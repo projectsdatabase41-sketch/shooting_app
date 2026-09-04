@@ -1,0 +1,73 @@
+# Сборка веб-версии и публикация на GitHub Pages.
+#
+# Собирает GitHub, а не ваш компьютер: после `git push` через пару
+# минут по адресу Pages лежит новая версия. Локально `flutter build
+# web` для этого запускать не нужно.
+name: Веб-версия на GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  # Кнопка «Run workflow» на вкладке Actions — пересобрать без коммита.
+  workflow_dispatch:
+
+# Права ровно под публикацию Pages, не больше.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Две сборки подряд не толкаются: новая ждёт, старая доезжает.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          # Версия зафиксирована намеренно: «последняя стабильная»
+          # однажды обновится и сломает сборку в момент, когда вы
+          # правите совсем другое. Меняется здесь, вручную.
+          flutter-version: '3.38.4'
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      # Анализатор до сборки: если он ругается, публиковать нечего.
+      - run: flutter analyze
+
+      - run: flutter test
+
+      - name: Сборка веба
+        # base-href берётся из имени репозитория: сайт живёт по адресу
+        # логин.github.io/<имя-репозитория>/, и без правильного base
+        # страница откроется белой (все пути к ресурсам уедут в корень).
+        #
+        # Ключ OpenRouter приходит из секрета репозитория, а не из
+        # исходников: в публичном репозитории живой ключ находят
+        # сканеры GitHub и отзывают. В собранном main.dart.js он всё
+        # равно виден — клиентское приложение секретов не хранит.
+        run: |
+          flutter build web --release \
+            --base-href "/${{ github.event.repository.name }}/" \
+            --dart-define=OPENROUTER_KEY="${{ secrets.OPENROUTER_KEY }}"
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

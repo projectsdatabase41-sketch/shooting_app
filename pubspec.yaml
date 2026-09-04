@@ -1,0 +1,36 @@
+name: shooting_app
+description: Приложение для стрелкового спорта — запись и анализ результатов по мишеням ISSF.
+publish_to: 'none'
+version: 0.2.0+1
+
+environment:
+  sdk: '>=3.6.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # v3.x грузит нативную библиотеку через Dart build hooks (native
+  # assets) вместо ручного DynamicLibrary.open — это единственный
+  # способ, который одинаково работает и для `flutter run`, и для
+  # `flutter test` на Windows/Linux/macOS. sqlite3_flutter_libs (для
+  # версии 2.x) больше не нужен и объявлен устаревшим апстримом.
+  sqlite3: ^3.0.0
+  path_provider: ^2.1.2
+  path: ^1.9.0
+  file_picker: ^8.0.0
+  share_plus: ^12.0.2
+  uuid: ^4.4.0
+  crypto: ^3.0.3
+  http: ^1.2.1
+  intl: ^0.19.0
+  provider: ^6.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - lib/db/local_schema.sql
