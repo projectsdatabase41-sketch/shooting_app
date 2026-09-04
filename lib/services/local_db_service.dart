@@ -102,7 +102,7 @@ class LocalDbService {
   }
 
   void close() {
-    _db?.dispose();
+    _db?.close();
     _db = null;
   }
 

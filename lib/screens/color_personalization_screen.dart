@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:provider/provider.dart';
 import '../models/color_presets.dart';
-import '../models/target_color_scheme.dart';
 import '../models/target_face.dart';
 import '../painters/target_painter.dart';
 import '../state/personalization_view_model.dart';

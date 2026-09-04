@@ -1,5 +1,3 @@
-import 'dart:ui' show Offset;
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shooting_app/logic/shot_analytics.dart';
 import 'package:shooting_app/models/shot.dart';

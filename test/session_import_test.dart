@@ -89,11 +89,14 @@ void main() {
   });
 
   group('Файл отклоняется целиком, а не наполовину', () {
-    void rejects(Object? json, String contains) {
+    // Параметр НЕ называть `contains`: он перекроет матчер `contains`
+    // из flutter_test, и вызов `contains(...)` перестанет быть вызовом
+    // функции. Анализатор ловит это как ошибку, компилятор — тоже.
+    void rejects(Object? json, String fragment) {
       expect(
         () => SessionImport.parse(json is String ? json : jsonEncode(json)),
         throwsA(isA<ImportException>()
-            .having((e) => e.message, 'сообщение', contains(contains))),
+            .having((e) => e.message, 'сообщение', contains(fragment))),
       );
     }
 

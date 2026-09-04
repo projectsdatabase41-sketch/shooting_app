@@ -11,4 +11,6 @@
 /// `sqlite3`. Благодаря ему весь остальной код (а он весь ходит через
 /// `db.select` / `db.execute` с обычным SQL) не знает и не должен знать,
 /// где именно лежит база: в файле на диске или в IndexedDB браузера.
+library;
+
 export 'db_opener_io.dart' if (dart.library.js_interop) 'db_opener_web.dart';
