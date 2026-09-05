@@ -57,9 +57,19 @@ jobs:
         # исходников: в публичном репозитории живой ключ находят
         # сканеры GitHub и отзывают. В собранном main.dart.js он всё
         # равно виден — клиентское приложение секретов не хранит.
+        #
+        # --no-web-resources-cdn: по умолчанию Flutter грузит CanvasKit
+        # с gstatic.com, а не из своей же сборки — единственная внешняя
+        # зависимость на весь сайт, при том что sqlite3.wasm сознательно
+        # держим локально ровно для того, чтобы её не было. Тот же самый
+        # canvaskit/ и так лежит в build/web, просто раньше не
+        # использовался. Подозревается как причина «не грузится в
+        # Safari на айфоне» — сеть до gstatic не всегда доступна там, где
+        # доступен сам сайт (блокировщики, приватные режимы, MDM).
         run: |
           flutter build web --release \
             --base-href "/${{ github.event.repository.name }}/" \
+            --no-web-resources-cdn \
             --dart-define=OPENROUTER_KEY="${{ secrets.OPENROUTER_KEY }}"
 
       - uses: actions/upload-pages-artifact@v3
