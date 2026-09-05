@@ -1,3 +1,71 @@
+# Как подготовить свою базу Supabase
+
+Приложению нужна **ваша собственная** база: общей базы нет, ваши
+тренировки не лежат ни у кого, кроме вас. Подготовка разовая, минут на
+десять.
+
+## 1. Завести проект
+
+1. Зарегистрируйтесь на supabase.com и создайте новый проект
+   (бесплатного тарифа хватает с запасом).
+2. Придумайте и **сохраните** пароль базы — Supabase показывает его
+   один раз.
+3. Дождитесь, пока проект поднимется (пара минут).
+
+## 2. Создать таблицы
+
+Два способа, выбирайте любой.
+
+**Способ А — руками.** В проекте откройте *SQL editor*, вставьте
+скрипт из раздела 4 этого файла, нажмите *Run*. Скрипт можно запускать
+повторно: он ничего не ломает и не стирает.
+
+**Способ Б — через ИИ.** Если у вас ChatGPT или Claude, подключённый к
+Supabase, отправьте ему текст из раздела 3 — он сделает всё сам.
+
+## 3. Текст для ИИ-ассистента
+
+Скопируйте всё, что ниже до конца файла, и отправьте ассистенту одним
+сообщением.
+
+---
+
+Ты подключён к моему проекту Supabase. Примени, пожалуйста, миграцию
+ниже — это схема для приложения по спортивной стрельбе.
+
+Что важно:
+
+* Скрипт идемпотентный, применяй его целиком и как есть, ничего не
+  переписывая и не «улучшая».
+* Не создавай никаких дополнительных таблиц, политик и функций сверх
+  того, что в скрипте.
+* Если в базе уже есть таблицы с такими же именами от другого проекта —
+  **остановись и скажи мне**, ничего не применяй. `CREATE TABLE IF NOT
+  EXISTS` на существующей таблице молча ничего не делает, и приложение
+  начнёт писать в чужие данные.
+* После применения проверь и сообщи мне:
+  1. созданы ли таблицы `exercises`, `training_sessions`, `shots`,
+     `comments`, `training_notes`, `share_grants`, `project_settings`,
+     `target_faces`;
+  2. включён ли row level security на всех из них;
+  3. существуют ли функции `create_share_token`, `revoke_share_token`,
+     `validate_share_token`, `get_shared_training_sessions`,
+     `get_shared_shots`, `get_shared_comments`, `get_shared_exercises`,
+     `add_shared_comment`.
+* Ничего из моих данных не удаляй.
+
+Отдельно проверь настройки аутентификации и скажи мне, включено ли
+подтверждение почты (*Confirm email*). Если включено — так и оставь, но
+предупреди меня: после регистрации в приложении надо будет подтвердить
+адрес письмом, иначе вход не сработает.
+
+Когда закончишь, дай мне два значения из *Settings → API*: **Project
+URL** и **публичный ключ** (anon / publishable). Секретный ключ
+(service_role) мне не нужен, и в приложение он не вводится.
+
+## 4. Скрипт
+
+```sql
 -- sql/schema.sql — схема для ЛИЧНОЙ базы Supabase.
 --
 -- Модель развёртывания (решение пользователя, сентябрь 2026): общей
@@ -134,35 +202,21 @@ create table if not exists shots (
 
 create index if not exists idx_shots_session on shots(session_id);
 
--- Единая таблица комментариев к тренировке, серии, выстрелу — и
--- отдельный чат с тренером ('coach'): страница "Тренер" читает и пишет
--- именно этот уровень, без фильтра по автору, иначе сообщение
--- спортсмена, отправленное со страницы тренера, было бы не отличить от
--- обычной заметки и не видно тренеру там, где он его ждёт.
+-- Единая таблица комментариев к тренировке, серии или выстрелу.
 create table if not exists comments (
   id           uuid primary key default gen_random_uuid(),
   session_id   uuid not null references training_sessions(id) on delete cascade,
-  level        text not null check (level in ('shot', 'series', 'session', 'coach')),
+  level        text not null check (level in ('shot', 'series', 'session')),
   shot_id      uuid references shots(id) on delete cascade,
   series_no    int,
   author_role  text not null check (author_role in ('athlete', 'coach')),
   text         text not null,
-  created_at   timestamptz not null default now()
-);
-
--- CHECK-ограничения по имени накатываются заново при каждом запуске
--- скрипта (idempotent): 'create table if not exists' выше не тронет их
--- на уже созданной базе, а без этого 'coach' на старой базе отклонялся
--- бы constraint'ом, заведённым до того, как эта строка появилась.
-alter table comments drop constraint if exists comments_level_check;
-alter table comments add constraint comments_level_check
-  check (level in ('shot', 'series', 'session', 'coach'));
-
-alter table comments drop constraint if exists comments_level_fields;
-alter table comments add constraint comments_level_fields check (
-  (level = 'shot' and shot_id is not null and series_no is null) or
-  (level = 'series' and series_no is not null and shot_id is null) or
-  ((level = 'session' or level = 'coach') and shot_id is null and series_no is null)
+  created_at   timestamptz not null default now(),
+  constraint comments_level_fields check (
+    (level = 'shot' and shot_id is not null and series_no is null) or
+    (level = 'series' and series_no is not null and shot_id is null) or
+    (level = 'session' and shot_id is null and series_no is null)
+  )
 );
 
 create index if not exists idx_comments_session on comments(session_id);
@@ -431,3 +485,19 @@ begin
   return v_row;
 end;
 $$;
+```
+
+## 5. Что дальше
+
+В приложении: **Настройки → Учётная запись** (в самом низу). Вставьте
+адрес и публичный ключ, введите почту и пароль, нажмите
+«Зарегистрироваться» — учётная запись создастся в вашей же базе. Потом
+кнопка «Проверить базу» скажет, всё ли на месте.
+
+## 6. Как дать доступ тренеру
+
+В настройках создайте токен доступа. Он показывается **один раз** — в
+базе остаётся только его хеш, восстановить его нельзя, можно лишь
+выпустить новый. Передайте тренеру адрес базы, публичный ключ и токен.
+Тренер увидит ваши тренировки и сможет оставлять комментарии; править
+ваши данные он не может. Отзыв токена действует немедленно.

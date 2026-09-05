@@ -10,7 +10,14 @@ CREATE TABLE IF NOT EXISTS project_settings (
   storage_keep_count  INTEGER NOT NULL DEFAULT 200,
   supabase_url        TEXT,
   supabase_anon_key   TEXT,
-  connected_email     TEXT
+  connected_email     TEXT,
+  -- Сессия Supabase Auth личной базы. Токены лежат здесь, а не в
+  -- памяти: иначе каждый запуск приложения требовал бы пароль, а
+  -- пользователь просил обратного — вход один раз.
+  auth_user_id        TEXT,
+  auth_access_token   TEXT,
+  auth_refresh_token  TEXT,
+  auth_expires_at     TEXT
 );
 
 CREATE TABLE IF NOT EXISTS target_faces (
@@ -38,7 +45,10 @@ CREATE TABLE IF NOT EXISTS exercises (
   deleted_at       TEXT,
   -- Описание серий: JSON-массив {name, shot_count, time_limit_s,
   -- counts}. Пусто — упражнение старого вида, все серии одинаковы.
-  series           TEXT
+  series           TEXT,
+  -- Время последней правки. Нужно синхронизации: при расхождении
+  -- выигрывает более поздняя запись.
+  updated_at       TEXT
 );
 
 CREATE TABLE IF NOT EXISTS training_sessions (
@@ -54,7 +64,9 @@ CREATE TABLE IF NOT EXISTS training_sessions (
   created_at        TEXT NOT NULL DEFAULT (datetime('now')),
   -- Показатели, которых нет в колонках: из SCATT сюда уезжают скорость,
   -- стабильность прицеливания, темп, настройки прибора. JSON-строка.
-  extra             TEXT
+  -- В интерфейсе не показывается — это материал для ассистента.
+  extra             TEXT,
+  updated_at        TEXT
 );
 
 CREATE TABLE IF NOT EXISTS shots (
@@ -76,15 +88,22 @@ CREATE TABLE IF NOT EXISTS shots (
   -- в сумму и статистику не входит. Флаг на ВЫСТРЕЛЕ, а не только в
   -- описании упражнения: шаблон могут потом поменять, а уже отстрелянная
   -- тренировка должна остаться такой, какой была.
-  counts              INTEGER NOT NULL DEFAULT 1
+  counts              INTEGER NOT NULL DEFAULT 1,
+  updated_at          TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_shots_session ON shots(session_id);
 
+-- 'coach' — отдельный от 'session' уровень: страница "Тренер" читает и
+-- пишет ИМЕННО его, без фильтра по автору. Раньше страница фильтровала
+-- 'session' по author_role=coach, и сообщение спортсмена, отправленное
+-- прямо оттуда, тут же пропадало из вида (не от того автора) и
+-- всплывало в общей ленте "Заметки" — при том, что задумывался
+-- двусторонний чат.
 CREATE TABLE IF NOT EXISTS comments (
   id           TEXT PRIMARY KEY,
   session_id   TEXT NOT NULL REFERENCES training_sessions(id) ON DELETE CASCADE,
-  level        TEXT NOT NULL CHECK (level IN ('shot','series','session')),
+  level        TEXT NOT NULL CHECK (level IN ('shot','series','session','coach')),
   shot_id      TEXT REFERENCES shots(id) ON DELETE CASCADE,
   series_no    INTEGER,
   author_role  TEXT NOT NULL CHECK (author_role IN ('athlete','coach')),
@@ -94,6 +113,25 @@ CREATE TABLE IF NOT EXISTS comments (
 
 CREATE INDEX IF NOT EXISTS idx_comments_session ON comments(session_id);
 CREATE INDEX IF NOT EXISTS idx_comments_shot ON comments(shot_id);
+
+-- Заметки — самостоятельный дневник, не привязанный к тренировке.
+-- Имя с приставкой training_ — чтобы совпадать с облачной схемой, где
+-- простое «notes» слишком легко сталкивается с чужой таблицей.
+-- Тема придумывается ассистентом при сохранении, но остаётся обычным
+-- редактируемым текстом. Удаление двухступенчатое: сначала корзина,
+-- очистка корзины удаляет строку насовсем.
+CREATE TABLE IF NOT EXISTS training_notes (
+  id           TEXT PRIMARY KEY,
+  topic        TEXT NOT NULL DEFAULT '',
+  body         TEXT NOT NULL DEFAULT '',
+  is_favorite  INTEGER NOT NULL DEFAULT 0,
+  is_trashed   INTEGER NOT NULL DEFAULT 0,
+  trashed_at   TEXT,
+  created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at   TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_training_notes_trashed ON training_notes(is_trashed);
 
 CREATE TABLE IF NOT EXISTS share_grants (
   id            TEXT PRIMARY KEY,
@@ -114,7 +152,22 @@ CREATE TABLE IF NOT EXISTS color_prefs (
 -- (см. LocalDbService.seedTargetFaces), приложение стартует иначе
 -- полностью пустым (раздел 10 ТЗ: без демо-тренировок и упражнений).
 INSERT OR IGNORE INTO target_faces (code, name, distance_m, caliber_mm, bullseye_diameter_mm, blank_size_mm) VALUES
-  ('rifle_10m', '№ 8, пневматическая винтовка 10 м', 10, 4.5, 30.5, 170),
-  ('pistol_10m', 'Пневматический пистолет 10 м', 10, 4.5, 26.5, NULL),
-  ('rifle_50m', '№ 12, малокалиберная винтовка 50 м', 50, 5.6, 112.4, 250),
+  ('rifle_10m', '№ 8, пневматическая винтовка 10 м', 10, 4.5, 30.5, 80),
+  ('pistol_10m', '№ 9, пневматический пистолет 10 м', 10, 4.5, 59.5, 170),
+  ('rifle_50m', '№ 7, малокалиберная винтовка 50 м', 50, 5.6, 112.4, 250),
   ('pistol_25m', '№ 4, пистолет 25 м', 25, 5.6, 200, 550);
+
+-- Правка чисел в уже созданных базах: INSERT OR IGNORE существующие
+-- строки не трогает, а в первых версиях сюда попали неверные значения
+-- (бланк № 8 — 170 вместо 80, яблоко пистолетной — 26.5 вместо 59.5,
+-- мишень 50 м была подписана «№ 12» вместо «№ 7»). На расчёты это не
+-- влияет — геометрия живёт в константах TargetFace, — но справочник,
+-- который врёт, однажды кто-нибудь прочитает.
+UPDATE target_faces SET name = '№ 8, пневматическая винтовка 10 м', bullseye_diameter_mm = 30.5, blank_size_mm = 80
+  WHERE code = 'rifle_10m';
+
+UPDATE target_faces SET name = '№ 9, пневматический пистолет 10 м', bullseye_diameter_mm = 59.5, blank_size_mm = 170
+  WHERE code = 'pistol_10m';
+
+UPDATE target_faces SET name = '№ 7, малокалиберная винтовка 50 м'
+  WHERE code = 'rifle_50m';
