@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../logic/ai_context.dart';
 import '../models/exercise.dart';
+import '../models/series_spec.dart';
 import '../models/shot.dart';
 import '../models/target_face.dart';
 import '../models/training_session.dart';
@@ -10,6 +11,7 @@ import '../state/ai_chat_view_model.dart';
 import '../state/app_data_store.dart';
 import '../widgets/ai_chart_view.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/raised_3d_button.dart';
 
 /// Чат с ассистентом по результатам стрельбы.
 ///
@@ -163,9 +165,63 @@ class _AiChatBodyState extends State<_AiChatBody> {
           // не было бы.
           onRetry: vm.messages[i].fromUser && !vm.busy ? () => vm.retryFrom(i) : null,
           onDelete: vm.busy ? null : () => vm.removeFrom(i),
+          onCreateExercise: (vm.messages[i].exercise != null && !vm.messages[i].exerciseCreated)
+              ? () => _createExercise(context, vm, i)
+              : null,
         );
       },
     );
+  }
+
+  /// Создаёт упражнение из блока, который предложил ассистент.
+  ///
+  /// Спецификация уже провалидирована белым списком в `AiService`
+  /// (`_isValidExercise`) — здесь только раскладываем провалидированный
+  /// JSON в вызов `store.createExercise`, который используется и
+  /// обычным экраном создания упражнения.
+  void _createExercise(BuildContext context, AiChatViewModel vm, int index) {
+    final spec = vm.messages[index].exercise;
+    if (spec == null) return;
+    final store = context.read<AppDataStore>();
+
+    final rawSeries = spec['series'];
+    final series = rawSeries is List
+        ? [
+            for (final s in rawSeries.cast<Map>())
+              SeriesSpec(
+                name: '${s['name']}',
+                shotCount: (s['shot_count'] as num?)?.toInt(),
+                timeLimit: s['time_limit_min'] == null
+                    ? null
+                    : Duration(minutes: (s['time_limit_min'] as num).toInt()),
+                counts: s['counts'] != false,
+              ),
+          ]
+        : const <SeriesSpec>[];
+
+    final gender = ExerciseGender.values.firstWhere(
+      (g) => g.name == '${spec['gender'] ?? 'mixed'}',
+      orElse: () => ExerciseGender.mixed,
+    );
+
+    final ex = store.createExercise(
+      name: '${spec['name']}',
+      targetFaceCode: '${spec['target_face_code']}',
+      // У упражнения со своими сериями total_shots/series_size не несут
+      // смысла — раскладка идёт по `series` (см. 7.2 ТЗ), но колонки в
+      // базе NOT NULL, так что пишем сумму выстрелов серий и 1.
+      totalShots: series.isNotEmpty
+          ? series.fold<int>(0, (a, s) => a + (s.shotCount ?? 0))
+          : (spec['total_shots'] as num).toInt(),
+      seriesSize: series.isNotEmpty ? 1 : (spec['series_size'] as num).toInt(),
+      gender: gender,
+      series: series,
+    );
+
+    vm.markExerciseCreated(index);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text('Упражнение «${ex.name}» создано')));
   }
 
   Widget _buildInput(AiChatViewModel vm) {
@@ -203,7 +259,11 @@ class _Bubble extends StatelessWidget {
   final VoidCallback? onRetry;
   final VoidCallback? onDelete;
 
-  const _Bubble({required this.message, this.onRetry, this.onDelete});
+  /// `null`, если в сообщении нет предложенного упражнения или оно уже
+  /// создано — тогда карточка показывает отметку без кнопки.
+  final VoidCallback? onCreateExercise;
+
+  const _Bubble({required this.message, this.onRetry, this.onDelete, this.onCreateExercise});
 
   @override
   Widget build(BuildContext context) {
@@ -240,6 +300,14 @@ class _Bubble extends StatelessWidget {
             if (message.chart != null) ...[
               const SizedBox(height: 8),
               AiChartView(spec: message.chart!),
+            ],
+            if (message.exercise != null) ...[
+              const SizedBox(height: 8),
+              _ExerciseProposalCard(
+                spec: message.exercise!,
+                created: message.exerciseCreated,
+                onCreate: onCreateExercise,
+              ),
             ],
             if (message.sources.isNotEmpty) ...[
               const SizedBox(height: 6),
@@ -290,6 +358,89 @@ class _Bubble extends StatelessWidget {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Карточка предложенного ассистентом упражнения — показ результата на
+/// подтверждение, а не тихое создание: пользователь видит, что именно
+/// заведётся, прежде чем это попадёт в список упражнений.
+class _ExerciseProposalCard extends StatelessWidget {
+  final Map<String, dynamic> spec;
+  final bool created;
+  final VoidCallback? onCreate;
+
+  const _ExerciseProposalCard({required this.spec, required this.created, required this.onCreate});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final face = TargetFace.byCode('${spec['target_face_code']}');
+    final rawSeries = spec['series'];
+    final seriesList = rawSeries is List ? rawSeries.cast<Map>() : null;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.assignment_add, size: 18, color: cs.primary),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text('${spec['name']}', style: theme.textTheme.titleSmall),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(face.name, style: theme.textTheme.bodySmall),
+          if (seriesList != null)
+            for (final s in seriesList)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  '· ${s['name']}'
+                  '${s['shot_count'] != null ? ' — ${s['shot_count']} выстр.' : ''}'
+                  '${s['time_limit_min'] != null ? ' — ${s['time_limit_min']} мин' : ''}'
+                  '${s['counts'] == false ? ' (без зачёта)' : ''}',
+                  style: theme.textTheme.bodySmall,
+                ),
+              )
+          else
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                '${spec['total_shots']} выстрелов по ${spec['series_size']}',
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
+          const SizedBox(height: 10),
+          if (created)
+            Row(
+              children: [
+                Icon(Icons.check_circle, size: 18, color: cs.primary),
+                const SizedBox(width: 6),
+                Text('Создано', style: theme.textTheme.bodySmall?.copyWith(color: cs.primary)),
+              ],
+            )
+          else
+            Raised3DButton(
+              dense: true,
+              icon: Icons.add,
+              label: 'Создать упражнение',
+              baseColor: cs.primary,
+              onTap: onCreate,
+            ),
+        ],
       ),
     );
   }

@@ -254,6 +254,22 @@ class TargetViewModel extends ChangeNotifier {
   double get draftXMm => _draftXMm ?? 0;
   double get draftYMm => _draftYMm ?? 0;
 
+  /// Номер, который получит черновик при сохранении — для отображения
+  /// НА пробоине ещё до подтверждения.
+  ///
+  /// У новой пробоины это `shots.length + 1`: `SessionLogic.addShot`
+  /// всегда дописывает в конец списка независимо от того, какой выстрел
+  /// сейчас выбран/виден (см. `beginAddNew` — оно не трогает
+  /// `selectedIndex`). Раньше здесь ошибочно брался номер ВЫБРАННОГО
+  /// выстрела — черновик новой пробоины показывал номер предыдущей.
+  /// У уже существующей — её собственный номер, при перемещении он не
+  /// меняется.
+  int? get draftShotNumber {
+    if (!isEditing) return null;
+    if (isAddingNew) return session.shots.length + 1;
+    return _preEditSnapshot?.shotNumber;
+  }
+
   /// Угол черновика в градусах от 12 часов по часовой стрелке (0..360),
   /// то же соглашение, что у `Shot.angleDeg`. Нужен указателю
   /// направления на экране мишени.
@@ -263,32 +279,64 @@ class TargetViewModel extends ChangeNotifier {
     return deg < 0 ? deg + 360 : deg;
   }
 
-  /// Целая часть результата черновика (габарит), либо null.
-  int? get draftRing => draftScore?.floor();
+  /// Луч, на котором стоит черновик. Запоминается, потому что ровно в
+  /// центре угол не определён: без него пробоина, доведённая до нуля,
+  /// при обратном ходе уезжала бы вверх, а не туда, откуда пришла.
+  double? _draftAngleRad;
 
-  /// Десятая доля результата черновика, 0..9, либо null.
-  int? get draftDecimal {
-    final s = draftScore;
-    if (s == null) return null;
-    return ((s - s.floor()) * 10).round().clamp(0, 9);
+  double get _draftRadiusMm {
+    final x = _draftXMm;
+    final y = _draftYMm;
+    if (x == null || y == null) return 0;
+    return math.sqrt(x * x + y * y);
   }
 
-  /// Слайдер подбора десятых (A.6, замена степперов +/-).
+  /// Сколько делений колеса помещается от центра до края бланка.
+  int get maxDraftSteps {
+    final step = face.decimalStepMm;
+    if (step <= 0) return 0;
+    return (face.faceRadiusMm / step).round();
+  }
+
+  /// Положение барабана при правке: чем больше, тем ближе к центру.
   ///
-  /// Двигает пробоину ВДОЛЬ ЕЁ ЛУЧА — угол сохраняется, меняется только
-  /// расстояние до центра. Габарит при этом не меняется: слайдер
-  /// работает внутри того кольца, в которое выстрел уже попал, и
-  /// подбирает только десятую долю. Грубое позиционирование — жестом по
-  /// мишени, точное — здесь.
-  void setDraftDecimal(int decimal) {
+  /// Считается от ФАКТИЧЕСКОГО радиуса черновика, а не хранится
+  /// отдельно — иначе после перетаскивания пальцем колесо показывало бы
+  /// старое положение и первый же щелчок отбрасывал бы пробоину назад.
+  int get draftInwardSteps {
+    final step = face.decimalStepMm;
+    if (step <= 0) return 0;
+    final fromCentre = (_draftRadiusMm / step).round();
+    return (maxDraftSteps - fromCentre).clamp(0, maxDraftSteps);
+  }
+
+  /// Колесо при правке: двигает пробоину ВДОЛЬ ЕЁ ЛУЧА в обе стороны —
+  /// и к центру, и от него, на одну десятую долю за щелчок.
+  ///
+  /// Раньше колесо подбирало десятую долю ВНУТРИ того габарита, в
+  /// который выстрел уже попал: значения 0..9 и никакого выхода за
+  /// границу кольца. Из-за этого выстрел, поставленный на 9.0, крутился
+  /// только в сторону 9.9, а к восьмёрке или к десятке его было не
+  /// сдвинуть вовсе — и вдобавок первый же щелчок «примагничивал»
+  /// пробоину к сетке десятых, теряя точку, выбранную пальцем.
+  ///
+  /// Теперь колесо работает приращением: берётся разница с текущим
+  /// положением и прибавляется к фактическому радиусу. Габарит меняется
+  /// сам собой, когда край пробоины переходит границу кольца, а дробная
+  /// часть, заданная пальцем, сохраняется.
+  void setDraftInwardSteps(int value) {
     if (!isEditing || _draftXMm == null) return;
-    final ring = draftRing;
-    if (ring == null || ring < 1) return;
-    final currentR = math.sqrt(_draftXMm! * _draftXMm! + _draftYMm! * _draftYMm!);
-    // Тот же внутренний параметр поворота, что и в updateDraftPosition:
-    // atan2(x, -y) с обратным преобразованием (sin / -cos).
-    final angle = currentR == 0 ? 0.0 : math.atan2(_draftXMm!, -_draftYMm!);
-    final newR = radiusForScore(ring, decimal.clamp(0, 9), face);
+    final step = face.decimalStepMm;
+    if (step <= 0) return;
+
+    final delta = value - draftInwardSteps; // + — к центру, − — от центра
+    if (delta == 0) return;
+
+    final currentR = _draftRadiusMm;
+    if (currentR > 0) _draftAngleRad = math.atan2(_draftXMm!, -_draftYMm!);
+    final angle = _draftAngleRad ?? 0.0;
+
+    final newR = (currentR - delta * step).clamp(0.0, face.faceRadiusMm);
     _draftXMm = newR * math.sin(angle);
     _draftYMm = -newR * math.cos(angle);
     notifyListeners();
@@ -406,6 +454,19 @@ class TargetViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Два пальца на мишени.
+  ///
+  /// Флаг читает рабочий стол: пока он поднят, страницы не листаются.
+  /// Живёт во вью-модели, а не в самом холсте, потому что PageView
+  /// находится выше по дереву и о пальцах на мишени иначе не узнает.
+  bool multiTouch = false;
+
+  void setMultiTouch(bool value) {
+    if (multiTouch == value) return;
+    multiTouch = value;
+    notifyListeners();
+  }
+
   /// Двухпальцевый жест немедленно отменяет активную правку (B.4).
   /// Второй палец на экране — это зум, а не правка.
   ///
@@ -416,15 +477,6 @@ class TargetViewModel extends ChangeNotifier {
     if (isEditing) cancelEditing();
   }
 
-  /// Палец ушёл слишком далеко от точки удержания — значит это было
-  /// не удержание, а начало жеста (прокрутка, зум, свайп страницы).
-  ///
-  /// Пользователь просил именно такой фильтр: «если палец двинулся за
-  /// область, то отмена редактирования». Порог в пикселях задаётся
-  /// жестовым слоем — он один знает про экран.
-  void onGestureLeftHoldZone() {
-    if (isAddingNew) cancelEditing();
-  }
 
   // ---- B.5 — корзина ----
 
@@ -435,6 +487,27 @@ class TargetViewModel extends ChangeNotifier {
     session = SessionLogic.deleteShot(session, shot.id);
     _selectedIndex = session.shots.isEmpty ? -1 : (_selectedIndex - 1).clamp(0, session.shots.length - 1);
     cancelEditing();
+    _persist();
+  }
+
+  /// Удаление КОНКРЕТНОГО выстрела по id — не обязательно того, что
+  /// сейчас выбран.
+  ///
+  /// Нужен списку выстрелов: там кнопка удаления стоит у КАЖДОЙ строки,
+  /// а `deleteSelected()` всегда бьёт по `selectedIndex` — это ровно то,
+  /// из-за чего раньше убрали кнопку "удалить текущий" из шапки списка
+  /// (била не по той строке, на которую смотрел палец).
+  void deleteShot(String shotId) {
+    if (!canEdit) return;
+    final keepId = selectedShot?.id;
+    session = SessionLogic.deleteShot(session, shotId);
+    if (isEditing && _preEditSnapshot?.id == shotId) cancelEditing();
+    if (keepId != null && keepId != shotId) {
+      final idx = session.shots.indexWhere((s) => s.id == keepId);
+      _selectedIndex = idx >= 0 ? idx : (session.shots.isEmpty ? -1 : session.shots.length - 1);
+    } else {
+      _selectedIndex = session.shots.isEmpty ? -1 : _selectedIndex.clamp(0, session.shots.length - 1);
+    }
     _persist();
   }
 

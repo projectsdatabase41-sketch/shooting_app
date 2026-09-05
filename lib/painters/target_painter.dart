@@ -35,6 +35,7 @@ class TargetPainter extends CustomPainter {
   final bool isEditing;
   final double? draftXMm;
   final double? draftYMm;
+  final int? draftShotNumber;
   final double zoom;
   final Offset pan;
 
@@ -47,6 +48,7 @@ class TargetPainter extends CustomPainter {
     this.isEditing = false,
     this.draftXMm,
     this.draftYMm,
+    this.draftShotNumber,
     this.zoom = 1.0,
     this.pan = Offset.zero,
   });
@@ -279,7 +281,7 @@ class TargetPainter extends CustomPainter {
     // Черновик правки/добавления — рисуется поверх всего.
     if (isEditing && draftXMm != null && draftYMm != null) {
       final pos = center + Offset(draftXMm!, -draftYMm!) * mmToPx;
-      _drawShotCircle(canvas, pos, radiusPx, colors.shotSelected, sel?.shotNumber ?? (visibleShots.length + 1));
+      _drawShotCircle(canvas, pos, radiusPx, colors.shotSelected, draftShotNumber ?? (visibleShots.length + 1));
     }
   }
 
@@ -323,6 +325,7 @@ class TargetPainter extends CustomPainter {
         oldDelegate.isEditing != isEditing ||
         oldDelegate.draftXMm != draftXMm ||
         oldDelegate.draftYMm != draftYMm ||
+        oldDelegate.draftShotNumber != draftShotNumber ||
         oldDelegate.zoom != zoom ||
         oldDelegate.pan != pan;
   }

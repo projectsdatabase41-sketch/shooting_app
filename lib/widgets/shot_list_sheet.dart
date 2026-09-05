@@ -6,10 +6,14 @@ import 'comments_thread.dart';
 import 'trash_sheet.dart';
 
 /// Шторка списка выстрелов (раздел 5 ТЗ) — 85% высоты экрана. Наверху:
-/// добавить/удалить/корзина(бейдж)/фильтр избранного/комментарии
-/// текущего выстрела (скрыты в режиме "только просмотр" — раздел 7 ТЗ).
-/// Список разбит на группы по сериям, тап по строке — выбрать и закрыть.
-/// Свайп по строке вправо/влево — в избранное/из избранного.
+/// корзина(бейдж)/фильтр избранного/комментарии текущего выстрела
+/// (скрыты в режиме "только просмотр" — раздел 7 ТЗ). Список разбит на
+/// группы по сериям, тап по строке — выбрать и закрыть.
+///
+/// У каждой строки — две отдельные кнопки, «в избранное» и «удалить»
+/// (решение пользователя, взамен свайпа): свайп по строке в списке,
+/// который и так прокручивается и открывается снизу вверх, слишком
+/// легко путался с прокруткой и с закрытием шторки.
 class ShotListSheet extends StatefulWidget {
   const ShotListSheet({super.key});
 
@@ -78,36 +82,36 @@ class _ShotListSheetState extends State<ShotListSheet> {
                       ),
                     ),
                     for (final shot in visibleRows)
-                      Dismissible(
+                      ListTile(
                         key: ValueKey(shot.id),
-                        // Фон свайпа "в избранное" — янтарный контейнер
-                        // темы вместо жёсткого Colors.amber: в тёмной
-                        // теме иконка на ярко-жёлтом не читалась.
-                        background: Container(
-                          color: Theme.of(context).colorScheme.secondaryContainer,
-                          alignment: Alignment.centerLeft,
-                          padding: const EdgeInsets.only(left: 16),
-                          child: Icon(Icons.star, color: Theme.of(context).colorScheme.onSecondaryContainer),
+                        // Номер — исходный, из shot.shotNumber: при фильтре
+                        // "только избранное" строки не идут подряд, и без
+                        // номера непонятно, каким по счёту был выстрел
+                        // (раздел 19 старого ТЗ — этого не хватало).
+                        title: Text('№${shot.shotNumber} · ${shot.score.toStringAsFixed(1)}'),
+                        subtitle: Text('X:${shot.xMm.toStringAsFixed(1)} Y:${shot.yMm.toStringAsFixed(1)}'),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              visualDensity: VisualDensity.compact,
+                              icon: Icon(shot.isFavorite ? Icons.star : Icons.star_border),
+                              tooltip: shot.isFavorite ? 'Убрать из избранного' : 'В избранное',
+                              onPressed: () => vm.toggleFavorite(shot.id),
+                            ),
+                            if (vm.canEdit)
+                              IconButton(
+                                visualDensity: VisualDensity.compact,
+                                icon: const Icon(Icons.delete_outline),
+                                tooltip: 'Удалить',
+                                onPressed: () => vm.deleteShot(shot.id),
+                              ),
+                          ],
                         ),
-                        secondaryBackground: Container(
-                          color: Theme.of(context).colorScheme.secondaryContainer,
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 16),
-                          child: Icon(Icons.star_border, color: Theme.of(context).colorScheme.onSecondaryContainer),
-                        ),
-                        confirmDismiss: (_) async {
-                          vm.toggleFavorite(shot.id);
-                          return false; // не удаляем строку, только переключаем избранное
+                        onTap: () {
+                          vm.selectIndex(vm.session.shots.indexOf(shot));
+                          Navigator.of(context).pop();
                         },
-                        child: ListTile(
-                          title: Text(shot.score.toStringAsFixed(1)),
-                          subtitle: Text('X:${shot.xMm.toStringAsFixed(1)} Y:${shot.yMm.toStringAsFixed(1)}'),
-                          trailing: Icon(shot.isFavorite ? Icons.star : Icons.star_border, size: 18),
-                          onTap: () {
-                            vm.selectIndex(vm.session.shots.indexOf(shot));
-                            Navigator.of(context).pop();
-                          },
-                        ),
                       ),
                   ],
                 );

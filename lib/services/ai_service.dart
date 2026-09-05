@@ -4,7 +4,8 @@ import 'package:http/http.dart' as http;
 
 import 'ai_settings.dart';
 
-/// Ответ модели: текст плюс, если был, разобранный блок графика.
+/// Ответ модели: текст плюс, если был, разобранный блок графика или
+/// предложенного упражнения.
 class AiReply {
   final String text;
   final Map<String, dynamic>? chart;
@@ -15,11 +16,18 @@ class AiReply {
   /// и видно, на чём модель основывалась.
   final String? reasoning;
 
+  /// Предложенное упражнение (раздел 19 старого ТЗ: "создание
+  /// упражнения по свободному описанию силами ассистента с показом
+  /// результата на подтверждение"). Уже провалидировано белым списком —
+  /// см. `AiService._splitExercise`; в интерфейсе только жмут "Создать".
+  final Map<String, dynamic>? exercise;
+
   const AiReply({
     required this.text,
     required this.model,
     this.chart,
     this.reasoning,
+    this.exercise,
   });
 }
 
@@ -200,18 +208,20 @@ class AiService {
     }
     final reasoning = parts.join('\n\n');
 
-    final parsed = _splitChart(split.$1);
+    final parsedChart = _splitChart(split.$1);
+    final parsedExercise = _splitExercise(parsedChart.$1);
 
     // Модель зарассуждалась и до ответа не дошла. Это не ответ, а
     // мусор — пробуем следующую модель в цепочке вместо того, чтобы
     // показывать пользователю обрывок чужих мыслей.
-    if (parsed.$1.trim().isEmpty) {
+    if (parsedExercise.$1.trim().isEmpty) {
       throw const AiException('модель не дошла до ответа');
     }
 
     return AiReply(
-      text: parsed.$1,
-      chart: parsed.$2,
+      text: parsedExercise.$1,
+      chart: parsedChart.$2,
+      exercise: parsedExercise.$2,
       model: model,
       reasoning: reasoning.isEmpty ? null : reasoning,
     );
@@ -272,6 +282,80 @@ class AiService {
       // некорректный JSON — молча оставляем только текст
     }
     return (text, null);
+  }
+
+  /// Мишени, которые модель вправе называть в предложенном упражнении —
+  /// тот же справочник, что и везде в приложении, а не выдуманные коды.
+  static const Set<String> targetFaceCodes = {
+    'rifle_10m',
+    'pistol_10m',
+    'rifle_50m',
+    'pistol_25m',
+  };
+
+  static const Set<String> _genders = {'male', 'female', 'mixed'};
+
+  /// Отделяет блок ```exercise (предложение упражнения) от текста.
+  ///
+  /// Тот же принцип, что у `_splitChart`: белый список проверяется в
+  /// коде, а не только просьбой в промпте — модель, которую попросили
+  /// "не выдумывай мишень", однажды её выдумает. Негодная спецификация
+  /// молча отбрасывается, текст ответа остаётся как есть.
+  static (String, Map<String, dynamic>?) _splitExercise(String raw) {
+    final matches = RegExp(r'```exercise\s*([\s\S]*?)```').allMatches(raw).toList();
+    if (matches.isEmpty) return (raw, null);
+
+    var text = raw;
+    for (final m in matches.reversed) {
+      text = text.replaceRange(m.start, m.end, '');
+    }
+    text = text.trim();
+
+    try {
+      final decoded = jsonDecode(matches.last.group(1)!.trim());
+      if (decoded is Map<String, dynamic> && _isValidExercise(decoded)) {
+        return (text, decoded);
+      }
+    } catch (_) {
+      // некорректный JSON — молча оставляем только текст
+    }
+    return (text, null);
+  }
+
+  static bool _isValidExercise(Map<String, dynamic> spec) {
+    final name = spec['name'];
+    if (name is! String || name.trim().isEmpty) return false;
+
+    final face = spec['target_face_code'];
+    if (face is! String || !targetFaceCodes.contains(face)) return false;
+
+    final gender = spec['gender'];
+    if (gender != null && !_genders.contains('$gender')) return false;
+
+    final series = spec['series'];
+    if (series != null) {
+      if (series is! List || series.isEmpty) return false;
+      for (final s in series) {
+        if (s is! Map) return false;
+        final sName = s['name'];
+        if (sName is! String || sName.trim().isEmpty) return false;
+        final shotCount = s['shot_count'];
+        final timeLimitMin = s['time_limit_min'];
+        final hasShots = shotCount is num && shotCount > 0;
+        final hasTime = timeLimitMin is num && timeLimitMin > 0;
+        // Ровно одна граница серии — как в SeriesSpec: и выстрелами, и
+        // временем сразу серия ограничена быть не может.
+        if (hasShots == hasTime) return false;
+        final counts = s['counts'];
+        if (counts != null && counts is! bool) return false;
+      }
+      return true;
+    }
+
+    // Без series — старый вид: обязательны total_shots и series_size.
+    final totalShots = spec['total_shots'];
+    final seriesSize = spec['series_size'];
+    return totalShots is num && totalShots > 0 && seriesSize is num && seriesSize > 0;
   }
 
   /// Отделяет рассуждения модели от собственно ответа.

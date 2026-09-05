@@ -1,4 +1,4 @@
-enum CommentLevel { shot, series, session }
+enum CommentLevel { shot, series, session, coach }
 
 enum AuthorRole { athlete, coach }
 
@@ -29,7 +29,7 @@ class Comment {
               (level == CommentLevel.series &&
                   seriesNo != null &&
                   shotId == null) ||
-              (level == CommentLevel.session &&
+              ((level == CommentLevel.session || level == CommentLevel.coach) &&
                   shotId == null &&
                   seriesNo == null),
           'ровно одно из (shotId, seriesNo) заполнено в зависимости от level',

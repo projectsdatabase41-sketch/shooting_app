@@ -18,6 +18,14 @@ class AiMessage {
   /// Из каких источников базы знаний брались материалы для ответа.
   final List<String> sources;
 
+  /// Предложенное упражнение, если модель его предложила (уже
+  /// провалидировано белым списком в `AiService`).
+  final Map<String, dynamic>? exercise;
+
+  /// Упражнение из этого сообщения уже создано — кнопка "Создать"
+  /// становится отметкой, а не предложением нажать ещё раз.
+  final bool exerciseCreated;
+
   const AiMessage({
     required this.fromUser,
     required this.text,
@@ -26,7 +34,21 @@ class AiMessage {
     this.isError = false,
     this.reasoning,
     this.sources = const [],
+    this.exercise,
+    this.exerciseCreated = false,
   });
+
+  AiMessage copyWith({bool? exerciseCreated}) => AiMessage(
+        fromUser: fromUser,
+        text: text,
+        chart: chart,
+        model: model,
+        isError: isError,
+        reasoning: reasoning,
+        sources: sources,
+        exercise: exercise,
+        exerciseCreated: exerciseCreated ?? this.exerciseCreated,
+      );
 }
 
 /// Состояние разговора с ассистентом.
@@ -130,6 +152,7 @@ class AiChatViewModel extends ChangeNotifier {
         model: reply.model,
         reasoning: reply.reasoning,
         sources: {for (final c in chunks) c.source}.toList(),
+        exercise: reply.exercise,
       ));
     } catch (e) {
       messages.add(AiMessage(fromUser: false, text: '$e', isError: true));
@@ -137,6 +160,15 @@ class AiChatViewModel extends ChangeNotifier {
       _busy = false;
       notifyListeners();
     }
+  }
+
+  /// Отмечает, что упражнение из сообщения [index] уже создано —
+  /// нажатая кнопка "Создать" не должна заводить дубликат при
+  /// повторном нажатии или перерисовке.
+  void markExerciseCreated(int index) {
+    if (index < 0 || index >= messages.length) return;
+    messages[index] = messages[index].copyWith(exerciseCreated: true);
+    notifyListeners();
   }
 
   /// Последние реплики без ошибок — ошибки в историю модели не отдаём,

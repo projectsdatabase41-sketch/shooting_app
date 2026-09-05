@@ -9,26 +9,24 @@ import '../state/target_view_model.dart';
 
 /// Лента комментариев — НЕ перезаписываемое поле, а лента записей с
 /// автором и временем (раздел 7 ТЗ, часть C.3 логики-спека). Доступна на
-/// всех трёх уровнях независимо от роли/статуса тренировки — в отличие
-/// от canEdit (C.2).
+/// всех уровнях независимо от роли/статуса тренировки — в отличие от
+/// canEdit (C.2).
+///
+/// Уровней четыре: shot/series/session — привязаны к части тренировки,
+/// coach — отдельный от них чат с тренером (страница "Тренер" на
+/// рабочем столе), не фильтр по автору поверх session, а свой уровень:
+/// иначе сообщение спортсмена оттуда пряталось бы от него самого же
+/// (не тот author_role) и всплывало в общей ленте "Заметки".
 class CommentsThreadSheet extends StatefulWidget {
   final CommentLevel level;
   final String? shotId;
   final int? seriesNo;
-
-  /// Показывать только записи тренера.
-  ///
-  /// Нужно для отдельной страницы «Тренер» на рабочем столе: разбор от
-  /// тренера — это не то же самое, что собственные заметки спортсмена,
-  /// и смешивать их в одной ленте значит терять и то, и другое.
-  final bool coachOnly;
 
   const CommentsThreadSheet({
     super.key,
     required this.level,
     this.shotId,
     this.seriesNo,
-    this.coachOnly = false,
   });
 
   static Future<void> showForShot(BuildContext context, String shotId) => _show(
@@ -44,6 +42,14 @@ class CommentsThreadSheet extends StatefulWidget {
   static Future<void> showForSession(BuildContext context) => _show(
         context,
         const CommentsThreadSheet(level: CommentLevel.session),
+      );
+
+  /// Отдельный чат с тренером — не фильтр по автору поверх `session`
+  /// (тем самым и от «Заметок» отделён по-настоящему: сообщение
+  /// спортсмена отсюда видно здесь же, а не только тренеру).
+  static Future<void> showForCoach(BuildContext context) => _show(
+        context,
+        const CommentsThreadSheet(level: CommentLevel.coach),
       );
 
   static Future<void> _show(BuildContext context, Widget child) {
@@ -78,14 +84,12 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
     final vm = context.watch<TargetViewModel>();
     final store = context.watch<AppDataStore>();
     final repo = CommentsRepository(store.db);
-    final all = switch (widget.level) {
+    final comments = switch (widget.level) {
       CommentLevel.shot => repo.forShot(vm.session.id, widget.shotId!),
       CommentLevel.series => repo.forSeries(vm.session.id, widget.seriesNo!),
       CommentLevel.session => repo.forSession(vm.session.id),
+      CommentLevel.coach => repo.forCoach(vm.session.id),
     };
-    final comments = widget.coachOnly
-        ? all.where((c) => c.authorRole == AuthorRole.coach).toList()
-        : all;
     final df = DateFormat('dd.MM HH:mm');
 
     return SafeArea(
@@ -94,7 +98,7 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
           Padding(
             padding: const EdgeInsets.all(12),
             child: Text(
-              widget.coachOnly ? 'Разбор от тренера' : _titleFor(widget.level),
+              _titleFor(widget.level),
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
           ),
@@ -102,8 +106,8 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
           Expanded(
             child: comments.isEmpty
                 ? Center(
-                    child: Text(widget.coachOnly
-                        ? 'Тренер пока ничего не написал'
+                    child: Text(widget.level == CommentLevel.coach
+                        ? 'Переписки с тренером пока нет'
                         : 'Комментариев пока нет'),
                   )
                 : ListView.builder(
@@ -170,5 +174,6 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
         CommentLevel.shot => 'Комментарии к выстрелу',
         CommentLevel.series => 'Комментарии к серии',
         CommentLevel.session => 'Комментарии к тренировке',
+        CommentLevel.coach => 'Чат с тренером',
       };
 }

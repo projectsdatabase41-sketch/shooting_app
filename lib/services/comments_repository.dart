@@ -32,6 +32,18 @@ class CommentsRepository {
     return rows.map(_fromRow).toList();
   }
 
+  /// Отдельный чат с тренером — не то же самое, что `forSession`
+  /// (личные заметки спортсмена): без этого разделения сообщение,
+  /// отправленное со страницы "Тренер", было от `forSession` не
+  /// отличить и терялось в общей ленте.
+  List<Comment> forCoach(String sessionId) {
+    final rows = db.db.select(
+      'SELECT * FROM comments WHERE session_id = ? AND level = ? ORDER BY created_at',
+      [sessionId, 'coach'],
+    );
+    return rows.map(_fromRow).toList();
+  }
+
   Comment add(Comment comment) {
     db.db.execute(
       'INSERT INTO comments (id, session_id, level, shot_id, series_no, author_role, text, created_at) '

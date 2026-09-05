@@ -85,6 +85,18 @@ void main() {
       }
     });
 
+    test('TargetFace — оружие и боеприпас для контекста ИИ выводятся верно', () {
+      expect(TargetFace.rifle10m.weaponRu, 'винтовка');
+      expect(TargetFace.rifle50m.weaponRu, 'винтовка');
+      expect(TargetFace.pistol10m.weaponRu, 'пистолет');
+      expect(TargetFace.pistol25m.weaponRu, 'пистолет');
+
+      expect(TargetFace.rifle10m.ammoRu, contains('пневматическое'));
+      expect(TargetFace.pistol10m.ammoRu, contains('пневматическое'));
+      expect(TargetFace.rifle50m.ammoRu, contains('.22 LR'));
+      expect(TargetFace.pistol25m.ammoRu, contains('.22 LR'));
+    });
+
     test('Comment — все три уровня', () {
       final shotComment = Comment(
         id: 'c1',
@@ -119,6 +131,21 @@ void main() {
       final restored = Comment.fromJson(sessionComment.toJson());
       expect(restored.shotId, isNull);
       expect(restored.seriesNo, isNull);
+
+      // 'coach' — отдельный от 'session' уровень (чат со тренером),
+      // та же форма полей (ни shotId, ни seriesNo).
+      final coachComment = Comment(
+        id: 'c4',
+        sessionId: 's1',
+        level: CommentLevel.coach,
+        authorRole: AuthorRole.athlete,
+        text: 'Вопрос тренеру',
+        createdAt: DateTime(2026, 9, 1),
+      );
+      final restoredCoach = Comment.fromJson(coachComment.toJson());
+      expect(restoredCoach.level, CommentLevel.coach);
+      expect(restoredCoach.shotId, isNull);
+      expect(restoredCoach.seriesNo, isNull);
     });
 
     test('Comment — assert ловит некорректную комбинацию уровня/полей', () {

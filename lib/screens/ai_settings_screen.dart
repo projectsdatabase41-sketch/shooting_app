@@ -67,7 +67,10 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     _settings.models = _models.text.split('\n');
     _settings.booksUrl = _booksUrl.text;
     _settings.booksToken = _booksToken.text;
-    setState(() => _message = 'Сохранено');
+    // "Сохранить" — это закрыть экран настроек, а не остаться на нём:
+    // настройки — не рабочий экран, к которому возвращаются, а разовое
+    // действие, после которого логично вернуться туда, откуда пришёл.
+    Navigator.of(context).pop();
   }
 
   Future<void> _loadModels() async {

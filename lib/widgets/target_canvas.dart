@@ -9,10 +9,9 @@ import '../state/target_view_model.dart';
 
 /// Подсказка при попытке записать выстрел на паузе.
 ///
-/// Живёт здесь, потому что первым её показывает жестовый слой; экран
-/// мишени переиспользует её для кнопки "Добавить" — он и так импортирует
-/// этот файл, а обратный импорт дал бы циклическую зависимость между
-/// экраном и виджетом.
+/// Живёт здесь, а не в экране мишени, потому что тот и так импортирует
+/// этот файл (кнопка "Добавить" под мишенью), а обратный импорт дал бы
+/// циклическую зависимость между экраном и виджетом.
 void showPauseAddHint(BuildContext context) {
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
@@ -27,11 +26,16 @@ void showPauseAddHint(BuildContext context) {
 /// Жестовый слой + отрисовка мишени (раздел 5 ТЗ, часть B.4
 /// logic-personalization-spec.md, задача 3.3 dev-task-spec.md).
 ///
-/// Единый `RawGestureDetector` (`LongPressGestureRecognizer` +
-/// `ScaleGestureRecognizer` + `DoubleTapGestureRecognizer`), которые сами
-/// разруливают конкуренцию жестов — самописный распознаватель от первой
-/// версии оказался ненадёжным и был полностью заменён (раздел 5 ТЗ,
-/// обновление 2026-09-01).
+/// Остался ОДИН распознаватель — `ScaleGestureRecognizer`. Он же
+/// обслуживает и щипок-зум, и перетаскивание пробоины при активной
+/// правке, и пролистывание выстрелов двумя пальцами.
+///
+/// Ни удержания, ни тапа для добавления пробоины здесь больше нет
+/// (решение пользователя): оба ставили пробоину сами по себе и
+/// конфликтовали со всем подряд — с пинчем (распознаватель следит
+/// только за первым пальцем), со свайпом страницы, с прокруткой.
+/// Новый выстрел создаётся ИСКЛЮЧИТЕЛЬНО кнопкой под мишенью
+/// (`_ShotActionBar` в target_screen.dart).
 class TargetCanvas extends StatefulWidget {
   const TargetCanvas({super.key});
 
@@ -39,38 +43,35 @@ class TargetCanvas extends StatefulWidget {
   State<TargetCanvas> createState() => _TargetCanvasState();
 }
 
-class _TargetCanvasState extends State<TargetCanvas> with SingleTickerProviderStateMixin {
+class _TargetCanvasState extends State<TargetCanvas> {
   static const double _pixelsPerShot = 40.0; // B.4
-  static const double _scaleDeltaThresholdPx = 2.0; // B.4: 2px/кадр
 
-  /// Допуск на дрожание пальца, при котором касание всё ещё считается
-  /// тапом, а не перетаскиванием.
-  /// Сколько пальцев сейчас на экране. Нужно, чтобы отличить удержание
-  /// от начала пинча: распознаватель удержания о втором пальце не знает.
+  /// Порог решения "это щипок" — накопленное с начала жеста отклонение
+  /// `ScaleGestureRecognizer.scale` от 1.0 (доля, не пиксели).
+  static const double _zoomScaleDeltaThreshold = 0.04;
+
+  /// Порог решения "это пролистывание" — накопленное с начала жеста
+  /// смещение середины между пальцами, px.
+  static const double _scrollFocalDriftThresholdPx = 16.0;
+
+  /// Сколько пальцев сейчас на экране. Считается сырыми событиями, до
+  /// арены жестов: от этого зависит, можно ли листать страницы —
+  /// двухпальцевый жест на мишени принадлежит мишени, а не рабочему
+  /// столу.
   int _activePointers = 0;
 
-  /// Когда сработало удержание — нужно для фильтра «палец ушёл».
-  DateTime? _holdStartedAt;
-
-  static const double _tapSlopPx = 10.0;
-
-  /// Дольше этого касание уже не тап (у долгого нажатия порог 700 мс,
-  /// так что пересечения нет).
   /// Ближе этого к центру считаем, что смещения нет вовсе.
   static const double _centreEpsilonMm = 0.05;
 
-  /// Насколько далеко палец может уйти от точки удержания, прежде чем
-  /// мы решим, что это был не хват, а начало другого жеста.
-  static const double _holdEscapePx = 40.0;
-
-  /// И как быстро. Позже этого срока движение — уже осмысленное
-  /// перетаскивание пробоины, отменять его нельзя.
-  static const Duration _holdEscapeWindow = Duration(milliseconds: 350);
-
-  static const Duration _tapMaxDuration = Duration(milliseconds: 350);
-
-  double _longPressProgress = 0; // 0..1, для дуги-индикатора
-  Offset? _longPressStartPos;
+  /// Сообщает вью-модели, лежат ли на мишени два пальца.
+  ///
+  /// Нужно это не мишени, а рабочему столу: пока пальцев два, PageView
+  /// не должен листать страницы. Иначе щипок для зума норовит уехать на
+  /// соседнюю страницу — при сведении пальцы всегда смещаются вбок, и
+  /// горизонтальную составляющую PageView считает своей.
+  void _syncMultiTouch(TargetViewModel vm) {
+    vm.setMultiTouch(_activePointers >= 2);
+  }
 
   /// Текущий жест начат на кольце компаса — значит меняем только угол,
   /// не трогая результат. Решается ОДИН раз в начале жеста: иначе
@@ -78,16 +79,19 @@ class _TargetCanvasState extends State<TargetCanvas> with SingleTickerProviderSt
   /// зоны компаса по дороге.
   bool _gestureOnCompass = false;
 
-  // Распознавание тапа внутри scale-жеста (см. комментарий в build).
-  Offset? _gestureStartLocal;
-  Offset? _gestureLastLocal;
-  DateTime? _gestureStartTime;
-  bool _movedBeyondTapSlop = false;
+  // Сколько пальцев было в жесте — нужно только чтобы поймать появление
+  // второго пальца ПОСЛЕ начала жеста (см. _onScaleUpdate) и отменить
+  // правку: одиночным касанием пробоина больше не ставится нигде, это
+  // делает исключительно кнопка под мишенью.
   int _maxPointerCount = 0;
 
-  // Мультитач-арбитраж (differential, per-frame — B.4)
+  // Мультитач-арбитраж (B.4): режим (щипок или пролистывание) решается
+  // один раз за жест по НАКОПЛЕННЫМ с начала жеста величинам, а
+  // дальнейшее применение зума — по межкадровой разнице (см.
+  // _onScaleUpdate).
   double? _lastScaleDistance;
   Offset? _lastFocalPoint;
+  Offset? _gestureStartFocal;
   double _accumulatedFocalDy = 0;
   bool _twoFingerModeDecided = false;
   bool _isZoomGesture = false;
@@ -108,45 +112,36 @@ class _TargetCanvasState extends State<TargetCanvas> with SingleTickerProviderSt
         // свой первый палец и потому не отличает долгое нажатие от
         // медленного пинча.
         return Listener(
-          onPointerDown: (_) => _activePointers++,
-          onPointerUp: (_) => _activePointers = math.max(0, _activePointers - 1),
-          onPointerCancel: (_) => _activePointers = math.max(0, _activePointers - 1),
+          onPointerDown: (_) {
+            _activePointers++;
+            _syncMultiTouch(vm);
+          },
+          onPointerUp: (_) {
+            _activePointers = math.max(0, _activePointers - 1);
+            _syncMultiTouch(vm);
+          },
+          onPointerCancel: (_) {
+            _activePointers = math.max(0, _activePointers - 1);
+            _syncMultiTouch(vm);
+          },
           child: RawGestureDetector(
           gestures: <Type, GestureRecognizerFactory>{
-            LongPressGestureRecognizer: GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
-              () => LongPressGestureRecognizer(duration: const Duration(milliseconds: 700)),
-              (LongPressGestureRecognizer instance) {
-                instance.onLongPressStart = (details) => _onLongPressStart(details, vm);
-                instance.onLongPressMoveUpdate = (details) => _onLongPressMoveUpdate(details, vm);
-                instance.onLongPressEnd = (details) => _onLongPressEnd(vm);
-                instance.onLongPressCancel = () => _resetLongPress();
-              },
-            ),
+            // Ни удержания, ни тапа здесь больше нет — оба когда-то
+            // ставили пробоину и конфликтовали со всем подряд: с пинчем
+            // (распознаватель следит только за первым пальцем), со
+            // свайпом страницы, с прокруткой выстрелов. Новый выстрел
+            // создаётся ИСКЛЮЧИТЕЛЬНО кнопкой под мишенью (решение
+            // пользователя) — сама мишень теперь отвечает только за
+            // зум, перетаскивание черновика при активной правке и
+            // пролистывание выстрелов двумя пальцами.
             ScaleGestureRecognizer: GestureRecognizerFactoryWithHandlers<ScaleGestureRecognizer>(
               () => ScaleGestureRecognizer(),
               (ScaleGestureRecognizer instance) {
                 instance.onStart = (details) => _onScaleStart(details, vm);
                 instance.onUpdate = (details) => _onScaleUpdate(details, vm);
-                instance.onEnd = (details) => _onScaleEnd(vm);
+                instance.onEnd = (details) => _onScaleEnd();
               },
             ),
-            // DoubleTapGestureRecognizer и TapGestureRecognizer убраны
-            // намеренно — из-за них добавление выстрела срабатывало
-            // "через раз":
-            //
-            // 1. Пока DoubleTap ждал возможный второй тап (~300 мс), он
-            //    держал арену жестов, и одиночный тап либо запаздывал,
-            //    либо съедался вторым касанием (вместо выстрела
-            //    сбрасывался зум).
-            // 2. ScaleGestureRecognizer принимает и одиночное касание и
-            //    выигрывает арену при сдвиге буквально в пару пикселей —
-            //    а палец на сенсорном экране всегда чуть смещается,
-            //    так что Tap до срабатывания часто не доживал.
-            //
-            // Теперь тап определяется ВНУТРИ scale-жеста (см.
-            // _onScaleEnd): короткое касание без смещения = тап.
-            // Конкурировать в арене больше не с кем. Сброс зума остался
-            // кнопкой в шапке экрана.
           },
           child: Stack(
             fit: StackFit.expand,
@@ -161,18 +156,11 @@ class _TargetCanvasState extends State<TargetCanvas> with SingleTickerProviderSt
                   isEditing: vm.isEditing,
                   draftXMm: vm.isEditing ? vm.draftXMm : null,
                   draftYMm: vm.isEditing ? vm.draftYMm : null,
+                  draftShotNumber: vm.draftShotNumber,
                   zoom: vm.zoom,
                   pan: Offset(vm.panX, vm.panY),
                 ),
               ),
-              if (_longPressStartPos != null && _longPressProgress > 0 && _longPressProgress < 1)
-                CustomPaint(
-                  painter: _LongPressArcPainter(
-                    center: _longPressStartPos!,
-                    progress: _longPressProgress,
-                    color: colors.compassRing,
-                  ),
-                ),
               ..._buildCornerValues(vm, colors),
             ],
           ),
@@ -228,99 +216,14 @@ class _TargetCanvasState extends State<TargetCanvas> with SingleTickerProviderSt
     }
   }
 
-  void _beginAddAt(Offset localPos, TargetViewModel vm) {
-    // На паузе (позже минутного окна) выстрел не добавляется — но молча
-    // ничего не делать нельзя, иначе жест выглядит сломанным. Поэтому
-    // объясняем, что надо продолжить тренировку.
-    if (!vm.canAddShotNow) {
-      showPauseAddHint(context);
-      return;
-    }
-    vm.beginAddNew();
-    if (vm.isEditing) {
-      final mmPos = _screenToMm(vm, localPos);
-      vm.updateDraftPosition(mmPos.dx, mmPos.dy);
-    }
-  }
-
-  // ---- Long press (удержание 0.7с — правка) ----
-
-  /// Удержание = ВСЕГДА новый выстрел, где бы палец ни стоял.
-  ///
-  /// Раньше удержание рядом с выбранной пробоиной брало её на
-  /// перемещение, и добавить выстрел в кучную группу было нельзя — на
-  /// десятке все пробоины лежат друг на друге, и попасть «мимо» просто
-  /// негде. Перемещение осталось там, где оно осмысленно: выбрал
-  /// выстрел, включил правку кнопкой — и тащи.
-  void _onLongPressStart(LongPressStartDetails details, TargetViewModel vm) {
-    if (!vm.canEdit) return;
-
-    // Пальцев больше одного — это зум, а не удержание.
-    //
-    // LongPressGestureRecognizer следит только за первым пальцем и о
-    // втором не знает вовсе: медленный пинч спокойно доживал до 700 мс
-    // и открывал правку прямо посреди масштабирования.
-    if (_activePointers > 1) {
-      _resetLongPress();
-      return;
-    }
-
-    _longPressStartPos = details.localPosition;
-    _holdStartedAt = DateTime.now();
-    _longPressProgress = 1.0; // к моменту onLongPressStart 700мс уже прошли
-    _beginAddAt(details.localPosition, vm);
-    _gestureOnCompass = false;
-    setState(() {});
-  }
-
-  void _onLongPressMoveUpdate(LongPressMoveUpdateDetails details, TargetViewModel vm) {
-    if (!vm.isEditing) return;
-
-    // Палец рванул с места сразу после срабатывания удержания — значит
-    // это было начало зума или свайпа, а «хват» распознался по ошибке.
-    // Отменяем добавление, пока лишняя пробоина не осталась на мишени.
-    final origin = _longPressStartPos;
-    final startedAt = _holdStartedAt;
-    if (origin != null && startedAt != null) {
-      final quick = DateTime.now().difference(startedAt) < _holdEscapeWindow;
-      if (quick && (details.localPosition - origin).distance > _holdEscapePx) {
-        vm.onGestureLeftHoldZone();
-        _resetLongPress();
-        _holdStartedAt = null;
-        return;
-      }
-    }
-
-    _applyEditDrag(details.localPosition, vm);
-  }
-
-  void _onLongPressEnd(TargetViewModel vm) {
-    // Подтверждение/отмена — явными кнопками, НЕ отпусканием пальца
-    // (раздел 5 ТЗ) — здесь только гасим дугу-индикатор, состояние
-    // правки остаётся открытым до нажатия галочки/крестика.
-    _resetLongPress();
-  }
-
-  void _resetLongPress() {
-    setState(() {
-      _longPressStartPos = null;
-      _longPressProgress = 0;
-    });
-  }
-
   // ---- Scale (пинч-зум / пролистывание выстрелов, B.4) ----
 
   void _onScaleStart(ScaleStartDetails details, TargetViewModel vm) {
     _lastScaleDistance = null;
     _lastFocalPoint = details.focalPoint;
+    _gestureStartFocal = details.focalPoint;
     _accumulatedFocalDy = 0;
     _twoFingerModeDecided = false;
-
-    // Состояние для распознавания тапа — см. _onScaleEnd.
-    _gestureStartLocal = details.localFocalPoint;
-    _gestureLastLocal = details.localFocalPoint;
-    _gestureStartTime = DateTime.now();
-    _movedBeyondTapSlop = false;
     _maxPointerCount = details.pointerCount;
 
     if (details.pointerCount >= 2) {
@@ -341,14 +244,8 @@ class _TargetCanvasState extends State<TargetCanvas> with SingleTickerProviderSt
       // Второй палец мог появиться уже после начала жеста — тогда
       // _onScaleStart о нём не знал. Отменяем правку здесь.
       vm.onTwoFingerGestureStarted();
-      if (_longPressStartPos != null) _resetLongPress();
     }
     if (details.pointerCount > _maxPointerCount) _maxPointerCount = details.pointerCount;
-    _gestureLastLocal = details.localFocalPoint;
-    final start = _gestureStartLocal;
-    if (start != null && (details.localFocalPoint - start).distance > _tapSlopPx) {
-      _movedBeyondTapSlop = true;
-    }
 
     if (details.pointerCount < 2) {
       // Один палец/курсор во время активной правки — прямое
@@ -358,9 +255,6 @@ class _TargetCanvasState extends State<TargetCanvas> with SingleTickerProviderSt
       // (isAddingNew — без разницы, обе двигаются через draftX/Y).
       if (vm.isEditing) {
         _applyEditDrag(details.localFocalPoint, vm);
-        // Долгое нажатие уже не нужно (правка продолжается
-        // перетаскиванием) — гасим дугу-индикатор, если она ещё видна.
-        if (_longPressStartPos != null) _resetLongPress();
       }
       return;
     }
@@ -368,21 +262,29 @@ class _TargetCanvasState extends State<TargetCanvas> with SingleTickerProviderSt
     final deltaFocal = details.focalPoint - lastFocal;
     _lastFocalPoint = details.focalPoint;
 
-    // per-frame differential distance: используем scale относительно
-    // предыдущего кадра, не суммарно от начала жеста.
-    final currentDistance = details.scale; // Flutter даёt кумулятивный scale;
-    // приближаем per-frame дельту через изменение относительно предыдущего кадра.
+    // Применение зума — по МЕЖКАДРОВОЙ разнице: scale от Flutter
+    // кумулятивен с начала жеста, а нужен прирост с прошлого кадра.
+    final currentDistance = details.scale;
     final prevDistance = _lastScaleDistance ?? currentDistance;
     final frameScaleDelta = currentDistance == 0 ? 1.0 : currentDistance / (prevDistance == 0 ? 1 : prevDistance);
     _lastScaleDistance = currentDistance;
 
-    final distancePxDelta = (frameScaleDelta - 1.0).abs() * 100; // эвристика перевода в "px/кадр"
-
+    // Решение режима — по НАКОПЛЕННЫМ с начала жеста величинам, а не по
+    // межкадровым: межкадровое смещение середины между пальцами почти
+    // всегда больше пары пикселей уже от дрожания руки, и решение
+    // "это пролистывание" срабатывало раньше, чем масштаб успевал
+    // измениться заметно — щипок почти всегда распознавался как свайп
+    // выстрелов, а не как зум (отсюда и "зум не реагирует", и особенно
+    // "зажат на максимуме, обратно не крутится": сжать пальцы обратно
+    // ровно по той же линии почти невозможно, и любое дрожание тут же
+    // уводило жест в пролистывание).
     if (!_twoFingerModeDecided) {
-      if (distancePxDelta > _scaleDeltaThresholdPx) {
+      final cumulativeScaleDelta = (details.scale - 1.0).abs();
+      final cumulativeFocalDrift = (details.focalPoint - (_gestureStartFocal ?? details.focalPoint)).distance;
+      if (cumulativeScaleDelta > _zoomScaleDeltaThreshold) {
         _isZoomGesture = true;
         _twoFingerModeDecided = true;
-      } else if (deltaFocal.distance > _scaleDeltaThresholdPx) {
+      } else if (cumulativeFocalDrift > _scrollFocalDriftThresholdPx) {
         _isZoomGesture = false;
         _twoFingerModeDecided = true;
       }
@@ -400,38 +302,14 @@ class _TargetCanvasState extends State<TargetCanvas> with SingleTickerProviderSt
     }
   }
 
-  // ---- Завершение жеста: здесь же распознаётся тап ----
+  // ---- Завершение жеста ----
 
-  /// Тап по мишени в режиме просмотра сразу начинает добавление нового
-  /// выстрела ПРЯМО В ТОЧКЕ тапа.
-  ///
-  /// Определяется тут, а не отдельным `TapGestureRecognizer`, потому что
-  /// тот проигрывал арену жестов масштабированию и двойному тапу — см.
-  /// комментарий в `build()`. Условие тапа: одно касание, сдвиг меньше
-  /// допуска на дрожание и короткая длительность.
-  void _onScaleEnd(TargetViewModel vm) {
-    final startedAt = _gestureStartTime;
-    final endedAt = _gestureLastLocal;
-    final wasTap = _maxPointerCount <= 1 &&
-        !_movedBeyondTapSlop &&
-        startedAt != null &&
-        endedAt != null &&
-        DateTime.now().difference(startedAt) < _tapMaxDuration;
-
-    // Во время правки тап ничего не добавляет: там он уже отработал как
-    // подхват пробоины в _onScaleStart.
-    if (wasTap && !vm.isEditing && vm.canEdit) {
-      _beginAddAt(endedAt, vm);
-    }
-
+  void _onScaleEnd() {
     _lastScaleDistance = null;
     _lastFocalPoint = null;
+    _gestureStartFocal = null;
     _twoFingerModeDecided = false;
     _accumulatedFocalDy = 0;
-    _gestureStartLocal = null;
-    _gestureLastLocal = null;
-    _gestureStartTime = null;
-    _movedBeyondTapSlop = false;
     _maxPointerCount = 0;
   }
 
@@ -634,30 +512,4 @@ class _DirectionValue extends StatelessWidget {
       ],
     );
   }
-}
-
-class _LongPressArcPainter extends CustomPainter {
-  final Offset center;
-  final double progress;
-  final Color color;
-
-  _LongPressArcPainter({required this.center, required this.progress, required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3;
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: 18),
-      -math.pi / 2,
-      2 * math.pi * progress,
-      false,
-      paint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _LongPressArcPainter oldDelegate) => oldDelegate.progress != progress;
 }

@@ -11,6 +11,7 @@ import '../state/target_view_model.dart';
 import '../state/workspace_view_model.dart';
 import '../widgets/analytics_panel.dart';
 import '../widgets/comments_thread.dart';
+import '../widgets/raised_3d_button.dart';
 import '../widgets/shot_list_sheet.dart';
 import '../widgets/shot_wheel.dart';
 import '../widgets/target_canvas.dart';
@@ -127,6 +128,16 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
         appBar: AppBar(
           title: Text(vm.exercise.name),
           actions: [
+            // Сброс зума — раньше был только жестом (щипок обратно), а
+            // щипок легко "залипал" на максимуме, если пальцы не сводить
+            // ровно по той же линии. Кнопка — гарантированный выход
+            // независимо от того, как повёл себя жест.
+            if (vm.zoom != 1.0 || vm.panX != 0 || vm.panY != 0)
+              IconButton(
+                icon: const Icon(Icons.zoom_out_map),
+                tooltip: 'Сбросить зум',
+                onPressed: vm.resetZoom,
+              ),
             if (vm.canEdit)
               IconButton(
                 icon: Icon(vm.isEditing ? Icons.remove_red_eye_outlined : Icons.edit_outlined),
@@ -149,10 +160,15 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
                 controller: _pages,
                 itemCount: pages.length,
                 onPageChanged: (i) => setState(() => _current = i),
-                // Во время правки страницы не листаются: палец на
-                // мишени тянет пробоину, и горизонтальное движение
-                // не должно уносить на соседнюю страницу.
-                physics: vm.isEditing
+                // Страницы не листаются в двух случаях. Во время
+                // правки — палец на мишени тянет пробоину, и
+                // горизонтальное движение не должно уносить на
+                // соседнюю страницу. И пока на мишени два пальца — это
+                // щипок для зума: пальцы при сведении всегда смещаются
+                // вбок, и горизонтальную составляющую PageView считал
+                // своей, из-за чего зум то и дело уезжал на соседнюю
+                // страницу.
+                physics: vm.isEditing || vm.multiTouch
                     ? const NeverScrollableScrollPhysics()
                     : const PageScrollPhysics(),
                 itemBuilder: (context, i) => _pageBody(pages[i], vm),
@@ -192,7 +208,7 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
       case WorkspacePage.notes:
         return const CommentsThreadSheet(level: CommentLevel.session);
       case WorkspacePage.coach:
-        return const CommentsThreadSheet(level: CommentLevel.session, coachOnly: true);
+        return const CommentsThreadSheet(level: CommentLevel.coach);
     }
   }
 
@@ -367,7 +383,7 @@ class _TargetPage extends StatelessWidget {
             child: ClipRect(child: TargetCanvas()),
           ),
         ),
-        if (vm.isEditing) const _EditActionBar(),
+        if (vm.isEditing) const _EditActionBar() else const _ShotActionBar(),
         const _ShotWheelBar(),
       ],
     );
@@ -463,7 +479,7 @@ class _TrainingControlsBar extends StatelessWidget {
           children: [
             Row(
               children: [
-                _buildActionButton(vm, status),
+                _buildActionButton(context, vm, status),
                 const SizedBox(width: 12),
                 Text('Общее: ${_fmt(vm.elapsed)}', style: const TextStyle(fontSize: 12)),
                 const SizedBox(width: 12),
@@ -477,21 +493,22 @@ class _TrainingControlsBar extends StatelessWidget {
     );
   }
 
-  Widget _buildActionButton(TargetViewModel vm, SessionStatus status) {
+  Widget _buildActionButton(BuildContext context, TargetViewModel vm, SessionStatus status) {
+    final cs = Theme.of(context).colorScheme;
     switch (status) {
       case SessionStatus.notStarted:
-        return FilledButton(onPressed: vm.start, child: const Text('Начать'));
+        return Raised3DButton(dense: true, label: 'Начать', baseColor: cs.primary, onTap: vm.start);
       case SessionStatus.running:
         return Row(mainAxisSize: MainAxisSize.min, children: [
-          OutlinedButton(onPressed: vm.pause, child: const Text('Пауза')),
+          Raised3DButton(dense: true, label: 'Пауза', baseColor: cs.secondary, onTap: vm.pause),
           const SizedBox(width: 8),
-          FilledButton(onPressed: vm.finish, child: const Text('Завершить')),
+          Raised3DButton(dense: true, label: 'Завершить', baseColor: cs.error, onTap: vm.finish),
         ]);
       case SessionStatus.paused:
         return Row(mainAxisSize: MainAxisSize.min, children: [
-          OutlinedButton(onPressed: vm.resume, child: const Text('Продолжить')),
+          Raised3DButton(dense: true, label: 'Продолжить', baseColor: cs.secondary, onTap: vm.resume),
           const SizedBox(width: 8),
-          FilledButton(onPressed: vm.finish, child: const Text('Завершить')),
+          Raised3DButton(dense: true, label: 'Завершить', baseColor: cs.error, onTap: vm.finish),
         ]);
       case SessionStatus.finished:
         return const Text('Завершена', style: TextStyle(fontWeight: FontWeight.bold));
@@ -588,6 +605,11 @@ class _EditActionBar extends StatelessWidget {
     // красилась схемой, на светлой схеме получались белые подписи на
     // белом фоне: было видно, что кнопки есть, но не видно какие.
     final cs = Theme.of(context).colorScheme;
+    // Заметка — только к уже существующему выстрелу (id есть, и
+    // CommentsThreadSheet может к нему обратиться). У черновика новой
+    // пробоины id появится только после "Сохранить" — до этого
+    // комментировать нечего.
+    final shotForNote = vm.isAddingNew ? null : vm.selectedShot;
 
     return Material(
       color: cs.surfaceContainerHigh,
@@ -601,14 +623,21 @@ class _EditActionBar extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  // Только два решения. «Удалить» и «Заметка» ушли: во
-                  // время добавления выстрела удалять нечего, а заметку
-                  // логичнее писать к уже сохранённому. Обе живут в
-                  // списке выстрелов.
+                  // «Удалить» осталось в списке выстрелов: во время
+                  // добавления удалять нечего, а при перемещении удобнее
+                  // удалять из списка, где виден весь контекст тренировки.
                   //
                   // Сохранить слева, отменить справа — подтверждение
                   // должно стоять там, куда палец идёт по умолчанию.
                   _iconLabel(context, Icons.check, 'Сохранить', vm.confirmEdit, cs.primary),
+                  if (shotForNote != null)
+                    _iconLabel(
+                      context,
+                      Icons.comment_outlined,
+                      'Заметка',
+                      () => CommentsThreadSheet.showForShot(context, shotForNote.id),
+                      cs.secondary,
+                    ),
                   _iconLabel(context, Icons.close, 'Отменить', vm.cancelEditing, cs.error),
                 ],
               ),
@@ -638,6 +667,73 @@ class _EditActionBar extends StatelessWidget {
   }
 }
 
+/// Кнопки под мишенью в режиме просмотра: «плюс» и «править».
+///
+/// Пришли на смену удержанию пальцем. Удержание ставило пробоину и
+/// конфликтовало со всем сразу — с щипком, со свайпом страницы, с
+/// прокруткой выстрелов; заплатки ловили часть случаев, но на рабочем
+/// экране «часть» не годится. Кнопка не срабатывает сама, и это её
+/// главное достоинство.
+///
+/// «Плюс» ставит новую пробоину в центре — дальше её тащат пальцем,
+/// доводят компасом или колесом. «Править» берёт последний выстрел:
+/// поправляют почти всегда именно его, и лишний выбор в списке ради
+/// этого не нужен.
+///
+/// Обе — ОТДЕЛЬНЫЕ кнопки с объёмным ("3D") нажатием (решение
+/// пользователя), а не два тапа внутри одной общей плашки: рельеф и
+/// просадка при нажатии видны как раз потому, что у каждой кнопки
+/// свой собственный контур и тень, а не общий фон на двоих.
+class _ShotActionBar extends StatelessWidget {
+  const _ShotActionBar();
+
+  @override
+  Widget build(BuildContext context) {
+    final vm = context.watch<TargetViewModel>();
+    if (!vm.canEdit) return const SizedBox.shrink();
+
+    final hasShots = vm.session.shots.isNotEmpty;
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            Raised3DButton(
+              icon: Icons.add_circle_outline,
+              label: 'Выстрел',
+              baseColor: Theme.of(context).colorScheme.primary,
+              onTap: () {
+                // На паузе позже минутного окна выстрел не добавляется.
+                // Молча ничего не делать нельзя — кнопка выглядела бы
+                // сломанной, поэтому объясняем, что надо продолжить.
+                if (!vm.canAddShotNow) {
+                  showPauseAddHint(context);
+                  return;
+                }
+                vm.beginAddNew();
+              },
+            ),
+            Raised3DButton(
+              icon: Icons.edit_location_alt_outlined,
+              label: 'Править',
+              baseColor: Theme.of(context).colorScheme.secondary,
+              onTap: hasShots
+                  ? () {
+                      vm.selectIndex(vm.session.shots.length - 1);
+                      vm.beginMoveSelected();
+                    }
+                  : null,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Колесо под мишенью — единственный постоянный элемент под ней после
 /// того, как нижняя панель значений уехала на углы бланка.
 ///
@@ -660,16 +756,16 @@ class _ShotWheelBar extends StatelessWidget {
 
     final Widget wheel;
     if (vm.isEditing) {
-      final ring = vm.draftRing;
-      final decimal = vm.draftDecimal;
-      // Габарит 0 (мимо разметки) на десятые не делится — крутить нечего.
-      final enabled = ring != null && ring >= 1 && decimal != null;
+      // Колесо двигает пробоину по её лучу в обе стороны: вправо-влево
+      // от центра, на одну десятую долю за щелчок, через границы колец.
+      // Ограничение «только внутри своего габарита» убрано — из-за него
+      // выстрел на 9.0 крутился лишь в сторону 9.9.
       wheel = ShotWheel(
-        value: decimal ?? 0,
+        value: vm.draftInwardSteps,
         minValue: 0,
-        maxValue: 9,
-        enabled: enabled,
-        onChanged: vm.setDraftDecimal,
+        maxValue: vm.maxDraftSteps,
+        enabled: vm.maxDraftSteps > 0,
+        onChanged: vm.setDraftInwardSteps,
       );
     } else {
       final index = vm.selectedIndex;
