@@ -240,6 +240,94 @@ List<HoleCandidate> findCandidateHoles({
   }).toList();
 }
 
+/// Автоматическая калибровка круга мишени по фото: центр и радиус,
+/// которые пользователь дальше может подправить руками.
+///
+/// Снимающий целится камерой в мишень, поэтому бланк — это заметно
+/// отличающаяся от фона область вокруг ЦЕНТРА кадра. Фон оценивается по
+/// уголкам кадра (туда бланк почти никогда не долетает), а сам бланк —
+/// связная область вокруг центра, отличающаяся от этого фона сильнее
+/// порога. Метод того же рода, что и `findCandidateHoles` — там пробоина
+/// отличается от своего локального фона, здесь бланк отличается от фона
+/// всего кадра.
+///
+/// Возвращает `null`, если довериться результату нельзя (кадр слишком
+/// маленький, в центре сам фон, область почти не выросла или расползлась
+/// до всех четырёх краёв кадра сразу) — вызывающий код в этом случае
+/// оставляет прежнюю ручную калибровку по умолчанию.
+({PixelPoint center, double radiusPx})? detectTargetCircle(GrayImage image) {
+  final w = image.width, h = image.height;
+  if (w < 20 || h < 20) return null;
+
+  final blurRadius = math.max(2, (math.min(w, h) * 0.01).round());
+  final blurred = boxBlur(image, blurRadius);
+
+  final patch = math.max(2, (math.min(w, h) * 0.04).round());
+  double cornerAvg(int x0, int y0) {
+    var sum = 0, count = 0;
+    for (var y = y0; y < y0 + patch; y++) {
+      for (var x = x0; x < x0 + patch; x++) {
+        sum += blurred.at(x, y);
+        count++;
+      }
+    }
+    return sum / count;
+  }
+
+  final bg = (cornerAvg(0, 0) +
+          cornerAvg(w - patch, 0) +
+          cornerAvg(0, h - patch) +
+          cornerAvg(w - patch, h - patch)) /
+      4;
+
+  const threshold = 24.0;
+  bool differsFromBg(int x, int y) => (blurred.at(x, y) - bg).abs() >= threshold;
+
+  final cx = w ~/ 2, cy = h ~/ 2;
+  if (!differsFromBg(cx, cy)) return null;
+
+  final visited = Uint8List(w * h);
+  final queueX = Int32List(w * h);
+  final queueY = Int32List(w * h);
+  var head = 0, tail = 0;
+  queueX[tail] = cx;
+  queueY[tail] = cy;
+  tail++;
+  visited[cy * w + cx] = 1;
+  var minX = cx, maxX = cx, minY = cy, maxY = cy, count = 0;
+
+  while (head < tail) {
+    final x = queueX[head];
+    final y = queueY[head];
+    head++;
+    count++;
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+    for (final d in const [(-1, 0), (1, 0), (0, -1), (0, 1)]) {
+      final nx = x + d.$1, ny = y + d.$2;
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      final nIdx = ny * w + nx;
+      if (visited[nIdx] != 0) continue;
+      if (!differsFromBg(nx, ny)) continue;
+      visited[nIdx] = 1;
+      queueX[tail] = nx;
+      queueY[tail] = ny;
+      tail++;
+    }
+  }
+
+  if (count < w * h * 0.03) return null;
+  final touchesAllSides = minX == 0 && maxX == w - 1 && minY == 0 && maxY == h - 1;
+  if (touchesAllSides) return null;
+
+  return (
+    center: PixelPoint((minX + maxX) / 2, (minY + maxY) / 2),
+    radiusPx: math.max(maxX - minX, maxY - minY) / 2,
+  );
+}
+
 /// Переводит пиксельную точку в мм от центра мишени — та же система
 /// координат, что и на экране мишени (Y вверх, а не вниз, как у пикселей
 /// изображения).

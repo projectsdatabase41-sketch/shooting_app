@@ -116,6 +116,49 @@ void main() {
     });
   });
 
+  group('detectTargetCircle', () {
+    test('светлый бланк по центру тёмного фона — найден верно', () {
+      final img = GrayImage.filled(300, 300, 40);
+      img.fillCircle(150, 150, 100, 210);
+      final result = detectTargetCircle(img);
+      expect(result, isNotNull);
+      expect(result!.center.x, closeTo(150, 3));
+      expect(result.center.y, closeTo(150, 3));
+      expect(result.radiusPx, closeTo(100, 4));
+    });
+
+    test('бланк смещён от центра кадра — центр найден по самому бланку', () {
+      final img = GrayImage.filled(300, 300, 210);
+      img.fillCircle(100, 180, 80, 30);
+      final result = detectTargetCircle(img);
+      expect(result, isNotNull);
+      expect(result!.center.x, closeTo(100, 3));
+      expect(result.center.y, closeTo(180, 3));
+    });
+
+    test('фон и центр кадра почти одного цвета — не с чем сравнивать', () {
+      final img = GrayImage.filled(300, 300, 200);
+      final result = detectTargetCircle(img);
+      expect(result, isNull);
+    });
+
+    test('бланк заполняет весь кадр (фон виден лишь в уголках) — граница не найдена', () {
+      final img = GrayImage.filled(300, 300, 210);
+      // Фон-подсказка только в самых уголках — угадать границу бланка
+      // по такому кадру нельзя, область расползается до всех краёв.
+      for (final corner in [(0, 0), (288, 0), (0, 288), (288, 288)]) {
+        img.fillCircle(corner.$1 + 6, corner.$2 + 6, 6, 40);
+      }
+      final result = detectTargetCircle(img);
+      expect(result, isNull);
+    });
+
+    test('слишком маленький кадр отклоняется сразу', () {
+      final img = GrayImage.filled(10, 10, 210);
+      expect(detectTargetCircle(img), isNull);
+    });
+  });
+
   group('pixelToMm', () {
     test('центр остаётся центром', () {
       final mm = pixelToMm(const PixelPoint(100, 100), const PixelPoint(100, 100), 90, 40);

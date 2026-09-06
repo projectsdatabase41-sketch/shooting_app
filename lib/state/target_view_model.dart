@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../logic/scoring.dart';
 import '../logic/session_logic.dart';
+import '../logic/shot_photo_detection.dart' show PixelPoint;
 import '../models/exercise.dart';
 import '../models/series_spec.dart';
 import '../models/shot.dart';
@@ -385,6 +386,39 @@ class TargetViewModel extends ChangeNotifier {
     isEditing = true;
     isAddingNew = true;
     notifyListeners();
+  }
+
+  /// Добавляет разом все пробоины, подтверждённые пользователем на фото
+  /// (`PhotoScanScreen`) — их положение уже совмещено с фактическим
+  /// отверстием ТАМ, на фото, поэтому повторная правка на самой мишени
+  /// для каждой из них не нужна (решение пользователя: подтверждение на
+  /// фото сразу ведёт к следующему фото, а не на экран правки).
+  ///
+  /// Возвращает, сколько выстрелов реально добавилось — на паузе после
+  /// минутного окна (`canAddShotNow`) добавление молча останавливается,
+  /// остаток списка теряется, и вызывающий код должен это показать.
+  int addScannedShots(List<PixelPoint> pointsMm) {
+    var added = 0;
+    for (final p in pointsMm) {
+      if (!canAddShotNow) break;
+      session = SessionLogic.addShot(
+        session,
+        exercise,
+        face,
+        p.x,
+        p.y,
+        DateTime.now(),
+        idGenerator: () => _uuid.v4(),
+        allowDuringPause: canAddShotNow,
+      );
+      added++;
+    }
+    if (added > 0) {
+      _selectedIndex = session.shots.length - 1;
+      notifyListeners();
+      _persist();
+    }
+    return added;
   }
 
   /// Живое обновление координат во время перетаскивания/компаса.

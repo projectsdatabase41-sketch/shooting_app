@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../logic/ai_context.dart';
@@ -697,25 +695,6 @@ class _ShotActionBar extends StatefulWidget {
 class _ShotActionBarState extends State<_ShotActionBar> {
   bool _scanning = false;
 
-  /// Ждёт, пока пользователь не подтвердит/отменит текущий черновик —
-  /// нужно, чтобы прогнать несколько найденных на фото пробоин ПО
-  /// ОЧЕРЕДИ через обычную панель правки, а не городить для этого
-  /// отдельный экран подтверждения: пользователь видит их на настоящей
-  /// мишени, тем же способом, что и вручную поставленную пробоину.
-  Future<void> _waitUntilEditingDone(TargetViewModel vm) {
-    if (!vm.isEditing) return Future.value();
-    final completer = Completer<void>();
-    void listener() {
-      if (!vm.isEditing) {
-        vm.removeListener(listener);
-        completer.complete();
-      }
-    }
-
-    vm.addListener(listener);
-    return completer.future;
-  }
-
   Future<void> _scanPhoto(BuildContext context, TargetViewModel vm) async {
     setState(() => _scanning = true);
     try {
@@ -727,16 +706,9 @@ class _ShotActionBarState extends State<_ShotActionBar> {
           builder: (_) => PhotoScanScreen(face: vm.face, knownHolesMm: knownHolesMm),
         ),
       );
-      if (points == null || !context.mounted) return;
-      for (final p in points) {
-        if (!vm.canAddShotNow) {
-          if (context.mounted) showPauseAddHint(context);
-          return;
-        }
-        vm.beginAddNew();
-        vm.updateDraftPosition(p.x, p.y);
-        await _waitUntilEditingDone(vm);
-      }
+      if (points == null || points.isEmpty || !context.mounted) return;
+      final added = vm.addScannedShots(points);
+      if (added < points.length && context.mounted) showPauseAddHint(context);
     } finally {
       if (mounted) setState(() => _scanning = false);
     }

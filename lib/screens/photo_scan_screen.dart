@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -5,11 +6,12 @@ import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 
+import '../logic/scoring.dart';
 import '../logic/shot_photo_detection.dart';
 import '../models/target_face.dart';
 import '../services/shot_photo_service.dart';
 
-/// Функция для `compute()` — обязана быть верхнеуровневой: изолят видит
+/// Функции для `compute()` — обязаны быть верхнеуровневыми: изолят видит
 /// только сам код функции и переданный ей аргумент, никаких замыканий.
 List<HoleCandidate> _detectInIsolate(_DetectArgs args) {
   return findCandidateHoles(
@@ -20,6 +22,9 @@ List<HoleCandidate> _detectInIsolate(_DetectArgs args) {
     knownHolesPx: args.knownHolesPx,
   );
 }
+
+({PixelPoint center, double radiusPx})? _detectCircleInIsolate(GrayImage image) =>
+    detectTargetCircle(image);
 
 class _DetectArgs {
   final GrayImage image;
@@ -36,14 +41,18 @@ class _DetectArgs {
   });
 }
 
-/// Определение пробоин по фото мишени.
+/// Определение пробоин по фото мишени — можно снять НЕСКОЛЬКО фото подряд
+/// в одном заходе (решение пользователя: подтвердил пробоины на одном
+/// снимке — экран сразу предлагает следующий, а не уводит на правку).
 ///
-/// Три шага: выбрать фото → совместить круг с краем бланка на фото
-/// (калибровка масштаба и центра — по кольцам/краю мишени, а не по
-/// отдельной физической метке) → найденные новые пробоины возвращаются
-/// вызывающему экрану координатами в мм, он же их и подтверждает —
-/// обычной панелью правки на настоящей мишени, которая для этого уже
-/// есть и проверена.
+/// Шаги на каждом фото: выбрать снимок → круг мишени подгоняется
+/// автоматически (по контрасту с фоном кадра), пользователь может
+/// подправить его руками → пробоины ищутся сразу же и показываются
+/// точками поверх фото — их можно перетащить, убрать лишнюю или
+/// добавить пропущенную → «Подтвердить» добавляет их в общий список
+/// внизу и сразу предлагает выбрать следующее фото. «Готово» в шапке
+/// завершает заход и возвращает накопленный список вызывающему экрану —
+/// тот добавляет все выстрелы разом, без правки по одному.
 ///
 /// Само фото никогда не сохраняется приложением: путь к нему не
 /// открывается (`file_picker` с `withData: true` отдаёт байты в
@@ -67,12 +76,21 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
   img.Image? _decoded;
   String? _error;
   bool _busy = false;
+  bool _addMode = false;
 
   // Калибровка — в координатах ИСХОДНОГО (не отображаемого) фото.
   Offset? _calibCenter;
   double _calibRadius = 0;
 
+  // Кандидаты текущего фото — тоже в координатах исходного фото.
+  List<Offset> _candidates = [];
+
+  // Накопленный список подтверждённых пробоин (across фото), в мм.
+  final List<PixelPoint> _confirmedMm = [];
+
   double _displayScale = 1; // display px = natural px * _displayScale
+
+  List<PixelPoint> get _allKnownMm => [...widget.knownHolesMm, ..._confirmedMm];
 
   Future<void> _pick() async {
     setState(() {
@@ -88,20 +106,36 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
       final bytes = result.files.first.bytes;
       if (bytes == null) throw const ShotPhotoException('Не удалось прочитать файл');
       final decoded = ShotPhotoService.decode(bytes);
+      final analyzed = ShotPhotoService.analyze(decoded);
+      final autoCircle = await compute(_detectCircleInIsolate, analyzed.image);
+
+      Offset center;
+      double radius;
+      if (autoCircle != null) {
+        final s = analyzed.scale;
+        center = Offset(autoCircle.center.x / s, autoCircle.center.y / s);
+        radius = autoCircle.radiusPx / s;
+      } else {
+        center = Offset(decoded.width / 2, decoded.height / 2);
+        radius = (decoded.width < decoded.height ? decoded.width : decoded.height) * 0.35;
+      }
+
       setState(() {
         _bytes = bytes;
         _decoded = decoded;
-        _calibCenter = Offset(decoded.width / 2, decoded.height / 2);
-        _calibRadius = (decoded.width < decoded.height ? decoded.width : decoded.height) * 0.35;
+        _calibCenter = center;
+        _calibRadius = radius;
+        _candidates = [];
       });
+      await _runDetection();
     } catch (e) {
       setState(() => _error = '$e');
     } finally {
-      setState(() => _busy = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
 
-  Future<void> _detect() async {
+  Future<void> _runDetection() async {
     final decoded = _decoded;
     final center = _calibCenter;
     if (decoded == null || center == null) return;
@@ -116,7 +150,7 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
       final scaledRadius = _calibRadius * s;
       final caliberRadiusPx = scaledRadius * (widget.face.caliberMm / 2) / widget.face.faceRadiusMm;
       final knownPx = [
-        for (final mm in widget.knownHolesMm)
+        for (final mm in _allKnownMm)
           PixelPoint(
             scaledCenter.x + mm.x / widget.face.faceRadiusMm * scaledRadius,
             scaledCenter.y - mm.y / widget.face.faceRadiusMm * scaledRadius,
@@ -135,20 +169,14 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
       );
 
       if (!mounted) return;
-      if (candidates.isEmpty) {
-        setState(() {
-          _busy = false;
-          _error = 'Новых пробоин не нашли — либо на фото их не видно, либо круг откалиброван неточно. '
-              'Попробуйте подровнять круг по самому краю бланка и снять чуть ровнее.';
-        });
-        return;
-      }
-
-      final points = [
-        for (final c in candidates)
-          pixelToMm(c.center, scaledCenter, scaledRadius, widget.face.faceRadiusMm),
-      ];
-      Navigator.of(context).pop(points);
+      setState(() {
+        _busy = false;
+        _candidates = [for (final c in candidates) Offset(c.center.x / s, c.center.y / s)];
+        if (_candidates.isEmpty) {
+          _error = 'Пробоин не нашли — либо на фото их не видно, либо круг откалиброван неточно. '
+              'Можно подровнять круг или добавить точку вручную кнопкой ниже.';
+        }
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -158,83 +186,70 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
     }
   }
 
+  PixelPoint _toMm(Offset px) => pixelToMm(
+        PixelPoint(px.dx, px.dy),
+        PixelPoint(_calibCenter!.dx, _calibCenter!.dy),
+        _calibRadius,
+        widget.face.faceRadiusMm,
+      );
+
+  void _confirmPhoto() {
+    setState(() {
+      _confirmedMm.addAll(_candidates.map(_toMm));
+      _candidates = [];
+      _decoded = null;
+      _bytes = null;
+      _calibCenter = null;
+      _addMode = false;
+      _error = null;
+    });
+  }
+
+  void _finish() {
+    Navigator.of(context).pop(_confirmedMm);
+  }
+
   @override
   Widget build(BuildContext context) {
     final decoded = _decoded;
     return Scaffold(
-      appBar: AppBar(title: const Text('Фото мишени')),
-      body: decoded == null
-          ? _buildPickPrompt()
-          : Column(
-              children: [
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final aspect = decoded.width / decoded.height;
-                        return Center(
-                          child: AspectRatio(
-                            aspectRatio: aspect,
-                            child: LayoutBuilder(
-                              builder: (context, box) {
-                                _displayScale = box.maxWidth / decoded.width;
-                                return _CalibrationOverlay(
-                                  bytes: _bytes!,
-                                  displayScale: _displayScale,
-                                  center: _calibCenter!,
-                                  radius: _calibRadius,
-                                  onChanged: (c, r) => setState(() {
-                                    _calibCenter = c;
-                                    _calibRadius = r;
-                                  }),
-                                );
-                              },
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: Text(
-                    'Совместите круг с краем бланка мишени на фото: тащите за середину, '
-                    'чтобы сдвинуть, и за край круга, чтобы изменить размер.',
-                    style: Theme.of(context).textTheme.bodySmall,
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                  ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _busy ? null : () => setState(() => _decoded = null),
-                          child: const Text('Другое фото'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: FilledButton(
-                          onPressed: _busy ? null : _detect,
-                          child: _busy
-                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                              : const Text('Найти пробоины'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+      appBar: AppBar(
+        title: const Text('Фото мишени'),
+        actions: [
+          if (_confirmedMm.isNotEmpty)
+            TextButton(
+              onPressed: _finish,
+              child: Text('Готово (${_confirmedMm.length})', style: const TextStyle(color: Colors.white)),
             ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Expanded(child: decoded == null ? _buildPickPrompt() : _buildReview(decoded)),
+          if (_confirmedMm.isNotEmpty) _buildRunningList(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRunningList() {
+    final labels = [
+      for (final p in _confirmedMm)
+        scoreForRadius(math.sqrt(p.x * p.x + p.y * p.y), widget.face).toStringAsFixed(1),
+    ];
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Уже добавлено', style: Theme.of(context).textTheme.labelMedium),
+            const SizedBox(height: 4),
+            Text(labels.join(', '), style: Theme.of(context).textTheme.bodyMedium),
+          ],
+        ),
+      ),
     );
   }
 
@@ -248,8 +263,10 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
             Icon(Icons.photo_camera_outlined, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
             const SizedBox(height: 12),
             Text(
-              'Сфотографируйте мишень камерой телефона и выберите снимок здесь — '
-              'приложение само в галерею не пишет и файл после разбора не хранит.',
+              _confirmedMm.isEmpty
+                  ? 'Сфотографируйте мишень камерой телефона и выберите снимок здесь — '
+                      'приложение само в галерею не пишет и файл после разбора не хранит.'
+                  : 'Можно выбрать ещё одно фото — или нажать «Готово» в шапке, если снимков достаточно.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium,
             ),
@@ -270,55 +287,187 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
       ),
     );
   }
+
+  Widget _buildReview(img.Image decoded) {
+    return Column(
+      children: [
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final aspect = decoded.width / decoded.height;
+                return Center(
+                  child: AspectRatio(
+                    aspectRatio: aspect,
+                    child: LayoutBuilder(
+                      builder: (context, box) {
+                        _displayScale = box.maxWidth / decoded.width;
+                        return _ReviewOverlay(
+                          bytes: _bytes!,
+                          displayScale: _displayScale,
+                          center: _calibCenter!,
+                          radius: _calibRadius,
+                          candidates: _candidates,
+                          addMode: _addMode,
+                          onCalibrationChanged: (c, r) => setState(() {
+                            _calibCenter = c;
+                            _calibRadius = r;
+                          }),
+                          onCandidateMoved: (i, p) => setState(() => _candidates[i] = p),
+                          onCandidateRemoved: (i) => setState(() => _candidates.removeAt(i)),
+                          onCandidateAdded: (p) => setState(() {
+                            _candidates.add(p);
+                            _addMode = false;
+                          }),
+                        );
+                      },
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Text(
+            'Круг подогнан автоматически — при необходимости сдвиньте центр или '
+            'потяните за край. Точки — найденные пробоины: перетащите, чтобы '
+            'совместить с фактическим отверстием, или снимите лишнюю.',
+            style: Theme.of(context).textTheme.bodySmall,
+            textAlign: TextAlign.center,
+          ),
+        ),
+        if (_error != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _busy ? null : () => setState(() => _addMode = !_addMode),
+                  icon: Icon(_addMode ? Icons.close : Icons.add_location_alt_outlined),
+                  label: Text(_addMode ? 'Отмена' : 'Точка'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _busy ? null : _runDetection,
+                  child: const Text('Найти снова'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 2,
+                child: FilledButton(
+                  onPressed: _busy || _candidates.isEmpty ? null : _confirmPhoto,
+                  child: _busy
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : Text('Подтвердить (${_candidates.length})'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }
 
-/// Фото + перетаскиваемый круг калибровки поверх него. Координаты
-/// хранятся в системе ИСХОДНОГО фото — виджет сам переводит экранные
-/// жесты через `displayScale`, наружу всегда уходят "настоящие" пиксели.
-class _CalibrationOverlay extends StatelessWidget {
+/// Фото + перетаскиваемый круг калибровки + точки-кандидаты поверх него.
+/// Координаты хранятся в системе ИСХОДНОГО фото — виджет сам переводит
+/// экранные жесты через `displayScale`, наружу всегда уходят "настоящие"
+/// пиксели.
+class _ReviewOverlay extends StatelessWidget {
   final Uint8List bytes;
   final double displayScale;
   final Offset center;
   final double radius;
-  final void Function(Offset center, double radius) onChanged;
+  final List<Offset> candidates;
+  final bool addMode;
+  final void Function(Offset center, double radius) onCalibrationChanged;
+  final void Function(int index, Offset newPos) onCandidateMoved;
+  final void Function(int index) onCandidateRemoved;
+  final void Function(Offset pos) onCandidateAdded;
 
-  const _CalibrationOverlay({
+  const _ReviewOverlay({
     required this.bytes,
     required this.displayScale,
     required this.center,
     required this.radius,
-    required this.onChanged,
+    required this.candidates,
+    required this.addMode,
+    required this.onCalibrationChanged,
+    required this.onCandidateMoved,
+    required this.onCandidateRemoved,
+    required this.onCandidateAdded,
   });
 
   static const double _handleHitRadius = 24;
+  static const double _dotRadius = 12;
 
   @override
   Widget build(BuildContext context) {
     final displayCenter = center * displayScale;
     final displayRadius = radius * displayScale;
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onPanStart: (details) {},
-      onPanUpdate: (details) {
-        final local = details.localPosition;
-        final distFromEdge = (local - displayCenter).distance - displayRadius;
-        if (distFromEdge.abs() <= _handleHitRadius) {
-          final newRadius = (local - displayCenter).distance / displayScale;
-          onChanged(center, newRadius.clamp(10, 5000));
-        } else {
-          onChanged(center + details.delta / displayScale, radius);
-        }
-      },
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Image.memory(bytes, fit: BoxFit.fill),
-          CustomPaint(
-            painter: _CalibrationPainter(center: displayCenter, radius: displayRadius),
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapUp: addMode ? (details) => onCandidateAdded(details.localPosition / displayScale) : null,
+          onPanUpdate: addMode
+              ? null
+              : (details) {
+                  final local = details.localPosition;
+                  final distFromEdge = (local - displayCenter).distance - displayRadius;
+                  if (distFromEdge.abs() <= _handleHitRadius) {
+                    final newRadius = (local - displayCenter).distance / displayScale;
+                    onCalibrationChanged(center, newRadius.clamp(10, 5000));
+                  } else {
+                    onCalibrationChanged(center + details.delta / displayScale, radius);
+                  }
+                },
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Image.memory(bytes, fit: BoxFit.fill),
+              CustomPaint(
+                painter: _CalibrationPainter(center: displayCenter, radius: displayRadius),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+        for (var i = 0; i < candidates.length; i++)
+          Positioned(
+            left: candidates[i].dx * displayScale - _dotRadius,
+            top: candidates[i].dy * displayScale - _dotRadius,
+            width: _dotRadius * 2,
+            height: _dotRadius * 2,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => onCandidateRemoved(i),
+              onPanUpdate: (details) => onCandidateMoved(
+                i,
+                candidates[i] + details.delta / displayScale,
+              ),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.redAccent.withValues(alpha: 0.85),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
