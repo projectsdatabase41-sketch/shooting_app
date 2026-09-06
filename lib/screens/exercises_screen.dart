@@ -8,6 +8,7 @@ import '../models/training_session.dart';
 import '../state/app_data_store.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/swipe_to_delete.dart';
+import '../widgets/weapon_icon.dart';
 import 'exercise_editor_screen.dart';
 import 'target_screen.dart';
 
@@ -60,6 +61,7 @@ class ExercisesScreen extends StatelessWidget {
                   onConfirmed: () => _deleteExercise(context, ex),
                   child: _ExerciseCard(
                     name: ex.name,
+                    face: face,
                     faceName: face.name,
                     totalShots: ex.totalShots,
                     seriesSize: ex.seriesSize,
@@ -130,6 +132,7 @@ class ExercisesScreen extends StatelessWidget {
 /// упражнение и опознаётся, а в слитной подписи они терялись.
 class _ExerciseCard extends StatelessWidget {
   final String name;
+  final TargetFace face;
   final String faceName;
   final int totalShots;
   final int seriesSize;
@@ -140,6 +143,7 @@ class _ExerciseCard extends StatelessWidget {
 
   const _ExerciseCard({
     required this.name,
+    required this.face,
     required this.faceName,
     required this.totalShots,
     required this.seriesSize,
@@ -167,7 +171,7 @@ class _ExerciseCard extends StatelessWidget {
                   color: cs.primaryContainer,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(Icons.gps_fixed, size: 20, color: cs.onPrimaryContainer),
+                child: WeaponIcon(face: face, size: 20, color: cs.onPrimaryContainer),
               ),
               const SizedBox(width: 12),
               Expanded(
