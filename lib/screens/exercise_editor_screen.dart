@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../models/series_spec.dart';
 import '../models/target_face.dart';
 import '../state/app_data_store.dart';
-import '../widgets/weapon_icon.dart';
 
 /// Создание упражнения со свободной структурой серий.
 ///
@@ -122,14 +121,7 @@ class _ExerciseEditorScreenState extends State<ExerciseEditorScreen> {
               for (final f in TargetFace.all)
                 DropdownMenuItem(
                   value: f.code,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      WeaponIcon(face: f, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                      const SizedBox(width: 8),
-                      Flexible(child: Text(f.name, overflow: TextOverflow.ellipsis, maxLines: 1)),
-                    ],
-                  ),
+                  child: Text(f.name, overflow: TextOverflow.ellipsis, maxLines: 1),
                 ),
             ],
             onChanged: (v) => setState(() => _faceCode = v ?? _faceCode),

@@ -12,7 +12,6 @@ import '../state/app_data_store.dart';
 import '../widgets/ai_chart_view.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/raised_3d_button.dart';
-import '../widgets/weapon_icon.dart';
 
 /// Чат с ассистентом по результатам стрельбы.
 ///
@@ -403,14 +402,7 @@ class _ExerciseProposalCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 4),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              WeaponIcon(face: face, size: 14, color: theme.textTheme.bodySmall?.color),
-              const SizedBox(width: 6),
-              Text(face.name, style: theme.textTheme.bodySmall),
-            ],
-          ),
+          Text(face.name, style: theme.textTheme.bodySmall),
           if (seriesList != null)
             for (final s in seriesList)
               Padding(
