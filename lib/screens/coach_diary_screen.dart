@@ -210,12 +210,14 @@ class _ConnectFormState extends State<_ConnectForm> {
             controller: _key,
             decoration: const InputDecoration(labelText: 'Публичный ключ (anon / publishable)'),
             autocorrect: false,
+            obscureText: true,
           ),
           const SizedBox(height: 10),
           TextField(
             controller: _token,
             decoration: const InputDecoration(labelText: 'Токен доступа'),
             autocorrect: false,
+            obscureText: true,
           ),
           const SizedBox(height: 16),
           FilledButton(

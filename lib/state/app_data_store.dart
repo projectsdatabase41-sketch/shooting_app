@@ -83,7 +83,12 @@ class AppDataStore extends ChangeNotifier {
   void saveSettings() {
     db.db.execute(
       'UPDATE project_settings SET is_athlete = ?, is_coach = ?, work_mode = ?, storage_keep_count = ? WHERE id = 1',
-      [isAthlete ? 1 : 0, isCoach ? 1 : 0, _workMode.name, storageKeepCount],
+      // workMode (геттер), не _workMode: при одной активной роли геттер
+      // выводит режим из isAthlete/isCoach и игнорирует _workMode
+      // (сеттер тоже это учитывает и молча не трогает поле) — сохраняя
+      // _workMode напрямую, здесь можно было записать в колонку
+      // устаревшее значение, оставшееся от прошлой роли.
+      [isAthlete ? 1 : 0, isCoach ? 1 : 0, workMode.name, storageKeepCount],
     );
   }
 

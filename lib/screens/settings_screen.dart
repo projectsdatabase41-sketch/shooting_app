@@ -5,7 +5,7 @@ import '../services/supabase_service.dart';
 import '../state/app_data_store.dart';
 import '../state/personalization_view_model.dart';
 import '../widgets/section_header.dart';
-import 'import_screen.dart';
+import 'export_screen.dart';
 import 'ai_settings_screen.dart';
 import 'color_personalization_screen.dart';
 
@@ -24,7 +24,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final store = context.watch<AppDataStore>();
-    final bothRoles = store.isAthlete && store.isCoach;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Настройки')),
@@ -58,26 +57,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           ListTile(
-            leading: const Icon(Icons.file_download_outlined),
+            leading: Icon(Icons.file_download_outlined, color: Theme.of(context).disabledColor),
             title: const Text('Импорт тренировок'),
-            subtitle: const Text('Из файла: координаты, результаты, показатели прибора'),
+            subtitle: const Text('В разработке'),
+            enabled: false,
+          ),
+          ListTile(
+            leading: const Icon(Icons.ios_share_outlined),
+            title: const Text('Экспорт тренировок'),
+            subtitle: const Text('В файл: для резервной копии или переноса на другое устройство'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ImportScreen()),
+              MaterialPageRoute(builder: (_) => const ExportScreen()),
             ),
           ),
           const Divider(height: 24),
-          if (bothRoles)
-            SwitchListTile(
-              title: const Text('Режим работы: тренер'),
-              subtitle: Text(store.workMode == WorkMode.coach ? 'Тренер' : 'Спортсмен'),
-              value: store.workMode == WorkMode.coach,
-              onChanged: (v) {
-                store.workMode = v ? WorkMode.coach : WorkMode.athlete;
-                store.saveSettings();
-                setState(() {});
-              },
+          // Рубильник, а не переключатель режима внутри уже включённой
+          // тренерской роли: раньше эту роль вообще не было видно как
+          // включить — переключатель показывался, только если isCoach
+          // уже почему-то стоял true, а поставить его true было неоткуда.
+          // По умолчанию — всегда спортсмен; включили — стали тренером,
+          // это единственная и исключающая пара, не два флага сразу.
+          SwitchListTile(
+            title: const Text('Режим тренера'),
+            subtitle: Text(
+              store.workMode == WorkMode.coach
+                  ? 'Тренер — свои тренировки не ведёте, только дневники подключённых спортсменов'
+                  : 'Спортсмен — обычный режим',
             ),
+            value: store.workMode == WorkMode.coach,
+            onChanged: (v) {
+              // Не устанавливаем store.workMode отдельно: при ровно
+              // одной активной роли (а здесь всегда так) геттер сам
+              // выводит режим из isAthlete/isCoach.
+              store.isCoach = v;
+              store.isAthlete = !v;
+              store.saveSettings();
+              setState(() {});
+            },
+          ),
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: SectionHeader(
@@ -606,6 +624,7 @@ class _AccountSheetState extends State<_AccountSheet> {
                     hintText: 'sb_publishable_… или eyJhbGci…',
                   ),
                   autocorrect: false,
+                  obscureText: true,
                 ),
                 const SizedBox(height: 4),
                 Text(

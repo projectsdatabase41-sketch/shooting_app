@@ -590,81 +590,80 @@ class _CurrentSeriesLine extends StatelessWidget {
   }
 }
 
-/// Кнопки действий на самой мишени во время активной правки — ПО
-/// МАКЕТАМ (решение пользователя): Добавить/Удалить/Переместить/Отмена
-/// + быстрая заметка к выстрелу вместо "Помощь", плюс степперы
-/// результата/угла (A.6).
+/// Кнопки действий на самой мишени во время активной правки.
+///
+/// Тот же `Raised3DButton`, что и у панели просмотра (Выстрел/Править/
+/// Фото) — решение пользователя: обе панели живут на одном и том же
+/// месте под мишенью и должны выглядеть одной системой, а не парой
+/// разных стилей кнопок вперемешку.
 class _EditActionBar extends StatelessWidget {
   const _EditActionBar();
 
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<TargetViewModel>();
-    // Цвета берём из ТЕМЫ приложения, а не из цветовой схемы мишени.
-    //
-    // Схема мишени — это личная настройка видимости бланка (стрелок
-    // подбирает её под своё зрение и освещение), и bottomPanelBg там
-    // остался от старой панели значений, которая жила прямо на мишени.
-    // Панель под мишенью — обычный элемент интерфейса, и когда она
-    // красилась схемой, на светлой схеме получались белые подписи на
-    // белом фоне: было видно, что кнопки есть, но не видно какие.
     final cs = Theme.of(context).colorScheme;
-    // Заметка — только к уже существующему выстрелу (id есть, и
-    // CommentsThreadSheet может к нему обратиться). У черновика новой
-    // пробоины id появится только после "Сохранить" — до этого
-    // комментировать нечего.
-    final shotForNote = vm.isAddingNew ? null : vm.selectedShot;
+    // Заметка и удаление — только у уже существующего выстрела (id
+    // есть, и CommentsThreadSheet/deleteSelected могут к нему
+    // обратиться). У черновика новой пробоины id появится только после
+    // "Сохранить" — до этого ни комментировать, ни удалять нечего.
+    final existingShot = vm.isAddingNew ? null : vm.selectedShot;
 
     return Material(
       color: cs.surfaceContainerHigh,
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  // «Удалить» осталось в списке выстрелов: во время
-                  // добавления удалять нечего, а при перемещении удобнее
-                  // удалять из списка, где виден весь контекст тренировки.
-                  //
-                  // Сохранить слева, отменить справа — подтверждение
-                  // должно стоять там, куда палец идёт по умолчанию.
-                  _iconLabel(context, Icons.check, 'Сохранить', vm.confirmEdit, cs.primary),
-                  if (shotForNote != null)
-                    _iconLabel(
-                      context,
-                      Icons.comment_outlined,
-                      'Заметка',
-                      () => CommentsThreadSheet.showForShot(context, shotForNote.id),
-                      cs.secondary,
-                    ),
-                  _iconLabel(context, Icons.close, 'Отменить', vm.cancelEditing, cs.error),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          // До четырёх кнопок сразу (Сохранить/Заметка/Удалить/
+          // Отменить) на узком экране в Row с spaceEvenly не помещаются
+          // — та же ошибка, что уже была с нижней навигацией. Горизон-
+          // тальная прокрутка не даёт им обрезаться или перенестись.
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Raised3DButton(
+                  dense: true,
+                  icon: Icons.check,
+                  label: 'Сохранить',
+                  baseColor: cs.primary,
+                  onTap: vm.confirmEdit,
+                ),
+                if (existingShot != null) ...[
+                  const SizedBox(width: 12),
+                  Raised3DButton(
+                    dense: true,
+                    icon: Icons.comment_outlined,
+                    label: 'Заметка',
+                    baseColor: cs.secondary,
+                    onTap: () => CommentsThreadSheet.showForShot(context, existingShot.id),
+                  ),
+                  const SizedBox(width: 12),
+                  Raised3DButton(
+                    dense: true,
+                    icon: Icons.delete_outline,
+                    label: 'Удалить',
+                    baseColor: cs.error,
+                    onTap: vm.deleteSelected,
+                  ),
                 ],
-              ),
-            ],
+                const SizedBox(width: 12),
+                Raised3DButton(
+                  dense: true,
+                  icon: Icons.close,
+                  label: 'Отменить',
+                  // Не error: эта кнопка ничего не удаляет и не портит,
+                  // просто отбрасывает несохранённую правку — сильный
+                  // красный здесь спорил бы с настоящим "Удалить" рядом.
+                  baseColor: cs.outline,
+                  onTap: vm.cancelEditing,
+                ),
+              ],
+            ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _iconLabel(BuildContext context, IconData icon, String label, VoidCallback? onTap, Color color) {
-    return InkWell(
-      onTap: onTap,
-      child: Opacity(
-        // 0.55, а не 0.4: на 0.4 подпись под иконкой сливалась с фоном
-        // и было непонятно, что это вообще за кнопка.
-        opacity: onTap == null ? 0.55 : 1,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: color, size: 22),
-            Text(label, style: TextStyle(color: color, fontSize: 10)),
-          ],
         ),
       ),
     );
@@ -753,43 +752,53 @@ class _ShotActionBarState extends State<_ShotActionBar> {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            Raised3DButton(
-              icon: Icons.add_circle_outline,
-              label: 'Выстрел',
-              baseColor: Theme.of(context).colorScheme.primary,
-              onTap: () {
-                // На паузе позже минутного окна выстрел не добавляется.
-                // Молча ничего не делать нельзя — кнопка выглядела бы
-                // сломанной, поэтому объясняем, что надо продолжить.
-                if (!vm.canAddShotNow) {
-                  showPauseAddHint(context);
-                  return;
-                }
-                vm.beginAddNew();
-              },
-            ),
-            Raised3DButton(
-              icon: Icons.edit_location_alt_outlined,
-              label: 'Править',
-              baseColor: Theme.of(context).colorScheme.secondary,
-              onTap: hasShots
-                  ? () {
-                      vm.selectIndex(vm.session.shots.length - 1);
-                      vm.beginMoveSelected();
-                    }
-                  : null,
-            ),
-            Raised3DButton(
-              icon: Icons.photo_camera_outlined,
-              label: 'Фото',
-              baseColor: Theme.of(context).colorScheme.tertiary,
-              onTap: _scanning ? null : () => _scanPhoto(context, vm),
-            ),
-          ],
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        // Три полноразмерные 3D-кнопки впритык помещаются на широких
+        // телефонах, но на узких (360dp и меньше — обычные Android)
+        // рискуют обрезаться. Прокрутка — тот же приём, что и в панели
+        // правки, вместо угадывания, скольким телефонам хватит места.
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Raised3DButton(
+                icon: Icons.add_circle_outline,
+                label: 'Выстрел',
+                baseColor: Theme.of(context).colorScheme.primary,
+                onTap: () {
+                  // На паузе позже минутного окна выстрел не добавляется.
+                  // Молча ничего не делать нельзя — кнопка выглядела бы
+                  // сломанной, поэтому объясняем, что надо продолжить.
+                  if (!vm.canAddShotNow) {
+                    showPauseAddHint(context);
+                    return;
+                  }
+                  vm.beginAddNew();
+                },
+              ),
+              const SizedBox(width: 16),
+              Raised3DButton(
+                icon: Icons.edit_location_alt_outlined,
+                label: 'Править',
+                baseColor: Theme.of(context).colorScheme.secondary,
+                onTap: hasShots
+                    ? () {
+                        vm.selectIndex(vm.session.shots.length - 1);
+                        vm.beginMoveSelected();
+                      }
+                    : null,
+              ),
+              const SizedBox(width: 16),
+              Raised3DButton(
+                icon: Icons.photo_camera_outlined,
+                label: 'Фото',
+                baseColor: Theme.of(context).colorScheme.tertiary,
+                onTap: _scanning ? null : () => _scanPhoto(context, vm),
+              ),
+            ],
+          ),
         ),
       ),
     );
