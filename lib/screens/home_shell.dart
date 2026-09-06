@@ -65,6 +65,12 @@ class _HomeShellState extends State<HomeShell> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _athleteIndex,
         onDestinationSelected: (i) => setState(() => _athleteIndex = i),
+        // Шесть вкладок на узком экране (375dp и меньше) не помещаются
+        // с подписью у каждой — "Тренировка"/"Ассистент"/"Настройки"
+        // переносились на две строки или обрезались. Подпись остаётся
+        // только у выбранной вкладки — Material-паттерн для навигации
+        // с большим числом пунктов, а не сокращение слов до нечитаемого.
+        labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
         destinations: const [
           NavigationDestination(icon: Icon(Icons.fitness_center), label: 'Тренировка'),
           NavigationDestination(icon: Icon(Icons.history), label: 'История'),

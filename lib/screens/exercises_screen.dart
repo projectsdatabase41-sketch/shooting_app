@@ -27,11 +27,17 @@ class ExercisesScreen extends StatelessWidget {
     final list = store.activeExercises;
     return Scaffold(
       appBar: AppBar(title: const Text('Тренировка')),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showCreateExerciseDialog(context),
-        icon: const Icon(Icons.add),
-        label: const Text('Упражнение'),
-      ),
+      // На пустом списке кнопка создания уже есть в самом EmptyState —
+      // вторая, плавающая, с тем же действием рядом только дублировала
+      // её и спорила за внимание. FAB нужен, когда список уже не пуст:
+      // тогда центральной кнопки нет и создавать больше не откуда.
+      floatingActionButton: list.isEmpty
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _showCreateExerciseDialog(context),
+              icon: const Icon(Icons.add),
+              label: const Text('Упражнение'),
+            ),
       body: list.isEmpty
           ? EmptyState(
               icon: Icons.fitness_center,
