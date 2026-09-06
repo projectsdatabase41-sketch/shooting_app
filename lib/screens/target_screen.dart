@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../logic/ai_context.dart';
+import '../logic/shot_photo_detection.dart';
 import '../models/exercise.dart';
 import '../models/comment.dart';
 import '../models/target_face.dart';
@@ -16,6 +19,7 @@ import '../widgets/shot_list_sheet.dart';
 import '../widgets/shot_wheel.dart';
 import '../widgets/target_canvas.dart';
 import 'ai_chat_screen.dart';
+import 'photo_scan_screen.dart';
 
 /// Рабочий стол тренировки.
 ///
@@ -684,8 +688,60 @@ class _EditActionBar extends StatelessWidget {
 /// пользователя), а не два тапа внутри одной общей плашки: рельеф и
 /// просадка при нажатии видны как раз потому, что у каждой кнопки
 /// свой собственный контур и тень, а не общий фон на двоих.
-class _ShotActionBar extends StatelessWidget {
+class _ShotActionBar extends StatefulWidget {
   const _ShotActionBar();
+
+  @override
+  State<_ShotActionBar> createState() => _ShotActionBarState();
+}
+
+class _ShotActionBarState extends State<_ShotActionBar> {
+  bool _scanning = false;
+
+  /// Ждёт, пока пользователь не подтвердит/отменит текущий черновик —
+  /// нужно, чтобы прогнать несколько найденных на фото пробоин ПО
+  /// ОЧЕРЕДИ через обычную панель правки, а не городить для этого
+  /// отдельный экран подтверждения: пользователь видит их на настоящей
+  /// мишени, тем же способом, что и вручную поставленную пробоину.
+  Future<void> _waitUntilEditingDone(TargetViewModel vm) {
+    if (!vm.isEditing) return Future.value();
+    final completer = Completer<void>();
+    void listener() {
+      if (!vm.isEditing) {
+        vm.removeListener(listener);
+        completer.complete();
+      }
+    }
+
+    vm.addListener(listener);
+    return completer.future;
+  }
+
+  Future<void> _scanPhoto(BuildContext context, TargetViewModel vm) async {
+    setState(() => _scanning = true);
+    try {
+      final knownHolesMm = [
+        for (final s in [...vm.session.shots, ...vm.session.trash]) PixelPoint(s.xMm, s.yMm),
+      ];
+      final points = await Navigator.of(context).push<List<PixelPoint>>(
+        MaterialPageRoute(
+          builder: (_) => PhotoScanScreen(face: vm.face, knownHolesMm: knownHolesMm),
+        ),
+      );
+      if (points == null || !context.mounted) return;
+      for (final p in points) {
+        if (!vm.canAddShotNow) {
+          if (context.mounted) showPauseAddHint(context);
+          return;
+        }
+        vm.beginAddNew();
+        vm.updateDraftPosition(p.x, p.y);
+        await _waitUntilEditingDone(vm);
+      }
+    } finally {
+      if (mounted) setState(() => _scanning = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -697,7 +753,7 @@ class _ShotActionBar extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
@@ -726,6 +782,12 @@ class _ShotActionBar extends StatelessWidget {
                       vm.beginMoveSelected();
                     }
                   : null,
+            ),
+            Raised3DButton(
+              icon: Icons.photo_camera_outlined,
+              label: 'Фото',
+              baseColor: Theme.of(context).colorScheme.tertiary,
+              onTap: _scanning ? null : () => _scanPhoto(context, vm),
             ),
           ],
         ),
