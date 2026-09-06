@@ -6,6 +6,11 @@
          ответ, справочник по стрельбе не открывается, синхронизация с
          Supabase не работает — без единого сообщения об ошибке. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Съёмка мишени через камеру (раздел "Фото" — автоопределение
+         пробоины и автоспуск). Без звука — enableAudio: false в
+         CameraController, поэтому RECORD_AUDIO не запрашивается. -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
 
     <application
         android:label="Стрельба"

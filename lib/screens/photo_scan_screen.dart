@@ -2,7 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart' show compute;
+import 'package:flutter/foundation.dart' show compute, defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 
@@ -10,6 +10,7 @@ import '../logic/scoring.dart';
 import '../logic/shot_photo_detection.dart';
 import '../models/target_face.dart';
 import '../services/shot_photo_service.dart';
+import 'camera_scan_screen.dart';
 
 /// Функции для `compute()` — обязаны быть верхнеуровневыми: изолят видит
 /// только сам код функции и переданный ей аргумент, никаких замыканий.
@@ -92,6 +93,11 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
 
   List<PixelPoint> get _allKnownMm => [...widget.knownHolesMm, ..._confirmedMm];
 
+  /// Живая камера есть только в Android-сборке (см. pubspec.yaml) — на
+  /// Windows и в вебе (в том числе на телефоне, открытом в браузере)
+  /// остаётся привычный выбор файла.
+  bool get _cameraAvailable => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
   Future<void> _pick() async {
     setState(() {
       _busy = true;
@@ -105,34 +111,58 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
       }
       final bytes = result.files.first.bytes;
       if (bytes == null) throw const ShotPhotoException('Не удалось прочитать файл');
-      final decoded = ShotPhotoService.decode(bytes);
-      final analyzed = ShotPhotoService.analyze(decoded);
-      final autoCircle = await compute(_detectCircleInIsolate, analyzed.image);
-
-      Offset center;
-      double radius;
-      if (autoCircle != null) {
-        final s = analyzed.scale;
-        center = Offset(autoCircle.center.x / s, autoCircle.center.y / s);
-        radius = autoCircle.radiusPx / s;
-      } else {
-        center = Offset(decoded.width / 2, decoded.height / 2);
-        radius = (decoded.width < decoded.height ? decoded.width : decoded.height) * 0.35;
-      }
-
-      setState(() {
-        _bytes = bytes;
-        _decoded = decoded;
-        _calibCenter = center;
-        _calibRadius = radius;
-        _candidates = [];
-      });
-      await _runDetection();
+      await _loadPhoto(bytes);
     } catch (e) {
       setState(() => _error = '$e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _openCamera() async {
+    final bytes = await Navigator.of(context).push<Uint8List>(
+      MaterialPageRoute(
+        builder: (_) => CameraScanScreen(face: widget.face, knownHolesMm: _allKnownMm),
+      ),
+    );
+    if (bytes == null || !mounted) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await _loadPhoto(bytes);
+    } catch (e) {
+      setState(() => _error = '$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _loadPhoto(Uint8List bytes) async {
+    final decoded = ShotPhotoService.decode(bytes);
+    final analyzed = ShotPhotoService.analyze(decoded);
+    final autoCircle = await compute(_detectCircleInIsolate, analyzed.image);
+
+    Offset center;
+    double radius;
+    if (autoCircle != null) {
+      final s = analyzed.scale;
+      center = Offset(autoCircle.center.x / s, autoCircle.center.y / s);
+      radius = autoCircle.radiusPx / s;
+    } else {
+      center = Offset(decoded.width / 2, decoded.height / 2);
+      radius = (decoded.width < decoded.height ? decoded.width : decoded.height) * 0.35;
+    }
+
+    setState(() {
+      _bytes = bytes;
+      _decoded = decoded;
+      _calibCenter = center;
+      _calibRadius = radius;
+      _candidates = [];
+    });
+    await _runDetection();
   }
 
   Future<void> _runDetection() async {
@@ -264,20 +294,38 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
             const SizedBox(height: 12),
             Text(
               _confirmedMm.isEmpty
-                  ? 'Сфотографируйте мишень камерой телефона и выберите снимок здесь — '
-                      'приложение само в галерею не пишет и файл после разбора не хранит.'
-                  : 'Можно выбрать ещё одно фото — или нажать «Готово» в шапке, если снимков достаточно.',
+                  ? (_cameraAvailable
+                      ? 'Наведите камеру на мишень — приложение само найдёт пробоину и снимет '
+                          'кадр. Файл нигде не сохраняется и после разбора не хранится.'
+                      : 'Сфотографируйте мишень и выберите снимок здесь — приложение само в '
+                          'галерею не пишет и файл после разбора не хранит.')
+                  : 'Можно снять ещё одно фото — или нажать «Готово» в шапке, если снимков достаточно.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: _busy ? null : _pick,
-              icon: _busy
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.image_outlined),
-              label: const Text('Выбрать фото'),
-            ),
+            if (_cameraAvailable) ...[
+              FilledButton.icon(
+                onPressed: _busy ? null : _openCamera,
+                icon: _busy
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.camera_alt_outlined),
+                label: const Text('Через камеру'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _busy ? null : _pick,
+                icon: const Icon(Icons.image_outlined),
+                label: const Text('Выбрать фото'),
+              ),
+            ] else
+              FilledButton.icon(
+                onPressed: _busy ? null : _pick,
+                icon: _busy
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.image_outlined),
+                label: const Text('Выбрать фото'),
+              ),
             if (_error != null) ...[
               const SizedBox(height: 12),
               Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),

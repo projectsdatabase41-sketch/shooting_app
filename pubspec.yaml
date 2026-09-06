@@ -29,6 +29,10 @@ dependencies:
   # биндингов и без OpenCV: тот же принцип минимума зависимостей, что и
   # везде в проекте.
   image: ^4.2.0
+  # Живая камера для "Фото мишени" — только на Android (см.
+  # camera_scan_screen.dart): пакет не поддерживает Windows desktop, там
+  # остаётся выбор файла через file_picker.
+  camera: ^0.11.0+2
 
 dev_dependencies:
   flutter_test:
