@@ -17,7 +17,12 @@ CREATE TABLE IF NOT EXISTS project_settings (
   auth_user_id        TEXT,
   auth_access_token   TEXT,
   auth_refresh_token  TEXT,
-  auth_expires_at     TEXT
+  auth_expires_at     TEXT,
+  -- Подключение ТРЕНЕРА к базе спортсмена — отдельно от supabase_url/
+  -- supabase_anon_key выше (собственная база этого устройства).
+  coach_supabase_url       TEXT,
+  coach_supabase_anon_key  TEXT,
+  coach_share_token        TEXT
 );
 
 CREATE TABLE IF NOT EXISTS target_faces (
@@ -142,7 +147,7 @@ CREATE TABLE IF NOT EXISTS share_grants (
 );
 
 -- color_prefs — ЧИСТО ЛОКАЛЬНАЯ таблица (часть A.2 логики-спека), не
--- входит в sql/schema.sql (Supabase) и не участвует в SyncService.
+-- входит в sql/schema.sql (Supabase) и не синхронизируется в облако.
 CREATE TABLE IF NOT EXISTS color_prefs (
   key  TEXT PRIMARY KEY,
   hex  TEXT NOT NULL -- формат #RRGGBB или #AARRGGBB

@@ -44,6 +44,37 @@ class CommentsRepository {
     return rows.map(_fromRow).toList();
   }
 
+  /// Все комментарии тренировки, любого уровня — для синхронизации:
+  /// пушится и подтягивается ленты целиком, без разбора по level/shotId.
+  List<Comment> forSessionAll(String sessionId) {
+    final rows = db.db.select(
+      'SELECT * FROM comments WHERE session_id = ? ORDER BY created_at',
+      [sessionId],
+    );
+    return rows.map(_fromRow).toList();
+  }
+
+  /// Добавляет комментарий, ЕСЛИ такого id ещё нет — для приёма с
+  /// сервера (там же генерируются id тренером и другими устройствами).
+  /// Комментарии неизменяемы после создания, поэтому не обновляем
+  /// существующие — только дополняем недостающие.
+  void addIfMissing(Comment comment) {
+    db.db.execute(
+      'INSERT OR IGNORE INTO comments (id, session_id, level, shot_id, series_no, author_role, text, created_at) '
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        comment.id,
+        comment.sessionId,
+        comment.level.name,
+        comment.shotId,
+        comment.seriesNo,
+        comment.authorRole.name,
+        comment.text,
+        comment.createdAt.toIso8601String(),
+      ],
+    );
+  }
+
   Comment add(Comment comment) {
     db.db.execute(
       'INSERT INTO comments (id, session_id, level, shot_id, series_no, author_role, text, created_at) '

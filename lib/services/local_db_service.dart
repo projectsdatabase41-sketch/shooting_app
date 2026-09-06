@@ -78,6 +78,14 @@ class LocalDbService {
         'auth_access_token': 'TEXT',
         'auth_refresh_token': 'TEXT',
         'auth_expires_at': 'TEXT',
+        // Подключение ТРЕНЕРА к чужой (спортсмена) базе — отдельные поля
+        // от supabase_url/supabase_anon_key выше: это своя, спортсмена,
+        // база, а не та, к которой у этого устройства может быть
+        // одновременно и собственный, атлетский, вход (переключатель
+        // ролей в настройках это разрешает).
+        'coach_supabase_url': 'TEXT',
+        'coach_supabase_anon_key': 'TEXT',
+        'coach_share_token': 'TEXT',
       },
     };
 
@@ -172,7 +180,10 @@ CREATE TABLE IF NOT EXISTS project_settings (
   auth_user_id        TEXT,
   auth_access_token   TEXT,
   auth_refresh_token  TEXT,
-  auth_expires_at     TEXT
+  auth_expires_at     TEXT,
+  coach_supabase_url       TEXT,
+  coach_supabase_anon_key  TEXT,
+  coach_share_token        TEXT
 );
 
 CREATE TABLE IF NOT EXISTS target_faces (
@@ -252,7 +263,7 @@ CREATE INDEX IF NOT EXISTS idx_shots_session ON shots(session_id);
 CREATE TABLE IF NOT EXISTS comments (
   id           TEXT PRIMARY KEY,
   session_id   TEXT NOT NULL REFERENCES training_sessions(id) ON DELETE CASCADE,
-  level        TEXT NOT NULL CHECK (level IN ('shot','series','session')),
+  level        TEXT NOT NULL CHECK (level IN ('shot','series','session','coach')),
   shot_id      TEXT REFERENCES shots(id) ON DELETE CASCADE,
   series_no    INTEGER,
   author_role  TEXT NOT NULL CHECK (author_role IN ('athlete','coach')),
@@ -291,7 +302,7 @@ CREATE TABLE IF NOT EXISTS share_grants (
 );
 
 -- color_prefs — ЧИСТО ЛОКАЛЬНАЯ таблица (часть A.2 логики-спека), не
--- входит в sql/schema.sql (Supabase) и не участвует в SyncService.
+-- входит в sql/schema.sql (Supabase) и не синхронизируется в облако.
 CREATE TABLE IF NOT EXISTS color_prefs (
   key  TEXT PRIMARY KEY,
   hex  TEXT NOT NULL -- формат #RRGGBB или #AARRGGBB

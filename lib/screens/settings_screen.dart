@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../services/share_token_service.dart';
-import '../services/sync_service.dart';
 import '../services/supabase_auth_service.dart';
 import '../services/supabase_service.dart';
 import '../state/app_data_store.dart';
@@ -176,12 +174,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _syncMessage = null;
     });
     final store = context.read<AppDataStore>();
-    final sync = SyncService(DemoSupabaseService());
+    final sync = SupabaseSyncService(SupabaseAuthService(store.db));
     try {
-      await sync.syncNow(store.unsyncedSessions);
-      setState(() => _syncMessage = 'Готово (демо — реального облака ещё нет)');
+      final pushed = await sync.push(store);
+      final result = await sync.pull(store);
+      final parts = <String>[];
+      if (pushed > 0) parts.add('отправлено: $pushed');
+      if (result.pulledSessions > 0) parts.add('получено тренировок: ${result.pulledSessions}');
+      if (result.pulledExercises > 0) parts.add('упражнений: ${result.pulledExercises}');
+      if (result.pulledComments > 0) parts.add('комментариев: ${result.pulledComments}');
+      setState(() => _syncMessage = parts.isEmpty ? 'Готово, новых данных не было' : 'Готово — ${parts.join(', ')}');
     } catch (e) {
-      setState(() => _syncMessage = 'Синхронизация недоступна: подключение к Supabase — следующий этап (раздел 12 ТЗ п.1)');
+      setState(() => _syncMessage = '$e');
     } finally {
       setState(() => _syncing = false);
     }
@@ -240,24 +244,70 @@ class _ShareTokensSection extends StatefulWidget {
 
 class _ShareTokensSectionState extends State<_ShareTokensSection> {
   String? _lastCreatedToken;
+  bool _busy = false;
+  String? _error;
+
+  late final SupabaseAuthService _auth;
+  late final SupabaseSyncService _sync;
+
+  @override
+  void initState() {
+    super.initState();
+    final store = context.read<AppDataStore>();
+    _auth = SupabaseAuthService(store.db);
+    _sync = SupabaseSyncService(_auth);
+    // Список токенов на сервере — источник истины (отозвать можно и с
+    // другого устройства), поэтому подтягиваем его при открытии
+    // экрана, а не полагаемся на то, что осело в локальной базе.
+    if (_auth.isSignedIn) _refresh();
+  }
+
+  Future<void> _refresh() async {
+    try {
+      await _sync.refreshShareGrants(context.read<AppDataStore>());
+    } catch (_) {
+      // Не удалось обновить список — покажем то, что уже есть локально;
+      // отдельно сообщать об ошибке здесь не за что: пользователь ничего
+      // не запрашивал явно.
+    }
+  }
+
+  Future<void> _create() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final token = await _sync.createShareToken(context.read<AppDataStore>());
+      if (!mounted) return;
+      setState(() => _lastCreatedToken = token);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = '$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _revoke(String grantId) async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await _sync.revokeShareToken(context.read<AppDataStore>(), grantId);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = '$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final store = context.watch<AppDataStore>();
-    final service = ShareTokenService(
-      readGrants: () => store.shareGrants,
-      persistGrant: (grant) async {
-        store.db.db.execute(
-          'INSERT INTO share_grants (id, token_hash, athlete_label, created_at) VALUES (?, ?, ?, ?)',
-          [grant.id, grant.tokenHash, grant.athleteLabel, grant.createdAt.toIso8601String()],
-        );
-        store.shareGrants = [...store.shareGrants, grant];
-      },
-      persistRevoke: (id, revokedAt) async {
-        store.db.db.execute('UPDATE share_grants SET revoked_at = ? WHERE id = ?', [revokedAt.toIso8601String(), id]);
-        store.shareGrants = store.shareGrants.where((g) => g.id != id).toList();
-      },
-    );
+    final signedIn = _auth.isSignedIn;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -269,6 +319,23 @@ class _ShareTokensSectionState extends State<_ShareTokensSection> {
             subtitle: 'Токены на просмотр вашего дневника',
           ),
         ),
+        if (!signedIn)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Text(
+              // Токен без базы работать не может — тренеру попросту
+              // некуда его подставить, поэтому честнее не предлагать
+              // создать его локально "про запас".
+              'Сначала войдите в базу Supabase — токен проверяется на сервере, '
+              'без неё выдавать его некому.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+        if (_error != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          ),
         if (_lastCreatedToken != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -313,22 +380,18 @@ class _ShareTokensSectionState extends State<_ShareTokensSection> {
               title: Text(g.athleteLabel.isEmpty ? 'Токен ${g.id.substring(0, 6)}' : g.athleteLabel),
               subtitle: Text('Создан ${g.createdAt.toLocal()}'),
               trailing: TextButton(
-                onPressed: () async {
-                  await service.revoke(g.id);
-                  setState(() {});
-                },
+                onPressed: _busy ? null : () => _revoke(g.id),
                 child: const Text('Отозвать'),
               ),
             )),
         Padding(
           padding: const EdgeInsets.all(16),
           child: OutlinedButton.icon(
-            icon: const Icon(Icons.add),
+            icon: _busy
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.add),
             label: const Text('Создать токен'),
-            onPressed: () async {
-              final token = await service.createToken();
-              setState(() => _lastCreatedToken = token);
-            },
+            onPressed: (!signedIn || _busy) ? null : _create,
           ),
         ),
       ],
