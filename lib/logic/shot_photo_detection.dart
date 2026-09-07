@@ -35,6 +35,26 @@ class GrayImage {
       }
     }
   }
+
+  /// Рисует кольцо (контур) заданной толщины — только для тестов:
+  /// имитирует напечатанные кольца мишени, в отличие от `fillCircle`
+  /// (сплошное пятно, имитирует пробоину).
+  void fillRing(double cx, double cy, double radius, double thickness, int value) {
+    final r0 = radius - thickness / 2, r1 = radius + thickness / 2;
+    final x0 = math.max(0, (cx - r1).floor());
+    final x1 = math.min(width - 1, (cx + r1).ceil());
+    final y0 = math.max(0, (cy - r1).floor());
+    final y1 = math.min(height - 1, (cy + r1).ceil());
+    final r0sq = r0 * r0, r1sq = r1 * r1;
+    for (var y = y0; y <= y1; y++) {
+      for (var x = x0; x <= x1; x++) {
+        final dx = x + 0.5 - cx;
+        final dy = y + 0.5 - cy;
+        final d2 = dx * dx + dy * dy;
+        if (d2 >= r0sq && d2 <= r1sq) set(x, y, value);
+      }
+    }
+  }
 }
 
 /// Простое целочисленное смещение в пикселях исходного изображения.

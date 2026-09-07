@@ -98,7 +98,7 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
   /// одной точке").
   int? _expectedCount;
 
-  static const List<int> _countChoices = [1, 2, 3, 4, 5, 6, 8, 10];
+  static const List<int> _countChoices = [0, 1, 2, 3, 4, 5, 6, 8, 10];
 
   double _displayScale = 1; // display px = natural px * _displayScale
 
@@ -236,12 +236,19 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
         widget.face.faceRadiusMm,
       );
 
-  /// Кандидаты, дополненные до заданного числа выстрелов (см.
-  /// `_expectedCount`) — дублирует последнюю точку на месте, если
-  /// найденных пробоин меньше, чем указано.
+  /// Кандидаты, подогнанные под заданное число выстрелов (см.
+  /// `_expectedCount`) — это ЖЁСТКОЕ число, не подсказка: пользователь
+  /// точно знает, сколько раз стрелял, а автоматика по фото — нет.
+  /// Меньше найденных, чем указано, — недостающие достраиваются в той
+  /// же точке (несколько лечь в одну дырку по фото не различить).
+  /// Больше найденных — оставляем только первые (самые уверенные:
+  /// `findCandidateHoles` возвращает их отсортированными по круглости,
+  /// а марок, добавленных руками, в начале списка не бывает).
   List<Offset> get _candidatesToConfirm {
     final count = _expectedCount;
-    if (count == null || _candidates.isEmpty || _candidates.length >= count) return _candidates;
+    if (count == null) return _candidates;
+    if (_candidates.length > count) return _candidates.take(count).toList();
+    if (_candidates.isEmpty || _candidates.length == count) return _candidates;
     return [..._candidates, for (var i = _candidates.length; i < count; i++) _candidates.last];
   }
 
@@ -326,6 +333,11 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 16),
+            // Сколько выстрелов на этом снимке — до съёмки, а не после:
+            // число нужно ДЛЯ разбора найденных пробоин (см.
+            // _candidatesToConfirm), а не для самой фотографии.
+            _buildCountSelector(),
+            const SizedBox(height: 8),
             if (_cameraAvailable) ...[
               FilledButton.icon(
                 onPressed: _busy ? null : _openCamera,
@@ -409,7 +421,6 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
             textAlign: TextAlign.center,
           ),
         ),
-        _buildCountSelector(),
         if (_error != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -429,15 +440,15 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton(
-                  onPressed: _busy ? null : _runDetection,
-                  child: const Text('Найти снова'),
+                  onPressed: _busy ? null : _retakePhoto,
+                  child: const Text('Новое фото'),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 flex: 2,
                 child: FilledButton(
-                  onPressed: _busy || _candidates.isEmpty ? null : _confirmPhoto,
+                  onPressed: _busy || (_candidates.isEmpty && _expectedCount != 0) ? null : _confirmPhoto,
                   child: _busy
                       ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                       : Text('Подтвердить (${_candidatesToConfirm.length})'),
@@ -449,6 +460,13 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
       ],
     );
   }
+
+  /// Отказаться от текущего фото и сразу переснять — камера/выбор файла
+  /// открывается заново, как в первый раз (решение пользователя: кнопка
+  /// повторного поиска на том же снимке была почти бесполезна, если
+  /// сам снимок неудачный).
+  Future<void> _retakePhoto() =>
+      _cameraAvailable ? _openCamera() : _pick();
 
   Widget _buildCountSelector() {
     return Padding(
