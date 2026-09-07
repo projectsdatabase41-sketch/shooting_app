@@ -26,11 +26,25 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _athleteIndex = 2; // старт на вкладке "Мишень"
   int _coachIndex = 0;
+  WorkMode? _lastMode;
 
   @override
   Widget build(BuildContext context) {
     final store = context.watch<AppDataStore>();
     final isCoach = store.workMode == WorkMode.coach;
+
+    // Рубильник "Режим тренера" переключают со страницы настроек —
+    // после смены роли логичнее увидеть домашнюю вкладку нового режима
+    // (Дневник у тренера, Мишень у спортсмена), а не ту, на которой
+    // листали до переключения (обычно это и есть сами настройки).
+    if (_lastMode != null && _lastMode != store.workMode) {
+      if (isCoach) {
+        _coachIndex = 0;
+      } else {
+        _athleteIndex = 2;
+      }
+    }
+    _lastMode = store.workMode;
 
     if (isCoach) {
       final pages = [const CoachDiaryScreen(), const SettingsScreen()];

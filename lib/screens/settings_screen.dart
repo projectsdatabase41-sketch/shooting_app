@@ -94,6 +94,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               store.isCoach = v;
               store.isAthlete = !v;
               store.saveSettings();
+              // setState() здесь перерисовывает только сам экран
+              // настроек — нижнюю навигацию (HomeShell, отдельный виджет
+              // выше по дереву) он не трогает, и состав вкладок менялся
+              // будто бы "только после переключения на другую вкладку".
+              // notifyListeners() — тот же AppDataStore, который уже
+              // слушает HomeShell через context.watch.
+              store.refreshView();
               setState(() {});
             },
           ),
@@ -448,6 +455,13 @@ class _AccountTile extends StatelessWidget {
         context: context,
         isScrollControlled: true,
         useSafeArea: true,
+        // Раньше "полосочка" рисовалась САМИ первым элементом внутри
+        // ListView — визуально ручка для свайпа, а по факту обычный
+        // пункт списка: жест перетаскивания забирал скролл, а не сам
+        // лист, и свайп для закрытия не срабатывал. showDragHandle
+        // рисует её СНАРУЖИ прокручиваемого содержимого, там, где
+        // Flutter сам умеет закрывать лист перетаскиванием.
+        showDragHandle: true,
         builder: (_) => ChangeNotifierProvider<AppDataStore>.value(
           value: store,
           child: const _AccountSheet(),
@@ -509,6 +523,12 @@ class _AccountSheetState extends State<_AccountSheet> {
     try {
       final ok = await action();
       if (!mounted) return;
+      // "Учётная запись" на самом экране настроек (_AccountTile) читает
+      // состояние входа из той же локальной базы, но это ДРУГОЙ виджет —
+      // без notifyListeners() он не узнаёт о входе/регистрации, пока
+      // что-нибудь ещё не вызовет случайную перерисовку (отсюда "вроде
+      // подключился, но пишет не подключено — помогает только рестарт").
+      context.read<AppDataStore>().refreshView();
       setState(() {
         _message = ok;
         _messageIsError = false;
@@ -553,17 +573,6 @@ class _AccountSheetState extends State<_AccountSheet> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: cs.outlineVariant,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
             Text('Учётная запись', style: theme.textTheme.titleMedium),
             const SizedBox(height: 4),
             Text(
@@ -593,6 +602,7 @@ class _AccountSheetState extends State<_AccountSheet> {
                     ? null
                     : () {
                         _auth.signOutLocally();
+                        context.read<AppDataStore>().refreshView();
                         setState(() => _message = 'Вы вышли. Тренировки на устройстве остались на месте.');
                       },
                 icon: const Icon(Icons.logout),
@@ -604,6 +614,7 @@ class _AccountSheetState extends State<_AccountSheet> {
                     ? null
                     : () {
                         _auth.forgetBase();
+                        context.read<AppDataStore>().refreshView();
                         setState(() {
                           _url.text = '';
                           _key.text = '';
