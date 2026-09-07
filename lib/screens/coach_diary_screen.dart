@@ -57,8 +57,11 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
     }
   }
 
-  String _exerciseName(String? id) => _exercises
-      .firstWhere((e) => e['id'] == id, orElse: () => const {'name': 'Упражнение'})['name'] as String;
+  /// `_exercises` — снимки-упражнения (реальная таблица `exercises`),
+  /// связаны с тренировкой по `package_id`, а не по `id`: отдельного
+  /// `exercise_id` на самой тренировке в реальной схеме нет.
+  String _exerciseName(String packageId) => _exercises
+      .firstWhere((e) => e['package_id'] == packageId, orElse: () => const {'exercise_name': 'Упражнение'})['exercise_name'] as String? ?? 'Упражнение';
 
   void _disconnect() {
     _access.forget();
@@ -112,9 +115,10 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
                   itemCount: _sessions.length,
                   itemBuilder: (context, i) {
                     final s = _sessions[i];
+                    final packageId = s['id'] as String;
                     final started = DateTime.tryParse('${s['started_at']}');
                     return ListTile(
-                      title: Text(_exerciseName(s['exercise_id'] as String?)),
+                      title: Text(_exerciseName(packageId)),
                       subtitle: Text(
                         started == null ? '—' : DateFormat('dd.MM.yyyy HH:mm').format(started.toLocal()),
                       ),
@@ -122,8 +126,8 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
                       onTap: () => Navigator.of(context).push(MaterialPageRoute(
                         builder: (_) => _SharedSessionScreen(
                           access: _access,
-                          sessionId: s['id'] as String,
-                          title: _exerciseName(s['exercise_id'] as String?),
+                          sessionId: packageId,
+                          title: _exerciseName(packageId),
                         ),
                       )),
                     );
@@ -279,7 +283,7 @@ class _SharedSessionScreenState extends State<_SharedSessionScreen> {
     try {
       final shots = await widget.access.fetchShots(widget.sessionId);
       final comments = await widget.access.fetchComments(widget.sessionId);
-      shots.sort((a, b) => (a['shot_number'] as num).compareTo(b['shot_number'] as num));
+      shots.sort((a, b) => (a['shot_no'] as num).compareTo(b['shot_no'] as num));
       final coachThread = comments.where((c) => c['level'] == 'coach').toList()
         ..sort((a, b) => '${a['created_at']}'.compareTo('${b['created_at']}'));
       if (!mounted) return;
@@ -333,8 +337,8 @@ class _SharedSessionScreenState extends State<_SharedSessionScreen> {
                       const SizedBox(height: 6),
                       for (final s in _shots)
                         Text(
-                          '№${s['shot_number']} · ${(s['score'] as num).toStringAsFixed(1)}'
-                          '  X:${(s['x_mm'] as num).toStringAsFixed(1)} Y:${(s['y_mm'] as num).toStringAsFixed(1)}',
+                          '№${s['shot_no']} · ${(s['final_score'] as num).toStringAsFixed(1)}'
+                          '  X:${(s['x_mm'] as num? ?? 0).toStringAsFixed(1)} Y:${(s['y_mm'] as num? ?? 0).toStringAsFixed(1)}',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       const SizedBox(height: 20),

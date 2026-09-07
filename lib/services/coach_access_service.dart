@@ -19,14 +19,20 @@ class CoachAccessException implements Exception {
 /// (`security definer`), апи-ключ нужен только чтобы постучаться в
 /// PostgREST вообще.
 ///
-/// ИЗВЕСТНЫЙ РАЗРЫВ (не в объёме TASK-sync-mapping.md, раздел 1 которого
-/// касается только тренировки/упражнения/выстрела): RPC-функции ниже —
-/// `get_shared_exercises`/`get_shared_training_sessions`/
-/// `get_shared_shots`/`get_shared_comments`/`add_shared_comment` — на
-/// реальной базе НЕ СУЩЕСТВУЮТ (см. docs/db-schema-actual.md). Там
-/// вместо них есть `validate_share_token`, но под новую схему
-/// (`training_packages`/`exercises`/`shots`) эту сторону ещё предстоит
-/// написать заново — отдельная задача.
+/// На реальной базе (см. docs/db-schema-actual.md) из RPC для этого
+/// потока изначально была только `validate_share_token` — проверяет
+/// токен и отдаёт `null`/не-`null`, но сама данные не читает. Функции
+/// `get_shared_packages`/`get_shared_exercises`/`get_shared_shots`/
+/// `get_shared_comments`/`add_shared_comment` дописаны в
+/// `sql/schema.sql` (`security definer`, поверх `validate_share_token`,
+/// без выборки по владельцу — в этой схеме проект принадлежит ровно
+/// одному спортсмену, отдельного `athlete_id` на `share_grants` нет и
+/// не нужно).
+///
+/// `exercises` в этих ответах — РЕАЛЬНАЯ таблица `exercises` (снимок
+/// упражнения внутри тренировки, `package_id`+`exercise_name`), а не
+/// каталог `exercise_templates`: тренеру для дневника ничего, кроме
+/// этого снимка, не нужно.
 class CoachAccessService {
   final LocalDbService db;
   CoachAccessService(this.db);
@@ -51,17 +57,24 @@ class CoachAccessService {
     _write('coach_share_token', '');
   }
 
+  /// Снимки упражнений (реальная таблица `exercises`, не каталог) —
+  /// одна строка на тренировку, ключ связи с ней — `package_id`.
   Future<List<Map<String, dynamic>>> fetchExercises() =>
       _rpc('get_shared_exercises', {'p_token': token});
 
+  /// Тренировки спортсмена (`training_packages`).
   Future<List<Map<String, dynamic>>> fetchSessions() =>
-      _rpc('get_shared_training_sessions', {'p_token': token});
+      _rpc('get_shared_packages', {'p_token': token});
 
+  /// `sessionId` здесь — id тренировки (`training_packages.id`), он же
+  /// id её единственного снимка-упражнения (`exercises.id`): один на
+  /// тренировку, отдельным id не заводится — то же самое значение,
+  /// которое `shots.exercise_id` и ждёт.
   Future<List<Map<String, dynamic>>> fetchShots(String sessionId) =>
-      _rpc('get_shared_shots', {'p_token': token, 'p_session_id': sessionId});
+      _rpc('get_shared_shots', {'p_token': token, 'p_exercise_id': sessionId});
 
   Future<List<Map<String, dynamic>>> fetchComments(String sessionId) =>
-      _rpc('get_shared_comments', {'p_token': token, 'p_session_id': sessionId});
+      _rpc('get_shared_comments', {'p_token': token, 'p_package_id': sessionId});
 
   Future<void> addComment({
     required String sessionId,
@@ -72,7 +85,7 @@ class CoachAccessService {
   }) async {
     await _rpc('add_shared_comment', {
       'p_token': token,
-      'p_session_id': sessionId,
+      'p_package_id': sessionId,
       'p_level': level,
       'p_shot_id': shotId,
       'p_series_no': seriesNo,

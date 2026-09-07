@@ -26,7 +26,11 @@
 -- логики — на это в задании прямой запрет (раздел 3.5: "ничего не
 -- удалять/трогать лишнее"). Новые таблицы ниже (`comments`,
 -- `training_notes`) используют `is_project_owner()` как есть, полагаясь
--- на то, что она уже существует.
+-- на то, что она уже существует. Ниже также добавлены НОВЫЕ функции
+-- `get_shared_*`/`add_shared_comment` (дневник тренера, раздел «Чтение
+-- дневника тренером по токену») — имена новые, ничего чужого не
+-- переопределяют, построены поверх уже существующей
+-- `validate_share_token`.
 --
 -- Известный открытый вопрос: RLS на всех таблицах требует, чтобы в
 -- `project_settings` была строка с `owner_user_id = auth.uid()` —
@@ -364,6 +368,99 @@ from (values
     '{"ring_diameters_mm":[50,100,150,200,250,300,350,400,450,500],"bullseye_diameter_mm":200,"blank_size_mm":550,"inner_ten_diameter_mm":25,"gauging":"inward"}')
 ) as v(code, name, distance_m, caliber_mm, ring_config)
 on conflict (code) do nothing;
+
+-- ============================================================
+-- Чтение дневника тренером по токену.
+--
+-- На живой базе уже была `validate_share_token(p_token)` — проверяет
+-- токен (bcrypt через `hash_share_token`) и отдаёт null на неверный
+-- или отозванный, что угодно не-null на годный. САМИ данные она не
+-- читает — функций ниже не было вовсе, тренер получал PGRST202 на
+-- каждый переход в дневник. Имена НОВЫЕ (`get_shared_packages` и т.д.),
+-- ничего существующего не переопределяют.
+--
+-- Без фильтра по владельцу внутри: в этой схеме один проект — один
+-- спортсмен, `share_grants` не хранит `athlete_id` для сравнения (и не
+-- нужен) — годный токен открывает весь проект целиком.
+-- ============================================================
+
+create or replace function get_shared_packages(p_token text)
+returns setof training_packages
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if validate_share_token(p_token) is null then return; end if;
+  return query select * from training_packages order by started_at desc nulls last;
+end;
+$$;
+
+-- "exercises" здесь — реальная таблица-снимок (package_id +
+-- exercise_name), не каталог exercise_templates: дневнику тренера
+-- каталог не нужен.
+create or replace function get_shared_exercises(p_token text)
+returns setof exercises
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if validate_share_token(p_token) is null then return; end if;
+  return query select * from exercises order by created_at;
+end;
+$$;
+
+create or replace function get_shared_shots(p_token text, p_exercise_id uuid)
+returns setof shots
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if validate_share_token(p_token) is null then return; end if;
+  return query select * from shots where exercise_id = p_exercise_id order by shot_no;
+end;
+$$;
+
+create or replace function get_shared_comments(p_token text, p_package_id uuid)
+returns setof comments
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if validate_share_token(p_token) is null then return; end if;
+  return query select * from comments where package_id = p_package_id order by created_at;
+end;
+$$;
+
+-- Тренер комментирует наравне со спортсменом — автор проставляется
+-- сервером ('coach'), не приходит из клиента.
+create or replace function add_shared_comment(
+  p_token text,
+  p_package_id uuid,
+  p_level text,
+  p_shot_id uuid,
+  p_series_no int,
+  p_text text
+) returns comments
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row comments;
+begin
+  if validate_share_token(p_token) is null then
+    raise exception 'invalid or revoked token';
+  end if;
+  insert into comments (package_id, level, shot_id, series_no, author_role, text)
+  values (p_package_id, p_level, p_shot_id, p_series_no, 'coach', p_text)
+  returning * into v_row;
+  return v_row;
+end;
+$$;
 
 -- ============================================================
 -- Сброс кеша схемы — обязательно последней строкой.
