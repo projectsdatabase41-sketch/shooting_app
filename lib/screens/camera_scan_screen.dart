@@ -1,20 +1,36 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:sensors_plus/sensors_plus.dart';
 
 import '../logic/shot_photo_detection.dart';
 import '../models/target_face.dart';
 
-/// Живая камера: наводим на мишень, приложение само находит пробоину и
-/// делает снимок — решение пользователя предпочесть это статичному
-/// выбору фото из галереи (доступно только на Android — см. pubspec.yaml).
+/// Живая камера: наводим на мишень, приложение само делает снимок.
 ///
-/// Анализ идёт на маленькой уменьшенной копии живого кадра (яркостная
-/// плоскость потока камеры, без цвета — она и так уже градации серого),
-/// поэтому не нагружает поток предпросмотра. Экран решает только КОГДА
-/// снять кадр; само итоговое фото после автоспуска проходит через тот же
+/// Два РАЗНЫХ механизма решают, когда снять кадр — в зависимости от
+/// платформы:
+///
+/// - **Android**: анализ живого потока (`startImageStream`) — та же
+///   яркостная плоскость YUV420, что и раньше: находит круг мишени и
+///   саму пробоину по пикселям, снимает, как только несколько кадров
+///   подряд видят одну и ту же новую пробоину на месте.
+/// - **Веб**: `camera_web` в принципе не отдаёт кадры потока
+///   (`startImageStream` там — `UnimplementedError`, только готовые
+///   снимки через `takePicture()`), поэтому "трясётся ли картинка" по
+///   пикселям не определить. Вместо этого — обратный отсчёт 2 секунды с
+///   анимацией плюс акселерометр телефона: пока телефон дрожит, отсчёт
+///   не продвигается (и визуально "сбрасывается"), как только дрожь
+///   утихла — отсчёт идёт плавно до конца и снимает кадр сам. Если
+///   датчика нет (например, ноутбук без акселерометра), отсчёт идёт
+///   обычным таймером без проверки — это осознанный запасной вариант, а
+///   не баг.
+///
+/// В обоих случаях итоговое фото после автоспуска проходит через тот же
 /// точный разбор и ту же правку руками, что и фото из галереи — если
 /// наводка была не идеальной, это не потеряно, а исправляется на
 /// следующем экране.
@@ -33,6 +49,10 @@ enum _Status { searchingTarget, searchingHole, holding, capturing }
 class _CameraScanScreenState extends State<CameraScanScreen> {
   CameraController? _controller;
   String? _error;
+  bool _capturing = false;
+
+  // ---- Android: анализ потока по пикселям ----
+
   _Status _status = _Status.searchingTarget;
 
   // Аналитическая сетка — фиксированный небольшой размер независимо от
@@ -47,6 +67,17 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
   PixelPoint? _pendingCandidate;
   int _stableFrames = 0;
   static const int _stableFramesNeeded = 4;
+
+  // ---- Веб: таймер + акселерометр ----
+
+  StreamSubscription<AccelerometerEvent>? _accelSub;
+  final List<double> _recentAccelMagnitudes = [];
+  bool _webStable = true; // нет датчика — считаем неподвижным (запасной путь)
+  Timer? _countdownTicker;
+  double _webProgress = 0; // 0..1 за _webCountdown
+  static const Duration _webCountdown = Duration(seconds: 2);
+  static const Duration _webTick = Duration(milliseconds: 40);
+  static const double _shakeThreshold = 0.6; // м/с², стандартное отклонение модуля ускорения
 
   @override
   void initState() {
@@ -65,7 +96,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
         back,
         ResolutionPreset.high,
         enableAudio: false,
-        imageFormatGroup: ImageFormatGroup.yuv420,
+        imageFormatGroup: kIsWeb ? null : ImageFormatGroup.yuv420,
       );
       await controller.initialize();
       if (!mounted) {
@@ -73,7 +104,11 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
         return;
       }
       setState(() => _controller = controller);
-      await controller.startImageStream(_onFrame);
+      if (kIsWeb) {
+        _startWebCountdown();
+      } else {
+        await controller.startImageStream(_onFrame);
+      }
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     }
@@ -81,6 +116,8 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
 
   @override
   void dispose() {
+    _accelSub?.cancel();
+    _countdownTicker?.cancel();
     final c = _controller;
     if (c != null) {
       if (c.value.isStreamingImages) c.stopImageStream();
@@ -88,6 +125,46 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
     }
     super.dispose();
   }
+
+  // ==================== Веб: таймер + акселерометр ====================
+
+  void _startWebCountdown() {
+    try {
+      _accelSub = accelerometerEventStream().listen(_onAccel, onError: (_) {});
+    } catch (_) {
+      // Датчика нет или доступ не дали — отсчёт просто идёт без проверки.
+    }
+    _countdownTicker = Timer.periodic(_webTick, (_) => _onWebTick());
+  }
+
+  void _onAccel(AccelerometerEvent e) {
+    final magnitude = math.sqrt(e.x * e.x + e.y * e.y + e.z * e.z);
+    _recentAccelMagnitudes.add(magnitude);
+    if (_recentAccelMagnitudes.length > 12) _recentAccelMagnitudes.removeAt(0);
+    if (_recentAccelMagnitudes.length < 4) return;
+    final mean = _recentAccelMagnitudes.reduce((a, b) => a + b) / _recentAccelMagnitudes.length;
+    final variance = _recentAccelMagnitudes.map((m) => (m - mean) * (m - mean)).reduce((a, b) => a + b) /
+        _recentAccelMagnitudes.length;
+    final stable = math.sqrt(variance) < _shakeThreshold;
+    if (stable != _webStable && mounted) setState(() => _webStable = stable);
+  }
+
+  void _onWebTick() {
+    if (_capturing || !mounted) return;
+    final step = _webTick.inMilliseconds / _webCountdown.inMilliseconds;
+    setState(() {
+      if (_webStable) {
+        _webProgress = math.min(1, _webProgress + step);
+        if (_webProgress >= 1) _capture();
+      } else {
+        // Сброс быстрее набора — одно резкое движение должно заметно
+        // откатить отсчёт назад, а не просто чуть притормозить его.
+        _webProgress = math.max(0, _webProgress - step * 3);
+      }
+    });
+  }
+
+  // ==================== Android: анализ потока по пикселям ====================
 
   void _onFrame(CameraImage image) {
     if (_processing) return;
@@ -182,14 +259,21 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
     }
   }
 
+  // ==================== Общее: сам снимок ====================
+
   Future<void> _capture() async {
     final controller = _controller;
-    if (controller == null || _status == _Status.capturing) return;
-    setState(() => _status = _Status.capturing);
+    if (controller == null || _capturing) return;
+    setState(() {
+      _capturing = true;
+      _status = _Status.capturing;
+    });
     try {
       if (controller.value.isStreamingImages) {
         await controller.stopImageStream();
       }
+      _countdownTicker?.cancel();
+      await _accelSub?.cancel();
       final file = await controller.takePicture();
       final bytes = await file.readAsBytes();
       if (mounted) Navigator.of(context).pop(bytes);
@@ -198,7 +282,9 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
         setState(() {
           _error = '$e';
           _status = _Status.searchingTarget;
+          _capturing = false;
         });
+        if (kIsWeb) _startWebCountdown();
       }
     }
   }
@@ -208,12 +294,18 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
     await _capture();
   }
 
-  String get _statusText => switch (_status) {
-        _Status.searchingTarget => 'Наведите камеру на мишень',
-        _Status.searchingHole => 'Мишень найдена — ищу пробоину',
-        _Status.holding => 'Пробоина найдена — держите ровно…',
-        _Status.capturing => 'Снимаю…',
-      };
+  String get _statusText {
+    if (kIsWeb) {
+      if (_capturing) return 'Снимаю…';
+      return _webStable ? 'Держите ровно…' : 'Не двигайте телефон';
+    }
+    return switch (_status) {
+      _Status.searchingTarget => 'Наведите камеру на мишень',
+      _Status.searchingHole => 'Мишень найдена — ищу пробоину',
+      _Status.holding => 'Пробоина найдена — держите ровно…',
+      _Status.capturing => 'Снимаю…',
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -252,12 +344,29 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
                         ),
                       ),
                     ),
+                    if (kIsWeb)
+                      Align(
+                        alignment: Alignment.center,
+                        // Прогресс обновляется тикером каждые 40мс через
+                        // setState — этого достаточно для плавной на вид
+                        // анимации без дополнительной обёртки.
+                        child: SizedBox(
+                          width: 84,
+                          height: 84,
+                          child: CircularProgressIndicator(
+                            value: _webProgress,
+                            strokeWidth: 5,
+                            backgroundColor: Colors.white24,
+                            valueColor: AlwaysStoppedAnimation(_webStable ? Colors.greenAccent : Colors.amber),
+                          ),
+                        ),
+                      ),
                     Align(
                       alignment: Alignment.bottomCenter,
                       child: Padding(
                         padding: const EdgeInsets.only(bottom: 24),
                         child: FloatingActionButton(
-                          onPressed: _status == _Status.capturing ? null : _captureManually,
+                          onPressed: _capturing ? null : _captureManually,
                           child: const Icon(Icons.camera_alt),
                         ),
                       ),

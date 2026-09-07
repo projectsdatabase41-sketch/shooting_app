@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/supabase_auth_service.dart';
 import '../services/supabase_service.dart';
 import '../state/app_data_store.dart';
@@ -158,10 +159,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const Divider(height: 24),
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
-            child: SectionHeader(
-              title: 'Синхронизация',
-              subtitle: 'Облако — резервная копия. Без автоматики, без «только Wi-Fi».',
-            ),
+            child: SectionHeader(title: 'Синхронизация'),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -627,6 +625,30 @@ class _AccountSheetState extends State<_AccountSheet> {
               ),
             ] else ...[
               if (_showBaseFields) ...[
+                if (!_auth.hasBase) ...[
+                  // Порядок действий по шагам, а не два независимых
+                  // поля сразу: сначала создать СВОЙ проект на
+                  // Supabase (там же выдаются адрес и ключ), и только
+                  // потом возвращаться сюда их вставлять.
+                  OutlinedButton.icon(
+                    onPressed: () => launchUrl(
+                      Uri.parse('https://supabase.com/dashboard/sign-up'),
+                      mode: LaunchMode.externalApplication,
+                    ),
+                    icon: const Icon(Icons.open_in_new),
+                    label: const Text('1. Создать проект на Supabase'),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Откроется сайт Supabase — зарегистрируйтесь и создайте новый '
+                    'проект. Затем вернитесь сюда и вставьте адрес и ключ из '
+                    'Settings → API этого проекта.',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 14),
+                  Text('2. Вставить адрес и ключ', style: theme.textTheme.labelLarge),
+                  const SizedBox(height: 10),
+                ],
                 TextField(
                   controller: _url,
                   decoration: const InputDecoration(

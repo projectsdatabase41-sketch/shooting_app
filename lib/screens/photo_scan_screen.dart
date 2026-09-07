@@ -89,14 +89,27 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
   // Накопленный список подтверждённых пробоин (across фото), в мм.
   final List<PixelPoint> _confirmedMm = [];
 
+  /// Сколько выстрелов сделано в это фото — сколько угодно мишеней,
+  /// поле одно и то же. `null` — авто: сколько пробоин нашли/оставили,
+  /// столько и есть. Если пробоин меньше указанного числа (несколько
+  /// легло в одну и ту же дырку — по фото их не различить), при
+  /// подтверждении недостающие достраиваются В ТОЙ ЖЕ точке (решение
+  /// пользователя: "выбрав 2 выстрела, просто покажет 2 выстрела в
+  /// одной точке").
+  int? _expectedCount;
+
+  static const List<int> _countChoices = [1, 2, 3, 4, 5, 6, 8, 10];
+
   double _displayScale = 1; // display px = natural px * _displayScale
 
   List<PixelPoint> get _allKnownMm => [...widget.knownHolesMm, ..._confirmedMm];
 
-  /// Живая камера есть только в Android-сборке (см. pubspec.yaml) — на
-  /// Windows и в вебе (в том числе на телефоне, открытом в браузере)
+  /// Живая камера — Android-сборка и веб (там `camera_web` умеет только
+  /// открыть превью и снять кадр, без анализа потока — см.
+  /// camera_scan_screen.dart, там же таймер+акселерометр вместо
+  /// разбора пикселей). На Windows desktop `camera` не работает вовсе —
   /// остаётся привычный выбор файла.
-  bool get _cameraAvailable => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+  bool get _cameraAvailable => kIsWeb || defaultTargetPlatform == TargetPlatform.android;
 
   Future<void> _pick() async {
     setState(() {
@@ -223,9 +236,18 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
         widget.face.faceRadiusMm,
       );
 
+  /// Кандидаты, дополненные до заданного числа выстрелов (см.
+  /// `_expectedCount`) — дублирует последнюю точку на месте, если
+  /// найденных пробоин меньше, чем указано.
+  List<Offset> get _candidatesToConfirm {
+    final count = _expectedCount;
+    if (count == null || _candidates.isEmpty || _candidates.length >= count) return _candidates;
+    return [..._candidates, for (var i = _candidates.length; i < count; i++) _candidates.last];
+  }
+
   void _confirmPhoto() {
     setState(() {
-      _confirmedMm.addAll(_candidates.map(_toMm));
+      _confirmedMm.addAll(_candidatesToConfirm.map(_toMm));
       _candidates = [];
       _decoded = null;
       _bytes = null;
@@ -387,6 +409,7 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
             textAlign: TextAlign.center,
           ),
         ),
+        _buildCountSelector(),
         if (_error != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -417,13 +440,47 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
                   onPressed: _busy || _candidates.isEmpty ? null : _confirmPhoto,
                   child: _busy
                       ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                      : Text('Подтвердить (${_candidates.length})'),
+                      : Text('Подтвердить (${_candidatesToConfirm.length})'),
                 ),
               ),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildCountSelector() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Row(
+        children: [
+          Text('Выстрелов:', style: Theme.of(context).textTheme.labelMedium),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  ChoiceChip(
+                    label: const Text('Авто'),
+                    selected: _expectedCount == null,
+                    onSelected: (_) => setState(() => _expectedCount = null),
+                  ),
+                  for (final n in _countChoices) ...[
+                    const SizedBox(width: 6),
+                    ChoiceChip(
+                      label: Text('$n'),
+                      selected: _expectedCount == n,
+                      onSelected: (_) => setState(() => _expectedCount = n),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

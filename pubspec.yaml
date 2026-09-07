@@ -33,6 +33,14 @@ dependencies:
   # camera_scan_screen.dart): пакет не поддерживает Windows desktop, там
   # остаётся выбор файла через file_picker.
   camera: ^0.11.0+2
+  # Открыть сайт Supabase из формы первого подключения (создать свой
+  # проект) — единственное применение, полноценный webview не нужен.
+  url_launcher: ^6.3.0
+  # Акселерометр для авто-спуска камеры на вебе (camera_web не отдаёт
+  # кадры потока — startImageStream там бросает UnimplementedError,
+  # поэтому "трясётся ли картинка" там определяется не по пикселям, как
+  # на Android, а по датчику движения телефона).
+  sensors_plus: ^7.1.0
 
 dev_dependencies:
   flutter_test:
