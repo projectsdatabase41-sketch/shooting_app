@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/supabase_auth_service.dart';
@@ -540,7 +541,15 @@ class _AccountSheetState extends State<_AccountSheet> {
       child: Padding(
         // Отступ снизу равен высоте клавиатуры: иначе поле пароля
         // оказывается под ней ровно в тот момент, когда в него пишут.
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        //
+        // На вебе — НЕ добавляем: там это сам браузер уже подстраивает
+        // видимую область под виртуальную клавиатуру телефона, а
+        // `viewInsets.bottom` после ЗАКРЫТИЯ клавиатуры не всегда
+        // возвращается ровно к нулю (известная особенность мобильных
+        // браузеров) — двойная компенсация оставляла пустой промежуток
+        // снизу и уезжавший вверх лист уже после того, как клавиатура
+        // скрылась.
+        padding: EdgeInsets.only(bottom: kIsWeb ? 0 : MediaQuery.of(context).viewInsets.bottom),
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           children: [
