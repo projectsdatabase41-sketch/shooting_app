@@ -18,6 +18,15 @@ class CoachAccessException implements Exception {
 /// и никакого входа: RPC на стороне спортсмена сами проверяют токен
 /// (`security definer`), апи-ключ нужен только чтобы постучаться в
 /// PostgREST вообще.
+///
+/// ИЗВЕСТНЫЙ РАЗРЫВ (не в объёме TASK-sync-mapping.md, раздел 1 которого
+/// касается только тренировки/упражнения/выстрела): RPC-функции ниже —
+/// `get_shared_exercises`/`get_shared_training_sessions`/
+/// `get_shared_shots`/`get_shared_comments`/`add_shared_comment` — на
+/// реальной базе НЕ СУЩЕСТВУЮТ (см. docs/db-schema-actual.md). Там
+/// вместо них есть `validate_share_token`, но под новую схему
+/// (`training_packages`/`exercises`/`shots`) эту сторону ещё предстоит
+/// написать заново — отдельная задача.
 class CoachAccessService {
   final LocalDbService db;
   CoachAccessService(this.db);

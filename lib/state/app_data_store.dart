@@ -392,24 +392,16 @@ class AppDataStore extends ChangeNotifier {
   /// Заводит упражнение, пришедшее с сервера при pull — ТОЛЬКО если его
   /// ещё нет локально по id.
   ///
+  /// Принимает уже готовый `Exercise` — разбор строки конкретной
+  /// облачной таблицы (её колонки чужие локальной схеме, см.
+  /// `SupabaseSyncService`) остаётся целиком в мосте синхронизации;
+  /// здесь только персистентность в уже существующем локальном формате.
+  ///
   /// Не трогаем уже существующее: упражнение могли переименовать на
   /// этом же устройстве уже ПОСЛЕ последней отправки, и слепая
   /// перезапись стёрла бы правку, которую сервер ещё не видел.
-  void upsertExerciseFromRemote(Map<String, dynamic> row) {
-    if (exercises.any((e) => e.id == row['id'])) return;
-    final ex = Exercise(
-      id: row['id'] as String,
-      name: row['name'] as String,
-      targetFaceCode: row['target_face_code'] as String,
-      totalShots: row['total_shots'] as int,
-      seriesSize: row['series_size'] as int,
-      gender: ExerciseGender.values.firstWhere(
-        (g) => g.name == (row['gender'] as String? ?? 'mixed'),
-        orElse: () => ExerciseGender.mixed,
-      ),
-      deletedAt: row['deleted_at'] == null ? null : DateTime.parse(row['deleted_at'] as String),
-      series: seriesFromJson(row['series']),
-    );
+  void upsertExerciseFromRemote(Exercise ex) {
+    if (exercises.any((e) => e.id == ex.id)) return;
     db.db.execute(
       'INSERT INTO exercises (id, code, name, target_face_code, total_shots, series_size, gender, series, deleted_at) '
       'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -423,83 +415,47 @@ class AppDataStore extends ChangeNotifier {
   }
 
   /// Заводит тренировку и её выстрелы, пришедшие с сервера при pull —
-  /// ТОЛЬКО если такой тренировки ещё нет локально. См. причину в
-  /// `upsertExerciseFromRemote`: локальные тренировки завершены и не
-  /// редактируются (`canEdit` требует `status != finished`), так что
-  /// конфликтовать здесь особо нечему, но перезаписывать существующую
-  /// запись данными, которые могли устареть по дороге, всё равно не
-  /// нужно — это и так уже наша тренировка, локальная копия главнее.
-  void upsertSessionFromRemote(Map<String, dynamic> sessionRow, List<Map<String, dynamic>> shotRows) {
-    if (sessions.any((s) => s.id == sessionRow['id'])) return;
-    final id = sessionRow['id'] as String;
+  /// ТОЛЬКО если такой тренировки ещё нет локально.
+  ///
+  /// Принимает уже готовую `TrainingSession` (с выстрелами внутри) —
+  /// разбор облачных строк остаётся в `SupabaseSyncService`, см.
+  /// комментарий `upsertExerciseFromRemote`. Корзина (`trash`) с сервера
+  /// не приходит вовсе — синхронизируются только завершённые
+  /// тренировки, где корзину уже нечем пополнить, а сам список корзины
+  /// на сервер не отправляется (см. `SupabaseSyncService.push`).
+  ///
+  /// Существующую тренировку не перезаписываем: локальная копия — уже
+  /// наша тренировка, устаревшей по дороге стать не может (`canEdit`
+  /// требует `status != finished`, а синхронизируются только finished).
+  void upsertSessionFromRemote(TrainingSession session) {
+    if (sessions.any((s) => s.id == session.id)) return;
     db.db.execute('BEGIN');
     try {
       db.db.execute(
         'INSERT INTO training_sessions (id, exercise_id, target_face_code, status, started_at, finished_at, pause_intervals, synced_to_cloud, extra) '
         'VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)',
         [
-          id,
-          sessionRow['exercise_id'],
-          sessionRow['target_face_code'],
-          sessionRow['status'],
-          sessionRow['started_at'],
-          sessionRow['finished_at'],
-          jsonEncode(sessionRow['pause_intervals'] ?? []),
-          sessionRow['extra'] == null ? null : jsonEncode(sessionRow['extra']),
+          session.id,
+          session.exerciseId,
+          session.targetFaceCode,
+          session.status.name,
+          session.startedAt?.toIso8601String(),
+          session.finishedAt?.toIso8601String(),
+          '[]',
+          session.extra == null ? null : jsonEncode(session.extra),
         ],
       );
-      for (final row in shotRows) {
-        db.db.execute(
-          'INSERT INTO shots (id, session_id, shot_number, series_no, x_mm, y_mm, score, time, is_favorite, is_manually_edited, is_trashed, extra, counts) '
-          'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [
-            row['id'], id, row['shot_number'], row['series_no'], row['x_mm'], row['y_mm'], row['score'], row['time'],
-            row['is_favorite'] == true ? 1 : 0,
-            row['is_manually_edited'] == true ? 1 : 0,
-            row['is_trashed'] == true ? 1 : 0,
-            row['extra'] == null ? null : jsonEncode(row['extra']),
-            row['counts'] == false ? 0 : 1,
-          ],
-        );
+      for (final shot in session.shots) {
+        _insertShot(session.id, shot, trashed: false);
       }
       db.db.execute('COMMIT');
     } catch (_) {
       db.db.execute('ROLLBACK');
       rethrow;
     }
-    final shots = [for (final r in shotRows) if (r['is_trashed'] != true) _shotFromRemoteRow(r)];
-    final trash = [for (final r in shotRows) if (r['is_trashed'] == true) _shotFromRemoteRow(r)];
-    sessions = [
-      TrainingSession(
-        id: id,
-        exerciseId: sessionRow['exercise_id'] as String,
-        targetFaceCode: sessionRow['target_face_code'] as String,
-        status: SessionStatus.values.firstWhere((s) => s.name == sessionRow['status']),
-        startedAt: sessionRow['started_at'] == null ? null : DateTime.parse(sessionRow['started_at'] as String),
-        finishedAt: sessionRow['finished_at'] == null ? null : DateTime.parse(sessionRow['finished_at'] as String),
-        shots: shots,
-        trash: trash,
-        syncedToCloud: true,
-        extra: extraFromJson(sessionRow['extra']),
-      ),
-      ...sessions,
-    ];
+    sessions = [session.copyWith(syncedToCloud: true), ...sessions];
     notifyListeners();
   }
-
-  Shot _shotFromRemoteRow(Map<String, dynamic> r) => Shot(
-        id: r['id'] as String,
-        shotNumber: r['shot_number'] as int,
-        seriesNo: r['series_no'] as int,
-        xMm: (r['x_mm'] as num).toDouble(),
-        yMm: (r['y_mm'] as num).toDouble(),
-        score: (r['score'] as num).toDouble(),
-        time: DateTime.parse(r['time'] as String),
-        isFavorite: r['is_favorite'] == true,
-        isManuallyEdited: r['is_manually_edited'] == true,
-        counts: r['counts'] != false,
-        extra: extraFromJson(r['extra']),
-      );
 }
 
 extension _FirstOrNull<T> on Iterable<T> {

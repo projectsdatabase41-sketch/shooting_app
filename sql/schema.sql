@@ -1,16 +1,44 @@
--- sql/schema.sql — схема для ЛИЧНОЙ базы Supabase.
+-- sql/schema.sql — схема ЛИЧНОЙ базы Supabase, КАК ОНА РЕАЛЬНО УСТРОЕНА.
 --
--- Модель развёртывания (решение пользователя, сентябрь 2026): общей
--- базы нет. У каждого спортсмена свой проект Supabase, у тренера свой.
--- Тренер подключается к базе спортсмена по ревокируемому токену — на
--- чтение и на комментарии. Никакой дополнительной регистрации в
--- сторонней службе не требуется: учётная запись создаётся здесь же, в
--- этой базе, средствами Supabase Auth.
+-- ВАЖНО, прочитать перед правкой этого файла: до 2026-09-07 этот файл
+-- описывал СОВСЕМ ДРУГУЮ, никогда не применённую к живой базе схему
+-- (плоские exercises/training_sessions/shots). Реальная база
+-- (fiwpmxfonmyadatggtuj) с самого начала была создана по другой,
+-- более развёрнутой схеме — training_packages/exercises/
+-- exercise_templates и инфраструктура под фото-импорт и дневник
+-- тренера через удалённый источник. Расхождение и было причиной
+-- ошибки "HTTP 400 PGRST204: Could not find the 'deleted_at' column".
 --
--- Применяется один раз при подготовке базы: через SQL editor Supabase
--- или через ИИ-ассистента, подключённого к проекту (см. инструкцию
--- claude/supabase-setup-prompt.md — её пользователь просто пересылает
--- своему ассистенту).
+-- Реальная структура снята через OpenAPI-описание PostgREST
+-- (`GET /rest/v1/` секретным ключом — см. docs/db-schema-actual.md,
+-- там же таблица соответствия полей приложения колонкам базы).
+-- Этот файл теперь описывает РЕАЛЬНУЮ схему: на уже существующей базе
+-- `create table if not exists` ничего не меняет (структура и так
+-- совпадает), на свежем проекте — создаёт ровно то же самое с нуля.
+--
+-- Чего в этом файле НЕТ и почему: RLS-политики и RPC-функции
+-- (`is_project_owner`, `hash_share_token`, `revoke_share_grant`,
+-- `set_project_status`, `validate_share_token`), которые уже реально
+-- работают на живой базе, — их SQL-тела сюда не переписаны, потому что
+-- секретный ключ даёт доступ к ОПИСАНИЮ таблиц (OpenAPI), а не к
+-- исходному коду функций/политик. `create or replace function` с
+-- УГАДАННЫМ телом тут был бы не восстановлением, а подменой рабочей
+-- логики — на это в задании прямой запрет (раздел 3.5: "ничего не
+-- удалять/трогать лишнее"). Новые таблицы ниже (`comments`,
+-- `training_notes`) используют `is_project_owner()` как есть, полагаясь
+-- на то, что она уже существует.
+--
+-- Известный открытый вопрос: RLS на всех таблицах требует, чтобы в
+-- `project_settings` была строка с `owner_user_id = auth.uid()` —
+-- сейчас (2026-09-07) она пуста, и `is_project_owner()` возвращает
+-- false для любого запроса. Создать эту первую строку не вышло —
+-- колонка `storage_balance` защищена CHECK-ограничением с неизвестным
+-- набором допустимых значений (перебор текстом результата не дал).
+-- Нужно посмотреть определение ограничения в Table Editor Supabase
+-- (project_settings → колонка storage_balance → Constraints) и завести
+-- первую строку `project_settings` вручную с подходящим значением —
+-- до этого push/pull будут получать HTTP 403 (RLS), это ожидаемо и не
+-- баг моста.
 --
 -- Скрипт идемпотентный: повторный запуск ничего не ломает.
 --
@@ -20,13 +48,9 @@
 create extension if not exists "pgcrypto";
 
 -- ============================================================
--- Служебное: отметка времени последнего изменения.
+-- Служебное
 -- ============================================================
 
--- Синхронизация ручная и односторонних правил слияния не имеет:
--- выигрывает более поздняя запись. Чтобы это работало, время правки
--- должна ставить БАЗА, а не клиент — часы на телефоне могут врать, и
--- «победитель» тогда определялся бы настройками устройства.
 create or replace function touch_updated_at()
 returns trigger
 language plpgsql
@@ -38,110 +62,229 @@ end;
 $$;
 
 -- ============================================================
--- Данные пользователя
+-- Реальные таблицы — как они уже существуют на живой базе.
 -- ============================================================
 
 create table if not exists project_settings (
-  id                 uuid primary key default gen_random_uuid(),
-  user_id            uuid not null default auth.uid() references auth.users(id) on delete cascade,
-  is_athlete         boolean not null default true,
-  is_coach           boolean not null default false,
-  storage_keep_count int not null default 200,
-  created_at         timestamptz not null default now(),
-  updated_at         timestamptz not null default now()
+  id                          uuid primary key default gen_random_uuid(),
+  owner_user_id               uuid not null references auth.users(id) on delete cascade,
+  project_name                text,
+  status                      text not null default 'active',
+  paused_at                   timestamptz,
+  pause_reason                text,
+  is_athlete                  boolean not null default true,
+  is_coach                    boolean not null default false,
+  keep_local_packages_count   int not null default 200,
+  keep_files_after_sync       boolean not null default true,
+  sync_only_wifi              boolean not null default false,
+  storage_balance             text not null,
+  created_at                  timestamptz not null default now(),
+  updated_at                  timestamptz not null default now()
 );
 
--- Справочник мишеней. Геометрию приложение берёт из собственных
--- констант (TargetFace), эта таблица нужна только как якорь для
--- внешних ключей и как читаемая расшифровка кода мишени в SQL.
 create table if not exists target_faces (
-  code                  text primary key,
-  name                  text not null,
-  distance_m            numeric not null,
-  caliber_mm            numeric not null,
-  bullseye_diameter_mm  numeric not null,
-  blank_size_mm         numeric
-);
-
-insert into target_faces (code, name, distance_m, caliber_mm, bullseye_diameter_mm, blank_size_mm) values
-  ('rifle_10m',  '№ 8, пневматическая винтовка 10 м',  10, 4.5,  30.5,  80),
-  ('pistol_10m', '№ 9, пневматический пистолет 10 м',  10, 4.5,  59.5, 170),
-  ('rifle_50m',  '№ 7, малокалиберная винтовка 50 м',  50, 5.6, 112.4, 250),
-  ('pistol_25m', '№ 4, пистолет 25 м',                 25, 5.6, 200,   550)
-on conflict (code) do nothing;
-
-create table if not exists exercises (
-  id                uuid primary key default gen_random_uuid(),
-  user_id           uuid not null default auth.uid() references auth.users(id) on delete cascade,
-  name              text not null,
-  target_face_code  text not null references target_faces(code),
-  total_shots       int not null,
-  series_size       int not null,
-  gender            text not null default 'mixed' check (gender in ('male','female','mixed')),
-  -- Описание серий: [{name, shot_count, time_limit_s, counts}, …].
-  -- Пусто — упражнение старого вида, все серии одинаковы.
-  series            jsonb,
-  -- Мягкое удаление: упражнение уходит из выбора, но остаётся в базе,
-  -- чтобы прошлые тренировки не потеряли название.
-  deleted_at        timestamptz,
-  created_at        timestamptz not null default now(),
-  updated_at        timestamptz not null default now()
-);
-
-create table if not exists training_sessions (
-  id                uuid primary key default gen_random_uuid(),
-  user_id           uuid not null default auth.uid() references auth.users(id) on delete cascade,
-  exercise_id       uuid not null references exercises(id),
-  target_face_code  text not null references target_faces(code),
-  status            text not null default 'notStarted'
-                     check (status in ('notStarted','running','paused','finished')),
-  started_at        timestamptz,
-  finished_at       timestamptz,
-  pause_intervals   jsonb not null default '[]'::jsonb,
-  -- Показатели, под которые нет колонок: из SCATT и других приборов
-  -- сюда уезжают скорость, стабильность прицеливания, темп, настройки
-  -- прибора. В интерфейсе не показывается — это материал для
-  -- ассистента, он читает содержимое и может построить по нему график.
-  -- Структура намеренно не фиксирована: приборов со временем станет
-  -- больше, и заводить под каждый свои колонки — тупик.
-  extra             jsonb,
-  created_at        timestamptz not null default now(),
-  updated_at        timestamptz not null default now()
-);
-
-create table if not exists shots (
   id                  uuid primary key default gen_random_uuid(),
-  session_id          uuid not null references training_sessions(id) on delete cascade,
-  shot_number         int not null,
-  series_no           int not null,
-  x_mm                numeric not null,
-  y_mm                numeric not null,
-  score               numeric not null,
-  time                timestamptz not null,
-  is_favorite         boolean not null default false,
-  is_manually_edited  boolean not null default false,
-  is_trashed          boolean not null default false,
-  -- Идёт ли выстрел в зачёт. Пристрелка пишется и видна на мишени, но
-  -- в сумму и статистику не входит. Флаг на выстреле, а не только в
-  -- описании упражнения: шаблон могут потом переписать, а отстрелянная
-  -- тренировка меняться не должна.
-  counts              boolean not null default true,
-  -- Показатели выстрела из внешних приборов: время прицеливания,
-  -- удержание, скорость подвода. См. комментарий к training_sessions.extra.
-  extra               jsonb,
+  code                text not null,
+  name                text not null,
+  distance_m          numeric not null,
+  default_caliber_mm  numeric not null,
+  scoring_type        text not null default 'decimal',
+  max_score           numeric not null default 10.9,
+  ring_config         jsonb not null,
+  is_system           boolean not null default true,
+  is_active           boolean not null default true,
+  created_at          timestamptz not null default now(),
   updated_at          timestamptz not null default now()
 );
 
-create index if not exists idx_shots_session on shots(session_id);
+-- Уникальность кода — таблица была пуста на момент добавления
+-- ограничения, конфликтов со старыми данными нет.
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'target_faces_code_key'
+  ) then
+    alter table target_faces add constraint target_faces_code_key unique (code);
+  end if;
+end
+$$;
 
--- Единая таблица комментариев к тренировке, серии, выстрелу — и
--- отдельный чат с тренером ('coach'): страница "Тренер" читает и пишет
--- именно этот уровень, без фильтра по автору, иначе сообщение
--- спортсмена, отправленное со страницы тренера, было бы не отличить от
--- обычной заметки и не видно тренеру там, где он его ждёт.
+create table if not exists exercise_templates (
+  id                  uuid primary key default gen_random_uuid(),
+  code                text not null,
+  name                text not null,
+  weapon_type         text not null,
+  ammo_type           text not null,
+  distance_m          numeric not null,
+  shots_count         int not null,
+  series_count        int,
+  shots_per_series    int,
+  target_face_id      uuid references target_faces(id),
+  time_limit_minutes  int,
+  official_code       text,
+  is_custom           boolean not null default true,
+  is_active           boolean not null default true,
+  created_at          timestamptz not null default now(),
+  updated_at          timestamptz not null default now()
+);
+
+-- Снимок ОДНОГО исполнения упражнения внутри пакета — не то же самое,
+-- что exercise_templates (справочник-каталог). У пакета в этой схеме
+-- может быть несколько таких строк, приложение пишет ровно одну на
+-- тренировку (см. docs/db-schema-actual.md).
+create table if not exists exercises (
+  id                    uuid primary key default gen_random_uuid(),
+  package_id            uuid not null references training_packages(id) on delete cascade,
+  exercise_name         text,
+  discipline            text not null,
+  distance_meters       numeric not null,
+  target_face_id        uuid references target_faces(id),
+  decimal_scoring       boolean not null default true,
+  expected_shots        int,
+  started_at            timestamptz,
+  time_is_approximate   boolean not null default false,
+  created_at            timestamptz not null default now(),
+  updated_at            timestamptz not null default now()
+);
+
+create table if not exists training_packages (
+  id                          uuid primary key default gen_random_uuid(),
+  started_at                  timestamptz not null,
+  ended_at                    timestamptz,
+  time_is_approximate         boolean not null default false,
+  local_time_offset_minutes   int,
+  title                       text,
+  location                    text,
+  note                        text,
+  package_status              text not null,
+  editor_mode                 text not null default 'athlete',
+  is_locked_by_athlete        boolean not null default true,
+  local_version               int not null default 1,
+  created_at                  timestamptz not null default now(),
+  updated_at                  timestamptz not null default now()
+);
+
+create table if not exists shots (
+  id                     uuid primary key default gen_random_uuid(),
+  exercise_id            uuid not null references exercises(id) on delete cascade,
+  shot_no                int not null,
+  series_no              int,
+  x_mm                   numeric,
+  y_mm                   numeric,
+  input_angle_degrees    numeric,
+  coordinate_source      text not null default 'app',
+  reported_score         numeric,
+  computed_score         numeric,
+  final_score            numeric not null,
+  source                 text not null default 'app',
+  photo_import_id        uuid references photo_import_jobs(id),
+  is_manually_corrected  boolean not null default false,
+  confirmed              boolean not null default true,
+  shot_time_ms           bigint,
+  created_at             timestamptz not null default now(),
+  updated_at             timestamptz not null default now()
+);
+
+create index if not exists idx_shots_exercise on shots(exercise_id);
+
+create table if not exists remote_athlete_sources (
+  id                       uuid primary key default gen_random_uuid(),
+  athlete_label            text not null,
+  project_url              text not null,
+  access_token_reference   text,
+  status                   text not null default 'active',
+  last_fetched_at          timestamptz,
+  last_error               text,
+  archive_enabled          boolean not null default false,
+  created_at               timestamptz not null default now(),
+  updated_at               timestamptz not null default now()
+);
+
+create table if not exists archived_packages (
+  id                    uuid primary key default gen_random_uuid(),
+  remote_source_id      uuid references remote_athlete_sources(id),
+  original_package_id   uuid not null,
+  athlete_label         text,
+  source_project_url    text,
+  started_at            timestamptz,
+  fetched_at            timestamptz not null default now(),
+  package_json          jsonb not null,
+  checksum              text,
+  note                  text,
+  created_at            timestamptz not null default now()
+);
+
+create table if not exists file_assets (
+  id                       uuid primary key default gen_random_uuid(),
+  package_id               uuid not null references training_packages(id) on delete cascade,
+  exercise_id              uuid references exercises(id) on delete cascade,
+  kind                     text not null,
+  usage                    text not null,
+  local_path               text,
+  remote_path              text,
+  file_name                text,
+  mime_type                text,
+  size_bytes               bigint,
+  upload_status            text not null default 'pending',
+  processing_status        text not null default 'pending',
+  keep_after_processing    boolean not null default false,
+  created_at               timestamptz not null default now(),
+  updated_at               timestamptz not null default now()
+);
+
+create table if not exists photo_import_jobs (
+  id                      uuid primary key default gen_random_uuid(),
+  package_id              uuid not null references training_packages(id) on delete cascade,
+  exercise_id             uuid references exercises(id) on delete cascade,
+  file_asset_id           uuid not null references file_assets(id) on delete cascade,
+  status                  text not null default 'pending',
+  detected_shots_count    int not null default 0,
+  confirmed_at            timestamptz,
+  error_message           text,
+  created_at              timestamptz not null default now(),
+  updated_at              timestamptz not null default now()
+);
+
+create table if not exists share_grants (
+  id             uuid primary key default gen_random_uuid(),
+  token_hash     text not null,
+  label          text,
+  description    text,
+  permissions    text[] not null default array['read']::text[],
+  created_by     uuid,
+  created_at     timestamptz not null default now(),
+  expires_at     timestamptz,
+  revoked_at     timestamptz,
+  revoked_by     uuid,
+  last_used_at   timestamptz
+);
+
+create table if not exists share_events (
+  id               uuid primary key default gen_random_uuid(),
+  share_grant_id   uuid references share_grants(id) on delete cascade,
+  event_type       text not null,
+  details          jsonb not null default '{}'::jsonb,
+  created_at       timestamptz not null default now()
+);
+
+-- ============================================================
+-- Догоняющая миграция: чего не хватало для моста приложения
+-- (раздел 5 TASK-sync-mapping.md).
+-- ============================================================
+
+alter table shots              add column if not exists counts  boolean not null default true;
+alter table shots              add column if not exists extra   jsonb;
+alter table training_packages  add column if not exists extra   jsonb;
+alter table exercises          add column if not exists extra   jsonb;
+alter table exercise_templates add column if not exists extra   jsonb;
+
+-- Единая лента комментариев — тренировка/серия/выстрел, и отдельный
+-- чат с тренером ('coach'): страница "Тренер" читает и пишет именно
+-- этот уровень, без фильтра по автору (та же логика, что в локальной
+-- схеме, lib/db/local_schema.sql).
 create table if not exists comments (
   id           uuid primary key default gen_random_uuid(),
-  session_id   uuid not null references training_sessions(id) on delete cascade,
+  package_id   uuid not null references training_packages(id) on delete cascade,
   level        text not null check (level in ('shot', 'series', 'session', 'coach')),
   shot_id      uuid references shots(id) on delete cascade,
   series_no    int,
@@ -150,14 +293,6 @@ create table if not exists comments (
   created_at   timestamptz not null default now()
 );
 
--- CHECK-ограничения по имени накатываются заново при каждом запуске
--- скрипта (idempotent): 'create table if not exists' выше не тронет их
--- на уже созданной базе, а без этого 'coach' на старой базе отклонялся
--- бы constraint'ом, заведённым до того, как эта строка появилась.
-alter table comments drop constraint if exists comments_level_check;
-alter table comments add constraint comments_level_check
-  check (level in ('shot', 'series', 'session', 'coach'));
-
 alter table comments drop constraint if exists comments_level_fields;
 alter table comments add constraint comments_level_fields check (
   (level = 'shot' and shot_id is not null and series_no is null) or
@@ -165,24 +300,15 @@ alter table comments add constraint comments_level_fields check (
   ((level = 'session' or level = 'coach') and shot_id is null and series_no is null)
 );
 
-create index if not exists idx_comments_session on comments(session_id);
+create index if not exists idx_comments_package on comments(package_id);
 
 -- Заметки — самостоятельный дневник, не привязанный к тренировке.
---
--- Имя с приставкой training_ намеренно: «notes» — слишком ходовое
--- слово, и в реальной базе пользователя такая таблица уже нашлась (от
--- другого его проекта). CREATE TABLE IF NOT EXISTS в этом случае молча
--- ничего не делает, и приложение начало бы писать выстрелы в чужие
--- записи. Приставка стоит копейку и снимает целый класс аварий.
--- Тема (короткий заголовок) придумывается ассистентом при сохранении,
--- но остаётся обычным редактируемым текстом: если название не
--- понравилось, пользователь его переписывает.
---
--- Удаление двухступенчатое, как у выстрелов: сначала корзина
--- (is_trashed), и только очистка корзины удаляет строку насовсем.
+-- Уже существует ЛОКАЛЬНО (lib/db/local_schema.sql), но ни один экран
+-- её пока не использует — таблица здесь только чтобы быть готовой,
+-- синхронизация для нёе мостом пока не написана (раздел 5.3 задания:
+-- "заведена на будущее").
 create table if not exists training_notes (
   id           uuid primary key default gen_random_uuid(),
-  user_id      uuid not null default auth.uid() references auth.users(id) on delete cascade,
   topic        text not null default '',
   body         text not null default '',
   is_favorite  boolean not null default false,
@@ -192,242 +318,55 @@ create table if not exists training_notes (
   updated_at   timestamptz not null default now()
 );
 
-create index if not exists idx_training_notes_user on training_notes(user_id) where is_trashed = false;
-
-create table if not exists share_grants (
-  id             uuid primary key default gen_random_uuid(),
-  athlete_id     uuid not null default auth.uid() references auth.users(id) on delete cascade,
-  token_hash     text not null,
-  athlete_label  text not null default '',
-  created_at     timestamptz not null default now(),
-  revoked_at     timestamptz
-);
-
-create index if not exists idx_share_grants_athlete on share_grants(athlete_id) where revoked_at is null;
-
--- Триггеры отметки времени. drop+create вместо "if not exists" —
--- у триггеров такого синтаксиса нет, а повторный запуск скрипта не
--- должен падать.
-drop trigger if exists touch_exercises on exercises;
-create trigger touch_exercises before update on exercises
-  for each row execute function touch_updated_at();
-
-drop trigger if exists touch_training_sessions on training_sessions;
-create trigger touch_training_sessions before update on training_sessions
-  for each row execute function touch_updated_at();
-
-drop trigger if exists touch_shots on shots;
-create trigger touch_shots before update on shots
-  for each row execute function touch_updated_at();
+-- ============================================================
+-- Триггеры отметки времени — только на таблицах, которые заводит
+-- этот блок (comments/training_notes). На остальных триггеры уже
+-- есть на живой базе (updated_at там уже проставляется), трогать их
+-- не нужно.
+-- ============================================================
 
 drop trigger if exists touch_training_notes on training_notes;
 create trigger touch_training_notes before update on training_notes
   for each row execute function touch_updated_at();
 
-drop trigger if exists touch_project_settings on project_settings;
-create trigger touch_project_settings before update on project_settings
-  for each row execute function touch_updated_at();
-
 -- ============================================================
--- RLS: каждый видит только своё.
---
--- Доступ тренера идёт ИСКЛЮЧИТЕЛЬНО через функции ниже (security
--- definer), а не через политики на чужие строки. Это принципиально:
--- токен можно отозвать одним полем, а выданный доступ к строкам —
--- нельзя.
+-- RLS для НОВЫХ таблиц — используем уже существующую is_project_owner().
+-- На остальных таблицах RLS уже включён и работает (см. предупреждение
+-- в шапке файла) — здесь его не трогаем.
 -- ============================================================
 
-alter table project_settings enable row level security;
-alter table exercises enable row level security;
-alter table training_sessions enable row level security;
-alter table shots enable row level security;
 alter table comments enable row level security;
 alter table training_notes enable row level security;
-alter table share_grants enable row level security;
-alter table target_faces enable row level security;
 
-drop policy if exists "own project_settings" on project_settings;
-create policy "own project_settings" on project_settings
-  for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+drop policy if exists "owner comments" on comments;
+create policy "owner comments" on comments
+  for all using (is_project_owner()) with check (is_project_owner());
 
-drop policy if exists "own exercises" on exercises;
-create policy "own exercises" on exercises
-  for all using (user_id = auth.uid()) with check (user_id = auth.uid());
-
-drop policy if exists "own training_sessions" on training_sessions;
-create policy "own training_sessions" on training_sessions
-  for all using (user_id = auth.uid()) with check (user_id = auth.uid());
-
-drop policy if exists "own shots" on shots;
-create policy "own shots" on shots
-  for all using (
-    exists (select 1 from training_sessions s where s.id = shots.session_id and s.user_id = auth.uid())
-  ) with check (
-    exists (select 1 from training_sessions s where s.id = shots.session_id and s.user_id = auth.uid())
-  );
-
-drop policy if exists "own or authored comments" on comments;
-create policy "own or authored comments" on comments
-  for all using (
-    exists (select 1 from training_sessions s where s.id = comments.session_id and s.user_id = auth.uid())
-  ) with check (
-    exists (select 1 from training_sessions s where s.id = comments.session_id and s.user_id = auth.uid())
-  );
-
-drop policy if exists "own training_notes" on training_notes;
-create policy "own training_notes" on training_notes
-  for all using (user_id = auth.uid()) with check (user_id = auth.uid());
-
-drop policy if exists "own share_grants" on share_grants;
-create policy "own share_grants" on share_grants
-  for all using (athlete_id = auth.uid()) with check (athlete_id = auth.uid());
-
--- Справочник мишеней читают все авторизованные, пишет только владелец
--- базы через SQL editor: это статические данные, а не пользовательские.
-drop policy if exists "read target_faces" on target_faces;
-create policy "read target_faces" on target_faces
-  for select using (true);
+drop policy if exists "owner training_notes" on training_notes;
+create policy "owner training_notes" on training_notes
+  for all using (is_project_owner()) with check (is_project_owner());
 
 -- ============================================================
--- Доступ тренера по токену
+-- Справочник мишеней ISSF — сидируется один раз, дальше мост сам
+-- находит строку по коду (get-or-create), сюда не пишет повторно.
 -- ============================================================
 
--- Создание токена: он возвращается ОДИН РАЗ, в базе остаётся только
--- хеш. Восстановить исходный токен нельзя — можно выпустить новый.
-create or replace function create_share_token(p_athlete_label text default '')
-returns text
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_token text := encode(gen_random_bytes(24), 'base64');
-  v_hash text := encode(digest(v_token, 'sha256'), 'hex');
-begin
-  insert into share_grants (athlete_id, token_hash, athlete_label)
-  values (auth.uid(), v_hash, p_athlete_label);
-  return v_token;
-end;
-$$;
+insert into target_faces (code, name, distance_m, default_caliber_mm, scoring_type, max_score, ring_config, is_system, is_active)
+select v.code, v.name, v.distance_m, v.caliber_mm, 'decimal', 10.9, v.ring_config::jsonb, true, true
+from (values
+  ('rifle_10m',  '№ 8, пневматическая винтовка 10 м', 10::numeric, 4.5::numeric,
+    '{"ring_diameters_mm":[0.5,5.5,10.5,15.5,20.5,25.5,30.5,35.5,40.5,45.5],"bullseye_diameter_mm":30.5,"blank_size_mm":80,"inner_ten_diameter_mm":null,"gauging":"inward"}'),
+  ('pistol_10m', '№ 9, пневматический пистолет 10 м', 10::numeric, 4.5::numeric,
+    '{"ring_diameters_mm":[11.5,27.5,43.5,59.5,75.5,91.5,107.5,123.5,139.5,155.5],"bullseye_diameter_mm":59.5,"blank_size_mm":170,"inner_ten_diameter_mm":5.0,"gauging":"inward"}'),
+  ('rifle_50m',  '№ 7, малокалиберная винтовка 50 м', 50::numeric, 5.6::numeric,
+    '{"ring_diameters_mm":[10.4,26.4,42.4,58.4,74.4,90.4,106.4,122.4,138.4,154.4],"bullseye_diameter_mm":112.4,"blank_size_mm":250,"inner_ten_diameter_mm":5.0,"gauging":"inward"}'),
+  ('pistol_25m', '№ 4, пистолет 25 м', 25::numeric, 5.6::numeric,
+    '{"ring_diameters_mm":[50,100,150,200,250,300,350,400,450,500],"bullseye_diameter_mm":200,"blank_size_mm":550,"inner_ten_diameter_mm":25,"gauging":"inward"}')
+) as v(code, name, distance_m, caliber_mm, ring_config)
+on conflict (code) do nothing;
 
-create or replace function revoke_share_token(p_grant_id uuid)
-returns void
-language sql
-security definer
-set search_path = public
-as $$
-  update share_grants
-    set revoked_at = now()
-    where id = p_grant_id and athlete_id = auth.uid() and revoked_at is null;
-$$;
+-- ============================================================
+-- Сброс кеша схемы — обязательно последней строкой.
+-- ============================================================
 
--- Проверка токена обязана смотреть revoked_at ПРИ КАЖДОМ вызове.
--- Отозванный токен перестаёт отдавать данные немедленно, а не после
--- перезапуска приложения тренера.
-create or replace function validate_share_token(p_token text)
-returns uuid -- athlete_id, либо null если токен неверный или отозван
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_hash text := encode(digest(p_token, 'sha256'), 'hex');
-  v_athlete uuid;
-begin
-  select athlete_id into v_athlete
-    from share_grants
-    where token_hash = v_hash and revoked_at is null
-    limit 1;
-  return v_athlete;
-end;
-$$;
-
--- Неверный или отозванный токен даёт ПУСТОЙ результат, а не ошибку:
--- тренер не должен по коду ответа отличать «нет доступа» от «нет
--- тренировок».
-create or replace function get_shared_exercises(p_token text)
-returns setof exercises
-language sql
-security definer
-set search_path = public
-as $$
-  select e.* from exercises e
-  where e.user_id = validate_share_token(p_token)
-    and validate_share_token(p_token) is not null
-  order by e.created_at;
-$$;
-
-create or replace function get_shared_training_sessions(p_token text)
-returns setof training_sessions
-language sql
-security definer
-set search_path = public
-as $$
-  select s.* from training_sessions s
-  where s.user_id = validate_share_token(p_token)
-    and validate_share_token(p_token) is not null
-  order by s.started_at desc nulls last;
-$$;
-
-create or replace function get_shared_shots(p_token text, p_session_id uuid)
-returns setof shots
-language sql
-security definer
-set search_path = public
-as $$
-  select sh.* from shots sh
-  join training_sessions s on s.id = sh.session_id
-  where sh.session_id = p_session_id
-    and s.user_id = validate_share_token(p_token)
-    and validate_share_token(p_token) is not null
-  order by sh.shot_number;
-$$;
-
-create or replace function get_shared_comments(p_token text, p_session_id uuid)
-returns setof comments
-language sql
-security definer
-set search_path = public
-as $$
-  select c.* from comments c
-  join training_sessions s on s.id = c.session_id
-  where c.session_id = p_session_id
-    and s.user_id = validate_share_token(p_token)
-    and validate_share_token(p_token) is not null
-  order by c.created_at;
-$$;
-
--- Тренер комментирует наравне со спортсменом: комментирование не
--- входит в право правки и ролью не ограничено. Автор проставляется
--- сервером ('coach'), а не приходит из клиента.
-create or replace function add_shared_comment(
-  p_token text,
-  p_session_id uuid,
-  p_level text,
-  p_shot_id uuid,
-  p_series_no int,
-  p_text text
-) returns comments
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_athlete uuid := validate_share_token(p_token);
-  v_row comments;
-begin
-  if v_athlete is null then
-    raise exception 'invalid or revoked token';
-  end if;
-  if not exists (
-    select 1 from training_sessions s
-    where s.id = p_session_id and s.user_id = v_athlete
-  ) then
-    raise exception 'session does not belong to this athlete';
-  end if;
-  insert into comments (session_id, level, shot_id, series_no, author_role, text)
-  values (p_session_id, p_level, p_shot_id, p_series_no, 'coach', p_text)
-  returning * into v_row;
-  return v_row;
-end;
-$$;
+notify pgrst, 'reload schema';
