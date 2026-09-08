@@ -2,6 +2,7 @@
 // синтетические изображения строятся прямо в тесте).
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shooting_app/logic/shot_photo_detection.dart';
+import 'package:shooting_app/models/target_face.dart';
 
 void main() {
   group('findCandidateHoles', () {
@@ -242,6 +243,46 @@ void main() {
     test('слишком маленький кадр отклоняется сразу', () {
       final img = GrayImage.filled(10, 10, 210);
       expect(detectTargetCircle(img), isNull);
+    });
+  });
+
+  group('refineRadiusByRings', () {
+    // Настоящая геометрия мишени № 7 (50 м) — те же пропорции колец,
+    // что и в реальном бланке, отрисованные тонкими линиями (не
+    // сплошными кольцами) на известном масштабе.
+    const face = TargetFace.rifle50m;
+    const truePx = 200.0;
+
+    GrayImage drawRings(double scalePx) {
+      final img = GrayImage.filled(500, 500, 210);
+      for (final ringMm in face.ringRadiiMm) {
+        img.fillRing(250, 250, ringMm / face.faceRadiusMm * scalePx, 2, 40);
+      }
+      return img;
+    }
+
+    test('исправляет масштаб, если начальная оценка радиуса заметно мимо', () {
+      final img = drawRings(truePx);
+      final refined = refineRadiusByRings(
+        image: img,
+        center: const PixelPoint(250, 250),
+        initialRadiusPx: truePx * 0.7, // на 30% занижена
+        ringRadiiMm: face.ringRadiiMm,
+        faceRadiusMm: face.faceRadiusMm,
+      );
+      expect(refined, closeTo(truePx, 6));
+    });
+
+    test('не портит уже верную оценку радиуса', () {
+      final img = drawRings(truePx);
+      final refined = refineRadiusByRings(
+        image: img,
+        center: const PixelPoint(250, 250),
+        initialRadiusPx: truePx,
+        ringRadiiMm: face.ringRadiiMm,
+        faceRadiusMm: face.faceRadiusMm,
+      );
+      expect(refined, closeTo(truePx, 6));
     });
   });
 

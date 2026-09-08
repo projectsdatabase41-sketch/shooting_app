@@ -219,7 +219,16 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
         return;
       }
       _lockedCenter = circle.center;
-      _lockedRadius = circle.radiusPx;
+      // Уточнение по кольцам — только один раз, в момент фиксации
+      // центра, а не на каждом кадре: точное сравнение с геометрией
+      // всех 10 колец заметно тяжелее самой калибровки по контрасту.
+      _lockedRadius = refineRadiusByRings(
+        image: gray,
+        center: circle.center,
+        initialRadiusPx: circle.radiusPx,
+        ringRadiiMm: widget.face.ringRadiiMm,
+        faceRadiusMm: widget.face.faceRadiusMm,
+      );
     }
 
     final center = _lockedCenter!;

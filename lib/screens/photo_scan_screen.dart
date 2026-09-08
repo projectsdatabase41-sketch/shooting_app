@@ -24,13 +24,34 @@ List<HoleCandidate> _detectInIsolate(_DetectArgs args) {
   );
 }
 
-({PixelPoint center, double radiusPx})? _detectCircleInIsolate(_CalibArgs args) =>
-    detectTargetCircle(args.image, bullseyeToFaceRatio: args.bullseyeToFaceRatio);
+({PixelPoint center, double radiusPx})? _detectCircleInIsolate(_CalibArgs args) {
+  final auto = detectTargetCircle(args.image, bullseyeToFaceRatio: args.bullseyeToFaceRatio);
+  if (auto == null) return null;
+  // Уточнение по печатным кольцам — поверх уже найденного центра и
+  // грубого радиуса: точные, заранее известные расстояния до всех 10
+  // колец надёжнее любой эвристики по форме пятна или контрасту с
+  // фоном (см. комментарий к refineRadiusByRings).
+  final refined = refineRadiusByRings(
+    image: args.image,
+    center: auto.center,
+    initialRadiusPx: auto.radiusPx,
+    ringRadiiMm: args.ringRadiiMm,
+    faceRadiusMm: args.faceRadiusMm,
+  );
+  return (center: auto.center, radiusPx: refined);
+}
 
 class _CalibArgs {
   final GrayImage image;
   final double bullseyeToFaceRatio;
-  const _CalibArgs({required this.image, required this.bullseyeToFaceRatio});
+  final List<double> ringRadiiMm;
+  final double faceRadiusMm;
+  const _CalibArgs({
+    required this.image,
+    required this.bullseyeToFaceRatio,
+    required this.ringRadiiMm,
+    required this.faceRadiusMm,
+  });
 }
 
 class _DetectArgs {
@@ -166,6 +187,8 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
       _CalibArgs(
         image: analyzed.image,
         bullseyeToFaceRatio: widget.face.faceRadiusMm / widget.face.bullseyeRadiusMm,
+        ringRadiiMm: widget.face.ringRadiiMm,
+        faceRadiusMm: widget.face.faceRadiusMm,
       ),
     );
 

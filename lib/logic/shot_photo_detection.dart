@@ -573,3 +573,95 @@ PixelPoint pixelToMm(PixelPoint px, PixelPoint center, double radiusPx, double f
   final scale = faceRadiusMm / radiusPx;
   return PixelPoint((px.x - center.x) * scale, -(px.y - center.y) * scale);
 }
+
+/// Уточняет РАДИУС калибровки (масштаб мм↔пиксели) по печатным кольцам
+/// мишени — а не по контрасту "мишень/фон", как `detectTargetCircle`.
+///
+/// У каждой мишени напечатано ровно 10 колец на ТОЧНО известных
+/// расстояниях от центра (`TargetFace.ringRadiiMm`) — это куда более
+/// надёжный ориентир, чем форма пятна или край листа бумаги (который
+/// может быть больше самой мишени — см. `detectTargetCircle`). Метод:
+/// перебором масштаба ищем такой, при котором ожидаемые границы всех
+/// десяти колец сильнее всего совпадают с реальными перепадами яркости
+/// на фото — окружность на предсказанном радиусе кольца либо застаёт
+/// границу (сильный перепад между чуть меньшим и чуть большим
+/// радиусом), либо нет (случайный масштаб чаще попадает в ровную,
+/// однотонную часть кольца). Верный масштаб выигрывает за счёт
+/// накопления по всем 10 кольцам и многим углам — шум одной точки на
+/// общий счёт почти не влияет.
+///
+/// Центр НЕ уточняется — только масштаб; `initialRadiusPx` (обычно —
+/// результат `detectTargetCircle`) должен быть в разумных пределах от
+/// истинного (поиск идёт в диапазоне 0.6×..1.6× от него), иначе перебор
+/// рискует сойтись на случайном совпадении.
+double refineRadiusByRings({
+  required GrayImage image,
+  required PixelPoint center,
+  required double initialRadiusPx,
+  required List<double> ringRadiiMm,
+  required double faceRadiusMm,
+}) {
+  if (initialRadiusPx <= 0 || ringRadiiMm.isEmpty || faceRadiusMm <= 0) return initialRadiusPx;
+  final w = image.width, h = image.height;
+  const angleSamples = 24;
+  const scaleSteps = 80;
+  const scaleRangeMin = 0.6;
+  const scaleRangeMax = 1.6;
+  final maxSamplingRadius = math.min(w, h) * 0.6;
+
+  double sampleAt(double x, double y) {
+    final xi = x.round().clamp(0, w - 1);
+    final yi = y.round().clamp(0, h - 1);
+    return image.at(xi, yi).toDouble();
+  }
+
+  // Разброс (максимум минус минимум) в окне В НЕСКОЛЬКО ПИКСЕЛЕЙ вокруг
+  // r, а не просто разница двух точек на фиксированном расстоянии от
+  // r: печатная линия кольца тонкая (пара пикселей), и при росте r
+  // фиксированная-в-долях-от-r дельта рано или поздно перестаёт на неё
+  // попадать вообще, давая нулевой сигнал даже на верном масштабе.
+  // Разброс по окну ловит линию, где бы она внутри окна ни оказалась.
+  const window = [-3, -2, -1, 0, 1, 2, 3];
+
+  double scoreForScale(double scalePx) {
+    var score = 0.0;
+    for (final ringMm in ringRadiiMm) {
+      final r = ringMm / faceRadiusMm * scalePx;
+      if (r < 4 || r > maxSamplingRadius) continue;
+      for (var i = 0; i < angleSamples; i++) {
+        final angle = 2 * math.pi * i / angleSamples;
+        final dx = math.cos(angle), dy = math.sin(angle);
+        var lo = 255.0, hi = 0.0;
+        for (final k in window) {
+          final v = sampleAt(center.x + dx * (r + k), center.y + dy * (r + k));
+          if (v < lo) lo = v;
+          if (v > hi) hi = v;
+        }
+        score += hi - lo;
+      }
+    }
+    return score;
+  }
+
+  double search(double from, double to, int steps) {
+    var bestScale = initialRadiusPx;
+    var bestScore = -1.0;
+    for (var i = 0; i <= steps; i++) {
+      final scale = from + (to - from) * i / steps;
+      final score = scoreForScale(scale);
+      if (score > bestScore) {
+        bestScore = score;
+        bestScale = scale;
+      }
+    }
+    return bestScale;
+  }
+
+  // Грубый проход по широкому диапазону, затем точный — в узком окне
+  // вокруг найденного — той же ценой, что и один грубый проход вдвое
+  // мельче, но без риска промахнуться мимо истинного пика на широком
+  // диапазоне из-за крупного шага.
+  final coarse = search(initialRadiusPx * scaleRangeMin, initialRadiusPx * scaleRangeMax, scaleSteps);
+  final step = initialRadiusPx * (scaleRangeMax - scaleRangeMin) / scaleSteps;
+  return search(coarse - step, coarse + step, scaleSteps);
+}
