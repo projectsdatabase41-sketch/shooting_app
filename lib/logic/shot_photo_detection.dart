@@ -135,7 +135,7 @@ List<HoleCandidate> findCandidateHoles({
   required double caliberRadiusPx,
   List<PixelPoint> knownHolesPx = const [],
   double contrastThreshold = 28,
-  double minCircularity = 0.55,
+  double minCircularity = 0.85,
 }) {
   final blurRadius = math.max(2, (caliberRadiusPx * 1.6).round());
   final blurred = boxBlur(image, blurRadius);
@@ -342,10 +342,64 @@ List<HoleCandidate> findCandidateHoles({
   final touchesAllSides = minX == 0 && maxX == w - 1 && minY == 0 && maxY == h - 1;
   if (touchesAllSides) return null;
 
-  return (
-    center: PixelPoint((minX + maxX) / 2, (minY + maxY) / 2),
-    radiusPx: math.max(maxX - minX, maxY - minY) / 2,
-  );
+  final floodCenter = PixelPoint((minX + maxX) / 2, (minY + maxY) / 2);
+  final floodRadius = math.max(maxX - minX, maxY - minY) / 2;
+
+  // Разлив (BFS выше) останавливается на ПЕРВОЙ внутренней границе,
+  // похожей на фон кадра — а у мишени такая граница часто есть задолго
+  // до настоящего края бланка: например, чёрное яблоко в центре
+  // заметно отличается от фона, но белое кольцо вокруг него — уже нет,
+  // и разлив застревает на границе яблока, радиус выходит в разы
+  // меньше настоящего. Дальше это ломает всё: калибр по такому радиусу
+  // получается крошечным, размытие в findCandidateHoles — тоже, и
+  // детектор пробоин начинает принимать буквально штрихи печатных
+  // цифр за пробоины (реальная находка пользователя — мишень с
+  // цифрами у колец).
+  //
+  // Лечится лучами: идём от края кадра К ЦЕНТРУ по многим направлениям
+  // и берём точку, где лучу впервые попадается что-то, отличное от
+  // фона, — так внешний край бланка находится независимо от связности
+  // с центром, даже если между ним и найденным разливом есть кольца
+  // цвета фона.
+  const rays = 24;
+  final rayRadii = <double>[];
+  for (var i = 0; i < rays; i++) {
+    final angle = 2 * math.pi * i / rays;
+    final dx = math.cos(angle), dy = math.sin(angle);
+    final edgeR = _rayDistanceToEdge(floodCenter.x, floodCenter.y, dx, dy, w, h);
+    if (edgeR <= floodRadius) continue;
+    var found = floodRadius;
+    for (var r = edgeR; r > floodRadius; r -= 2) {
+      final x = (floodCenter.x + dx * r).round().clamp(0, w - 1);
+      final y = (floodCenter.y + dy * r).round().clamp(0, h - 1);
+      if (differsFromBg(x, y)) {
+        found = r;
+        break;
+      }
+    }
+    rayRadii.add(found);
+  }
+
+  double refinedRadius;
+  if (rayRadii.isEmpty) {
+    refinedRadius = floodRadius;
+  } else {
+    rayRadii.sort();
+    refinedRadius = rayRadii[rayRadii.length ~/ 2];
+  }
+
+  return (center: floodCenter, radiusPx: refinedRadius);
+}
+
+/// Расстояние от (cx,cy) до края прямоугольника w×h вдоль направления
+/// (dx,dy) — сколько можно пройти по лучу, не выйдя за кадр.
+double _rayDistanceToEdge(double cx, double cy, double dx, double dy, int w, int h) {
+  var t = double.infinity;
+  if (dx > 0) t = math.min(t, (w - 1 - cx) / dx);
+  if (dx < 0) t = math.min(t, (0 - cx) / dx);
+  if (dy > 0) t = math.min(t, (h - 1 - cy) / dy);
+  if (dy < 0) t = math.min(t, (0 - cy) / dy);
+  return t;
 }
 
 /// Переводит пиксельную точку в мм от центра мишени — та же система
