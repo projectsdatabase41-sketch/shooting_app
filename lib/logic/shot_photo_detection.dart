@@ -436,23 +436,123 @@ List<HoleCandidate> findCandidateHoles({
           midpoints.map((p) => p.y).reduce((a, b) => a + b) / midpoints.length,
         );
 
-  // Радиус: если лучи реально нашли край заметно дальше яблока — фон
-  // вокруг бланка виден, это самое прямое измерение, доверяем ему.
-  // Если нет (мишень занимает весь кадр, фона не видно) — доверяем
-  // известной геометрии выбранной мишени, если она передана; это и
-  // была изначальная причина ложных срабатываний на печатных мишенях
-  // без видимого фона (раньше в этом случае оставался радиус яблока).
+  // Радиус и центр — выбор между двумя НЕЗАВИСИМЫМИ оценками:
+  //
+  // 1. По разливу-от-фона+лучам (rayRefinedRadius/refinedCenter выше).
+  //    Ищет край "бумага отличается от фона кадра" — верно, когда
+  //    бланк вырезан примерно по размеру мишени. Ошибается, если лист
+  //    бумаги БОЛЬШЕ печатной мишени (поля, дописанные от руки заметки
+  //    рядом с ней — реальная находка пользователя): разлив и лучи в
+  //    этом случае цепляют край ВСЕГО ЛИСТА, не круга мишени, и дают
+  //    результат заметно крупнее и часто не по центру.
+  // 2. По тёмному яблоку в центре (ниже) — ищет не "отличается от
+  //    фона", а буквально "тёмное пятно возле центра кадра" по
+  //    абсолютной яркости, независимо от того, что на бумаге ещё
+  //    напечатано или дописано. Яблоко есть на бланке всегда, и от
+  //    оценки 1 не зависит вовсе.
+  //
+  // Если обе оценки согласуются — доверяем более точной (1). Если
+  // сильно расходятся — доверяем геометрии (2): значит оценка 1
+  // зацепила что-то лишнее, а не край мишени.
+  ({PixelPoint center, double radiusPx})? bullseyeEstimate;
+  if (bullseyeToFaceRatio != null) {
+    final blob = _centralDarkBlobBbox(image);
+    if (blob != null) {
+      bullseyeEstimate = (
+        center: PixelPoint((blob.minX + blob.maxX) / 2, (blob.minY + blob.maxY) / 2),
+        radiusPx: math.max(blob.maxX - blob.minX, blob.maxY - blob.minY) / 2 * bullseyeToFaceRatio,
+      );
+    }
+  }
+
   final foundRealEdge = rayRefinedRadius > floodRadius * 1.15;
+  PixelPoint finalCenter;
   double finalRadius;
-  if (foundRealEdge) {
+  if (bullseyeEstimate != null) {
+    final ratio = rayRefinedRadius / bullseyeEstimate.radiusPx;
+    final centerDx = refinedCenter.x - bullseyeEstimate.center.x;
+    final centerDy = refinedCenter.y - bullseyeEstimate.center.y;
+    final centerDist = math.sqrt(centerDx * centerDx + centerDy * centerDy);
+    // Разлив от центра КАДРА (не яблока) начинается на кадре, а не на
+    // мишени — если бумага крупнее и смещена, разлив/лучи находят её
+    // центр, не центр яблока, и одно только совпадение радиусов это не
+    // ловит: лист может случайно оказаться и нужного размера.
+    final agrees = foundRealEdge && ratio > 0.7 && ratio < 1.4 && centerDist < bullseyeEstimate.radiusPx * 0.3;
+    if (agrees) {
+      finalCenter = refinedCenter;
+      finalRadius = rayRefinedRadius;
+    } else {
+      finalCenter = bullseyeEstimate.center;
+      finalRadius = bullseyeEstimate.radiusPx;
+    }
+  } else if (foundRealEdge) {
+    finalCenter = refinedCenter;
     finalRadius = rayRefinedRadius;
   } else if (bullseyeToFaceRatio != null) {
+    // Своё яблоко отдельным поиском не нашлось (редкость) — запасной
+    // вариант через уже имеющийся разлив-от-фона, как было раньше.
+    finalCenter = floodCenter;
     finalRadius = floodRadius * bullseyeToFaceRatio;
   } else {
+    finalCenter = refinedCenter;
     finalRadius = rayRefinedRadius;
   }
 
-  return (center: refinedCenter, radiusPx: finalRadius);
+  return (center: finalCenter, radiusPx: finalRadius);
+}
+
+/// Связная тёмная область вокруг ЦЕНТРА КАДРА по АБСОЛЮТНОЙ яркости
+/// (порог — доля от средней яркости всего кадра), а не по отличию от
+/// фона по краям — печатное яблоко мишени тёмное всегда, независимо от
+/// того, что ещё есть на той же бумаге (поля, дописанные от руки
+/// заметки, второй бланк рядом). Не зависит и не пересекается с
+/// разливом-от-фона выше — источник для перепроверки его результата.
+({int minX, int maxX, int minY, int maxY})? _centralDarkBlobBbox(GrayImage image) {
+  final w = image.width, h = image.height;
+  var sum = 0;
+  for (final v in image.pixels) {
+    sum += v;
+  }
+  final meanBrightness = sum / image.pixels.length;
+  final darkThreshold = meanBrightness * 0.55;
+
+  final cx = w ~/ 2, cy = h ~/ 2;
+  if (image.at(cx, cy) >= darkThreshold) return null;
+
+  final visited = Uint8List(w * h);
+  final queueX = Int32List(w * h);
+  final queueY = Int32List(w * h);
+  var head = 0, tail = 0;
+  queueX[tail] = cx;
+  queueY[tail] = cy;
+  tail++;
+  visited[cy * w + cx] = 1;
+  var minX = cx, maxX = cx, minY = cy, maxY = cy, count = 0;
+
+  while (head < tail) {
+    final x = queueX[head];
+    final y = queueY[head];
+    head++;
+    count++;
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+    for (final d in const [(-1, 0), (1, 0), (0, -1), (0, 1)]) {
+      final nx = x + d.$1, ny = y + d.$2;
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      final nIdx = ny * w + nx;
+      if (visited[nIdx] != 0) continue;
+      if (image.at(nx, ny) >= darkThreshold) continue;
+      visited[nIdx] = 1;
+      queueX[tail] = nx;
+      queueY[tail] = ny;
+      tail++;
+    }
+  }
+
+  if (count < w * h * 0.005) return null;
+  return (minX: minX, maxX: maxX, minY: minY, maxY: maxY);
 }
 
 /// Расстояние от (cx,cy) до края прямоугольника w×h вдоль направления
