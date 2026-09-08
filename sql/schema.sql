@@ -32,17 +32,25 @@
 -- переопределяют, построены поверх уже существующей
 -- `validate_share_token`.
 --
--- Известный открытый вопрос: RLS на всех таблицах требует, чтобы в
--- `project_settings` была строка с `owner_user_id = auth.uid()` —
--- сейчас (2026-09-07) она пуста, и `is_project_owner()` возвращает
--- false для любого запроса. Создать эту первую строку не вышло —
--- колонка `storage_balance` защищена CHECK-ограничением с неизвестным
--- набором допустимых значений (перебор текстом результата не дал).
--- Нужно посмотреть определение ограничения в Table Editor Supabase
--- (project_settings → колонка storage_balance → Constraints) и завести
--- первую строку `project_settings` вручную с подходящим значением —
--- до этого push/pull будут получать HTTP 403 (RLS), это ожидаемо и не
--- баг моста.
+-- RLS на всех таблицах держится на `is_project_owner()`, а та сверяет
+-- `auth.uid()` с `project_settings.owner_user_id` — без этой строки
+-- ЛЮБОЕ действие получает HTTP 403, и это не баг моста. Допустимые
+-- значения `storage_balance` (CHECK-ограничение, не enum): `local_first`,
+-- `balanced`, `cloud_first`.
+--
+-- С 2026-09-08 приложение заводит эту строку САМО, сразу после первого
+-- успешного входа/регистрации (`SupabaseAuthService._ensureProjectSettingsRow`,
+-- `on_conflict=owner_user_id`, ничего не перезаписывает при повторных
+-- входах) — но это работает, только если INSERT в `project_settings`
+-- вообще разрешён НЕ-владельцу. Если политика на INSERT там тоже
+-- требует `is_project_owner()` — замкнутый круг (нельзя стать
+-- владельцем, не будучи им), и его разрывает только политика ниже.
+-- Имя новое — ничего существующего не переопределяет. RLS сравнивает
+-- РАЗРЕШИТЕЛЬНЫЕ политики через OR, поэтому это ДОБАВЛЯЕТ разрешённый
+-- путь, а не заменяет то, что уже стоит на INSERT у этой таблицы.
+drop policy if exists "bootstrap own project_settings" on project_settings;
+create policy "bootstrap own project_settings" on project_settings
+  for insert with check (owner_user_id = auth.uid());
 --
 -- Скрипт идемпотентный: повторный запуск ничего не ломает.
 --
@@ -132,6 +140,23 @@ create table if not exists exercise_templates (
   updated_at          timestamptz not null default now()
 );
 
+create table if not exists training_packages (
+  id                          uuid primary key default gen_random_uuid(),
+  started_at                  timestamptz not null,
+  ended_at                    timestamptz,
+  time_is_approximate         boolean not null default false,
+  local_time_offset_minutes   int,
+  title                       text,
+  location                    text,
+  note                        text,
+  package_status              text not null,
+  editor_mode                 text not null default 'athlete',
+  is_locked_by_athlete        boolean not null default true,
+  local_version               int not null default 1,
+  created_at                  timestamptz not null default now(),
+  updated_at                  timestamptz not null default now()
+);
+
 -- Снимок ОДНОГО исполнения упражнения внутри пакета — не то же самое,
 -- что exercise_templates (справочник-каталог). У пакета в этой схеме
 -- может быть несколько таких строк, приложение пишет ровно одну на
@@ -151,21 +176,35 @@ create table if not exists exercises (
   updated_at            timestamptz not null default now()
 );
 
-create table if not exists training_packages (
-  id                          uuid primary key default gen_random_uuid(),
-  started_at                  timestamptz not null,
-  ended_at                    timestamptz,
-  time_is_approximate         boolean not null default false,
-  local_time_offset_minutes   int,
-  title                       text,
-  location                    text,
-  note                        text,
-  package_status              text not null,
-  editor_mode                 text not null default 'athlete',
-  is_locked_by_athlete        boolean not null default true,
-  local_version               int not null default 1,
-  created_at                  timestamptz not null default now(),
-  updated_at                  timestamptz not null default now()
+create table if not exists file_assets (
+  id                       uuid primary key default gen_random_uuid(),
+  package_id               uuid not null references training_packages(id) on delete cascade,
+  exercise_id              uuid references exercises(id) on delete cascade,
+  kind                     text not null,
+  usage                    text not null,
+  local_path               text,
+  remote_path              text,
+  file_name                text,
+  mime_type                text,
+  size_bytes               bigint,
+  upload_status            text not null default 'pending',
+  processing_status        text not null default 'pending',
+  keep_after_processing    boolean not null default false,
+  created_at               timestamptz not null default now(),
+  updated_at               timestamptz not null default now()
+);
+
+create table if not exists photo_import_jobs (
+  id                      uuid primary key default gen_random_uuid(),
+  package_id              uuid not null references training_packages(id) on delete cascade,
+  exercise_id             uuid references exercises(id) on delete cascade,
+  file_asset_id           uuid not null references file_assets(id) on delete cascade,
+  status                  text not null default 'pending',
+  detected_shots_count    int not null default 0,
+  confirmed_at            timestamptz,
+  error_message           text,
+  created_at              timestamptz not null default now(),
+  updated_at              timestamptz not null default now()
 );
 
 create table if not exists shots (
@@ -216,37 +255,6 @@ create table if not exists archived_packages (
   checksum              text,
   note                  text,
   created_at            timestamptz not null default now()
-);
-
-create table if not exists file_assets (
-  id                       uuid primary key default gen_random_uuid(),
-  package_id               uuid not null references training_packages(id) on delete cascade,
-  exercise_id              uuid references exercises(id) on delete cascade,
-  kind                     text not null,
-  usage                    text not null,
-  local_path               text,
-  remote_path              text,
-  file_name                text,
-  mime_type                text,
-  size_bytes               bigint,
-  upload_status            text not null default 'pending',
-  processing_status        text not null default 'pending',
-  keep_after_processing    boolean not null default false,
-  created_at               timestamptz not null default now(),
-  updated_at               timestamptz not null default now()
-);
-
-create table if not exists photo_import_jobs (
-  id                      uuid primary key default gen_random_uuid(),
-  package_id              uuid not null references training_packages(id) on delete cascade,
-  exercise_id             uuid references exercises(id) on delete cascade,
-  file_asset_id           uuid not null references file_assets(id) on delete cascade,
-  status                  text not null default 'pending',
-  detected_shots_count    int not null default 0,
-  confirmed_at            timestamptz,
-  error_message           text,
-  created_at              timestamptz not null default now(),
-  updated_at              timestamptz not null default now()
 );
 
 create table if not exists share_grants (

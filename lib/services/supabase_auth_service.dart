@@ -103,6 +103,7 @@ class SupabaseAuthService {
     });
     if (res['access_token'] == null) return false;
     _saveSession(res, email: email.trim());
+    await _ensureProjectSettingsRow();
     return true;
   }
 
@@ -113,6 +114,62 @@ class SupabaseAuthService {
       body: {'email': email.trim(), 'password': password},
       email: email.trim(),
     );
+    await _ensureProjectSettingsRow();
+  }
+
+  /// Заводит строку-паспорт проекта в облачной `project_settings`, если
+  /// её ещё нет — вся RLS в реальной базе держится на
+  /// `is_project_owner()`, а та сверяет `auth.uid()` именно с
+  /// `owner_user_id` в этой таблице. Без нативной регистрации через
+  /// приложение эта строка никогда не появлялась сама (раньше её можно
+  /// было завести только вручную через SQL Editor Supabase), и первая
+  /// же попытка синхронизации падала с HTTP 403 — не из-за моста, а
+  /// из-за того, что владельца проекта попросту не существовало.
+  ///
+  /// `on_conflict=owner_user_id` + `resolution=ignore-duplicates` —
+  /// заводит строку РОВНО ОДИН РАЗ и не трогает её при последующих
+  /// входах: настройки (`is_coach`/`is_athlete` и т.п.) могли уже
+  /// поменяться, перетирать их дефолтами при каждом логине нельзя.
+  ///
+  /// Требует отдельную политику на INSERT в `project_settings`
+  /// (`with check (owner_user_id = auth.uid())`) — если политика
+  /// по-прежнему требует `is_project_owner()` для вставки, это
+  /// замкнутый круг (нельзя стать владельцем, не будучи им), и его
+  /// может разорвать только ручная вставка первой строки через SQL
+  /// Editor. Ошибку здесь поэтому не бросаем — вход должен остаться
+  /// успешным, даже если бутстрап не удался; при синхронизации
+  /// пользователь всё равно увидит понятный HTTP 403.
+  Future<void> _ensureProjectSettingsRow() async {
+    final uid = userId;
+    if (uid.isEmpty) return;
+    final token = await ensureFreshToken();
+    if (token == null) return;
+    final client = clientFactory();
+    try {
+      await client
+          .post(
+            Uri.parse('$url/rest/v1/project_settings?on_conflict=owner_user_id'),
+            headers: {
+              'apikey': anonKey,
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+              'Prefer': 'resolution=ignore-duplicates,return=minimal',
+            },
+            body: jsonEncode({
+              'owner_user_id': uid,
+              'project_name': 'Стрельба',
+              'status': 'active',
+              'is_athlete': true,
+              'is_coach': false,
+              'storage_balance': 'balanced',
+            }),
+          )
+          .timeout(const Duration(seconds: 20));
+    } catch (_) {
+      // Best-effort: неудача здесь не должна ронять сам вход.
+    } finally {
+      client.close();
+    }
   }
 
   /// Выход: токены стираются с устройства. Локальные тренировки
