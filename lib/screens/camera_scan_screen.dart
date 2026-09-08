@@ -5,10 +5,12 @@ import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:image/image.dart' as img;
 import 'package:sensors_plus/sensors_plus.dart';
 
 import '../logic/shot_photo_detection.dart';
 import '../models/target_face.dart';
+import '../services/shot_photo_service.dart';
 
 /// Живая камера: наводим на мишень, приложение само делает снимок.
 ///
@@ -205,11 +207,13 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
     return GrayImage(gw, gh, out);
   }
 
+  double get _bullseyeToFaceRatio => widget.face.faceRadiusMm / widget.face.bullseyeRadiusMm;
+
   void _analyze(CameraImage image) {
     final gray = _grayFromYPlane(image);
 
     if (_lockedCenter == null) {
-      final circle = detectTargetCircle(gray);
+      final circle = detectTargetCircle(gray, bullseyeToFaceRatio: _bullseyeToFaceRatio);
       if (circle == null) {
         if (mounted) setState(() => _status = _Status.searchingTarget);
         return;
@@ -275,18 +279,61 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
       _countdownTicker?.cancel();
       await _accelSub?.cancel();
       final file = await controller.takePicture();
-      final bytes = await file.readAsBytes();
+      final decoded = ShotPhotoService.decode(await file.readAsBytes());
+
+      // Проверка "мишень вообще в кадре" — тем же детектором, что и
+      // калибровка на следующем экране, но уже на полном снимке, а не
+      // на маленькой сетке потока. На вебе без нее отсчёт снял бы что
+      // угодно, лишь бы телефон не дрожал; для ручной кнопки (на любой
+      // платформе) это тоже единственная проверка вообще — нажатие само
+      // по себе не подтверждает, что в кадре мишень.
+      final analyzed = ShotPhotoService.analyze(decoded);
+      final found = detectTargetCircle(analyzed.image, bullseyeToFaceRatio: _bullseyeToFaceRatio);
+      if (found == null) {
+        await _resumeSearching();
+        return;
+      }
+
+      final square = _cropToSquare(decoded);
+      final bytes = Uint8List.fromList(img.encodeJpg(square, quality: 92));
       if (mounted) Navigator.of(context).pop(bytes);
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _error = '$e';
-          _status = _Status.searchingTarget;
-          _capturing = false;
-        });
-        if (kIsWeb) _startWebCountdown();
+        setState(() => _error = '$e');
+        await _resumeSearching();
       }
     }
+  }
+
+  /// Мишень не подтвердилась на снятом кадре — не отдаём его наружу, а
+  /// возвращаемся к поиску, как будто автоспуска не было.
+  Future<void> _resumeSearching() async {
+    if (!mounted) return;
+    setState(() {
+      _capturing = false;
+      _status = _Status.searchingTarget;
+    });
+    if (kIsWeb) {
+      _webProgress = 0;
+      _startWebCountdown();
+    } else {
+      _lockedCenter = null;
+      _pendingCandidate = null;
+      _stableFrames = 0;
+      final controller = _controller;
+      if (controller != null && !controller.value.isStreamingImages) {
+        await controller.startImageStream(_onFrame);
+      }
+    }
+  }
+
+  /// Обрезка по центру до квадрата 1:1 — мишень круглая, лишние поля по
+  /// длинной стороне кадра только мешают калибровке на следующем экране.
+  img.Image _cropToSquare(img.Image src) {
+    final side = math.min(src.width, src.height);
+    final x = (src.width - side) ~/ 2;
+    final y = (src.height - side) ~/ 2;
+    return img.copyCrop(src, x: x, y: y, width: side, height: side);
   }
 
   Future<void> _captureManually() async {
@@ -329,7 +376,36 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
               : Stack(
                   fit: StackFit.expand,
                   children: [
-                    CameraPreview(controller),
+                    // Чёрно-белое — тот же довод, что и у разбора фото
+                    // из галереи: контраст читается лучше, чем на
+                    // цветном превью, а снимает и анализирует
+                    // приложение всё равно в градациях серого.
+                    ColorFiltered(
+                      colorFilter: const ColorFilter.matrix(<double>[
+                        0.2126, 0.7152, 0.0722, 0, 0,
+                        0.2126, 0.7152, 0.0722, 0, 0,
+                        0.2126, 0.7152, 0.0722, 0, 0,
+                        0, 0, 0, 1, 0,
+                      ]),
+                      child: CameraPreview(controller),
+                    ),
+                    // Квадратная рамка — итоговый снимок обрезается по
+                    // центру до 1:1 (см. _cropToSquare), рамка заранее
+                    // показывает, что попадёт в кадр.
+                    Center(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final side = math.min(constraints.maxWidth, constraints.maxHeight);
+                          return Container(
+                            width: side,
+                            height: side,
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.white54, width: 1.5),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
                     Align(
                       alignment: Alignment.topCenter,
                       child: Padding(

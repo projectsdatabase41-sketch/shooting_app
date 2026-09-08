@@ -24,8 +24,14 @@ List<HoleCandidate> _detectInIsolate(_DetectArgs args) {
   );
 }
 
-({PixelPoint center, double radiusPx})? _detectCircleInIsolate(GrayImage image) =>
-    detectTargetCircle(image);
+({PixelPoint center, double radiusPx})? _detectCircleInIsolate(_CalibArgs args) =>
+    detectTargetCircle(args.image, bullseyeToFaceRatio: args.bullseyeToFaceRatio);
+
+class _CalibArgs {
+  final GrayImage image;
+  final double bullseyeToFaceRatio;
+  const _CalibArgs({required this.image, required this.bullseyeToFaceRatio});
+}
 
 class _DetectArgs {
   final GrayImage image;
@@ -98,7 +104,7 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
   /// одной точке").
   int? _expectedCount;
 
-  static const List<int> _countChoices = [0, 1, 2, 3, 4, 5, 6, 8, 10];
+  static const List<int> _countChoices = [1, 2, 3, 4, 5, 6, 8, 10];
 
   double _displayScale = 1; // display px = natural px * _displayScale
 
@@ -155,7 +161,13 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
   Future<void> _loadPhoto(Uint8List bytes) async {
     final decoded = ShotPhotoService.decode(bytes);
     final analyzed = ShotPhotoService.analyze(decoded);
-    final autoCircle = await compute(_detectCircleInIsolate, analyzed.image);
+    final autoCircle = await compute(
+      _detectCircleInIsolate,
+      _CalibArgs(
+        image: analyzed.image,
+        bullseyeToFaceRatio: widget.face.faceRadiusMm / widget.face.bullseyeRadiusMm,
+      ),
+    );
 
     Offset center;
     double radius;
@@ -448,7 +460,7 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
               Expanded(
                 flex: 2,
                 child: FilledButton(
-                  onPressed: _busy || (_candidates.isEmpty && _expectedCount != 0) ? null : _confirmPhoto,
+                  onPressed: _busy || _candidates.isEmpty ? null : _confirmPhoto,
                   child: _busy
                       ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                       : Text('Подтвердить (${_candidatesToConfirm.length})'),
@@ -561,7 +573,19 @@ class _ReviewOverlay extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              Image.memory(bytes, fit: BoxFit.fill),
+              // Чёрно-белое — только для показа: круг калибровки и
+              // найденные точки читаются на контрасте заметно лучше,
+              // чем на цветном снимке (блики, оттенок бумаги), а сам
+              // разбор и так всегда шёл по градациям серого.
+              ColorFiltered(
+                colorFilter: const ColorFilter.matrix(<double>[
+                  0.2126, 0.7152, 0.0722, 0, 0,
+                  0.2126, 0.7152, 0.0722, 0, 0,
+                  0.2126, 0.7152, 0.0722, 0, 0,
+                  0, 0, 0, 1, 0,
+                ]),
+                child: Image.memory(bytes, fit: BoxFit.fill),
+              ),
               CustomPaint(
                 painter: _CalibrationPainter(center: displayCenter, radius: displayRadius),
               ),

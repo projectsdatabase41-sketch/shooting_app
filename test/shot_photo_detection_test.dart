@@ -175,6 +175,27 @@ void main() {
       expect(result.radiusPx, closeTo(150, 6), reason: 'радиус должен доходить до внешней границы, а не до яблока');
     });
 
+    test('мишень занимает весь кадр без видимого фона — радиус берётся из известной геометрии яблока', () {
+      // То же яблоко без фона, что и в предыдущем тесте, но фона вокруг
+      // НЕТ вовсе (только яблоко в центре кадра) — лучи не находят
+      // ничего дальше яблока, и без geometрии мишени радиус остался бы
+      // радиусом яблока. Отношение 3.0 — как если бы у выбранного
+      // упражнения faceRadiusMm втрое больше bullseyeRadiusMm.
+      final img = GrayImage.filled(400, 400, 220);
+      img.fillCircle(200, 200, 50, 20);
+      final result = detectTargetCircle(img, bullseyeToFaceRatio: 3.0);
+      expect(result, isNotNull);
+      expect(result!.radiusPx, closeTo(150, 10), reason: '50 (яблоко) × 3.0 = 150 (вся мишень)');
+    });
+
+    test('без переданного отношения и без видимого фона — остаётся радиус яблока (как раньше)', () {
+      final img = GrayImage.filled(400, 400, 220);
+      img.fillCircle(200, 200, 50, 20);
+      final result = detectTargetCircle(img);
+      expect(result, isNotNull);
+      expect(result!.radiusPx, closeTo(50, 3));
+    });
+
     test('фон и центр кадра почти одного цвета — не с чем сравнивать', () {
       final img = GrayImage.filled(300, 300, 200);
       final result = detectTargetCircle(img);

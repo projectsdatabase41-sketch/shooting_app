@@ -271,11 +271,22 @@ List<HoleCandidate> findCandidateHoles({
 /// отличается от своего локального фона, здесь бланк отличается от фона
 /// всего кадра.
 ///
+/// `bullseyeToFaceRatio` — `TargetFace.faceRadiusMm / TargetFace.bullseyeRadiusMm`
+/// для КОНКРЕТНОГО выбранного упражнения, если он известен вызывающему
+/// коду (обычно известен — мишень выбирается раньше сканирования).
+/// Разлив (см. ниже) чаще всего находит именно чёрное яблоко — оно
+/// заметно контрастнее фона независимо от освещения, тогда как белое
+/// поле бланка вокруг него от фона кадра может не отличаться вовсе.
+/// Зная точное отношение «радиус всей мишени / радиус яблока» —
+/// СВОЁ у каждой мишени, поэтому один и тот же множитель на все четыре
+/// не годится — можно вычислить настоящий внешний радиус даже когда
+/// фон кадра вокруг бланка не виден совсем (мишень занимает весь кадр).
+///
 /// Возвращает `null`, если довериться результату нельзя (кадр слишком
 /// маленький, в центре сам фон, область почти не выросла или расползлась
 /// до всех четырёх краёв кадра сразу) — вызывающий код в этом случае
 /// оставляет прежнюю ручную калибровку по умолчанию.
-({PixelPoint center, double radiusPx})? detectTargetCircle(GrayImage image) {
+({PixelPoint center, double radiusPx})? detectTargetCircle(GrayImage image, {double? bullseyeToFaceRatio}) {
   final w = image.width, h = image.height;
   if (w < 20 || h < 20) return null;
 
@@ -363,12 +374,18 @@ List<HoleCandidate> findCandidateHoles({
   // цвета фона.
   const rays = 24;
   final rayRadii = <double>[];
+  // Только ЛУЧИ, которые реально нашли границу (не уткнулись в
+  // floodRadius по умолчанию), участвуют в уточнении ЦЕНТРА — иначе
+  // "ненайденные" лучи (фон вокруг совпадает с бланком) тянули бы
+  // центр к геометрии кадра, а не к настоящей мишени.
+  final foundPoints = <PixelPoint>[];
+  final foundAngles = <double>[];
   for (var i = 0; i < rays; i++) {
     final angle = 2 * math.pi * i / rays;
     final dx = math.cos(angle), dy = math.sin(angle);
     final edgeR = _rayDistanceToEdge(floodCenter.x, floodCenter.y, dx, dy, w, h);
     if (edgeR <= floodRadius) continue;
-    var found = floodRadius;
+    double? found;
     for (var r = edgeR; r > floodRadius; r -= 2) {
       final x = (floodCenter.x + dx * r).round().clamp(0, w - 1);
       final y = (floodCenter.y + dy * r).round().clamp(0, h - 1);
@@ -377,18 +394,65 @@ List<HoleCandidate> findCandidateHoles({
         break;
       }
     }
-    rayRadii.add(found);
+    if (found != null) {
+      rayRadii.add(found);
+      foundPoints.add(PixelPoint(floodCenter.x + dx * found, floodCenter.y + dy * found));
+      foundAngles.add(angle);
+    }
   }
 
-  double refinedRadius;
+  double rayRefinedRadius;
   if (rayRadii.isEmpty) {
-    refinedRadius = floodRadius;
+    rayRefinedRadius = floodRadius;
   } else {
     rayRadii.sort();
-    refinedRadius = rayRadii[rayRadii.length ~/ 2];
+    rayRefinedRadius = rayRadii[rayRadii.length ~/ 2];
   }
 
-  return (center: floodCenter, radiusPx: refinedRadius);
+  // Уточнение ЦЕНТРА: для каждой пары лучей "туда-обратно" (углы,
+  // отличающиеся примерно на 180°), у которых ОБА реально нашли
+  // границу, настоящий центр мишени — середина отрезка между двумя
+  // найденными точками (диаметр). Разлив от центра кадра может
+  // ошибаться в центре мишени, если яблоко на фото несимметрично
+  // (тень, блик, край кадра) — середины диаметров этой ошибки не
+  // наследуют.
+  final midpoints = <PixelPoint>[];
+  for (var i = 0; i < foundAngles.length; i++) {
+    for (var j = i + 1; j < foundAngles.length; j++) {
+      final diff = (foundAngles[i] - foundAngles[j]).abs() % (2 * math.pi);
+      final oppositeness = (diff - math.pi).abs();
+      if (oppositeness < (2 * math.pi / rays) / 2) {
+        midpoints.add(PixelPoint(
+          (foundPoints[i].x + foundPoints[j].x) / 2,
+          (foundPoints[i].y + foundPoints[j].y) / 2,
+        ));
+      }
+    }
+  }
+  final refinedCenter = midpoints.isEmpty
+      ? floodCenter
+      : PixelPoint(
+          midpoints.map((p) => p.x).reduce((a, b) => a + b) / midpoints.length,
+          midpoints.map((p) => p.y).reduce((a, b) => a + b) / midpoints.length,
+        );
+
+  // Радиус: если лучи реально нашли край заметно дальше яблока — фон
+  // вокруг бланка виден, это самое прямое измерение, доверяем ему.
+  // Если нет (мишень занимает весь кадр, фона не видно) — доверяем
+  // известной геометрии выбранной мишени, если она передана; это и
+  // была изначальная причина ложных срабатываний на печатных мишенях
+  // без видимого фона (раньше в этом случае оставался радиус яблока).
+  final foundRealEdge = rayRefinedRadius > floodRadius * 1.15;
+  double finalRadius;
+  if (foundRealEdge) {
+    finalRadius = rayRefinedRadius;
+  } else if (bullseyeToFaceRatio != null) {
+    finalRadius = floodRadius * bullseyeToFaceRatio;
+  } else {
+    finalRadius = rayRefinedRadius;
+  }
+
+  return (center: refinedCenter, radiusPx: finalRadius);
 }
 
 /// Расстояние от (cx,cy) до края прямоугольника w×h вдоль направления
