@@ -148,7 +148,7 @@ class _AiChatBodyState extends State<_AiChatBody> {
     if (vm.messages.isEmpty) {
       return const EmptyState(
         icon: Icons.forum_outlined,
-        text: 'Спросите про свои результаты — например «где кучнее, в первой серии или в последней?»',
+        text: 'ИИ ассистент',
       );
     }
     return ListView.builder(
@@ -237,9 +237,10 @@ class _AiChatBodyState extends State<_AiChatBody> {
                 controller: _input,
                 minLines: 1,
                 maxLines: 4,
-                textInputAction: TextInputAction.send,
+                // Enter — перевод строки, а не отправка (решение
+                // пользователя): сообщение уходит только по кнопке.
+                textInputAction: TextInputAction.newline,
                 decoration: const InputDecoration(hintText: 'Вопрос по стрельбе'),
-                onSubmitted: (_) => _send(vm),
               ),
             ),
             const SizedBox(width: 8),

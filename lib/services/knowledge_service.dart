@@ -194,7 +194,7 @@ class KnowledgeService {
         // content-range приходит в виде «0-0/128» или «*/0».
         final range = res.headers['content-range'] ?? '';
         final total = range.contains('/') ? range.split('/').last : '?';
-        out[table] = total == '0' ? 'пусто' : '$total записей';
+        out[table] = total == '0' ? 'пусто' : '$total строк';
       } catch (e) {
         out[table] = 'недоступна';
       }

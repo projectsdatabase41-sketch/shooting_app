@@ -16,6 +16,7 @@ class AiSettings {
   static const String keyBooksUrl = 'ai_books_url';
   static const String keyBooksToken = 'ai_books_token';
   static const String keyTables = 'ai_tables';
+  static const String keyCustomInstructions = 'ai_custom_instructions';
 
   /// Все ключи ИИ — чтобы «сбросить все цвета» их не снесло.
   static const List<String> allKeys = [
@@ -24,6 +25,7 @@ class AiSettings {
     keyBooksUrl,
     keyBooksToken,
     keyTables,
+    keyCustomInstructions,
   ];
 
   /// Тестовый ключ OpenRouter. В исходниках его больше НЕТ — он
@@ -127,6 +129,12 @@ class AiSettings {
 
   set models(List<String> v) => _write(keyModels, v.join('\n'));
 
+  /// Сохранённая цепочка КАК ЕСТЬ, без отката к дефолту — в отличие от
+  /// [models]. Нужна экрану настроек: со своим ключом поле цепочки при
+  /// первом открытии должно быть пустым (решение пользователя), а не
+  /// подставлять модели, подобранные под встроенный бесплатный ключ.
+  String get rawModels => _read(keyModels);
+
   /// База знаний по умолчанию — публичная таблица пользователя.
   /// Как и тестовый ключ, это значение можно перекрыть в настройках.
   static const String defaultBooksUrl =
@@ -161,4 +169,19 @@ class AiSettings {
   set booksToken(String v) => _write(keyBooksToken, v.trim());
 
   bool get booksConfigured => booksUrl.isNotEmpty;
+
+  /// Короткая инструкция от пользователя — что ассистенту стоит знать
+  /// или как себя вести, поверх общего системного промпта.
+  String get customInstructions => _read(keyCustomInstructions);
+  set customInstructions(String v) => _write(keyCustomInstructions, v.trim());
+
+  /// Предел длины пользовательской инструкции, символов. Со встроенным
+  /// (бесплатным) ключом контекст короче и дороже каждого лишнего
+  /// токена — со своим ключом (обычно платным) модель переваривает
+  /// заметно больше текста, поэтому предел там намного шире.
+  static const int customInstructionsLimitBuiltIn = 300;
+  static const int customInstructionsLimitOwnKey = 2000;
+
+  int get customInstructionsLimit =>
+      hasOwnKey ? customInstructionsLimitOwnKey : customInstructionsLimitBuiltIn;
 }

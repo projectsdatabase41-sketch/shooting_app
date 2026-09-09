@@ -331,15 +331,25 @@ class SeriesBarsPainter extends CustomPainter {
   final Color barColor;
   final Color axisColor;
 
+  /// Низ шкалы. `null` — на балл ниже худшей серии, тем же правилом,
+  /// что и у линейных графиков (`AnalyticsDynamics.effectiveMinY`): у
+  /// мастера все серии лежат между 9 и 10.9, и шкала от нуля превращает
+  /// столбики в почти одинаковые палки — разницу, ради которой смотрят
+  /// на график, не видно (решение пользователя).
+  final double? minY;
+
   SeriesBarsPainter({
     required this.series,
     required this.barColor,
     required this.axisColor,
     this.maxY = 10.9,
+    this.minY,
   });
 
   static const double _leftMargin = 26;
   static const double _bottomMargin = 18;
+
+  double get _effectiveMinY => minY ?? axisMin(series.map((s) => s.average), step: maxY > 30 ? 10 : 1);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -347,13 +357,15 @@ class SeriesBarsPainter extends CustomPainter {
     final plotBottom = size.height - _bottomMargin;
     final plotWidth = size.width - plotLeft;
     final plotHeight = plotBottom;
-    if (plotWidth <= 0 || plotHeight <= 0 || maxY <= 0) return;
+    final lo = series.isEmpty ? 0.0 : _effectiveMinY;
+    final span = maxY - lo;
+    if (plotWidth <= 0 || plotHeight <= 0 || span <= 0) return;
 
     final gridPaint = Paint()
       ..color = axisColor.withValues(alpha: 0.25)
       ..strokeWidth = 1;
-    for (var v = 0.0; v <= maxY + 1e-9; v += maxY / 4) {
-      final py = plotBottom - (v / maxY) * plotHeight;
+    for (var v = lo; v <= maxY + 1e-9; v += span / 4) {
+      final py = plotBottom - ((v - lo) / span) * plotHeight;
       canvas.drawLine(Offset(plotLeft, py), Offset(size.width, py), gridPaint);
       _drawText(canvas, v.toStringAsFixed(v == v.roundToDouble() ? 0 : 1),
           Offset(plotLeft - 5, py), axisColor, 9,
@@ -373,7 +385,7 @@ class SeriesBarsPainter extends CustomPainter {
     for (var i = 0; i < series.length; i++) {
       final s = series[i];
       final cx = plotLeft + slot * (i + 0.5);
-      final h = (s.average / maxY).clamp(0.0, 1.0) * plotHeight;
+      final h = (((s.average - lo) / span).clamp(0.0, 1.0)) * plotHeight;
       canvas.drawRRect(
         RRect.fromRectAndCorners(
           Rect.fromLTWH(cx - barWidth / 2, plotBottom - h, barWidth, h),
@@ -391,6 +403,7 @@ class SeriesBarsPainter extends CustomPainter {
   bool shouldRepaint(covariant SeriesBarsPainter old) {
     return old.series != series ||
         old.maxY != maxY ||
+        old.minY != minY ||
         old.barColor != barColor ||
         old.axisColor != axisColor;
   }

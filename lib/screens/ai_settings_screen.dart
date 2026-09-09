@@ -21,6 +21,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
   late final TextEditingController _models;
   late final TextEditingController _booksUrl;
   late final TextEditingController _booksToken;
+  late final TextEditingController _customInstructions;
 
   List<String>? _available;
   bool _loading = false;
@@ -47,9 +48,13 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     _ownKey = _settings.hasOwnKey;
     _key = TextEditingController(text: _ownKey ? _settings.apiKey : '');
     _tables = [..._settings.tables];
-    _models = TextEditingController(text: _settings.models.join('\n'));
+    // Со своим ключом поле цепочки стартует ПУСТЫМ, если пользователь
+    // ещё ничего не вводил — не подставляем модели, подобранные под
+    // встроенный бесплатный ключ, это разные наборы задач/ограничений.
+    _models = TextEditingController(text: _ownKey ? _settings.rawModels : _settings.models.join('\n'));
     _booksUrl = TextEditingController(text: _settings.booksUrl);
     _booksToken = TextEditingController(text: _settings.booksToken);
+    _customInstructions = TextEditingController(text: _settings.customInstructions);
   }
 
   @override
@@ -58,8 +63,16 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     _models.dispose();
     _booksUrl.dispose();
     _booksToken.dispose();
+    _customInstructions.dispose();
     super.dispose();
   }
+
+  /// Со встроенным ключом предел заметно уже — экран использует ЭТОТ
+  /// геттер (не `_settings.customInstructionsLimit`), чтобы предел в UI
+  /// менялся сразу при переключении сегмента, не дожидаясь "Сохранить".
+  int get _customInstructionsLimit => _ownKey
+      ? AiSettings.customInstructionsLimitOwnKey
+      : AiSettings.customInstructionsLimitBuiltIn;
 
   void _save() {
     _settings.apiKey = _ownKey ? _key.text : '';
@@ -67,6 +80,10 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     _settings.models = _models.text.split('\n');
     _settings.booksUrl = _booksUrl.text;
     _settings.booksToken = _booksToken.text;
+    final rawInstructions = _customInstructions.text;
+    _settings.customInstructions = rawInstructions.length > _customInstructionsLimit
+        ? rawInstructions.substring(0, _customInstructionsLimit)
+        : rawInstructions;
     // "Сохранить" — это закрыть экран настроек, а не остаться на нём:
     // настройки — не рабочий экран, к которому возвращаются, а разовое
     // действие, после которого логично вернуться туда, откуда пришёл.
@@ -114,7 +131,65 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
       if (!mounted) return;
       setState(() => _probe[model] = result);
     }
-    if (mounted) setState(() => _probing = false);
+    if (!mounted) return;
+    // Рабочие модели остаются в порядке, который написал пользователь,
+    // неответившие уходят в конец списка (решение пользователя, пункт 3
+    // списка правок) — так цепочка сама чинится по итогам проверки, а не
+    // только показывает, что где-то что-то не отвечает.
+    final working = [for (final m in list) if (_probeOk(_probe[m] ?? '')) m];
+    final failing = [for (final m in list) if (!_probeOk(_probe[m] ?? '')) m];
+    setState(() {
+      _models.text = [...working, ...failing].join('\n');
+      _probing = false;
+    });
+  }
+
+  /// Встроенный ключ: одна кнопка вместо ручного набора цепочки. Тянет
+  /// список бесплатных моделей у OpenRouter и просит уже настроенную
+  /// (пусть даже дефолтную) цепочку отсортировать его по пригодности для
+  /// задачи ассистента — решение пользователя, пункт 3 списка правок.
+  Future<void> _autoConfigureModels() async {
+    setState(() {
+      _loading = true;
+      _message = null;
+    });
+    try {
+      final service = AiService(_settings);
+      final free = await service.fetchFreeModels();
+      if (free.isEmpty) throw const AiException('Бесплатных моделей сейчас нет');
+      final reply = await service.ask(
+        systemPrompt: 'Ты помогаешь настроить цепочку ИИ-моделей для ассистента по '
+            'спортивной стрельбе. Нужны модели, которые точно считают арифметику '
+            '(например, среднюю точку попадания и кучность по координатам выстрелов) '
+            'и не рассуждают вслух подолгу — ответ должен быть коротким и по делу, а не '
+            'дорогим и медленным.',
+        contextBlock: 'Доступные бесплатные модели OpenRouter прямо сейчас, по одной в строке:\n'
+            '${free.join('\n')}',
+        history: const [
+          (
+            role: 'user',
+            text: 'Распредели эти модели по приоритету для описанной задачи и дай мне '
+                'список без лишнего текста — по одной модели в строке, в этом же формате '
+                'id, что и во входном списке, от самой подходящей к наименее подходящей.',
+          ),
+        ],
+      );
+      final ranked = reply.text
+          .split('\n')
+          .map((l) => l.trim())
+          .where(free.contains)
+          .toList();
+      if (ranked.isEmpty) throw const AiException('Не удалось разобрать ответ модели — попробуйте ещё раз');
+      _settings.models = ranked;
+      setState(() {
+        _models.text = ranked.join('\n');
+        _message = 'Подобрано моделей: ${ranked.length}';
+      });
+    } catch (e) {
+      setState(() => _message = '$e');
+    } finally {
+      setState(() => _loading = false);
+    }
   }
 
   /// Добавляет таблицу в список поиска.
@@ -155,6 +230,12 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     });
     _settings.booksUrl = _booksUrl.text;
     _settings.booksToken = _booksToken.text;
+    // Таблицы тоже нужно сохранить ПЕРЕД проверкой — иначе таблица,
+    // только что добавленная кнопкой "Добавить" (живёт пока в _tables,
+    // а не на диске), в проверке не участвует: tableStatus читает
+    // settings.tables, а это сохранённое значение (баг, найденный
+    // пользователем на таблице "notes").
+    _settings.tables = _tables;
     final status = await KnowledgeService(_settings).tableStatus();
     if (!mounted) return;
     setState(() {
@@ -198,7 +279,16 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             showSelectedIcon: false,
             onSelectionChanged: (v) => setState(() {
               _ownKey = v.first;
-              if (!_ownKey) _key.text = '';
+              if (!_ownKey) {
+                _key.text = '';
+                // Возвращаемся к эффективной цепочке встроенного ключа
+                // (например, уже подобранной кнопкой "Подобрать модели").
+                _models.text = _settings.models.join('\n');
+              } else if (_models.text == _settings.models.join('\n')) {
+                // Поле ещё показывает набор встроенного ключа — со своим
+                // ключом это чужой список, начинаем с чистого листа.
+                _models.text = _settings.rawModels;
+              }
             }),
           ),
           if (_ownKey) ...[
@@ -227,97 +317,153 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
           ],
           const SizedBox(height: 24),
           SectionHeader(
-            title: 'Модели',
-            subtitle: 'По одной в строке, сверху вниз. Не ответила первая — берётся следующая.',
-            trailing: _loading
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : TextButton(onPressed: _loadModels, child: const Text('Обновить')),
+            title: 'Инструкция ассистенту',
+            subtitle: _ownKey
+                ? 'Свой ключ — предел заметно шире, платная модель переваривает больше текста.'
+                : 'Короткая заметка поверх общих правил: что ассистенту стоит знать или как себя вести.',
           ),
           const SizedBox(height: 12),
           TextField(
-            controller: _models,
-            minLines: 3,
-            maxLines: 8,
-            decoration: const InputDecoration(labelText: 'Цепочка моделей'),
+            controller: _customInstructions,
+            minLines: 2,
+            maxLines: 6,
+            maxLength: _customInstructionsLimit,
+            decoration: const InputDecoration(
+              labelText: 'Например: «обращайся на ты», «я готовлюсь к отбору, упоминай это»',
+            ),
           ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              OutlinedButton.icon(
-                onPressed: _probing ? null : _probeModels,
-                icon: _probing
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.check_circle_outline, size: 18),
-                label: const Text('Проверить'),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Отправит каждой модели короткий вопрос со счётом и графиком',
-                  style: theme.textTheme.bodySmall,
+          const SizedBox(height: 24),
+          // Окно выбора цепочки моделей нужно, только когда пользователь
+          // сам подставляет ключ — со встроенным ключом ручной выбор
+          // модели заменяет одна кнопка ниже (решение пользователя,
+          // пункт 2 списка правок).
+          if (_ownKey) ...[
+            SectionHeader(
+              title: 'Модели',
+              subtitle: 'По одной в строке, сверху вниз. Не ответила первая — берётся следующая.',
+              trailing: _loading
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : TextButton(onPressed: _loadModels, child: const Text('Обновить')),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _models,
+              minLines: 3,
+              maxLines: 8,
+              decoration: const InputDecoration(labelText: 'Цепочка моделей'),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _probing ? null : _probeModels,
+                  icon: _probing
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.check_circle_outline, size: 18),
+                  label: const Text('Проверить'),
                 ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Не ответившие модели уйдут в конец списка, рабочие останутся в вашем порядке',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+              ],
+            ),
+            if (_probe.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              for (final e in _probe.entries)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        _probeOk(e.value) ? Icons.check_circle : Icons.cancel_outlined,
+                        size: 16,
+                        color: _probeOk(e.value) ? Colors.green.shade600 : cs.error,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text.rich(
+                          TextSpan(children: [
+                            TextSpan(
+                              text: '${e.key}\n',
+                              style: theme.textTheme.labelSmall,
+                            ),
+                            TextSpan(
+                              text: e.value,
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: cs.onSurfaceVariant,
+                              ),
+                            ),
+                          ]),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+            if (_available != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Бесплатные модели сейчас (${_available!.length}) — нажмите, чтобы добавить:',
+                style: theme.textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final m in _available!)
+                    ActionChip(
+                      label: Text(m, style: theme.textTheme.labelSmall),
+                      onPressed: () => setState(() {
+                        final lines = _models.text.split('\n').where((e) => e.trim().isNotEmpty).toList();
+                        if (!lines.contains(m)) lines.add(m);
+                        _models.text = lines.join('\n');
+                      }),
+                    ),
+                ],
               ),
             ],
-          ),
-          if (_probe.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            for (final e in _probe.entries)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      _probeOk(e.value) ? Icons.check_circle : Icons.cancel_outlined,
-                      size: 16,
-                      color: _probeOk(e.value) ? Colors.green.shade600 : cs.error,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text.rich(
-                        TextSpan(children: [
-                          TextSpan(
-                            text: '${e.key}\n',
-                            style: theme.textTheme.labelSmall,
-                          ),
-                          TextSpan(
-                            text: e.value,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: cs.onSurfaceVariant,
-                            ),
-                          ),
-                        ]),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-          ],
-          if (_available != null) ...[
+          ] else ...[
+            const SectionHeader(
+              title: 'Модели',
+              subtitle: 'Приложение само подбирает и проверяет бесплатные модели для встроенного ключа.',
+            ),
             const SizedBox(height: 12),
-            Text(
-              'Бесплатные модели сейчас (${_available!.length}) — нажмите, чтобы добавить:',
-              style: theme.textTheme.bodySmall,
+            Row(
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _loading ? null : _autoConfigureModels,
+                  icon: _loading
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.auto_fix_high, size: 18),
+                  label: const Text('Подобрать модели'),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Получит список бесплатных моделей и попросит ИИ расставить их по приоритету',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                for (final m in _available!)
-                  ActionChip(
-                    label: Text(m, style: theme.textTheme.labelSmall),
-                    onPressed: () => setState(() {
-                      final lines = _models.text.split('\n').where((e) => e.trim().isNotEmpty).toList();
-                      if (!lines.contains(m)) lines.add(m);
-                      _models.text = lines.join('\n');
-                    }),
-                  ),
-              ],
+            Text(
+              'Сейчас в цепочке: ${_settings.models.length} модел${_settings.models.length == 1 ? 'ь' : _settings.models.length < 5 ? 'и' : 'ей'}',
+              style: theme.textTheme.bodySmall,
             ),
           ],
           const SizedBox(height: 24),

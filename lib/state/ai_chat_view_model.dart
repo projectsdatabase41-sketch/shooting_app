@@ -140,7 +140,7 @@ class AiChatViewModel extends ChangeNotifier {
         for (final m in _recent()) (role: m.fromUser ? 'user' : 'assistant', text: m.text),
       ];
       final reply = await service.ask(
-        systemPrompt: AiContext.systemPrompt(),
+        systemPrompt: AiContext.systemPrompt(customInstructions: service.settings.customInstructions),
         contextBlock: ctx.buildContextBlock(DateTime.now()),
         history: history,
         booksExcerpt: books,
