@@ -157,17 +157,21 @@ class _AiChatBodyState extends State<_AiChatBody> {
       itemCount: vm.messages.length + (vm.busy ? 1 : 0),
       itemBuilder: (context, i) {
         if (i >= vm.messages.length) return const _TypingBubble();
+        final message = vm.messages[i];
+        final charts = vm.chartMessages;
         return _Bubble(
-          message: vm.messages[i],
+          message: message,
           // Удалить свой вопрос вместе с ответом и спросить заново.
           // Важно, что модель о нём ЗАБЫВАЕТ: иначе на повтор она
           // отвечает «как я уже писал выше» — переспрашивать смысла
           // не было бы.
-          onRetry: vm.messages[i].fromUser && !vm.busy ? () => vm.retryFrom(i) : null,
+          onRetry: message.fromUser && !vm.busy ? () => vm.retryFrom(i) : null,
           onDelete: vm.busy ? null : () => vm.removeFrom(i),
-          onCreateExercise: (vm.messages[i].exercise != null && !vm.messages[i].exerciseCreated)
+          onCreateExercise: (message.exercise != null && !message.exerciseCreated)
               ? () => _createExercise(context, vm, i)
               : null,
+          chartGallery: message.chart == null ? null : [for (final m in charts) m.chart!],
+          chartGalleryIndex: message.chart == null ? 0 : charts.indexOf(message),
         );
       },
     );
@@ -264,7 +268,20 @@ class _Bubble extends StatelessWidget {
   /// создано — тогда карточка показывает отметку без кнопки.
   final VoidCallback? onCreateExercise;
 
-  const _Bubble({required this.message, this.onRetry, this.onDelete, this.onCreateExercise});
+  /// Все графики разговора и позиция графика ЭТОГО сообщения среди них —
+  /// для листания в полноэкранном просмотре (`ChartGalleryScreen`).
+  /// `null`/пусто, если в сообщении графика нет вовсе.
+  final List<Map<String, dynamic>>? chartGallery;
+  final int chartGalleryIndex;
+
+  const _Bubble({
+    required this.message,
+    this.onRetry,
+    this.onDelete,
+    this.onCreateExercise,
+    this.chartGallery,
+    this.chartGalleryIndex = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -300,7 +317,11 @@ class _Bubble extends StatelessWidget {
             SelectableText(message.text, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
             if (message.chart != null) ...[
               const SizedBox(height: 8),
-              AiChartView(spec: message.chart!),
+              AiChartView(
+                spec: message.chart!,
+                gallery: chartGallery,
+                galleryIndex: chartGalleryIndex,
+              ),
             ],
             if (message.exercise != null) ...[
               const SizedBox(height: 8),

@@ -20,7 +20,18 @@ import '../theme/app_theme.dart';
 class AiChartView extends StatelessWidget {
   final Map<String, dynamic> spec;
 
-  const AiChartView({super.key, required this.spec});
+  /// Список всех графиков разговора и позиция этого — для листания в
+  /// полноэкранном просмотре. `null` — открывать нечего (например,
+  /// превью где-то ещё), карточка становится нетапабельной.
+  final List<Map<String, dynamic>>? gallery;
+  final int galleryIndex;
+
+  const AiChartView({
+    super.key,
+    required this.spec,
+    this.gallery,
+    this.galleryIndex = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +51,7 @@ class AiChartView extends StatelessWidget {
       );
     }
 
-    return Card(
+    final card = Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -48,7 +59,13 @@ class AiChartView extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (title.isNotEmpty) ...[
-              Text(title, style: theme.textTheme.titleSmall),
+              Row(
+                children: [
+                  Expanded(child: Text(title, style: theme.textTheme.titleSmall)),
+                  if (gallery != null)
+                    Icon(Icons.open_in_full, size: 15, color: theme.colorScheme.onSurfaceVariant),
+                ],
+              ),
               const SizedBox(height: 10),
             ],
             body,
@@ -56,24 +73,22 @@ class AiChartView extends StatelessWidget {
         ),
       ),
     );
+
+    final list = gallery;
+    if (list == null || list.isEmpty) return card;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => ChartGalleryScreen(specs: list, initialIndex: galleryIndex),
+      )),
+      child: card,
+    );
   }
 
   Widget _buildChart(BuildContext context, {required bool bar}) {
     final cs = Theme.of(context).colorScheme;
-    final labels = [for (final e in (spec['x'] as List? ?? const [])) '$e'];
-    final rawSeries = spec['series'] as List? ?? const [];
-
-    final series = <_Series>[];
-    for (final s in rawSeries) {
-      if (s is! Map) continue;
-      final values = <double>[];
-      for (final v in (s['values'] as List? ?? const [])) {
-        values.add(v is num ? v.toDouble() : (double.tryParse('$v') ?? 0));
-      }
-      if (values.isNotEmpty) {
-        series.add(_Series('${s['name'] ?? ''}', values));
-      }
-    }
+    final labels = _parseLabels(spec);
+    final series = _parseSeries(spec);
     if (series.isEmpty) {
       return Text('Нет данных для графика', style: Theme.of(context).textTheme.bodySmall);
     }
@@ -128,22 +143,21 @@ class AiChartView extends StatelessWidget {
 
   Widget _buildTable(BuildContext context) {
     final theme = Theme.of(context);
-    final columns = [for (final c in (spec['columns'] as List? ?? const [])) '$c'];
-    final rows = <List<String>>[];
-    for (final r in (spec['rows'] as List? ?? const [])) {
-      if (r is List) rows.add([for (final c in r) '$c']);
-    }
+    final (columns, rows) = _parseTable(spec);
     if (columns.isEmpty && rows.isEmpty) {
       return Text('Пустая таблица', style: theme.textTheme.bodySmall);
     }
     // Широкие таблицы прокручиваются вбок, а не ломают вёрстку экрана.
+    // Ячейки переносятся по словам (ConstrainedBox + softWrap) — иначе
+    // длинное значение либо обрезалось молча, либо раздувало колонку на
+    // весь экран (жалоба пользователя на нечитаемые таблицы).
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: DataTable(
         columnSpacing: 22,
-        headingRowHeight: 34,
-        dataRowMinHeight: 30,
-        dataRowMaxHeight: 40,
+        headingRowHeight: 36,
+        dataRowMinHeight: 36,
+        dataRowMaxHeight: 64,
         columns: [
           for (final c in columns) DataColumn(label: Text(c, style: theme.textTheme.labelMedium)),
         ],
@@ -151,7 +165,214 @@ class AiChartView extends StatelessWidget {
           for (final r in rows)
             DataRow(cells: [
               for (var i = 0; i < columns.length; i++)
-                DataCell(Text(i < r.length ? r[i] : '', style: theme.textTheme.bodySmall)),
+                DataCell(ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 160),
+                  child: Text(i < r.length ? r[i] : '', style: theme.textTheme.bodySmall, softWrap: true),
+                )),
+            ]),
+        ],
+      ),
+    );
+  }
+}
+
+/// Разбирает "x"/"series" общим кодом для компактной карточки и
+/// полноэкранного просмотра — чтобы два места не расходились в трактовке
+/// одного и того же формата.
+List<String> _parseLabels(Map<String, dynamic> spec) =>
+    [for (final e in (spec['x'] as List? ?? const [])) '$e'];
+
+List<_Series> _parseSeries(Map<String, dynamic> spec) {
+  final series = <_Series>[];
+  for (final s in (spec['series'] as List? ?? const [])) {
+    if (s is! Map) continue;
+    final values = <double>[];
+    for (final v in (s['values'] as List? ?? const [])) {
+      values.add(v is num ? v.toDouble() : (double.tryParse('$v') ?? 0));
+    }
+    if (values.isNotEmpty) series.add(_Series('${s['name'] ?? ''}', values));
+  }
+  return series;
+}
+
+(List<String>, List<List<String>>) _parseTable(Map<String, dynamic> spec) {
+  final columns = [for (final c in (spec['columns'] as List? ?? const [])) '$c'];
+  final rows = <List<String>>[];
+  for (final r in (spec['rows'] as List? ?? const [])) {
+    if (r is List) rows.add([for (final c in r) '$c']);
+  }
+  return (columns, rows);
+}
+
+/// Полноэкранный просмотр графиков/таблиц из чата с ассистентом —
+/// открывается тапом по карточке (см. `AiChartView`). Листание между
+/// всеми графиками разговора свайпом, плюс приближение через
+/// `InteractiveViewer` (решение пользователя: "открывать их и листать,
+/// увеличивать, уменьшать — удобнее для ознакомления").
+///
+/// Отдельная страница со свайпом уже была в приложении и её убрали,
+/// потому что она конфликтовала с листанием рабочего стола (см.
+/// комментарий в `ai_chat_screen.dart`) — здесь конфликта нет: это
+/// МОДАЛЬНЫЙ полноэкранный маршрут, а не вкладка рабочего стола,
+/// показывается одна и та же поверх всего, свайпить страницы стола
+/// параллельно с ней нельзя физически.
+class ChartGalleryScreen extends StatefulWidget {
+  final List<Map<String, dynamic>> specs;
+  final int initialIndex;
+
+  const ChartGalleryScreen({super.key, required this.specs, required this.initialIndex});
+
+  @override
+  State<ChartGalleryScreen> createState() => _ChartGalleryScreenState();
+}
+
+class _ChartGalleryScreenState extends State<ChartGalleryScreen> {
+  late final PageController _pages = PageController(initialPage: widget.initialIndex);
+  late int _current = widget.initialIndex;
+
+  @override
+  void dispose() {
+    _pages.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('${_current + 1} из ${widget.specs.length}'),
+      ),
+      body: PageView.builder(
+        controller: _pages,
+        itemCount: widget.specs.length,
+        onPageChanged: (i) => setState(() => _current = i),
+        itemBuilder: (context, i) => _GalleryPage(spec: widget.specs[i]),
+      ),
+    );
+  }
+}
+
+class _GalleryPage extends StatelessWidget {
+  final Map<String, dynamic> spec;
+  const _GalleryPage({required this.spec});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final type = '${spec['type'] ?? ''}'.toLowerCase();
+    final title = '${spec['title'] ?? ''}'.trim();
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (title.isNotEmpty) ...[
+            Text(title, style: theme.textTheme.titleMedium),
+            const SizedBox(height: 12),
+          ],
+          Expanded(
+            child: type == 'table'
+                ? _buildExpandedTable(context)
+                : _buildExpandedChart(context, bar: type == 'bar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExpandedChart(BuildContext context, {required bool bar}) {
+    final cs = Theme.of(context).colorScheme;
+    final labels = _parseLabels(spec);
+    final series = _parseSeries(spec);
+    if (series.isEmpty) {
+      return Center(child: Text('Нет данных для графика', style: Theme.of(context).textTheme.bodyMedium));
+    }
+    final palette = [cs.primary, AppTheme.accentFor(cs), cs.tertiary];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) => InteractiveViewer(
+              minScale: 1,
+              maxScale: 6,
+              child: SizedBox(
+                width: constraints.maxWidth,
+                height: constraints.maxHeight,
+                child: CustomPaint(
+                  painter: _SpecChartPainter(
+                    series: series,
+                    labels: labels,
+                    bar: bar,
+                    colors: palette,
+                    axisColor: cs.onSurfaceVariant,
+                  ),
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (series.length > 1) ...[
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 14,
+            runSpacing: 6,
+            children: [
+              for (var i = 0; i < series.length; i++)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: palette[i % palette.length],
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(series[i].name, style: Theme.of(context).textTheme.bodySmall),
+                  ],
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildExpandedTable(BuildContext context) {
+    final theme = Theme.of(context);
+    final (columns, rows) = _parseTable(spec);
+    if (columns.isEmpty && rows.isEmpty) {
+      return Center(child: Text('Пустая таблица', style: theme.textTheme.bodyMedium));
+    }
+    // constrained: false — таблица занимает свой естественный размер
+    // (часто шире экрана), а панорамирование и зум даёт сам
+    // InteractiveViewer, без обёртки в ScrollView.
+    return InteractiveViewer(
+      constrained: false,
+      minScale: 0.5,
+      maxScale: 4,
+      child: DataTable(
+        columnSpacing: 28,
+        headingRowHeight: 44,
+        dataRowMinHeight: 44,
+        dataRowMaxHeight: 72,
+        columns: [
+          for (final c in columns) DataColumn(label: Text(c, style: theme.textTheme.titleSmall)),
+        ],
+        rows: [
+          for (final r in rows)
+            DataRow(cells: [
+              for (var i = 0; i < columns.length; i++)
+                DataCell(ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 240),
+                  child: Text(i < r.length ? r[i] : '', style: theme.textTheme.bodyMedium, softWrap: true),
+                )),
             ]),
         ],
       ),
