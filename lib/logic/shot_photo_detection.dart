@@ -136,6 +136,13 @@ List<HoleCandidate> findCandidateHoles({
   List<PixelPoint> knownHolesPx = const [],
   double contrastThreshold = 28,
   double minCircularity = 0.85,
+  // Второй радиус и поворот — калибровка эллипсом для фото, снятого под
+  // углом (решение пользователя): по умолчанию совпадает с `radiusPx`,
+  // то есть остаётся обычным кругом, ничего не меняя для всех
+  // существующих вызовов. `angleRad` — поворот оси `radiusPx` от
+  // горизонтали, по часовой стрелке (экранные координаты, Y вниз).
+  double? radiusYPx,
+  double angleRad = 0,
 }) {
   final blurRadius = math.max(2, (caliberRadiusPx * 1.6).round());
   final blurred = boxBlur(image, blurRadius);
@@ -144,10 +151,17 @@ List<HoleCandidate> findCandidateHoles({
   final visited = Uint8List(w * h);
   final candidates = <HoleCandidate>[];
 
+  final ry = radiusYPx ?? radiusPx;
+  final isCircle = angleRad == 0 && ry == radiusPx;
+  final cosA = math.cos(angleRad), sinA = math.sin(angleRad);
+
   bool insideTarget(int x, int y) {
     final dx = x + 0.5 - center.x;
     final dy = y + 0.5 - center.y;
-    return dx * dx + dy * dy <= radiusPx * radiusPx;
+    if (isCircle) return dx * dx + dy * dy <= radiusPx * radiusPx;
+    final xLocal = dx * cosA + dy * sinA;
+    final yLocal = -dx * sinA + dy * cosA;
+    return (xLocal * xLocal) / (radiusPx * radiusPx) + (yLocal * yLocal) / (ry * ry) <= 1;
   }
 
   // BFS-обход связных компонент по маске "заметно темнее/светлее своего
@@ -572,6 +586,53 @@ double _rayDistanceToEdge(double cx, double cy, double dx, double dy, int w, int
 PixelPoint pixelToMm(PixelPoint px, PixelPoint center, double radiusPx, double faceRadiusMm) {
   final scale = faceRadiusMm / radiusPx;
   return PixelPoint((px.x - center.x) * scale, -(px.y - center.y) * scale);
+}
+
+/// То же самое, но для калибровки ЭЛЛИПСОМ (фото под углом — пункты 1 и
+/// 3 списка правок): `radiusXPx`/`radiusYPx` — полуоси эллипса на фото,
+/// `angleRad` — поворот оси `radiusXPx` от горизонтали по часовой
+/// стрелке. Идея та же, что у поворота осей в геометрии: точку сначала
+/// переводят в систему координат самого эллипса (отменяют поворот), а
+/// потом масштабируют по каждой оси СВОИМ коэффициентом — так
+/// сплюснутый под углом камеры круг разворачивается обратно в
+/// настоящую окружность мишени. При `angleRad == 0` и
+/// `radiusXPx == radiusYPx` даёт точно то же число, что и [pixelToMm].
+PixelPoint pixelToMmEllipse(
+  PixelPoint px,
+  PixelPoint center,
+  double radiusXPx,
+  double radiusYPx,
+  double angleRad,
+  double faceRadiusMm,
+) {
+  final dx = px.x - center.x;
+  final dy = px.y - center.y;
+  final cosA = math.cos(angleRad), sinA = math.sin(angleRad);
+  final xLocal = dx * cosA + dy * sinA;
+  final yLocal = -dx * sinA + dy * cosA;
+  final xMm = xLocal / radiusXPx * faceRadiusMm;
+  final yMm = yLocal / radiusYPx * faceRadiusMm;
+  return PixelPoint(xMm, -yMm);
+}
+
+/// Обратное преобразование к [pixelToMmEllipse] — из мм от центра
+/// мишени обратно в пиксели ИСХОДНОГО фото. Нужно, чтобы уже известные
+/// пробоины (в мм) можно было исключить из повторного поиска на новом
+/// фото той же тренировки.
+PixelPoint mmToPixelEllipse(
+  PixelPoint mm,
+  PixelPoint center,
+  double radiusXPx,
+  double radiusYPx,
+  double angleRad,
+  double faceRadiusMm,
+) {
+  final xLocal = mm.x / faceRadiusMm * radiusXPx;
+  final yLocal = -mm.y / faceRadiusMm * radiusYPx;
+  final cosA = math.cos(angleRad), sinA = math.sin(angleRad);
+  final dx = xLocal * cosA - yLocal * sinA;
+  final dy = xLocal * sinA + yLocal * cosA;
+  return PixelPoint(center.x + dx, center.y + dy);
 }
 
 /// Уточняет РАДИУС калибровки (масштаб мм↔пиксели) по печатным кольцам

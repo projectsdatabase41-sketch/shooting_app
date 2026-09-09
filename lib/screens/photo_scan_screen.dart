@@ -19,6 +19,8 @@ List<HoleCandidate> _detectInIsolate(_DetectArgs args) {
     image: args.image,
     center: args.center,
     radiusPx: args.radiusPx,
+    radiusYPx: args.radiusYPx,
+    angleRad: args.angleRad,
     caliberRadiusPx: args.caliberRadiusPx,
     knownHolesPx: args.knownHolesPx,
   );
@@ -58,12 +60,16 @@ class _DetectArgs {
   final GrayImage image;
   final PixelPoint center;
   final double radiusPx;
+  final double radiusYPx;
+  final double angleRad;
   final double caliberRadiusPx;
   final List<PixelPoint> knownHolesPx;
   const _DetectArgs({
     required this.image,
     required this.center,
     required this.radiusPx,
+    required this.radiusYPx,
+    required this.angleRad,
     required this.caliberRadiusPx,
     required this.knownHolesPx,
   });
@@ -107,8 +113,16 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
   bool _addMode = false;
 
   // Калибровка — в координатах ИСХОДНОГО (не отображаемого) фото.
+  // Эллипс, а не круг (пункты 1 и 3 списка правок): фото, снятое не
+  // строго перпендикулярно мишени, превращает её круглый контур в
+  // эллипс, и калибровка должна уметь повторить эту же форму, а не
+  // упрямо подгонять круг под то, что кругом уже не выглядит.
+  // `_calibRy == _calibRx` и `_calibAngle == 0` — обычный круг, ничего
+  // не меняющий для перпендикулярных снимков.
   Offset? _calibCenter;
-  double _calibRadius = 0;
+  double _calibRx = 0;
+  double _calibRy = 0;
+  double _calibAngle = 0;
 
   // Кандидаты текущего фото — тоже в координатах исходного фото.
   List<Offset> _candidates = [];
@@ -207,7 +221,9 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
       _bytes = bytes;
       _decoded = decoded;
       _calibCenter = center;
-      _calibRadius = radius;
+      _calibRx = radius;
+      _calibRy = radius;
+      _calibAngle = 0;
       _candidates = [];
     });
     await _runDetection();
@@ -225,14 +241,18 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
       final analyzed = ShotPhotoService.analyze(decoded);
       final s = analyzed.scale;
       final scaledCenter = PixelPoint(center.dx * s, center.dy * s);
-      final scaledRadius = _calibRadius * s;
-      final caliberRadiusPx = scaledRadius * (widget.face.caliberMm / 2) / widget.face.faceRadiusMm;
+      final scaledRx = _calibRx * s;
+      final scaledRy = _calibRy * s;
+      // Калибр и окно ожидаемого размера пробоины считаем по СРЕДНЕМУ
+      // радиусу эллипса — при умеренном наклоне (а калибровка эллипсом
+      // рассчитана именно на умеренный, не на настоящую трапецию) разница
+      // между полуосями небольшая, и отдельный калибр под каждую ось
+      // усложнил бы формулы без заметной пользы.
+      final avgRadiusPx = (scaledRx + scaledRy) / 2;
+      final caliberRadiusPx = avgRadiusPx * (widget.face.caliberMm / 2) / widget.face.faceRadiusMm;
       final knownPx = [
         for (final mm in _allKnownMm)
-          PixelPoint(
-            scaledCenter.x + mm.x / widget.face.faceRadiusMm * scaledRadius,
-            scaledCenter.y - mm.y / widget.face.faceRadiusMm * scaledRadius,
-          ),
+          mmToPixelEllipse(mm, scaledCenter, scaledRx, scaledRy, _calibAngle, widget.face.faceRadiusMm),
       ];
 
       final candidates = await compute(
@@ -240,7 +260,9 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
         _DetectArgs(
           image: analyzed.image,
           center: scaledCenter,
-          radiusPx: scaledRadius,
+          radiusPx: scaledRx,
+          radiusYPx: scaledRy,
+          angleRad: _calibAngle,
           caliberRadiusPx: caliberRadiusPx,
           knownHolesPx: knownPx,
         ),
@@ -264,10 +286,12 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
     }
   }
 
-  PixelPoint _toMm(Offset px) => pixelToMm(
+  PixelPoint _toMm(Offset px) => pixelToMmEllipse(
         PixelPoint(px.dx, px.dy),
         PixelPoint(_calibCenter!.dx, _calibCenter!.dy),
-        _calibRadius,
+        _calibRx,
+        _calibRy,
+        _calibAngle,
         widget.face.faceRadiusMm,
       );
 
@@ -424,18 +448,24 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
                           bytes: _bytes!,
                           displayScale: _displayScale,
                           center: _calibCenter!,
-                          radius: _calibRadius,
+                          radiusX: _calibRx,
+                          radiusY: _calibRy,
+                          angle: _calibAngle,
                           // Радиус пробоины в тех же пикселях фото, что и
-                          // калибровочный круг — от него и масштабируется
-                          // маркер, чтобы на экране он был не крупнее
-                          // настоящего отверстия (решение пользователя,
-                          // иначе точную подгонку неудобно делать).
-                          holeRadiusPx: _calibRadius * widget.face.caliberRadiusMm / widget.face.faceRadiusMm,
+                          // калибровка (по среднему радиусу эллипса) — от
+                          // него и масштабируется маркер, чтобы на экране
+                          // он был не крупнее настоящего отверстия
+                          // (решение пользователя, иначе точную подгонку
+                          // неудобно делать).
+                          holeRadiusPx:
+                              (_calibRx + _calibRy) / 2 * widget.face.caliberRadiusMm / widget.face.faceRadiusMm,
                           candidates: _candidates,
                           addMode: _addMode,
-                          onCalibrationChanged: (c, r) => setState(() {
+                          onCalibrationChanged: (c, rx, ry, angle) => setState(() {
                             _calibCenter = c;
-                            _calibRadius = r;
+                            _calibRx = rx;
+                            _calibRy = ry;
+                            _calibAngle = angle;
                           }),
                           onCandidateMoved: (i, p) => setState(() => _candidates[i] = p),
                           onCandidateRemoved: (i) => setState(() => _candidates.removeAt(i)),
@@ -455,9 +485,11 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           child: Text(
-            'Круг подогнан автоматически — при необходимости сдвиньте центр или '
-            'потяните за край. Точки — найденные пробоины: перетащите, чтобы '
-            'совместить с фактическим отверстием, или снимите лишнюю.',
+            'Контур подогнан автоматически — сдвиньте центр, потяните за один из '
+            'двух маркеров на краю, чтобы растянуть контур в овал под углом '
+            'съёмки, если фото снято не строго анфас. Точки — найденные '
+            'пробоины: перетащите, чтобы совместить с фактическим отверстием, '
+            'или снимите лишнюю.',
             style: Theme.of(context).textTheme.bodySmall,
             textAlign: TextAlign.center,
           ),
@@ -552,11 +584,13 @@ class _ReviewOverlay extends StatelessWidget {
   final Uint8List bytes;
   final double displayScale;
   final Offset center;
-  final double radius;
+  final double radiusX;
+  final double radiusY;
+  final double angle;
   final double holeRadiusPx;
   final List<Offset> candidates;
   final bool addMode;
-  final void Function(Offset center, double radius) onCalibrationChanged;
+  final void Function(Offset center, double radiusX, double radiusY, double angle) onCalibrationChanged;
   final void Function(int index, Offset newPos) onCandidateMoved;
   final void Function(int index) onCandidateRemoved;
   final void Function(Offset pos) onCandidateAdded;
@@ -565,7 +599,9 @@ class _ReviewOverlay extends StatelessWidget {
     required this.bytes,
     required this.displayScale,
     required this.center,
-    required this.radius,
+    required this.radiusX,
+    required this.radiusY,
+    required this.angle,
     required this.holeRadiusPx,
     required this.candidates,
     required this.addMode,
@@ -584,7 +620,14 @@ class _ReviewOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final displayCenter = center * displayScale;
-    final displayRadius = radius * displayScale;
+    final displayRx = radiusX * displayScale;
+    final displayRy = radiusY * displayScale;
+    // Два независимых маркера на краю эллипса — один растягивает/поворачивает
+    // ось radiusX, второй только меняет длину radiusY (угол задаёт
+    // ЕДИНСТВЕННО первый маркер, чтобы оба не спорили за поворот разом).
+    final handleA = displayCenter + Offset(displayRx * math.cos(angle), displayRx * math.sin(angle));
+    final perp = Offset(-math.sin(angle), math.cos(angle));
+    final handleB = displayCenter + perp * displayRy;
 
     return Stack(
       fit: StackFit.expand,
@@ -596,18 +639,25 @@ class _ReviewOverlay extends StatelessWidget {
               ? null
               : (details) {
                   final local = details.localPosition;
-                  final distFromEdge = (local - displayCenter).distance - displayRadius;
-                  if (distFromEdge.abs() <= _handleHitRadius) {
-                    final newRadius = (local - displayCenter).distance / displayScale;
-                    onCalibrationChanged(center, newRadius.clamp(10, 5000));
+                  final distA = (local - handleA).distance;
+                  final distB = (local - handleB).distance;
+                  if (distA <= _handleHitRadius && distA <= distB) {
+                    final v = (local - displayCenter) / displayScale;
+                    final newRx = v.distance.clamp(10, 5000).toDouble();
+                    onCalibrationChanged(center, newRx, radiusY, math.atan2(v.dy, v.dx));
+                  } else if (distB <= _handleHitRadius) {
+                    final v = (local - displayCenter) / displayScale;
+                    final projected = v.dx * perp.dx + v.dy * perp.dy;
+                    final newRy = projected.abs().clamp(10, 5000).toDouble();
+                    onCalibrationChanged(center, radiusX, newRy, angle);
                   } else {
-                    onCalibrationChanged(center + details.delta / displayScale, radius);
+                    onCalibrationChanged(center + details.delta / displayScale, radiusX, radiusY, angle);
                   }
                 },
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Чёрно-белое — только для показа: круг калибровки и
+              // Чёрно-белое — только для показа: контур калибровки и
               // найденные точки читаются на контрасте заметно лучше,
               // чем на цветном снимке (блики, оттенок бумаги), а сам
               // разбор и так всегда шёл по градациям серого.
@@ -621,7 +671,7 @@ class _ReviewOverlay extends StatelessWidget {
                 child: Image.memory(bytes, fit: BoxFit.fill),
               ),
               CustomPaint(
-                painter: _CalibrationPainter(center: displayCenter, radius: displayRadius),
+                painter: _CalibrationPainter(center: displayCenter, radiusX: displayRx, radiusY: displayRy, angle: angle),
               ),
             ],
           ),
@@ -663,9 +713,16 @@ class _ReviewOverlay extends StatelessWidget {
 
 class _CalibrationPainter extends CustomPainter {
   final Offset center;
-  final double radius;
+  final double radiusX;
+  final double radiusY;
+  final double angle;
 
-  const _CalibrationPainter({required this.center, required this.radius});
+  const _CalibrationPainter({
+    required this.center,
+    required this.radiusX,
+    required this.radiusY,
+    required this.angle,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -673,15 +730,27 @@ class _CalibrationPainter extends CustomPainter {
       ..color = Colors.amberAccent
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3;
-    canvas.drawCircle(center, radius, ring);
+
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(angle);
+    canvas.drawOval(Rect.fromCenter(center: Offset.zero, width: radiusX * 2, height: radiusY * 2), ring);
+    canvas.restore();
 
     final handle = Paint()..color = Colors.amberAccent;
     canvas.drawCircle(center, 6, handle);
-    final edgePoint = center + Offset(radius, 0);
-    canvas.drawCircle(edgePoint, 8, handle);
+    // Два независимых маркера — растянуть по каждой оси эллипса можно
+    // отдельно (см. жесты в _ReviewOverlay), первый ещё и поворачивает.
+    final handleA = center + Offset(radiusX * math.cos(angle), radiusX * math.sin(angle));
+    final handleB = center + Offset(-radiusY * math.sin(angle), radiusY * math.cos(angle));
+    canvas.drawCircle(handleA, 8, handle);
+    canvas.drawCircle(handleB, 8, handle);
   }
 
   @override
   bool shouldRepaint(covariant _CalibrationPainter oldDelegate) =>
-      oldDelegate.center != center || oldDelegate.radius != radius;
+      oldDelegate.center != center ||
+      oldDelegate.radiusX != radiusX ||
+      oldDelegate.radiusY != radiusY ||
+      oldDelegate.angle != angle;
 }

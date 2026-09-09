@@ -305,4 +305,25 @@ void main() {
       expect(up.y, closeTo(45, 1e-6));
     });
   });
+
+  group('pixelToMmEllipse / mmToPixelEllipse — калибровка под углом', () {
+    test('без поворота и с равными полуосями совпадает с pixelToMm', () {
+      const center = PixelPoint(100, 100);
+      const px = PixelPoint(160, 40);
+      final circle = pixelToMm(px, center, 90, 45);
+      final ellipse = pixelToMmEllipse(px, center, 90, 90, 0, 45);
+      expect(ellipse.x, closeTo(circle.x, 1e-9));
+      expect(ellipse.y, closeTo(circle.y, 1e-9));
+    });
+
+    test('mmToPixelEllipse — точное обращение pixelToMmEllipse при повороте и разных полуосях', () {
+      const center = PixelPoint(200, 150);
+      const px = PixelPoint(260, 90);
+      const rx = 90.0, ry = 60.0, angle = 0.4;
+      final mm = pixelToMmEllipse(px, center, rx, ry, angle, 45);
+      final back = mmToPixelEllipse(mm, center, rx, ry, angle, 45);
+      expect(back.x, closeTo(px.x, 1e-6));
+      expect(back.y, closeTo(px.y, 1e-6));
+    });
+  });
 }
