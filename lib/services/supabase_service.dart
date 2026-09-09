@@ -212,7 +212,7 @@ class SupabaseSyncService {
       await _upsert(token, 'training_packages', [_trainingPackageJson(session)]);
       await _upsert(token, 'exercises', [_exerciseSnapshotJson(session, exercise, face, faceId)]);
 
-      final shotRows = [for (final s in session.shots) _shotJson(s, session.id, face)];
+      final shotRows = [for (final s in session.shots) _shotJson(s, session.id, face, session.startedAt)];
       await _upsert(token, 'shots', shotRows);
 
       final commentRows = [for (final c in repo.forSessionAll(session.id)) _commentJson(c)];
@@ -247,7 +247,12 @@ class SupabaseSyncService {
         'started_at': session.startedAt?.toIso8601String(),
         'ended_at': session.finishedAt?.toIso8601String(),
         'time_is_approximate': false,
-        'package_status': session.status.name,
+        // Реальная схема не знает слова 'finished' (единственный статус,
+        // до которого доходят синхронизируемые тренировки, — push шлёт
+        // только store.unsyncedSessions, а туда попадают ровно
+        // SessionStatus.finished) — допустимые слова см.
+        // SUPABASE-CREATE.md: draft/active/completed/archived.
+        'package_status': 'completed',
         'editor_mode': 'athlete',
         'is_locked_by_athlete': true,
         'local_version': 1,
@@ -281,7 +286,7 @@ class SupabaseSyncService {
         'extra': {'template_id': exercise.id},
       };
 
-  Map<String, dynamic> _shotJson(Shot shot, String sessionId, TargetFace face) => {
+  Map<String, dynamic> _shotJson(Shot shot, String sessionId, TargetFace face, DateTime? sessionStart) => {
         'id': shot.id,
         'exercise_id': sessionId,
         'shot_no': shot.shotNumber,
@@ -289,13 +294,21 @@ class SupabaseSyncService {
         'x_mm': shot.xMm,
         'y_mm': shot.yMm,
         'input_angle_degrees': shot.angleDeg,
-        'coordinate_source': 'app',
+        // Допустимые слова — см. SUPABASE-CREATE.md ("Значения,
+        // ограниченные проверками"): 'tap' у координат, 'manual' у
+        // источника — приложение сейчас не различает тап/фото/камеру на
+        // уровне модели выстрела, это ближайшее по смыслу из списка.
+        'coordinate_source': 'tap',
         'computed_score': scoreForRadius(shot.radiusMm, face),
         'final_score': shot.score,
-        'source': 'app',
+        'source': 'manual',
         'is_manually_corrected': shot.isManuallyEdited,
         'confirmed': true,
-        'shot_time_ms': shot.time.millisecondsSinceEpoch,
+        // ВАЖНО: колонка целая (integer) и хранит СМЕЩЕНИЕ от начала
+        // тренировки в миллисекундах, не эпоху — час стрельбы даёт
+        // около 1 100 000, а epoch millis (~1.7×10¹²) вылетает за
+        // границы integer (ошибка 22003). См. SUPABASE-CREATE.md.
+        'shot_time_ms': sessionStart == null ? 0 : shot.time.difference(sessionStart).inMilliseconds,
         'counts': shot.counts,
         'extra': shot.extra,
       };
@@ -349,19 +362,20 @@ class SupabaseSyncService {
       if (faceCode == null) continue; // мишень не опознана — восстановить тренировку не из чего
 
       final exerciseId = _resolveLocalExerciseId(store, child, faceCode);
+      final sessionStart = _dateOrNull(packageRow['started_at']);
       final shots = [
-        for (final r in shotsByExercise[id] ?? const <Map<String, dynamic>>[]) _shotFromRow(r),
+        for (final r in shotsByExercise[id] ?? const <Map<String, dynamic>>[]) _shotFromRow(r, sessionStart),
       ]..sort((a, b) => a.shotNumber.compareTo(b.shotNumber));
 
       store.upsertSessionFromRemote(TrainingSession(
         id: id,
         exerciseId: exerciseId,
         targetFaceCode: faceCode,
-        status: SessionStatus.values.firstWhere(
-          (s) => s.name == packageRow['package_status'],
-          orElse: () => SessionStatus.finished,
-        ),
-        startedAt: _dateOrNull(packageRow['started_at']),
+        // Реальная схема не знает 'finished' (см. push) — только
+        // 'completed' синхронизируется мостом, но читаем терпимо к
+        // строкам от стороннего источника (draft/active/archived).
+        status: packageRow['package_status'] == 'completed' ? SessionStatus.finished : SessionStatus.notStarted,
+        startedAt: sessionStart,
         finishedAt: _dateOrNull(packageRow['ended_at']),
         shots: shots,
         syncedToCloud: true,
@@ -439,8 +453,15 @@ class SupabaseSyncService {
         .id;
   }
 
-  Shot _shotFromRow(Map<String, dynamic> r) {
-    final ms = (r['shot_time_ms'] as num?)?.toInt();
+  Shot _shotFromRow(Map<String, dynamic> r, DateTime? sessionStart) {
+    // shot_time_ms — смещение от начала тренировки в миллисекундах, не
+    // эпоха (см. _shotJson) — без времени начала самой тренировки
+    // абсолютный момент выстрела не восстановить, тогда лучше взять
+    // время записи строки, чем спутать смещение с эпохой.
+    final offsetMs = (r['shot_time_ms'] as num?)?.toInt();
+    final time = (offsetMs != null && sessionStart != null)
+        ? sessionStart.add(Duration(milliseconds: offsetMs))
+        : DateTime.tryParse('${r['created_at']}') ?? DateTime.now();
     return Shot(
       id: '${r['id']}',
       shotNumber: (r['shot_no'] as num).toInt(),
@@ -448,9 +469,7 @@ class SupabaseSyncService {
       xMm: (r['x_mm'] as num?)?.toDouble() ?? 0,
       yMm: (r['y_mm'] as num?)?.toDouble() ?? 0,
       score: (r['final_score'] as num).toDouble(),
-      time: ms != null
-          ? DateTime.fromMillisecondsSinceEpoch(ms)
-          : DateTime.parse(r['created_at'] as String),
+      time: time,
       isManuallyEdited: r['is_manually_corrected'] == true,
       counts: r['counts'] != false,
       extra: extraFromJson(r['extra']),
