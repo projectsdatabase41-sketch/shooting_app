@@ -52,3 +52,6 @@ scatt_import.json
 hs_err_pid*.log
 *.apk
 .github/workflows/_probe.txt
+
+# Локальный ключ OpenRouter для сборок с этой машины — не для git.
+.local/
