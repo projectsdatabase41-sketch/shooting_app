@@ -207,6 +207,11 @@ class TargetViewModel extends ChangeNotifier {
     if (!canEdit) return;
     session = SessionLogic.finish(session, DateTime.now());
     _persist();
+    // Не ждём результата: индикатор в HomeShell следит за
+    // store.isBackgroundSyncing сам, а ручная кнопка на экране
+    // настроек остаётся — это ДОПОЛНЕНИЕ, не замена (решение
+    // пользователя, пункт 7 списка правок).
+    unawaited(store.syncInBackground());
   }
 
   // ---- B.2/B.3 — таймеры ----

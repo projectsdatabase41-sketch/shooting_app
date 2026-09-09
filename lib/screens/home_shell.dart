@@ -49,7 +49,12 @@ class _HomeShellState extends State<HomeShell> {
     if (isCoach) {
       final pages = [const CoachDiaryScreen(), const SettingsScreen()];
       return Scaffold(
-        body: pages[_coachIndex],
+        body: Column(
+          children: [
+            if (store.isBackgroundSyncing) const _SyncBanner(),
+            Expanded(child: pages[_coachIndex]),
+          ],
+        ),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _coachIndex,
           onDestinationSelected: (i) => setState(() => _coachIndex = i),
@@ -75,7 +80,12 @@ class _HomeShellState extends State<HomeShell> {
     ];
 
     return Scaffold(
-      body: pages[_athleteIndex],
+      body: Column(
+        children: [
+          if (store.isBackgroundSyncing) const _SyncBanner(),
+          Expanded(child: pages[_athleteIndex]),
+        ],
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _athleteIndex,
         onDestinationSelected: (i) => setState(() => _athleteIndex = i),
@@ -137,5 +147,41 @@ class _ActiveTargetTab extends StatelessWidget {
       return const Scaffold(body: Center(child: Text('Упражнение не найдено')));
     }
     return TargetScreen(session: session, exercise: exercise, embedded: true);
+  }
+}
+
+/// Тонкая полоса поверх любой вкладки, пока идёт автосинхронизация после
+/// завершения тренировки — предупреждает не выключать телефон посреди
+/// записи (пункт 7 списка правок).
+class _SyncBanner extends StatelessWidget {
+  const _SyncBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Theme.of(context).colorScheme.secondaryContainer,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Синхронизация с облаком… не выключайте телефон',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

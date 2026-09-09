@@ -9,6 +9,8 @@ import '../models/target_face.dart';
 import '../models/training_session.dart';
 import '../models/shot.dart';
 import '../services/local_db_service.dart';
+import '../services/supabase_auth_service.dart';
+import '../services/supabase_service.dart';
 
 enum WorkMode { athlete, coach }
 
@@ -424,9 +426,10 @@ class AppDataStore extends ChangeNotifier {
   /// тренировки, где корзину уже нечем пополнить, а сам список корзины
   /// на сервер не отправляется (см. `SupabaseSyncService.push`).
   ///
-  /// Существующую тренировку не перезаписываем: локальная копия — уже
-  /// наша тренировка, устаревшей по дороге стать не может (`canEdit`
-  /// требует `status != finished`, а синхронизируются только finished).
+  /// Существующую тренировку не перезаписываем: раз локальная копия уже
+  /// есть, она главнее любой строки, которая могла прийти с сервера —
+  /// включая случай, когда её потом разблокировали и поправили задним
+  /// числом (`TargetViewModel.unlockForEditingFinished`).
   void upsertSessionFromRemote(TrainingSession session) {
     if (sessions.any((s) => s.id == session.id)) return;
     db.db.execute('BEGIN');
@@ -455,6 +458,38 @@ class AppDataStore extends ChangeNotifier {
     }
     sessions = [session.copyWith(syncedToCloud: true), ...sessions];
     notifyListeners();
+  }
+
+  // ---- Автосинхронизация по завершении тренировки ----
+
+  /// Идёт ли сейчас фоновая синхронизация — экраны показывают по этому
+  /// флагу индикатор, чтобы пользователь не выключил телефон посреди
+  /// записи (решение пользователя, пункт 7 списка правок).
+  bool isBackgroundSyncing = false;
+  String? backgroundSyncError;
+
+  /// Запускается сама, как только тренировка завершена
+  /// (`TargetViewModel.finish`) — вдобавок к ручной кнопке
+  /// "Синхронизировать сейчас" на экране настроек, а не взамен неё.
+  /// Молча ничего не делает, если облако не подключено или уже идёт
+  /// другая синхронизация.
+  Future<void> syncInBackground() async {
+    if (isBackgroundSyncing) return;
+    final auth = SupabaseAuthService(db);
+    if (!auth.isSignedIn) return;
+    isBackgroundSyncing = true;
+    backgroundSyncError = null;
+    notifyListeners();
+    try {
+      final sync = SupabaseSyncService(auth);
+      await sync.push(this);
+      await sync.pull(this);
+    } catch (e) {
+      backgroundSyncError = '$e';
+    } finally {
+      isBackgroundSyncing = false;
+      notifyListeners();
+    }
   }
 }
 
