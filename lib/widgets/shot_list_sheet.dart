@@ -1,19 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/shot.dart';
+import '../services/comments_repository.dart';
+import '../state/app_data_store.dart';
 import '../state/target_view_model.dart';
-import 'comments_thread.dart';
+import 'add_shot_dialog.dart';
+import 'favorites_sheet.dart';
+import 'shot_actions_sheet.dart';
 import 'trash_sheet.dart';
 
 /// Шторка списка выстрелов (раздел 5 ТЗ) — 85% высоты экрана. Наверху:
-/// корзина(бейдж)/фильтр избранного/комментарии текущего выстрела
-/// (скрыты в режиме "только просмотр" — раздел 7 ТЗ). Список разбит на
-/// группы по сериям, тап по строке — выбрать и закрыть.
+/// корзина/избранное (бейджи, открывают отдельные списки — решение
+/// пользователя, пункт 8 списка правок) плюс комментарии текущего
+/// выстрела и кнопка "+" ручного добавления. Список разбит на группы по
+/// сериям.
 ///
-/// У каждой строки — две отдельные кнопки, «в избранное» и «удалить»
-/// (решение пользователя, взамен свайпа): свайп по строке в списке,
-/// который и так прокручивается и открывается снизу вверх, слишком
-/// легко путался с прокруткой и с закрытием шторки.
+/// Тап по строке — выбрать выстрел и сразу перейти на мишень. Долгое
+/// нажатие (НЕ свайп — свайп по строке уже пробовали и убрали, см. ниже)
+/// открывает меню действий (`ShotActionsSheet`): там же теперь и
+/// избранное/удаление, поэтому отдельных кнопок на самой строке больше
+/// нет — это и короче саму строку делает.
+///
+/// Свайп по строке когда-то был для удаления, и его убрали:
+/// список и так прокручивается и открывается снизу вверх, свайп путался
+/// с обоими жестами.
 class ShotListSheet extends StatefulWidget {
   const ShotListSheet({super.key});
 
@@ -36,11 +46,11 @@ class ShotListSheet extends StatefulWidget {
 }
 
 class _ShotListSheetState extends State<ShotListSheet> {
-  bool _favoritesOnly = false;
-
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<TargetViewModel>();
+    final store = context.watch<AppDataStore>();
+    final repo = CommentsRepository(store.db);
     final shots = vm.session.shots;
     final grouped = <int, List<Shot>>{};
     for (final s in shots) {
@@ -51,7 +61,7 @@ class _ShotListSheetState extends State<ShotListSheet> {
     return SafeArea(
       child: Column(
         children: [
-          _Header(favoritesOnly: _favoritesOnly, onToggleFavorites: () => setState(() => _favoritesOnly = !_favoritesOnly)),
+          const _Header(),
           const Divider(height: 1),
           Expanded(
             child: ListView.builder(
@@ -59,8 +69,7 @@ class _ShotListSheetState extends State<ShotListSheet> {
               itemBuilder: (context, i) {
                 final seriesNo = seriesNumbers[i];
                 final seriesShots = grouped[seriesNo]!;
-                final sum = seriesShots.fold(0.0, (a, s) => a + s.score); // сумма по ВСЕЙ серии, фильтр не сужает
-                final visibleRows = _favoritesOnly ? seriesShots.where((s) => s.isFavorite).toList() : seriesShots;
+                final sum = seriesShots.fold(0.0, (a, s) => a + s.score);
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -81,37 +90,12 @@ class _ShotListSheetState extends State<ShotListSheet> {
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ),
-                    for (final shot in visibleRows)
-                      ListTile(
-                        key: ValueKey(shot.id),
-                        // Номер — исходный, из shot.shotNumber: при фильтре
-                        // "только избранное" строки не идут подряд, и без
-                        // номера непонятно, каким по счёту был выстрел
-                        // (раздел 19 старого ТЗ — этого не хватало).
-                        title: Text('№${shot.shotNumber} · ${shot.score.toStringAsFixed(1)}'),
-                        subtitle: Text('X:${shot.xMm.toStringAsFixed(1)} Y:${shot.yMm.toStringAsFixed(1)}'),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              visualDensity: VisualDensity.compact,
-                              icon: Icon(shot.isFavorite ? Icons.star : Icons.star_border),
-                              tooltip: shot.isFavorite ? 'Убрать из избранного' : 'В избранное',
-                              onPressed: () => vm.toggleFavorite(shot.id),
-                            ),
-                            if (vm.canEditShots)
-                              IconButton(
-                                visualDensity: VisualDensity.compact,
-                                icon: const Icon(Icons.delete_outline),
-                                tooltip: 'Удалить',
-                                onPressed: () => vm.deleteShot(shot.id),
-                              ),
-                          ],
-                        ),
-                        onTap: () {
-                          vm.selectIndex(vm.session.shots.indexOf(shot));
-                          Navigator.of(context).pop();
-                        },
+                    for (final shot in seriesShots)
+                      _ShotRow(
+                        shot: shot,
+                        hasNote: repo.forShot(vm.session.id, shot.id).isNotEmpty,
+                        onTap: () => vm.selectAndJumpToTarget(vm.session.shots.indexOf(shot)),
+                        onLongPress: () => ShotActionsSheet.show(context, shot),
                       ),
                   ],
                 );
@@ -124,23 +108,81 @@ class _ShotListSheetState extends State<ShotListSheet> {
   }
 }
 
-class _Header extends StatelessWidget {
-  final bool favoritesOnly;
-  final VoidCallback onToggleFavorites;
+/// Строка выстрела: слева номер + результат (крупнее), справа
+/// координаты. На 20% ниже прежней (решение пользователя, пункт 1
+/// списка правок) — компактной строку и делает как раз отсутствие
+/// кнопок на ней (см. класс выше).
+class _ShotRow extends StatelessWidget {
+  final Shot shot;
+  final bool hasNote;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
 
-  const _Header({required this.favoritesOnly, required this.onToggleFavorites});
+  const _ShotRow({
+    required this.shot,
+    required this.hasNote,
+    required this.onTap,
+    required this.onLongPress,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      key: ValueKey(shot.id),
+      onTap: onTap,
+      onLongPress: onLongPress,
+      child: Padding(
+        // Прежний ListTile давал ~56px строку; тут — заметно компактнее
+        // (плотный вертикальный отступ вместо стандартного), это и есть
+        // те самые "минус 20%".
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        child: Row(
+          children: [
+            if (shot.isFavorite) ...[
+              Icon(Icons.star, size: 16, color: Colors.amber.shade700),
+              const SizedBox(width: 4),
+            ],
+            Expanded(
+              child: Text.rich(
+                TextSpan(
+                  style: theme.textTheme.bodyMedium,
+                  children: [
+                    TextSpan(text: '${shot.shotNumber} '),
+                    TextSpan(
+                      text: shot.score.toStringAsFixed(1),
+                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (hasNote) ...[
+              Icon(Icons.notes_outlined, size: 15, color: theme.colorScheme.onSurfaceVariant),
+              const SizedBox(width: 8),
+            ],
+            Text(
+              'X ${shot.xMm.toStringAsFixed(1)}  Y ${shot.yMm.toStringAsFixed(1)}',
+              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Header extends StatelessWidget {
+  const _Header();
 
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<TargetViewModel>();
+    final favoritesCount = vm.session.shots.where((s) => s.isFavorite).length;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       child: Row(
         children: [
-          // «Добавить» и «Удалить последний» убраны: выстрел ставится
-          // на мишени, а удаление — свайпом по строке списка. Кнопка
-          // «удалить текущий» в шапке к тому же била по выбранному
-          // выстрелу, а не по тому, на который смотрит палец.
           if (vm.canEditShots)
             Badge(
               label: Text('${vm.session.trash.length}'),
@@ -151,16 +193,20 @@ class _Header extends StatelessWidget {
                 onPressed: () => TrashSheet.show(context),
               ),
             ),
-          IconButton(
-            icon: Icon(favoritesOnly ? Icons.star : Icons.star_border),
-            tooltip: 'Только избранное',
-            onPressed: onToggleFavorites,
+          Badge(
+            label: Text('$favoritesCount'),
+            isLabelVisible: favoritesCount > 0,
+            child: IconButton(
+              icon: const Icon(Icons.star_border),
+              tooltip: 'Избранное',
+              onPressed: () => FavoritesSheet.show(context),
+            ),
           ),
-          if (vm.selectedShot != null)
+          if (vm.canEditShots)
             IconButton(
-              icon: const Icon(Icons.comment_outlined),
-              tooltip: 'Комментарии к выстрелу',
-              onPressed: () => CommentsThreadSheet.showForShot(context, vm.selectedShot!.id),
+              icon: const Icon(Icons.add),
+              tooltip: 'Добавить выстрел',
+              onPressed: () => AddShotDialog.show(context),
             ),
           const Spacer(),
           // Крестик только у шторки. Как страница рабочего стола список

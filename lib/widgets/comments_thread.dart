@@ -29,9 +29,14 @@ class CommentsThreadSheet extends StatefulWidget {
     this.seriesNo,
   });
 
+  // 0.8 вместо общих 0.7 — по запросу пользователя специально для
+  // заметки к выстрелу: открывается чаще остальных уровней, из
+  // длинного списка (см. shot_list_sheet.dart), где лишний простор
+  // важнее.
   static Future<void> showForShot(BuildContext context, String shotId) => _show(
         context,
         CommentsThreadSheet(level: CommentLevel.shot, shotId: shotId),
+        heightFactor: 0.8,
       );
 
   static Future<void> showForSeries(BuildContext context, int seriesNo) => _show(
@@ -52,14 +57,14 @@ class CommentsThreadSheet extends StatefulWidget {
         const CommentsThreadSheet(level: CommentLevel.coach),
       );
 
-  static Future<void> _show(BuildContext context, Widget child) {
+  static Future<void> _show(BuildContext context, Widget child, {double heightFactor = 0.7}) {
     final vm = context.read<TargetViewModel>();
     final store = context.read<AppDataStore>();
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder: (_) => FractionallySizedBox(
-        heightFactor: 0.7,
+        heightFactor: heightFactor,
         child: MultiProvider(
           providers: [
             ChangeNotifierProvider.value(value: vm),
@@ -135,32 +140,47 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
           const Divider(height: 1),
           Padding(
             padding: const EdgeInsets.all(8),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    decoration: const InputDecoration(hintText: 'Написать комментарий…'),
-                  ),
+                TextField(
+                  controller: _controller,
+                  minLines: 1,
+                  maxLines: 4,
+                  decoration: const InputDecoration(hintText: 'Написать комментарий…'),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.send),
-                  onPressed: () {
-                    if (_controller.text.trim().isEmpty) return;
-                    final comment = Comment(
-                      id: _uuid.v4(),
-                      sessionId: vm.session.id,
-                      level: widget.level,
-                      shotId: widget.level == CommentLevel.shot ? widget.shotId : null,
-                      seriesNo: widget.level == CommentLevel.series ? widget.seriesNo : null,
-                      authorRole: store.workMode == WorkMode.coach ? AuthorRole.coach : AuthorRole.athlete,
-                      text: _controller.text.trim(),
-                      createdAt: DateTime.now(),
-                    );
-                    repo.add(comment);
-                    _controller.clear();
-                    setState(() {});
-                  },
+                const SizedBox(height: 8),
+                // Явные "Сохранить"/"Отмена" вместо одной кнопки-отправки
+                // (решение пользователя) — Отмена просто стирает
+                // черновик, ничего не отправляя.
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => setState(_controller.clear),
+                      child: const Text('Отмена'),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed: () {
+                        if (_controller.text.trim().isEmpty) return;
+                        final comment = Comment(
+                          id: _uuid.v4(),
+                          sessionId: vm.session.id,
+                          level: widget.level,
+                          shotId: widget.level == CommentLevel.shot ? widget.shotId : null,
+                          seriesNo: widget.level == CommentLevel.series ? widget.seriesNo : null,
+                          authorRole: store.workMode == WorkMode.coach ? AuthorRole.coach : AuthorRole.athlete,
+                          text: _controller.text.trim(),
+                          createdAt: DateTime.now(),
+                        );
+                        repo.add(comment);
+                        _controller.clear();
+                        setState(() {});
+                      },
+                      child: const Text('Сохранить'),
+                    ),
+                  ],
                 ),
               ],
             ),

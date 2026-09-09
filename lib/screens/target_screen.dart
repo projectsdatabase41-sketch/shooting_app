@@ -110,6 +110,9 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
     final workspace = context.watch<WorkspaceViewModel>();
     final pages = workspace.visible;
     _ensureController(workspace.targetIndex);
+    // ShotListSheet живёт на СВОЕЙ странице рабочего стола и не видит
+    // наш PageController напрямую — сообщает о переходе через вью-модель.
+    vm.onJumpToTargetRequested = () => _goTo(workspace.targetIndex);
 
     // Индекс мог уехать за границы, если страницу спрятали, пока мы
     // на ней стояли.

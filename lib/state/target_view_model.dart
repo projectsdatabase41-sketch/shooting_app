@@ -66,6 +66,20 @@ class TargetViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Переключает рабочий стол на страницу мишени — вызывается извне
+  /// (например, `ShotListSheet` по тапу на строку выстрела), который
+  /// не может достучаться до `PageController` внутри `TargetScreen`
+  /// напрямую: экран сам подписывается на это поле при построении.
+  VoidCallback? onJumpToTargetRequested;
+
+  /// Тап по выстрелу в списке — выбрать его и сразу перейти на мишень
+  /// (решение пользователя, пункт 8 списка правок): раньше тап только
+  /// выбирал выстрел и закрывал список, оставляя на текущей странице.
+  void selectAndJumpToTarget(int index) {
+    selectIndex(index);
+    onJumpToTargetRequested?.call();
+  }
+
   /// Пролистывание двухпальцевым свайпом (B.4) — шаг пропорционален
   /// длине жеста, без "прыжков" между сериями, упирается в границы.
   void scrollByShots(double shotIndexDeltaFloat) {
