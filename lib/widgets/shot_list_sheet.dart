@@ -99,7 +99,7 @@ class _ShotListSheetState extends State<ShotListSheet> {
                               tooltip: shot.isFavorite ? 'Убрать из избранного' : 'В избранное',
                               onPressed: () => vm.toggleFavorite(shot.id),
                             ),
-                            if (vm.canEdit)
+                            if (vm.canEditShots)
                               IconButton(
                                 visualDensity: VisualDensity.compact,
                                 icon: const Icon(Icons.delete_outline),
@@ -141,7 +141,7 @@ class _Header extends StatelessWidget {
           // на мишени, а удаление — свайпом по строке списка. Кнопка
           // «удалить текущий» в шапке к тому же била по выбранному
           // выстрелу, а не по тому, на который смотрит палец.
-          if (vm.canEdit)
+          if (vm.canEditShots)
             Badge(
               label: Text('${vm.session.trash.length}'),
               isLabelVisible: vm.session.trash.isNotEmpty,

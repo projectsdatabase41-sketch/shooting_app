@@ -84,10 +84,65 @@ class TargetViewModel extends ChangeNotifier {
   }
 
   // ---- canEdit — единая точка правды (C.2) ----
+  //
+  // Управление жизненным циклом тренировки (старт/пауза/финиш) требует
+  // именно `canEdit`: разблокировка финиша (см. ниже) даёт править
+  // выстрелы задним числом, но не "разворачивает" уже завершённую
+  // тренировку обратно в идущую.
   bool get canEdit =>
       store.workMode == WorkMode.athlete &&
       isOwnSession &&
       session.status != SessionStatus.finished;
+
+  /// Правка САМИХ ВЫСТРЕЛОВ (добавить/подвинуть/удалить) — шире, чем
+  /// `canEdit`: после явной разблокировки (`unlockForEditingFinished`)
+  /// разрешена и на уже завершённой тренировке (решение пользователя —
+  /// поправить задним числом опечатку в результате финишированной
+  /// тренировки).
+  bool get canEditShots =>
+      store.workMode == WorkMode.athlete &&
+      isOwnSession &&
+      (session.status != SessionStatus.finished || unlockedForEdit);
+
+  /// Тренировка завершена и правка выстрелов пока не разблокирована —
+  /// экран показывает подсказку "разблокировать", а не сами контролы.
+  bool get isFinishedAndLocked =>
+      session.status == SessionStatus.finished && !unlockedForEdit;
+
+  bool unlockedForEdit = false;
+  TrainingSession? _preUnlockSnapshot;
+  bool _dirtySinceUnlock = false;
+
+  /// Есть ли изменения с момента разблокировки завершённой тренировки —
+  /// решает, спрашивать ли при выходе "Хотите применить изменения?".
+  bool get hasUnsavedFinishedEdits => unlockedForEdit && _dirtySinceUnlock;
+
+  /// Разблокировать правку у уже завершённой тренировки (кнопка на
+  /// экране мишени). Запоминает снимок "как было", чтобы при выходе
+  /// можно было откатить, если пользователь передумает.
+  void unlockForEditingFinished() {
+    if (session.status != SessionStatus.finished || unlockedForEdit) return;
+    unlockedForEdit = true;
+    _preUnlockSnapshot = session;
+    _dirtySinceUnlock = false;
+    notifyListeners();
+  }
+
+  /// Завершение сеанса правки уже завершённой тренировки — вызывается
+  /// после диалога подтверждения при выходе с экрана.
+  /// `keep: true` — оставить изменения (они уже сохранены по ходу
+  /// правки); `keep: false` — откатить к состоянию на момент
+  /// разблокировки.
+  void resolveFinishedEditExit({required bool keep}) {
+    if (!keep && _preUnlockSnapshot != null) {
+      session = _preUnlockSnapshot!;
+      store.upsertSession(session);
+    }
+    unlockedForEdit = false;
+    _preUnlockSnapshot = null;
+    _dirtySinceUnlock = false;
+    notifyListeners();
+  }
 
   /// Полоса управления тренировкой (старт/пауза/финиш + таймеры) —
   /// показывается только в режиме спортсмена, даже уже, чем canEdit
@@ -113,7 +168,7 @@ class TargetViewModel extends ChangeNotifier {
 
   /// Можно ли прямо сейчас записать новый выстрел.
   bool get canAddShotNow {
-    if (!canEdit) return false;
+    if (!canEditShots) return false;
     final pausedAt = currentPauseStartedAt;
     if (pausedAt == null) return true;
     return DateTime.now().difference(pausedAt) <= pauseAddGrace;
@@ -358,7 +413,7 @@ class TargetViewModel extends ChangeNotifier {
   /// Начало правки существующего выстрела (жест "удержание" в зоне
   /// перемещения, либо кнопка "Переместить" по макетам — A.6).
   void beginMoveSelected() {
-    if (!canEdit) return;
+    if (!canEditShots) return;
     final shot = selectedShot;
     if (shot == null) return;
     _preEditSnapshot = shot;
@@ -374,7 +429,7 @@ class TargetViewModel extends ChangeNotifier {
   /// экрана). Стартует в центре, дальше правится перетаскиванием/
   /// степперами/компасом.
   void beginAddNew() {
-    if (!canEdit) return;
+    if (!canEditShots) return;
     // Раньше здесь был жёсткий запрет на паузе (B.1). Теперь запрет мягче
     // и живёт в canAddShotNow: минуту после нажатия "Пауза" выстрел ещё
     // можно дописать (решение пользователя), дальше — нельзя, и интерфейс
@@ -515,7 +570,7 @@ class TargetViewModel extends ChangeNotifier {
   // ---- B.5 — корзина ----
 
   void deleteSelected() {
-    if (!canEdit) return;
+    if (!canEditShots) return;
     final shot = selectedShot;
     if (shot == null) return;
     session = SessionLogic.deleteShot(session, shot.id);
@@ -532,7 +587,7 @@ class TargetViewModel extends ChangeNotifier {
   /// из-за чего раньше убрали кнопку "удалить текущий" из шапки списка
   /// (била не по той строке, на которую смотрел палец).
   void deleteShot(String shotId) {
-    if (!canEdit) return;
+    if (!canEditShots) return;
     final keepId = selectedShot?.id;
     session = SessionLogic.deleteShot(session, shotId);
     if (isEditing && _preEditSnapshot?.id == shotId) cancelEditing();
@@ -546,13 +601,13 @@ class TargetViewModel extends ChangeNotifier {
   }
 
   void restoreFromTrash(String shotId) {
-    if (!canEdit) return;
+    if (!canEditShots) return;
     session = SessionLogic.restoreShot(session, shotId, exercise);
     _persist();
   }
 
   void clearTrash() {
-    if (!canEdit) return;
+    if (!canEditShots) return;
     session = SessionLogic.clearTrash(session);
     _persist();
   }
@@ -597,6 +652,7 @@ class TargetViewModel extends ChangeNotifier {
 
   void _persist() {
     _refreshTimersNow();
+    if (unlockedForEdit) _dirtySinceUnlock = true;
     store.upsertSession(session);
     notifyListeners();
   }

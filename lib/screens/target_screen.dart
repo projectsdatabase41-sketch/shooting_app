@@ -121,10 +121,18 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
       //
       // Раньше «назад» сворачивал приложение целиком: жест уходил
       // системе, потому что перехватывать его было некому.
-      canPop: safeCurrent == workspace.targetIndex,
+      //
+      // Если тренировка была завершена, но пользователь её разблокировал
+      // и что-то поправил, выход дополнительно спрашивает — применить
+      // правки или вернуть как было (решение пользователя, часть 12).
+      canPop: safeCurrent == workspace.targetIndex && !vm.hasUnsavedFinishedEdits,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-        _goTo(workspace.targetIndex);
+        if (safeCurrent != workspace.targetIndex) {
+          _goTo(workspace.targetIndex);
+          return;
+        }
+        _handleFinishedEditExit(context, vm);
       },
       child: Scaffold(
         appBar: AppBar(
@@ -140,7 +148,13 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
                 tooltip: 'Сбросить зум',
                 onPressed: vm.resetZoom,
               ),
-            if (vm.canEdit)
+            if (vm.isFinishedAndLocked)
+              IconButton(
+                icon: const Icon(Icons.lock_outline),
+                tooltip: 'Разблокировать правку завершённой тренировки',
+                onPressed: () => _confirmUnlockFinished(context, vm),
+              ),
+            if (vm.canEditShots)
               IconButton(
                 icon: Icon(vm.isEditing ? Icons.remove_red_eye_outlined : Icons.edit_outlined),
                 tooltip: vm.isEditing ? 'Просмотр' : 'Правка',
@@ -222,6 +236,55 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
     } else {
       vm.beginAddNew();
     }
+  }
+
+  Future<void> _confirmUnlockFinished(BuildContext context, TargetViewModel vm) async {
+    final sure = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Разблокировать правку?'),
+        content: const Text(
+          'Тренировка уже завершена. Можно поправить выстрелы задним '
+          'числом — при выходе с экрана будет ещё раз спрошено, '
+          'применить изменения или вернуть как было.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Отмена')),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Разблокировать')),
+        ],
+      ),
+    );
+    if (sure == true) vm.unlockForEditingFinished();
+  }
+
+  /// Выход с экрана мишени, когда завершённая тренировка была
+  /// разблокирована и в ней что-то поменяли (часть 12 списка).
+  Future<void> _handleFinishedEditExit(BuildContext context, TargetViewModel vm) async {
+    final keep = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Хотите применить изменения?'),
+        content: const Text(
+          'Вы поправили уже завершённую тренировку. Применить изменения '
+          'или вернуть её к тому виду, что был до разблокировки?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Вернуть как было'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Применить'),
+          ),
+        ],
+      ),
+    );
+    // null — диалог закрыли, не выбрав ничего (тап мимо/системное
+    // "назад" внутри диалога): остаёмся на экране, ничего не решаем.
+    if (keep == null) return;
+    vm.resolveFinishedEditExit(keep: keep);
+    if (context.mounted) Navigator.of(context).pop();
   }
 
   /// Обзор страниц — как список запущенных приложений в Android.
@@ -717,7 +780,7 @@ class _ShotActionBarState extends State<_ShotActionBar> {
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<TargetViewModel>();
-    if (!vm.canEdit) return const SizedBox.shrink();
+    if (!vm.canEditShots) return const SizedBox.shrink();
 
     final hasShots = vm.session.shots.isNotEmpty;
 
