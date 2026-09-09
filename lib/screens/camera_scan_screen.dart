@@ -101,6 +101,14 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
   double _gravZ = 0;
   DateTime _lastTiltUiUpdate = DateTime.fromMillisecondsSinceEpoch(0);
 
+  /// Пришло ли хоть одно показание датчика. Пока false, точка индикатора
+  /// НЕ должна выглядеть "ровно" (координаты по умолчанию (0,0) иначе
+  /// неотличимы от настоящего уровня) — без этого разбитый/недоступный
+  /// датчик и телефон, который прямо сейчас держат ровно, выглядели бы
+  /// одинаково, и жалобу "акселерометр не работает" было бы невозможно
+  /// отличить от "он просто держал телефон ровно".
+  bool _tiltAvailable = false;
+
   @override
   void initState() {
     super.initState();
@@ -171,6 +179,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
   }
 
   void _onAccel(AccelerometerEvent e) {
+    _tiltAvailable = true;
     _gravX += (e.x - _gravX) * 0.2;
     _gravZ += (e.z - _gravZ) * 0.2;
 
@@ -440,18 +449,35 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
                     // из галереи: контраст читается лучше, чем на
                     // цветном превью, а снимает и анализирует
                     // приложение всё равно в градациях серого.
-                    ColorFiltered(
-                      colorFilter: const ColorFilter.matrix(<double>[
-                        0.2126, 0.7152, 0.0722, 0, 0,
-                        0.2126, 0.7152, 0.0722, 0, 0,
-                        0.2126, 0.7152, 0.0722, 0, 0,
-                        0, 0, 0, 1, 0,
-                      ]),
-                      child: CameraPreview(controller),
+                    //
+                    // Center + AspectRatio — иначе StackFit.expand задаёт
+                    // ЖЁСТКИЕ constraints на весь экран, AspectRatio их
+                    // игнорирует при жёстких ограничениях (растягивая
+                    // картинку под экран целиком), а Center отдаёт
+                    // ребёнку СВОБОДНЫЕ ограничения того же максимального
+                    // размера — единственный способ сохранить реальное
+                    // соотношение сторон камеры внутри Stack.expand
+                    // (жалоба пользователя: превью растянуто по вертикали).
+                    Center(
+                      child: AspectRatio(
+                        aspectRatio: controller.value.aspectRatio,
+                        child: ColorFiltered(
+                          colorFilter: const ColorFilter.matrix(<double>[
+                            0.2126, 0.7152, 0.0722, 0, 0,
+                            0.2126, 0.7152, 0.0722, 0, 0,
+                            0.2126, 0.7152, 0.0722, 0, 0,
+                            0, 0, 0, 1, 0,
+                          ]),
+                          child: CameraPreview(controller),
+                        ),
+                      ),
                     ),
-                    // Квадратная рамка — итоговый снимок обрезается по
-                    // центру до 1:1 (см. _cropToSquare), рамка заранее
-                    // показывает, что попадёт в кадр.
+                    // Круглая рамка — мишень круглая, целиться в круг
+                    // удобнее, чем в квадрат (решение пользователя).
+                    // Итоговый снимок по-прежнему обрезается до квадрата
+                    // 1:1 (см. _cropToSquare) — меняется только сама
+                    // подсказка на экране, не логика обрезки: круг
+                    // вписан в тот же квадрат кадрирования, что и раньше.
                     Center(
                       child: LayoutBuilder(
                         builder: (context, constraints) {
@@ -460,6 +486,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
                             width: side,
                             height: side,
                             decoration: BoxDecoration(
+                              shape: BoxShape.circle,
                               border: Border.all(color: Colors.white54, width: 1.5),
                             ),
                           );
@@ -501,7 +528,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
                       alignment: Alignment.bottomLeft,
                       child: Padding(
                         padding: const EdgeInsets.only(left: 16, bottom: 24),
-                        child: _TiltLevelIndicator(gravX: _gravX, gravZ: _gravZ),
+                        child: _TiltLevelIndicator(gravX: _gravX, gravZ: _gravZ, available: _tiltAvailable),
                       ),
                     ),
                     Align(
@@ -529,7 +556,13 @@ class _TiltLevelIndicator extends StatelessWidget {
   final double gravX;
   final double gravZ;
 
-  const _TiltLevelIndicator({required this.gravX, required this.gravZ});
+  /// Пришло ли хоть одно показание акселерометра. Пока нет — точка
+  /// СЕРАЯ и стоит в центре не потому, что телефон ровно, а потому что
+  /// данных ещё/вообще нет: иначе "не работает" и "и так уже ровно"
+  /// неотличимы на глаз (см. `_CameraScanScreenState._tiltAvailable`).
+  final bool available;
+
+  const _TiltLevelIndicator({required this.gravX, required this.gravZ, required this.available});
 
   static const double _size = 72;
   static const double _dotSize = 16;
@@ -541,38 +574,57 @@ class _TiltLevelIndicator extends StatelessWidget {
     final dx = (gravX / 9.81).clamp(-1.0, 1.0) * _maxOffset;
     final dy = (gravZ / 9.81).clamp(-1.0, 1.0) * _maxOffset;
     final level = math.sqrt(dx * dx + dy * dy) <= _maxOffset * _levelToleranceFraction;
-    return Container(
-      width: _size,
-      height: _size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: Colors.black.withValues(alpha: 0.35),
-        border: Border.all(color: Colors.white54, width: 1.5),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Container(
-            width: _size * 0.35,
-            height: _size * 0.35,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white30, width: 1),
-            ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: _size,
+          height: _size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.black.withValues(alpha: 0.35),
+            border: Border.all(color: Colors.white54, width: 1.5),
           ),
-          Transform.translate(
-            offset: Offset(dx, dy),
-            child: Container(
-              width: _dotSize,
-              height: _dotSize,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: level ? Colors.greenAccent : Colors.amber,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: _size * 0.35,
+                height: _size * 0.35,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white30, width: 1),
+                ),
               ),
+              Transform.translate(
+                offset: available ? Offset(dx, dy) : Offset.zero,
+                child: Container(
+                  width: _dotSize,
+                  height: _dotSize,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: !available ? Colors.grey : (level ? Colors.greenAccent : Colors.amber),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (!available) ...[
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.55),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Text(
+              'Датчик недоступен',
+              style: TextStyle(color: Colors.white70, fontSize: 10),
             ),
           ),
         ],
-      ),
+      ],
     );
   }
 }

@@ -127,6 +127,25 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
   // Кандидаты текущего фото — тоже в координатах исходного фото.
   List<Offset> _candidates = [];
 
+  /// Когда была вручную добавлена последняя точка (режим "+") — нужно,
+  /// чтобы отличить настоящий тап от начала щипка двумя пальцами: если
+  /// второй палец касается экрана в течение этого окна после того, как
+  /// первый успел зарегистрироваться тапом и создать точку, это не
+  /// добавление, а начало масштабирования, и точку нужно откатить
+  /// (пункт 5 списка правок).
+  DateTime? _lastManualAddAt;
+  static const _pinchCancelWindow = Duration(milliseconds: 500);
+
+  void _cancelAccidentalTap() {
+    final at = _lastManualAddAt;
+    if (at == null || _candidates.isEmpty) return;
+    if (DateTime.now().difference(at) > _pinchCancelWindow) return;
+    setState(() {
+      _candidates.removeLast();
+      _lastManualAddAt = null;
+    });
+  }
+
   // Накопленный список подтверждённых пробоин (across фото), в мм.
   final List<PixelPoint> _confirmedMm = [];
 
@@ -472,7 +491,9 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
                           onCandidateAdded: (p) => setState(() {
                             _candidates.add(p);
                             _addMode = false;
+                            _lastManualAddAt = DateTime.now();
                           }),
+                          onPinchStart: _cancelAccidentalTap,
                         );
                       },
                     ),
@@ -595,6 +616,13 @@ class _ReviewOverlay extends StatelessWidget {
   final void Function(int index) onCandidateRemoved;
   final void Function(Offset pos) onCandidateAdded;
 
+  /// Начался жест с ДВУМЯ и более пальцами (масштабирование) — пункт 5
+  /// списка правок: если секунду назад в режиме добавления палец успел
+  /// зарегистрироваться как одиночный тап и создать пробоину, а это на
+  /// самом деле было начало щипка (второй палец просто чуть опоздал),
+  /// вызывающий код откатывает ту пробоину.
+  final VoidCallback onPinchStart;
+
   const _ReviewOverlay({
     required this.bytes,
     required this.displayScale,
@@ -609,6 +637,7 @@ class _ReviewOverlay extends StatelessWidget {
     required this.onCandidateMoved,
     required this.onCandidateRemoved,
     required this.onCandidateAdded,
+    required this.onPinchStart,
   });
 
   static const double _handleHitRadius = 24;
@@ -629,7 +658,19 @@ class _ReviewOverlay extends StatelessWidget {
     final perp = Offset(-math.sin(angle), math.cos(angle));
     final handleB = displayCenter + perp * displayRy;
 
-    return Stack(
+    // panEnabled: false — одним пальцем управляют калибровка/маркеры,
+    // как и раньше; InteractiveViewer перехватывает только жест минимум
+    // с ДВУМЯ пальцами (масштаб), без обычного панорамирования одним
+    // пальцем поверх наших собственных жестов (пункт 5 списка правок).
+    return InteractiveViewer(
+      panEnabled: false,
+      scaleEnabled: true,
+      minScale: 1,
+      maxScale: 6,
+      onInteractionStart: (details) {
+        if (details.pointerCount >= 2) onPinchStart();
+      },
+      child: Stack(
       fit: StackFit.expand,
       children: [
         GestureDetector(
@@ -707,6 +748,7 @@ class _ReviewOverlay extends StatelessWidget {
             );
           }),
       ],
+      ),
     );
   }
 }
