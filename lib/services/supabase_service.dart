@@ -109,6 +109,45 @@ class SupabaseSyncService {
     }
   }
 
+  Future<void> _deleteWhere(String token, String table, String column, String value) async {
+    final client = clientFactory();
+    try {
+      final res = await client
+          .delete(Uri.parse('${auth.url}/rest/v1/$table?$column=eq.$value'), headers: _headers(token))
+          .timeout(const Duration(seconds: 30));
+      if (res.statusCode >= 400) {
+        throw SupabaseSyncException('$table: ${_errorMessage(res.body, res.statusCode)}');
+      }
+    } finally {
+      client.close();
+    }
+  }
+
+  /// Удаляет в облаке тренировки, помеченные локально на удаление
+  /// (`AppDataStore.pendingDeletionIds`, пункт 6 списка правок), и
+  /// только ПОСЛЕ успеха стирает тромбстоун локально
+  /// (`confirmSessionDeleted`) — если сеть оборвётся посередине, строка
+  /// остаётся помеченной и попытка повторится на следующей
+  /// синхронизации, вместо того чтобы тренировка "потерялась" с
+  /// телефона, а в облаке осталась висеть.
+  ///
+  /// Порядок — от дочерних таблиц к родительской, тем же путём, что и
+  /// связи в push (shots.exercise_id / comments.package_id — общий id
+  /// с training_packages, см. _shotJson/_commentJson).
+  Future<int> pushDeletions(AppDataStore store) async {
+    final token = await _requireToken();
+    var count = 0;
+    for (final id in store.pendingDeletionIds()) {
+      await _deleteWhere(token, 'comments', 'package_id', id);
+      await _deleteWhere(token, 'shots', 'exercise_id', id);
+      await _deleteWhere(token, 'exercises', 'id', id);
+      await _deleteWhere(token, 'training_packages', 'id', id);
+      store.confirmSessionDeleted(id);
+      count++;
+    }
+    return count;
+  }
+
   Future<List<Map<String, dynamic>>> _select(String token, String path) async {
     final client = clientFactory();
     try {

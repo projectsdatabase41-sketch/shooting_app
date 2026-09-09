@@ -72,7 +72,11 @@ class LocalDbService {
         'counts': 'INTEGER NOT NULL DEFAULT 1',
         'updated_at': 'TEXT',
       },
-      'training_sessions': {'extra': 'TEXT', 'updated_at': 'TEXT'},
+      'training_sessions': {
+        'extra': 'TEXT',
+        'updated_at': 'TEXT',
+        'pending_delete': 'INTEGER NOT NULL DEFAULT 0',
+      },
       'project_settings': {
         'auth_user_id': 'TEXT',
         'auth_access_token': 'TEXT',
@@ -232,7 +236,8 @@ CREATE TABLE IF NOT EXISTS training_sessions (
   -- стабильность прицеливания, темп, настройки прибора. JSON-строка.
   -- В интерфейсе не показывается — это материал для ассистента.
   extra             TEXT,
-  updated_at        TEXT
+  updated_at        TEXT,
+  pending_delete    INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS shots (

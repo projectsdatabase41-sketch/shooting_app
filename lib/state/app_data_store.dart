@@ -154,14 +154,38 @@ class AppDataStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Полностью удаляет тренировку — вместе с выстрелами и заметками.
+  /// Удаляет тренировку — вместе с выстрелами и заметками.
   ///
-  /// Здесь удаление именно физическое, как и просил пользователь:
-  /// «вообще удалить и из базы». Выстрелы и комментарии уезжают по
-  /// внешнему ключу с `ON DELETE CASCADE`, но полагаться на это нельзя:
-  /// в sqlite контроль внешних ключей по умолчанию ВЫКЛЮЧЕН, и без
-  /// явного удаления в базе остались бы висячие строки.
+  /// Пропадает из приложения СРАЗУ в обоих случаях, но физически стирается
+  /// по-разному (пункт 6 списка правок):
+  /// - никогда не синхронизированная — как и раньше, стирается на месте:
+  ///   в облаке её всё равно никогда не было, чистить нечего;
+  /// - уже уехавшая в облако — помечается `pending_delete`, а не
+  ///   стирается: если стереть строку сразу, ближайший `pull()` увидит
+  ///   в облаке "чужую" (для себя ещё не удалённую) тренировку и
+  ///   привезёт её обратно. Настоящее стирание — `confirmSessionDeleted`,
+  ///   вызывается синхронизацией после того, как облачная копия
+  ///   подтверждённо удалена.
   void deleteSession(String id) {
+    final session = sessions.where((s) => s.id == id).firstOrNull;
+    if (session != null && session.syncedToCloud) {
+      db.db.execute('UPDATE training_sessions SET pending_delete = 1 WHERE id = ?', [id]);
+    } else {
+      confirmSessionDeleted(id);
+    }
+    sessions = [for (final s in sessions) if (s.id != id) s];
+    notifyListeners();
+  }
+
+  /// Стирает тромбстоун тренировки физически — вызывается сразу из
+  /// `deleteSession` (никогда не синхронизированная тренировка) или из
+  /// `SupabaseSyncService` после подтверждённого удаления облачной копии.
+  ///
+  /// Выстрелы и комментарии уезжают по внешнему ключу с `ON DELETE
+  /// CASCADE`, но полагаться на это нельзя: в sqlite контроль внешних
+  /// ключей по умолчанию ВЫКЛЮЧЕН, и без явного удаления в базе остались
+  /// бы висячие строки.
+  void confirmSessionDeleted(String id) {
     db.db.execute('BEGIN');
     try {
       db.db.execute('DELETE FROM comments WHERE session_id = ?', [id]);
@@ -172,8 +196,14 @@ class AppDataStore extends ChangeNotifier {
       db.db.execute('ROLLBACK');
       rethrow;
     }
-    sessions = [for (final s in sessions) if (s.id != id) s];
-    notifyListeners();
+  }
+
+  /// Id тренировок, помеченных на удаление, но ещё не удалённых
+  /// физически — список для push: их нужно удалить в облаке, а после
+  /// подтверждения — стереть локально через `confirmSessionDeleted`.
+  List<String> pendingDeletionIds() {
+    final rows = db.db.select('SELECT id FROM training_sessions WHERE pending_delete = 1');
+    return [for (final r in rows) r['id'] as String];
   }
 
   Exercise createExercise({
@@ -217,7 +247,13 @@ class AppDataStore extends ChangeNotifier {
   }
 
   void _loadSessions() {
-    final sessionRows = db.db.select('SELECT * FROM training_sessions ORDER BY started_at DESC');
+    // pending_delete = 0 — тренировки, помеченные на удаление, не
+    // должны быть видны нигде в приложении, даже до того, как
+    // синхронизация успеет подтвердить их удаление в облаке (пункт 6
+    // списка правок). Сама строка при этом остаётся в базе — её видит
+    // только sync через pendingDeletionIds().
+    final sessionRows =
+        db.db.select('SELECT * FROM training_sessions WHERE pending_delete = 0 ORDER BY started_at DESC');
     sessions = sessionRows.map((r) {
       final id = r['id'] as String;
       final shotRows = db.db.select(
@@ -482,6 +518,7 @@ class AppDataStore extends ChangeNotifier {
     notifyListeners();
     try {
       final sync = SupabaseSyncService(auth);
+      await sync.pushDeletions(this);
       await sync.push(this);
       await sync.pull(this);
     } catch (e) {

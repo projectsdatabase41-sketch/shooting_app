@@ -200,9 +200,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final store = context.read<AppDataStore>();
     final sync = SupabaseSyncService(SupabaseAuthService(store.db));
     try {
+      final deleted = await sync.pushDeletions(store);
       final pushed = await sync.push(store);
       final result = await sync.pull(store);
       final parts = <String>[];
+      if (deleted > 0) parts.add('удалено: $deleted');
       if (pushed > 0) parts.add('отправлено: $pushed');
       if (result.pulledSessions > 0) parts.add('получено тренировок: ${result.pulledSessions}');
       if (result.pulledExercises > 0) parts.add('упражнений: ${result.pulledExercises}');

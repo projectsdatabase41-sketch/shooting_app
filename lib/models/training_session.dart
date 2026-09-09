@@ -64,6 +64,13 @@ class TrainingSession {
   final List<Shot> trash; // удалённые в текущей тренировке (B.5)
   final bool syncedToCloud;
 
+  /// Помечена на удаление, но ещё не удалена физически (пункт 6 списка
+  /// правок): тренировка, уже отправленная в облако, пропадает из
+  /// `AppDataStore.sessions` сразу, а строка живёт до тех пор, пока
+  /// синхронизация не подтвердит, что облачная копия удалена — иначе
+  /// следующий `pull()` привёз бы её обратно.
+  final bool pendingDelete;
+
   /// Показатели тренировки, для которых нет своих колонок.
   ///
   /// Из отчёта SCATT сюда уезжают средняя скорость и раздельно по
@@ -85,6 +92,7 @@ class TrainingSession {
     this.shots = const [],
     this.trash = const [],
     this.syncedToCloud = false,
+    this.pendingDelete = false,
     this.extra,
   });
 
@@ -99,6 +107,7 @@ class TrainingSession {
     List<Shot>? shots,
     List<Shot>? trash,
     bool? syncedToCloud,
+    bool? pendingDelete,
     Map<String, dynamic>? extra,
   }) {
     return TrainingSession(
@@ -112,6 +121,7 @@ class TrainingSession {
       shots: shots ?? this.shots,
       trash: trash ?? this.trash,
       syncedToCloud: syncedToCloud ?? this.syncedToCloud,
+      pendingDelete: pendingDelete ?? this.pendingDelete,
       extra: extra ?? this.extra,
     );
   }
@@ -142,6 +152,7 @@ class TrainingSession {
           .toList(),
       syncedToCloud: json['synced_to_cloud'] == true ||
           json['synced_to_cloud'] == 1,
+      pendingDelete: json['pending_delete'] == true || json['pending_delete'] == 1,
       extra: extraFromJson(json['extra']),
     );
   }
@@ -157,6 +168,7 @@ class TrainingSession {
         'shots': shots.map((e) => e.toJson()).toList(),
         'trash': trash.map((e) => e.toJson()).toList(),
         'synced_to_cloud': syncedToCloud,
+        'pending_delete': pendingDelete,
         'extra': extra,
       };
 
