@@ -81,6 +81,26 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
   static const Duration _webTick = Duration(milliseconds: 40);
   static const double _shakeThreshold = 0.6; // м/с², стандартное отклонение модуля ускорения
 
+  // ---- Индикатор "держите камеру перпендикулярно мишени" (пункт 5) ----
+  //
+  // Съёмка под углом — главная причина, по которой круглая мишень на
+  // фото становится эллипсом и калибровочный круг потом не совпадает с
+  // её настоящей формой (жалоба пользователя). Раз это заранее видно по
+  // тому, как наклонён телефон, дешевле подсказать на месте съёмки, чем
+  // потом бороться с перспективой на готовом фото.
+  //
+  // Ось Y акселерометра (стандарт Android/iOS) смотрит к верху экрана, Z —
+  // из экрана наружу. У телефона, что держат строго вертикально перед
+  // собой (камера смотрит горизонтально в мишень), сила тяжести целиком
+  // ложится на Y (≈ +9.81), а X/Z ≈ 0. Отклонение по X — крен (кадр
+  // заваливается набок), по Z — тангаж (камера смотрит вверх/вниз, из-за
+  // чего круг мишени и превращается в эллипс). Сглаживаем экспоненциально
+  // (коэффициент 0.2) — иначе точка индикатора дрожит на каждом чихе
+  // датчика.
+  double _gravX = 0;
+  double _gravZ = 0;
+  DateTime _lastTiltUiUpdate = DateTime.fromMillisecondsSinceEpoch(0);
+
   @override
   void initState() {
     super.initState();
@@ -106,6 +126,10 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
         return;
       }
       setState(() => _controller = controller);
+      // Индикатор уровня нужен на ОБЕИХ платформах — в отличие от
+      // самого механизма автоспуска (см. класс), у которого веб и
+      // Android идут разными путями.
+      _startTiltSensor();
       if (kIsWeb) {
         _startWebCountdown();
       } else {
@@ -128,27 +152,51 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
     super.dispose();
   }
 
-  // ==================== Веб: таймер + акселерометр ====================
+  // ==================== Индикатор уровня (обе платформы) ====================
 
-  void _startWebCountdown() {
+  void _startTiltSensor() {
     try {
       _accelSub = accelerometerEventStream().listen(_onAccel, onError: (_) {});
     } catch (_) {
-      // Датчика нет или доступ не дали — отсчёт просто идёт без проверки.
+      // Датчика нет или доступ не дали — индикатор остаётся в нейтральном
+      // положении (см. начальные значения _gravX/_gravZ), съёмке это не
+      // мешает, просто подсказки не будет.
     }
+  }
+
+  // ==================== Веб: таймер ====================
+
+  void _startWebCountdown() {
     _countdownTicker = Timer.periodic(_webTick, (_) => _onWebTick());
   }
 
   void _onAccel(AccelerometerEvent e) {
+    _gravX += (e.x - _gravX) * 0.2;
+    _gravZ += (e.z - _gravZ) * 0.2;
+
     final magnitude = math.sqrt(e.x * e.x + e.y * e.y + e.z * e.z);
     _recentAccelMagnitudes.add(magnitude);
     if (_recentAccelMagnitudes.length > 12) _recentAccelMagnitudes.removeAt(0);
-    if (_recentAccelMagnitudes.length < 4) return;
-    final mean = _recentAccelMagnitudes.reduce((a, b) => a + b) / _recentAccelMagnitudes.length;
-    final variance = _recentAccelMagnitudes.map((m) => (m - mean) * (m - mean)).reduce((a, b) => a + b) /
-        _recentAccelMagnitudes.length;
-    final stable = math.sqrt(variance) < _shakeThreshold;
-    if (stable != _webStable && mounted) setState(() => _webStable = stable);
+    var stableChanged = false;
+    if (_recentAccelMagnitudes.length >= 4) {
+      final mean = _recentAccelMagnitudes.reduce((a, b) => a + b) / _recentAccelMagnitudes.length;
+      final variance = _recentAccelMagnitudes.map((m) => (m - mean) * (m - mean)).reduce((a, b) => a + b) /
+          _recentAccelMagnitudes.length;
+      final stable = math.sqrt(variance) < _shakeThreshold;
+      if (stable != _webStable) {
+        _webStable = stable;
+        stableChanged = true;
+      }
+    }
+
+    // Индикатор уровня перерисовывается по своему таймингу (~15 кадров в
+    // секунду) — датчик шлёт события гораздо чаще, и вызывать setState на
+    // каждое было бы лишней нагрузкой ради неразличимой на глаз разницы.
+    final now = DateTime.now();
+    if (stableChanged || now.difference(_lastTiltUiUpdate) >= const Duration(milliseconds: 66)) {
+      _lastTiltUiUpdate = now;
+      if (mounted) setState(() {});
+    }
   }
 
   void _onWebTick() {
@@ -322,6 +370,9 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
       _capturing = false;
       _status = _Status.searchingTarget;
     });
+    // _capture() останавливал акселерометр перед снимком (см. выше) —
+    // индикатор уровня без этого остался бы замороженным навсегда.
+    _startTiltSensor();
     if (kIsWeb) {
       _webProgress = 0;
       _startWebCountdown();
@@ -447,6 +498,13 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
                         ),
                       ),
                     Align(
+                      alignment: Alignment.bottomLeft,
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 16, bottom: 24),
+                        child: _TiltLevelIndicator(gravX: _gravX, gravZ: _gravZ),
+                      ),
+                    ),
+                    Align(
                       alignment: Alignment.bottomCenter,
                       child: Padding(
                         padding: const EdgeInsets.only(bottom: 24),
@@ -458,6 +516,63 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
                     ),
                   ],
                 ),
+    );
+  }
+}
+
+/// Пузырьковый уровень: точка смещается от центра пропорционально
+/// наклону телефона, зелёная — когда почти в центре. Ровно то самое
+/// "визуальное подтверждение перпендикулярности", о котором просил
+/// пользователь (пункт 5) — снимок под углом иначе превращает круглую
+/// мишень в эллипс уже на фото, когда исправлять поздно.
+class _TiltLevelIndicator extends StatelessWidget {
+  final double gravX;
+  final double gravZ;
+
+  const _TiltLevelIndicator({required this.gravX, required this.gravZ});
+
+  static const double _size = 72;
+  static const double _dotSize = 16;
+  static const double _maxOffset = (_size - _dotSize) / 2;
+  static const double _levelToleranceFraction = 0.25;
+
+  @override
+  Widget build(BuildContext context) {
+    final dx = (gravX / 9.81).clamp(-1.0, 1.0) * _maxOffset;
+    final dy = (gravZ / 9.81).clamp(-1.0, 1.0) * _maxOffset;
+    final level = math.sqrt(dx * dx + dy * dy) <= _maxOffset * _levelToleranceFraction;
+    return Container(
+      width: _size,
+      height: _size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.black.withValues(alpha: 0.35),
+        border: Border.all(color: Colors.white54, width: 1.5),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: _size * 0.35,
+            height: _size * 0.35,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white30, width: 1),
+            ),
+          ),
+          Transform.translate(
+            offset: Offset(dx, dy),
+            child: Container(
+              width: _dotSize,
+              height: _dotSize,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: level ? Colors.greenAccent : Colors.amber,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
