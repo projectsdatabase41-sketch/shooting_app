@@ -755,12 +755,10 @@ class _ShotActionBarState extends State<_ShotActionBar> {
                 icon: Icons.edit_location_alt_outlined,
                 label: 'Править',
                 baseColor: Theme.of(context).colorScheme.secondary,
-                onTap: hasShots
-                    ? () {
-                        vm.selectIndex(vm.session.shots.length - 1);
-                        vm.beginMoveSelected();
-                      }
-                    : null,
+                // Правит ВЫБРАННЫЙ выстрел (см. selectedShot) — не всегда
+                // последний: выбор мог прийти со свайпа по мишени или из
+                // списка выстрелов (shot_list_sheet).
+                onTap: hasShots ? vm.beginMoveSelected : null,
               ),
               const SizedBox(width: 16),
               Raised3DButton(
