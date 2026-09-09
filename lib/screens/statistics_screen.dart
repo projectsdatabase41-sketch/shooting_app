@@ -38,6 +38,12 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   String? _exerciseId;
   String? _sessionId;
 
+  /// Фильтр по упражнению ВНУТРИ среза «Тренировка» — сужает список в
+  /// выпадающем меню «Тренировка», чтобы не листать все тренировки
+  /// подряд (решение пользователя). `null` — без фильтра, все
+  /// тренировки, как было раньше.
+  String? _sessionExerciseFilterId;
+
   /// `null` — все серии выбранной тренировки.
   int? _seriesNo;
 
@@ -141,16 +147,39 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         ];
 
       case _Scope.session:
-        final currentId = _currentSessionId(sessions);
-        final current = sessions.firstWhere((s) => s.id == currentId);
+        // Фильтр по упражнению — только чтобы сузить список ниже, не
+        // самостоятельный срез (решение пользователя, пункт 11).
+        final exerciseIds = sessions.map((s) => s.exerciseId).toSet();
+        final exercisesForFilter = store.exercises.where((e) => exerciseIds.contains(e.id)).toList();
+        final sessionsFiltered = _sessionsForExerciseFilter(sessions);
+        final currentId = _currentSessionId(sessionsFiltered);
+        final current = sessionsFiltered.firstWhere((s) => s.id == currentId);
         final seriesNos = current.shots.map((s) => s.seriesNo).toSet().toList()..sort();
         return [
+          if (exercisesForFilter.length > 1) ...[
+            DropdownButtonFormField<String?>(
+              initialValue: _sessionExerciseFilterId,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Упражнение (фильтр)'),
+              items: [
+                const DropdownMenuItem<String?>(value: null, child: Text('Все упражнения')),
+                for (final e in exercisesForFilter)
+                  DropdownMenuItem(value: e.id, child: Text(e.label, overflow: TextOverflow.ellipsis)),
+              ],
+              onChanged: (v) => setState(() {
+                _sessionExerciseFilterId = v;
+                _sessionId = null;
+                _seriesNo = null;
+              }),
+            ),
+            const SizedBox(height: 12),
+          ],
           DropdownButtonFormField<String>(
             initialValue: currentId,
             isExpanded: true,
             decoration: const InputDecoration(labelText: 'Тренировка'),
             items: [
-              for (final s in sessions)
+              for (final s in sessionsFiltered)
                 DropdownMenuItem(
                   value: s.id,
                   child: Text(
@@ -226,6 +255,19 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     return sessions.last.id;
   }
 
+  /// Тренировки, сузженные фильтром по упражнению (см.
+  /// `_sessionExerciseFilterId`) — используется и списком в выпадающем
+  /// меню, и подбором текущей тренировки, чтобы оба места видели один и
+  /// тот же список. Пустой результат фильтра откатывается к полному
+  /// списку — потерять все тренировки разом из-за фильтра хуже, чем
+  /// показать что-то не то.
+  List<TrainingSession> _sessionsForExerciseFilter(List<TrainingSession> sessions) {
+    final exId = _sessionExerciseFilterId;
+    if (exId == null) return sessions;
+    final filtered = sessions.where((s) => s.exerciseId == exId).toList();
+    return filtered.isEmpty ? sessions : filtered;
+  }
+
   /// Собирает выстрелы и подписи выбранного среза.
   _Selection _resolveSelection(AppDataStore store, List<TrainingSession> sessions) {
     switch (_scope) {
@@ -248,7 +290,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         );
 
       case _Scope.session:
-        final session = sessions.firstWhere((s) => s.id == _currentSessionId(sessions));
+        final sessionsFiltered = _sessionsForExerciseFilter(sessions);
+        final session = sessionsFiltered.firstWhere((s) => s.id == _currentSessionId(sessionsFiltered));
         final face = TargetFace.byCode(session.targetFaceCode);
         final all = session.countingShots;
         final shots = _seriesNo == null ? all : all.where((s) => s.seriesNo == _seriesNo).toList();

@@ -41,6 +41,32 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
       _error = null;
     });
     try {
+      // Проверяем токен ЯВНО, а не по тому, пуст ли список тренировок —
+      // отозванный токен и "у спортсмена правда нет тренировок" дают
+      // ОДИНАКОВЫЙ пустой ответ от get_shared_packages (решение
+      // пользователя, пункт 9: не должно выглядеть так, будто ничего не
+      // изменилось).
+      final status = await _access.checkTokenStatus();
+      if (status == ShareTokenStatus.revoked) {
+        _access.forget();
+        if (!mounted) return;
+        setState(() {
+          _exercises = [];
+          _sessions = [];
+        });
+        // build() провалится в _ConnectForm сразу после forget() —
+        // сообщение об отзыве иначе никто бы не увидел: показываем
+        // его снэкбаром ДО того, как экран переключится.
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+            'Доступ отозван спортсменом — токен больше не действует. '
+            'Подключение снято, локальных данных о нём не осталось.',
+          ),
+          duration: Duration(seconds: 6),
+        ));
+        return;
+      }
+
       final exercises = await _access.fetchExercises();
       final sessions = await _access.fetchSessions();
       sessions.sort((a, b) => '${b['started_at']}'.compareTo('${a['started_at']}'));

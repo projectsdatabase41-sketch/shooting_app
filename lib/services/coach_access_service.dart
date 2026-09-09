@@ -11,6 +11,28 @@ class CoachAccessException implements Exception {
   String toString() => message;
 }
 
+/// Итог проверки токена доступа (пункт 9 списка правок).
+///
+/// `get_shared_packages` и подобные функции на отозванный токен молча
+/// возвращают ПУСТОЙ список (200, а не ошибку) — с точки зрения тренера
+/// это неотличимо от "у спортсмена правда нет тренировок". Явная
+/// проверка через `validate_share_token` убирает эту двусмысленность:
+/// он возвращает null РОВНО тогда, когда токен неверный или отозван.
+enum ShareTokenStatus {
+  /// Токен действует — `validate_share_token` вернул не-null.
+  valid,
+
+  /// Токен точно неверный или отозван — `validate_share_token` вернул
+  /// null. Единственный статус, при котором стоит рвать соединение и
+  /// чистить локально сохранённые url/ключ/токен.
+  revoked,
+
+  /// Проверить не удалось (сеть, недоступный адрес, HTTP-ошибка) — НЕ
+  /// значит "отозван". Соединение трогать нельзя: разрыв по сетевому
+  /// сбою стёр бы годное подключение.
+  unknown,
+}
+
 /// Чтение дневника спортсмена тренером — по токену, в ЧУЖОЙ базе
 /// (раздел 14 ТЗ: у каждого спортсмена свой проект Supabase, у тренера
 /// свой). Поэтому это не продолжение `SupabaseAuthService` (та ведёт
@@ -91,6 +113,36 @@ class CoachAccessService {
       'p_series_no': seriesNo,
       'p_text': text,
     });
+  }
+
+  /// Явная проверка токена — вызывает уже существующую
+  /// `validate_share_token` НАПРЯМУЮ (не переопределяет её, просто
+  /// читает результат), а не выводит статус из того, пуст ли список
+  /// тренировок. См. `ShareTokenStatus`.
+  Future<ShareTokenStatus> checkTokenStatus() async {
+    if (!hasConnection) return ShareTokenStatus.unknown;
+    final client = clientFactory();
+    try {
+      final res = await client
+          .post(
+            Uri.parse('$url/rest/v1/rpc/validate_share_token'),
+            headers: {
+              'apikey': anonKey,
+              'Authorization': 'Bearer $anonKey',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({'p_token': token}),
+          )
+          .timeout(const Duration(seconds: 20));
+      if (res.statusCode >= 400) return ShareTokenStatus.unknown;
+      if (res.bodyBytes.isEmpty) return ShareTokenStatus.revoked;
+      final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+      return decoded == null ? ShareTokenStatus.revoked : ShareTokenStatus.valid;
+    } catch (_) {
+      return ShareTokenStatus.unknown;
+    } finally {
+      client.close();
+    }
   }
 
   Future<List<Map<String, dynamic>>> _rpc(String fn, Map<String, dynamic> args) async {
