@@ -359,6 +359,45 @@ create policy "owner training_notes" on training_notes
   for all using (is_project_owner()) with check (is_project_owner());
 
 -- ============================================================
+-- Память ассистента о прошлых разговорах (пункт 10 списка правок).
+--
+-- Сам чат живёт только в оперативной памяти приложения, пока оно
+-- запущено (AiChatViewModel) — закрыли приложение, разговор пропал.
+-- Ассистент поэтому НИЧЕГО не знает про то, что обсуждали позавчера,
+-- даже если спортсмен спросит "а что я делал в понедельник" или "что я
+-- тебе писал, когда разбирал ту серию". Эта таблица — не сырая
+-- переписка, а компактные СВОДКИ по кускам разговора: дата, о каких
+-- тренировках шла речь (может быть ни одной — общий разговор), и
+-- короткий текст сути. Пишется и читается приложением
+-- (`AiMemoryService`), не руками.
+create table if not exists ai_conversation_summaries (
+  id                    uuid primary key default gen_random_uuid(),
+  -- Временной диапазон обсуждения, а не момента записи: "что было
+  -- вчера" ищут по этим полям, а не по created_at (сводка может быть
+  -- дописана позже, чем был сам разговор).
+  period_start          timestamptz not null,
+  period_end            timestamptz not null,
+  summary               text not null,
+  -- Тренировки, о которых шла речь, если о каких-то шла — ссылка на
+  -- training_packages.id, не foreign key: сводка не должна стать
+  -- нечитаемой, если упомянутую тренировку потом удалят.
+  training_package_ids  uuid[] not null default '{}',
+  -- Необязательные точечные ссылки на конкретные выстрелы, если
+  -- разговор был про них — свободная структура, не обязательна.
+  shot_refs             jsonb,
+  extra                 jsonb,
+  created_at            timestamptz not null default now()
+);
+
+create index if not exists idx_ai_summaries_period on ai_conversation_summaries(period_start desc);
+
+alter table ai_conversation_summaries enable row level security;
+
+drop policy if exists "owner ai_conversation_summaries" on ai_conversation_summaries;
+create policy "owner ai_conversation_summaries" on ai_conversation_summaries
+  for all using (is_project_owner()) with check (is_project_owner());
+
+-- ============================================================
 -- Справочник мишеней ISSF — сидируется один раз, дальше мост сам
 -- находит строку по коду (get-or-create), сюда не пишет повторно.
 -- ============================================================

@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../logic/ai_context.dart';
+import '../models/ai_memory_summary.dart';
+import '../services/ai_memory_service.dart';
 import '../services/ai_service.dart';
 import '../services/knowledge_service.dart';
 
@@ -68,6 +72,12 @@ class AiChatViewModel extends ChangeNotifier {
   final AiService service;
   final KnowledgeService knowledge;
 
+  /// Сводки прошлых разговоров (пункт 10 списка правок) — читает и
+  /// пишет `ai_conversation_summaries` в личной базе спортсмена. Молчит
+  /// сама по себе, если облако не подключено — методы `recent`/`append`
+  /// в этом случае просто ничего не делают, а не бросают ошибку.
+  final AiMemoryService memory;
+
   /// Откуда брать контекст на момент отправки.
   ///
   /// Не поле-значение, а функция, и меняется при открытии экрана:
@@ -79,6 +89,7 @@ class AiChatViewModel extends ChangeNotifier {
   AiChatViewModel({
     required this.service,
     required this.knowledge,
+    required this.memory,
     required this.contextBuilder,
   });
 
@@ -93,6 +104,18 @@ class AiChatViewModel extends ChangeNotifier {
   final List<AiMessage> messages = [];
   bool _busy = false;
   bool get busy => _busy;
+
+  // ---- Память о прошлых разговорах (пункт 10 списка правок) ----
+  //
+  // Сам чат живёт только в оперативной памяти, поэтому "запомнить
+  // разговор" не может ждать закрытия приложения (dispose() на выходе
+  // не гарантирован) — вместо этого раз в MEMORY_CHECKPOINT_EVERY
+  // ответов ассистента лишний запрос тихо просит его же самого сжать
+  // последний кусок разговора в 1-3 предложения и сохраняет их.
+  static const int _checkpointEvery = 6;
+  int _exchangesSinceCheckpoint = 0;
+  DateTime? _checkpointWindowStart;
+  bool _checkpointing = false;
 
   /// Все графики из ответов. Осталось для возможных сводок; отдельной
   /// панели графиков в чате больше нет — они рисуются в сообщениях.
@@ -129,11 +152,14 @@ class AiChatViewModel extends ChangeNotifier {
     if (trimmed.isEmpty || _busy) return;
 
     messages.add(AiMessage(fromUser: true, text: trimmed));
+    _checkpointWindowStart ??= DateTime.now();
     _busy = true;
     notifyListeners();
 
     try {
-      final ctx = contextBuilder();
+      final rawCtx = contextBuilder();
+      final pastSummaries = await memory.recent();
+      final ctx = pastSummaries.isEmpty ? rawCtx : rawCtx.withPastSummaries(pastSummaries);
       final chunks = await knowledge.search(trimmed);
       final books = KnowledgeService.asPromptBlock(chunks);
       final history = <({String role, String text})>[
@@ -154,11 +180,50 @@ class AiChatViewModel extends ChangeNotifier {
         sources: {for (final c in chunks) c.source}.toList(),
         exercise: reply.exercise,
       ));
+      _exchangesSinceCheckpoint++;
+      if (_exchangesSinceCheckpoint >= _checkpointEvery) {
+        _exchangesSinceCheckpoint = 0;
+        unawaited(_saveCheckpoint(rawCtx));
+      }
     } catch (e) {
       messages.add(AiMessage(fromUser: false, text: '$e', isError: true));
     } finally {
       _busy = false;
       notifyListeners();
+    }
+  }
+
+  /// Просит модель сжать последний кусок разговора в короткую сводку и
+  /// сохраняет её (best-effort — ошибка здесь не должна портить сам
+  /// чат, только тихо не сохраниться).
+  Future<void> _saveCheckpoint(AiContext ctx) async {
+    if (_checkpointing) return;
+    _checkpointing = true;
+    final start = _checkpointWindowStart ?? DateTime.now();
+    _checkpointWindowStart = null;
+    try {
+      final history = <({String role, String text})>[
+        for (final m in _recent()) (role: m.fromUser ? 'user' : 'assistant', text: m.text),
+      ];
+      final reply = await service.ask(
+        systemPrompt: 'Сожми последний разговор в 1-3 коротких предложения по-русски: что '
+            'обсуждали, какие выводы или договорённости были. Без вступлений и оценок, '
+            'только суть. Не используй блоки ```chart или ```exercise.',
+        contextBlock: '',
+        history: history,
+      );
+      final summary = reply.text.trim();
+      if (summary.isEmpty) return;
+      await memory.append(AiMemorySummary(
+        periodStart: start,
+        periodEnd: DateTime.now(),
+        summary: summary,
+        trainingPackageIds: ctx.session != null ? [ctx.session!.id] : const [],
+      ));
+    } catch (_) {
+      // Сводка — необязательное улучшение, не даём ей ронять чат.
+    } finally {
+      _checkpointing = false;
     }
   }
 

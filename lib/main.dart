@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'logic/ai_context.dart';
+import 'services/ai_memory_service.dart';
 import 'services/ai_service.dart';
 import 'services/ai_settings.dart';
 import 'services/knowledge_service.dart';
 import 'services/local_db_service.dart';
+import 'services/supabase_auth_service.dart';
 import 'state/ai_chat_view_model.dart';
 import 'state/app_data_store.dart';
 import 'state/personalization_view_model.dart';
@@ -55,6 +57,7 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
     _aiChat = AiChatViewModel(
       service: AiService(aiSettings),
       knowledge: KnowledgeService(aiSettings),
+      memory: AiMemoryService(SupabaseAuthService(widget.db)),
       // Заглушка до первого открытия чата: экран подставит настоящий
       // источник (общий разговор, тренировка или выстрел) сам.
       contextBuilder: () => AiContext(
