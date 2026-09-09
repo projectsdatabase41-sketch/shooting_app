@@ -39,16 +39,6 @@ class SeriesSpec {
     this.counts = true,
   });
 
-  /// Готовые названия — их предлагают списком, но писать можно любое.
-  static const List<String> suggestedNames = [
-    'Пристрелка',
-    'Лёжа',
-    'С колена',
-    'Стоя',
-    'Зачётная',
-    'Финал',
-  ];
-
   /// Серия ограничена временем, а не числом выстрелов.
   bool get isTimed => shotCount == null && timeLimit != null;
 

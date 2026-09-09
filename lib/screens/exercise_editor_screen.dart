@@ -241,19 +241,6 @@ class _SeriesCard extends StatelessWidget {
                   ),
               ],
             ),
-            const SizedBox(height: 8),
-            // Готовые названия — быстрый выбор, но поле выше остаётся
-            // свободным: пользователь просил именно так.
-            Wrap(
-              spacing: 6,
-              children: [
-                for (final name in SeriesSpec.suggestedNames)
-                  ActionChip(
-                    label: Text(name),
-                    onPressed: () => onChanged(spec.copyWith(name: name)),
-                  ),
-              ],
-            ),
             const SizedBox(height: 12),
             Row(
               children: [
