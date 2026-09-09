@@ -425,6 +425,12 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
                           displayScale: _displayScale,
                           center: _calibCenter!,
                           radius: _calibRadius,
+                          // Радиус пробоины в тех же пикселях фото, что и
+                          // калибровочный круг — от него и масштабируется
+                          // маркер, чтобы на экране он был не крупнее
+                          // настоящего отверстия (решение пользователя,
+                          // иначе точную подгонку неудобно делать).
+                          holeRadiusPx: _calibRadius * widget.face.caliberRadiusMm / widget.face.faceRadiusMm,
                           candidates: _candidates,
                           addMode: _addMode,
                           onCalibrationChanged: (c, r) => setState(() {
@@ -547,6 +553,7 @@ class _ReviewOverlay extends StatelessWidget {
   final double displayScale;
   final Offset center;
   final double radius;
+  final double holeRadiusPx;
   final List<Offset> candidates;
   final bool addMode;
   final void Function(Offset center, double radius) onCalibrationChanged;
@@ -559,6 +566,7 @@ class _ReviewOverlay extends StatelessWidget {
     required this.displayScale,
     required this.center,
     required this.radius,
+    required this.holeRadiusPx,
     required this.candidates,
     required this.addMode,
     required this.onCalibrationChanged,
@@ -568,7 +576,10 @@ class _ReviewOverlay extends StatelessWidget {
   });
 
   static const double _handleHitRadius = 24;
-  static const double _dotRadius = 12;
+  // Хитбокс пальца не меньше этого радиуса, даже если настоящее отверстие
+  // на экране мельче — иначе по мелкому калибру (4.5мм воздушки) не
+  // попасть пальцем. Сам КРУЖОК рисуется реального размера (см. build).
+  static const double _minTapRadius = 16;
 
   @override
   Widget build(BuildContext context) {
@@ -616,27 +627,35 @@ class _ReviewOverlay extends StatelessWidget {
           ),
         ),
         for (var i = 0; i < candidates.length; i++)
-          Positioned(
-            left: candidates[i].dx * displayScale - _dotRadius,
-            top: candidates[i].dy * displayScale - _dotRadius,
-            width: _dotRadius * 2,
-            height: _dotRadius * 2,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => onCandidateRemoved(i),
-              onPanUpdate: (details) => onCandidateMoved(
-                i,
-                candidates[i] + details.delta / displayScale,
-              ),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.redAccent.withValues(alpha: 0.85),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
+          Builder(builder: (context) {
+            final dotRadius = holeRadiusPx * displayScale;
+            final hitRadius = math.max(dotRadius, _minTapRadius);
+            return Positioned(
+              left: candidates[i].dx * displayScale - hitRadius,
+              top: candidates[i].dy * displayScale - hitRadius,
+              width: hitRadius * 2,
+              height: hitRadius * 2,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => onCandidateRemoved(i),
+                onPanUpdate: (details) => onCandidateMoved(
+                  i,
+                  candidates[i] + details.delta / displayScale,
+                ),
+                child: Center(
+                  child: Container(
+                    width: dotRadius * 2,
+                    height: dotRadius * 2,
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent.withValues(alpha: 0.85),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
+            );
+          }),
       ],
     );
   }
