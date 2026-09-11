@@ -255,6 +255,14 @@ CREATE TABLE IF NOT EXISTS coach_athletes (
   created_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS coach_notes (
+  id          TEXT PRIMARY KEY,
+  topic       TEXT NOT NULL,
+  content     TEXT NOT NULL,
+  chart_json  TEXT,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS shots (
   id                  TEXT PRIMARY KEY,
   session_id          TEXT NOT NULL REFERENCES training_sessions(id) ON DELETE CASCADE,

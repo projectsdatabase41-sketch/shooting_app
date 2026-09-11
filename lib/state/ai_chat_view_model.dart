@@ -30,6 +30,11 @@ class AiMessage {
   /// становится отметкой, а не предложением нажать ещё раз.
   final bool exerciseCreated;
 
+  /// Предложенная заметка в дневник тренера, если модель её предложила
+  /// (только в тренерском чате — см. `AiContext.coachMode`).
+  final Map<String, dynamic>? note;
+  final bool noteCreated;
+
   const AiMessage({
     required this.fromUser,
     required this.text,
@@ -40,9 +45,11 @@ class AiMessage {
     this.sources = const [],
     this.exercise,
     this.exerciseCreated = false,
+    this.note,
+    this.noteCreated = false,
   });
 
-  AiMessage copyWith({bool? exerciseCreated}) => AiMessage(
+  AiMessage copyWith({bool? exerciseCreated, bool? noteCreated}) => AiMessage(
         fromUser: fromUser,
         text: text,
         chart: chart,
@@ -52,6 +59,8 @@ class AiMessage {
         sources: sources,
         exercise: exercise,
         exerciseCreated: exerciseCreated ?? this.exerciseCreated,
+        note: note,
+        noteCreated: noteCreated ?? this.noteCreated,
       );
 }
 
@@ -159,7 +168,10 @@ class AiChatViewModel extends ChangeNotifier {
       ];
       final askedAt = DateTime.now();
       final reply = await service.ask(
-        systemPrompt: AiContext.systemPrompt(customInstructions: service.settings.customInstructions),
+        systemPrompt: AiContext.systemPrompt(
+          customInstructions: service.settings.customInstructions,
+          coachMode: rawCtx.coachMode,
+        ),
         contextBlock: ctx.buildContextBlock(askedAt),
         history: history,
         booksExcerpt: books,
@@ -172,6 +184,7 @@ class AiChatViewModel extends ChangeNotifier {
         reasoning: reply.reasoning,
         sources: {for (final c in chunks) c.source}.toList(),
         exercise: reply.exercise,
+        note: reply.note,
       ));
       // Пишем КАЖДЫЙ обмен как есть, без лишнего вызова модели на
       // сжатие (решение пользователя, пункт 10: "лучше в раг каждый
@@ -205,6 +218,13 @@ class AiChatViewModel extends ChangeNotifier {
   void markExerciseCreated(int index) {
     if (index < 0 || index >= messages.length) return;
     messages[index] = messages[index].copyWith(exerciseCreated: true);
+    notifyListeners();
+  }
+
+  /// Отмечает, что заметка из сообщения [index] уже сохранена в дневник.
+  void markNoteCreated(int index) {
+    if (index < 0 || index >= messages.length) return;
+    messages[index] = messages[index].copyWith(noteCreated: true);
     notifyListeners();
   }
 

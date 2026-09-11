@@ -2,12 +2,16 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'package:uuid/uuid.dart';
+
 import '../logic/ai_context.dart';
+import '../models/coach_note.dart';
 import '../models/exercise.dart';
 import '../models/series_spec.dart';
 import '../models/shot.dart';
 import '../models/target_face.dart';
 import '../models/training_session.dart';
+import '../services/coach_notes_repository.dart';
 import '../state/ai_chat_view_model.dart';
 import '../state/app_data_store.dart';
 import '../widgets/ai_chart_view.dart';
@@ -38,6 +42,15 @@ class AiChatScreen extends StatelessWidget {
   /// путала — какая из них к чему относится.
   final bool embedded;
 
+  /// Чат тренера (главный экран тренера, раздел 8 ТЗ) — вместо
+  /// собственных тренировок тренера ассистенту отдаются тренировки
+  /// ВЫБРАННОГО спортсмена ([sessionsOverride], уже сведённые к
+  /// `TrainingSession` из RPC-ответов `CoachAccessService`), и
+  /// разрешается предлагать заметку в дневник тренера (```note).
+  final bool coachMode;
+  final List<TrainingSession>? sessionsOverride;
+  final String Function(TrainingSession)? exerciseNameOfOverride;
+
   const AiChatScreen({
     super.key,
     this.scope = AiScope.general,
@@ -46,6 +59,9 @@ class AiChatScreen extends StatelessWidget {
     this.face,
     this.shot,
     this.embedded = false,
+    this.coachMode = false,
+    this.sessionsOverride,
+    this.exerciseNameOfOverride,
   });
 
   @override
@@ -61,20 +77,23 @@ class AiChatScreen extends StatelessWidget {
           exercise: exercise,
           face: face,
           shot: shot,
-          allSessions: store.sessions,
+          allSessions: sessionsOverride ?? store.sessions,
           // Код в подпись обязательно: пользователь спрашивает
           // «а по упражнению 234», и это именно код, а не название.
           // Без него модель просто не находит, о чём речь.
-          exerciseNameOf: (s) => store.exerciseFor(s)?.label ?? 'без упражнения',
+          exerciseNameOf: exerciseNameOfOverride ??
+              (s) => store.exerciseFor(s)?.label ?? 'без упражнения',
+          coachMode: coachMode,
         ));
-    return _AiChatBody(embedded: embedded);
+    return _AiChatBody(embedded: embedded, coachMode: coachMode);
   }
 }
 
 class _AiChatBody extends StatefulWidget {
   final bool embedded;
+  final bool coachMode;
 
-  const _AiChatBody({this.embedded = false});
+  const _AiChatBody({this.embedded = false, this.coachMode = false});
 
   @override
   State<_AiChatBody> createState() => _AiChatBodyState();
@@ -171,6 +190,9 @@ class _AiChatBodyState extends State<_AiChatBody> {
           onCreateExercise: (message.exercise != null && !message.exerciseCreated)
               ? () => _createExercise(context, vm, i)
               : null,
+          onSaveNote: (message.note != null && !message.noteCreated)
+              ? () => _saveNote(context, vm, i)
+              : null,
           chartGallery: message.chart == null ? null : [for (final m in charts) m.chart!],
           chartGalleryIndex: message.chart == null ? 0 : charts.indexOf(message),
         );
@@ -229,6 +251,24 @@ class _AiChatBodyState extends State<_AiChatBody> {
       ..showSnackBar(SnackBar(content: Text('Упражнение «${ex.name}» создано')));
   }
 
+  /// Сохраняет заметку, которую предложил ассистент, в дневник тренера —
+  /// тот же принцип показа-на-подтверждение, что и у `_createExercise`.
+  void _saveNote(BuildContext context, AiChatViewModel vm, int index) {
+    final spec = vm.messages[index].note;
+    if (spec == null) return;
+    final store = context.read<AppDataStore>();
+    CoachNotesRepository(store.db).add(CoachNote(
+      id: const Uuid().v4(),
+      topic: '${spec['topic']}',
+      content: '${spec['content']}',
+      createdAt: DateTime.now(),
+    ));
+    vm.markNoteCreated(index);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text('Заметка сохранена в дневник')));
+  }
+
   Widget _buildInput(AiChatViewModel vm) {
     // embedded: true — экран живёт внутри PageView мишени, а не под
     // своим Scaffold, и не подвигается под клавиатуру сам (жалоба
@@ -277,6 +317,10 @@ class _Bubble extends StatelessWidget {
   /// создано — тогда карточка показывает отметку без кнопки.
   final VoidCallback? onCreateExercise;
 
+  /// `null`, если в сообщении нет предложенной заметки в дневник или она
+  /// уже сохранена.
+  final VoidCallback? onSaveNote;
+
   /// Все графики разговора и позиция графика ЭТОГО сообщения среди них —
   /// для листания в полноэкранном просмотре (`ChartGalleryScreen`).
   /// `null`/пусто, если в сообщении графика нет вовсе.
@@ -288,6 +332,7 @@ class _Bubble extends StatelessWidget {
     this.onRetry,
     this.onDelete,
     this.onCreateExercise,
+    this.onSaveNote,
     this.chartGallery,
     this.chartGalleryIndex = 0,
   });
@@ -338,6 +383,14 @@ class _Bubble extends StatelessWidget {
                 spec: message.exercise!,
                 created: message.exerciseCreated,
                 onCreate: onCreateExercise,
+              ),
+            ],
+            if (message.note != null) ...[
+              const SizedBox(height: 8),
+              _NoteProposalCard(
+                spec: message.note!,
+                created: message.noteCreated,
+                onSave: onSaveNote,
               ),
             ],
             if (message.sources.isNotEmpty) ...[
@@ -470,6 +523,63 @@ class _ExerciseProposalCard extends StatelessWidget {
               label: 'Создать упражнение',
               baseColor: cs.primary,
               onTap: onCreate,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Карточка предложенной ассистентом заметки в дневник тренера — тот же
+/// принцип, что у `_ExerciseProposalCard`: показ на подтверждение.
+class _NoteProposalCard extends StatelessWidget {
+  final Map<String, dynamic> spec;
+  final bool created;
+  final VoidCallback? onSave;
+
+  const _NoteProposalCard({required this.spec, required this.created, required this.onSave});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.menu_book_outlined, size: 18, color: cs.primary),
+              const SizedBox(width: 6),
+              Expanded(child: Text('${spec['topic']}', style: theme.textTheme.titleSmall)),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text('${spec['content']}', style: theme.textTheme.bodySmall),
+          const SizedBox(height: 10),
+          if (created)
+            Row(
+              children: [
+                Icon(Icons.check_circle, size: 18, color: cs.primary),
+                const SizedBox(width: 6),
+                Text('Сохранено', style: theme.textTheme.bodySmall?.copyWith(color: cs.primary)),
+              ],
+            )
+          else
+            Raised3DButton(
+              dense: true,
+              icon: Icons.add,
+              label: 'Сохранить в дневник',
+              baseColor: cs.primary,
+              onTap: onSave,
             ),
         ],
       ),

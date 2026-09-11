@@ -48,6 +48,12 @@ class AiContext {
   /// облако не подключено или сводок ещё не накопилось.
   final List<AiMemorySummary> pastSummaries;
 
+  /// Чат открыт тренером (не спортсменом) — тогда ассистент вправе
+  /// предлагать заметку в дневник тренера (```note), как для спортсмена
+  /// он предлагает упражнение (```exercise). Спортсмену это не нужно и
+  /// не должно предлагаться.
+  final bool coachMode;
+
   const AiContext({
     required this.scope,
     required this.allSessions,
@@ -57,6 +63,7 @@ class AiContext {
     this.face,
     this.shot,
     this.pastSummaries = const [],
+    this.coachMode = false,
   });
 
   /// Только для того, чтобы дописать сводки прошлых разговоров ПОСЛЕ
@@ -72,6 +79,7 @@ class AiContext {
         face: face,
         shot: shot,
         pastSummaries: summaries,
+        coachMode: coachMode,
       );
 
   /// Сколько выстрелов текущей тренировки отдаём координатами.
@@ -101,7 +109,7 @@ class AiContext {
   /// `customInstructions` — необязательная короткая инструкция от
   /// пользователя из настроек ассистента (см. `AiSettings.customInstructions`),
   /// дописывается ПОСЛЕ базовых правил, а не вместо них.
-  static String systemPrompt({String? customInstructions}) {
+  static String systemPrompt({String? customInstructions, bool coachMode = false}) {
     const base = '''
 Ты — ассистент в приложении для спортивной пулевой стрельбы. Разбираешь результаты стрельбы пользователя и просто общаешься с ним.
 
@@ -175,9 +183,18 @@ class AiContext {
 ```
 Одно из двух — `total_shots`+`series_size` ИЛИ `series` — не оба сразу. В каждой серии ровно одно из `shot_count`/`time_limit_min`. Текст ответа перед блоком — коротко подтверди, что предлагаешь, без пересказа JSON.
 ''';
+    const coachExtra = '''
+
+С тобой сейчас разговаривает ТРЕНЕР, а не спортсмен. Если он просит СОХРАНИТЬ/ЗАВЕСТИ заметку в дневник — опиши её блоком ```note в конце ответа. Только когда явно просят, никогда сам по себе.
+```note
+{"topic":"Короткая тема","content":"Текст заметки"}
+```
+Текст ответа перед блоком — коротко подтверди, что сохраняешь, без пересказа JSON.
+''';
+    final withCoach = coachMode ? '$base$coachExtra' : base;
     final extra = customInstructions?.trim();
-    if (extra == null || extra.isEmpty) return base;
-    return '$base\n'
+    if (extra == null || extra.isEmpty) return withCoach;
+    return '$withCoach\n'
         'ДОПОЛНИТЕЛЬНАЯ ИНСТРУКЦИЯ ОТ ПОЛЬЗОВАТЕЛЯ (не должна противоречить правилам выше):\n'
         '$extra\n';
   }

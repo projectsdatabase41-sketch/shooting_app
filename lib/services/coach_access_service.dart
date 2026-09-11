@@ -161,19 +161,25 @@ class CoachAccessService {
 
   /// Снимки упражнений (реальная таблица `exercises`, не каталог) —
   /// одна строка на тренировку, ключ связи с ней — `package_id`.
-  Future<List<Map<String, dynamic>>> fetchExercises() =>
-      _rpc('get_shared_exercises', {'p_token': token});
+  ///
+  /// [athlete] позволяет спросить данные КОНКРЕТНОГО спортсмена, не
+  /// переключая на него "активное" подключение (нужно вкладкам
+  /// "Статистика"/"Чат с ИИ" — там выбор спортсмена временный, для
+  /// одного просмотра, а не постоянная смена текущего в списке).
+  Future<List<Map<String, dynamic>>> fetchExercises({CoachAthlete? athlete}) =>
+      _rpc('get_shared_exercises', {'p_token': athlete?.token ?? token}, athlete: athlete);
 
   /// Тренировки спортсмена (`training_packages`).
-  Future<List<Map<String, dynamic>>> fetchSessions() =>
-      _rpc('get_shared_packages', {'p_token': token});
+  Future<List<Map<String, dynamic>>> fetchSessions({CoachAthlete? athlete}) =>
+      _rpc('get_shared_packages', {'p_token': athlete?.token ?? token}, athlete: athlete);
 
   /// `sessionId` здесь — id тренировки (`training_packages.id`), он же
   /// id её единственного снимка-упражнения (`exercises.id`): один на
   /// тренировку, отдельным id не заводится — то же самое значение,
   /// которое `shots.exercise_id` и ждёт.
-  Future<List<Map<String, dynamic>>> fetchShots(String sessionId) =>
-      _rpc('get_shared_shots', {'p_token': token, 'p_exercise_id': sessionId});
+  Future<List<Map<String, dynamic>>> fetchShots(String sessionId, {CoachAthlete? athlete}) => _rpc(
+      'get_shared_shots', {'p_token': athlete?.token ?? token, 'p_exercise_id': sessionId},
+      athlete: athlete);
 
   Future<List<Map<String, dynamic>>> fetchComments(String sessionId) =>
       _rpc('get_shared_comments', {'p_token': token, 'p_package_id': sessionId});
@@ -225,21 +231,23 @@ class CoachAccessService {
     }
   }
 
-  Future<List<Map<String, dynamic>>> _rpc(String fn, Map<String, dynamic> args) async {
-    if (!hasConnection) {
+  Future<List<Map<String, dynamic>>> _rpc(String fn, Map<String, dynamic> args, {CoachAthlete? athlete}) async {
+    final effectiveUrl = athlete?.url ?? url;
+    final effectiveKey = athlete?.anonKey ?? anonKey;
+    if (effectiveUrl.isEmpty || effectiveKey.isEmpty || (args['p_token'] as String? ?? '').isEmpty) {
       throw const CoachAccessException('Не указаны адрес базы, ключ или токен спортсмена');
     }
     final client = clientFactory();
     try {
       final res = await client
           .post(
-            Uri.parse('$url/rest/v1/rpc/$fn'),
+            Uri.parse('$effectiveUrl/rest/v1/rpc/$fn'),
             headers: {
-              'apikey': anonKey,
+              'apikey': effectiveKey,
               // RPC-функции проверяют токен сами (security definer) —
               // отдельного входа тренеру не нужно, анонимного ключа
               // достаточно, чтобы постучаться в PostgREST вообще.
-              'Authorization': 'Bearer $anonKey',
+              'Authorization': 'Bearer $effectiveKey',
               'Content-Type': 'application/json',
             },
             body: jsonEncode(args),

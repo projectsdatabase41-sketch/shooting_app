@@ -4,7 +4,11 @@ import '../models/training_session.dart';
 import '../state/app_data_store.dart';
 import '../widgets/finished_edit_exit_dialog.dart';
 import 'ai_chat_screen.dart';
+import 'coach_ai_chat_screen.dart';
 import 'coach_athletes_screen.dart';
+import 'coach_diary_notes_screen.dart';
+import 'coach_statistics_screen.dart';
+import 'coach_tasks_screen.dart';
 import 'exercises_screen.dart';
 import 'settings_screen.dart';
 import 'statistics_screen.dart';
@@ -48,10 +52,19 @@ class _HomeShellState extends State<HomeShell> {
     _lastMode = store.workMode;
 
     if (isCoach) {
-      // Мульти-спортсменский режим (решение пользователя): "Дневник" с
-      // единственным подключением заменён на список спортсменов —
-      // тап на конкретного открывает его дневник отдельным экраном.
-      final pages = [const CoachAthletesScreen(), const SettingsScreen()];
+      // Главный экран тренера (раздел 8 ТЗ): Дневник · Спортсмены ·
+      // Статистика · Чат с ИИ · Задания · Настройки. Мульти-спортсменский
+      // режим (решение пользователя): "Дневник" со списком тренировок
+      // одного подключения заменён на список спортсменов — тап на
+      // конкретного открывает его тренировки отдельным экраном.
+      final pages = [
+        const CoachDiaryNotesScreen(),
+        const CoachAthletesScreen(),
+        const CoachStatisticsScreen(),
+        const CoachAiChatScreen(),
+        const CoachTasksScreen(),
+        const SettingsScreen(),
+      ];
       return Scaffold(
         body: Column(
           children: [
@@ -62,8 +75,15 @@ class _HomeShellState extends State<HomeShell> {
         bottomNavigationBar: NavigationBar(
           selectedIndex: _coachIndex,
           onDestinationSelected: (i) => setState(() => _coachIndex = i),
+          // Шесть вкладок — тот же приём, что у спортсмена: подпись
+          // только у выбранной, иначе не помещаются на узком экране.
+          labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
           destinations: const [
+            NavigationDestination(icon: Icon(Icons.menu_book_outlined), label: 'Дневник'),
             NavigationDestination(icon: Icon(Icons.groups_outlined), label: 'Спортсмены'),
+            NavigationDestination(icon: Icon(Icons.bar_chart), label: 'Статистика'),
+            NavigationDestination(icon: Icon(Icons.auto_awesome_outlined), label: 'Ассистент'),
+            NavigationDestination(icon: Icon(Icons.assignment_outlined), label: 'Задания'),
             NavigationDestination(icon: Icon(Icons.settings_outlined), label: 'Настройки'),
           ],
         ),

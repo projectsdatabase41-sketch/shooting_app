@@ -22,12 +22,17 @@ class AiReply {
   /// см. `AiService._splitExercise`; в интерфейсе только жмут "Создать".
   final Map<String, dynamic>? exercise;
 
+  /// Предложенная заметка в дневник тренера (```note) — тот же принцип,
+  /// что у `exercise`, только для тренерского режима чата.
+  final Map<String, dynamic>? note;
+
   const AiReply({
     required this.text,
     required this.model,
     this.chart,
     this.reasoning,
     this.exercise,
+    this.note,
   });
 }
 
@@ -251,18 +256,20 @@ class AiService {
 
     final parsedChart = _splitChart(split.$1);
     final parsedExercise = _splitExercise(parsedChart.$1);
+    final parsedNote = _splitNote(parsedExercise.$1);
 
     // Модель зарассуждалась и до ответа не дошла. Это не ответ, а
     // мусор — пробуем следующую модель в цепочке вместо того, чтобы
     // показывать пользователю обрывок чужих мыслей.
-    if (parsedExercise.$1.trim().isEmpty) {
+    if (parsedNote.$1.trim().isEmpty) {
       throw const AiException('модель не дошла до ответа');
     }
 
     return AiReply(
-      text: parsedExercise.$1,
+      text: parsedNote.$1,
       chart: parsedChart.$2,
       exercise: parsedExercise.$2,
+      note: parsedNote.$2,
       model: model,
       reasoning: reasoning.isEmpty ? null : reasoning,
     );
@@ -397,6 +404,35 @@ class AiService {
     final totalShots = spec['total_shots'];
     final seriesSize = spec['series_size'];
     return totalShots is num && totalShots > 0 && seriesSize is num && seriesSize > 0;
+  }
+
+  /// Отделяет блок ```note (предложенная заметка в дневник тренера) от
+  /// текста — тот же принцип, что у `_splitExercise`.
+  static (String, Map<String, dynamic>?) _splitNote(String raw) {
+    final matches = RegExp(r'```note\s*([\s\S]*?)```').allMatches(raw).toList();
+    if (matches.isEmpty) return (raw, null);
+
+    var text = raw;
+    for (final m in matches.reversed) {
+      text = text.replaceRange(m.start, m.end, '');
+    }
+    text = text.trim();
+
+    try {
+      final decoded = jsonDecode(matches.last.group(1)!.trim());
+      if (decoded is Map<String, dynamic> && _isValidNote(decoded)) {
+        return (text, decoded);
+      }
+    } catch (_) {
+      // некорректный JSON — молча оставляем только текст
+    }
+    return (text, null);
+  }
+
+  static bool _isValidNote(Map<String, dynamic> spec) {
+    final topic = spec['topic'];
+    final content = spec['content'];
+    return topic is String && topic.trim().isNotEmpty && content is String && content.trim().isNotEmpty;
   }
 
   /// Отделяет рассуждения модели от собственно ответа.
