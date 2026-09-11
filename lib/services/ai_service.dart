@@ -26,6 +26,10 @@ class AiReply {
   /// что у `exercise`, только для тренерского режима чата.
   final Map<String, dynamic>? note;
 
+  /// Предложенный отзыв о приложении (```feedback), пункт 10 списка
+  /// правок — тоже показ-на-подтверждение, не отправляется молча.
+  final Map<String, dynamic>? feedback;
+
   const AiReply({
     required this.text,
     required this.model,
@@ -33,6 +37,7 @@ class AiReply {
     this.reasoning,
     this.exercise,
     this.note,
+    this.feedback,
   });
 }
 
@@ -88,20 +93,27 @@ class AiService {
     if (res.statusCode != 200) {
       throw AiException('Не удалось получить список моделей (${res.statusCode})');
     }
-    final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
-    final list = (data['data'] as List?) ?? const [];
-    final free = <String>[];
-    for (final m in list) {
-      if (m is! Map) continue;
-      final id = m['id'];
-      final pricing = m['pricing'];
-      if (id is! String || pricing is! Map) continue;
-      final prompt = double.tryParse('${pricing['prompt']}') ?? 1;
-      final completion = double.tryParse('${pricing['completion']}') ?? 1;
-      if (prompt == 0 && completion == 0) free.add(id);
+    try {
+      final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+      final list = (data['data'] as List?) ?? const [];
+      final free = <String>[];
+      for (final m in list) {
+        if (m is! Map) continue;
+        final id = m['id'];
+        final pricing = m['pricing'];
+        if (id is! String || pricing is! Map) continue;
+        final prompt = double.tryParse('${pricing['prompt']}') ?? 1;
+        final completion = double.tryParse('${pricing['completion']}') ?? 1;
+        if (prompt == 0 && completion == 0) free.add(id);
+      }
+      free.sort();
+      return free;
+    } catch (_) {
+      // Сервер ответил 200, но не тем форматом, что мы ждём (сменился
+      // API, временная заглушка вместо JSON) — пользователю нужна не
+      // тарабарщина из FormatException, а понятная просьба повторить.
+      throw const AiException('Не удалось разобрать ответ моделей — попробуйте ещё раз');
     }
-    free.sort();
-    return free;
   }
 
   /// Проверка одной модели: жива ли она вообще и доходит ли до ответа.
@@ -257,19 +269,21 @@ class AiService {
     final parsedChart = _splitChart(split.$1);
     final parsedExercise = _splitExercise(parsedChart.$1);
     final parsedNote = _splitNote(parsedExercise.$1);
+    final parsedFeedback = _splitFeedback(parsedNote.$1);
 
     // Модель зарассуждалась и до ответа не дошла. Это не ответ, а
     // мусор — пробуем следующую модель в цепочке вместо того, чтобы
     // показывать пользователю обрывок чужих мыслей.
-    if (parsedNote.$1.trim().isEmpty) {
+    if (parsedFeedback.$1.trim().isEmpty) {
       throw const AiException('модель не дошла до ответа');
     }
 
     return AiReply(
-      text: parsedNote.$1,
+      text: parsedFeedback.$1,
       chart: parsedChart.$2,
       exercise: parsedExercise.$2,
       note: parsedNote.$2,
+      feedback: parsedFeedback.$2,
       model: model,
       reasoning: reasoning.isEmpty ? null : reasoning,
     );
@@ -433,6 +447,34 @@ class AiService {
     final topic = spec['topic'];
     final content = spec['content'];
     return topic is String && topic.trim().isNotEmpty && content is String && content.trim().isNotEmpty;
+  }
+
+  /// Отделяет блок ```feedback (предложенный отзыв о приложении) от
+  /// текста — тот же принцип, что у `_splitExercise`/`_splitNote`.
+  static (String, Map<String, dynamic>?) _splitFeedback(String raw) {
+    final matches = RegExp(r'```feedback\s*([\s\S]*?)```').allMatches(raw).toList();
+    if (matches.isEmpty) return (raw, null);
+
+    var text = raw;
+    for (final m in matches.reversed) {
+      text = text.replaceRange(m.start, m.end, '');
+    }
+    text = text.trim();
+
+    try {
+      final decoded = jsonDecode(matches.last.group(1)!.trim());
+      if (decoded is Map<String, dynamic> && _isValidFeedback(decoded)) {
+        return (text, decoded);
+      }
+    } catch (_) {
+      // некорректный JSON — молча оставляем только текст
+    }
+    return (text, null);
+  }
+
+  static bool _isValidFeedback(Map<String, dynamic> spec) {
+    final text = spec['text'];
+    return text is String && text.trim().isNotEmpty;
   }
 
   /// Отделяет рассуждения модели от собственно ответа.

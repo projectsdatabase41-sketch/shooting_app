@@ -28,7 +28,7 @@ class TrainingsHistoryScreen extends StatelessWidget {
     final df = DateFormat('dd.MM.yyyy · HH:mm');
 
     return Scaffold(
-      appBar: AppBar(title: const Text('История')),
+      appBar: AppBar(title: const Text('Тренировки')),
       body: sessions.isEmpty
           ? const EmptyState(
               icon: Icons.history,

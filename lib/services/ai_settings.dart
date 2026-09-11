@@ -53,8 +53,6 @@ class AiSettings {
 
   static const String keyApiKey = 'ai_api_key';
   static const String keyModels = 'ai_models';
-  static const String keyBooksUrl = 'ai_books_url';
-  static const String keyBooksToken = 'ai_books_token';
   static const String keyTables = 'ai_tables';
   static const String keyCustomInstructions = 'ai_custom_instructions';
   static const String keyApiBaseUrl = 'ai_api_base_url';
@@ -63,8 +61,6 @@ class AiSettings {
   static const List<String> allKeys = [
     keyApiKey,
     keyModels,
-    keyBooksUrl,
-    keyBooksToken,
     keyTables,
     keyCustomInstructions,
     keyApiBaseUrl,
@@ -191,24 +187,26 @@ class AiSettings {
   /// подставлять модели, подобранные под встроенный бесплатный ключ.
   String get rawModels => _read(keyModels);
 
-  /// База знаний по умолчанию — публичная таблица пользователя.
-  /// Как и тестовый ключ, это значение можно перекрыть в настройках.
-  static const String defaultBooksUrl =
-      'https://yirvomezybprdlntxyas.supabase.co/rest/v1';
-  static const String defaultBooksToken =
-      'sb_publishable_2nW7G7lKueMQamuFeoC3Cw_iql48Xj3';
+  /// Общая база разработчика — книги, правила стрельбы и прочий
+  /// справочный материал, ОДИН на всех пользователей приложения, а не в
+  /// личном проекте каждого (решение пользователя, пункт 2/10 списка
+  /// правок: "справочные материалы вшиты и скрыты внутри приложения").
+  /// Адрес и публикуемый ключ поэтому зашиты как константы — ни то, ни
+  /// другое больше не редактируется в настройках.
+  static const String booksUrl = 'https://yirvomezybprdlntxyas.supabase.co/rest/v1';
+  static const String booksToken = 'sb_publishable_2nW7G7lKueMQamuFeoC3Cw_iql48Xj3';
 
-  /// Таблицы базы знаний ПО УМОЛЧАНИЮ. Ищутся по тексту колонки
-  /// `content`: `shooting_rules` — основы и правила стрельбы, `books` —
-  /// книги по медицине, тренировкам и смежным темам.
-  ///
-  /// Это только стартовое значение: список редактируется в настройках,
-  /// потому что таблиц у пользователя со временем станет больше, а
-  /// пересобирать приложение ради имени таблицы — нелепо.
-  static const List<String> knowledgeTables = ['shooting_rules', 'books'];
+  /// Таблицы общей базы, вшитые в приложение — всегда активны, нигде в
+  /// настройках не показываются и не редактируются.
+  static const List<KnowledgeTableConfig> builtInTables = [
+    KnowledgeTableConfig(name: 'shooting_rules', label: 'Правила стрельбы'),
+    KnowledgeTableConfig(name: 'books', label: 'Книги'),
+  ];
 
-  /// Таблицы, по которым ассистент ищет сейчас — с названием и
-  /// описанием, если пользователь их указал.
+  /// Таблицы из ЛИЧНОЙ базы пользователя (та же, что хранит тренировки —
+  /// `SupabaseAuthService`), которые он сам подключил как справочник для
+  /// ИИ — список заполняется в настройках учётной записи (пункт 3/8
+  /// списка правок), не здесь.
   ///
   /// Хранится JSON-массивом. Старый формат (простой список имён через
   /// запятую, до появления названий/описаний) распознаётся отдельно —
@@ -216,38 +214,45 @@ class AiSettings {
   /// пропасть только из-за смены формата хранения.
   List<KnowledgeTableConfig> get tables {
     final raw = _read(keyTables);
-    if (raw.isEmpty) {
-      return [for (final name in knowledgeTables) KnowledgeTableConfig(name: name)];
-    }
+    if (raw.isEmpty) return const [];
     if (raw.trimLeft().startsWith('[')) {
       try {
         final decoded = jsonDecode(raw) as List;
-        final list = decoded
-            .cast<Map<String, dynamic>>()
-            .map(KnowledgeTableConfig.fromJson)
-            .toList();
-        if (list.isNotEmpty) return list;
+        return decoded.cast<Map<String, dynamic>>().map(KnowledgeTableConfig.fromJson).toList();
       } catch (_) {
-        // Битый JSON — падать в старый формат бессмысленно (это не он),
-        // возвращаем справочник по умолчанию, а не теряем весь список.
-        return [for (final name in knowledgeTables) KnowledgeTableConfig(name: name)];
+        return const [];
       }
     }
     // Старый формат — простые имена через запятую.
     final names = raw.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
-    if (names.isEmpty) return [for (final name in knowledgeTables) KnowledgeTableConfig(name: name)];
     return [for (final n in names) KnowledgeTableConfig(name: n)];
   }
 
   set tables(List<KnowledgeTableConfig> v) => _write(keyTables, jsonEncode([for (final t in v) t.toJson()]));
 
-  String get booksUrl => _read(keyBooksUrl, fallback: defaultBooksUrl);
-  set booksUrl(String v) => _write(keyBooksUrl, v.trim());
-
-  String get booksToken => _read(keyBooksToken, fallback: defaultBooksToken);
-  set booksToken(String v) => _write(keyBooksToken, v.trim());
-
-  bool get booksConfigured => booksUrl.isNotEmpty;
+  /// Таблицы, которые заводит сама схема приложения (`sql/schema.sql`) в
+  /// ЛИЧНОЙ базе пользователя — исключаются из списка при подключении
+  /// таблиц для ИИ-справочника (пункт 8 списка правок: "фильтр на
+  /// названия таблиц... имеющих отношение к работе приложения"), иначе
+  /// список для подключения предлагал бы подключить тренировки/выстрелы
+  /// как будто это справочный материал.
+  static const Set<String> appOwnTables = {
+    'project_settings',
+    'target_faces',
+    'exercise_templates',
+    'training_packages',
+    'exercises',
+    'file_assets',
+    'photo_import_jobs',
+    'shots',
+    'remote_athlete_sources',
+    'archived_packages',
+    'share_grants',
+    'share_events',
+    'comments',
+    'training_notes',
+    'ai_conversation_summaries',
+  };
 
   /// Короткая инструкция от пользователя — что ассистенту стоит знать
   /// или как себя вести, поверх общего системного промпта.

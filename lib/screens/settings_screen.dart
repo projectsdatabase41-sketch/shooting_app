@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../services/ai_settings.dart';
 import '../services/supabase_auth_service.dart';
 import '../services/supabase_service.dart';
 import '../state/app_data_store.dart';
-import '../state/personalization_view_model.dart';
 import '../widgets/section_header.dart';
 import 'export_screen.dart';
 import 'ai_settings_screen.dart';
@@ -33,18 +33,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.only(bottom: 32),
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: SectionHeader(
-              title: 'Оформление',
-              subtitle: 'Тема интерфейса. Цвета самой мишени настраиваются отдельно.',
-            ),
-          ),
-          const _ThemeModeSelector(),
           ListTile(
             leading: const Icon(Icons.palette_outlined),
-            title: const Text('Персонализация цвета мишени'),
-            subtitle: const Text('Бумага, яблоко, кольца, пробоины'),
+            title: const Text('Цветовые настройки'),
+            subtitle: const Text('Тема интерфейса, бумага, яблоко, кольца, пробоины'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const ColorPersonalizationScreen()),
@@ -52,7 +44,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           ListTile(
             leading: const Icon(Icons.auto_awesome_outlined),
-            title: const Text('Ассистент по результатам'),
+            title: const Text('ИИ Ассистент'),
             subtitle: const Text('Ключ OpenRouter, модели, справочные материалы'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
@@ -293,49 +285,6 @@ void _showImportDialog(BuildContext context) {
       ],
     ),
   );
-}
-
-/// Переключатель светлой/тёмной темы интерфейса.
-///
-/// Значение живёт в `PersonalizationViewModel` (та же key-value таблица
-/// `color_prefs`), поэтому переживает перезапуск. "Система" — значение
-/// по умолчанию: приложение следует настройке ОС.
-class _ThemeModeSelector extends StatelessWidget {
-  const _ThemeModeSelector();
-
-  @override
-  Widget build(BuildContext context) {
-    final vm = context.watch<PersonalizationViewModel>();
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      child: SizedBox(
-        width: double.infinity,
-        child: SegmentedButton<ThemeMode>(
-          segments: const [
-            ButtonSegment(
-              value: ThemeMode.system,
-              icon: Icon(Icons.brightness_auto_outlined),
-              label: Text('Система'),
-            ),
-            ButtonSegment(
-              value: ThemeMode.light,
-              icon: Icon(Icons.light_mode_outlined),
-              label: Text('Светлая'),
-            ),
-            ButtonSegment(
-              value: ThemeMode.dark,
-              icon: Icon(Icons.dark_mode_outlined),
-              label: Text('Тёмная'),
-            ),
-          ],
-          selected: {vm.themeMode},
-          showSelectedIcon: false,
-          onSelectionChanged: (set) => vm.setThemeMode(set.first),
-        ),
-      ),
-    );
-  }
 }
 
 class _ShareTokensSection extends StatefulWidget {
@@ -667,6 +616,65 @@ class _AccountSheetState extends State<_AccountSheet> {
     }
   }
 
+  Future<void> _openTablesPicker(BuildContext context) async {
+    List<String> names;
+    try {
+      names = (await _auth.fetchTableNames())
+          .where((n) => !AiSettings.appOwnTables.contains(n))
+          .toList();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _message = '$e';
+        _messageIsError = true;
+      });
+      return;
+    }
+    if (!context.mounted) return;
+    final settings = AiSettings(context.read<AppDataStore>().db);
+    final existing = {for (final t in settings.tables) t.name: t};
+    final selected = {for (final n in names) n: existing.containsKey(n)};
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Таблицы для ИИ'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: names.isEmpty
+                ? const Text('В базе не нашлось таблиц, кроме тех, что уже использует само приложение.')
+                : SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (final n in names)
+                          CheckboxListTile(
+                            value: selected[n],
+                            title: Text(n),
+                            onChanged: (v) => setDialogState(() => selected[n] = v ?? false),
+                          ),
+                      ],
+                    ),
+                  ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Отмена')),
+            FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Сохранить')),
+          ],
+        ),
+      ),
+    );
+    if (result != true) return;
+
+    settings.tables = [
+      for (final n in names)
+        if (selected[n] == true) existing[n] ?? KnowledgeTableConfig(name: n),
+    ];
+    if (!mounted) return;
+    setState(() => _message = 'Таблицы для ИИ обновлены');
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -716,6 +724,17 @@ class _AccountSheetState extends State<_AccountSheet> {
                 onPressed: _busy ? null : () => _run(_auth.checkSchema),
                 icon: const Icon(Icons.fact_check_outlined),
                 label: const Text('Проверить базу'),
+              ),
+              const SizedBox(height: 8),
+              // Пункт 3/8 списка правок: список таблиц читается из САМОЙ
+              // базы (вместо того, чтобы печатать имя таблицы руками в
+              // настройках ассистента), а свои внутренние таблицы
+              // (тренировки, выстрелы и т.п.) в списке не предлагаются —
+              // AiSettings.appOwnTables их отфильтровывает.
+              OutlinedButton.icon(
+                onPressed: _busy ? null : () => _openTablesPicker(context),
+                icon: const Icon(Icons.table_chart_outlined),
+                label: const Text('Таблицы для ИИ'),
               ),
               const SizedBox(height: 8),
               OutlinedButton.icon(

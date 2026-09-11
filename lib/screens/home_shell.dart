@@ -120,8 +120,8 @@ class _HomeShellState extends State<HomeShell> {
         // с большим числом пунктов, а не сокращение слов до нечитаемого.
         labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.fitness_center), label: 'Тренировка'),
-          NavigationDestination(icon: Icon(Icons.history), label: 'История'),
+          NavigationDestination(icon: Icon(Icons.fitness_center), label: 'Упражнения'),
+          NavigationDestination(icon: Icon(Icons.history), label: 'Тренировки'),
           NavigationDestination(icon: Icon(Icons.gps_fixed), label: 'Мишень'),
           NavigationDestination(icon: Icon(Icons.bar_chart), label: 'Статистика'),
           NavigationDestination(icon: Icon(Icons.auto_awesome_outlined), label: 'Ассистент'),

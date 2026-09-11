@@ -19,7 +19,7 @@ void main() {
 
     // Нижняя навигация — то, что есть на любом стартовом экране
     // независимо от роли и от того, есть ли в базе упражнения.
-    expect(find.text('Тренировка'), findsWidgets);
+    expect(find.text('Упражнения'), findsWidgets);
     expect(find.text('Настройки'), findsWidgets);
   });
 }

@@ -35,6 +35,11 @@ class AiMessage {
   final Map<String, dynamic>? note;
   final bool noteCreated;
 
+  /// Предложенный отзыв об приложении (пункт 10 списка правок) — тот же
+  /// принцип показа-на-подтверждение.
+  final Map<String, dynamic>? feedback;
+  final bool feedbackSent;
+
   const AiMessage({
     required this.fromUser,
     required this.text,
@@ -47,9 +52,11 @@ class AiMessage {
     this.exerciseCreated = false,
     this.note,
     this.noteCreated = false,
+    this.feedback,
+    this.feedbackSent = false,
   });
 
-  AiMessage copyWith({bool? exerciseCreated, bool? noteCreated}) => AiMessage(
+  AiMessage copyWith({bool? exerciseCreated, bool? noteCreated, bool? feedbackSent}) => AiMessage(
         fromUser: fromUser,
         text: text,
         chart: chart,
@@ -61,6 +68,8 @@ class AiMessage {
         exerciseCreated: exerciseCreated ?? this.exerciseCreated,
         note: note,
         noteCreated: noteCreated ?? this.noteCreated,
+        feedback: feedback,
+        feedbackSent: feedbackSent ?? this.feedbackSent,
       );
 }
 
@@ -146,6 +155,15 @@ class AiChatViewModel extends ChangeNotifier {
     await send(text);
   }
 
+  /// Как [retryFrom], но с ИЗМЕНЁННЫМ текстом вопроса (пункт 6 списка
+  /// правок — редактирование, а не только удаление и переспрос заново).
+  Future<void> editAndRetry(int index, String newText) async {
+    if (index < 0 || index >= messages.length) return;
+    if (!messages[index].fromUser) return;
+    removeFrom(index);
+    await send(newText);
+  }
+
   Future<void> send(String text) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty || _busy) return;
@@ -185,6 +203,7 @@ class AiChatViewModel extends ChangeNotifier {
         sources: {for (final c in chunks) c.source}.toList(),
         exercise: reply.exercise,
         note: reply.note,
+        feedback: reply.feedback,
       ));
       // Пишем КАЖДЫЙ обмен как есть, без лишнего вызова модели на
       // сжатие (решение пользователя, пункт 10: "лучше в раг каждый
@@ -225,6 +244,13 @@ class AiChatViewModel extends ChangeNotifier {
   void markNoteCreated(int index) {
     if (index < 0 || index >= messages.length) return;
     messages[index] = messages[index].copyWith(noteCreated: true);
+    notifyListeners();
+  }
+
+  /// Отмечает, что отзыв из сообщения [index] уже отправлен.
+  void markFeedbackSent(int index) {
+    if (index < 0 || index >= messages.length) return;
+    messages[index] = messages[index].copyWith(feedbackSent: true);
     notifyListeners();
   }
 

@@ -7,6 +7,49 @@ import '../painters/target_painter.dart';
 import '../state/personalization_view_model.dart';
 import '../widgets/color_picker_dialog.dart';
 
+/// Переключатель светлой/тёмной темы интерфейса.
+///
+/// Значение живёт в `PersonalizationViewModel` (та же key-value таблица
+/// `color_prefs`), поэтому переживает перезапуск. "Система" — значение
+/// по умолчанию: приложение следует настройке ОС.
+class _ThemeModeSelector extends StatelessWidget {
+  const _ThemeModeSelector();
+
+  @override
+  Widget build(BuildContext context) {
+    final vm = context.watch<PersonalizationViewModel>();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: SizedBox(
+        width: double.infinity,
+        child: SegmentedButton<ThemeMode>(
+          segments: const [
+            ButtonSegment(
+              value: ThemeMode.system,
+              icon: Icon(Icons.brightness_auto_outlined),
+              label: Text('Система'),
+            ),
+            ButtonSegment(
+              value: ThemeMode.light,
+              icon: Icon(Icons.light_mode_outlined),
+              label: Text('Светлая'),
+            ),
+            ButtonSegment(
+              value: ThemeMode.dark,
+              icon: Icon(Icons.dark_mode_outlined),
+              label: Text('Тёмная'),
+            ),
+          ],
+          selected: {vm.themeMode},
+          showSelectedIcon: false,
+          onSelectionChanged: (set) => vm.setThemeMode(set.first),
+        ),
+      ),
+    );
+  }
+}
+
 /// Экран "Персонализация цвета" (часть A.3 логики-спека, задача 2.3/2.5
 /// dev-task-spec.md). Два таба: "Элементы" (список по 5 секциям) и
 /// "Пресеты" (сетка карточек). Раскладка переключается 1/2 колонки по
@@ -65,7 +108,7 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Персонализация цвета'),
+        title: const Text('Цветовые настройки'),
         bottom: TabBar(controller: _tab, tabs: const [Tab(text: 'ЭЛЕМЕНТЫ'), Tab(text: 'ПРЕСЕТЫ')]),
         actions: [
           PopupMenuButton<String>(
@@ -139,6 +182,22 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
     return ListView(
       children: [
         if (!wide) SizedBox(height: 160, child: _buildMiniPreview(context)),
+        // Тема интерфейса (светлая/тёмная/системная) переехала сюда из
+        // общих настроек (решение пользователя, пункт 4 списка правок:
+        // "оформление цветов" и "персонализация цвета мишени" — одно и
+        // то же по смыслу место, а не два разных).
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+          child: Text(
+            'ТЕМА ИНТЕРФЕЙСА',
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  letterSpacing: 0.6,
+                ),
+          ),
+        ),
+        const _ThemeModeSelector(),
+        const SizedBox(height: 8),
         for (final section in _sections.entries) ...[
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),

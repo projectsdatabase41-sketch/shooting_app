@@ -221,6 +221,51 @@ class SupabaseAuthService {
     }
   }
 
+  /// Список таблиц, доступных в личной базе — для подключения таблиц
+  /// как справочника ассистенту (пункт 3/8 списка правок: "вводишь
+  /// адрес, ключи, жмёшь проверить и получаешь список таблиц").
+  ///
+  /// PostgREST на корневом пути (`/rest/v1/`) отдаёт OpenAPI-описание
+  /// схемы — ключи `paths` это и есть имена таблиц/представлений,
+  /// доступных текущему ключу/роли. Отдельной SQL-функции заводить не
+  /// нужно — это стандартный ответ самого PostgREST.
+  Future<List<String>> fetchTableNames() async {
+    _requireBase();
+    final token = await ensureFreshToken();
+    final client = clientFactory();
+    try {
+      final res = await client.get(
+        Uri.parse('$url/rest/v1/'),
+        headers: {
+          'apikey': anonKey,
+          if (token != null) 'Authorization': 'Bearer $token',
+          'Accept': 'application/openapi+json',
+        },
+      ).timeout(const Duration(seconds: 20));
+      if (res.statusCode != 200) {
+        throw AuthException('Не удалось получить список таблиц (${res.statusCode})');
+      }
+      final decoded = jsonDecode(res.body) as Map<String, dynamic>;
+      final paths = (decoded['paths'] as Map?) ?? const {};
+      final names = <String>{};
+      for (final key in paths.keys) {
+        final k = '$key';
+        if (!k.startsWith('/') || k.length <= 1) continue;
+        final name = k.substring(1);
+        if (name.startsWith('rpc')) continue;
+        names.add(name);
+      }
+      final list = names.toList()..sort();
+      return list;
+    } on AuthException {
+      rethrow;
+    } catch (e) {
+      throw AuthException('Не удалось разобрать список таблиц: $e');
+    } finally {
+      client.close();
+    }
+  }
+
   // ---- Внутреннее ----
 
   void _requireBase() {

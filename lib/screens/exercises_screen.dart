@@ -26,7 +26,7 @@ class ExercisesScreen extends StatelessWidget {
     // а itemBuilder вызывается на каждую строку.
     final list = store.activeExercises;
     return Scaffold(
-      appBar: AppBar(title: const Text('Тренировка')),
+      appBar: AppBar(title: const Text('Упражнения')),
       // На пустом списке кнопка создания уже есть в самом EmptyState —
       // вторая, плавающая, с тем же действием рядом только дублировала
       // её и спорила за внимание. FAB нужен, когда список уже не пуст:

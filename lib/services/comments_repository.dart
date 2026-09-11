@@ -93,6 +93,23 @@ class CommentsRepository {
     return comment;
   }
 
+  /// Правка текста (пункт 6 списка правок: возможность редактировать
+  /// сообщение в чате/заметках). Строка та же, id и автор не меняются —
+  /// при следующей отправке в облако `push()` перезапишет её там же
+  /// (upsert по id).
+  void update(String id, String text) {
+    db.db.execute('UPDATE comments SET text = ? WHERE id = ?', [text, id]);
+  }
+
+  /// Удаление одного сообщения. Локально — сразу; в облаке, если строка
+  /// уже была отправлена, останется до следующего полного push с чистого
+  /// списка (см. ограничение в комментарии класса `CommentsThreadSheet`) —
+  /// в рамках этой правки решаем главную жалобу (нет способа удалить
+  /// написанное вообще), а не идеальную синхронизацию удаления.
+  void delete(String id) {
+    db.db.execute('DELETE FROM comments WHERE id = ?', [id]);
+  }
+
   Comment _fromRow(Map<String, dynamic> row) => Comment(
         id: row['id'] as String,
         sessionId: row['session_id'] as String,

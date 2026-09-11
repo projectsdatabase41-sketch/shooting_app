@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../services/ai_service.dart';
 import '../services/knowledge_service.dart';
 import '../services/ai_settings.dart';
+import '../services/supabase_auth_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/section_header.dart';
 
@@ -20,9 +21,8 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
   late final TextEditingController _key;
   late final TextEditingController _apiBaseUrl;
   late final TextEditingController _models;
-  late final TextEditingController _booksUrl;
-  late final TextEditingController _booksToken;
   late final TextEditingController _customInstructions;
+  late final SupabaseAuthService _personalAuth;
 
   List<String>? _available;
   bool _loading = false;
@@ -46,6 +46,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
   void initState() {
     super.initState();
     _settings = AiSettings(context.read<AppDataStore>().db);
+    _personalAuth = SupabaseAuthService(context.read<AppDataStore>().db);
     _ownKey = _settings.hasOwnKey;
     _key = TextEditingController(text: _ownKey ? _settings.apiKey : '');
     _apiBaseUrl = TextEditingController(text: _settings.apiBaseUrl);
@@ -54,8 +55,6 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     // ещё ничего не вводил — не подставляем модели, подобранные под
     // встроенный бесплатный ключ, это разные наборы задач/ограничений.
     _models = TextEditingController(text: _ownKey ? _settings.rawModels : _settings.models.join('\n'));
-    _booksUrl = TextEditingController(text: _settings.booksUrl);
-    _booksToken = TextEditingController(text: _settings.booksToken);
     _customInstructions = TextEditingController(text: _settings.customInstructions);
   }
 
@@ -64,8 +63,6 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     _key.dispose();
     _apiBaseUrl.dispose();
     _models.dispose();
-    _booksUrl.dispose();
-    _booksToken.dispose();
     _customInstructions.dispose();
     super.dispose();
   }
@@ -82,8 +79,6 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     _settings.apiBaseUrl = _apiBaseUrl.text.isEmpty ? AiSettings.defaultApiBaseUrl : _apiBaseUrl.text;
     _settings.tables = _tables;
     _settings.models = _models.text.split('\n');
-    _settings.booksUrl = _booksUrl.text;
-    _settings.booksToken = _booksToken.text;
     final rawInstructions = _customInstructions.text;
     _settings.customInstructions = rawInstructions.length > _customInstructionsLimit
         ? rawInstructions.substring(0, _customInstructionsLimit)
@@ -134,6 +129,11 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
       final result = await service.probeModel(model);
       if (!mounted) return;
       setState(() => _probe[model] = result);
+      // Пауза между запросами (пункт 7 списка правок): без неё подряд
+      // идущие запросы с одного ключа провайдеры иногда встречают сбоем
+      // — не 429 явным текстом, а обрывком ответа, который выглядит как
+      // "модель не ответила", хотя дело не в самой модели.
+      if (model != list.last) await Future.delayed(const Duration(milliseconds: 400));
     }
     if (!mounted) return;
     // Рабочие модели остаются в порядке, который написал пользователь,
@@ -183,7 +183,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
           .map((l) => l.trim())
           .where(free.contains)
           .toList();
-      if (ranked.isEmpty) throw const AiException('Не удалось разобрать ответ модели — попробуйте ещё раз');
+      if (ranked.isEmpty) throw const AiException('Не удалось разобрать ответ моделей — попробуйте ещё раз');
       _settings.models = ranked;
       setState(() {
         _models.text = ranked.join('\n');
@@ -268,23 +268,20 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     });
   }
 
-  /// Считает записи в таблицах справочника — по введённым в полях
-  /// адресу и токену, а не по сохранённым: проверять надо то, что
-  /// человек видит перед собой.
+  /// Считает записи в подключённых таблицах — общей базе (вшита) и
+  /// личных, которые сейчас в `_tables`.
   Future<void> _checkBooks() async {
     setState(() {
       _checkingBooks = true;
       _books = null;
     });
-    _settings.booksUrl = _booksUrl.text;
-    _settings.booksToken = _booksToken.text;
     // Таблицы тоже нужно сохранить ПЕРЕД проверкой — иначе таблица,
     // только что добавленная кнопкой "Добавить" (живёт пока в _tables,
     // а не на диске), в проверке не участвует: tableStatus читает
     // settings.tables, а это сохранённое значение (баг, найденный
     // пользователем на таблице "notes").
     _settings.tables = _tables;
-    final status = await KnowledgeService(_settings).tableStatus();
+    final status = await KnowledgeService(_settings, personalAuth: _personalAuth).tableStatus();
     if (!mounted) return;
     setState(() {
       _books = status;
@@ -374,10 +371,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             ),
           ],
           const SizedBox(height: 24),
-          const SectionHeader(
-            title: 'Инструкция ассистенту',
-            subtitle: 'Что ещё должен знать ИИ',
-          ),
+          const SectionHeader(title: 'Инструкция ассистенту'),
           const SizedBox(height: 12),
           TextField(
             controller: _customInstructions,
@@ -518,19 +512,12 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             ),
           ],
           const SizedBox(height: 24),
-          const SectionHeader(title: 'Справочные материалы'),
+          const SectionHeader(
+            title: 'Справочные материалы',
+            subtitle: 'Книги и правила стрельбы встроены в приложение — подключать вручную не нужно. '
+                'Свои таблицы добавляются в настройках учётной записи.',
+          ),
           const SizedBox(height: 12),
-          TextField(
-            controller: _booksUrl,
-            decoration: const InputDecoration(labelText: 'URL таблицы'),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _booksToken,
-            decoration: const InputDecoration(labelText: 'Токен (если нужен)'),
-            obscureText: true,
-          ),
-          const SizedBox(height: 10),
           Row(
             children: [
               OutlinedButton.icon(

@@ -12,6 +12,7 @@ import '../models/shot.dart';
 import '../models/target_face.dart';
 import '../models/training_session.dart';
 import '../services/coach_notes_repository.dart';
+import '../services/feedback_service.dart';
 import '../state/ai_chat_view_model.dart';
 import '../state/app_data_store.dart';
 import '../widgets/ai_chart_view.dart';
@@ -186,12 +187,16 @@ class _AiChatBodyState extends State<_AiChatBody> {
           // отвечает «как я уже писал выше» — переспрашивать смысла
           // не было бы.
           onRetry: message.fromUser && !vm.busy ? () => vm.retryFrom(i) : null,
+          onEdit: message.fromUser && !vm.busy ? () => _editMessage(context, vm, i) : null,
           onDelete: vm.busy ? null : () => vm.removeFrom(i),
           onCreateExercise: (message.exercise != null && !message.exerciseCreated)
               ? () => _createExercise(context, vm, i)
               : null,
           onSaveNote: (message.note != null && !message.noteCreated)
               ? () => _saveNote(context, vm, i)
+              : null,
+          onSendFeedback: (message.feedback != null && !message.feedbackSent)
+              ? () => _sendFeedback(context, vm, i)
               : null,
           chartGallery: message.chart == null ? null : [for (final m in charts) m.chart!],
           chartGalleryIndex: message.chart == null ? 0 : charts.indexOf(message),
@@ -269,6 +274,50 @@ class _AiChatBodyState extends State<_AiChatBody> {
       ..showSnackBar(const SnackBar(content: Text('Заметка сохранена в дневник')));
   }
 
+  /// Правка своего вопроса перед повторной отправкой (пункт 6 списка
+  /// правок) — то же удаление-и-переспрос, что и `retryFrom`, но с
+  /// изменённым текстом вместо исходного.
+  Future<void> _editMessage(BuildContext context, AiChatViewModel vm, int index) async {
+    final controller = TextEditingController(text: vm.messages[index].text);
+    final text = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Изменить вопрос'),
+        content: TextField(controller: controller, autofocus: true, minLines: 1, maxLines: 6),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            child: const Text('Спросить заново'),
+          ),
+        ],
+      ),
+    );
+    if (text == null || text.isEmpty) return;
+    vm.editAndRetry(index, text).then((_) => _scrollToEnd());
+    _scrollToEnd();
+  }
+
+  /// Отправляет предложенный отзыв в общую базу разработчика (пункт 10
+  /// списка правок) — показ-на-подтверждение, как у заметки и упражнения.
+  Future<void> _sendFeedback(BuildContext context, AiChatViewModel vm, int index) async {
+    final spec = vm.messages[index].feedback;
+    if (spec == null) return;
+    try {
+      await FeedbackService().send('${spec['text']}');
+      if (!context.mounted) return;
+      vm.markFeedbackSent(index);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('Отзыв отправлен, спасибо')));
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
   Widget _buildInput(AiChatViewModel vm) {
     // embedded: true — экран живёт внутри PageView мишени, а не под
     // своим Scaffold, и не подвигается под клавиатуру сам (жалоба
@@ -311,6 +360,7 @@ class _AiChatBodyState extends State<_AiChatBody> {
 class _Bubble extends StatelessWidget {
   final AiMessage message;
   final VoidCallback? onRetry;
+  final VoidCallback? onEdit;
   final VoidCallback? onDelete;
 
   /// `null`, если в сообщении нет предложенного упражнения или оно уже
@@ -321,6 +371,10 @@ class _Bubble extends StatelessWidget {
   /// уже сохранена.
   final VoidCallback? onSaveNote;
 
+  /// `null`, если в сообщении нет предложенного отзыва или он уже
+  /// отправлен.
+  final VoidCallback? onSendFeedback;
+
   /// Все графики разговора и позиция графика ЭТОГО сообщения среди них —
   /// для листания в полноэкранном просмотре (`ChartGalleryScreen`).
   /// `null`/пусто, если в сообщении графика нет вовсе.
@@ -330,9 +384,11 @@ class _Bubble extends StatelessWidget {
   const _Bubble({
     required this.message,
     this.onRetry,
+    this.onEdit,
     this.onDelete,
     this.onCreateExercise,
     this.onSaveNote,
+    this.onSendFeedback,
     this.chartGallery,
     this.chartGalleryIndex = 0,
   });
@@ -352,7 +408,7 @@ class _Bubble extends StatelessWidget {
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
-        onLongPress: (onRetry == null && onDelete == null)
+        onLongPress: (onRetry == null && onEdit == null && onDelete == null)
             ? null
             : () => _showActions(context),
         child: Container(
@@ -393,6 +449,14 @@ class _Bubble extends StatelessWidget {
                 onSave: onSaveNote,
               ),
             ],
+            if (message.feedback != null) ...[
+              const SizedBox(height: 8),
+              _FeedbackProposalCard(
+                spec: message.feedback!,
+                sent: message.feedbackSent,
+                onSend: onSendFeedback,
+              ),
+            ],
             if (message.sources.isNotEmpty) ...[
               const SizedBox(height: 6),
               Text(
@@ -429,6 +493,15 @@ class _Bubble extends StatelessWidget {
                 onTap: () {
                   Navigator.of(ctx).pop();
                   onRetry!();
+                },
+              ),
+            if (onEdit != null)
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('Изменить'),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  onEdit!();
                 },
               ),
             if (onDelete != null)
@@ -580,6 +653,63 @@ class _NoteProposalCard extends StatelessWidget {
               label: 'Сохранить в дневник',
               baseColor: cs.primary,
               onTap: onSave,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Карточка предложенного отзыва об приложении — тот же принцип, что у
+/// `_NoteProposalCard`/`_ExerciseProposalCard`: показ на подтверждение.
+class _FeedbackProposalCard extends StatelessWidget {
+  final Map<String, dynamic> spec;
+  final bool sent;
+  final VoidCallback? onSend;
+
+  const _FeedbackProposalCard({required this.spec, required this.sent, required this.onSend});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.rate_review_outlined, size: 18, color: cs.primary),
+              const SizedBox(width: 6),
+              const Text('Отзыв о приложении', style: TextStyle(fontWeight: FontWeight.w600)),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text('${spec['text']}', style: theme.textTheme.bodySmall),
+          const SizedBox(height: 10),
+          if (sent)
+            Row(
+              children: [
+                Icon(Icons.check_circle, size: 18, color: cs.primary),
+                const SizedBox(width: 6),
+                Text('Отправлено', style: theme.textTheme.bodySmall?.copyWith(color: cs.primary)),
+              ],
+            )
+          else
+            Raised3DButton(
+              dense: true,
+              icon: Icons.send,
+              label: 'Отправить отзыв',
+              baseColor: cs.primary,
+              onTap: onSend,
             ),
         ],
       ),

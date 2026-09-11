@@ -127,18 +127,21 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
                     itemCount: comments.length,
                     itemBuilder: (context, i) {
                       final c = comments[i];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('${c.authorLabel}: ${df.format(c.createdAt)}',
-                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                      fontWeight: FontWeight.w600,
-                                    )),
-                            Text(c.text),
-                          ],
+                      return GestureDetector(
+                        onLongPress: () => _showActions(context, repo, c),
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('${c.authorLabel}: ${df.format(c.createdAt)}',
+                                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                        fontWeight: FontWeight.w600,
+                                      )),
+                              Text(c.text),
+                            ],
+                          ),
                         ),
                       );
                     },
@@ -195,6 +198,59 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
         ],
       ),
     );
+  }
+
+  /// Меню "Изменить"/"Удалить" по долгому нажатию (пункт 6 списка
+  /// правок) — тот же приём, что уже есть у сообщений ассистента.
+  void _showActions(BuildContext context, CommentsRepository repo, Comment c) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('Изменить'),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _editComment(context, repo, c);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline),
+              title: const Text('Удалить'),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                repo.delete(c.id);
+                setState(() {});
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _editComment(BuildContext context, CommentsRepository repo, Comment c) async {
+    final controller = TextEditingController(text: c.text);
+    final text = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Изменить сообщение'),
+        content: TextField(controller: controller, autofocus: true, minLines: 1, maxLines: 6),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+    );
+    if (text == null || text.isEmpty) return;
+    repo.update(c.id, text);
+    if (mounted) setState(() {});
   }
 
   String _titleFor(CommentLevel level) => switch (level) {

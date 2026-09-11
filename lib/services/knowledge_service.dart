@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../logic/text_search.dart';
 import 'ai_settings.dart';
+import 'supabase_auth_service.dart';
 
 /// Кусок текста из базы знаний.
 class KnowledgeChunk {
@@ -24,7 +25,13 @@ class KnowledgeChunk {
   });
 }
 
-/// Поиск по справочным таблицам пользователя (Supabase REST / PostgREST).
+/// Одна подключённая таблица вместе с адресом/ключом, по которым её
+/// искать — общая база разработчика (книги/правила) и личная база
+/// пользователя (его собственные таблицы) физически разные проекты
+/// Supabase, поэтому у каждой таблицы свой адрес.
+typedef _SourceTable = (KnowledgeTableConfig table, String baseUrl, String token);
+
+/// Поиск по справочным таблицам (Supabase REST / PostgREST).
 ///
 /// Ищем ПО КЛЮЧЕВЫМ СЛОВАМ, а не по эмбеддингам — решение пользователя.
 /// В таблицах эмбеддинги есть, но чтобы ими пользоваться, нужно на каждый
@@ -32,13 +39,22 @@ class KnowledgeChunk {
 /// подстрокой по `content` даёт достаточный результат бесплатно и
 /// мгновенно.
 ///
-/// Таблицы: `shooting_rules` (основы и правила стрельбы) и `books`
-/// (книги по медицине, тренировкам и смежным темам).
+/// Источников теперь два (пункт 2/3/8 списка правок):
+/// * `AiSettings.builtInTables` — вшитые в приложение таблицы ОБЩЕЙ базы
+///   разработчика (`AiSettings.booksUrl`/`booksToken`, константы).
+/// * `settings.tables` — таблицы из ЛИЧНОЙ базы пользователя
+///   (`personalAuth`), которые он сам подключил в настройках учётной
+///   записи.
 class KnowledgeService {
   final AiSettings settings;
+
+  /// `null` — личная база не подключена (пользователь не вошёл), тогда
+  /// ищем только по общей базе разработчика.
+  final SupabaseAuthService? personalAuth;
+
   final http.Client _client;
 
-  KnowledgeService(this.settings, {http.Client? client})
+  KnowledgeService(this.settings, {this.personalAuth, http.Client? client})
       : _client = client ?? http.Client();
 
   static const Duration _timeout = Duration(seconds: 20);
@@ -68,7 +84,23 @@ class KnowledgeService {
   /// чем взять первые два, какие отдал сервер.
   static const int perWordFetch = 4;
 
-  /// Сколько записей в каждой таблице базы знаний.
+  /// Все подключённые таблицы вместе с адресом/ключом для запроса —
+  /// вшитые (общая база) + личные пользователя, если она подключена.
+  Future<List<_SourceTable>> _allTables() async {
+    final out = <_SourceTable>[
+      for (final t in AiSettings.builtInTables) (t, AiSettings.booksUrl, AiSettings.booksToken),
+    ];
+    final auth = personalAuth;
+    if (auth != null && auth.hasBase && settings.tables.isNotEmpty) {
+      final token = await auth.ensureFreshToken() ?? auth.anonKey;
+      for (final t in settings.tables) {
+        out.add((t, '${auth.url}/rest/v1', token));
+      }
+    }
+    return out;
+  }
+
+  /// Сколько записей в каждой подключённой таблице.
   ///
   /// Когда ассистент отвечает «не моя тема», причин ровно две: он сам
   /// решил отказаться, или искать было негде. Отличить их без такой
@@ -79,13 +111,9 @@ class KnowledgeService {
   /// строку, так что тянуть всю таблицу ради счётчика не приходится.
   Future<Map<String, String>> tableStatus() async {
     final out = <String, String>{};
-    if (!settings.booksConfigured) {
-      return {'база': 'не задан URL'};
-    }
-    final token = settings.booksToken;
-    for (final table in settings.tables) {
+    for (final (table, baseUrl, token) in await _allTables()) {
       try {
-        final uri = Uri.parse('${settings.booksUrl}/${table.name}')
+        final uri = Uri.parse('$baseUrl/${table.name}')
             .replace(queryParameters: {'select': table.contentColumn});
         final res = await _client.get(uri, headers: {
           'Accept': 'application/json',
@@ -110,18 +138,14 @@ class KnowledgeService {
     return out;
   }
 
-  /// Ищет по обеим таблицам. Пустой список — не нашли, не искали или
-  /// база недоступна; для чата это не ошибка, просто ответ будет без
-  /// справочных материалов.
+  /// Ищет по всем подключённым таблицам. Пустой список — не нашли, не
+  /// искали или база недоступна; для чата это не ошибка, просто ответ
+  /// будет без справочных материалов.
   ///
   /// Схема поиска: на каждое ключевое слово — свой запрос, потом все
   /// найденные куски ранжируются по тому, сколько РАЗНЫХ слов вопроса
-  /// в них встречается. Раньше был один общий запрос `or=(...)` с
-  /// лимитом 2, и сервер отдавал просто две первые попавшиеся строки,
-  /// где нашлось хоть одно слово, — на вопрос про затыльник приезжал
-  /// случайный абзац, где было слово «глубина».
+  /// в них встречается.
   Future<List<KnowledgeChunk>> search(String question) async {
-    if (!settings.booksConfigured) return const [];
     final trimmed = question.trim();
     if (trimmed.length < minQuestionLength) return const [];
     if (isSmallTalk(trimmed)) return const [];
@@ -129,11 +153,11 @@ class KnowledgeService {
     if (words.isEmpty) return const [];
 
     final results = <KnowledgeChunk>[];
-    for (final table in settings.tables) {
+    for (final (table, baseUrl, token) in await _allTables()) {
       // Запросы по словам — параллельно: это одна и та же база, и
       // ждать их по очереди значит втрое затянуть ответ в чате.
       final batches = await Future.wait([
-        for (final w in words) _searchTable(table, w),
+        for (final w in words) _searchTable(table, w, baseUrl, token),
       ]);
 
       // Дедупликация по тексту: одно и то же слово в разных запросах
@@ -158,14 +182,19 @@ class KnowledgeService {
   static int _relevance(KnowledgeChunk c, List<String> words) =>
       TextSearch.relevance('${c.heading} ${c.text}', words);
 
-  Future<List<KnowledgeChunk>> _searchTable(KnowledgeTableConfig table, String word) async {
+  Future<List<KnowledgeChunk>> _searchTable(
+    KnowledgeTableConfig table,
+    String word,
+    String baseUrl,
+    String token,
+  ) async {
     try {
       // select=* вместо конкретных имён — file_name/heading_path не
       // обязаны существовать в чужой таблице (например, notes другого
       // ассистента), а contentColumn настраивается пользователем и не
       // обязан называться "content" (пункт: "хочу, чтобы ИИ мог читать
       // и заметки, и другие таблицы, которые я подключу").
-      final uri = Uri.parse('${settings.booksUrl}/${table.name}').replace(
+      final uri = Uri.parse('$baseUrl/${table.name}').replace(
         queryParameters: {
           'select': '*',
           table.contentColumn: 'ilike.*$word*',
@@ -173,7 +202,6 @@ class KnowledgeService {
         },
       );
 
-      final token = settings.booksToken;
       final res = await _client.get(uri, headers: {
         'Accept': 'application/json',
         if (token.isNotEmpty) 'apikey': token,
