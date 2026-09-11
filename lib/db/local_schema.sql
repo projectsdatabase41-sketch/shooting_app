@@ -76,7 +76,12 @@ CREATE TABLE IF NOT EXISTS training_sessions (
   -- отправленная в облако, пропадает из приложения сразу, но строка
   -- остаётся до тех пор, пока синхронизация не подтвердит удаление
   -- облачной копии — иначе следующий pull привёз бы её обратно.
-  pending_delete    INTEGER NOT NULL DEFAULT 0
+  pending_delete    INTEGER NOT NULL DEFAULT 0,
+  -- Удалена только с этого телефона (пункт списка правок: "удаление
+  -- двойное") — облачная копия остаётся, поэтому строка не должна
+  -- попасть ни в _loadSessions (скрыта), ни в pushDeletions (её не
+  -- нужно стирать в облаке).
+  local_hidden      INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS shots (

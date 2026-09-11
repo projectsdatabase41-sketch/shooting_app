@@ -258,26 +258,13 @@ class _GalleryPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final type = '${spec['type'] ?? ''}'.toLowerCase();
-    final title = '${spec['title'] ?? ''}'.trim();
-
+    // Название графика сюда не выводим (решение пользователя) — в
+    // увеличенном виде оно наезжало на верх графика; заголовок уже
+    // виден в самом чате на карточке.
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (title.isNotEmpty) ...[
-            Text(title, style: theme.textTheme.titleMedium),
-            const SizedBox(height: 12),
-          ],
-          Expanded(
-            child: type == 'table'
-                ? _buildExpandedTable(context)
-                : _buildExpandedChart(context, bar: type == 'bar'),
-          ),
-        ],
-      ),
+      child: type == 'table' ? _buildExpandedTable(context) : _buildExpandedChart(context, bar: type == 'bar'),
     );
   }
 
@@ -298,18 +285,22 @@ class _GalleryPage extends StatelessWidget {
             builder: (context, constraints) => InteractiveViewer(
               minScale: 1,
               maxScale: 6,
-              child: SizedBox(
-                width: constraints.maxWidth,
-                height: constraints.maxHeight,
-                child: CustomPaint(
-                  painter: _SpecChartPainter(
-                    series: series,
-                    labels: labels,
-                    bar: bar,
-                    colors: palette,
-                    axisColor: cs.onSurfaceVariant,
+              // На весь экран график был слишком крупным для чтения
+              // осей — 80% (решение пользователя), по центру.
+              child: Center(
+                child: SizedBox(
+                  width: constraints.maxWidth * 0.8,
+                  height: constraints.maxHeight * 0.8,
+                  child: CustomPaint(
+                    painter: _SpecChartPainter(
+                      series: series,
+                      labels: labels,
+                      bar: bar,
+                      colors: palette,
+                      axisColor: cs.onSurfaceVariant,
+                    ),
+                    child: const SizedBox.expand(),
                   ),
-                  child: const SizedBox.expand(),
                 ),
               ),
             ),

@@ -157,7 +157,7 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     TextButton(
-                      onPressed: () => setState(_controller.clear),
+                      onPressed: () => Navigator.of(context).pop(),
                       child: const Text('Отмена'),
                     ),
                     const SizedBox(width: 8),
@@ -175,8 +175,8 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
                           createdAt: DateTime.now(),
                         );
                         repo.add(comment);
-                        _controller.clear();
-                        setState(() {});
+                        vm.noteExternalEdit();
+                        Navigator.of(context).pop();
                       },
                       child: const Text('Сохранить'),
                     ),

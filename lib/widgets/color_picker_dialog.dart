@@ -33,7 +33,6 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> with SingleTicker
   late TextEditingController _hexController;
   late Color _color;
 
-  bool get _alphaCapable => TargetColorScheme.alphaCapableKeys.contains(widget.colorKey);
   bool get _autoContrastRelevant => TargetColorScheme.autoContrastRelevantKeys.contains(widget.colorKey);
 
   @override
@@ -77,7 +76,6 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> with SingleTicker
                 children: [_buildPaletteTab(), _buildHexTab()],
               ),
             ),
-            if (_alphaCapable) _buildAlphaChips(),
             if (vm.recentColors.isNotEmpty) _buildRecentColors(vm),
             if (_autoContrastRelevant) _buildAutoContrastToggle(vm),
           ],
@@ -108,9 +106,16 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> with SingleTicker
               final hue = (i % 8) * 45.0;
               final sat = 0.3 + (i ~/ 8) * 0.1;
               final c = HSVColor.fromAHSV(1, hue, sat.clamp(0, 1), hsv.value).toColor();
+              final selected = c == _color;
               return GestureDetector(
                 onTap: () => _apply(c),
-                child: Container(margin: const EdgeInsets.all(2), color: c),
+                child: Container(
+                  margin: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    color: c,
+                    border: selected ? Border.all(color: Colors.white, width: 3) : null,
+                  ),
+                ),
               );
             }),
           ),
@@ -177,24 +182,6 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> with SingleTicker
           child: Container(height: 40, color: _color),
         ),
       ],
-    );
-  }
-
-  Widget _buildAlphaChips() {
-    const presets = [1.0, 0.8, 0.6, 0.4, 0.2];
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Wrap(
-        spacing: 6,
-        children: presets.map((a) {
-          final selected = (_color.a - a).abs() < 0.02;
-          return ChoiceChip(
-            label: Text('${(a * 100).round()}%'),
-            selected: selected,
-            onSelected: (_) => _apply(_color.withAlpha((a * 255).round())),
-          );
-        }).toList(),
-      ),
     );
   }
 

@@ -203,11 +203,18 @@ class AiService {
         )
         .timeout(_timeout);
 
-    if (res.statusCode == 429 || res.statusCode == 403) {
-      throw RateLimitedException(_errorFrom(res));
+    // 403 бывает и НЕ про лимит (например, провайдер не разрешён в
+    // настройках аккаунта) — ложно останавливать всю цепочку из-за
+    // такого 403 хуже, чем показать его как обычную ошибку одной
+    // модели. 429 — всегда про лимит, тут сомнений нет.
+    final errorMsg = _errorFrom(res);
+    final isRateLimit = res.statusCode == 429 ||
+        (res.statusCode == 403 && RegExp(r'rate.?limit|too many requests|quota', caseSensitive: false).hasMatch(errorMsg));
+    if (isRateLimit) {
+      throw RateLimitedException(errorMsg);
     }
     if (res.statusCode != 200) {
-      throw AiException(_errorFrom(res));
+      throw AiException(errorMsg);
     }
     final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
     final choices = data['choices'] as List?;

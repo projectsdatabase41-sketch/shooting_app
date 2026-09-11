@@ -358,9 +358,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             minLines: 2,
             maxLines: 6,
             maxLength: _customInstructionsLimit,
-            decoration: const InputDecoration(
-              labelText: 'Например: «обращайся на ты», «я готовлюсь к отбору, упоминай это»',
-            ),
+            decoration: const InputDecoration(labelText: 'Что ещё должен знать ИИ'),
           ),
           const SizedBox(height: 24),
           // Окно выбора цепочки моделей нужно, только когда пользователь

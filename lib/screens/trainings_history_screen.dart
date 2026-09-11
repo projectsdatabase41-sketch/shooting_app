@@ -57,6 +57,7 @@ class TrainingsHistoryScreen extends StatelessWidget {
                   confirmLabel: empty ? 'Да' : 'Удалить навсегда',
                   cancelLabel: empty ? 'Нет' : 'Отмена',
                   onConfirmed: () => store.deleteSession(s.id),
+                  onConfirmedLocalOnly: empty ? null : () => store.deleteSessionLocalOnly(s.id),
                   child: _SessionCard(
                     title: exercise?.label ?? s.exerciseId,
                     subtitle: s.startedAt == null ? 'Не начата' : df.format(s.startedAt!),

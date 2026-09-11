@@ -76,6 +76,7 @@ class LocalDbService {
         'extra': 'TEXT',
         'updated_at': 'TEXT',
         'pending_delete': 'INTEGER NOT NULL DEFAULT 0',
+        'local_hidden': 'INTEGER NOT NULL DEFAULT 0',
       },
       'project_settings': {
         'auth_user_id': 'TEXT',
@@ -237,7 +238,8 @@ CREATE TABLE IF NOT EXISTS training_sessions (
   -- В интерфейсе не показывается — это материал для ассистента.
   extra             TEXT,
   updated_at        TEXT,
-  pending_delete    INTEGER NOT NULL DEFAULT 0
+  pending_delete    INTEGER NOT NULL DEFAULT 0,
+  local_hidden      INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS shots (

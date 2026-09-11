@@ -27,8 +27,14 @@ class SwipeToDelete extends StatelessWidget {
   /// вопроса «Зря создал?» уместнее «Нет».
   final String cancelLabel;
 
-  /// Вызывается только после подтверждения.
+  /// Вызывается после подтверждения "удалить везде" (или единственного
+  /// варианта удаления, если `onConfirmedLocalOnly` не задан).
   final VoidCallback onConfirmed;
+
+  /// Второй, более мягкий вариант удаления — "только с телефона",
+  /// облачная копия остаётся (пункт списка правок: "удаление двойное").
+  /// `null` — показывается только один вариант удаления, как раньше.
+  final VoidCallback? onConfirmedLocalOnly;
 
   final Widget child;
 
@@ -39,6 +45,7 @@ class SwipeToDelete extends StatelessWidget {
     required this.message,
     required this.onConfirmed,
     required this.child,
+    this.onConfirmedLocalOnly,
     this.confirmLabel = 'Удалить',
     this.cancelLabel = 'Отмена',
   });
@@ -84,26 +91,37 @@ class SwipeToDelete extends StatelessWidget {
         ),
       ),
       confirmDismiss: (_) async {
-        final ok = await showDialog<bool>(
+        // 0 = отмена/закрыли мимо, 1 = только с телефона, 2 = везде.
+        final choice = await showDialog<int>(
           context: context,
           builder: (ctx) => AlertDialog(
             title: Text(title),
             content: Text(message),
             actions: [
               TextButton(
-                onPressed: () => Navigator.of(ctx).pop(false),
+                onPressed: () => Navigator.of(ctx).pop(0),
                 child: Text(cancelLabel),
               ),
+              if (onConfirmedLocalOnly != null)
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(1),
+                  child: const Text('Только с телефона'),
+                ),
               FilledButton(
                 style: FilledButton.styleFrom(backgroundColor: cs.error),
-                onPressed: () => Navigator.of(ctx).pop(true),
-                child: Text(confirmLabel),
+                onPressed: () => Navigator.of(ctx).pop(2),
+                child: Text(onConfirmedLocalOnly != null ? 'И из облака' : confirmLabel),
               ),
             ],
           ),
         );
-        if (ok != true) return false;
-        onConfirmed();
+        if (choice == 1) {
+          onConfirmedLocalOnly!();
+        } else if (choice == 2) {
+          onConfirmed();
+        } else {
+          return false;
+        }
         // false, а не true: строку из списка убирает уже само хранилище,
         // и если вернуть true, Dismissible попытается анимировать
         // удаление виджета, которого в дереве больше нет.

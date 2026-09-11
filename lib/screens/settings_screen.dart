@@ -59,10 +59,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           ListTile(
-            leading: Icon(Icons.file_download_outlined, color: Theme.of(context).disabledColor),
+            leading: const Icon(Icons.file_download_outlined),
             title: const Text('Импорт тренировок'),
-            subtitle: const Text('В разработке'),
-            enabled: false,
+            subtitle: const Text('Через чат с ИИ-ассистентом'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _showImportDialog(context),
           ),
           ListTile(
             leading: const Icon(Icons.ios_share_outlined),
@@ -166,12 +167,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                FilledButton.icon(
-                  onPressed: _syncing ? null : () => _syncNow(context),
-                  icon: _syncing
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.cloud_upload_outlined),
-                  label: const Text('Синхронизировать сейчас'),
+                // Разделено на "из" и "в" (решение пользователя): раньше
+                // одна кнопка делала оба разом, и новую тренировку на
+                // телефоне нельзя было ТОЛЬКО подтянуть с сервера, не
+                // отправив заодно локальные.
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: _syncing ? null : () => _pullNow(context),
+                      icon: _syncing
+                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.cloud_download_outlined),
+                      label: const Text('Загрузить из облака'),
+                    ),
+                    FilledButton.icon(
+                      onPressed: _syncing ? null : () => _pushNow(context),
+                      icon: _syncing
+                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.cloud_upload_outlined),
+                      label: const Text('Отправить в облако'),
+                    ),
+                  ],
                 ),
                 if (_syncMessage != null) ...[
                   const SizedBox(height: 8),
@@ -192,7 +210,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Future<void> _syncNow(BuildContext context) async {
+  Future<void> _pullNow(BuildContext context) async {
     setState(() {
       _syncing = true;
       _syncMessage = null;
@@ -200,12 +218,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final store = context.read<AppDataStore>();
     final sync = SupabaseSyncService(SupabaseAuthService(store.db));
     try {
-      final deleted = await sync.pushDeletions(store);
-      final pushed = await sync.push(store);
       final result = await sync.pull(store);
       final parts = <String>[];
-      if (deleted > 0) parts.add('удалено: $deleted');
-      if (pushed > 0) parts.add('отправлено: $pushed');
       if (result.pulledSessions > 0) parts.add('получено тренировок: ${result.pulledSessions}');
       if (result.pulledExercises > 0) parts.add('упражнений: ${result.pulledExercises}');
       if (result.pulledComments > 0) parts.add('комментариев: ${result.pulledComments}');
@@ -216,6 +230,68 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() => _syncing = false);
     }
   }
+
+  Future<void> _pushNow(BuildContext context) async {
+    setState(() {
+      _syncing = true;
+      _syncMessage = null;
+    });
+    final store = context.read<AppDataStore>();
+    final sync = SupabaseSyncService(SupabaseAuthService(store.db));
+    try {
+      final deleted = await sync.pushDeletions(store);
+      final pushed = await sync.push(store);
+      final parts = <String>[];
+      if (deleted > 0) parts.add('удалено: $deleted');
+      if (pushed > 0) parts.add('отправлено: $pushed');
+      setState(() => _syncMessage = parts.isEmpty ? 'Готово, новых данных не было' : 'Готово — ${parts.join(', ')}');
+    } catch (e) {
+      setState(() => _syncMessage = '$e');
+    } finally {
+      setState(() => _syncing = false);
+    }
+  }
+}
+
+/// Импорт тренировок пока не встроен в приложение — вместо этого
+/// открываем чат с ИИ-ассистентом, где пользователь может выгрузить
+/// свою переписку/данные и попросить помочь перенести их (решение
+/// пользователя). Каждая кнопка — ссылка на веб-чат сервиса; на
+/// телефоне с установленным приложением ОС сама предложит открыть его
+/// вместо браузера.
+void _showImportDialog(BuildContext context) {
+  const links = {
+    'ChatGPT': 'https://chat.openai.com',
+    'Claude': 'https://claude.ai',
+    'Qwen': 'https://chat.qwen.ai',
+  };
+  showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Импорт через ИИ-ассистента'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final entry in links.entries) ...[
+            OutlinedButton(
+              onPressed: () => launchUrl(Uri.parse(entry.value), mode: LaunchMode.externalApplication),
+              child: Text(entry.key),
+            ),
+            const SizedBox(height: 8),
+          ],
+          const SizedBox(height: 8),
+          Text(
+            'Импорт внутри самого приложения пока в разработке.',
+            style: Theme.of(ctx).textTheme.bodySmall,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Закрыть')),
+      ],
+    ),
+  );
 }
 
 /// Переключатель светлой/тёмной темы интерфейса.

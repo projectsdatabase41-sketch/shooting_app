@@ -38,6 +38,10 @@ class AiMemoryService {
   /// `KnowledgeService` для куда более крупной таблицы книг.
   static const int _recentWindow = 200;
 
+  /// Сколько записей держим вообще, старше — стираем при каждом append
+  /// (решение пользователя: "чистка её, 1000 строк для хранения").
+  static const int maxStoredRows = 1000;
+
   Future<List<AiMemorySummary>> _fetchRecent({int limit = _recentWindow}) async {
     if (!auth.isSignedIn) return const [];
     final token = await auth.ensureFreshToken();
@@ -113,10 +117,29 @@ class AiMemoryService {
             body: jsonEncode([summary.toJson()]),
           )
           .timeout(const Duration(seconds: 20));
+      await _trimOldRows(token, client);
     } catch (_) {
       // Best-effort — см. комментарий у метода.
     } finally {
       client.close();
     }
+  }
+
+  /// Стирает записи старше первых [maxStoredRows] — иначе таблица
+  /// растёт бесконечно. Дёшево: одна выборка id "лишнего хвоста" плюс
+  /// одно удаление по ним.
+  Future<void> _trimOldRows(String token, http.Client client) async {
+    final res = await client.get(
+      Uri.parse('${auth.url}/rest/v1/ai_conversation_summaries'
+          '?select=id&order=period_start.desc&offset=$maxStoredRows&limit=500'),
+      headers: {'apikey': auth.anonKey, 'Authorization': 'Bearer $token'},
+    ).timeout(const Duration(seconds: 20));
+    if (res.statusCode >= 400) return;
+    final ids = (jsonDecode(utf8.decode(res.bodyBytes)) as List).map((r) => '${r['id']}').toList();
+    if (ids.isEmpty) return;
+    await client.delete(
+      Uri.parse('${auth.url}/rest/v1/ai_conversation_summaries?id=in.(${ids.join(',')})'),
+      headers: {'apikey': auth.anonKey, 'Authorization': 'Bearer $token'},
+    ).timeout(const Duration(seconds: 20));
   }
 }

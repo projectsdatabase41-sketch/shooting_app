@@ -177,6 +177,21 @@ class AppDataStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Удаляет ТОЛЬКО с этого телефона — облачная копия остаётся
+  /// нетронутой (пункт списка правок: "удаление двойное"). Если
+  /// тренировка никогда не синхронизировалась, разницы с
+  /// `deleteSession` нет — стирать в облаке всё равно нечего.
+  void deleteSessionLocalOnly(String id) {
+    final session = sessions.where((s) => s.id == id).firstOrNull;
+    if (session != null && session.syncedToCloud) {
+      db.db.execute('UPDATE training_sessions SET local_hidden = 1 WHERE id = ?', [id]);
+    } else {
+      confirmSessionDeleted(id);
+    }
+    sessions = [for (final s in sessions) if (s.id != id) s];
+    notifyListeners();
+  }
+
   /// Стирает тромбстоун тренировки физически — вызывается сразу из
   /// `deleteSession` (никогда не синхронизированная тренировка) или из
   /// `SupabaseSyncService` после подтверждённого удаления облачной копии.
@@ -253,7 +268,7 @@ class AppDataStore extends ChangeNotifier {
     // списка правок). Сама строка при этом остаётся в базе — её видит
     // только sync через pendingDeletionIds().
     final sessionRows =
-        db.db.select('SELECT * FROM training_sessions WHERE pending_delete = 0 ORDER BY started_at DESC');
+        db.db.select('SELECT * FROM training_sessions WHERE pending_delete = 0 AND local_hidden = 0 ORDER BY started_at DESC');
     sessions = sessionRows.map((r) {
       final id = r['id'] as String;
       final shotRows = db.db.select(
