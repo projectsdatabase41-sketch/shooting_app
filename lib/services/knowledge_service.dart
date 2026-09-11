@@ -86,7 +86,7 @@ class KnowledgeService {
     for (final table in settings.tables) {
       try {
         final uri = Uri.parse('${settings.booksUrl}/${table.name}')
-            .replace(queryParameters: {'select': 'content'});
+            .replace(queryParameters: {'select': table.contentColumn});
         final res = await _client.get(uri, headers: {
           'Accept': 'application/json',
           'Prefer': 'count=exact',
@@ -160,10 +160,15 @@ class KnowledgeService {
 
   Future<List<KnowledgeChunk>> _searchTable(KnowledgeTableConfig table, String word) async {
     try {
+      // select=* вместо конкретных имён — file_name/heading_path не
+      // обязаны существовать в чужой таблице (например, notes другого
+      // ассистента), а contentColumn настраивается пользователем и не
+      // обязан называться "content" (пункт: "хочу, чтобы ИИ мог читать
+      // и заметки, и другие таблицы, которые я подключу").
       final uri = Uri.parse('${settings.booksUrl}/${table.name}').replace(
         queryParameters: {
-          'select': 'file_name,heading_path,content',
-          'content': 'ilike.*$word*',
+          'select': '*',
+          table.contentColumn: 'ilike.*$word*',
           'limit': '$perWordFetch',
         },
       );
@@ -175,8 +180,8 @@ class KnowledgeService {
         if (token.isNotEmpty) 'Authorization': 'Bearer $token',
       }).timeout(_timeout);
 
-      // 400 — в таблице нет ожидаемых колонок. Это не повод рушить чат:
-      // просто пропускаем таблицу.
+      // 400 — в таблице нет колонки, указанной как contentColumn. Это
+      // не повод рушить чат: просто пропускаем таблицу.
       if (res.statusCode != 200) return const [];
 
       final data = jsonDecode(utf8.decode(res.bodyBytes));
@@ -184,14 +189,14 @@ class KnowledgeService {
 
       return [
         for (final row in data)
-          if (row is Map && row['content'] is String)
+          if (row is Map && row[table.contentColumn] is String)
             KnowledgeChunk(
               table: table.name,
               tableLabel: table.label,
               tableDescription: table.description,
               source: '${row['file_name'] ?? table.label}',
               heading: '${row['heading_path'] ?? ''}',
-              text: _clean('${row['content']}'),
+              text: _clean('${row[table.contentColumn]}'),
             )
       ];
     } catch (_) {

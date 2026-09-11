@@ -199,34 +199,45 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     final nameCtrl = TextEditingController();
     final labelCtrl = TextEditingController();
     final descCtrl = TextEditingController();
+    final columnCtrl = TextEditingController(text: 'content');
     final config = await showDialog<KnowledgeTableConfig>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Новая таблица'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtrl,
-              autofocus: true,
-              decoration: const InputDecoration(labelText: 'Напишите имя таблицы'),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: labelCtrl,
-              decoration: const InputDecoration(labelText: 'Название (необязательно)'),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: descCtrl,
-              minLines: 2,
-              maxLines: 4,
-              decoration: const InputDecoration(
-                labelText: 'Краткое описание (необязательно)',
-                hintText: 'Что в этой таблице — чтобы ИИ понимал',
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: 'Напишите имя таблицы'),
               ),
-            ),
-          ],
+              const SizedBox(height: 10),
+              TextField(
+                controller: labelCtrl,
+                decoration: const InputDecoration(labelText: 'Название (необязательно)'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: descCtrl,
+                minLines: 2,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  labelText: 'Краткое описание (необязательно)',
+                  hintText: 'Что в этой таблице — чтобы ИИ понимал',
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: columnCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Колонка с текстом',
+                  hintText: 'content — если в таблице она называется иначе, укажите имя',
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
@@ -238,6 +249,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                 name: name,
                 label: labelCtrl.text.trim().isEmpty ? null : labelCtrl.text.trim(),
                 description: descCtrl.text.trim(),
+                contentColumn: columnCtrl.text.trim().isEmpty ? 'content' : columnCtrl.text.trim(),
               ));
             },
             child: const Text('Добавить'),

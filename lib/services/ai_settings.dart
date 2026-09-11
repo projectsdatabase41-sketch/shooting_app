@@ -12,22 +12,31 @@ class KnowledgeTableConfig {
   final String label;
   final String description;
 
+  /// Какая колонка содержит текст для поиска. По умолчанию `content` —
+  /// так были устроены исходные shooting_rules/books, но таблица со
+  /// своей структурой (например, чужая `notes`) может называть её
+  /// иначе — отсюда настройка, а не жёстко зашитое имя.
+  final String contentColumn;
+
   const KnowledgeTableConfig({
     required this.name,
     String? label,
     this.description = '',
+    this.contentColumn = 'content',
   }) : label = label ?? name;
 
   factory KnowledgeTableConfig.fromJson(Map<String, dynamic> json) => KnowledgeTableConfig(
         name: json['name'] as String,
         label: json['label'] as String?,
         description: json['description'] as String? ?? '',
+        contentColumn: json['content_column'] as String? ?? 'content',
       );
 
   Map<String, dynamic> toJson() => {
         'name': name,
         'label': label,
         'description': description,
+        'content_column': contentColumn,
       };
 }
 
