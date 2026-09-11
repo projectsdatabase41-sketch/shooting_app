@@ -112,6 +112,10 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
           theme: _lightTheme,
           darkTheme: _darkTheme,
           themeMode: themeMode,
+          // null — системный язык устройства (по умолчанию). Сам текст
+          // экранов при этом не переводится — см. комментарий у
+          // `PersonalizationViewModel.locale`.
+          locale: _personalization.locale,
           // Личные цвета мишени — отдельная персонализация (часть A), НЕ
           // связана с этой темой (раздел 9 ТЗ): стрелок подбирает цвета
           // мишени под свою видимость, а не под оформление приложения.

@@ -5,10 +5,13 @@ import 'package:provider/provider.dart';
 import '../services/coach_access_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/empty_state.dart';
+import 'coach_exercise_detail_screen.dart';
 
-/// Экран тренера — "дневник" (раздел 8 ТЗ): список тренировок
-/// подключённого спортсмена по токену, тап → выстрелы этой тренировки
-/// и общий чат с ней.
+/// Экран тренера — список УПРАЖНЕНИЙ подключённого спортсмена (раздел 8
+/// ТЗ), как папка с файлами: сначала выбираешь упражнение (сгруппировано
+/// по названию, самое недавно тренированное — первым, с датой последней
+/// тренировки), потом — конкретную дату тренировки внутри него, потом
+/// открывается подробный просмотр (`CoachExerciseDetailScreen`).
 ///
 /// Тренер подключается к ЧУЖОЙ базе (см. `CoachAccessService`) — своей
 /// регистрации в ней нет и не нужно, RPC на стороне спортсмена сами
@@ -94,6 +97,22 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
   String _exerciseName(String packageId) => _exercises
       .firstWhere((e) => e['package_id'] == packageId, orElse: () => const {'exercise_name': 'Упражнение'})['exercise_name'] as String? ?? 'Упражнение';
 
+  /// Группировка тренировок по названию упражнения — сессии внутри
+  /// каждой группы уже отсортированы по дате (новые сначала, см. `_load`),
+  /// а сами группы отсортированы по дате ПОСЛЕДНЕЙ тренировки: то
+  /// упражнение, которым занимались недавнее всех, — первое в списке
+  /// (решение пользователя).
+  List<_ExerciseGroup> get _groups {
+    final byName = <String, List<Map<String, dynamic>>>{};
+    for (final s in _sessions) {
+      final name = _exerciseName(s['id'] as String);
+      (byName[name] ??= []).add(s);
+    }
+    final groups = [for (final e in byName.entries) _ExerciseGroup(name: e.key, sessions: e.value)];
+    groups.sort((a, b) => '${b.sessions.first['started_at']}'.compareTo('${a.sessions.first['started_at']}'));
+    return groups;
+  }
+
   @override
   Widget build(BuildContext context) {
     // Подключение делает CoachAthletesScreen ДО перехода сюда
@@ -108,6 +127,9 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
         ),
       );
     }
+
+    final groups = _groups;
+    final df = DateFormat('dd.MM.yyyy');
 
     return Scaffold(
       appBar: AppBar(
@@ -129,28 +151,31 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
                 child: Text(_error!, textAlign: TextAlign.center),
               ),
             )
-          : _sessions.isEmpty && !_loading
+          : groups.isEmpty && !_loading
               ? const EmptyState(
                   icon: Icons.groups_outlined,
                   text: 'У спортсмена пока нет отправленных тренировок',
                 )
               : ListView.builder(
-                  itemCount: _sessions.length,
+                  itemCount: groups.length,
                   itemBuilder: (context, i) {
-                    final s = _sessions[i];
-                    final packageId = s['id'] as String;
-                    final started = DateTime.tryParse('${s['started_at']}');
+                    final g = groups[i];
+                    final last = DateTime.tryParse('${g.sessions.first['started_at']}');
                     return ListTile(
-                      title: Text(_exerciseName(packageId)),
+                      title: Text(g.name),
                       subtitle: Text(
-                        started == null ? '—' : DateFormat('dd.MM.yyyy HH:mm').format(started.toLocal()),
+                        // Дата ВСЕГДА видна в строке упражнения — по ней
+                        // видно, что тренировали последним (решение
+                        // пользователя).
+                        'Последняя: ${last == null ? '—' : df.format(last.toLocal())} · '
+                        'тренировок: ${g.sessions.length}',
                       ),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => _SharedSessionScreen(
+                        builder: (_) => _ExerciseTrainingsScreen(
                           access: _access,
-                          sessionId: packageId,
-                          title: _exerciseName(packageId),
+                          exercises: _exercises,
+                          group: g,
                         ),
                       )),
                     );
@@ -160,151 +185,45 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
   }
 }
 
-/// Одна тренировка спортсмена, только чтение: список выстрелов и общий
-/// чат с ним (тот же уровень 'coach', что и "Тренер" на его рабочем
-/// столе — ответ отсюда попадёт именно туда после его следующей
-/// синхронизации).
-class _SharedSessionScreen extends StatefulWidget {
-  final CoachAccessService access;
-  final String sessionId;
-  final String title;
-
-  const _SharedSessionScreen({required this.access, required this.sessionId, required this.title});
-
-  @override
-  State<_SharedSessionScreen> createState() => _SharedSessionScreenState();
+class _ExerciseGroup {
+  final String name;
+  final List<Map<String, dynamic>> sessions;
+  const _ExerciseGroup({required this.name, required this.sessions});
 }
 
-class _SharedSessionScreenState extends State<_SharedSessionScreen> {
-  final _input = TextEditingController();
-  bool _loading = true;
-  bool _sending = false;
-  String? _error;
-  List<Map<String, dynamic>> _shots = [];
-  List<Map<String, dynamic>> _comments = [];
+/// Список дат тренировок ОДНОГО упражнения — второй уровень (раздел 8
+/// ТЗ: "упражнение → тренировка").
+class _ExerciseTrainingsScreen extends StatelessWidget {
+  final CoachAccessService access;
+  final List<Map<String, dynamic>> exercises;
+  final _ExerciseGroup group;
 
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  @override
-  void dispose() {
-    _input.dispose();
-    super.dispose();
-  }
-
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final shots = await widget.access.fetchShots(widget.sessionId);
-      final comments = await widget.access.fetchComments(widget.sessionId);
-      shots.sort((a, b) => (a['shot_no'] as num).compareTo(b['shot_no'] as num));
-      final coachThread = comments.where((c) => c['level'] == 'coach').toList()
-        ..sort((a, b) => '${a['created_at']}'.compareTo('${b['created_at']}'));
-      if (!mounted) return;
-      setState(() {
-        _shots = shots;
-        _comments = coachThread;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = '$e');
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _send() async {
-    final text = _input.text.trim();
-    if (text.isEmpty) return;
-    setState(() => _sending = true);
-    try {
-      await widget.access.addComment(sessionId: widget.sessionId, level: 'coach', text: text);
-      _input.clear();
-      await _load();
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = '$e');
-    } finally {
-      if (mounted) setState(() => _sending = false);
-    }
-  }
+  const _ExerciseTrainingsScreen({required this.access, required this.exercises, required this.group});
 
   @override
   Widget build(BuildContext context) {
-    final df = DateFormat('dd.MM HH:mm');
+    final df = DateFormat('dd.MM.yyyy · HH:mm');
     return Scaffold(
-      appBar: AppBar(title: Text(widget.title)),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                  ),
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.all(12),
-                    children: [
-                      Text('Выстрелы', style: Theme.of(context).textTheme.titleSmall),
-                      const SizedBox(height: 6),
-                      for (final s in _shots)
-                        Text(
-                          '№${s['shot_no']} · ${(s['final_score'] as num).toStringAsFixed(1)}'
-                          '  X:${(s['x_mm'] as num? ?? 0).toStringAsFixed(1)} Y:${(s['y_mm'] as num? ?? 0).toStringAsFixed(1)}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      const SizedBox(height: 20),
-                      Text('Чат', style: Theme.of(context).textTheme.titleSmall),
-                      const SizedBox(height: 6),
-                      for (final c in _comments)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '${c['author_role'] == 'coach' ? 'Тренер' : 'Спортсмен'}: '
-                                '${df.format(DateTime.parse('${c['created_at']}').toLocal())}',
-                                style: Theme.of(context).textTheme.labelSmall,
-                              ),
-                              Text('${c['text']}'),
-                            ],
-                          ),
-                        ),
-                      if (_comments.isEmpty) const Text('Переписки пока нет'),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1),
-                Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _input,
-                          decoration: const InputDecoration(hintText: 'Написать спортсмену…'),
-                        ),
-                      ),
-                      IconButton(
-                        icon: _sending
-                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                            : const Icon(Icons.send),
-                        onPressed: _sending ? null : _send,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+      appBar: AppBar(title: Text(group.name)),
+      body: ListView.builder(
+        itemCount: group.sessions.length,
+        itemBuilder: (context, i) {
+          final s = group.sessions[i];
+          final started = DateTime.tryParse('${s['started_at']}');
+          return ListTile(
+            title: Text(started == null ? '—' : df.format(started.toLocal())),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => CoachExerciseDetailScreen(
+                access: access,
+                packageRow: s,
+                exercises: exercises,
+                exerciseName: group.name,
+              ),
+            )),
+          );
+        },
+      ),
     );
   }
 }

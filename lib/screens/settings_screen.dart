@@ -7,6 +7,7 @@ import '../services/ai_settings.dart';
 import '../services/supabase_auth_service.dart';
 import '../services/supabase_service.dart';
 import '../state/app_data_store.dart';
+import '../state/personalization_view_model.dart';
 import '../widgets/section_header.dart';
 import 'export_screen.dart';
 import 'ai_settings_screen.dart';
@@ -27,12 +28,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final store = context.watch<AppDataStore>();
+    final personalization = context.watch<PersonalizationViewModel>();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Настройки')),
       body: ListView(
         padding: const EdgeInsets.only(bottom: 32),
         children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: SectionHeader(title: 'Язык', subtitle: 'По умолчанию — язык системы'),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<String?>(
+                segments: const [
+                  ButtonSegment(value: null, label: Text('Системный')),
+                  ButtonSegment(value: 'ru', label: Text('Русский')),
+                  ButtonSegment(value: 'en', label: Text('English')),
+                ],
+                selected: {personalization.localeCode},
+                showSelectedIcon: false,
+                onSelectionChanged: (set) => personalization.setLocaleCode(set.first),
+              ),
+            ),
+          ),
           ListTile(
             leading: const Icon(Icons.palette_outlined),
             title: const Text('Цветовые настройки'),

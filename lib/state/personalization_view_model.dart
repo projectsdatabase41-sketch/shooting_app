@@ -1,4 +1,4 @@
-import 'dart:ui' show Color;
+import 'dart:ui' show Color, Locale;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show ThemeMode;
 import '../models/color_presets.dart';
@@ -50,6 +50,33 @@ class PersonalizationViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Язык приложения — по умолчанию системный (пункт списка правок).
+  ///
+  /// ЧЕСТНОЕ ОГРАНИЧЕНИЕ: в приложении нет инфраструктуры перевода (ARB,
+  /// `GlobalMaterialLocalizations.delegates`/`supportedLocales`) — весь
+  /// текст сейчас захардкожен по-русски прямо в виджетах. Эта настройка
+  /// хранит выбор и передаёт его в `MaterialApp.locale`, что переводит
+  /// системные виджеты (даты/числа через `intl`, стандартные подписи
+  /// Material), но НЕ переводит сам текст экранов — для этого понадобится
+  /// отдельная большая работа (вынести все строки в ARB-файлы).
+  static const String localeKey = 'app_locale';
+
+  /// `null` — системный язык устройства.
+  String? _localeCode;
+  String? get localeCode => _localeCode;
+  Locale? get locale => _localeCode == null ? null : Locale(_localeCode!);
+
+  void setLocaleCode(String? code) {
+    if (code == _localeCode) return;
+    _localeCode = code;
+    db.db.execute(
+      'INSERT INTO color_prefs (key, hex) VALUES (?, ?) '
+      'ON CONFLICT(key) DO UPDATE SET hex = excluded.hex',
+      [localeKey, code ?? 'system'],
+    );
+    notifyListeners();
+  }
+
   static ThemeMode _themeModeFromString(String? value) {
     switch (value) {
       case 'light':
@@ -82,6 +109,10 @@ class PersonalizationViewModel extends ChangeNotifier {
       [themeModeKey],
     );
     _themeMode = _themeModeFromString(themeRow.isEmpty ? null : themeRow.first['hex'] as String?);
+
+    final localeRow = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [localeKey]);
+    final localeValue = localeRow.isEmpty ? 'system' : localeRow.first['hex'] as String;
+    _localeCode = localeValue == 'system' ? null : localeValue;
 
     notifyListeners();
   }
@@ -141,7 +172,7 @@ class PersonalizationViewModel extends ChangeNotifier {
     // тема интерфейса и настройки ИИ (ключ, модели, адрес книг) — снести
     // их вместе с цветами было бы неожиданностью для того, кто нажал
     // "сбросить все цвета".
-    final protected = [themeModeKey, ...AiSettings.allKeys, ...WorkspaceViewModel.allKeys];
+    final protected = [themeModeKey, localeKey, ...AiSettings.allKeys, ...WorkspaceViewModel.allKeys];
     final placeholders = List.filled(protected.length, '?').join(', ');
     db.db.execute('DELETE FROM color_prefs WHERE key NOT IN ($placeholders)', protected);
     notifyListeners();
