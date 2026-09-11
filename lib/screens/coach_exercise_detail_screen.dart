@@ -143,6 +143,12 @@ class _DetailBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final blocks = context.watch<ExerciseDetailViewModel>();
+    // Пока на мишени два пальца (щипок для зума), список блоков не
+    // должен листаться сам — иначе прокрутка страницы забирает жест
+    // раньше, чем TargetCanvas успевает опознать его как зум (решение
+    // пользователя). Тот же флаг, что гасит свайп PageView на рабочем
+    // столе тренировки (target_screen.dart).
+    final multiTouch = context.watch<TargetViewModel>().multiTouch;
     final total = session.totalScore;
 
     return Scaffold(
@@ -164,6 +170,7 @@ class _DetailBody extends StatelessWidget {
         ],
       ),
       body: ListView(
+        physics: multiTouch ? const NeverScrollableScrollPhysics() : null,
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
         children: [
           for (final block in blocks.visible) ...[
