@@ -49,6 +49,11 @@ class ShotWheel extends StatefulWidget {
   /// выглядит как обычный элемент, которому сейчас нечего листать.
   final bool enabled;
 
+  /// Высота барабана. По умолчанию как на рабочем столе тренировки;
+  /// экран просмотра тренировки у тренера просит вдвое тоньше — там
+  /// мишень становится главной, а колесо только листает.
+  final double height;
+
   const ShotWheel({
     super.key,
     required this.value,
@@ -56,6 +61,7 @@ class ShotWheel extends StatefulWidget {
     required this.maxValue,
     required this.onChanged,
     this.enabled = true,
+    this.height = 53,
   });
 
   @override
@@ -117,7 +123,7 @@ class _ShotWheelState extends State<ShotWheel> {
       // просто иногда крутится вхолостую.
       child: SizedBox(
         // Высота уменьшена на 20% (была 66) — по просьбе пользователя.
-        height: 53,
+        height: widget.height,
         child: CustomPaint(
           painter: _WheelPainter(
             phase: _phase,

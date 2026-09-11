@@ -178,7 +178,7 @@ class _DetailBody extends StatelessWidget {
   Widget _buildBlock(BuildContext context, ExerciseDetailBlock block) {
     switch (block) {
       case ExerciseDetailBlock.target:
-        return _TargetBlock(height: MediaQuery.sizeOf(context).height * 0.3);
+        return const _TargetBlock();
       case ExerciseDetailBlock.series:
         return _SeriesBlock(session: session, face: face, comments: comments);
       case ExerciseDetailBlock.statistics:
@@ -254,26 +254,37 @@ class _BlockSettingsSheet extends StatelessWidget {
 }
 
 class _TargetBlock extends StatelessWidget {
-  final double height;
-  const _TargetBlock({required this.height});
+  const _TargetBlock();
 
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<TargetViewModel>();
     final total = vm.session.shots.length;
+    // 98% ширины экрана, квадрат (решение пользователя) — раньше высота
+    // была задана отдельно от ширины (0.3 высоты экрана), из-за чего
+    // мишень оказывалась мельче, чем у спортсмена на рабочем столе, и
+    // зум внутри такой маленькой рамки выглядел как "зум в окне", а не
+    // как настоящее увеличение мишени.
+    final side = MediaQuery.sizeOf(context).width * 0.98;
     return Column(
       children: [
-        SizedBox(height: height, child: const ClipRect(child: TargetCanvas())),
+        Center(
+          child: SizedBox(width: side, height: side, child: const ClipRect(child: TargetCanvas())),
+        ),
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 4),
           child: FractionallySizedBox(
             widthFactor: 0.9,
+            // Вдвое тоньше, чем на рабочем столе тренировки (решение
+            // пользователя) — здесь колесо только листает уже
+            // записанные выстрелы, а не главный элемент экрана.
             child: ShotWheel(
               value: vm.selectedIndex < 0 ? 0 : vm.selectedIndex,
               minValue: 0,
               maxValue: total == 0 ? 0 : total - 1,
               enabled: total > 1,
               onChanged: vm.selectIndex,
+              height: 26,
             ),
           ),
         ),

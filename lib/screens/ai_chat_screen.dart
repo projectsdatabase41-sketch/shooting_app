@@ -197,7 +197,14 @@ class _AiChatBodyState extends State<_AiChatBody> {
                   ? () => vm.retryFrom(i - 1)
                   : null,
           onEdit: message.fromUser && !vm.busy ? () => _editMessage(context, vm, i) : null,
-          onDelete: vm.busy ? null : () => vm.removeFrom(i),
+          // Удаление ответа ассистента забирает с собой и СВОЙ вопрос
+          // (решение пользователя) — иначе от переписки оставался вопрос
+          // без ответа. Удаление своего вопроса и так тянет всё, что
+          // после него, включая ответ (см. removeFrom) — здесь только
+          // добиваем обратный случай.
+          onDelete: vm.busy
+              ? null
+              : () => vm.removeFrom(!message.fromUser && i > 0 && vm.messages[i - 1].fromUser ? i - 1 : i),
           onCreateExercise: (message.exercise != null && !message.exerciseCreated)
               ? () => _createExercise(context, vm, i)
               : null,
