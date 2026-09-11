@@ -38,6 +38,21 @@ class AiException implements Exception {
   String toString() => message;
 }
 
+/// Упёрлись в лимит бесплатных моделей — общий на ВСЕ модели `:free`
+/// сразу (аккаунт/ключ OpenRouter, а не конкретная модель). Отдельный
+/// тип нужен, чтобы `ask()` не перебирал ещё семь моделей подряд,
+/// каждая из которых упрётся в тот же самый лимит: это не только
+/// бесполезно, а ЕЩЁ БЫСТРЕЕ исчерпывает и без того ограниченную
+/// квоту — пользователь сообщил, что после "лимит исчерпан" ошибка не
+/// проходила, даже когда лимит уже сбросился и прямой запрос к
+/// OpenRouter той же моделью отвечал нормально. Корень: один вопрос в
+/// чате уже бил по лимиту минимум восемь раз подряд (по одному на
+/// каждую модель цепочки), и повторная попытка почти сразу набирала
+/// тот же лимит заново.
+class RateLimitedException extends AiException {
+  const RateLimitedException(super.message);
+}
+
 /// Клиент OpenRouter с перебором моделей и чтением «книг».
 ///
 /// Все бесплатные модели рано или поздно отвечают отказом (кончился
@@ -144,6 +159,15 @@ class AiService {
     for (final model in settings.models) {
       try {
         return await _askModel(model, messages, key);
+      } on RateLimitedException catch (e) {
+        // Лимит бесплатных моделей общий на ВЕСЬ ключ, а не на
+        // конкретную модель — пробовать оставшиеся семь бессмысленно
+        // (упрутся в тот же лимит) и только быстрее его исчерпывает.
+        throw RateLimitedException(
+          'Исчерпан дневной/минутный лимит бесплатных моделей OpenRouter. '
+          'Подождите немного и попробуйте снова — это не поломка приложения. '
+          '(${e.message})',
+        );
       } on AiException catch (e) {
         errors.add('$model: ${e.message}');
       } catch (e) {
@@ -179,6 +203,9 @@ class AiService {
         )
         .timeout(_timeout);
 
+    if (res.statusCode == 429 || res.statusCode == 403) {
+      throw RateLimitedException(_errorFrom(res));
+    }
     if (res.statusCode != 200) {
       throw AiException(_errorFrom(res));
     }
