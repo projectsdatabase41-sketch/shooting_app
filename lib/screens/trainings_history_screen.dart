@@ -6,6 +6,7 @@ import '../state/app_data_store.dart';
 import '../theme/app_theme.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/swipe_to_delete.dart';
+import 'exercise_history_detail_screen.dart';
 import 'target_screen.dart';
 
 /// Вкладка "История" (по составу навигации из макетов — переименование
@@ -65,11 +66,18 @@ class TrainingsHistoryScreen extends StatelessWidget {
                     totalScore: s.totalScore,
                     totalWhole: _wholeScore(s),
                     status: s.status,
+                    // Завершённую тренировку открываем новым экраном
+                    // просмотра (раздел 8 ТЗ: перестраиваемые блоки —
+                    // мишень со слайдером, серии, статистика, чат),
+                    // незавершённую — рабочим столом тренировки как
+                    // раньше, там же и продолжают запись.
                     onTap: exercise == null
                         ? null
                         : () => Navigator.of(context).push(
                               MaterialPageRoute(
-                                builder: (_) => TargetScreen(session: s, exercise: exercise),
+                                builder: (_) => s.status == SessionStatus.finished
+                                    ? ExerciseHistoryDetailScreen(session: s, exercise: exercise)
+                                    : TargetScreen(session: s, exercise: exercise),
                               ),
                             ),
                   ),
