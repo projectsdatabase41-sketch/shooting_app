@@ -4,6 +4,26 @@ import 'package:http/http.dart' as http;
 
 import 'local_db_service.dart';
 
+/// Один сохранённый спортсмен у тренера — мульти-спортсменский режим
+/// (решение пользователя: "как список создания упражнений, так же
+/// создание подключений к спортсменам"). `id` генерируется на
+/// устройстве (uuid), не связан ни с чем на стороне спортсмена.
+class CoachAthlete {
+  final String id;
+  final String name;
+  final String url;
+  final String anonKey;
+  final String token;
+
+  const CoachAthlete({
+    required this.id,
+    required this.name,
+    required this.url,
+    required this.anonKey,
+    required this.token,
+  });
+}
+
 class CoachAccessException implements Exception {
   final String message;
   const CoachAccessException(this.message);
@@ -77,6 +97,66 @@ class CoachAccessService {
     _write('coach_supabase_url', '');
     _write('coach_supabase_anon_key', '');
     _write('coach_share_token', '');
+    _write('coach_active_athlete_id', '');
+  }
+
+  // ---- Список спортсменов (мульти-спортсменский режим) ----
+
+  String? get activeAthleteId {
+    final id = _read('coach_active_athlete_id');
+    return id.isEmpty ? null : id;
+  }
+
+  List<CoachAthlete> listAthletes() {
+    final rows = db.db.select('SELECT * FROM coach_athletes ORDER BY sort_order, created_at');
+    return [
+      for (final r in rows)
+        CoachAthlete(
+          id: r['id'] as String,
+          name: r['name'] as String,
+          url: r['supabase_url'] as String,
+          anonKey: r['supabase_anon_key'] as String,
+          token: r['share_token'] as String,
+        ),
+    ];
+  }
+
+  /// Добавляет нового спортсмена или обновляет уже сохранённого (если
+  /// `id` совпадает с существующим).
+  void saveAthlete(CoachAthlete athlete) {
+    db.db.execute(
+      'INSERT INTO coach_athletes (id, name, supabase_url, supabase_anon_key, share_token) '
+      'VALUES (?, ?, ?, ?, ?) '
+      'ON CONFLICT(id) DO UPDATE SET name = excluded.name, supabase_url = excluded.supabase_url, '
+      'supabase_anon_key = excluded.supabase_anon_key, share_token = excluded.share_token',
+      [
+        athlete.id,
+        athlete.name.trim(),
+        athlete.url.trim().replaceAll(RegExp(r'/+$'), ''),
+        athlete.anonKey.trim(),
+        athlete.token.trim(),
+      ],
+    );
+  }
+
+  void deleteAthlete(String id) {
+    db.db.execute('DELETE FROM coach_athletes WHERE id = ?', [id]);
+    if (activeAthleteId == id) forget();
+  }
+
+  void reorderAthletes(List<String> orderedIds) {
+    for (var i = 0; i < orderedIds.length; i++) {
+      db.db.execute('UPDATE coach_athletes SET sort_order = ? WHERE id = ?', [i, orderedIds[i]]);
+    }
+  }
+
+  /// Делает спортсмена активным — копирует его подключение в те же
+  /// три поля, что читают `url`/`anonKey`/`token` и вся RPC-логика
+  /// ниже. Остальной код тренера (CoachDiaryScreen) не знает о списке
+  /// спортсменов вовсе, работает с "текущим подключением" как раньше.
+  void selectAthlete(CoachAthlete athlete) {
+    setConnection(url: athlete.url, anonKey: athlete.anonKey, token: athlete.token);
+    _write('coach_active_athlete_id', athlete.id);
   }
 
   /// Снимки упражнений (реальная таблица `exercises`, не каталог) —

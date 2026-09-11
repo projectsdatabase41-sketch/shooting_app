@@ -15,7 +15,12 @@ import '../widgets/empty_state.dart';
 /// проверяют токен. Данные не кэшируются локально: список всегда живой,
 /// "Обновить" перечитывает его заново.
 class CoachDiaryScreen extends StatefulWidget {
-  const CoachDiaryScreen({super.key});
+  /// Показывается в шапке — какого спортсмена сейчас смотрим
+  /// (мульти-спортсменский режим, экран открывается из
+  /// `CoachAthletesScreen`, которая уже вызвала `selectAthlete`).
+  final String athleteName;
+
+  const CoachDiaryScreen({super.key, required this.athleteName});
 
   @override
   State<CoachDiaryScreen> createState() => _CoachDiaryScreenState();
@@ -89,27 +94,24 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
   String _exerciseName(String packageId) => _exercises
       .firstWhere((e) => e['package_id'] == packageId, orElse: () => const {'exercise_name': 'Упражнение'})['exercise_name'] as String? ?? 'Упражнение';
 
-  void _disconnect() {
-    _access.forget();
-    setState(() {
-      _sessions = [];
-      _exercises = [];
-      _error = null;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
+    // Подключение делает CoachAthletesScreen ДО перехода сюда
+    // (selectAthlete) — сюда нельзя попасть без него, кроме случая,
+    // когда токен отозвали прямо во время просмотра (см. _load).
     if (!_access.hasConnection) {
-      return _ConnectForm(access: _access, onConnected: () {
-        setState(() {});
-        _load();
-      });
+      return Scaffold(
+        appBar: AppBar(title: Text(widget.athleteName)),
+        body: const EmptyState(
+          icon: Icons.link_off,
+          text: 'Подключение снято — вернитесь к списку спортсменов.',
+        ),
+      );
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Дневник'),
+        title: Text(widget.athleteName),
         actions: [
           IconButton(
             icon: _loading
@@ -117,11 +119,6 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
                 : const Icon(Icons.refresh),
             tooltip: 'Обновить',
             onPressed: _loading ? null : _load,
-          ),
-          IconButton(
-            icon: const Icon(Icons.link_off),
-            tooltip: 'Отключиться',
-            onPressed: _disconnect,
           ),
         ],
       ),
@@ -159,109 +156,6 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
                     );
                   },
                 ),
-    );
-  }
-}
-
-/// Форма подключения к базе спортсмена: адрес, публичный ключ, токен —
-/// три значения, которые спортсмен передаёт тренеру сам (токен — один
-/// раз, из своих настроек; адрес и ключ его проекта не секретны).
-class _ConnectForm extends StatefulWidget {
-  final CoachAccessService access;
-  final VoidCallback onConnected;
-
-  const _ConnectForm({required this.access, required this.onConnected});
-
-  @override
-  State<_ConnectForm> createState() => _ConnectFormState();
-}
-
-class _ConnectFormState extends State<_ConnectForm> {
-  final _url = TextEditingController();
-  final _key = TextEditingController();
-  final _token = TextEditingController();
-  bool _busy = false;
-  String? _error;
-
-  @override
-  void dispose() {
-    _url.dispose();
-    _key.dispose();
-    _token.dispose();
-    super.dispose();
-  }
-
-  Future<void> _connect() async {
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    widget.access.setConnection(url: _url.text, anonKey: _key.text, token: _token.text);
-    try {
-      // Проверяем сразу же — реальным запросом, а не просто сохраняем
-      // поля: неверный токен или адрес должны стать ясны здесь, а не
-      // молчаливым пустым списком на следующем экране.
-      await widget.access.fetchSessions();
-      widget.onConnected();
-    } catch (e) {
-      widget.access.forget();
-      if (!mounted) return;
-      setState(() => _error = '$e');
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Дневник')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text(
-            'Подключитесь к базе спортсмена: адрес и публичный ключ его '
-            'проекта Supabase (не секретны, спортсмен присылает сам) и '
-            'токен доступа — тот выдаётся один раз в его настройках.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _url,
-            decoration: const InputDecoration(
-              labelText: 'Адрес базы спортсмена',
-              hintText: 'https://xxxx.supabase.co',
-            ),
-            keyboardType: TextInputType.url,
-            autocorrect: false,
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _key,
-            decoration: const InputDecoration(labelText: 'Публичный ключ (anon / publishable)'),
-            autocorrect: false,
-            obscureText: true,
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _token,
-            decoration: const InputDecoration(labelText: 'Токен доступа'),
-            autocorrect: false,
-            obscureText: true,
-          ),
-          const SizedBox(height: 16),
-          FilledButton(
-            onPressed: _busy ? null : _connect,
-            child: _busy
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Подключиться'),
-          ),
-          if (_error != null) ...[
-            const SizedBox(height: 12),
-            Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-          ],
-        ],
-      ),
     );
   }
 }

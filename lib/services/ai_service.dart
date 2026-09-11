@@ -65,7 +65,14 @@ class AiService {
 
   AiService(this.settings, {http.Client? client}) : _client = client ?? http.Client();
 
-  static const String _base = 'https://openrouter.ai/api/v1';
+  static const String defaultBase = 'https://openrouter.ai/api/v1';
+
+  /// Настраиваемый адрес API — единственный рычаг на стороне кода
+  /// против блокировки openrouter.ai в регионе (пользователь сообщил:
+  /// без VPN "исчерпан лимит" на всех моделях, с VPN сразу работает —
+  /// это сетевая блокировка, а не лимит, код её не обходит, но можно
+  /// указать свой прокси/зеркало с тем же API).
+  String get _base => settings.apiBaseUrl;
   static const Duration _timeout = Duration(seconds: 45);
 
   /// Список бесплатных моделей с сервера — для экрана настроек.

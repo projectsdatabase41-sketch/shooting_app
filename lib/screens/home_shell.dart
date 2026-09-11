@@ -4,7 +4,7 @@ import '../models/training_session.dart';
 import '../state/app_data_store.dart';
 import '../widgets/finished_edit_exit_dialog.dart';
 import 'ai_chat_screen.dart';
-import 'coach_diary_screen.dart';
+import 'coach_athletes_screen.dart';
 import 'exercises_screen.dart';
 import 'settings_screen.dart';
 import 'statistics_screen.dart';
@@ -48,7 +48,10 @@ class _HomeShellState extends State<HomeShell> {
     _lastMode = store.workMode;
 
     if (isCoach) {
-      final pages = [const CoachDiaryScreen(), const SettingsScreen()];
+      // Мульти-спортсменский режим (решение пользователя): "Дневник" с
+      // единственным подключением заменён на список спортсменов —
+      // тап на конкретного открывает его дневник отдельным экраном.
+      final pages = [const CoachAthletesScreen(), const SettingsScreen()];
       return Scaffold(
         body: Column(
           children: [
@@ -60,7 +63,7 @@ class _HomeShellState extends State<HomeShell> {
           selectedIndex: _coachIndex,
           onDestinationSelected: (i) => setState(() => _coachIndex = i),
           destinations: const [
-            NavigationDestination(icon: Icon(Icons.menu_book_outlined), label: 'Дневник'),
+            NavigationDestination(icon: Icon(Icons.groups_outlined), label: 'Спортсмены'),
             NavigationDestination(icon: Icon(Icons.settings_outlined), label: 'Настройки'),
           ],
         ),

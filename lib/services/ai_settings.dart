@@ -57,6 +57,7 @@ class AiSettings {
   static const String keyBooksToken = 'ai_books_token';
   static const String keyTables = 'ai_tables';
   static const String keyCustomInstructions = 'ai_custom_instructions';
+  static const String keyApiBaseUrl = 'ai_api_base_url';
 
   /// Все ключи ИИ — чтобы «сбросить все цвета» их не снесло.
   static const List<String> allKeys = [
@@ -66,7 +67,19 @@ class AiSettings {
     keyBooksToken,
     keyTables,
     keyCustomInstructions,
+    keyApiBaseUrl,
   ];
+
+  /// Совпадает с `AiService.defaultBase` — не импортируем сам сервис
+  /// сюда, чтобы не заводить встречный импорт ради одной константы.
+  static const String defaultApiBaseUrl = 'https://openrouter.ai/api/v1';
+
+  /// Адрес API OpenRouter — обычно трогать не нужно. Настраиваемый
+  /// ради единственного случая: openrouter.ai заблокирован в регионе
+  /// пользователя (403 без VPN, мгновенно работает с ним) — код это не
+  /// чинит, но свой прокси/зеркало с тем же API подключить можно.
+  String get apiBaseUrl => _read(keyApiBaseUrl, fallback: defaultApiBaseUrl);
+  set apiBaseUrl(String v) => _write(keyApiBaseUrl, v.trim().replaceAll(RegExp(r'/+$'), ''));
 
   /// Тестовый ключ OpenRouter. В исходниках его больше НЕТ — он
   /// приходит на сборку: `--dart-define=OPENROUTER_KEY=sk-or-...`.

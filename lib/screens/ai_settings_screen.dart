@@ -18,6 +18,7 @@ class AiSettingsScreen extends StatefulWidget {
 class _AiSettingsScreenState extends State<AiSettingsScreen> {
   late final AiSettings _settings;
   late final TextEditingController _key;
+  late final TextEditingController _apiBaseUrl;
   late final TextEditingController _models;
   late final TextEditingController _booksUrl;
   late final TextEditingController _booksToken;
@@ -47,6 +48,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     _settings = AiSettings(context.read<AppDataStore>().db);
     _ownKey = _settings.hasOwnKey;
     _key = TextEditingController(text: _ownKey ? _settings.apiKey : '');
+    _apiBaseUrl = TextEditingController(text: _settings.apiBaseUrl);
     _tables = [..._settings.tables];
     // Со своим ключом поле цепочки стартует ПУСТЫМ, если пользователь
     // ещё ничего не вводил — не подставляем модели, подобранные под
@@ -60,6 +62,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
   @override
   void dispose() {
     _key.dispose();
+    _apiBaseUrl.dispose();
     _models.dispose();
     _booksUrl.dispose();
     _booksToken.dispose();
@@ -76,6 +79,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
 
   void _save() {
     _settings.apiKey = _ownKey ? _key.text : '';
+    _settings.apiBaseUrl = _apiBaseUrl.text.isEmpty ? AiSettings.defaultApiBaseUrl : _apiBaseUrl.text;
     _settings.tables = _tables;
     _settings.models = _models.text.split('\n');
     _settings.booksUrl = _booksUrl.text;
@@ -344,6 +348,16 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                 hintText: 'sk-or-v1-…',
               ),
               obscureText: true,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _apiBaseUrl,
+              decoration: const InputDecoration(
+                labelText: 'Адрес API (обычно не нужно менять)',
+                hintText: 'https://openrouter.ai/api/v1',
+              ),
+              keyboardType: TextInputType.url,
+              autocorrect: false,
             ),
           ] else if (AiSettings.testApiKey.isEmpty) ...[
             // Ключ подставляется на сборке (--dart-define). Если его

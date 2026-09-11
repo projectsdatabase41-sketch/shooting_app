@@ -91,6 +91,9 @@ class LocalDbService {
         'coach_supabase_url': 'TEXT',
         'coach_supabase_anon_key': 'TEXT',
         'coach_share_token': 'TEXT',
+        // id строки в coach_athletes, чьё подключение сейчас скопировано
+        // в три поля выше — какой спортсмен сейчас "активен".
+        'coach_active_athlete_id': 'TEXT',
       },
     };
 
@@ -240,6 +243,16 @@ CREATE TABLE IF NOT EXISTS training_sessions (
   updated_at        TEXT,
   pending_delete    INTEGER NOT NULL DEFAULT 0,
   local_hidden      INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS coach_athletes (
+  id                  TEXT PRIMARY KEY,
+  name                TEXT NOT NULL,
+  supabase_url        TEXT NOT NULL,
+  supabase_anon_key   TEXT NOT NULL,
+  share_token         TEXT NOT NULL,
+  sort_order          INTEGER NOT NULL DEFAULT 0,
+  created_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS shots (

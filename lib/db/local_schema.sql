@@ -84,6 +84,22 @@ CREATE TABLE IF NOT EXISTS training_sessions (
   local_hidden      INTEGER NOT NULL DEFAULT 0
 );
 
+-- Список спортсменов, подключённых тренером (мульти-спортсменский
+-- режим — решение пользователя: было одно сохранённое подключение на
+-- всё приложение, стало несколько, как со списком упражнений).
+-- Активное подключение по-прежнему копируется в project_settings.coach_*
+-- (CoachAccessService.selectAthlete) — весь остальной код тренера
+-- (CoachDiaryScreen и её RPC) продолжает работать без изменений.
+CREATE TABLE IF NOT EXISTS coach_athletes (
+  id                  TEXT PRIMARY KEY,
+  name                TEXT NOT NULL,
+  supabase_url        TEXT NOT NULL,
+  supabase_anon_key   TEXT NOT NULL,
+  share_token         TEXT NOT NULL,
+  sort_order          INTEGER NOT NULL DEFAULT 0,
+  created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS shots (
   id                  TEXT PRIMARY KEY,
   session_id          TEXT NOT NULL REFERENCES training_sessions(id) ON DELETE CASCADE,
