@@ -121,7 +121,7 @@ class _HomeShellState extends State<HomeShell> {
         labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
         destinations: const [
           NavigationDestination(icon: Icon(Icons.fitness_center), label: 'Упражнения'),
-          NavigationDestination(icon: Icon(Icons.history), label: 'Тренировки'),
+          NavigationDestination(icon: Icon(Icons.calendar_month_outlined), label: 'Тренировки'),
           NavigationDestination(icon: Icon(Icons.gps_fixed), label: 'Мишень'),
           NavigationDestination(icon: Icon(Icons.bar_chart), label: 'Статистика'),
           NavigationDestination(icon: Icon(Icons.auto_awesome_outlined), label: 'Ассистент'),

@@ -186,7 +186,16 @@ class _AiChatBodyState extends State<_AiChatBody> {
           // Важно, что модель о нём ЗАБЫВАЕТ: иначе на повтор она
           // отвечает «как я уже писал выше» — переспрашивать смысла
           // не было бы.
-          onRetry: message.fromUser && !vm.busy ? () => vm.retryFrom(i) : null,
+          onRetry: message.fromUser && !vm.busy
+              ? () => vm.retryFrom(i)
+              // Ошибку ассистента повторяют тем же вопросом, которым
+              // она вызвана, а не собой (у ошибки нет своего текста
+              // вопроса) — решение пользователя: маленькие кнопки
+              // "Удалить"/"Повторить" прямо под сообщением об ошибке,
+              // а не через долгое нажатие.
+              : (message.isError && !vm.busy && i > 0 && vm.messages[i - 1].fromUser)
+                  ? () => vm.retryFrom(i - 1)
+                  : null,
           onEdit: message.fromUser && !vm.busy ? () => _editMessage(context, vm, i) : null,
           onDelete: vm.busy ? null : () => vm.removeFrom(i),
           onCreateExercise: (message.exercise != null && !message.exerciseCreated)
@@ -469,6 +478,31 @@ class _Bubble extends StatelessWidget {
               Text(
                 message.model!,
                 style: theme.textTheme.labelSmall?.copyWith(color: fg.withValues(alpha: 0.6)),
+              ),
+            ],
+            // Маленькие кнопки прямо под сообщением об ошибке (решение
+            // пользователя) — не прятать за долгим нажатием то, что
+            // нужно сразу после сбоя ответа.
+            if (message.isError && (onDelete != null || onRetry != null)) ...[
+              const SizedBox(height: 4),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (onRetry != null)
+                    TextButton.icon(
+                      onPressed: onRetry,
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: const Text('Повторить'),
+                      style: TextButton.styleFrom(foregroundColor: fg, visualDensity: VisualDensity.compact),
+                    ),
+                  if (onDelete != null)
+                    TextButton.icon(
+                      onPressed: onDelete,
+                      icon: const Icon(Icons.delete_outline, size: 16),
+                      label: const Text('Удалить'),
+                      style: TextButton.styleFrom(foregroundColor: fg, visualDensity: VisualDensity.compact),
+                    ),
+                ],
               ),
             ],
           ],

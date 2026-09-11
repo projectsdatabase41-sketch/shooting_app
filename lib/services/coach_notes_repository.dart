@@ -30,4 +30,13 @@ class CoachNotesRepository {
   void delete(String id) {
     db.db.execute('DELETE FROM coach_notes WHERE id = ?', [id]);
   }
+
+  /// Правка темы/текста — заметка не заблокирована на редактирование
+  /// (в отличие от завершённой тренировки спортсмена).
+  void update(String id, {required String topic, required String content}) {
+    db.db.execute(
+      'UPDATE coach_notes SET topic = ?, content = ? WHERE id = ?',
+      [topic, content, id],
+    );
+  }
 }

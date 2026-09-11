@@ -13,12 +13,16 @@ import 'coach_diary_screen.dart';
 /// этого спортсмена; "+" внизу слева — добавить нового, как у
 /// спортсмена при создании упражнения.
 ///
-/// Перетаскивание для смены порядка — обычный `ReorderableListView`
-/// (не двухколоночная сетка с "прилипанием к пальцу": Flutter не даёт
-/// такой виджет из коробки, а тянуть отдельный пакет ради одной сетки
-/// с перетаскиванием — лишнее). Правка/удаление — через кнопку на
-/// самой строке, а не долгим нажатием: два смысла у одного жеста
-/// (потянуть vs открыть) было бы неоднозначно.
+/// Сетка в два столбца, кнопки квадратные (решение пользователя).
+/// Перетаскивание сделано на встроенных `LongPressDraggable`/
+/// `DragTarget` — без отдельного пакета под двухколоночную сетку с
+/// "прилипанием к пальцу". Долгое нажатие БЕЗ движения — это тоже
+/// перетаскивание, которое заканчивается на той же самой
+/// ячейке: там это ловится как частный случай "перетащили сами на
+/// себя" и открывает настройки спортсмена, а не меняет порядок
+/// (решение пользователя: "удержал и отпустил, позиция не изменилась —
+/// открыть настройки"). Перетаскивание на ДРУГУЮ ячейку меняет
+/// спортсменов местами.
 class CoachAthletesScreen extends StatefulWidget {
   const CoachAthletesScreen({super.key});
 
@@ -128,6 +132,22 @@ class _CoachAthletesScreenState extends State<CoachAthletesScreen> {
     ));
   }
 
+  /// Перетащили одного спортсмена на ячейку другого — меняются местами
+  /// (простой swap, а не вставка со сдвигом остальных: для сетки это
+  /// понятнее — карточка всегда попадает ровно туда, куда её положили).
+  void _swap(String draggedId, String targetId) {
+    if (draggedId == targetId) return;
+    final di = _athletes.indexWhere((a) => a.id == draggedId);
+    final ti = _athletes.indexWhere((a) => a.id == targetId);
+    if (di < 0 || ti < 0) return;
+    setState(() {
+      final tmp = _athletes[di];
+      _athletes[di] = _athletes[ti];
+      _athletes[ti] = tmp;
+    });
+    _access.reorderAthletes([for (final a in _athletes) a.id]);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -137,31 +157,23 @@ class _CoachAthletesScreenState extends State<CoachAthletesScreen> {
               icon: Icons.groups_outlined,
               text: 'Пока никого не подключили — нажмите "+", чтобы добавить спортсмена.',
             )
-          : ReorderableListView.builder(
+          : GridView.builder(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 80),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                childAspectRatio: 1,
+              ),
               itemCount: _athletes.length,
-              onReorder: (oldIndex, newIndex) {
-                if (newIndex > oldIndex) newIndex -= 1;
-                setState(() {
-                  final a = _athletes.removeAt(oldIndex);
-                  _athletes.insert(newIndex, a);
-                });
-                _access.reorderAthletes([for (final a in _athletes) a.id]);
-              },
               itemBuilder: (context, i) {
                 final athlete = _athletes[i];
-                return Card(
+                return _AthleteCell(
                   key: ValueKey(athlete.id),
-                  child: ListTile(
-                    leading: const Icon(Icons.person_outline),
-                    title: Text(athlete.name),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.settings_outlined),
-                      tooltip: 'Настройки спортсмена',
-                      onPressed: () => _openAthleteDialog(existing: athlete),
-                    ),
-                    onTap: () => _openDiary(athlete),
-                  ),
+                  athlete: athlete,
+                  onTap: () => _openDiary(athlete),
+                  onSettings: () => _openAthleteDialog(existing: athlete),
+                  onDropped: (draggedId) => _swap(draggedId, athlete.id),
                 );
               },
             ),
@@ -170,6 +182,72 @@ class _CoachAthletesScreenState extends State<CoachAthletesScreen> {
         child: const Icon(Icons.add),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
+    );
+  }
+}
+
+/// Одна квадратная кнопка спортсмена в сетке — тап открывает дневник,
+/// долгое нажатие-и-отпускание НА МЕСТЕ открывает настройки (см.
+/// объяснение у класса экрана), перетаскивание на другую ячейку меняет
+/// спортсменов местами.
+class _AthleteCell extends StatelessWidget {
+  final CoachAthlete athlete;
+  final VoidCallback onTap;
+  final VoidCallback onSettings;
+  final void Function(String draggedAthleteId) onDropped;
+
+  const _AthleteCell({
+    super.key,
+    required this.athlete,
+    required this.onTap,
+    required this.onSettings,
+    required this.onDropped,
+  });
+
+  Widget _card(BuildContext context) => Card(
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.person_outline, size: 28),
+                const SizedBox(height: 8),
+                Text(
+                  athlete.name,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return DragTarget<String>(
+      onAcceptWithDetails: (details) {
+        if (details.data == athlete.id) {
+          onSettings();
+        } else {
+          onDropped(details.data);
+        }
+      },
+      builder: (context, candidateData, rejectedData) => LongPressDraggable<String>(
+        data: athlete.id,
+        feedback: Material(
+          elevation: 4,
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(width: 150, height: 150, child: _card(context)),
+        ),
+        childWhenDragging: Opacity(opacity: 0.3, child: _card(context)),
+        child: _card(context),
+      ),
     );
   }
 }

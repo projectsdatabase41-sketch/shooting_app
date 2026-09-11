@@ -39,9 +39,6 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
   /// Пользователь ввёл собственный ключ, а не пользуется вшитым.
   late bool _ownKey;
 
-  /// Таблицы справочника — редактируемый список.
-  late List<KnowledgeTableConfig> _tables;
-
   @override
   void initState() {
     super.initState();
@@ -50,7 +47,6 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     _ownKey = _settings.hasOwnKey;
     _key = TextEditingController(text: _ownKey ? _settings.apiKey : '');
     _apiBaseUrl = TextEditingController(text: _settings.apiBaseUrl);
-    _tables = [..._settings.tables];
     // Со своим ключом поле цепочки стартует ПУСТЫМ, если пользователь
     // ещё ничего не вводил — не подставляем модели, подобранные под
     // встроенный бесплатный ключ, это разные наборы задач/ограничений.
@@ -77,7 +73,6 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
   void _save() {
     _settings.apiKey = _ownKey ? _key.text : '';
     _settings.apiBaseUrl = _apiBaseUrl.text.isEmpty ? AiSettings.defaultApiBaseUrl : _apiBaseUrl.text;
-    _settings.tables = _tables;
     _settings.models = _models.text.split('\n');
     final rawInstructions = _customInstructions.text;
     _settings.customInstructions = rawInstructions.length > _customInstructionsLimit
@@ -196,91 +191,13 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     }
   }
 
-  /// Добавляет таблицу в список поиска — имя обязательно, название и
-  /// описание нет (пункт 12 списка правок: чтобы ИИ понимал, что в
-  /// таблице лежит, а не только откуда она).
-  Future<void> _addTable() async {
-    final nameCtrl = TextEditingController();
-    final labelCtrl = TextEditingController();
-    final descCtrl = TextEditingController();
-    final columnCtrl = TextEditingController(text: 'content');
-    final config = await showDialog<KnowledgeTableConfig>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Новая таблица'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameCtrl,
-                autofocus: true,
-                decoration: const InputDecoration(labelText: 'Напишите имя таблицы'),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: labelCtrl,
-                decoration: const InputDecoration(labelText: 'Название (необязательно)'),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: descCtrl,
-                minLines: 2,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Краткое описание (необязательно)',
-                  hintText: 'Что в этой таблице — чтобы ИИ понимал',
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: columnCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Колонка с текстом',
-                  hintText: 'content — если в таблице она называется иначе, укажите имя',
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
-          FilledButton(
-            onPressed: () {
-              final name = nameCtrl.text.trim();
-              if (name.isEmpty) return;
-              Navigator.of(ctx).pop(KnowledgeTableConfig(
-                name: name,
-                label: labelCtrl.text.trim().isEmpty ? null : labelCtrl.text.trim(),
-                description: descCtrl.text.trim(),
-                contentColumn: columnCtrl.text.trim().isEmpty ? 'content' : columnCtrl.text.trim(),
-              ));
-            },
-            child: const Text('Добавить'),
-          ),
-        ],
-      ),
-    );
-    if (config == null) return;
-    if (!mounted) return;
-    setState(() {
-      if (!_tables.any((t) => t.name == config.name)) _tables.add(config);
-    });
-  }
-
   /// Считает записи в подключённых таблицах — общей базе (вшита) и
-  /// личных, которые сейчас в `_tables`.
+  /// личных, которые пользователь выбрал в настройках учётной записи.
   Future<void> _checkBooks() async {
     setState(() {
       _checkingBooks = true;
       _books = null;
     });
-    // Таблицы тоже нужно сохранить ПЕРЕД проверкой — иначе таблица,
-    // только что добавленная кнопкой "Добавить" (живёт пока в _tables,
-    // а не на диске), в проверке не участвует: tableStatus читает
-    // settings.tables, а это сохранённое значение (баг, найденный
-    // пользователем на таблице "notes").
-    _settings.tables = _tables;
     final status = await KnowledgeService(_settings, personalAuth: _personalAuth).tableStatus();
     if (!mounted) return;
     setState(() {
@@ -540,31 +457,6 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                   ),
                 ),
             ],
-          ),
-          const SizedBox(height: 20),
-          Text('Подключённые таблицы', style: theme.textTheme.titleSmall),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              for (final t in _tables)
-                InputChip(
-                  label: Text(t.label),
-                  tooltip: t.description.isEmpty ? null : t.description,
-                  onDeleted: () => setState(() => _tables.remove(t)),
-                ),
-              ActionChip(
-                avatar: const Icon(Icons.add, size: 16),
-                label: const Text('Добавить'),
-                onPressed: _addTable,
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Напишите имя таблицы',
-            style: theme.textTheme.bodySmall,
           ),
           if (_message != null) ...[
             const SizedBox(height: 20),

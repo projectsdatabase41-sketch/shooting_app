@@ -26,4 +26,12 @@ class CoachNote {
         chart: row['chart_json'] == null ? null : jsonDecode(row['chart_json'] as String) as Map<String, dynamic>,
         createdAt: DateTime.parse(row['created_at'] as String),
       );
+
+  CoachNote copyWith({String? topic, String? content}) => CoachNote(
+        id: id,
+        topic: topic ?? this.topic,
+        content: content ?? this.content,
+        chart: chart,
+        createdAt: createdAt,
+      );
 }

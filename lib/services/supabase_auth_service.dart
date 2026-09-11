@@ -225,38 +225,42 @@ class SupabaseAuthService {
   /// как справочника ассистенту (пункт 3/8 списка правок: "вводишь
   /// адрес, ключи, жмёшь проверить и получаешь список таблиц").
   ///
-  /// PostgREST на корневом пути (`/rest/v1/`) отдаёт OpenAPI-описание
-  /// схемы — ключи `paths` это и есть имена таблиц/представлений,
-  /// доступных текущему ключу/роли. Отдельной SQL-функции заводить не
-  /// нужно — это стандартный ответ самого PostgREST.
+  /// Через RPC `list_public_tables` (см. `sql/schema.sql`), а не через
+  /// OpenAPI-описание схемы на голом `/rest/v1/` — у части проектов этот
+  /// путь отвечает 401 (не общий стандарт, зависит от настроек шлюза
+  /// конкретного проекта), тогда как обычный вызов функции идёт тем же
+  /// путём и теми же заголовками, что и любой другой запрос в
+  /// приложении, и его надёжность уже проверена (`get_shared_*` и т.п.).
   Future<List<String>> fetchTableNames() async {
     _requireBase();
     final token = await ensureFreshToken();
     final client = clientFactory();
     try {
-      final res = await client.get(
-        Uri.parse('$url/rest/v1/'),
-        headers: {
-          'apikey': anonKey,
-          if (token != null) 'Authorization': 'Bearer $token',
-          'Accept': 'application/openapi+json',
-        },
-      ).timeout(const Duration(seconds: 20));
-      if (res.statusCode != 200) {
-        throw AuthException('Не удалось получить список таблиц (${res.statusCode})');
+      final res = await client
+          .post(
+            Uri.parse('$url/rest/v1/rpc/list_public_tables'),
+            headers: {
+              'apikey': anonKey,
+              if (token != null) 'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+            body: '{}',
+          )
+          .timeout(const Duration(seconds: 20));
+      if (res.statusCode >= 400) {
+        if (res.statusCode == 404 || res.body.contains('PGRST202') || res.body.contains('PGRST205')) {
+          throw const AuthException(
+              'Функция list_public_tables не найдена — примените свежий sql/schema.sql к своей базе');
+        }
+        throw AuthException(_message(res.body));
       }
-      final decoded = jsonDecode(res.body) as Map<String, dynamic>;
-      final paths = (decoded['paths'] as Map?) ?? const {};
-      final names = <String>{};
-      for (final key in paths.keys) {
-        final k = '$key';
-        if (!k.startsWith('/') || k.length <= 1) continue;
-        final name = k.substring(1);
-        if (name.startsWith('rpc')) continue;
-        names.add(name);
-      }
-      final list = names.toList()..sort();
-      return list;
+      final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+      if (decoded is! List) return const [];
+      final names = <String>{
+        for (final row in decoded)
+          if (row is Map && row['table_name'] is String) row['table_name'] as String,
+      };
+      return names.toList()..sort();
     } on AuthException {
       rethrow;
     } catch (e) {

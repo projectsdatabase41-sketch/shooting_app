@@ -191,8 +191,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
-          const Divider(height: 24),
-          const _ShareTokensSection(),
+          // Тренер не ведёт свои тренировки и никому не передаёт свои
+          // данные — токен доступа тренерам нужен только спортсмену
+          // (пункт списка правок: "тренер не будет свои данные
+          // передавать").
+          if (store.workMode != WorkMode.coach) ...[
+            const Divider(height: 24),
+            const _ShareTokensSection(),
+          ],
           const Divider(height: 24),
           // Учётная запись — в самом низу, как просил пользователь:
           // заходят сюда раз в жизни, а место наверху занимает то, что

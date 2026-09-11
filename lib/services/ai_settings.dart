@@ -213,19 +213,29 @@ class AiSettings {
   /// у существующих пользователей подключённые таблицы не должны
   /// пропасть только из-за смены формата хранения.
   List<KnowledgeTableConfig> get tables {
-    final raw = _read(keyTables);
-    if (raw.isEmpty) return const [];
-    if (raw.trimLeft().startsWith('[')) {
-      try {
-        final decoded = jsonDecode(raw) as List;
-        return decoded.cast<Map<String, dynamic>>().map(KnowledgeTableConfig.fromJson).toList();
-      } catch (_) {
-        return const [];
+    List<KnowledgeTableConfig> parse() {
+      final raw = _read(keyTables);
+      if (raw.isEmpty) return const [];
+      if (raw.trimLeft().startsWith('[')) {
+        try {
+          final decoded = jsonDecode(raw) as List;
+          return decoded.cast<Map<String, dynamic>>().map(KnowledgeTableConfig.fromJson).toList();
+        } catch (_) {
+          return const [];
+        }
       }
+      // Старый формат — простые имена через запятую.
+      final names = raw.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+      return [for (final n in names) KnowledgeTableConfig(name: n)];
     }
-    // Старый формат — простые имена через запятую.
-    final names = raw.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
-    return [for (final n in names) KnowledgeTableConfig(name: n)];
+
+    // Записи с именем встроенной таблицы отфильтровываются даже если уже
+    // сохранены — до этой правки shooting_rules/books попадали сюда по
+    // умолчанию, и у пользователей, успевших открыть и сохранить
+    // настройки ассистента раньше, они застряли в списке личных таблиц
+    // навсегда, хотя интерфейс их больше не добавляет.
+    final builtInNames = {for (final t in builtInTables) t.name};
+    return parse().where((t) => !builtInNames.contains(t.name)).toList();
   }
 
   set tables(List<KnowledgeTableConfig> v) => _write(keyTables, jsonEncode([for (final t in v) t.toJson()]));
