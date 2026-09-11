@@ -7,12 +7,16 @@ import 'ai_settings.dart';
 /// Кусок текста из базы знаний.
 class KnowledgeChunk {
   final String table;
+  final String tableLabel;
+  final String tableDescription;
   final String source;
   final String heading;
   final String text;
 
   const KnowledgeChunk({
     required this.table,
+    required this.tableLabel,
+    this.tableDescription = '',
     required this.source,
     required this.heading,
     required this.text,
@@ -177,7 +181,7 @@ class KnowledgeService {
     final token = settings.booksToken;
     for (final table in settings.tables) {
       try {
-        final uri = Uri.parse('${settings.booksUrl}/$table')
+        final uri = Uri.parse('${settings.booksUrl}/${table.name}')
             .replace(queryParameters: {'select': 'content'});
         final res = await _client.get(uri, headers: {
           'Accept': 'application/json',
@@ -188,15 +192,15 @@ class KnowledgeService {
         }).timeout(_timeout);
 
         if (res.statusCode >= 400) {
-          out[table] = 'ошибка ${res.statusCode}';
+          out[table.label] = 'ошибка ${res.statusCode}';
           continue;
         }
         // content-range приходит в виде «0-0/128» или «*/0».
         final range = res.headers['content-range'] ?? '';
         final total = range.contains('/') ? range.split('/').last : '?';
-        out[table] = total == '0' ? 'пусто' : '$total строк';
+        out[table.label] = total == '0' ? 'пусто' : '$total строк';
       } catch (e) {
-        out[table] = 'недоступна';
+        out[table.label] = 'недоступна';
       }
     }
     return out;
@@ -256,9 +260,9 @@ class KnowledgeService {
     return n;
   }
 
-  Future<List<KnowledgeChunk>> _searchTable(String table, String word) async {
+  Future<List<KnowledgeChunk>> _searchTable(KnowledgeTableConfig table, String word) async {
     try {
-      final uri = Uri.parse('${settings.booksUrl}/$table').replace(
+      final uri = Uri.parse('${settings.booksUrl}/${table.name}').replace(
         queryParameters: {
           'select': 'file_name,heading_path,content',
           'content': 'ilike.*$word*',
@@ -284,8 +288,10 @@ class KnowledgeService {
         for (final row in data)
           if (row is Map && row['content'] is String)
             KnowledgeChunk(
-              table: table,
-              source: '${row['file_name'] ?? table}',
+              table: table.name,
+              tableLabel: table.label,
+              tableDescription: table.description,
+              source: '${row['file_name'] ?? table.label}',
               heading: '${row['heading_path'] ?? ''}',
               text: _clean('${row['content']}'),
             )
@@ -309,7 +315,12 @@ class KnowledgeService {
     if (chunks.isEmpty) return null;
     final buf = StringBuffer();
     for (final c in chunks) {
-      final piece = '[${c.source}${c.heading.isEmpty ? '' : ', ${c.heading}'}]\n${c.text}\n\n';
+      // Название/описание таблицы — чтобы модель понимала, ЧТО за
+      // источник перед ней (личный дневник — не то же самое, что
+      // официальные правила ISSF, даже если оба совпали по слову),
+      // а не только откуда файл (пункт 12 списка правок).
+      final tableTag = c.tableDescription.isEmpty ? c.tableLabel : '${c.tableLabel}: ${c.tableDescription}';
+      final piece = '[$tableTag — ${c.source}${c.heading.isEmpty ? '' : ', ${c.heading}'}]\n${c.text}\n\n';
       if (buf.length + piece.length > totalCharLimit) break;
       buf.write(piece);
     }

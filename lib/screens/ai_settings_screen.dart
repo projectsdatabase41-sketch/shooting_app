@@ -39,7 +39,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
   late bool _ownKey;
 
   /// Таблицы справочника — редактируемый список.
-  late List<String> _tables;
+  late List<KnowledgeTableConfig> _tables;
 
   @override
   void initState() {
@@ -192,31 +192,63 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     }
   }
 
-  /// Добавляет таблицу в список поиска.
+  /// Добавляет таблицу в список поиска — имя обязательно, название и
+  /// описание нет (пункт 12 списка правок: чтобы ИИ понимал, что в
+  /// таблице лежит, а не только откуда она).
   Future<void> _addTable() async {
-    final controller = TextEditingController();
-    final name = await showDialog<String>(
+    final nameCtrl = TextEditingController();
+    final labelCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    final config = await showDialog<KnowledgeTableConfig>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Имя таблицы'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: 'например shooting_rules'),
+        title: const Text('Новая таблица'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'Напишите имя таблицы'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: labelCtrl,
+              decoration: const InputDecoration(labelText: 'Название (необязательно)'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: descCtrl,
+              minLines: 2,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                labelText: 'Краткое описание (необязательно)',
+                hintText: 'Что в этой таблице — чтобы ИИ понимал',
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
           FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            onPressed: () {
+              final name = nameCtrl.text.trim();
+              if (name.isEmpty) return;
+              Navigator.of(ctx).pop(KnowledgeTableConfig(
+                name: name,
+                label: labelCtrl.text.trim().isEmpty ? null : labelCtrl.text.trim(),
+                description: descCtrl.text.trim(),
+              ));
+            },
             child: const Text('Добавить'),
           ),
         ],
       ),
     );
-    if (name == null || name.isEmpty) return;
+    if (config == null) return;
     if (!mounted) return;
     setState(() {
-      if (!_tables.contains(name)) _tables.add(name);
+      if (!_tables.any((t) => t.name == config.name)) _tables.add(config);
     });
   }
 
@@ -316,11 +348,9 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             ),
           ],
           const SizedBox(height: 24),
-          SectionHeader(
+          const SectionHeader(
             title: 'Инструкция ассистенту',
-            subtitle: _ownKey
-                ? 'Свой ключ — предел заметно шире, платная модель переваривает больше текста.'
-                : 'Короткая заметка поверх общих правил: что ассистенту стоит знать или как себя вести.',
+            subtitle: 'Что ещё должен знать ИИ',
           ),
           const SizedBox(height: 12),
           TextField(
@@ -433,10 +463,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
               ),
             ],
           ] else ...[
-            const SectionHeader(
-              title: 'Модели',
-              subtitle: 'Приложение само подбирает и проверяет бесплатные модели для встроенного ключа.',
-            ),
+            const SectionHeader(title: 'Модели'),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -454,7 +481,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Получит список бесплатных моделей и попросит ИИ расставить их по приоритету',
+                    'Переподключить доступные модели',
                     style: theme.textTheme.bodySmall,
                   ),
                 ),
@@ -467,10 +494,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             ),
           ],
           const SizedBox(height: 24),
-          const SectionHeader(
-            title: 'Справочные материалы',
-            subtitle: 'Таблицы shooting_rules и books. Поиск по ключевым словам.',
-          ),
+          const SectionHeader(title: 'Справочные материалы'),
           const SizedBox(height: 12),
           TextField(
             controller: _booksUrl,
@@ -515,7 +539,8 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             children: [
               for (final t in _tables)
                 InputChip(
-                  label: Text(t),
+                  label: Text(t.label),
+                  tooltip: t.description.isEmpty ? null : t.description,
                   onDeleted: () => setState(() => _tables.remove(t)),
                 ),
               ActionChip(
@@ -527,8 +552,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Ассистент ищет по колонке content каждой из них. '
-            'Добавьте имя таблицы — и она подключится к поиску.',
+            'Напишите имя таблицы',
             style: theme.textTheme.bodySmall,
           ),
           if (_message != null) ...[

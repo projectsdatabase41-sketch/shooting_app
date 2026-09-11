@@ -12,6 +12,7 @@ import '../state/target_view_model.dart';
 import '../state/workspace_view_model.dart';
 import '../widgets/analytics_panel.dart';
 import '../widgets/comments_thread.dart';
+import '../widgets/finished_edit_exit_dialog.dart';
 import '../widgets/raised_3d_button.dart';
 import '../widgets/shot_list_sheet.dart';
 import '../widgets/shot_wheel.dart';
@@ -263,26 +264,7 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
   /// Выход с экрана мишени, когда завершённая тренировка была
   /// разблокирована и в ней что-то поменяли (часть 12 списка).
   Future<void> _handleFinishedEditExit(BuildContext context, TargetViewModel vm) async {
-    final keep = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Хотите применить изменения?'),
-        content: const Text(
-          'Вы поправили уже завершённую тренировку. Применить изменения '
-          'или вернуть её к тому виду, что был до разблокировки?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Вернуть как было'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Применить'),
-          ),
-        ],
-      ),
-    );
+    final keep = await confirmFinishedEditExit(context);
     // null — диалог закрыли, не выбрав ничего (тап мимо/системное
     // "назад" внутри диалога): остаёмся на экране, ничего не решаем.
     if (keep == null) return;

@@ -528,6 +528,29 @@ class AppDataStore extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  // ---- Незавершённая правка завершённой тренировки (пункт 13 списка правок) ----
+  //
+  // `TargetScreen`'s `PopScope` спрашивает "применить/откатить" на
+  // системное "назад", но переключение НИЖНЕЙ ВКЛАДКИ в `HomeShell`
+  // (например, на "История") — это не Navigator.pop, а замена всего
+  // виджета `TargetScreen` на другой, и PopScope этот путь не видит
+  // вовсе (баг, на который пожаловался пользователь: "при всех жестах,
+  // при которых я выхожу из тренировки"). `HomeShell` не видит сам
+  // `TargetViewModel` (он создаётся глубоко внутри `TargetScreen`), но
+  // может проверить этот флаг перед тем, как переключить вкладку.
+  bool hasUnsavedFinishedEdit = false;
+  void Function({required bool keep})? resolvePendingFinishedEdit;
+
+  /// Вызывается `TargetViewModel` при каждом изменении, пока
+  /// разблокирована завершённая тренировка — держит этот флаг и
+  /// колбэк-резолвер синхронными с `TargetViewModel.hasUnsavedFinishedEdits`.
+  void setUnsavedFinishedEdit(bool value, {void Function({required bool keep})? resolver}) {
+    if (hasUnsavedFinishedEdit == value) return;
+    hasUnsavedFinishedEdit = value;
+    resolvePendingFinishedEdit = value ? resolver : null;
+    notifyListeners();
+  }
 }
 
 extension _FirstOrNull<T> on Iterable<T> {

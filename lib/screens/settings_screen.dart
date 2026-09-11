@@ -298,13 +298,45 @@ class _ShareTokensSectionState extends State<_ShareTokensSection> {
     }
   }
 
+  /// Спрашивает, кому предназначен токен, ДО создания — само поле уже
+  /// давно поддержано на сервере (`athleteLabel`/`share_grants.label`),
+  /// не хватало только запроса имени в интерфейсе (пункт 13 списка
+  /// правок). Пустое имя — тоже валидный ответ, просто без подписи.
+  Future<String?> _askTokenLabel() {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Название токена'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Имя, кому предназначен',
+            hintText: 'например «Тренер Иванов»',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            child: const Text('Создать'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _create() async {
+    final label = await _askTokenLabel();
+    if (label == null) return; // отменили в диалоге
+    if (!mounted) return;
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final token = await _sync.createShareToken(context.read<AppDataStore>());
+      final token = await _sync.createShareToken(context.read<AppDataStore>(), athleteLabel: label);
       if (!mounted) return;
       setState(() => _lastCreatedToken = token);
     } catch (e) {
@@ -575,11 +607,15 @@ class _AccountSheetState extends State<_AccountSheet> {
           children: [
             Text('Учётная запись', style: theme.textTheme.titleMedium),
             const SizedBox(height: 4),
-            Text(
-              'Приложение подключается к вашей собственной базе Supabase. '
-              'Учётная запись создаётся в ней же — отдельной регистрации '
-              'где-то ещё не нужно.',
-              style: theme.textTheme.bodySmall,
+            Text('Подключение к Supabase', style: theme.textTheme.bodySmall),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () => launchUrl(
+                Uri.parse('https://supabase.com/dashboard/sign-up'),
+                mode: LaunchMode.externalApplication,
+              ),
+              icon: const Icon(Icons.open_in_new),
+              label: const Text('Регистрация в Supabase'),
             ),
             const SizedBox(height: 16),
 

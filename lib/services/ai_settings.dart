@@ -1,4 +1,35 @@
+import 'dart:convert';
+
 import '../services/local_db_service.dart';
+
+/// Одна подключённая таблица базы знаний — имя (для запроса к базе),
+/// название и краткое описание (чтобы ИИ понимал, что там лежит и как
+/// доверять найденному — пункт 12 списка правок). Название/описание
+/// необязательны: старые записи (когда хранилось только имя) читаются
+/// как есть, без названия.
+class KnowledgeTableConfig {
+  final String name;
+  final String label;
+  final String description;
+
+  const KnowledgeTableConfig({
+    required this.name,
+    String? label,
+    this.description = '',
+  }) : label = label ?? name;
+
+  factory KnowledgeTableConfig.fromJson(Map<String, dynamic> json) => KnowledgeTableConfig(
+        name: json['name'] as String,
+        label: json['label'] as String?,
+        description: json['description'] as String? ?? '',
+      );
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'label': label,
+        'description': description,
+      };
+}
 
 /// Настройки ИИ-ассистента: ключ OpenRouter, цепочка моделей и адрес
 /// таблицы с книгами.
@@ -154,16 +185,39 @@ class AiSettings {
   /// пересобирать приложение ради имени таблицы — нелепо.
   static const List<String> knowledgeTables = ['shooting_rules', 'books'];
 
-  /// Таблицы, по которым ассистент ищет сейчас.
-  List<String> get tables {
+  /// Таблицы, по которым ассистент ищет сейчас — с названием и
+  /// описанием, если пользователь их указал.
+  ///
+  /// Хранится JSON-массивом. Старый формат (простой список имён через
+  /// запятую, до появления названий/описаний) распознаётся отдельно —
+  /// у существующих пользователей подключённые таблицы не должны
+  /// пропасть только из-за смены формата хранения.
+  List<KnowledgeTableConfig> get tables {
     final raw = _read(keyTables);
-    if (raw.isEmpty) return knowledgeTables;
-    final list = raw.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
-    return list.isEmpty ? knowledgeTables : list;
+    if (raw.isEmpty) {
+      return [for (final name in knowledgeTables) KnowledgeTableConfig(name: name)];
+    }
+    if (raw.trimLeft().startsWith('[')) {
+      try {
+        final decoded = jsonDecode(raw) as List;
+        final list = decoded
+            .cast<Map<String, dynamic>>()
+            .map(KnowledgeTableConfig.fromJson)
+            .toList();
+        if (list.isNotEmpty) return list;
+      } catch (_) {
+        // Битый JSON — падать в старый формат бессмысленно (это не он),
+        // возвращаем справочник по умолчанию, а не теряем весь список.
+        return [for (final name in knowledgeTables) KnowledgeTableConfig(name: name)];
+      }
+    }
+    // Старый формат — простые имена через запятую.
+    final names = raw.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    if (names.isEmpty) return [for (final name in knowledgeTables) KnowledgeTableConfig(name: name)];
+    return [for (final n in names) KnowledgeTableConfig(name: n)];
   }
 
-  set tables(List<String> v) =>
-      _write(keyTables, v.map((e) => e.trim()).where((e) => e.isNotEmpty).join(','));
+  set tables(List<KnowledgeTableConfig> v) => _write(keyTables, jsonEncode([for (final t in v) t.toJson()]));
 
   String get booksUrl => _read(keyBooksUrl, fallback: defaultBooksUrl);
   set booksUrl(String v) => _write(keyBooksUrl, v.trim());

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/training_session.dart';
 import '../state/app_data_store.dart';
+import '../widgets/finished_edit_exit_dialog.dart';
 import 'ai_chat_screen.dart';
 import 'coach_diary_screen.dart';
 import 'exercises_screen.dart';
@@ -88,7 +89,7 @@ class _HomeShellState extends State<HomeShell> {
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _athleteIndex,
-        onDestinationSelected: (i) => setState(() => _athleteIndex = i),
+        onDestinationSelected: (i) => _onDestinationSelected(context, store, i),
         // Шесть вкладок на узком экране (375dp и меньше) не помещаются
         // с подписью у каждой — "Тренировка"/"Ассистент"/"Настройки"
         // переносились на две строки или обрезались. Подпись остаётся
@@ -105,6 +106,23 @@ class _HomeShellState extends State<HomeShell> {
         ],
       ),
     );
+  }
+
+  /// Переключение нижней вкладки — не Navigator.pop, поэтому PopScope
+  /// экрана мишени его не видит: без этой проверки правки в
+  /// разблокированной завершённой тренировке терялись бы молча при
+  /// уходе на другую вкладку (пункт 13 списка правок; на практике
+  /// сейчас недостижимо — вкладка "Мишень" показывает только
+  /// running/paused тренировки, а редактирование завершённой открыто
+  /// отдельным экраном из истории — но это дешёвая защита на будущее,
+  /// если это когда-нибудь изменится).
+  Future<void> _onDestinationSelected(BuildContext context, AppDataStore store, int index) async {
+    if (index != _athleteIndex && store.hasUnsavedFinishedEdit) {
+      final keep = await confirmFinishedEditExit(context);
+      if (keep == null) return; // остаёмся на текущей вкладке
+      store.resolvePendingFinishedEdit?.call(keep: keep);
+    }
+    setState(() => _athleteIndex = index);
   }
 
   String _activeSessionKey(AppDataStore store) {

@@ -155,6 +155,7 @@ class TargetViewModel extends ChangeNotifier {
     unlockedForEdit = false;
     _preUnlockSnapshot = null;
     _dirtySinceUnlock = false;
+    store.setUnsavedFinishedEdit(false);
     notifyListeners();
   }
 
@@ -673,6 +674,10 @@ class TargetViewModel extends ChangeNotifier {
     _refreshTimersNow();
     if (unlockedForEdit) _dirtySinceUnlock = true;
     store.upsertSession(session);
+    // Держим AppDataStore в курсе — HomeShell не видит эту вью-модель
+    // напрямую, но должен успеть спросить "применить/откатить" при
+    // переключении нижней вкладки (см. комментарий у поля в AppDataStore).
+    store.setUnsavedFinishedEdit(hasUnsavedFinishedEdits, resolver: resolveFinishedEditExit);
     notifyListeners();
   }
 
@@ -690,6 +695,11 @@ class TargetViewModel extends ChangeNotifier {
   void dispose() {
     _timer?.cancel();
     disposeSession();
+    // Защита от повисшего резолвера: если экран закрылся КАКИМ-ТО ещё
+    // путём, не пройдя через resolveFinishedEditExit (не должно
+    // случаться при известных путях выхода, но вызвать колбэк на уже
+    // уничтоженной вью-модели опаснее, чем молча снять флаг).
+    if (hasUnsavedFinishedEdits) store.setUnsavedFinishedEdit(false);
     super.dispose();
   }
 }
