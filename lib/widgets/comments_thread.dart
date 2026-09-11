@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -63,14 +64,20 @@ class CommentsThreadSheet extends StatefulWidget {
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (_) => FractionallySizedBox(
-        heightFactor: heightFactor,
-        child: MultiProvider(
-          providers: [
-            ChangeNotifierProvider.value(value: vm),
-            ChangeNotifierProvider.value(value: store),
-          ],
-          child: child,
+      builder: (ctx) => Padding(
+        // Без этого поле ввода уезжало под клавиатуру — showModalBottomSheet
+        // не подвигает свой контент сам (жалоба пользователя: "не видно,
+        // что пишешь" в заметке к выстрелу и в чате с тренером).
+        padding: EdgeInsets.only(bottom: kIsWeb ? 0 : MediaQuery.of(ctx).viewInsets.bottom),
+        child: FractionallySizedBox(
+          heightFactor: heightFactor,
+          child: MultiProvider(
+            providers: [
+              ChangeNotifierProvider.value(value: vm),
+              ChangeNotifierProvider.value(value: store),
+            ],
+            child: child,
+          ),
         ),
       ),
     );

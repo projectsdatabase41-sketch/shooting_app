@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -229,10 +230,18 @@ class _AiChatBodyState extends State<_AiChatBody> {
   }
 
   Widget _buildInput(AiChatViewModel vm) {
+    // embedded: true — экран живёт внутри PageView мишени, а не под
+    // своим Scaffold, и не подвигается под клавиатуру сам (жалоба
+    // пользователя: поле ввода уезжало под клавиатуру). Вне embedded
+    // об этом уже заботится сам Scaffold (resizeToAvoidBottomInset),
+    // и дублировать отступ здесь не нужно — на вебе он к тому же не
+    // возвращается ровно к нулю после закрытия клавиатуры.
+    final keyboardInset =
+        widget.embedded && !kIsWeb ? MediaQuery.of(context).viewInsets.bottom : 0.0;
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        padding: EdgeInsets.fromLTRB(12, 0, 12, 12 + keyboardInset),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
