@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/supabase_auth_service.dart';
@@ -499,11 +500,19 @@ class _ShareTokensSectionState extends State<_ShareTokensSection> {
                       ],
                     ),
                     const SizedBox(height: 6),
-                    SelectableText(
-                      _lastCreatedToken!,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            color: Theme.of(context).colorScheme.onSecondaryContainer,
-                          ),
+                    // Сам токен на экран не выводим — только кнопка
+                    // копирования (решение пользователя): скопировать и
+                    // сразу отправить тренеру, глазами читать незачем,
+                    // а плечом подсмотреть — риск.
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: _lastCreatedToken!));
+                        ScaffoldMessenger.of(context)
+                          ..hideCurrentSnackBar()
+                          ..showSnackBar(const SnackBar(content: Text('Токен скопирован')));
+                      },
+                      icon: const Icon(Icons.copy, size: 16),
+                      label: const Text('Скопировать токен'),
                     ),
                   ],
                 ),

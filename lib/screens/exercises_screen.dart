@@ -163,7 +163,9 @@ class _ExerciseCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(14),
+          // Вертикальный отступ -10% (решение пользователя) — высота
+          // строки, не ширина.
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12.6),
           child: Row(
             children: [
               Container(
