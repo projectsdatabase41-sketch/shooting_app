@@ -11,6 +11,7 @@ import '../state/personalization_view_model.dart';
 import '../widgets/section_header.dart';
 import 'export_screen.dart';
 import 'ai_settings_screen.dart';
+import 'chat_home_screen.dart';
 import 'color_personalization_screen.dart';
 
 /// Настройки (раздел 9 ТЗ).
@@ -71,6 +72,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const AiSettingsScreen()),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.forum_outlined),
+            title: const Text('Чат'),
+            subtitle: const Text('Общение с другими пользователями приложения'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ChatHomeScreen()),
             ),
           ),
           ListTile(

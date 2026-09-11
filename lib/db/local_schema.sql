@@ -100,6 +100,34 @@ CREATE TABLE IF NOT EXISTS coach_athletes (
   created_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Публичный чат между пользователями приложения (разные личные базы,
+-- сообщения транзитом через отдельный общий проект — см.
+-- lib/services/chat_settings.dart). История и контакты живут ТОЛЬКО на
+-- устройстве, сервер их не хранит дольше доставки.
+CREATE TABLE IF NOT EXISTS chat_contacts (
+  id             TEXT PRIMARY KEY,
+  nickname       TEXT NOT NULL,
+  chat_code      TEXT NOT NULL,
+  avatar_base64  TEXT,
+  added_at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS chat_local_messages (
+  id                  TEXT PRIMARY KEY,
+  client_message_id   TEXT NOT NULL,
+  contact_id          TEXT NOT NULL REFERENCES chat_contacts(id) ON DELETE CASCADE,
+  direction           TEXT NOT NULL CHECK (direction IN ('outgoing','incoming')),
+  text                TEXT NOT NULL,
+  status              TEXT NOT NULL DEFAULT 'sending' CHECK (status IN ('sending','sent','delivered','error')),
+  -- Только для входящих: открыл ли получатель ветку с этим сообщением
+  -- после его получения — сервер уже ничего не хранит к этому моменту
+  -- (см. ChatSyncService.pollIncoming), это чисто локальная отметка "непрочитано".
+  seen                INTEGER NOT NULL DEFAULT 0,
+  created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_local_messages_contact ON chat_local_messages(contact_id);
+
 -- Дневник тренера (раздел 8 ТЗ): темы + заметки, живёт только на
 -- устройстве тренера (не привязан ни к одному спортсмену). Содержимое —
 -- обычный текст плюс необязательный блок графика/таблицы, тем же

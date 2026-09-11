@@ -94,6 +94,17 @@ class LocalDbService {
         // id строки в coach_athletes, чьё подключение сейчас скопировано
         // в три поля выше — какой спортсмен сейчас "активен".
         'coach_active_athlete_id': 'TEXT',
+        // Собственная учётная запись пользователя в ОБЩЕМ чате
+        // (отдельная от входа в его личную базу тренировок, см.
+        // ChatAuthService) — токены, никнейм и код контакта, по
+        // которому его добавляют другие.
+        'chat_user_id': 'TEXT',
+        'chat_access_token': 'TEXT',
+        'chat_refresh_token': 'TEXT',
+        'chat_expires_at': 'TEXT',
+        'chat_nickname': 'TEXT',
+        'chat_code': 'TEXT',
+        'chat_avatar_base64': 'TEXT',
       },
     };
 
@@ -262,6 +273,27 @@ CREATE TABLE IF NOT EXISTS coach_notes (
   chart_json  TEXT,
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS chat_contacts (
+  id             TEXT PRIMARY KEY,
+  nickname       TEXT NOT NULL,
+  chat_code      TEXT NOT NULL,
+  avatar_base64  TEXT,
+  added_at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS chat_local_messages (
+  id                  TEXT PRIMARY KEY,
+  client_message_id   TEXT NOT NULL,
+  contact_id          TEXT NOT NULL REFERENCES chat_contacts(id) ON DELETE CASCADE,
+  direction           TEXT NOT NULL CHECK (direction IN ('outgoing','incoming')),
+  text                TEXT NOT NULL,
+  status              TEXT NOT NULL DEFAULT 'sending' CHECK (status IN ('sending','sent','delivered','error')),
+  seen                INTEGER NOT NULL DEFAULT 0,
+  created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_local_messages_contact ON chat_local_messages(contact_id);
 
 CREATE TABLE IF NOT EXISTS shots (
   id                  TEXT PRIMARY KEY,
