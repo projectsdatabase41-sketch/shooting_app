@@ -161,8 +161,11 @@ class AiService {
     required List<({String role, String text})> history,
     String? booksExcerpt,
   }) async {
-    final key = settings.apiKey;
-    if (key.isEmpty) {
+    // Со своим ключом — он один; на встроенном — целый список (пользователь
+    // принёс несколько ключей именно на случай, если один упрётся в лимит:
+    // "если отвалится один, запуститься другой и так до последнего").
+    final keys = settings.hasOwnKey ? [settings.apiKey] : AiSettings.testApiKeys;
+    if (keys.isEmpty) {
       throw const AiException('Не задан ключ OpenRouter — укажите его в настройках');
     }
 
@@ -180,23 +183,34 @@ class AiService {
     ];
 
     final errors = <String>[];
-    for (final model in settings.models) {
-      try {
-        return await _askModel(model, messages, key);
-      } on RateLimitedException catch (e) {
-        // Лимит бесплатных моделей общий на ВЕСЬ ключ, а не на
-        // конкретную модель — пробовать оставшиеся семь бессмысленно
-        // (упрутся в тот же лимит) и только быстрее его исчерпывает.
-        throw RateLimitedException(
-          'Исчерпан дневной/минутный лимит бесплатных моделей OpenRouter. '
-          'Подождите немного и попробуйте снова — это не поломка приложения. '
-          '(${e.message})',
-        );
-      } on AiException catch (e) {
-        errors.add('$model: ${e.message}');
-      } catch (e) {
-        errors.add('$model: $e');
+    var anyRateLimited = false;
+    for (final key in keys) {
+      for (final model in settings.models) {
+        try {
+          return await _askModel(model, messages, key);
+        } on RateLimitedException catch (e) {
+          // Лимит бесплатных моделей общий на ВЕСЬ КЛЮЧ, а не на
+          // конкретную модель — пробовать оставшиеся модели ЭТИМ ЖЕ
+          // ключом бессмысленно (упрутся в тот же лимит) и только
+          // быстрее его исчерпывает. `break` уходит к СЛЕДУЮЩЕМУ КЛЮЧУ
+          // целиком (внешний for), а не сдаётся — на то запасные ключи
+          // и нужны.
+          anyRateLimited = true;
+          errors.add('$model: лимит (${e.message})');
+          break;
+        } on AiException catch (e) {
+          errors.add('$model: ${e.message}');
+        } catch (e) {
+          errors.add('$model: $e');
+        }
       }
+    }
+
+    if (anyRateLimited) {
+      throw RateLimitedException(
+        'Исчерпан дневной/минутный лимит бесплатных моделей OpenRouter на всех доступных ключах. '
+        'Подождите немного и попробуйте снова — это не поломка приложения.\n${errors.join('\n')}',
+      );
     }
     throw AiException('Ни одна модель не ответила.\n${errors.join('\n')}');
   }
@@ -209,7 +223,7 @@ class AiService {
     final res = await _client
         .post(
           Uri.parse('$_base/chat/completions'),
-          headers: {..._headers(), 'Content-Type': 'application/json'},
+          headers: {..._headers(key), 'Content-Type': 'application/json'},
           body: jsonEncode({
             'model': model,
             'messages': messages,
@@ -289,8 +303,8 @@ class AiService {
     );
   }
 
-  Map<String, String> _headers() => {
-        'Authorization': 'Bearer ${settings.apiKey}',
+  Map<String, String> _headers([String? key]) => {
+        'Authorization': 'Bearer ${key ?? settings.apiKey}',
         // OpenRouter просит указывать источник запроса.
         'HTTP-Referer': 'https://github.com/shooting-app',
         'X-Title': 'Shooting App',
