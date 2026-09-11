@@ -72,10 +72,12 @@ class AiChatViewModel extends ChangeNotifier {
   final AiService service;
   final KnowledgeService knowledge;
 
-  /// Сводки прошлых разговоров (пункт 10 списка правок) — читает и
-  /// пишет `ai_conversation_summaries` в личной базе спортсмена. Молчит
-  /// сама по себе, если облако не подключено — методы `recent`/`append`
-  /// в этом случае просто ничего не делают, а не бросают ошибку.
+  /// Записи прошлых разговоров (пункт 10 списка правок) — читает и
+  /// пишет `ai_conversation_summaries` в личной базе спортсмена: одна
+  /// строка на КАЖДЫЙ обмен вопрос-ответ, находится по ключевым словам
+  /// (`search`), а не слепым "последние N". Молчит сама по себе, если
+  /// облако не подключено — методы `search`/`append` в этом случае
+  /// просто ничего не делают, а не бросают ошибку.
   final AiMemoryService memory;
 
   /// Откуда брать контекст на момент отправки.
@@ -104,18 +106,6 @@ class AiChatViewModel extends ChangeNotifier {
   final List<AiMessage> messages = [];
   bool _busy = false;
   bool get busy => _busy;
-
-  // ---- Память о прошлых разговорах (пункт 10 списка правок) ----
-  //
-  // Сам чат живёт только в оперативной памяти, поэтому "запомнить
-  // разговор" не может ждать закрытия приложения (dispose() на выходе
-  // не гарантирован) — вместо этого раз в MEMORY_CHECKPOINT_EVERY
-  // ответов ассистента лишний запрос тихо просит его же самого сжать
-  // последний кусок разговора в 1-3 предложения и сохраняет их.
-  static const int _checkpointEvery = 6;
-  int _exchangesSinceCheckpoint = 0;
-  DateTime? _checkpointWindowStart;
-  bool _checkpointing = false;
 
   /// Все графики из ответов. Осталось для возможных сводок; отдельной
   /// панели графиков в чате больше нет — они рисуются в сообщениях.
@@ -152,22 +142,25 @@ class AiChatViewModel extends ChangeNotifier {
     if (trimmed.isEmpty || _busy) return;
 
     messages.add(AiMessage(fromUser: true, text: trimmed));
-    _checkpointWindowStart ??= DateTime.now();
     _busy = true;
     notifyListeners();
 
     try {
       final rawCtx = contextBuilder();
-      final pastSummaries = await memory.recent();
+      // По ключевым словам вопроса, а не слепые "последние 20" —
+      // решение пользователя (пункт 10, уточнение того же дня):
+      // старая версия тянула недавние сводки независимо от темы.
+      final pastSummaries = await memory.search(trimmed);
       final ctx = pastSummaries.isEmpty ? rawCtx : rawCtx.withPastSummaries(pastSummaries);
       final chunks = await knowledge.search(trimmed);
       final books = KnowledgeService.asPromptBlock(chunks);
       final history = <({String role, String text})>[
         for (final m in _recent()) (role: m.fromUser ? 'user' : 'assistant', text: m.text),
       ];
+      final askedAt = DateTime.now();
       final reply = await service.ask(
         systemPrompt: AiContext.systemPrompt(customInstructions: service.settings.customInstructions),
-        contextBlock: ctx.buildContextBlock(DateTime.now()),
+        contextBlock: ctx.buildContextBlock(askedAt),
         history: history,
         booksExcerpt: books,
       );
@@ -180,11 +173,17 @@ class AiChatViewModel extends ChangeNotifier {
         sources: {for (final c in chunks) c.source}.toList(),
         exercise: reply.exercise,
       ));
-      _exchangesSinceCheckpoint++;
-      if (_exchangesSinceCheckpoint >= _checkpointEvery) {
-        _exchangesSinceCheckpoint = 0;
-        unawaited(_saveCheckpoint(rawCtx));
-      }
+      // Пишем КАЖДЫЙ обмен как есть, без лишнего вызова модели на
+      // сжатие (решение пользователя, пункт 10: "лучше в раг каждый
+      // запрос записывает") — вопрос уже короткий сам по себе, а
+      // дополнительный запрос к ИИ только тратил бы и без того
+      // ограниченную квоту бесплатных моделей на каждое сообщение.
+      unawaited(memory.append(AiMemorySummary(
+        periodStart: askedAt,
+        periodEnd: DateTime.now(),
+        summary: 'В: $trimmed\nО: ${_gist(reply.text)}',
+        trainingPackageIds: rawCtx.session != null ? [rawCtx.session!.id] : const [],
+      )));
     } catch (e) {
       messages.add(AiMessage(fromUser: false, text: '$e', isError: true));
     } finally {
@@ -193,38 +192,11 @@ class AiChatViewModel extends ChangeNotifier {
     }
   }
 
-  /// Просит модель сжать последний кусок разговора в короткую сводку и
-  /// сохраняет её (best-effort — ошибка здесь не должна портить сам
-  /// чат, только тихо не сохраниться).
-  Future<void> _saveCheckpoint(AiContext ctx) async {
-    if (_checkpointing) return;
-    _checkpointing = true;
-    final start = _checkpointWindowStart ?? DateTime.now();
-    _checkpointWindowStart = null;
-    try {
-      final history = <({String role, String text})>[
-        for (final m in _recent()) (role: m.fromUser ? 'user' : 'assistant', text: m.text),
-      ];
-      final reply = await service.ask(
-        systemPrompt: 'Сожми последний разговор в 1-3 коротких предложения по-русски: что '
-            'обсуждали, какие выводы или договорённости были. Без вступлений и оценок, '
-            'только суть. Не используй блоки ```chart или ```exercise.',
-        contextBlock: '',
-        history: history,
-      );
-      final summary = reply.text.trim();
-      if (summary.isEmpty) return;
-      await memory.append(AiMemorySummary(
-        periodStart: start,
-        periodEnd: DateTime.now(),
-        summary: summary,
-        trainingPackageIds: ctx.session != null ? [ctx.session!.id] : const [],
-      ));
-    } catch (_) {
-      // Сводка — необязательное улучшение, не даём ей ронять чат.
-    } finally {
-      _checkpointing = false;
-    }
+  /// Обрезает ответ до короткой выдержки для памяти — полный текст там
+  /// не нужен, только чтобы потом узнать, о чём был разговор.
+  static String _gist(String text) {
+    final oneLine = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return oneLine.length <= 200 ? oneLine : '${oneLine.substring(0, 200)}…';
   }
 
   /// Отмечает, что упражнение из сообщения [index] уже создано —

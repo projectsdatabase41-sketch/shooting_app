@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../logic/text_search.dart';
 import 'ai_settings.dart';
 
 /// Кусок текста из базы знаний.
@@ -53,111 +54,14 @@ class KnowledgeService {
   static const int chunkCharLimit = 1200;
   static const int totalCharLimit = 6000;
 
-  /// Слова короче этого в поиск не идут — от «как», «что», «мне» толку
-  /// нет, а выдачу они размывают до бессмыслицы.
-  static const int minWordLength = 5;
-
-  /// Служебные слова, которые проходят по длине, но смысла не несут.
-  static const Set<String> _stopWords = {
-    'который',
-    'которая',
-    'потому',
-    'нужно',
-    'можно',
-    'почему',
-    'сколько',
-    'какой',
-    'какая',
-    'какие',
-    'когда',
-    'сейчас',
-    'вообще',
-    'вопрос',
-    'ответь',
-    'скажи',
-    'расскажи',
-    'подскажи',
-    'объясни',
-    'пожалуйста',
-    // Длинные, но пустые: «максимальная глубина затыльника» — искать
-    // надо затыльник, а «максимальная» встречается на каждой странице
-    // и забивает выдачу мусором. Слово длиннее — значит по нашей
-    // сортировке оно шло ПЕРВЫМ, то есть вредило сильнее всех.
-    'максимальная',
-    'максимальный',
-    'максимально',
-    'минимальная',
-    'минимальный',
-    'минимально',
-    'разрешено',
-    'разрешается',
-    'допустимо',
-    'допускается',
-    'правильно',
-    'обычно',
-    'лучше',
-    'должен',
-    'должна',
-    'должно',
-  };
-
-  /// Ключевые слова вопроса.
-  ///
-  /// Морфологии нет, поэтому у длинных слов берём только основу — первые
-  /// 6 букв. «стрельбе», «стрельбы», «стрельбой» превращаются в
-  /// «стрель» и находят друг друга. Грубо, но для подстрочного поиска
-  /// работает лучше, чем точное совпадение словоформы.
-  static List<String> keywords(String question) {
-    final words = question
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^\wа-яё\s]', unicode: true), ' ')
-        .split(RegExp(r'\s+'))
-        .where((w) => w.length >= minWordLength && !_stopWords.contains(w))
-        .toList();
-
-    // Длинные слова информативнее коротких — берём их первыми.
-    words.sort((a, b) => b.length.compareTo(a.length));
-
-    final stems = <String>[];
-    for (final w in words) {
-      final stem = w.length > 6 ? w.substring(0, 6) : w;
-      if (!stems.contains(stem)) stems.add(stem);
-      if (stems.length >= 4) break;
-    }
-    return stems;
-  }
-
-  /// Начала реплик, за которыми в справочник лезть незачем.
-  ///
-  /// На «Добро» ассистент честно шёл искать по книгам: слово проходило
-  /// и по длине, и мимо стоп-листа. Тратится время, а в запрос уезжает
-  /// случайный кусок Канемана.
-  ///
-  /// Намеренно СПИСОК ПРЕФИКСОВ, а не регулярка: в Dart `\w` и `\b`
-  /// работают только по ASCII, поэтому `привет\w*\b` на кириллице просто
-  /// не сработал бы — и проверка тихо пропускала бы всё подряд.
-  static const List<String> _smallTalkPrefixes = [
-    'привет',
-    'здравств',
-    'добр',
-    'хай',
-    'спасибо',
-    'пока',
-    'ага',
-    'как дела',
-    'как сам',
-    'что умеешь',
-    'кто ты',
-    'что ты умеешь',
-  ];
-
-  static bool isSmallTalk(String question) {
-    final q = question.trim().toLowerCase();
-    return _smallTalkPrefixes.any(q.startsWith);
-  }
+  /// Ключевые слова и «это болтовня, не вопрос» — общая логика,
+  /// см. `TextSearch` (вынесена оттуда же, где раньше жила здесь одна,
+  /// чтобы `AiMemoryService` не заводил тот же стоп-лист заново).
+  static List<String> keywords(String question) => TextSearch.keywords(question);
+  static bool isSmallTalk(String question) => TextSearch.isSmallTalk(question);
 
   /// Короче этого вопрос считаем репликой, а не запросом к справочнику.
-  static const int minQuestionLength = 8;
+  static const int minQuestionLength = TextSearch.minQuestionLength;
 
   /// Сколько строк тянем на КАЖДОЕ ключевое слово, прежде чем отбирать
   /// лучшие. Берём с запасом: выбрать два подходящих из десяти лучше,
@@ -251,14 +155,8 @@ class KnowledgeService {
   /// Сколько разных ключевых слов встретилось в куске. Заголовок весит
   /// столько же, сколько текст: попадание в заголовок раздела обычно
   /// значит, что раздел ровно про это.
-  static int _relevance(KnowledgeChunk c, List<String> words) {
-    final hay = '${c.heading} ${c.text}'.toLowerCase();
-    var n = 0;
-    for (final w in words) {
-      if (hay.contains(w)) n++;
-    }
-    return n;
-  }
+  static int _relevance(KnowledgeChunk c, List<String> words) =>
+      TextSearch.relevance('${c.heading} ${c.text}', words);
 
   Future<List<KnowledgeChunk>> _searchTable(KnowledgeTableConfig table, String word) async {
     try {

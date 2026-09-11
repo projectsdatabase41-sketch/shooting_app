@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../logic/text_search.dart';
 import '../models/ai_memory_summary.dart';
 import 'supabase_auth_service.dart';
 
@@ -29,11 +30,15 @@ class AiMemoryService {
   AiMemoryService(this.auth, {http.Client Function()? clientFactory})
       : clientFactory = clientFactory ?? http.Client.new;
 
-  /// Последние сводки, самые свежие первыми — контекст для системного
-  /// промпта. Пустой список, если облако не подключено или сводок ещё
-  /// нет: ассистент в этом случае просто не упоминает прошлое, вопрос
-  /// не выглядит ошибкой.
-  Future<List<AiMemorySummary>> recent({int limit = 20}) async {
+  /// Сколько последних записей вообще держим под рукой для поиска —
+  /// тот самый "ограниченный ~200 строк" из первоначального вопроса
+  /// пользователя про RAG-память. Тянем их одним запросом (дёшево —
+  /// строки короткие) и ранжируем по ключевым словам ЛОКАЛЬНО, а не
+  /// шлём отдельный запрос в базу на каждое слово, как делает
+  /// `KnowledgeService` для куда более крупной таблицы книг.
+  static const int _recentWindow = 200;
+
+  Future<List<AiMemorySummary>> _fetchRecent({int limit = _recentWindow}) async {
     if (!auth.isSignedIn) return const [];
     final token = await auth.ensureFreshToken();
     if (token == null) return const [];
@@ -58,6 +63,33 @@ class AiMemoryService {
     } finally {
       client.close();
     }
+  }
+
+  /// Последние записи как есть, самые свежие первыми — например, для
+  /// экрана "посмотреть память" (если такой появится). Большинству
+  /// вызывающего кода нужен `search()`, не этот метод.
+  Future<List<AiMemorySummary>> recent({int limit = 20}) => _fetchRecent(limit: limit);
+
+  /// Записи, релевантные вопросу — по ключевым словам (`TextSearch`,
+  /// та же логика, что у `KnowledgeService.search`), а не слепые
+  /// "последние N" (решение пользователя: "лучше в раг каждый запрос
+  /// записывает... можно поиск по ключевым словам реализовать" — было
+  /// вернуть последние 20 сводок независимо от темы вопроса).
+  ///
+  /// Пустой список — вопрос слишком короткий/это болтовня, облако не
+  /// подключено, или ничего подходящего не нашлось: во всех случаях
+  /// ассистент просто не упоминает прошлое, это не ошибка.
+  Future<List<AiMemorySummary>> search(String question, {int limit = 5}) async {
+    final trimmed = question.trim();
+    if (trimmed.length < TextSearch.minQuestionLength) return const [];
+    if (TextSearch.isSmallTalk(trimmed)) return const [];
+    final words = TextSearch.keywords(trimmed);
+    if (words.isEmpty) return const [];
+
+    final pool = await _fetchRecent();
+    final ranked = pool.where((s) => TextSearch.relevance(s.summary, words) > 0).toList()
+      ..sort((a, b) => TextSearch.relevance(b.summary, words).compareTo(TextSearch.relevance(a.summary, words)));
+    return ranked.take(limit).toList();
   }
 
   /// Добавляет новую сводку. Молча ничего не делает без облака —
