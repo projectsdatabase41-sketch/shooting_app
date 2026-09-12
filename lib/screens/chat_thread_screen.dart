@@ -86,10 +86,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       _sending = true;
       _replyingTo = null;
     });
-    await widget.sync.send(widget.contact.id, text, replyTo: replyTo);
-    _reload();
-    _scrollToEnd();
-    setState(() => _sending = false);
+    try {
+      await widget.sync.send(widget.contact.id, text, replyTo: replyTo);
+      _reload();
+      _scrollToEnd();
+    } catch (e) {
+      // Раньше необработанное исключение здесь означало, что сообщение
+      // просто "пропадало" — текст уже очищен из поля, а _sending
+      // навсегда оставался true (кнопка отправки переставала работать),
+      // без единого следа для пользователя. Теперь ошибка видна и не
+      // блокирует дальнейшую отправку.
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не отправлено: $e')));
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
   }
 
   Future<void> _retry(ChatMessage m) async {
@@ -174,18 +184,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     if (file == null || bytes == null) return;
 
     setState(() => _sending = true);
-    final isImage = ChatMediaUtils.looksLikeImage(file.name);
-    final compressed = isImage ? ChatMediaUtils.compressImage(bytes) : null;
-    await widget.sync.sendAttachment(
-      contactId: widget.contact.id,
-      bytes: compressed ?? bytes,
-      fileName: file.name,
-      mime: isImage ? ChatMediaUtils.mimeFor(file.name) : 'application/octet-stream',
-      type: isImage ? ChatMessageType.image : ChatMessageType.file,
-    );
-    _reload();
-    _scrollToEnd();
-    setState(() => _sending = false);
+    try {
+      final isImage = ChatMediaUtils.looksLikeImage(file.name);
+      final compressed = isImage ? ChatMediaUtils.compressImage(bytes) : null;
+      await widget.sync.sendAttachment(
+        contactId: widget.contact.id,
+        bytes: compressed ?? bytes,
+        fileName: file.name,
+        mime: isImage ? ChatMediaUtils.mimeFor(file.name) : 'application/octet-stream',
+        type: isImage ? ChatMessageType.image : ChatMessageType.file,
+      );
+      _reload();
+      _scrollToEnd();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не отправлено: $e')));
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
   }
 
   @override
