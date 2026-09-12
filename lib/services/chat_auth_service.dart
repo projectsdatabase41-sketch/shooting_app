@@ -82,6 +82,43 @@ class ChatAuthService {
     _requireConfigured();
     await _token(grant: 'password', body: {'email': email.trim(), 'password': password});
     await _loadOwnProfile();
+    // Если проект требует подтверждение почты, `signUp` не успевает
+    // завести профиль (RLS не даст вставить строку без настоящей сессии,
+    // а её при регистрации ещё не было) — код контакта у пользователя
+    // тогда навсегда оставался пустым ("не вижу код, не копируется").
+    // Здесь достраиваем профиль по факту первого успешного входа, если
+    // его почему-то ещё нет.
+    if (nickname.isEmpty) {
+      await _createProfile(nickname: email.trim().split('@').first);
+    }
+  }
+
+  /// Меняет никнейм — например, если он достался по умолчанию из почты
+  /// (см. комментарий в `signIn`) и пользователь хочет вписать свой.
+  Future<void> updateNickname(String value) async {
+    final token = await ensureFreshToken();
+    if (token == null) throw const AuthException('Сначала войдите в чат');
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return;
+    final client = clientFactory();
+    try {
+      final res = await client
+          .patch(
+            Uri.parse('$url/rest/v1/chat_profiles?user_id=eq.$userId'),
+            headers: {
+              'apikey': anonKey,
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal',
+            },
+            body: jsonEncode({'nickname': trimmed}),
+          )
+          .timeout(const Duration(seconds: 20));
+      if (res.statusCode >= 400) throw AuthException(_message(res.body));
+      _write('chat_nickname', trimmed);
+    } finally {
+      client.close();
+    }
   }
 
   void signOutLocally() {

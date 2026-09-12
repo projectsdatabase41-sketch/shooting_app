@@ -181,4 +181,58 @@ create policy chat_media_delete on storage.objects
     )
   );
 
+-- ============================================================
+-- Общедоступный чат — один поток на ВСЕХ пользователей платформы
+-- (пункт списка правок), в отличие от chat_messages (личная переписка
+-- двоих, транзит-и-удаление). Здесь сообщения ХРАНЯТСЯ — это открытая
+-- лента, а не очередь на доставку.
+--
+-- Рост базы: лента не чистится сама. Для МVP этого достаточно (клиент
+-- забирает только последние N сообщений — см.
+-- ChatGlobalService.fetchRecent), но при заметном трафике стоит
+-- завести периодическую очистку (например, pg_cron на платных планах,
+-- либо ручной DELETE по возрасту раз в какое-то время) — сознательно
+-- не добавлено сейчас.
+-- ============================================================
+
+create table if not exists chat_global_messages (
+  id          uuid primary key default gen_random_uuid(),
+  sender_id   uuid not null references auth.users(id) on delete cascade,
+  text        text not null,
+  created_at  timestamptz not null default now()
+);
+
+create index if not exists idx_chat_global_created on chat_global_messages(created_at desc);
+
+alter table chat_global_messages enable row level security;
+
+-- Читать и писать может любой вошедший в чат пользователь (общий
+-- канал) — но НЕ анонимный доступ: `to authenticated` требует
+-- настоящий JWT, простого anon-ключа без входа недостаточно.
+drop policy if exists chat_global_select on chat_global_messages;
+create policy chat_global_select on chat_global_messages
+  for select
+  to authenticated
+  using (true);
+
+drop policy if exists chat_global_insert on chat_global_messages;
+create policy chat_global_insert on chat_global_messages
+  for insert
+  to authenticated
+  with check (sender_id = auth.uid());
+
+-- Профиль по списку id — для отображения ников/аватаров в ленте общего
+-- чата и в списке "Участники" (не отдаёт chat_code — им по-прежнему
+-- находят собеседника только для ЛИЧНОГО чата, а не через общий поток).
+create or replace function resolve_profiles(p_ids uuid[])
+returns table(user_id uuid, nickname text, avatar_base64 text)
+language sql
+security definer
+set search_path = public
+as $$
+  select user_id, nickname, avatar_base64
+  from chat_profiles
+  where user_id = any(p_ids);
+$$;
+
 notify pgrst, 'reload schema';

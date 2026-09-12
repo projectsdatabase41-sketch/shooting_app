@@ -3,12 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:file_picker/file_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../logic/avatar_utils.dart';
 import '../models/chat_contact.dart';
-import '../models/chat_message.dart';
+import '../models/chat_global_message.dart';
 import '../services/chat_auth_service.dart';
+import '../services/chat_global_service.dart';
 import '../services/chat_messages_repository.dart';
 import '../services/chat_settings.dart';
 import '../services/chat_sync_service.dart';
@@ -18,10 +20,12 @@ import '../widgets/chat_avatar.dart';
 import '../widgets/empty_state.dart';
 import 'chat_thread_screen.dart';
 
-/// Публичный чат между пользователями приложения — отдельная учётная
-/// запись от личной базы тренировок (см. `ChatAuthService`). Список
-/// контактов + переход в переписку; опрос новых сообщений — редкий
-/// таймер, пока экран открыт (пункт из обсуждения: без push в MVP).
+/// Публичный чат — отдельная учётная запись от личной базы тренировок
+/// (см. `ChatAuthService`). Устройство как в Telegram (решение
+/// пользователя): слева выезжающая панель с контактами и настройками
+/// профиля, основной экран — общая (всемирная) лента на всех
+/// пользователей платформы; личная переписка с одним контактом
+/// открывается отдельным экраном (`ChatThreadScreen`) поверх этого.
 class ChatHomeScreen extends StatefulWidget {
   const ChatHomeScreen({super.key});
 
@@ -33,6 +37,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
   late final ChatAuthService _auth;
   late final ChatMessagesRepository _repo;
   late final ChatSyncService _sync;
+  late final ChatGlobalService _global;
   Timer? _pollTimer;
   List<ChatContact> _contacts = [];
 
@@ -43,6 +48,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
     _auth = ChatAuthService(db);
     _repo = ChatMessagesRepository(db);
     _sync = ChatSyncService(_auth, _repo);
+    _global = ChatGlobalService(_auth);
     _reload();
     if (_auth.isSignedIn) _startPolling();
   }
@@ -54,19 +60,6 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
   }
 
   void _reload() => setState(() => _contacts = _repo.listContacts());
-
-  /// Превью последнего сообщения в списке контактов — как в любом чате:
-  /// у вложения без подписи показывается тип, а не пустая строка.
-  String _previewFor(ChatMessage m) {
-    if (m.text != null && m.text!.isNotEmpty) return m.text!;
-    return switch (m.type) {
-      ChatMessageType.image => '📷 Фото',
-      ChatMessageType.video => '🎬 Видео',
-      ChatMessageType.audio => '🎤 Голосовое',
-      ChatMessageType.file => '📎 ${m.attachmentName ?? 'Файл'}',
-      ChatMessageType.text => '',
-    };
-  }
 
   void _startPolling() {
     _pollTimer?.cancel();
@@ -97,64 +90,53 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Чат'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.person_outline),
-            tooltip: 'Мой профиль',
-            onPressed: () => _openProfile(context),
-          ),
-          IconButton(
-            icon: const Icon(Icons.person_add_alt_outlined),
-            tooltip: 'Добавить контакт',
-            onPressed: () => _openAddContact(context),
-          ),
-        ],
+      appBar: AppBar(title: const Text('Общий чат')),
+      drawer: _ChatDrawer(
+        auth: _auth,
+        repo: _repo,
+        contacts: _contacts,
+        onContactsChanged: _reload,
+        onOpenThread: (contact) async {
+          Navigator.of(context).pop(); // закрыть панель
+          await Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => ChatThreadScreen(contact: contact, auth: _auth, repo: _repo, sync: _sync),
+          ));
+          _reload();
+        },
       ),
-      body: _contacts.isEmpty
-          ? const EmptyState(
-              icon: Icons.forum_outlined,
-              text: 'Пока нет контактов — добавьте по коду через значок вверху',
-            )
-          : ListView.builder(
-              itemCount: _contacts.length,
-              itemBuilder: (context, i) {
-                final c = _contacts[i];
-                final last = _repo.lastForContact(c.id);
-                final unread = _repo.unreadCount(c.id);
-                return ListTile(
-                  leading: ChatAvatar(base64: c.avatarBase64, nickname: c.nickname),
-                  title: Text(c.nickname),
-                  subtitle: last == null
-                      ? const Text('Сообщений пока нет')
-                      : Text(_previewFor(last), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  trailing: unread > 0
-                      ? CircleAvatar(radius: 11, child: Text('$unread', style: const TextStyle(fontSize: 11)))
-                      : null,
-                  onTap: () async {
-                    await Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => ChatThreadScreen(contact: c, auth: _auth, repo: _repo, sync: _sync),
-                    ));
-                    _reload();
-                  },
-                );
-              },
-            ),
+      body: _GlobalChatBody(auth: _auth, global: _global, repo: _repo, onContactAdded: _reload),
     );
   }
+}
 
-  Future<void> _openProfile(BuildContext context) async {
+/// Левая панель (решение пользователя, "как в телеграме") — профиль
+/// (аватар, никнейм, код контакта) и список личных контактов.
+class _ChatDrawer extends StatelessWidget {
+  final ChatAuthService auth;
+  final ChatMessagesRepository repo;
+  final List<ChatContact> contacts;
+  final VoidCallback onContactsChanged;
+  final void Function(ChatContact) onOpenThread;
+
+  const _ChatDrawer({
+    required this.auth,
+    required this.repo,
+    required this.contacts,
+    required this.onContactsChanged,
+    required this.onOpenThread,
+  });
+
+  Future<void> _editProfile(BuildContext context) async {
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _ProfileSheet(auth: _auth),
+      builder: (_) => _ProfileSheet(auth: auth),
     );
-    setState(() {});
+    onContactsChanged();
   }
 
-  Future<void> _openAddContact(BuildContext context) async {
+  Future<void> _addContact(BuildContext context) async {
     final codeCtrl = TextEditingController();
     final code = await showDialog<String>(
       context: context,
@@ -168,34 +150,342 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
         ),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(codeCtrl.text.trim()),
-            child: const Text('Найти'),
-          ),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(codeCtrl.text.trim()), child: const Text('Найти')),
         ],
       ),
     );
     if (code == null || code.isEmpty) return;
     if (!context.mounted) return;
     try {
-      final found = await _auth.resolveChatCode(code);
+      final found = await auth.resolveChatCode(code);
       if (found == null) {
         if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Контакт с таким кодом не найден')));
         return;
       }
-      _repo.addContact(ChatContact(
+      repo.addContact(ChatContact(
         id: found.userId,
         nickname: found.nickname,
         chatCode: code,
         avatarBase64: found.avatarBase64,
         addedAt: DateTime.now(),
       ));
-      _reload();
+      onContactsChanged();
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Drawer(
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            InkWell(
+              onTap: () => _editProfile(context),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    ChatAvatar(base64: auth.avatarBase64, nickname: auth.nickname, radius: 28),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(auth.nickname, style: theme.textTheme.titleMedium, overflow: TextOverflow.ellipsis),
+                          Text('Код: ${auth.chatCode}',
+                              style: theme.textTheme.bodySmall, overflow: TextOverflow.ellipsis),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.edit_outlined, size: 18),
+                  ],
+                ),
+              ),
+            ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+              child: Row(
+                children: [
+                  Expanded(child: Text('Контакты', style: theme.textTheme.titleSmall)),
+                  IconButton(
+                    icon: const Icon(Icons.person_add_alt_outlined),
+                    tooltip: 'Добавить по коду',
+                    onPressed: () => _addContact(context),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: contacts.isEmpty
+                  ? const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text('Пока нет контактов — добавьте по коду или из общего чата'),
+                    )
+                  : ListView.builder(
+                      itemCount: contacts.length,
+                      itemBuilder: (context, i) {
+                        final c = contacts[i];
+                        final unread = repo.unreadCount(c.id);
+                        return ListTile(
+                          leading: ChatAvatar(base64: c.avatarBase64, nickname: c.nickname),
+                          title: Text(c.nickname, overflow: TextOverflow.ellipsis),
+                          trailing: unread > 0
+                              ? CircleAvatar(radius: 11, child: Text('$unread', style: const TextStyle(fontSize: 11)))
+                              : null,
+                          onTap: () => onOpenThread(c),
+                        );
+                      },
+                    ),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.logout),
+              title: const Text('Выйти из чата'),
+              onTap: () {
+                auth.signOutLocally();
+                Navigator.of(context).pop();
+                onContactsChanged();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Общая (всемирная) лента — главный экран чата.
+class _GlobalChatBody extends StatefulWidget {
+  final ChatAuthService auth;
+  final ChatGlobalService global;
+  final ChatMessagesRepository repo;
+  final VoidCallback onContactAdded;
+
+  const _GlobalChatBody({required this.auth, required this.global, required this.repo, required this.onContactAdded});
+
+  @override
+  State<_GlobalChatBody> createState() => _GlobalChatBodyState();
+}
+
+class _GlobalChatBodyState extends State<_GlobalChatBody> {
+  final _input = TextEditingController();
+  final _scroll = ScrollController();
+  Timer? _pollTimer;
+  List<ChatGlobalMessage> _messages = [];
+  bool _loading = true;
+  bool _sending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+    _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) => _load(silent: true));
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    _input.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) setState(() => _loading = true);
+    final messages = await widget.global.fetchRecent();
+    if (!mounted) return;
+    setState(() {
+      _messages = messages;
+      _loading = false;
+    });
+    if (silent) _scrollToEnd();
+  }
+
+  void _scrollToEnd() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scroll.hasClients) {
+        _scroll.animateTo(_scroll.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+      }
+    });
+  }
+
+  Future<void> _send() async {
+    final text = _input.text.trim();
+    if (text.isEmpty || _sending) return;
+    _input.clear();
+    setState(() => _sending = true);
+    try {
+      await widget.global.send(text);
+      await _load();
+      _scrollToEnd();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  /// Пункт списка правок: "общедоступный чат со списком пользователей" —
+  /// список тех, кто уже писал в ленту (по загруженным сообщениям), с
+  /// возможностью сразу добавить в контакты для личной переписки. Код
+  /// контакта тут не нужен — id/никнейм/аватар уже известны из
+  /// собственных публичных сообщений человека.
+  void _openParticipants(BuildContext context) {
+    final seen = <String, ChatGlobalMessage>{};
+    for (final m in _messages) {
+      seen[m.senderId] = m;
+    }
+    final participants = seen.values.where((m) => m.senderId != widget.auth.userId).toList()
+      ..sort((a, b) => (a.senderNickname ?? '').compareTo(b.senderNickname ?? ''));
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.sizeOf(ctx).height * 0.6,
+          child: participants.isEmpty
+              ? const EmptyState(icon: Icons.groups_outlined, text: 'Пока никто, кроме вас, не писал')
+              : ListView.builder(
+                  itemCount: participants.length,
+                  itemBuilder: (context, i) {
+                    final p = participants[i];
+                    return ListTile(
+                      leading: ChatAvatar(base64: p.senderAvatarBase64, nickname: p.senderNickname ?? '?'),
+                      title: Text(p.senderNickname ?? '—'),
+                      trailing: OutlinedButton(
+                        onPressed: () {
+                          widget.repo.addContact(ChatContact(
+                            id: p.senderId,
+                            nickname: p.senderNickname ?? '—',
+                            chatCode: '',
+                            avatarBase64: p.senderAvatarBase64,
+                            addedAt: DateTime.now(),
+                          ));
+                          widget.onContactAdded();
+                          Navigator.of(ctx).pop();
+                          ScaffoldMessenger.of(context)
+                              .showSnackBar(const SnackBar(content: Text('Добавлено в контакты')));
+                        },
+                        child: const Text('В контакты'),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+          child: Row(
+            children: [
+              const Expanded(child: SizedBox()),
+              TextButton.icon(
+                onPressed: () => _openParticipants(context),
+                icon: const Icon(Icons.groups_outlined, size: 18),
+                label: const Text('Участники'),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _messages.isEmpty
+                  ? const EmptyState(icon: Icons.public_outlined, text: 'В общем чате пока тихо — напишите первым')
+                  : ListView.builder(
+                      controller: _scroll,
+                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+                      itemCount: _messages.length,
+                      itemBuilder: (context, i) =>
+                          _GlobalBubble(message: _messages[i], mine: _messages[i].senderId == widget.auth.userId),
+                    ),
+        ),
+        const Divider(height: 1),
+        SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _input,
+                    minLines: 1,
+                    maxLines: 4,
+                    textInputAction: TextInputAction.newline,
+                    decoration: const InputDecoration(hintText: 'Сообщение всем'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filled(onPressed: _sending ? null : _send, icon: const Icon(Icons.send)),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _GlobalBubble extends StatelessWidget {
+  final ChatGlobalMessage message;
+  final bool mine;
+  const _GlobalBubble({required this.message, required this.mine});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final bg = mine ? cs.primaryContainer : cs.surfaceContainerHigh;
+    final fg = mine ? cs.onPrimaryContainer : cs.onSurface;
+
+    return Align(
+      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 480),
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!mine)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Text(
+                  message.senderNickname ?? '—',
+                  style: theme.textTheme.labelMedium?.copyWith(color: fg, fontWeight: FontWeight.w600),
+                ),
+              ),
+            SelectableText(message.text, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
+            const SizedBox(height: 4),
+            Text(
+              DateFormat('HH:mm').format(message.createdAt.toLocal()),
+              style: theme.textTheme.labelSmall?.copyWith(color: fg.withValues(alpha: 0.65)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -249,7 +539,8 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
           avatarBase64: _avatarBase64,
         );
         if (!ok) {
-          setState(() => _error = 'Аккаунт создан. Подтвердите почту письмом (если это включено) и войдите.');
+          setState(() => _error =
+              'Аккаунт создан. Если почта требует подтверждения — перейдите по ссылке из письма, затем войдите через "Вход" (код контакта появится автоматически).');
           return;
         }
       } else {
@@ -331,6 +622,8 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
   }
 }
 
+/// Настройки профиля — открывается из левой панели (решение
+/// пользователя, "настройки профиля" в том же месте, что контакты).
 class _ProfileSheet extends StatefulWidget {
   final ChatAuthService auth;
   const _ProfileSheet({required this.auth});
@@ -341,6 +634,13 @@ class _ProfileSheet extends StatefulWidget {
 
 class _ProfileSheetState extends State<_ProfileSheet> {
   bool _busy = false;
+  late final TextEditingController _nickname = TextEditingController(text: widget.auth.nickname);
+
+  @override
+  void dispose() {
+    _nickname.dispose();
+    super.dispose();
+  }
 
   Future<void> _changeAvatar() async {
     final result = await FilePicker.platform.pickFiles(type: FileType.image, withData: true);
@@ -353,6 +653,19 @@ class _ProfileSheetState extends State<_ProfileSheet> {
       await widget.auth.updateAvatar(b64);
     } catch (_) {
       // молча — профиль всё равно перечитается при следующем входе
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _saveNickname() async {
+    final value = _nickname.text.trim();
+    if (value.isEmpty || value == widget.auth.nickname) return;
+    setState(() => _busy = true);
+    try {
+      await widget.auth.updateNickname(value);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -371,8 +684,15 @@ class _ProfileSheetState extends State<_ProfileSheet> {
               onTap: _busy ? null : _changeAvatar,
               child: ChatAvatar(base64: auth.avatarBase64, nickname: auth.nickname, radius: 40),
             ),
-            const SizedBox(height: 12),
-            Text(auth.nickname, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _nickname,
+              decoration: InputDecoration(
+                labelText: 'Никнейм',
+                suffixIcon: IconButton(icon: const Icon(Icons.check), onPressed: _busy ? null : _saveNickname),
+              ),
+              onSubmitted: (_) => _saveNickname(),
+            ),
             const SizedBox(height: 16),
             const Text('Ваш код контакта — дайте его собеседнику, чтобы он вас добавил'),
             const SizedBox(height: 8),
@@ -382,7 +702,7 @@ class _ProfileSheetState extends State<_ProfileSheet> {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Код скопирован')));
               },
               icon: const Icon(Icons.copy),
-              label: Text(auth.chatCode),
+              label: Text(auth.chatCode.isEmpty ? '—' : auth.chatCode),
             ),
             const SizedBox(height: 16),
             TextButton.icon(
