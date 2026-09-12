@@ -526,6 +526,36 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
     setState(() => _avatarBase64 = b64);
   }
 
+  Future<void> _forgotPassword() async {
+    final emailCtrl = TextEditingController(text: _email.text);
+    final email = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Восстановление пароля'),
+        content: TextField(
+          controller: emailCtrl,
+          autofocus: true,
+          keyboardType: TextInputType.emailAddress,
+          decoration: const InputDecoration(labelText: 'Почта'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(emailCtrl.text.trim()), child: const Text('Отправить')),
+        ],
+      ),
+    );
+    if (email == null || email.isEmpty || !mounted) return;
+    try {
+      await widget.auth.requestPasswordReset(email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Если такая почта зарегистрирована — письмо со ссылкой уже отправлено')),
+      );
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
   Future<void> _submit() async {
     setState(() {
       _busy = true;
@@ -606,6 +636,12 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
             decoration: const InputDecoration(labelText: 'Пароль'),
             obscureText: true,
           ),
+          if (!_register) ...[
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(onPressed: _forgotPassword, child: const Text('Забыли пароль?')),
+            ),
+          ],
           const SizedBox(height: 16),
           FilledButton(
             onPressed: _busy ? null : _submit,

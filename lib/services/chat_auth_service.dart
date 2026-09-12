@@ -93,6 +93,15 @@ class ChatAuthService {
     }
   }
 
+  /// Отправляет письмо для сброса пароля (штатный GoTrue-эндпоинт) —
+  /// ссылка в письме ведёт на `reset-password.html` (см. web/), который
+  /// сам просит новый пароль и обновляет его через `/auth/v1/user`.
+  /// Не требует предварительного входа.
+  Future<void> requestPasswordReset(String email) async {
+    _requireConfigured();
+    await _post('/auth/v1/recover', {'email': email.trim()});
+  }
+
   /// Меняет никнейм — например, если он достался по умолчанию из почты
   /// (см. комментарий в `signIn`) и пользователь хочет вписать свой.
   Future<void> updateNickname(String value) async {
