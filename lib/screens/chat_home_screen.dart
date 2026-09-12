@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
-import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -517,10 +516,7 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
   }
 
   Future<void> _pickAvatar() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.image, withData: true);
-    final bytes = result?.files.first.bytes;
-    if (bytes == null) return;
-    final b64 = AvatarUtils.processToBase64(bytes);
+    final b64 = await AvatarUtils.pickAndProcess();
     if (b64 == null) return;
     setState(() => _avatarBase64 = b64);
   }
@@ -643,10 +639,7 @@ class _ProfileSheetState extends State<_ProfileSheet> {
   }
 
   Future<void> _changeAvatar() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.image, withData: true);
-    final bytes = result?.files.first.bytes;
-    if (bytes == null) return;
-    final b64 = AvatarUtils.processToBase64(bytes);
+    final b64 = await AvatarUtils.pickAndProcess();
     if (b64 == null) return;
     setState(() => _busy = true);
     try {
