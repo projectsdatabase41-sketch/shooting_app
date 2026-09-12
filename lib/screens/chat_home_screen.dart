@@ -70,7 +70,11 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
     // (решение пользователя: сначала MVP без push).
     _pollTimer = Timer.periodic(const Duration(seconds: 20), (_) async {
       final added = await _sync.pollIncoming();
-      if (added > 0 && mounted) setState(() {});
+      // _reload(), а не голый setState — новое входящее от ещё не
+      // добавленного отправителя заводит контакт автоматически (см.
+      // ChatSyncService.pollIncoming), и он должен сразу появиться в
+      // списке слева, а не только после ручного обновления экрана.
+      if (added > 0 && mounted) _reload();
     });
   }
 

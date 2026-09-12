@@ -3,8 +3,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 
+import '../models/chat_contact.dart';
 import '../models/chat_message.dart';
 import 'chat_auth_service.dart';
+import 'chat_global_service.dart';
 import 'chat_messages_repository.dart';
 import 'chat_settings.dart';
 
@@ -23,6 +25,11 @@ class ChatSyncService {
 
   ChatSyncService(this.auth, this.repo, {http.Client Function()? clientFactory})
       : clientFactory = clientFactory ?? http.Client.new;
+
+  /// Только для того, чтобы подтянуть ник/аватар отправителя, который
+  /// ещё не в контактах (см. комментарий в `pollIncoming`) — та же
+  /// RPC, что и в общем чате, отдельного клиента не заводим.
+  late final ChatGlobalService _global = ChatGlobalService(auth, clientFactory: clientFactory);
 
   static const _uuid = Uuid();
   static const Duration _timeout = Duration(seconds: 60);
@@ -272,10 +279,30 @@ class ChatSyncService {
 
       var added = 0;
       final doneIds = <String>[];
+      // Добавление контакта — однонаправленное (кто добавил по коду/из
+      // общего чата, у того он и есть). Без этого входящее от ещё не
+      // добавленного отправителя сохранялось бы локально, но переписку
+      // было бы негде увидеть — в списке контактов такого отправителя
+      // просто нет. Поэтому первое сообщение от незнакомца заводит его
+      // в контакты автоматически, как "запрос на переписку" в обычных
+      // мессенджерах.
+      final knownContacts = repo.listContacts().map((c) => c.id).toSet();
       for (final row in decoded) {
         if (row is! Map) continue;
         final senderId = '${row['sender_id']}';
         final rawType = '${row['msg_type']}';
+
+        if (!knownContacts.contains(senderId)) {
+          final profile = (await _global.resolveProfiles([senderId]))[senderId];
+          repo.addContact(ChatContact(
+            id: senderId,
+            nickname: profile?.$1 ?? '—',
+            chatCode: '',
+            avatarBase64: profile?.$2,
+            addedAt: DateTime.now(),
+          ));
+          knownContacts.add(senderId);
+        }
 
         // edit/delete — сигналы к уже полученной строке, не новые
         // сообщения: применяем и чистим транзитную строку, минуя
