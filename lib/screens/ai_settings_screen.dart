@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../services/ai_service.dart';
 import '../services/knowledge_service.dart';
 import '../services/ai_settings.dart';
+import '../services/local_db_service.dart';
 import '../services/supabase_auth_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/section_header.dart';
@@ -23,6 +24,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
   late final TextEditingController _models;
   late final TextEditingController _customInstructions;
   late final SupabaseAuthService _personalAuth;
+  late final LocalDbService _db;
 
   List<String>? _available;
   bool _loading = false;
@@ -42,8 +44,9 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _settings = AiSettings(context.read<AppDataStore>().db);
-    _personalAuth = SupabaseAuthService(context.read<AppDataStore>().db);
+    _db = context.read<AppDataStore>().db;
+    _settings = AiSettings(_db);
+    _personalAuth = SupabaseAuthService(_db);
     _ownKey = _settings.hasOwnKey;
     _key = TextEditingController(text: _ownKey ? _settings.apiKey : '');
     _apiBaseUrl = TextEditingController(text: _settings.apiBaseUrl);
@@ -198,7 +201,12 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
       _checkingBooks = true;
       _books = null;
     });
-    final status = await KnowledgeService(_settings, personalAuth: _personalAuth).tableStatus();
+    final status = await KnowledgeService(
+      _settings,
+      db: _db,
+      aiService: AiService(_settings),
+      personalAuth: _personalAuth,
+    ).tableStatus();
     if (!mounted) return;
     setState(() {
       _books = status;

@@ -256,6 +256,13 @@ CREATE TABLE IF NOT EXISTS training_sessions (
   local_hidden      INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS ai_knowledge_columns (
+  table_name      TEXT PRIMARY KEY,
+  content_column  TEXT NOT NULL,
+  all_columns     TEXT NOT NULL,
+  discovered_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS coach_athletes (
   id                  TEXT PRIMARY KEY,
   name                TEXT NOT NULL,

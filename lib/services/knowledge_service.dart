@@ -3,7 +3,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../logic/text_search.dart';
+import 'ai_service.dart';
 import 'ai_settings.dart';
+import 'knowledge_column_discovery.dart';
+import 'local_db_service.dart';
 import 'supabase_auth_service.dart';
 
 /// Кусок текста из базы знаний.
@@ -52,10 +55,22 @@ class KnowledgeService {
   /// ищем только по общей базе разработчика.
   final SupabaseAuthService? personalAuth;
 
+  /// Определение колонки с текстом у таблиц, где она не `content` —
+  /// см. `KnowledgeColumnDiscovery`. Оба параметра нужны только для
+  /// него: `db` — куда кешировать результат, `aiService` — кем спросить.
+  final LocalDbService db;
+  final AiService aiService;
+  late final KnowledgeColumnDiscovery _discovery = KnowledgeColumnDiscovery(db);
+
   final http.Client _client;
 
-  KnowledgeService(this.settings, {this.personalAuth, http.Client? client})
-      : _client = client ?? http.Client();
+  KnowledgeService(
+    this.settings, {
+    required this.db,
+    required this.aiService,
+    this.personalAuth,
+    http.Client? client,
+  }) : _client = client ?? http.Client();
 
   static const Duration _timeout = Duration(seconds: 20);
 
@@ -86,18 +101,36 @@ class KnowledgeService {
 
   /// Все подключённые таблицы вместе с адресом/ключом для запроса —
   /// вшитые (общая база) + личные пользователя, если она подключена.
+  /// Колонка с текстом — не обязательно `content` по умолчанию, а
+  /// определённая один раз через `KnowledgeColumnDiscovery` (решение
+  /// пользователя: раньше "правила" и самостоятельно подключённые
+  /// таблицы вроде заметок молча не находились, если их текстовая
+  /// колонка называлась иначе).
   Future<List<_SourceTable>> _allTables() async {
-    final out = <_SourceTable>[
-      for (final t in AiSettings.builtInTables) (t, AiSettings.booksUrl, AiSettings.booksToken),
-    ];
+    final out = <_SourceTable>[];
+    for (final t in AiSettings.builtInTables) {
+      out.add((await _withDiscoveredColumn(t, AiSettings.booksUrl, AiSettings.booksToken), AiSettings.booksUrl, AiSettings.booksToken));
+    }
     final auth = personalAuth;
     if (auth != null && auth.hasBase && settings.tables.isNotEmpty) {
       final token = await auth.ensureFreshToken() ?? auth.anonKey;
+      final baseUrl = '${auth.url}/rest/v1';
       for (final t in settings.tables) {
-        out.add((t, '${auth.url}/rest/v1', token));
+        out.add((await _withDiscoveredColumn(t, baseUrl, token), baseUrl, token));
       }
     }
     return out;
+  }
+
+  Future<KnowledgeTableConfig> _withDiscoveredColumn(KnowledgeTableConfig t, String baseUrl, String token) async {
+    final column = await _discovery.discover(
+      tableName: t.name,
+      baseUrl: baseUrl,
+      token: token,
+      aiService: aiService,
+    );
+    if (column == null || column == t.contentColumn) return t;
+    return KnowledgeTableConfig(name: t.name, label: t.label, description: t.description, contentColumn: column);
   }
 
   /// Сколько записей в каждой подключённой таблице.

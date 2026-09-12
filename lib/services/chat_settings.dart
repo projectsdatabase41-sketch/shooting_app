@@ -11,8 +11,8 @@
 /// включится сам, как только здесь появятся настоящие значения —
 /// остальной код чата их не хардкодит нигде повторно.
 class ChatSettings {
-  static const String url = '';
-  static const String anonKey = '';
+  static const String url = 'https://frbptucrvmyikencyspu.supabase.co';
+  static const String anonKey = 'sb_publishable_4kAWR6cYksf6cE0Ch13Tpw_nZZjT1M0';
 
   static bool get isConfigured => url.isNotEmpty && anonKey.isNotEmpty;
 }

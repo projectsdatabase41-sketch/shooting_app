@@ -100,6 +100,20 @@ CREATE TABLE IF NOT EXISTS coach_athletes (
   created_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Какая колонка в подключённой таблице базы знаний содержит основной
+-- текст — определяется один раз (см.
+-- lib/services/knowledge_column_discovery.dart: пробуем строку из
+-- таблицы, отдаём список колонок ИИ, он выбирает) и кешируется здесь,
+-- а не переспрашивается на каждый поиск. Запись стирается при удалении
+-- таблицы из подключённых — при повторном подключении таблицы с тем же
+-- именем колонки перепроверяются заново, а не берутся на веру.
+CREATE TABLE IF NOT EXISTS ai_knowledge_columns (
+  table_name      TEXT PRIMARY KEY,
+  content_column  TEXT NOT NULL,
+  all_columns     TEXT NOT NULL,
+  discovered_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Публичный чат между пользователями приложения (разные личные базы,
 -- сообщения транзитом через отдельный общий проект — см.
 -- lib/services/chat_settings.dart). История и контакты живут ТОЛЬКО на

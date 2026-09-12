@@ -4,6 +4,7 @@ import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/ai_settings.dart';
+import '../services/knowledge_column_discovery.dart';
 import '../services/supabase_auth_service.dart';
 import '../services/supabase_service.dart';
 import '../state/app_data_store.dart';
@@ -709,6 +710,13 @@ class _AccountSheetState extends State<_AccountSheet> {
       for (final n in names)
         if (selected[n] == true) existing[n] ?? KnowledgeTableConfig(name: n),
     ];
+    // Отключили таблицу — забываем, какую колонку в ней нашли раньше
+    // (решение пользователя): подключат снова, в том числе таблицу с
+    // тем же именем, но другой структурой, — колонку определят заново.
+    final discovery = KnowledgeColumnDiscovery(settings.db);
+    for (final n in existing.keys) {
+      if (selected[n] != true) discovery.forget(n);
+    }
     if (!mounted) return;
     setState(() => _message = 'Таблицы для ИИ обновлены');
   }

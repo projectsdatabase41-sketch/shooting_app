@@ -56,7 +56,12 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
     final aiSettings = AiSettings(widget.db);
     _aiChat = AiChatViewModel(
       service: AiService(aiSettings),
-      knowledge: KnowledgeService(aiSettings, personalAuth: SupabaseAuthService(widget.db)),
+      knowledge: KnowledgeService(
+        aiSettings,
+        db: widget.db,
+        aiService: AiService(aiSettings),
+        personalAuth: SupabaseAuthService(widget.db),
+      ),
       memory: AiMemoryService(SupabaseAuthService(widget.db)),
       // Заглушка до первого открытия чата: экран подставит настоящий
       // источник (общий разговор, тренировка или выстрел) сам.
