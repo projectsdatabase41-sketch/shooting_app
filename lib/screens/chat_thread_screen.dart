@@ -41,6 +41,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   Timer? _pollTimer;
   List<ChatMessage> _messages = [];
   bool _sending = false;
+  ChatMessage? _replyingTo;
 
   @override
   void initState() {
@@ -79,9 +80,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   Future<void> _send() async {
     final text = _input.text.trim();
     if (text.isEmpty || _sending) return;
+    final replyTo = _replyingTo;
     _input.clear();
-    setState(() => _sending = true);
-    await widget.sync.send(widget.contact.id, text);
+    setState(() {
+      _sending = true;
+      _replyingTo = null;
+    });
+    await widget.sync.send(widget.contact.id, text, replyTo: replyTo);
     _reload();
     _scrollToEnd();
     setState(() => _sending = false);
@@ -90,6 +95,72 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   Future<void> _retry(ChatMessage m) async {
     await widget.sync.retry(m);
     _reload();
+  }
+
+  void _reply(ChatMessage m) => setState(() => _replyingTo = m);
+
+  Future<void> _edit(ChatMessage m) async {
+    final ctrl = TextEditingController(text: m.text);
+    final newText = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Изменить сообщение'),
+        content: TextField(controller: ctrl, autofocus: true, maxLines: 4),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()), child: const Text('Сохранить')),
+        ],
+      ),
+    );
+    if (newText == null || newText.isEmpty || newText == m.text) return;
+    await widget.sync.editMessage(m, newText);
+    _reload();
+  }
+
+  Future<void> _delete(ChatMessage m) async {
+    final mine = m.direction == ChatMessageDirection.outgoing;
+    await widget.sync.deleteMessage(m, alsoRemote: mine);
+    _reload();
+  }
+
+  Future<void> _showMessageMenu(ChatMessage m) async {
+    final mine = m.direction == ChatMessageDirection.outgoing;
+    final canEdit = mine && m.type == ChatMessageType.text;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.reply_outlined),
+              title: const Text('Ответить'),
+              onTap: () => Navigator.of(ctx).pop('reply'),
+            ),
+            if (canEdit)
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('Редактировать'),
+                onTap: () => Navigator.of(ctx).pop('edit'),
+              ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline),
+              title: Text(mine ? 'Удалить' : 'Удалить у себя'),
+              onTap: () => Navigator.of(ctx).pop('delete'),
+            ),
+          ],
+        ),
+      ),
+    );
+    switch (action) {
+      case 'reply':
+        _reply(m);
+      case 'edit':
+        await _edit(m);
+      case 'delete':
+        await _delete(m);
+    }
   }
 
   /// Прикрепить фото или файл — запись видео/голоса пока не встроена в
@@ -138,9 +209,33 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                     controller: _scroll,
                     padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
                     itemCount: _messages.length,
-                    itemBuilder: (context, i) => _Bubble(message: _messages[i], onRetry: () => _retry(_messages[i])),
+                    itemBuilder: (context, i) {
+                      final m = _messages[i];
+                      return Dismissible(
+                        key: ValueKey(m.id),
+                        direction: DismissDirection.startToEnd,
+                        // Свайп только показывает жест "ответить" и
+                        // всегда возвращает пузырь на место (решение
+                        // пользователя: ответ свайпом за само
+                        // сообщение, а не отдельной кнопкой).
+                        confirmDismiss: (_) async {
+                          _reply(m);
+                          return false;
+                        },
+                        background: Container(
+                          alignment: Alignment.centerLeft,
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Icon(Icons.reply_outlined, color: Theme.of(context).colorScheme.primary),
+                        ),
+                        child: GestureDetector(
+                          onLongPress: () => _showMessageMenu(m),
+                          child: _Bubble(message: m, onRetry: () => _retry(m)),
+                        ),
+                      );
+                    },
                   ),
           ),
+          if (_replyingTo != null) _ReplyPreviewBar(message: _replyingTo!, onCancel: () => setState(() => _replyingTo = null)),
           const Divider(height: 1),
           SafeArea(
             top: false,
@@ -175,6 +270,41 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   }
 }
 
+/// Полоска над полем ввода, пока выбран "ответ на сообщение" (свайп по
+/// пузырю в списке) — цитата + крестик отмены, как в Telegram/WhatsApp.
+class _ReplyPreviewBar extends StatelessWidget {
+  final ChatMessage message;
+  final VoidCallback onCancel;
+  const _ReplyPreviewBar({required this.message, required this.onCancel});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHigh,
+        border: Border(top: BorderSide(color: theme.dividerColor)),
+      ),
+      child: Row(
+        children: [
+          Container(width: 3, height: 32, color: theme.colorScheme.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              ChatSyncService.previewOf(message),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+          IconButton(icon: const Icon(Icons.close, size: 18), onPressed: onCancel),
+        ],
+      ),
+    );
+  }
+}
+
 class _Bubble extends StatelessWidget {
   final ChatMessage message;
   final VoidCallback onRetry;
@@ -203,6 +333,23 @@ class _Bubble extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (message.replyToPreview != null) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                margin: const EdgeInsets.only(bottom: 6),
+                decoration: BoxDecoration(
+                  color: fg.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border(left: BorderSide(color: fg.withValues(alpha: 0.5), width: 3)),
+                ),
+                child: Text(
+                  message.replyToPreview!,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(color: fg.withValues(alpha: 0.8)),
+                ),
+              ),
+            ],
             if (message.type == ChatMessageType.image && message.attachmentBase64 != null) ...[
               ClipRRect(
                 borderRadius: BorderRadius.circular(10),
@@ -232,6 +379,10 @@ class _Bubble extends StatelessWidget {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (message.edited) ...[
+                  Text('изменено', style: theme.textTheme.labelSmall?.copyWith(color: fg.withValues(alpha: 0.65))),
+                  const SizedBox(width: 6),
+                ],
                 Text(
                   DateFormat('HH:mm').format(message.createdAt.toLocal()),
                   style: theme.textTheme.labelSmall?.copyWith(color: fg.withValues(alpha: 0.65)),

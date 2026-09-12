@@ -148,6 +148,15 @@ CREATE TABLE IF NOT EXISTS chat_local_messages (
   attachment_name     TEXT,
   attachment_mime     TEXT,
   attachment_size     INTEGER,
+  -- Правка текста задним числом — правится локально сразу и рассылается
+  -- собеседнику отдельным "edit"-сигналом (см. sql/chat-schema.sql),
+  -- который применяется к уже сохранённой строке, а не создаёт новую.
+  edited              INTEGER NOT NULL DEFAULT 0,
+  -- Ответ на сообщение (свайп по пузырю) — храним и id оригинала (чтобы
+  -- при тапе можно было бы прыгнуть к нему в будущем), и короткий текст
+  -- превью на случай, если оригинал уже не найдётся локально.
+  reply_to_client_message_id TEXT,
+  reply_to_preview    TEXT,
   created_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

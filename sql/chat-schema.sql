@@ -47,9 +47,11 @@ create table if not exists chat_messages (
   -- Текст теперь необязателен — сообщение может быть чистым вложением
   -- (фото без подписи) или подписью к вложению одновременно.
   text                   text,
-  -- 'text' — только текст; 'image'/'video'/'audio'/'file' — есть вложение.
+  -- 'text' — только текст; 'image'/'video'/'audio'/'file' — есть вложение;
+  -- 'edit'/'delete' — служебные сигналы к уже отправленному сообщению
+  -- (см. ниже), а не новые сообщения сами по себе.
   msg_type               text not null default 'text'
-                           check (msg_type in ('text','image','video','audio','file')),
+                           check (msg_type in ('text','image','video','audio','file','edit','delete')),
   attachment_path        text,   -- путь объекта в бакете chat-media
   attachment_name        text,   -- исходное имя файла (для 'file')
   attachment_mime        text,
@@ -57,14 +59,25 @@ create table if not exists chat_messages (
   attachment_duration_ms integer, -- для video/audio — длительность, если известна
   attachment_width       integer, -- для image/video — пропорции превью до загрузки самого файла
   attachment_height      integer,
+  -- Правка/удаление задним числом — client_message_id ОРИГИНАЛЬНОГО
+  -- сообщения, к которому применяется сигнал (см. ChatSyncService.
+  -- editMessage/deleteMessage). Ответ на сообщение — тоже по
+  -- client_message_id, плюс короткая цитата на случай, если оригинал
+  -- уже не найдётся у получателя локально.
+  edit_of_client_message_id   text,
+  delete_of_client_message_id text,
+  reply_to_client_message_id  text,
+  reply_to_preview             text,
   created_at             timestamptz not null default now(),
   unique (sender_id, client_message_id),
-  -- Сообщение либо текстовое (text заполнен, вложения нет), либо с
-  -- вложением (attachment_path заполнен) — оба сразу тоже можно
-  -- (подпись к фото), но не "ничего": пустых сообщений не бывает.
+  -- Сообщение — ОДНО из: текст, вложение (+ опц. подпись), edit-сигнал
+  -- (текст + ссылка на оригинал) или delete-сигнал (только ссылка на
+  -- оригинал, без текста/вложения).
   check (
     (msg_type = 'text' and text is not null and attachment_path is null)
-    or (msg_type <> 'text' and attachment_path is not null)
+    or (msg_type in ('image','video','audio','file') and attachment_path is not null)
+    or (msg_type = 'edit' and edit_of_client_message_id is not null and text is not null)
+    or (msg_type = 'delete' and delete_of_client_message_id is not null)
   )
 );
 
@@ -79,6 +92,28 @@ alter table chat_messages add column if not exists attachment_size bigint;
 alter table chat_messages add column if not exists attachment_duration_ms integer;
 alter table chat_messages add column if not exists attachment_width integer;
 alter table chat_messages add column if not exists attachment_height integer;
+alter table chat_messages add column if not exists edit_of_client_message_id text;
+alter table chat_messages add column if not exists delete_of_client_message_id text;
+alter table chat_messages add column if not exists reply_to_client_message_id text;
+alter table chat_messages add column if not exists reply_to_preview text;
+
+-- CHECK не подвинуть ни ADD COLUMN, ни повторным CREATE TABLE — только
+-- пересозданием ограничения. Оба варианта имени учтены (авто-имя из
+-- первой версии этого файла и явное новое), поэтому блок безопасно
+-- накатывать многократно.
+alter table chat_messages drop constraint if exists chat_messages_msg_type_check;
+alter table chat_messages add constraint chat_messages_msg_type_check
+  check (msg_type in ('text','image','video','audio','file','edit','delete'));
+
+alter table chat_messages drop constraint if exists chat_messages_check;
+alter table chat_messages drop constraint if exists chat_messages_content_check;
+alter table chat_messages add constraint chat_messages_content_check
+  check (
+    (msg_type = 'text' and text is not null and attachment_path is null)
+    or (msg_type in ('image','video','audio','file') and attachment_path is not null)
+    or (msg_type = 'edit' and edit_of_client_message_id is not null and text is not null)
+    or (msg_type = 'delete' and delete_of_client_message_id is not null)
+  );
 
 create index if not exists idx_chat_messages_recipient on chat_messages(recipient_id);
 
@@ -275,6 +310,12 @@ create policy chat_push_tokens_self on chat_push_tokens
 
 create extension if not exists pg_net;
 
+-- ВАЖНО: весь код похода за секретом и HTTP-вызова обёрнут в
+-- `exception when others` — падение push (нет секрета, недоступна
+-- функция, что угодно) НЕ ДОЛЖНО откатывать вставку самого сообщения.
+-- Раньше без этой защиты ошибка здесь откатывала всю транзакцию
+-- INSERT — из-за этого не отправлялись сообщения в личном чате, хотя
+-- на вид проблема была "в push".
 create or replace function chat_notify_push()
 returns trigger
 language plpgsql
@@ -284,18 +325,24 @@ as $$
 declare
   service_key text;
 begin
-  select decrypted_secret into service_key
-  from vault.decrypted_secrets
-  where name = 'service_role_key';
+  begin
+    select decrypted_secret into service_key
+    from vault.decrypted_secrets
+    where name = 'service_role_key';
 
-  perform net.http_post(
-    url := 'https://frbptucrvmyikencyspu.supabase.co/functions/v1/send-chat-push',
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'Authorization', 'Bearer ' || service_key
-    ),
-    body := jsonb_build_object('table', TG_TABLE_NAME, 'record', row_to_json(NEW))
-  );
+    if service_key is not null then
+      perform net.http_post(
+        url := 'https://frbptucrvmyikencyspu.supabase.co/functions/v1/send-chat-push',
+        headers := jsonb_build_object(
+          'Content-Type', 'application/json',
+          'Authorization', 'Bearer ' || service_key
+        ),
+        body := jsonb_build_object('table', TG_TABLE_NAME, 'record', row_to_json(NEW))
+      );
+    end if;
+  exception when others then
+    null;
+  end;
   return NEW;
 end;
 $$;
@@ -309,5 +356,35 @@ drop trigger if exists chat_global_messages_push on chat_global_messages;
 create trigger chat_global_messages_push
   after insert on chat_global_messages
   for each row execute function chat_notify_push();
+
+-- ============================================================
+-- Общий чат — лента никем не читается вглубь (решение пользователя),
+-- поэтому храним не больше 500 последних сообщений: после каждой
+-- вставки лишние (старше 500-го по дате) удаляются. `for each
+-- statement`, а не `for each row` — при массовой вставке (например,
+-- импорт) чистка запускается один раз, а не по разу на строку.
+-- ============================================================
+
+create or replace function chat_global_trim()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  delete from chat_global_messages
+  where id in (
+    select id from chat_global_messages
+    order by created_at desc
+    offset 500
+  );
+  return null;
+end;
+$$;
+
+drop trigger if exists chat_global_messages_trim on chat_global_messages;
+create trigger chat_global_messages_trim
+  after insert on chat_global_messages
+  for each statement execute function chat_global_trim();
 
 notify pgrst, 'reload schema';

@@ -32,7 +32,10 @@ class ChatSyncService {
   /// статус `error`, повторная отправка только вручную (решение
   /// пользователя: "отправитель сам перезапустит процесс"), без
   /// автоматических попыток.
-  Future<ChatMessage> send(String contactId, String text) async {
+  ///
+  /// [replyTo] — сообщение, на которое отвечают (свайп по пузырю в
+  /// интерфейсе) — цитата уходит собеседнику вместе с сообщением.
+  Future<ChatMessage> send(String contactId, String text, {ChatMessage? replyTo}) async {
     final message = ChatMessage(
       id: _uuid.v4(),
       clientMessageId: _uuid.v4(),
@@ -40,11 +43,103 @@ class ChatSyncService {
       direction: ChatMessageDirection.outgoing,
       text: text,
       status: ChatMessageStatus.sending,
+      replyToClientMessageId: replyTo?.clientMessageId,
+      replyToPreview: replyTo == null ? null : previewOf(replyTo),
       createdAt: DateTime.now(),
     );
     repo.addMessage(message);
     await retry(message);
     return message;
+  }
+
+  /// Короткая цитата для превью "ответ на сообщение" — используется и
+  /// при отправке (что уйдёт собеседнику), и в UI (полоска над полем
+  /// ввода, пока идёт набор ответа).
+  static String previewOf(ChatMessage m) {
+    if (m.text != null && m.text!.isNotEmpty) {
+      return m.text!.length > 80 ? '${m.text!.substring(0, 80)}…' : m.text!;
+    }
+    return switch (m.type) {
+      ChatMessageType.image => '📷 Фото',
+      ChatMessageType.video => '🎥 Видео',
+      ChatMessageType.audio => '🎤 Голосовое',
+      ChatMessageType.file => '📎 ${m.attachmentName ?? 'Файл'}',
+      _ => 'Сообщение',
+    };
+  }
+
+  /// Правит уже отправленное сообщение задним числом — обновляет
+  /// локальную копию сразу и рассылает собеседнику edit-сигнал (см.
+  /// `msg_type = 'edit'` в `sql/chat-schema.sql`), который применяется
+  /// к уже полученной у него строке, а не создаёт новую.
+  Future<void> editMessage(ChatMessage original, String newText) async {
+    repo.updateText(original.id, newText);
+    if (!ChatSettings.isConfigured) return;
+    final token = await auth.ensureFreshToken();
+    if (token == null) return;
+    final client = clientFactory();
+    try {
+      await client
+          .post(
+            Uri.parse('${ChatSettings.url}/rest/v1/chat_messages'),
+            headers: {
+              'apikey': ChatSettings.anonKey,
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal',
+            },
+            body: jsonEncode({
+              'client_message_id': _uuid.v4(),
+              'sender_id': auth.userId,
+              'recipient_id': original.contactId,
+              'text': newText,
+              'msg_type': 'edit',
+              'edit_of_client_message_id': original.clientMessageId,
+            }),
+          )
+          .timeout(_timeout);
+    } catch (_) {
+      // Правка — необязательное усиление: если сигнал не дошёл, у
+      // собеседника просто останется старый текст, ничего не ломается.
+    } finally {
+      client.close();
+    }
+  }
+
+  /// Удаляет сообщение. [alsoRemote] — только для СВОИХ (outgoing)
+  /// сообщений: шлёт собеседнику delete-сигнал, чтобы оно исчезло и у
+  /// него. Чужое входящее можно удалить только у себя.
+  Future<void> deleteMessage(ChatMessage message, {required bool alsoRemote}) async {
+    repo.deleteMessage(message.id);
+    if (!alsoRemote || !ChatSettings.isConfigured) return;
+    final token = await auth.ensureFreshToken();
+    if (token == null) return;
+    final client = clientFactory();
+    try {
+      await client
+          .post(
+            Uri.parse('${ChatSettings.url}/rest/v1/chat_messages'),
+            headers: {
+              'apikey': ChatSettings.anonKey,
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal',
+            },
+            body: jsonEncode({
+              'client_message_id': _uuid.v4(),
+              'sender_id': auth.userId,
+              'recipient_id': message.contactId,
+              'msg_type': 'delete',
+              'delete_of_client_message_id': message.clientMessageId,
+            }),
+          )
+          .timeout(_timeout);
+    } catch (_) {
+      // Как и с правкой — необязательное усиление, локальное удаление
+      // уже случилось независимо от результата.
+    } finally {
+      client.close();
+    }
   }
 
   /// Отправляет вложение (фото/файл — запись видео/голоса пока не
@@ -142,6 +237,8 @@ class ChatSyncService {
               if (message.attachmentName != null) 'attachment_name': message.attachmentName,
               if (message.attachmentMime != null) 'attachment_mime': message.attachmentMime,
               if (message.attachmentSize != null) 'attachment_size': message.attachmentSize,
+              if (message.replyToClientMessageId != null) 'reply_to_client_message_id': message.replyToClientMessageId,
+              if (message.replyToPreview != null) 'reply_to_preview': message.replyToPreview,
             }),
           )
           .timeout(_timeout);
@@ -177,6 +274,25 @@ class ChatSyncService {
       final doneIds = <String>[];
       for (final row in decoded) {
         if (row is! Map) continue;
+        final senderId = '${row['sender_id']}';
+        final rawType = '${row['msg_type']}';
+
+        // edit/delete — сигналы к уже полученной строке, не новые
+        // сообщения: применяем и чистим транзитную строку, минуя
+        // обычную дедупликацию по client_message_id (у сигнала он свой).
+        if (rawType == 'edit') {
+          final target = repo.byClientId(senderId, '${row['edit_of_client_message_id']}');
+          if (target != null) repo.updateText(target.id, '${row['text'] ?? ''}');
+          doneIds.add('${row['id']}');
+          continue;
+        }
+        if (rawType == 'delete') {
+          final target = repo.byClientId(senderId, '${row['delete_of_client_message_id']}');
+          if (target != null) repo.deleteMessage(target.id);
+          doneIds.add('${row['id']}');
+          continue;
+        }
+
         final clientId = '${row['client_message_id']}';
         if (repo.existsByClientId(clientId)) {
           doneIds.add('${row['id']}'); // уже приняли раньше, просто дочистим строку
@@ -184,7 +300,7 @@ class ChatSyncService {
         }
 
         final type = ChatMessageType.values.firstWhere(
-          (t) => t.name == row['msg_type'],
+          (t) => t.name == rawType,
           orElse: () => ChatMessageType.text,
         );
         String? attachmentBase64;
@@ -199,7 +315,7 @@ class ChatSyncService {
         repo.addMessage(ChatMessage(
           id: _uuid.v4(),
           clientMessageId: clientId,
-          contactId: '${row['sender_id']}',
+          contactId: senderId,
           direction: ChatMessageDirection.incoming,
           text: row['text'] as String?,
           status: ChatMessageStatus.delivered,
@@ -208,6 +324,8 @@ class ChatSyncService {
           attachmentName: row['attachment_name'] as String?,
           attachmentMime: row['attachment_mime'] as String?,
           attachmentSize: (row['attachment_size'] as num?)?.toInt(),
+          replyToClientMessageId: row['reply_to_client_message_id'] as String?,
+          replyToPreview: row['reply_to_preview'] as String?,
           createdAt: DateTime.tryParse('${row['created_at']}') ?? DateTime.now(),
         ));
         added++;

@@ -10,7 +10,12 @@ enum ChatMessageStatus { sending, sent, delivered, error }
 /// Тип содержимого — как в Telegram/WhatsApp: обычный текст или
 /// вложение одного из видов (фото/видео/голосовое/файл произвольного
 /// формата). Подпись к вложению — то же поле `text`, необязательное.
-enum ChatMessageType { text, image, video, audio, file }
+///
+/// `edit`/`delete` — служебные типы: НЕ отдельные сообщения в переписке,
+/// а сигналы, которые `ChatSyncService.pollIncoming` применяет к уже
+/// существующей локальной строке (меняет текст / удаляет) и сам не
+/// сохраняет как новую запись — см. `ChatSyncService`.
+enum ChatMessageType { text, image, video, audio, file, edit, delete }
 
 class ChatMessage {
   final String id;
@@ -36,6 +41,15 @@ class ChatMessage {
   final String? attachmentMime;
   final int? attachmentSize;
 
+  /// Правили ли текст после отправки (см. `edited` в локальной схеме).
+  final bool edited;
+
+  /// Ответ на другое сообщение этой же переписки — `replyToPreview`
+  /// показывается всегда (короткая цитата), `replyToClientMessageId`
+  /// нужен только для потенциального перехода к оригиналу.
+  final String? replyToClientMessageId;
+  final String? replyToPreview;
+
   /// Только для входящих — открыл ли получатель ветку с этим сообщением
   /// (см. комментарий у колонки `seen` в схеме).
   final bool seen;
@@ -53,6 +67,9 @@ class ChatMessage {
     this.attachmentName,
     this.attachmentMime,
     this.attachmentSize,
+    this.edited = false,
+    this.replyToClientMessageId,
+    this.replyToPreview,
     this.seen = false,
     required this.createdAt,
   });
@@ -69,6 +86,9 @@ class ChatMessage {
         attachmentName: attachmentName,
         attachmentMime: attachmentMime,
         attachmentSize: attachmentSize,
+        edited: edited,
+        replyToClientMessageId: replyToClientMessageId,
+        replyToPreview: replyToPreview,
         seen: seen ?? this.seen,
         createdAt: createdAt,
       );
@@ -88,6 +108,9 @@ class ChatMessage {
         attachmentName: row['attachment_name'] as String?,
         attachmentMime: row['attachment_mime'] as String?,
         attachmentSize: (row['attachment_size'] as num?)?.toInt(),
+        edited: row['edited'] == 1 || row['edited'] == true,
+        replyToClientMessageId: row['reply_to_client_message_id'] as String?,
+        replyToPreview: row['reply_to_preview'] as String?,
         seen: row['seen'] == 1 || row['seen'] == true,
         createdAt: DateTime.parse(row['created_at'] as String),
       );

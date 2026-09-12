@@ -106,6 +106,11 @@ class LocalDbService {
         'chat_code': 'TEXT',
         'chat_avatar_base64': 'TEXT',
       },
+      'chat_local_messages': {
+        'edited': 'INTEGER NOT NULL DEFAULT 0',
+        'reply_to_client_message_id': 'TEXT',
+        'reply_to_preview': 'TEXT',
+      },
     };
 
     for (final table in additions.keys) {
