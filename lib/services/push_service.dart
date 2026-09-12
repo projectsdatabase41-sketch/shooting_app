@@ -22,11 +22,19 @@ class PushService {
   final ChatAuthService auth;
   const PushService(this.auth);
 
-  /// Только Android — `firebase_messaging` не поддерживает Windows
-  /// desktop (тот же пробел, что у `camera`/`image_picker`), а веб-push
-  /// требует отдельную настройку (service worker, VAPID-ключ) — не
-  /// делаем в этом заходе, чтобы не разрастаться.
-  static bool get _supportedPlatform => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+  /// Android и iOS — `firebase_messaging` поддерживает оба (iOS через
+  /// APNs). Windows desktop у пакета вообще нет реализации (тот же
+  /// пробел, что у `camera`/`image_picker`), а веб-push требует
+  /// отдельную настройку (service worker, VAPID-ключ) — не делаем в
+  /// этом заходе, чтобы не разрастаться.
+  ///
+  /// iOS-таргет в проекте есть (`ios/`), но собрать и проверить его
+  /// можно только на Mac с Xcode — здесь этого сделать нельзя. Когда
+  /// дойдёт до реальной сборки, там же в Xcode нужно включить Push
+  /// Notifications и Background Modes → Remote notifications
+  /// capability, иначе `requestPermission`/`getToken` не сработают.
+  static bool get _supportedPlatform =>
+      !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
 
   Future<void> init() async {
     if (!FirebaseSettings.isConfigured || !_supportedPlatform || !auth.isSignedIn) return;
@@ -43,12 +51,16 @@ class PushService {
     }
   }
 
-  static FirebaseOptions get _options => const FirebaseOptions(
-        apiKey: FirebaseSettings.apiKey,
-        appId: FirebaseSettings.appId,
-        messagingSenderId: FirebaseSettings.messagingSenderId,
-        projectId: FirebaseSettings.projectId,
-      );
+  static FirebaseOptions get _options {
+    final isIOS = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+    return FirebaseOptions(
+      apiKey: isIOS ? FirebaseSettings.iosApiKey : FirebaseSettings.androidApiKey,
+      appId: isIOS ? FirebaseSettings.iosAppId : FirebaseSettings.androidAppId,
+      messagingSenderId: FirebaseSettings.messagingSenderId,
+      projectId: FirebaseSettings.projectId,
+      iosBundleId: isIOS ? 'ru.bsshooting.shootingApp' : null,
+    );
+  }
 
   Future<void> _saveToken(String token) async {
     final freshToken = await auth.ensureFreshToken();

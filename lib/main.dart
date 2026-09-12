@@ -21,7 +21,9 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Обработчик фонового push должен быть зарегистрирован ДО первого
   // сообщения, поэтому здесь, до runApp (см. push_service.dart).
-  if (FirebaseSettings.isConfigured && !kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+  if (FirebaseSettings.isConfigured &&
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS)) {
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   }
   final db = LocalDbService();
