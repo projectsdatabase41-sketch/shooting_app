@@ -13,6 +13,7 @@ import '../services/chat_global_service.dart';
 import '../services/chat_messages_repository.dart';
 import '../services/chat_settings.dart';
 import '../services/chat_sync_service.dart';
+import '../services/push_service.dart';
 import '../services/supabase_auth_service.dart' show AuthException;
 import '../state/app_data_store.dart';
 import '../widgets/chat_avatar.dart';
@@ -49,7 +50,10 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
     _sync = ChatSyncService(_auth, _repo);
     _global = ChatGlobalService(_auth);
     _reload();
-    if (_auth.isSignedIn) _startPolling();
+    if (_auth.isSignedIn) {
+      _startPolling();
+      PushService(_auth).init();
+    }
   }
 
   @override
@@ -84,6 +88,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
       return _ChatAuthScreen(auth: _auth, onSignedIn: () {
         _reload();
         _startPolling();
+        PushService(_auth).init();
         setState(() {});
       });
     }

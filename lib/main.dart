@@ -1,11 +1,15 @@
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'logic/ai_context.dart';
 import 'services/ai_memory_service.dart';
 import 'services/ai_service.dart';
 import 'services/ai_settings.dart';
+import 'services/firebase_settings.dart';
 import 'services/knowledge_service.dart';
 import 'services/local_db_service.dart';
+import 'services/push_service.dart';
 import 'services/supabase_auth_service.dart';
 import 'state/ai_chat_view_model.dart';
 import 'state/app_data_store.dart';
@@ -15,6 +19,11 @@ import 'theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Обработчик фонового push должен быть зарегистрирован ДО первого
+  // сообщения, поэтому здесь, до runApp (см. push_service.dart).
+  if (FirebaseSettings.isConfigured && !kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  }
   final db = LocalDbService();
   await db.open();
   runApp(ShootingApp(db: db));

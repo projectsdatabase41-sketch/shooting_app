@@ -235,4 +235,31 @@ as $$
   where user_id = any(p_ids);
 $$;
 
+-- ============================================================
+-- Push-уведомления через Firebase (FCM) — ДОБАВКА к этой базе, не
+-- замена: сама переписка/контакты/вход остаются здесь как есть, Firebase
+-- нужен только чтобы разбудить закрытое приложение сигналом "новое
+-- сообщение" (см. lib/services/push_service.dart и
+-- supabase/functions/send-chat-push/index.ts — код функции, которую
+-- нужно развернуть в Supabase, инструкция в её же файле).
+-- ============================================================
+
+create table if not exists chat_push_tokens (
+  user_id     uuid not null references auth.users(id) on delete cascade,
+  token       text not null,
+  updated_at  timestamptz not null default now(),
+  primary key (user_id, token)
+);
+
+alter table chat_push_tokens enable row level security;
+
+-- Каждый пишет/удаляет только свой собственный токен; чужие токены
+-- никому не видны и не нужны — рассылку делает функция ниже с
+-- служебным ключом (service_role), в обход RLS, а не клиент.
+drop policy if exists chat_push_tokens_self on chat_push_tokens;
+create policy chat_push_tokens_self on chat_push_tokens
+  for all
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
 notify pgrst, 'reload schema';
