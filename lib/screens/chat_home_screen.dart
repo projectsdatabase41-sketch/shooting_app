@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../logic/avatar_utils.dart';
 import '../models/chat_contact.dart';
+import '../models/chat_message.dart';
 import '../services/chat_auth_service.dart';
 import '../services/chat_messages_repository.dart';
 import '../services/chat_settings.dart';
@@ -53,6 +54,19 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
   }
 
   void _reload() => setState(() => _contacts = _repo.listContacts());
+
+  /// Превью последнего сообщения в списке контактов — как в любом чате:
+  /// у вложения без подписи показывается тип, а не пустая строка.
+  String _previewFor(ChatMessage m) {
+    if (m.text != null && m.text!.isNotEmpty) return m.text!;
+    return switch (m.type) {
+      ChatMessageType.image => '📷 Фото',
+      ChatMessageType.video => '🎬 Видео',
+      ChatMessageType.audio => '🎤 Голосовое',
+      ChatMessageType.file => '📎 ${m.attachmentName ?? 'Файл'}',
+      ChatMessageType.text => '',
+    };
+  }
 
   void _startPolling() {
     _pollTimer?.cancel();
@@ -114,7 +128,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
                   title: Text(c.nickname),
                   subtitle: last == null
                       ? const Text('Сообщений пока нет')
-                      : Text(last.text, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      : Text(_previewFor(last), maxLines: 1, overflow: TextOverflow.ellipsis),
                   trailing: unread > 0
                       ? CircleAvatar(radius: 11, child: Text('$unread', style: const TextStyle(fontSize: 11)))
                       : null,

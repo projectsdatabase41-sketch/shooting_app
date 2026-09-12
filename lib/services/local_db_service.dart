@@ -287,9 +287,14 @@ CREATE TABLE IF NOT EXISTS chat_local_messages (
   client_message_id   TEXT NOT NULL,
   contact_id          TEXT NOT NULL REFERENCES chat_contacts(id) ON DELETE CASCADE,
   direction           TEXT NOT NULL CHECK (direction IN ('outgoing','incoming')),
-  text                TEXT NOT NULL,
+  text                TEXT,
   status              TEXT NOT NULL DEFAULT 'sending' CHECK (status IN ('sending','sent','delivered','error')),
   seen                INTEGER NOT NULL DEFAULT 0,
+  msg_type            TEXT NOT NULL DEFAULT 'text' CHECK (msg_type IN ('text','image','video','audio','file')),
+  attachment_base64   TEXT,
+  attachment_name     TEXT,
+  attachment_mime     TEXT,
+  attachment_size     INTEGER,
   created_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

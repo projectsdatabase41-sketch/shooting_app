@@ -7,6 +7,11 @@ enum ChatMessageDirection { outgoing, incoming }
 /// `error` — не ушло, нужна ручная отправка повторно.
 enum ChatMessageStatus { sending, sent, delivered, error }
 
+/// Тип содержимого — как в Telegram/WhatsApp: обычный текст или
+/// вложение одного из видов (фото/видео/голосовое/файл произвольного
+/// формата). Подпись к вложению — то же поле `text`, необязательное.
+enum ChatMessageType { text, image, video, audio, file }
+
 class ChatMessage {
   final String id;
 
@@ -15,8 +20,21 @@ class ChatMessage {
   final String clientMessageId;
   final String contactId;
   final ChatMessageDirection direction;
-  final String text;
+
+  /// Текст сообщения либо подпись к вложению — `null`/пусто у чистого
+  /// вложения без подписи.
+  final String? text;
   final ChatMessageStatus status;
+  final ChatMessageType type;
+
+  /// Вложение целиком, как base64 (тот же приём, что у аватара,
+  /// `AvatarUtils`) — сервер хранит файл только до получения (см.
+  /// `sql/chat-schema.sql`, бакет `chat-media`), локально он остаётся
+  /// навсегда как обычная история переписки.
+  final String? attachmentBase64;
+  final String? attachmentName;
+  final String? attachmentMime;
+  final int? attachmentSize;
 
   /// Только для входящих — открыл ли получатель ветку с этим сообщением
   /// (см. комментарий у колонки `seen` в схеме).
@@ -28,8 +46,13 @@ class ChatMessage {
     required this.clientMessageId,
     required this.contactId,
     required this.direction,
-    required this.text,
+    this.text,
     required this.status,
+    this.type = ChatMessageType.text,
+    this.attachmentBase64,
+    this.attachmentName,
+    this.attachmentMime,
+    this.attachmentSize,
     this.seen = false,
     required this.createdAt,
   });
@@ -41,6 +64,11 @@ class ChatMessage {
         direction: direction,
         text: text,
         status: status ?? this.status,
+        type: type,
+        attachmentBase64: attachmentBase64,
+        attachmentName: attachmentName,
+        attachmentMime: attachmentMime,
+        attachmentSize: attachmentSize,
         seen: seen ?? this.seen,
         createdAt: createdAt,
       );
@@ -50,8 +78,16 @@ class ChatMessage {
         clientMessageId: row['client_message_id'] as String,
         contactId: row['contact_id'] as String,
         direction: ChatMessageDirection.values.firstWhere((d) => d.name == row['direction']),
-        text: row['text'] as String,
+        text: row['text'] as String?,
         status: ChatMessageStatus.values.firstWhere((s) => s.name == row['status']),
+        type: ChatMessageType.values.firstWhere(
+          (t) => t.name == row['msg_type'],
+          orElse: () => ChatMessageType.text,
+        ),
+        attachmentBase64: row['attachment_base64'] as String?,
+        attachmentName: row['attachment_name'] as String?,
+        attachmentMime: row['attachment_mime'] as String?,
+        attachmentSize: (row['attachment_size'] as num?)?.toInt(),
         seen: row['seen'] == 1 || row['seen'] == true,
         createdAt: DateTime.parse(row['created_at'] as String),
       );

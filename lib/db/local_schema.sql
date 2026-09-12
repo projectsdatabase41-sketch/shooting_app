@@ -117,12 +117,23 @@ CREATE TABLE IF NOT EXISTS chat_local_messages (
   client_message_id   TEXT NOT NULL,
   contact_id          TEXT NOT NULL REFERENCES chat_contacts(id) ON DELETE CASCADE,
   direction           TEXT NOT NULL CHECK (direction IN ('outgoing','incoming')),
-  text                TEXT NOT NULL,
+  text                TEXT,
   status              TEXT NOT NULL DEFAULT 'sending' CHECK (status IN ('sending','sent','delivered','error')),
   -- Только для входящих: открыл ли получатель ветку с этим сообщением
   -- после его получения — сервер уже ничего не хранит к этому моменту
   -- (см. ChatSyncService.pollIncoming), это чисто локальная отметка "непрочитано".
   seen                INTEGER NOT NULL DEFAULT 0,
+  -- Вложения (фото/видео/файл/голосовое) — тот же принцип "только
+  -- транзит", что у текста: сервер хранит сам файл (Storage) до
+  -- получения, а локально он остаётся ЦЕЛИКОМ, как base64 — тот же
+  -- приём, что уже применён для аватара (AvatarUtils), только без
+  -- ограничения на размер: локальная база не пытается его сжать,
+  -- сжатие уже произошло на отправке.
+  msg_type            TEXT NOT NULL DEFAULT 'text' CHECK (msg_type IN ('text','image','video','audio','file')),
+  attachment_base64   TEXT,
+  attachment_name     TEXT,
+  attachment_mime     TEXT,
+  attachment_size     INTEGER,
   created_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

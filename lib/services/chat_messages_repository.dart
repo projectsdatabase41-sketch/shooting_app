@@ -46,9 +46,24 @@ class ChatMessagesRepository {
 
   void addMessage(ChatMessage m) {
     db.db.execute(
-      'INSERT INTO chat_local_messages (id, client_message_id, contact_id, direction, text, status, created_at) '
-      'VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [m.id, m.clientMessageId, m.contactId, m.direction.name, m.text, m.status.name, m.createdAt.toIso8601String()],
+      'INSERT INTO chat_local_messages '
+      '(id, client_message_id, contact_id, direction, text, status, msg_type, '
+      'attachment_base64, attachment_name, attachment_mime, attachment_size, created_at) '
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        m.id,
+        m.clientMessageId,
+        m.contactId,
+        m.direction.name,
+        m.text,
+        m.status.name,
+        m.type.name,
+        m.attachmentBase64,
+        m.attachmentName,
+        m.attachmentMime,
+        m.attachmentSize,
+        m.createdAt.toIso8601String(),
+      ],
     );
   }
 

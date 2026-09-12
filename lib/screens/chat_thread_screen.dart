@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../logic/chat_media_utils.dart';
 import '../models/chat_contact.dart';
 import '../models/chat_message.dart';
 import '../services/chat_auth_service.dart';
@@ -89,6 +92,31 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     _reload();
   }
 
+  /// Прикрепить фото или файл — запись видео/голоса пока не встроена в
+  /// интерфейс (см. комментарий у `ChatSyncService.sendAttachment`).
+  /// Картинка сжимается перед отправкой (`ChatMediaUtils.compressImage`),
+  /// остальные файлы уходят как есть.
+  Future<void> _attach() async {
+    final result = await FilePicker.platform.pickFiles(withData: true);
+    final file = result?.files.first;
+    final bytes = file?.bytes;
+    if (file == null || bytes == null) return;
+
+    setState(() => _sending = true);
+    final isImage = ChatMediaUtils.looksLikeImage(file.name);
+    final compressed = isImage ? ChatMediaUtils.compressImage(bytes) : null;
+    await widget.sync.sendAttachment(
+      contactId: widget.contact.id,
+      bytes: compressed ?? bytes,
+      fileName: file.name,
+      mime: isImage ? ChatMediaUtils.mimeFor(file.name) : 'application/octet-stream',
+      type: isImage ? ChatMessageType.image : ChatMessageType.file,
+    );
+    _reload();
+    _scrollToEnd();
+    setState(() => _sending = false);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -121,6 +149,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
+                  IconButton(
+                    onPressed: _sending ? null : _attach,
+                    icon: const Icon(Icons.attach_file),
+                    tooltip: 'Прикрепить фото или файл',
+                  ),
                   Expanded(
                     child: TextField(
                       controller: _input,
@@ -170,7 +203,31 @@ class _Bubble extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            SelectableText(message.text, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
+            if (message.type == ChatMessageType.image && message.attachmentBase64 != null) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.memory(base64Decode(message.attachmentBase64!), fit: BoxFit.contain),
+              ),
+              const SizedBox(height: 6),
+            ] else if (message.type == ChatMessageType.file) ...[
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.insert_drive_file_outlined, color: fg),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      '${message.attachmentName ?? 'Файл'} · ${ChatMediaUtils.formatSize(message.attachmentSize)}',
+                      style: theme.textTheme.bodyMedium?.copyWith(color: fg),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+            ],
+            if (message.text != null && message.text!.isNotEmpty)
+              SelectableText(message.text!, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
             const SizedBox(height: 4),
             Row(
               mainAxisSize: MainAxisSize.min,
