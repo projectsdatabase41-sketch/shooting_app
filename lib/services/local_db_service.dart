@@ -106,7 +106,20 @@ class LocalDbService {
         'chat_code': 'TEXT',
         'chat_avatar_base64': 'TEXT',
       },
+      // На части устройств chat_local_messages создалась ещё САМОЙ
+      // первой версией чата (только текст, без вложений) — CREATE
+      // TABLE IF NOT EXISTS её с тех пор не трогал, поэтому колонки
+      // вложений так и не появились. Отсюда падение "no column named
+      // msg_type" при любой отправке в личном чате — здесь всё
+      // перечислено заново, чтобы догнать схему целиком независимо от
+      // того, на каком именно шаге застряла конкретная установка.
       'chat_local_messages': {
+        'seen': 'INTEGER NOT NULL DEFAULT 0',
+        'msg_type': "TEXT NOT NULL DEFAULT 'text'",
+        'attachment_base64': 'TEXT',
+        'attachment_name': 'TEXT',
+        'attachment_mime': 'TEXT',
+        'attachment_size': 'INTEGER',
         'edited': 'INTEGER NOT NULL DEFAULT 0',
         'reply_to_client_message_id': 'TEXT',
         'reply_to_preview': 'TEXT',
