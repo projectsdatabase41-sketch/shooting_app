@@ -16,10 +16,10 @@
 /// - messagingSenderId → project_info.project_number
 /// - projectId         → project_info.project_id
 class FirebaseSettings {
-  static const String apiKey = '';
-  static const String appId = '';
-  static const String messagingSenderId = '';
-  static const String projectId = '';
+  static const String apiKey = 'AIzaSyBiZRhBcIh87nBwX5mFCOucuKmQso95XJc';
+  static const String appId = '1:817306839283:android:a47d69761a1d8cd2d7af86';
+  static const String messagingSenderId = '817306839283';
+  static const String projectId = 'shooting-app-chat';
 
   static bool get isConfigured => apiKey.isNotEmpty && appId.isNotEmpty && messagingSenderId.isNotEmpty && projectId.isNotEmpty;
 }

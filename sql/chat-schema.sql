@@ -262,4 +262,52 @@ create policy chat_push_tokens_self on chat_push_tokens
   using (user_id = auth.uid())
   with check (user_id = auth.uid());
 
+-- ============================================================
+-- Триггер, который зовёт Edge Function send-chat-push при новом
+-- сообщении — тот же результат, что "Database → Webhooks" в
+-- дашборде, но SQL-ом, без мастера интерфейса.
+--
+-- ПЕРЕД накаткой этого блока один раз выполнить (значение — Project
+-- settings → API → service_role key; секрет хранится в Vault, а не в
+-- этом файле, потому что файл лежит в git):
+--   select vault.create_secret('<service_role_key>', 'service_role_key');
+-- ============================================================
+
+create extension if not exists pg_net;
+
+create or replace function chat_notify_push()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  service_key text;
+begin
+  select decrypted_secret into service_key
+  from vault.decrypted_secrets
+  where name = 'service_role_key';
+
+  perform net.http_post(
+    url := 'https://frbptucrvmyikencyspu.supabase.co/functions/v1/send-chat-push',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || service_key
+    ),
+    body := jsonb_build_object('table', TG_TABLE_NAME, 'record', row_to_json(NEW))
+  );
+  return NEW;
+end;
+$$;
+
+drop trigger if exists chat_messages_push on chat_messages;
+create trigger chat_messages_push
+  after insert on chat_messages
+  for each row execute function chat_notify_push();
+
+drop trigger if exists chat_global_messages_push on chat_global_messages;
+create trigger chat_global_messages_push
+  after insert on chat_global_messages
+  for each row execute function chat_notify_push();
+
 notify pgrst, 'reload schema';
