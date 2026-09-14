@@ -172,6 +172,57 @@ class SupabaseAuthService {
     }
   }
 
+  /// Пароль от аккаунта в отдельном чат-проекте — хранится в
+  /// `project_settings.chat_password` ЭТОЙ (личной) базы, не локально,
+  /// чтобы чат заводился тем же email без видимой регистрации на любом
+  /// устройстве, где уже есть вход в основной аккаунт (см.
+  /// `ChatAuthService`/`ChatHomeScreen._ensureChatSession`).
+  Future<String?> fetchChatPassword() async {
+    final token = await ensureFreshToken();
+    if (token == null) return null;
+    final client = clientFactory();
+    try {
+      final res = await client.get(
+        Uri.parse('$url/rest/v1/project_settings?owner_user_id=eq.$userId&select=chat_password'),
+        headers: {'apikey': anonKey, 'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 20));
+      if (res.statusCode >= 400) return null;
+      final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+      if (decoded is! List || decoded.isEmpty) return null;
+      final value = decoded.first['chat_password'] as String?;
+      return (value == null || value.isEmpty) ? null : value;
+    } catch (_) {
+      return null;
+    } finally {
+      client.close();
+    }
+  }
+
+  Future<void> saveChatPassword(String password) async {
+    final token = await ensureFreshToken();
+    if (token == null) return;
+    final client = clientFactory();
+    try {
+      await client
+          .patch(
+            Uri.parse('$url/rest/v1/project_settings?owner_user_id=eq.$userId'),
+            headers: {
+              'apikey': anonKey,
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal',
+            },
+            body: jsonEncode({'chat_password': password}),
+          )
+          .timeout(const Duration(seconds: 20));
+    } catch (_) {
+      // Не сохранилось — не страшно, следующий silent-вход в чат
+      // просто сгенерирует пароль заново (см. _ensureChatSession).
+    } finally {
+      client.close();
+    }
+  }
+
   /// Выход: токены стираются с устройства. Локальные тренировки
   /// остаются на месте — база на телефоне живёт своей жизнью и без
   /// облака.

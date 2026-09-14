@@ -290,6 +290,16 @@ alter table training_packages  add column if not exists extra   jsonb;
 alter table exercises          add column if not exists extra   jsonb;
 alter table exercise_templates add column if not exists extra   jsonb;
 
+-- Пароль от аккаунта в ОТДЕЛЬНОМ чат-проекте (sql/chat-schema.sql) —
+-- генерируется приложением один раз (SupabaseAuthService.
+-- ensureChatCredentials) и хранится здесь, в СВОЕЙ базе пользователя,
+-- а не локально на устройстве: так чат заводится тем же email без
+-- видимой регистрации на любом устройстве, где уже есть вход в
+-- основной аккаунт — не только на первом. RLS та же, что и на всей
+-- строке (is_project_owner()), пароль читает и пишет только сам
+-- владелец.
+alter table project_settings add column if not exists chat_password text;
+
 -- Единая лента комментариев — тренировка/серия/выстрел, и отдельный
 -- чат с тренером ('coach'): страница "Тренер" читает и пишет именно
 -- этот уровень, без фильтра по автору (та же логика, что в локальной

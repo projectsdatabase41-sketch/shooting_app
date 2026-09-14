@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
@@ -13,8 +15,9 @@ import '../services/chat_global_service.dart';
 import '../services/chat_messages_repository.dart';
 import '../services/chat_settings.dart';
 import '../services/chat_sync_service.dart';
+import '../services/local_db_service.dart';
 import '../services/push_service.dart';
-import '../services/supabase_auth_service.dart' show AuthException;
+import '../services/supabase_auth_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/chat_avatar.dart';
 import '../widgets/empty_state.dart';
@@ -34,25 +37,37 @@ class ChatHomeScreen extends StatefulWidget {
 }
 
 class _ChatHomeScreenState extends State<ChatHomeScreen> {
+  late final LocalDbService _db;
   late final ChatAuthService _auth;
+  late final SupabaseAuthService _mainAuth;
   late final ChatMessagesRepository _repo;
   late final ChatSyncService _sync;
   late final ChatGlobalService _global;
   Timer? _pollTimer;
   List<ChatContact> _contacts = [];
 
+  /// Идёт попытка тихого входа в чат тем же email, что и основной вход
+  /// (см. `_ensureChatSession`) — пока она не завершилась, форму
+  /// регистрации/входа не показываем, чтобы не мигать ей на долю
+  /// секунды перед автоматическим входом.
+  bool _autoProvisioning = false;
+
   @override
   void initState() {
     super.initState();
-    final db = context.read<AppDataStore>().db;
-    _auth = ChatAuthService(db);
-    _repo = ChatMessagesRepository(db);
+    _db = context.read<AppDataStore>().db;
+    _auth = ChatAuthService(_db);
+    _mainAuth = SupabaseAuthService(_db);
+    _repo = ChatMessagesRepository(_db);
     _sync = ChatSyncService(_auth, _repo);
     _global = ChatGlobalService(_auth);
     _reload();
     if (_auth.isSignedIn) {
       _startPolling();
       PushService(_auth).init();
+    } else if (_mainAuth.isSignedIn) {
+      _autoProvisioning = true;
+      _ensureChatSession();
     }
   }
 
@@ -63,6 +78,61 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
   }
 
   void _reload() => setState(() => _contacts = _repo.listContacts());
+
+  /// Заводит/открывает чат-аккаунт тем же email, что и основной вход —
+  /// без видимой формы регистрации (решение пользователя: трение
+  /// отдельной регистрации — главная причина малого числа пользователей
+  /// чата). Настоящий пароль основного входа приложению недоступен и
+  /// никогда не сохраняется (см. `SupabaseAuthService`) — для чата
+  /// генерируется отдельный секрет, который хранится не локально, а в
+  /// облаке САМОГО пользователя (`project_settings.chat_password` его
+  /// личного проекта), чтобы это работало на любом его устройстве, а не
+  /// только на первом.
+  Future<void> _ensureChatSession() async {
+    final email = _mainAuth.email;
+    if (email.isEmpty) {
+      setState(() => _autoProvisioning = false);
+      return;
+    }
+    try {
+      final stored = await _mainAuth.fetchChatPassword();
+      if (stored != null) {
+        try {
+          await _auth.signIn(email: email, password: stored);
+        } on AuthException {
+          // Сохранённый пароль больше не подходит (аккаунт пересоздан
+          // вручную и т.п.) — падаем в обычную форму, чем гадать дальше.
+        }
+      } else {
+        final generated = _generatePassword();
+        try {
+          final ok = await _auth.signUp(nickname: email.split('@').first, email: email, password: generated);
+          if (ok) await _mainAuth.saveChatPassword(generated);
+        } on AuthException {
+          // Скорее всего "уже зарегистрирован" — чат-аккаунт с этой
+          // почтой уже существует с другим, неизвестным нам паролем
+          // (заведён вручную ещё до этой возможности). Остаётся только
+          // попросить войти самостоятельно один последний раз — успешный
+          // ручной вход сам сохранит пароль на будущее, см.
+          // _ChatAuthScreenState._maybeSaveChatPasswordForMainAccount.
+        }
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _autoProvisioning = false);
+        if (_auth.isSignedIn) {
+          _startPolling();
+          PushService(_auth).init();
+        }
+      }
+    }
+  }
+
+  static String _generatePassword() {
+    final rnd = Random.secure();
+    final bytes = List<int>.generate(24, (_) => rnd.nextInt(256));
+    return base64UrlEncode(bytes);
+  }
 
   void _startPolling() {
     _pollTimer?.cancel();
@@ -89,12 +159,19 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
       );
     }
     if (!_auth.isSignedIn) {
-      return _ChatAuthScreen(auth: _auth, onSignedIn: () {
-        _reload();
-        _startPolling();
-        PushService(_auth).init();
-        setState(() {});
-      });
+      if (_autoProvisioning) {
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      }
+      return _ChatAuthScreen(
+        auth: _auth,
+        db: _db,
+        onSignedIn: () {
+          _reload();
+          _startPolling();
+          PushService(_auth).init();
+          setState(() {});
+        },
+      );
     }
 
     return Scaffold(
@@ -500,8 +577,9 @@ class _GlobalBubble extends StatelessWidget {
 /// Вход/регистрация в чате — отдельная учётная запись от личной базы.
 class _ChatAuthScreen extends StatefulWidget {
   final ChatAuthService auth;
+  final LocalDbService db;
   final VoidCallback onSignedIn;
-  const _ChatAuthScreen({required this.auth, required this.onSignedIn});
+  const _ChatAuthScreen({required this.auth, required this.db, required this.onSignedIn});
 
   @override
   State<_ChatAuthScreen> createState() => _ChatAuthScreenState();
@@ -560,6 +638,22 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
     }
   }
 
+  /// После успешного ручного входа/регистрации — если почта совпадает
+  /// с основным входом и там ещё не сохранён пароль чата, сохраняет
+  /// его сейчас. "Догоняет" тихий вход (`ChatHomeScreen.
+  /// _ensureChatSession`) для аккаунтов, заведённых вручную ещё до
+  /// этой возможности или после её сбоя (например, "уже
+  /// зарегистрирован" при первой попытке) — следующий раз войдёт уже
+  /// без формы.
+  Future<void> _maybeSaveChatPasswordForMainAccount(String password) async {
+    final mainAuth = SupabaseAuthService(widget.db);
+    if (!mainAuth.isSignedIn) return;
+    if (mainAuth.email.trim().toLowerCase() != _email.text.trim().toLowerCase()) return;
+    final existing = await mainAuth.fetchChatPassword();
+    if (existing != null) return;
+    await mainAuth.saveChatPassword(password);
+  }
+
   Future<void> _submit() async {
     setState(() {
       _busy = true;
@@ -581,6 +675,7 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
       } else {
         await widget.auth.signIn(email: _email.text, password: _password.text);
       }
+      await _maybeSaveChatPasswordForMainAccount(_password.text);
       widget.onSignedIn();
     } on AuthException catch (e) {
       setState(() => _error = e.message);
