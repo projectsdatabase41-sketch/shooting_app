@@ -12,7 +12,7 @@
 // и без npm-зависимостей, которые в Deno утяжелили бы холодный старт.
 //
 // Деплой (нужно сделать вручную, у меня нет доступа к CLI/дашборду
-// проекта fpbptucrvmyikencyspu — это ДРУГОЙ Supabase-проект, не тот,
+// проекта frbptucrvmyikencyspu — это ДРУГОЙ Supabase-проект, не тот,
 // что подключён к MCP в этой сессии):
 //   1. supabase functions deploy send-chat-push --project-ref frbptucrvmyikencyspu
 //   2. Secrets (Dashboard → Edge Functions → Manage secrets, или CLI
@@ -103,6 +103,12 @@ Deno.serve(async (req: Request) => {
   const isGlobal = payload.table === 'chat_global_messages';
   const senderId = row.sender_id as string;
 
+  // edit/delete — служебные сигналы к уже отправленному сообщению (см.
+  // ChatSyncService.editMessage/deleteMessage), не новые сообщения —
+  // пуш по ним слать нечего и незачем.
+  const msgType = row.msg_type as string | undefined;
+  if (!isGlobal && (msgType === 'edit' || msgType === 'delete')) return new Response('ok');
+
   const recipientIds: string[] = [];
   if (isGlobal) {
     const res = await fetch(
@@ -124,8 +130,29 @@ Deno.serve(async (req: Request) => {
   const tokens: string[] = tokenRows.map((t: { token: string }) => t.token);
   if (tokens.length === 0) return new Response('ok');
 
-  const title = isGlobal ? 'Общий чат' : 'Личное сообщение';
-  const body = isGlobal ? (row.text ?? 'Новое сообщение') : 'Новое сообщение в чате';
+  // Ник отправителя — раньше уведомление показывало только шаблонный
+  // текст ("Личное сообщение"/заголовок без содержания), теперь то же
+  // содержимое, что видно в самом приложении.
+  const profileRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/chat_profiles?select=nickname&user_id=eq.${senderId}`,
+    { headers: { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` } },
+  );
+  const profileRows = await profileRes.json();
+  const senderNickname = profileRows[0]?.nickname as string | undefined;
+
+  const preview = (r: Record<string, unknown>): string => {
+    if (r.text) return r.text as string;
+    switch (r.msg_type) {
+      case 'image': return '📷 Фото';
+      case 'video': return '🎥 Видео';
+      case 'audio': return '🎤 Голосовое';
+      case 'file': return `📎 ${r.attachment_name ?? 'Файл'}`;
+      default: return 'Новое сообщение';
+    }
+  };
+
+  const title = isGlobal ? 'Общий чат' : (senderNickname ?? 'Личное сообщение');
+  const body = isGlobal ? `${senderNickname ?? '—'}: ${preview(row)}` : preview(row);
 
   // FCM v1 шлёт одно сообщение на один токен — параллельно на все
   // устройства получателя (обычно одно, но пользователь может быть
