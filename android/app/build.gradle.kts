@@ -13,6 +13,11 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // flutter_local_notifications (уведомление "Позвать", см.
+        // push_service.dart) использует java.time через desugaring —
+        // без этого релизная сборка падает на "requires core library
+        // desugaring to be enabled".
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -43,4 +48,10 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Требуется isCoreLibraryDesugaringEnabled выше — версия свежая по
+    // рекомендации самой ошибки сборки, независимо от версии Android Gradle Plugin.
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

@@ -40,11 +40,12 @@ class PushService {
   /// звонящего добавить несложно, если понадобится.
   static const int _callNotificationId = 9001;
 
-  /// Android и iOS — `firebase_messaging` поддерживает оба (iOS через
-  /// APNs). Windows desktop у пакета вообще нет реализации (тот же
-  /// пробел, что у `camera`/`image_picker`), а веб-push требует
-  /// отдельную настройку (service worker, VAPID-ключ) — не делаем в
-  /// этом заходе, чтобы не разрастаться.
+  /// Android, iOS и веб. Windows desktop у пакета вообще нет реализации
+  /// (тот же пробел, что у `camera`/`image_picker`).
+  ///
+  /// Веб включает push и на iPhone (Safari 16.4+) — но ТОЛЬКО когда сайт
+  /// добавлен на домашний экран как приложение, обычная вкладка такого
+  /// разрешения не получает (см. `web/firebase-messaging-sw.js`).
   ///
   /// iOS-таргет в проекте есть (`ios/`), но собрать и проверить его
   /// можно только на Mac с Xcode — здесь этого сделать нельзя. Когда
@@ -52,16 +53,21 @@ class PushService {
   /// Notifications и Background Modes → Remote notifications
   /// capability, иначе `requestPermission`/`getToken` не сработают.
   static bool get _supportedPlatform =>
-      !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
+      kIsWeb || defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS;
+
+  static bool get _isAndroid => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
   Future<void> init() async {
     if (!FirebaseSettings.isConfigured || !_supportedPlatform || !auth.isSignedIn) return;
     try {
       await Firebase.initializeApp(options: _options);
-      await _initLocalNotifications();
+      // Канал с рингтоном/вибрацией — только Android (см. showCallNotification).
+      if (_isAndroid) await _initLocalNotifications();
       final messaging = FirebaseMessaging.instance;
       await messaging.requestPermission();
-      final token = await messaging.getToken();
+      final token = kIsWeb
+          ? await messaging.getToken(vapidKey: FirebaseSettings.webVapidKey)
+          : await messaging.getToken();
       if (token != null) await _saveToken(token);
       messaging.onTokenRefresh.listen(_saveToken);
       FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
@@ -72,11 +78,23 @@ class PushService {
   }
 
   void _handleForegroundMessage(RemoteMessage message) {
-    if (message.data['type'] == 'call') showCallNotification(message.data);
+    // На вебе/iOS усиленного канала нет (см. showCallNotification) —
+    // пока приложение открыто, новое "Позвать" и так почти сразу
+    // покажет опрос (10-20с), отдельно тут его не дублируем.
+    if (_isAndroid && message.data['type'] == 'call') showCallNotification(message.data);
   }
 
   static FirebaseOptions get _options {
     final isIOS = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+    if (kIsWeb) {
+      return const FirebaseOptions(
+        apiKey: FirebaseSettings.webApiKey,
+        appId: FirebaseSettings.webAppId,
+        messagingSenderId: FirebaseSettings.messagingSenderId,
+        projectId: FirebaseSettings.projectId,
+        authDomain: FirebaseSettings.webAuthDomain,
+      );
+    }
     return FirebaseOptions(
       apiKey: isIOS ? FirebaseSettings.iosApiKey : FirebaseSettings.androidApiKey,
       appId: isIOS ? FirebaseSettings.iosAppId : FirebaseSettings.androidAppId,
@@ -188,7 +206,7 @@ Future<void> showCallNotification(Map<String, dynamic> data) async {
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   if (!FirebaseSettings.isConfigured) return;
   await Firebase.initializeApp(options: PushService._options);
-  if (message.data['type'] == 'call') {
+  if (PushService._isAndroid && message.data['type'] == 'call') {
     await _initLocalNotifications();
     await showCallNotification(message.data);
   }
