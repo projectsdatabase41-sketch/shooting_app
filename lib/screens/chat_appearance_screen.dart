@@ -40,11 +40,51 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
     if (picked != null) setState(() => onPicked(picked));
   }
 
+  Future<void> _pickLanguage() async {
+    final prefs = widget.prefs;
+    final current = prefs.translationLanguage.isEmpty ? _languages.first.code : prefs.translationLanguage;
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.sizeOf(ctx).height * 0.6,
+          child: ListView(
+            children: [
+              for (final lang in _languages)
+                ListTile(
+                  title: Text(lang.label),
+                  subtitle: lang.code == ChatTranslationService.systemLanguageCode() ? const Text('Язык системы') : null,
+                  trailing: lang.code == current ? const Icon(Icons.check) : null,
+                  onTap: () => Navigator.of(ctx).pop(lang.code),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (picked == null) return;
+    setState(() => prefs.translationLanguage = picked == _languages.first.code ? '' : picked);
+  }
+
   @override
   Widget build(BuildContext context) {
+    // AnimatedBuilder, а не голое чтение widget.prefs — настройки могут
+    // поменяться не только с этого экрана (например, из "Настроить с
+    // ИИ", отдельный лист), и без подписки на notifyListeners() экран
+    // не обновился бы сам.
+    return AnimatedBuilder(animation: widget.prefs, builder: (context, _) => _buildScaffold(context));
+  }
+
+  Widget _buildScaffold(BuildContext context) {
     final theme = Theme.of(context);
     final prefs = widget.prefs;
     final selectedLanguage = prefs.translationLanguage;
+    final currentLang = _languages.firstWhere(
+      (l) => l.code == (selectedLanguage.isEmpty ? _languages.first.code : selectedLanguage),
+      orElse: () => _languages.first,
+    );
     return Scaffold(
       appBar: AppBar(
         title: const Text('Настройки чата'),
@@ -78,20 +118,15 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
           const SizedBox(height: 24),
           Text('Язык перевода', style: theme.textTheme.titleMedium),
           const SizedBox(height: 8),
-          for (final lang in _languages)
-            RadioListTile<String>(
-              contentPadding: EdgeInsets.zero,
-              value: lang.code,
-              groupValue: selectedLanguage.isEmpty ? _languages.first.code : selectedLanguage,
-              // Системный язык хранится пустой строкой (см.
-              // ChatPreferences.translationLanguage) — так выбор
-              // остаётся верным, даже если язык устройства сменится.
-              onChanged: (v) => setState(
-                () => prefs.translationLanguage = v == _languages.first.code ? '' : v!,
-              ),
-              title: Text(lang.label),
-              subtitle: lang.code == ChatTranslationService.systemLanguageCode() ? const Text('Язык системы') : null,
+          Card(
+            margin: EdgeInsets.zero,
+            child: ListTile(
+              title: Text(currentLang.label),
+              subtitle: currentLang.code == ChatTranslationService.systemLanguageCode() ? const Text('Язык системы') : null,
+              trailing: const Icon(Icons.expand_more),
+              onTap: _pickLanguage,
             ),
+          ),
           const SizedBox(height: 28),
           Text('Оформление сообщений', style: theme.textTheme.titleMedium),
           const SizedBox(height: 4),
