@@ -196,7 +196,10 @@ class ChatPreferences extends ChangeNotifier {
   /// список id, скрытых локально на этом устройстве.
   Set<String> get hiddenGlobalIds {
     final raw = _read('chat_global_hidden_ids');
-    return raw.isEmpty ? const {} : raw.split(',').toSet();
+    // <String>{}, не const {} — hideGlobalMessage мутирует результат этого
+    // геттера через каскад (..add), а на const-литерале это бросает
+    // исключение "Cannot add to an unmodifiable set".
+    return raw.isEmpty ? <String>{} : raw.split(',').toSet();
   }
 
   void hideGlobalMessage(String id) {
