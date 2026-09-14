@@ -278,6 +278,14 @@ create policy chat_global_insert on chat_global_messages
   to authenticated
   with check (sender_id = auth.uid());
 
+-- Удалить можно только своё собственное сообщение (меню долгого
+-- нажатия в общем чате).
+drop policy if exists chat_global_delete on chat_global_messages;
+create policy chat_global_delete on chat_global_messages
+  for delete
+  to authenticated
+  using (sender_id = auth.uid());
+
 -- Вложения общего чата — тот же бакет chat-media, путь
 -- "global/<sender_id>/<...>" (отличает их от личных, которые лежат
 -- прямо в "<sender_id>/..."). Смотреть может любой вошедший (лента

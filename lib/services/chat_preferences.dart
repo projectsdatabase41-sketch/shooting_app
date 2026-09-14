@@ -1,16 +1,39 @@
 import 'package:flutter/material.dart';
 
+import '../models/target_color_scheme.dart' show TargetColorScheme;
 import 'local_db_service.dart';
 
-/// Когда переводить входящие сообщения (пункт 4 списка правок):
-/// - [off] — никогда, кнопки перевода нет вообще;
-/// - [manual] — кнопка "Перевести" в меню долгого нажатия на сообщение;
-/// - [auto] — перевод сразу, для каждого сообщения не на языке системы.
-enum ChatTranslationMode { off, manual, auto }
+/// Язык, на который переводить сообщения — список для экрана настроек,
+/// системный язык устройства всегда показывается первым (см.
+/// `ChatAppearanceScreen`).
+class ChatLanguage {
+  final String code;
+  final String label;
+  const ChatLanguage(this.code, this.label);
+}
 
-/// Оформление пузырей чата — цвета "своих"/"чужих" сообщений. Тени и
-/// лёгкий 3D-градиент (пункт 7) применяются всегда поверх любого
-/// пресета, здесь только базовые цвета.
+const List<ChatLanguage> chatLanguages = [
+  ChatLanguage('ru', 'Русский'),
+  ChatLanguage('en', 'English'),
+  ChatLanguage('es', 'Español'),
+  ChatLanguage('de', 'Deutsch'),
+  ChatLanguage('fr', 'Français'),
+  ChatLanguage('it', 'Italiano'),
+  ChatLanguage('pt', 'Português'),
+  ChatLanguage('tr', 'Türkçe'),
+  ChatLanguage('pl', 'Polski'),
+  ChatLanguage('uk', 'Українська'),
+  ChatLanguage('kk', 'Қазақша'),
+  ChatLanguage('zh', '中文'),
+  ChatLanguage('ja', '日本語'),
+  ChatLanguage('ko', '한국어'),
+  ChatLanguage('ar', 'العربية'),
+];
+
+/// Готовые сочетания — быстро заполняют 4 цвета сразу (см.
+/// `ChatPreferences.applyPreset`), а не отдельное самостоятельное
+/// состояние: после ручной правки понятия "текущий пресет" не остаётся,
+/// как и с любым другим редактируемым поверх шаблона оформлением.
 class ChatBubblePreset {
   final String id;
   final String label;
@@ -34,31 +57,91 @@ class ChatPreferences extends ChangeNotifier {
     ChatBubblePreset(id: 'violet', label: 'Фиолет', mine: Color(0xFF8256D0), other: Color(0xFF3B3A45)),
   ];
 
-  ChatTranslationMode get translationMode {
-    switch (_read('chat_translation_mode')) {
-      case 'manual':
-        return ChatTranslationMode.manual;
-      case 'auto':
-        return ChatTranslationMode.auto;
-      default:
-        return ChatTranslationMode.off;
+  static const Color _defaultMine = Color(0xFF3D6BF2);
+  static const Color _defaultOther = Color(0xFF3A3F4B);
+  static const double _defaultShadow = 0.22;
+
+  /// Ручной перевод одного сообщения (кнопка в меню долгого нажатия)
+  /// доступен всегда — этот тумблер только про АВТОМАТИЧЕСКУЮ маску на
+  /// каждое входящее сообщение сразу.
+  bool get autoTranslate => _read('chat_translation_mode') == 'auto';
+
+  set autoTranslate(bool value) {
+    _write('chat_translation_mode', value ? 'auto' : 'off');
+    notifyListeners();
+  }
+
+  /// Пустая строка — переводить на язык системы устройства (значение по
+  /// умолчанию); иначе явно выбранный в настройках язык.
+  String get translationLanguage => _read('chat_translation_language');
+
+  set translationLanguage(String code) {
+    _write('chat_translation_language', code);
+    notifyListeners();
+  }
+
+  Color get mineBubbleColor => _readColor('chat_color_mine_bubble', _defaultMine);
+  set mineBubbleColor(Color c) {
+    _writeColor('chat_color_mine_bubble', c);
+    notifyListeners();
+  }
+
+  Color get otherBubbleColor => _readColor('chat_color_other_bubble', _defaultOther);
+  set otherBubbleColor(Color c) {
+    _writeColor('chat_color_other_bubble', c);
+    notifyListeners();
+  }
+
+  Color get mineTextColor => _readColor('chat_color_mine_text', Colors.white);
+  set mineTextColor(Color c) {
+    _writeColor('chat_color_mine_text', c);
+    notifyListeners();
+  }
+
+  Color get otherTextColor => _readColor('chat_color_other_text', Colors.white);
+  set otherTextColor(Color c) {
+    _writeColor('chat_color_other_text', c);
+    notifyListeners();
+  }
+
+  bool get shadowEnabled => _read('chat_shadow_enabled') != '0';
+  set shadowEnabled(bool v) {
+    _write('chat_shadow_enabled', v ? '1' : '0');
+    notifyListeners();
+  }
+
+  /// 0..1 — насколько заметна тень под пузырём (пункт 7 списка правок).
+  double get shadowIntensity {
+    final raw = _read('chat_shadow_intensity');
+    return raw.isEmpty ? _defaultShadow : (double.tryParse(raw) ?? _defaultShadow);
+  }
+
+  set shadowIntensity(double v) {
+    _write('chat_shadow_intensity', v.clamp(0, 1).toStringAsFixed(2));
+    notifyListeners();
+  }
+
+  /// Быстро заполняет все 4 цвета сразу — то, что раньше называлось
+  /// "выбрать пресет".
+  void applyPreset(ChatBubblePreset preset) {
+    _writeColor('chat_color_mine_bubble', preset.mine);
+    _writeColor('chat_color_other_bubble', preset.other);
+    _writeColor('chat_color_mine_text', Colors.white);
+    _writeColor('chat_color_other_text', Colors.white);
+    notifyListeners();
+  }
+
+  Color _readColor(String column, Color fallback) {
+    final raw = _read(column);
+    if (raw.isEmpty) return fallback;
+    try {
+      return TargetColorScheme.hexToColor(raw);
+    } catch (_) {
+      return fallback;
     }
   }
 
-  set translationMode(ChatTranslationMode mode) {
-    _write('chat_translation_mode', mode.name);
-    notifyListeners();
-  }
-
-  ChatBubblePreset get bubblePreset {
-    final id = _read('chat_bubble_preset');
-    return presets.firstWhere((p) => p.id == id, orElse: () => presets.first);
-  }
-
-  set bubblePreset(ChatBubblePreset preset) {
-    _write('chat_bubble_preset', preset.id);
-    notifyListeners();
-  }
+  void _writeColor(String column, Color c) => _write(column, TargetColorScheme.colorToHex(c));
 
   String _read(String column) {
     final rows = db.db.select('SELECT $column FROM project_settings WHERE id = 1');

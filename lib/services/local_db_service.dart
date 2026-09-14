@@ -109,7 +109,17 @@ class LocalDbService {
         // Настройки чата, не завязанные на конкретный аккаунт (перевод,
         // оформление пузырей) — см. ChatPreferences.
         'chat_translation_mode': "TEXT NOT NULL DEFAULT 'off'",
-        'chat_bubble_preset': "TEXT NOT NULL DEFAULT 'classic'",
+        // Пусто = язык системы устройства (см. ChatPreferences.translationLanguage).
+        'chat_translation_language': 'TEXT',
+        // Цвета/тень пузырей — пусто = значение по умолчанию (см.
+        // ChatPreferences). Пресеты (chat_appearance_screen.dart) просто
+        // заполняют эти же поля разом, отдельно не хранятся.
+        'chat_color_mine_bubble': 'TEXT',
+        'chat_color_other_bubble': 'TEXT',
+        'chat_color_mine_text': 'TEXT',
+        'chat_color_other_text': 'TEXT',
+        'chat_shadow_enabled': 'INTEGER NOT NULL DEFAULT 1',
+        'chat_shadow_intensity': 'TEXT',
       },
       // На части устройств chat_local_messages создалась ещё САМОЙ
       // первой версией чата (только текст, без вложений) — CREATE

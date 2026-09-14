@@ -9,13 +9,11 @@ import 'package:intl/intl.dart';
 import '../logic/chat_media_utils.dart';
 import '../models/chat_contact.dart';
 import '../models/chat_message.dart';
-import '../services/ai_settings.dart';
 import '../services/chat_auth_service.dart';
 import '../services/chat_messages_repository.dart';
 import '../services/chat_preferences.dart';
 import '../services/chat_sync_service.dart';
 import '../services/chat_translation_service.dart';
-import '../services/local_db_service.dart';
 import '../widgets/chat_avatar.dart';
 import '../widgets/empty_state.dart';
 
@@ -27,7 +25,6 @@ class ChatThreadScreen extends StatefulWidget {
   final ChatAuthService auth;
   final ChatMessagesRepository repo;
   final ChatSyncService sync;
-  final LocalDbService db;
   final ChatPreferences prefs;
 
   const ChatThreadScreen({
@@ -36,7 +33,6 @@ class ChatThreadScreen extends StatefulWidget {
     required this.auth,
     required this.repo,
     required this.sync,
-    required this.db,
     required this.prefs,
   });
 
@@ -57,7 +53,22 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   /// текста, который и так живёт на устройстве получателя.
   final Map<String, String> _translations = {};
   final Set<String> _translating = {};
-  late final ChatTranslationService _translator = ChatTranslationService(AiSettings(widget.db));
+
+  /// "Маска" — показывать ли перевод ВМЕСТО оригинала (пункт из
+  /// обсуждения). Явный выбор пользователя по конкретному сообщению
+  /// (кнопка "Перевести" в меню — тумблер, а не одноразовое действие);
+  /// пока выбора нет, действует умолчание режима: в "всегда автоматически"
+  /// маска на входящих включена сама, в "по кнопке" — выключена.
+  final Map<String, bool> _maskOverride = {};
+  late final ChatTranslationService _translator = ChatTranslationService();
+
+  bool _isMasked(ChatMessage m) {
+    final override = _maskOverride[m.id];
+    if (override != null) return override;
+    return widget.prefs.autoTranslate &&
+        m.direction == ChatMessageDirection.incoming &&
+        _translations.containsKey(m.id);
+  }
 
   @override
   void initState() {
@@ -84,7 +95,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
 
   void _reload() {
     setState(() => _messages = widget.repo.forContact(widget.contact.id));
-    if (widget.prefs.translationMode == ChatTranslationMode.auto) _autoTranslateIncoming();
+    if (widget.prefs.autoTranslate) _autoTranslateIncoming();
   }
 
   /// Режим "всегда автоматически" — переводит новые входящие в фоне,
@@ -103,7 +114,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     if (m.text == null || m.text!.isEmpty) return;
     setState(() => _translating.add(m.id));
     try {
-      final translated = await _translator.translateIfNeeded(m.text!);
+      final translated =
+          await _translator.translateIfNeeded(m.text!, targetLanguage: widget.prefs.translationLanguage);
       if (!mounted) return;
       setState(() {
         if (translated != null) _translations[m.id] = translated;
@@ -115,6 +127,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось перевести: $e')));
       }
     }
+  }
+
+  /// Кнопка "Перевести" в меню — тумблер маски, а не разовое действие:
+  /// уже включена (по умолчанию режима "всегда" или включена вручную) —
+  /// выключает; иначе переводит (если ещё не переведено) и включает.
+  Future<void> _toggleMask(ChatMessage m) async {
+    if (_isMasked(m)) {
+      setState(() => _maskOverride[m.id] = false);
+      return;
+    }
+    if (!_translations.containsKey(m.id)) await _translate(m);
+    if (!mounted || !_translations.containsKey(m.id)) return;
+    setState(() => _maskOverride[m.id] = true);
   }
 
   void _scrollToEnd() {
@@ -215,7 +240,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     final mine = m.direction == ChatMessageDirection.outgoing;
     final canEdit = mine && m.type == ChatMessageType.text;
     final canCopy = m.text != null && m.text!.isNotEmpty;
-    final canTranslate = canCopy && widget.prefs.translationMode != ChatTranslationMode.off;
+    // Ручной перевод (тумблер маски) доступен всегда — настройка
+    // "автоперевод" влияет только на то, замаскировано ли сообщение
+    // ПО УМОЛЧАНИЮ, а не на доступность самой кнопки.
+    final canTranslate = canCopy;
     final canRetry = mine && m.status == ChatMessageStatus.error;
     final action = await showModalBottomSheet<String>(
       context: context,
@@ -243,8 +271,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
             ),
             if (canTranslate)
               ListTile(
-                leading: const Icon(Icons.translate_outlined),
+                leading: Icon(Icons.translate_outlined, color: _isMasked(m) ? Theme.of(ctx).colorScheme.primary : null),
                 title: const Text('Перевести'),
+                trailing: _isMasked(m) ? Icon(Icons.check, color: Theme.of(ctx).colorScheme.primary) : null,
                 onTap: () => Navigator.of(ctx).pop('translate'),
               ),
             if (canEdit)
@@ -270,7 +299,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       case 'reply':
         _reply(m);
       case 'translate':
-        await _translate(m);
+        await _toggleMask(m);
       case 'edit':
         await _edit(m);
       case 'delete':
@@ -360,8 +389,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                             onLongPress: () => _showMessageMenu(m),
                             child: _Bubble(
                               message: m,
-                              preset: widget.prefs.bubblePreset,
+                              prefs: widget.prefs,
                               translation: _translations[m.id],
+                              masked: _isMasked(m),
                               translating: _translating.contains(m.id),
                               onRetry: () => _retry(m),
                             ),
@@ -443,14 +473,16 @@ class _ReplyPreviewBar extends StatelessWidget {
 
 class _Bubble extends StatelessWidget {
   final ChatMessage message;
-  final ChatBubblePreset preset;
+  final ChatPreferences prefs;
   final String? translation;
+  final bool masked;
   final bool translating;
   final VoidCallback onRetry;
   const _Bubble({
     required this.message,
-    required this.preset,
+    required this.prefs,
     required this.translation,
+    required this.masked,
     required this.translating,
     required this.onRetry,
   });
@@ -461,8 +493,8 @@ class _Bubble extends StatelessWidget {
     final cs = theme.colorScheme;
     final mine = message.direction == ChatMessageDirection.outgoing;
     final isError = message.status == ChatMessageStatus.error;
-    final base = isError ? cs.errorContainer : (mine ? preset.mine : preset.other);
-    final fg = isError ? cs.onErrorContainer : Colors.white;
+    final base = isError ? cs.errorContainer : (mine ? prefs.mineBubbleColor : prefs.otherBubbleColor);
+    final fg = isError ? cs.onErrorContainer : (mine ? prefs.mineTextColor : prefs.otherTextColor);
 
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
@@ -484,9 +516,15 @@ class _Bubble extends StatelessWidget {
                 colors: [Color.lerp(base, Colors.white, 0.08)!, Color.lerp(base, Colors.black, 0.10)!],
               ),
               borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(color: Colors.black.withValues(alpha: 0.22), blurRadius: 10, offset: const Offset(0, 4)),
-              ],
+              boxShadow: prefs.shadowEnabled
+                  ? [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: prefs.shadowIntensity),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ]
+                  : null,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -544,26 +582,31 @@ class _Bubble extends StatelessWidget {
                     ],
                   ),
                 ],
-                if (message.text != null && message.text!.isNotEmpty)
-                  SelectableText(message.text!, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
+                // "Маска" — перевод показывается ВМЕСТО оригинала, не
+                // вместе с ним (решение пользователя): либо/либо, с
+                // маленькой иконкой-подсказкой, что это перевод.
                 if (translating) ...[
-                  const SizedBox(height: 6),
                   SizedBox(
-                    height: 12,
-                    width: 12,
+                    height: 14,
+                    width: 14,
                     child: CircularProgressIndicator(strokeWidth: 1.5, color: fg.withValues(alpha: 0.7)),
                   ),
-                ] else if (translation != null) ...[
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.only(top: 6),
-                    decoration: BoxDecoration(border: Border(top: BorderSide(color: fg.withValues(alpha: 0.25)))),
-                    child: Text(
-                      translation!,
-                      style: theme.textTheme.bodyMedium?.copyWith(color: fg.withValues(alpha: 0.85), fontStyle: FontStyle.italic),
-                    ),
+                ] else if (masked && translation != null) ...[
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 3, right: 4),
+                        child: Icon(Icons.translate_outlined, size: 13, color: fg.withValues(alpha: 0.7)),
+                      ),
+                      Flexible(
+                        child: SelectableText(translation!, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
+                      ),
+                    ],
                   ),
-                ],
+                ] else if (message.text != null && message.text!.isNotEmpty)
+                  SelectableText(message.text!, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
               ],
             ),
           ),

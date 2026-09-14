@@ -76,6 +76,25 @@ class ChatGlobalService {
     }
   }
 
+  /// Удаляет своё сообщение из общей ленты (меню долгого нажатия) —
+  /// RLS (`chat_global_delete`) и так не даёт удалить чужое, но
+  /// вызывающий код всё равно проверяет владельца сам, чтобы не
+  /// показывать пункт "Удалить" там, где он всё равно не сработает.
+  Future<void> delete(String id) async {
+    final token = await auth.ensureFreshToken();
+    if (token == null) throw Exception('Сначала войдите в чат');
+    final client = clientFactory();
+    try {
+      final res = await client.delete(
+        Uri.parse('${ChatSettings.url}/rest/v1/chat_global_messages?id=eq.$id'),
+        headers: {'apikey': ChatSettings.anonKey, 'Authorization': 'Bearer $token'},
+      ).timeout(_timeout);
+      if (res.statusCode >= 300) throw Exception('Не удалось удалить (${res.statusCode})');
+    } finally {
+      client.close();
+    }
+  }
+
   /// Фото/файл в общую ленту — путь "global/<sender_id>/..." (см.
   /// sql/chat-schema.sql), в отличие от личного чата объект НЕ
   /// удаляется после просмотра: лента общая и постоянная.

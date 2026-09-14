@@ -19,6 +19,7 @@ import '../services/chat_messages_repository.dart';
 import '../services/chat_preferences.dart';
 import '../services/chat_settings.dart';
 import '../services/chat_sync_service.dart';
+import '../services/chat_translation_service.dart';
 import '../services/local_db_service.dart';
 import '../services/push_service.dart';
 import '../services/supabase_auth_service.dart';
@@ -187,12 +188,13 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
         auth: _auth,
         repo: _repo,
         prefs: _prefs,
+        db: _db,
         contacts: _contacts,
         onContactsChanged: _reload,
         onOpenThread: (contact) async {
           Navigator.of(context).pop(); // закрыть панель
           await Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => ChatThreadScreen(contact: contact, auth: _auth, repo: _repo, sync: _sync, db: _db, prefs: _prefs),
+            builder: (_) => ChatThreadScreen(contact: contact, auth: _auth, repo: _repo, sync: _sync, prefs: _prefs),
           ));
           _reload();
         },
@@ -208,6 +210,7 @@ class _ChatDrawer extends StatelessWidget {
   final ChatAuthService auth;
   final ChatMessagesRepository repo;
   final ChatPreferences prefs;
+  final LocalDbService db;
   final List<ChatContact> contacts;
   final VoidCallback onContactsChanged;
   final void Function(ChatContact) onOpenThread;
@@ -216,6 +219,7 @@ class _ChatDrawer extends StatelessWidget {
     required this.auth,
     required this.repo,
     required this.prefs,
+    required this.db,
     required this.contacts,
     required this.onContactsChanged,
     required this.onOpenThread,
@@ -347,7 +351,7 @@ class _ChatDrawer extends StatelessWidget {
               subtitle: const Text('Перевод, оформление пузырей'),
               onTap: () {
                 Navigator.of(context).pop();
-                Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChatAppearanceScreen(prefs: prefs)));
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChatAppearanceScreen(prefs: prefs, db: db)));
               },
             ),
             ListTile(
@@ -394,6 +398,13 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
   bool _loading = true;
   bool _sending = false;
 
+  /// Перевод — та же "маска" и тот же тумблер, что в личном чате (см.
+  /// `ChatThreadScreen`), просто своя копия состояния для этой ленты.
+  final Map<String, String> _translations = {};
+  final Set<String> _translating = {};
+  final Map<String, bool> _maskOverride = {};
+  final ChatTranslationService _translator = ChatTranslationService();
+
   @override
   void initState() {
     super.initState();
@@ -409,6 +420,112 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
     super.dispose();
   }
 
+  bool _isMasked(ChatGlobalMessage m) {
+    final override = _maskOverride[m.id];
+    if (override != null) return override;
+    return widget.prefs.autoTranslate && m.senderId != widget.auth.userId && _translations.containsKey(m.id);
+  }
+
+  Future<void> _translate(ChatGlobalMessage m, {bool silent = false}) async {
+    if (m.text == null || m.text!.isEmpty) return;
+    setState(() => _translating.add(m.id));
+    try {
+      final translated =
+          await _translator.translateIfNeeded(m.text!, targetLanguage: widget.prefs.translationLanguage);
+      if (!mounted) return;
+      setState(() {
+        if (translated != null) _translations[m.id] = translated;
+        _translating.remove(m.id);
+      });
+    } catch (e) {
+      _translating.remove(m.id);
+      if (!silent && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось перевести: $e')));
+      }
+    }
+  }
+
+  Future<void> _toggleMask(ChatGlobalMessage m) async {
+    if (_isMasked(m)) {
+      setState(() => _maskOverride[m.id] = false);
+      return;
+    }
+    if (!_translations.containsKey(m.id)) await _translate(m);
+    if (!mounted || !_translations.containsKey(m.id)) return;
+    setState(() => _maskOverride[m.id] = true);
+  }
+
+  void _autoTranslateIncoming() {
+    if (!widget.prefs.autoTranslate) return;
+    for (final m in _messages) {
+      if (m.senderId == widget.auth.userId) continue;
+      if (m.text == null || m.text!.isEmpty) continue;
+      if (_translations.containsKey(m.id) || _translating.contains(m.id)) continue;
+      _translate(m, silent: true);
+    }
+  }
+
+  void _copy(ChatGlobalMessage m) {
+    if (m.text == null || m.text!.isEmpty) return;
+    Clipboard.setData(ClipboardData(text: m.text!));
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Скопировано')));
+  }
+
+  Future<void> _delete(ChatGlobalMessage m) async {
+    try {
+      await widget.global.delete(m.id);
+      setState(() => _messages.removeWhere((x) => x.id == m.id));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
+  /// Раньше долгое нажатие сразу копировало текст — решение
+  /// пользователя: заменить на то же меню, что в личном чате
+  /// (копировать/перевести/удалить своё), а не одно действие сразу.
+  Future<void> _showMessageMenu(ChatGlobalMessage m) async {
+    final mine = m.senderId == widget.auth.userId;
+    final canCopy = m.text != null && m.text!.isNotEmpty;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (canCopy)
+              ListTile(
+                leading: const Icon(Icons.copy_outlined),
+                title: const Text('Копировать текст'),
+                onTap: () => Navigator.of(ctx).pop('copy'),
+              ),
+            if (canCopy)
+              ListTile(
+                leading: Icon(Icons.translate_outlined, color: _isMasked(m) ? Theme.of(ctx).colorScheme.primary : null),
+                title: const Text('Перевести'),
+                trailing: _isMasked(m) ? Icon(Icons.check, color: Theme.of(ctx).colorScheme.primary) : null,
+                onTap: () => Navigator.of(ctx).pop('translate'),
+              ),
+            if (mine)
+              ListTile(
+                leading: const Icon(Icons.delete_outline),
+                title: const Text('Удалить'),
+                onTap: () => Navigator.of(ctx).pop('delete'),
+              ),
+          ],
+        ),
+      ),
+    );
+    switch (action) {
+      case 'copy':
+        _copy(m);
+      case 'translate':
+        await _toggleMask(m);
+      case 'delete':
+        await _delete(m);
+    }
+  }
+
   Future<void> _load({bool silent = false}) async {
     if (!silent) setState(() => _loading = true);
     final messages = await widget.global.fetchRecent();
@@ -417,6 +534,7 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
       _messages = messages;
       _loading = false;
     });
+    _autoTranslateIncoming();
     if (silent) _scrollToEnd();
   }
 
@@ -558,12 +676,21 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
                       controller: _scroll,
                       padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
                       itemCount: _messages.length,
-                      itemBuilder: (context, i) => _GlobalBubble(
-                        message: _messages[i],
-                        mine: _messages[i].senderId == widget.auth.userId,
-                        preset: widget.prefs.bubblePreset,
-                        global: widget.global,
-                      ),
+                      itemBuilder: (context, i) {
+                        final m = _messages[i];
+                        return GestureDetector(
+                          onLongPress: () => _showMessageMenu(m),
+                          child: _GlobalBubble(
+                            message: m,
+                            mine: m.senderId == widget.auth.userId,
+                            prefs: widget.prefs,
+                            global: widget.global,
+                            translation: _translations[m.id],
+                            masked: _isMasked(m),
+                            translating: _translating.contains(m.id),
+                          ),
+                        );
+                      },
                     ),
         ),
         const Divider(height: 1),
@@ -602,21 +729,26 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
 class _GlobalBubble extends StatelessWidget {
   final ChatGlobalMessage message;
   final bool mine;
-  final ChatBubblePreset preset;
+  final ChatPreferences prefs;
   final ChatGlobalService global;
-  const _GlobalBubble({required this.message, required this.mine, required this.preset, required this.global});
-
-  void _copy(BuildContext context) {
-    if (message.text == null || message.text!.isEmpty) return;
-    Clipboard.setData(ClipboardData(text: message.text!));
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Скопировано')));
-  }
+  final String? translation;
+  final bool masked;
+  final bool translating;
+  const _GlobalBubble({
+    required this.message,
+    required this.mine,
+    required this.prefs,
+    required this.global,
+    required this.translation,
+    required this.masked,
+    required this.translating,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final base = mine ? preset.mine : preset.other;
-    const fg = Colors.white;
+    final base = mine ? prefs.mineBubbleColor : prefs.otherBubbleColor;
+    final fg = mine ? prefs.mineTextColor : prefs.otherTextColor;
 
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
@@ -632,31 +764,54 @@ class _GlobalBubble extends StatelessWidget {
                 style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
             ),
-          GestureDetector(
-            onLongPress: message.text == null ? null : () => _copy(context),
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 480),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color.lerp(base, Colors.white, 0.08)!, Color.lerp(base, Colors.black, 0.10)!],
-                ),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withValues(alpha: 0.22), blurRadius: 10, offset: const Offset(0, 4)),
-                ],
+          Container(
+            constraints: const BoxConstraints(maxWidth: 480),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color.lerp(base, Colors.white, 0.08)!, Color.lerp(base, Colors.black, 0.10)!],
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (message.hasAttachment) _GlobalAttachment(message: message, global: global, fg: fg),
-                  if (message.text != null && message.text!.isNotEmpty)
-                    SelectableText(message.text!, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
-                ],
-              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: prefs.shadowEnabled
+                  ? [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: prefs.shadowIntensity),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (message.hasAttachment) _GlobalAttachment(message: message, global: global, fg: fg),
+                if (translating)
+                  SizedBox(
+                    height: 14,
+                    width: 14,
+                    child: CircularProgressIndicator(strokeWidth: 1.5, color: fg.withValues(alpha: 0.7)),
+                  )
+                else if (masked && translation != null)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 3, right: 4),
+                        child: Icon(Icons.translate_outlined, size: 13, color: fg.withValues(alpha: 0.7)),
+                      ),
+                      Flexible(
+                        child: SelectableText(translation!, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
+                      ),
+                    ],
+                  )
+                else if (message.text != null && message.text!.isNotEmpty)
+                  SelectableText(message.text!, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
+              ],
             ),
           ),
           const SizedBox(height: 3),
