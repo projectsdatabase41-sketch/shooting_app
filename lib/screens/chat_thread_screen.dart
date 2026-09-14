@@ -224,7 +224,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     });
     try {
       await widget.sync.send(widget.contact.id, text, replyTo: replyTo);
-      _reload();
       _scrollToEnd();
     } catch (e) {
       // Раньше необработанное исключение здесь означало, что сообщение
@@ -234,30 +233,25 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       // блокирует дальнейшую отправку.
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не отправлено: $e')));
     } finally {
-      if (mounted) setState(() => _sending = false);
-    }
-  }
-
-  /// "Позвать" — отдельная кнопка в шапке, не текстовое сообщение:
-  /// собеседник получает push с усиленным звуком/вибрацией (см.
-  /// sql/chat-schema.sql и Edge Function), а не просто прочитает
-  /// сообщение когда-нибудь.
-  Future<void> _call() async {
-    setState(() => _sending = true);
-    try {
-      await widget.sync.sendCall(widget.contact.id);
-      _reload();
-      _scrollToEnd();
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось позвать: $e')));
-    } finally {
-      if (mounted) setState(() => _sending = false);
+      // Всегда, а не только при успехе — иначе сообщение с красным
+      // статусом "ошибка" просто не появлялось бы в списке до ручного
+      // обновления экрана (retry() теперь бросает исключение при неудаче,
+      // см. ChatSyncService.retry).
+      if (mounted) {
+        _reload();
+        setState(() => _sending = false);
+      }
     }
   }
 
   Future<void> _retry(ChatMessage m) async {
-    await widget.sync.retry(m);
-    _reload();
+    try {
+      await widget.sync.retry(m);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не отправлено: $e')));
+    } finally {
+      _reload();
+    }
   }
 
   void _reply(ChatMessage m) => setState(() => _replyingTo = m);
@@ -357,15 +351,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         contactId: widget.contact.id,
         bytes: compressed ?? bytes,
         fileName: file.name,
-        mime: isImage ? ChatMediaUtils.mimeFor(file.name) : 'application/octet-stream',
+        // Сжатие всегда перекодирует в JPEG (см. ChatMediaUtils.compressImage)
+        // — mime должен это отражать, а не оставаться от исходного .png/.webp.
+        mime: isImage ? (compressed != null ? 'image/jpeg' : ChatMediaUtils.mimeFor(file.name)) : 'application/octet-stream',
         type: isImage ? ChatMessageType.image : ChatMessageType.file,
       );
-      _reload();
       _scrollToEnd();
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не отправлено: $e')));
     } finally {
-      if (mounted) setState(() => _sending = false);
+      if (mounted) {
+        _reload();
+        setState(() => _sending = false);
+      }
     }
   }
 
@@ -382,15 +380,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
               Text(widget.contact.nickname),
             ],
           ),
-          actions: [
-            IconButton(
-              onPressed: _sending ? null : _call,
-              icon: const Icon(Icons.campaign_outlined),
-              tooltip: 'Позвать',
-            ),
-          ],
         ),
-        body: Column(
+        // resizeToAvoidBottomInset выключен намеренно — Scaffold сам иногда
+        // не отыгрывает обратное схлопывание после закрытия клавиатуры
+        // системным жестом "назад" (а не тапом), оставляя пустой отступ.
+        // AnimatedPadding реагирует на MediaQuery сам, на каждой перестройке,
+        // и не завязан на то, как именно клавиатуру закрыли.
+        resizeToAvoidBottomInset: false,
+        body: AnimatedPadding(
+          padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+          duration: const Duration(milliseconds: 100),
+          child: Column(
           children: [
             Expanded(
               child: _messages.isEmpty
@@ -467,6 +467,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
               ),
             ),
           ],
+          ),
         ),
       ),
     );

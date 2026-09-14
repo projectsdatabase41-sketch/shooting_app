@@ -224,7 +224,16 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
           _reload();
         },
       ),
-      body: _GlobalChatBody(auth: _auth, global: _global, repo: _repo, prefs: _prefs, onContactAdded: _reload),
+      // resizeToAvoidBottomInset выключен намеренно — тот же приём, что в
+      // ChatThreadScreen (см. комментарий там): Scaffold иногда не
+      // схлопывает отступ обратно, когда клавиатуру закрывают системным
+      // жестом "назад", а не тапом.
+      resizeToAvoidBottomInset: false,
+      body: AnimatedPadding(
+        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+        duration: const Duration(milliseconds: 100),
+        child: _GlobalChatBody(auth: _auth, global: _global, repo: _repo, prefs: _prefs, onContactAdded: _reload),
+      ),
     );
   }
 }
@@ -262,68 +271,51 @@ class _ChatDrawer extends StatelessWidget {
     onContactsChanged();
   }
 
-  static String _globalPushModeLabel(String mode) => switch (mode) {
-        'replies' => 'Только ответы на мои сообщения',
-        'none' => 'Отключены',
-        _ => 'Все сообщения',
-      };
+  /// Один переключатель на все уведомления (решение пользователя, вместо
+  /// двух отдельных пунктов) + режим ниже, пока он включён. Под капотом
+  /// это по-прежнему два разных поля на сервере (`personal_push_mode`,
+  /// `global_push_mode`, см. `ChatAuthService`/send-chat-push) — экран
+  /// просто комбинирует их в один понятный выбор.
+  static const List<(String, String)> _pushModes = [
+    ('personal_only', 'Только личный чат'),
+    ('personal_and_replies', 'Личный чат и ответы на мои сообщения в общем чате'),
+    ('personal_and_all', 'Личный и общий чат'),
+  ];
 
-  /// Компактный выбор, тем же приёмом, что язык перевода в "Настройках
-  /// чата" — список вариантов в мини-листе, а не отдельный экран. Общий
-  /// для обеих настроек уведомлений (общий/личные чаты) — отличаются
-  /// только список вариантов и то, куда сохранить выбор.
-  Future<void> _pickPushMode(
-    BuildContext context, {
-    required List<(String, String)> options,
-    required String current,
-    required Future<void> Function(String) onSave,
-  }) async {
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final (value, label) in options)
-              ListTile(
-                title: Text(label),
-                trailing: current == value ? const Icon(Icons.check) : null,
-                onTap: () => Navigator.of(ctx).pop(value),
-              ),
-          ],
-        ),
-      ),
-    );
-    if (picked == null || picked == current) return;
+  bool get _pushEnabled => auth.personalPushMode != 'none' || auth.globalPushMode != 'none';
+
+  String get _pushMode {
+    if (auth.globalPushMode == 'all') return 'personal_and_all';
+    if (auth.globalPushMode == 'replies') return 'personal_and_replies';
+    return 'personal_only';
+  }
+
+  Future<void> _setPushEnabled(BuildContext context, bool enabled) => _updatePush(
+        context,
+        personal: enabled ? 'all' : 'none',
+        // Выключали и раньше был выбран какой-то режим общего чата —
+        // включили обратно тем же режимом, а не молча только личным.
+        global: enabled ? (auth.globalPushMode == 'none' ? 'all' : auth.globalPushMode) : 'none',
+      );
+
+  Future<void> _setPushMode(BuildContext context, String mode) => _updatePush(
+        context,
+        personal: 'all',
+        global: switch (mode) {
+          'personal_and_all' => 'all',
+          'personal_and_replies' => 'replies',
+          _ => 'none',
+        },
+      );
+
+  Future<void> _updatePush(BuildContext context, {required String personal, required String global}) async {
     try {
-      await onSave(picked);
+      await Future.wait([auth.updatePersonalPushMode(personal), auth.updateGlobalPushMode(global)]);
       onContactsChanged();
     } catch (e) {
       if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     }
   }
-
-  /// Значение хранится на сервере (`chat_profiles.global_push_mode`) —
-  /// им пользуется рассылка push (см. supabase/functions/send-chat-push),
-  /// а не сам клиент, поэтому здесь только отправка, без локальной фильтрации.
-  Future<void> _pickGlobalPushMode(BuildContext context) => _pickPushMode(
-        context,
-        options: const [
-          ('all', 'Все сообщения'),
-          ('replies', 'Только ответы на мои сообщения'),
-          ('none', 'Отключены'),
-        ],
-        current: auth.globalPushMode,
-        onSave: auth.updateGlobalPushMode,
-      );
-
-  Future<void> _pickPersonalPushMode(BuildContext context) => _pickPushMode(
-        context,
-        options: const [('all', 'Включены'), ('none', 'Отключены')],
-        current: auth.personalPushMode,
-        onSave: auth.updatePersonalPushMode,
-      );
 
   Future<void> _addContact(BuildContext context) async {
     final codeCtrl = TextEditingController();
@@ -444,18 +436,21 @@ class _ChatDrawer extends StatelessWidget {
                 Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChatAppearanceScreen(prefs: prefs, db: db)));
               },
             ),
-            ListTile(
-              leading: const Icon(Icons.notifications_outlined),
-              title: const Text('Уведомления общего чата'),
-              subtitle: Text(_globalPushModeLabel(auth.globalPushMode)),
-              onTap: () => _pickGlobalPushMode(context),
+            SwitchListTile(
+              secondary: const Icon(Icons.notifications_outlined),
+              title: const Text('Уведомления приложения'),
+              value: _pushEnabled,
+              onChanged: (v) => _setPushEnabled(context, v),
             ),
-            ListTile(
-              leading: const Icon(Icons.notifications_outlined),
-              title: const Text('Уведомления личных чатов'),
-              subtitle: Text(auth.personalPushMode == 'none' ? 'Отключены' : 'Включены'),
-              onTap: () => _pickPersonalPushMode(context),
-            ),
+            if (_pushEnabled)
+              for (final (value, label) in _pushModes)
+                ListTile(
+                  contentPadding: const EdgeInsets.only(left: 32, right: 16),
+                  dense: true,
+                  title: Text(label),
+                  trailing: _pushMode == value ? const Icon(Icons.check) : null,
+                  onTap: () => _setPushMode(context, value),
+                ),
             ListTile(
               leading: const Icon(Icons.shield_outlined),
               title: const Text('Приватность'),
@@ -745,7 +740,7 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
       await widget.global.sendAttachment(
         bytes: compressed ?? bytes,
         fileName: file.name,
-        mime: isImage ? ChatMediaUtils.mimeFor(file.name) : 'application/octet-stream',
+        mime: isImage ? (compressed != null ? 'image/jpeg' : ChatMediaUtils.mimeFor(file.name)) : 'application/octet-stream',
       );
       await _load();
       _scrollToEnd();

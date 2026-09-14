@@ -211,25 +211,30 @@ class ChatSyncService {
 
   /// Повторная отправка уже существующего (в статусе `error`)
   /// сообщения — текстового или с вложением, различает по `type`.
+  ///
+  /// Раньше любая ошибка здесь просто оседала статусом `error` на
+  /// пузыре, а вызывающий код (`_send`/`_attach`/`_call` в
+  /// `ChatThreadScreen`) ничего не получал обратно — их собственный
+  /// catch с сообщением пользователю никогда не срабатывал. Теперь
+  /// ошибка (с реальным текстом от сервера, не просто кодом) прокидывается
+  /// выше — статус на пузыре выставляется всё равно, но пользователь ещё
+  /// и видит, что и почему не отправилось.
   Future<void> retry(ChatMessage message) async {
     if (!ChatSettings.isConfigured) {
       repo.updateStatus(message.id, ChatMessageStatus.error);
-      return;
+      throw Exception('Чат не настроен');
     }
     final token = await auth.ensureFreshToken();
     if (token == null) {
       repo.updateStatus(message.id, ChatMessageStatus.error);
-      return;
+      throw Exception('Сначала войдите в чат');
     }
     final client = clientFactory();
     try {
       String? attachmentPath;
       if (_attachmentTypes.contains(message.type)) {
         final b64 = message.attachmentBase64;
-        if (b64 == null) {
-          repo.updateStatus(message.id, ChatMessageStatus.error);
-          return;
-        }
+        if (b64 == null) throw Exception('Файл повреждён');
         attachmentPath =
             '${auth.userId}/${message.clientMessageId}/${ChatMediaUtils.safePathSegment(message.attachmentName ?? 'file')}';
         final uploadRes = await client
@@ -247,8 +252,7 @@ class ChatSyncService {
             )
             .timeout(_timeout);
         if (uploadRes.statusCode >= 300) {
-          repo.updateStatus(message.id, ChatMessageStatus.error);
-          return;
+          throw Exception('Не удалось загрузить файл (${uploadRes.statusCode}): ${uploadRes.body}');
         }
       }
 
@@ -278,9 +282,13 @@ class ChatSyncService {
             }),
           )
           .timeout(_timeout);
-      repo.updateStatus(message.id, res.statusCode < 300 ? ChatMessageStatus.sent : ChatMessageStatus.error);
-    } catch (_) {
+      if (res.statusCode >= 300) {
+        throw Exception('Сервер ответил ${res.statusCode}: ${res.body}');
+      }
+      repo.updateStatus(message.id, ChatMessageStatus.sent);
+    } catch (e) {
       repo.updateStatus(message.id, ChatMessageStatus.error);
+      rethrow;
     } finally {
       client.close();
     }

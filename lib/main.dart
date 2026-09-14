@@ -39,8 +39,57 @@ Future<void> main() async {
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   }
   final db = LocalDbService();
-  await db.open();
+  try {
+    // На вебе открытие идёт через IndexedDB + wasm-сборку sqlite (см.
+    // db_opener_web.dart) — на части версий iOS Safari это иногда зависает
+    // без единой ошибки в консоли (сам браузер ни о чём не сообщает,
+    // просто не отвечает). Без таймаута пользователь видит вечное
+    // "Загрузка…" из index.html и не может понять, ждать ещё или нет.
+    await db.open().timeout(const Duration(seconds: 30));
+  } catch (e) {
+    runApp(_DbOpenFailedApp(error: e));
+    return;
+  }
   runApp(ShootingApp(db: db));
+}
+
+/// Экран на случай, если базу так и не удалось открыть (см. комментарий
+/// выше) — вместо бесконечно висящей заглушки из index.html хотя бы
+/// понятно, что пошло не так, и что попробовать.
+class _DbOpenFailedApp extends StatelessWidget {
+  final Object error;
+  const _DbOpenFailedApp({required this.error});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline, size: 48),
+                  const SizedBox(height: 16),
+                  const Text('Не удалось открыть базу данных', textAlign: TextAlign.center),
+                  const SizedBox(height: 8),
+                  Text('$error', textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Попробуйте перезагрузить страницу. Если не поможет — очистите данные сайта в настройках браузера.',
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class ShootingApp extends StatefulWidget {
