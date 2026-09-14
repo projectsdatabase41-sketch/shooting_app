@@ -19,6 +19,7 @@ import '../widgets/chat_quick_menu.dart';
 import '../widgets/chat_reply_bar.dart';
 import '../widgets/empty_state.dart';
 import 'attachment_compose_screen.dart';
+import 'photo_viewer_screen.dart';
 
 /// Переписка с одним контактом. Открытие ветки сразу отмечает входящие
 /// прочитанными локально (сервер их к этому моменту уже не хранит — см.
@@ -700,13 +701,22 @@ class _Bubble extends StatelessWidget {
       );
     }
 
+    void openFullscreen() {
+      Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => PhotoViewerScreen(image: MemoryImage(base64Decode(message.attachmentBase64!))),
+      ));
+    }
+
     final Widget frame;
     if (isBareImage) {
       frame = ClipRRect(
         borderRadius: BorderRadius.circular(16),
-        child: withDownloadButton(ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: _imageMaxWidth),
-          child: Image.memory(base64Decode(message.attachmentBase64!), fit: BoxFit.contain),
+        child: withDownloadButton(GestureDetector(
+          onTap: openFullscreen,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: _imageMaxWidth),
+            child: Image.memory(base64Decode(message.attachmentBase64!), fit: BoxFit.contain),
+          ),
         )),
       );
     } else if (isImage) {
@@ -719,9 +729,12 @@ class _Bubble extends StatelessWidget {
           children: [
             ClipRRect(
               borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              child: withDownloadButton(ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: _imageMaxWidth),
-                child: Image.memory(base64Decode(message.attachmentBase64!), fit: BoxFit.cover),
+              child: withDownloadButton(GestureDetector(
+                onTap: openFullscreen,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: _imageMaxWidth),
+                  child: Image.memory(base64Decode(message.attachmentBase64!), fit: BoxFit.cover),
+                ),
               )),
             ),
             Container(

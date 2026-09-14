@@ -162,6 +162,27 @@ CREATE TABLE IF NOT EXISTS chat_local_messages (
 
 CREATE INDEX IF NOT EXISTS idx_chat_local_messages_contact ON chat_local_messages(contact_id);
 
+-- Кэш последней загруженной ленты общего чата — сам общий чат хранится
+-- на сервере (chat_global_messages), но экран раньше перечитывал его
+-- заново при КАЖДОМ открытии, показывая пустой экран с крутилкой на
+-- время запроса. Тут — снимок последнего успешного fetchRecent(),
+-- полностью перезаписывается им же (не инкрементальный кэш): экран
+-- сперва рисует то, что здесь лежит, мгновенно, и обновляет в фоне.
+CREATE TABLE IF NOT EXISTS chat_global_cache (
+  id                    TEXT PRIMARY KEY,
+  sender_id             TEXT NOT NULL,
+  text                  TEXT,
+  attachment_path       TEXT,
+  attachment_name       TEXT,
+  attachment_mime       TEXT,
+  attachment_size       INTEGER,
+  reply_to_id           TEXT,
+  reply_to_preview      TEXT,
+  sender_nickname       TEXT,
+  sender_avatar_base64  TEXT,
+  created_at            TEXT NOT NULL
+);
+
 -- Дневник тренера (раздел 8 ТЗ): темы + заметки, живёт только на
 -- устройстве тренера (не привязан ни к одному спортсмену). Содержимое —
 -- обычный текст плюс необязательный блок графика/таблицы, тем же

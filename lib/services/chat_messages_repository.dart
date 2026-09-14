@@ -1,4 +1,5 @@
 import '../models/chat_contact.dart';
+import '../models/chat_global_message.dart';
 import '../models/chat_message.dart';
 import 'local_db_service.dart';
 
@@ -127,5 +128,66 @@ class ChatMessagesRepository {
       [clientMessageId],
     );
     return rows.isNotEmpty;
+  }
+
+  /// Снимок последней успешно загруженной ленты общего чата — экран
+  /// показывает его сразу при открытии, не дожидаясь сети (см.
+  /// `_GlobalChatBodyState._load`), в отличие от личного чата тут это не
+  /// история, а именно кэш: `cacheGlobalMessages` полностью его заменяет.
+  /// Не должно уронить экран, если таблицы кэша вдруг ещё нет (например,
+  /// на устройстве, где база создана до появления этой возможности, а
+  /// миграция по какой-то причине до неё не докатилась) — тогда просто
+  /// пустой кэш, экран покажет обычную крутилку вместо мгновенного показа.
+  List<ChatGlobalMessage> cachedGlobalMessages() {
+    try {
+      final rows = db.db.select('SELECT * FROM chat_global_cache ORDER BY created_at');
+      return rows
+          .map((r) => ChatGlobalMessage.fromRow({
+                'id': r['id'],
+                'sender_id': r['sender_id'],
+                'text': r['text'],
+                'attachment_path': r['attachment_path'],
+                'attachment_name': r['attachment_name'],
+                'attachment_mime': r['attachment_mime'],
+                'attachment_size': r['attachment_size'],
+                'reply_to_id': r['reply_to_id'],
+                'reply_to_preview': r['reply_to_preview'],
+                'created_at': r['created_at'],
+              }).withProfile(
+                  nickname: r['sender_nickname'] as String?, avatarBase64: r['sender_avatar_base64'] as String?))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  void cacheGlobalMessages(List<ChatGlobalMessage> messages) {
+    try {
+      db.db.execute('DELETE FROM chat_global_cache');
+      for (final m in messages) {
+        db.db.execute(
+          'INSERT INTO chat_global_cache '
+          '(id, sender_id, text, attachment_path, attachment_name, attachment_mime, attachment_size, '
+          'reply_to_id, reply_to_preview, sender_nickname, sender_avatar_base64, created_at) '
+          'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [
+            m.id,
+            m.senderId,
+            m.text,
+            m.attachmentPath,
+            m.attachmentName,
+            m.attachmentMime,
+            m.attachmentSize,
+            m.replyToId,
+            m.replyToPreview,
+            m.senderNickname,
+            m.senderAvatarBase64,
+            m.createdAt.toIso8601String(),
+          ],
+        );
+      }
+    } catch (_) {
+      // необязательно — просто не будет мгновенного показа в следующий раз
+    }
   }
 }

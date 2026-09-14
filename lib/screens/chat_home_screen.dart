@@ -32,6 +32,7 @@ import '../widgets/empty_state.dart';
 import 'attachment_compose_screen.dart';
 import 'chat_settings_screen.dart';
 import 'chat_thread_screen.dart';
+import 'photo_viewer_screen.dart';
 
 /// Публичный чат — отдельная учётная запись от личной базы тренировок
 /// (см. `ChatAuthService`). Устройство как в Telegram (решение
@@ -462,9 +463,25 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
     super.initState();
     _lastTranslationLanguage = widget.prefs.translationLanguage;
     widget.prefs.addListener(_onPrefsChanged);
+    _loadFromCache();
     _load();
     _scroll.addListener(_onScroll);
     _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) => _load(silent: true));
+  }
+
+  /// Мгновенный снимок последней загрузки, пока настоящий запрос ещё в
+  /// пути — раньше экран показывал крутилку при каждом открытии, даже
+  /// для уже виденной ленты (решение пользователя: не должно "постоянно
+  /// подгружаться").
+  void _loadFromCache() {
+    final cached = widget.repo.cachedGlobalMessages();
+    if (cached.isEmpty) return;
+    final hidden = widget.prefs.hiddenGlobalIds;
+    setState(() {
+      _messages = hidden.isEmpty ? cached : cached.where((m) => !hidden.contains(m.id)).toList();
+      _loading = false;
+    });
+    _autoTranslateIncoming();
   }
 
   @override
@@ -616,9 +633,13 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
   }
 
   Future<void> _load({bool silent = false}) async {
-    if (!silent) setState(() => _loading = true);
+    // Крутилка — только если совсем нечего показать (первый вход без
+    // кэша); если что-то уже нарисовано из _loadFromCache, обновление
+    // происходит незаметно поверх него.
+    if (!silent && _messages.isEmpty) setState(() => _loading = true);
     final messages = await widget.global.fetchRecent();
     if (!mounted) return;
+    widget.repo.cacheGlobalMessages(messages);
     final hidden = widget.prefs.hiddenGlobalIds;
     setState(() {
       _messages = hidden.isEmpty ? messages : messages.where((m) => !hidden.contains(m.id)).toList();
@@ -1090,7 +1111,12 @@ class _GlobalAttachmentState extends State<_GlobalAttachment> {
           return Text('Вложение недоступно', style: theme.textTheme.bodySmall?.copyWith(color: widget.fg));
         }
         if (widget.message.isImage) {
-          final image = Image.network(url, fit: widget.bare ? BoxFit.cover : BoxFit.contain);
+          final image = GestureDetector(
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => PhotoViewerScreen(image: NetworkImage(url)),
+            )),
+            child: Image.network(url, fit: widget.bare ? BoxFit.cover : BoxFit.contain),
+          );
           final withButton = !widget.showDownload
               ? image
               : Stack(
