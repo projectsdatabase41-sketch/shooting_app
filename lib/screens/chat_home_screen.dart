@@ -2,17 +2,21 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../logic/avatar_utils.dart';
+import '../logic/chat_media_utils.dart';
 import '../models/chat_contact.dart';
 import '../models/chat_global_message.dart';
 import '../services/chat_auth_service.dart';
 import '../services/chat_global_service.dart';
 import '../services/chat_messages_repository.dart';
+import '../services/chat_preferences.dart';
 import '../services/chat_settings.dart';
 import '../services/chat_sync_service.dart';
 import '../services/local_db_service.dart';
@@ -21,6 +25,7 @@ import '../services/supabase_auth_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/chat_avatar.dart';
 import '../widgets/empty_state.dart';
+import 'chat_appearance_screen.dart';
 import 'chat_thread_screen.dart';
 
 /// Публичный чат — отдельная учётная запись от личной базы тренировок
@@ -43,6 +48,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
   late final ChatMessagesRepository _repo;
   late final ChatSyncService _sync;
   late final ChatGlobalService _global;
+  late final ChatPreferences _prefs;
   Timer? _pollTimer;
   List<ChatContact> _contacts = [];
 
@@ -61,6 +67,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
     _repo = ChatMessagesRepository(_db);
     _sync = ChatSyncService(_auth, _repo);
     _global = ChatGlobalService(_auth);
+    _prefs = ChatPreferences(_db);
     _reload();
     if (_auth.isSignedIn) {
       _startPolling();
@@ -179,17 +186,18 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
       drawer: _ChatDrawer(
         auth: _auth,
         repo: _repo,
+        prefs: _prefs,
         contacts: _contacts,
         onContactsChanged: _reload,
         onOpenThread: (contact) async {
           Navigator.of(context).pop(); // закрыть панель
           await Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => ChatThreadScreen(contact: contact, auth: _auth, repo: _repo, sync: _sync),
+            builder: (_) => ChatThreadScreen(contact: contact, auth: _auth, repo: _repo, sync: _sync, db: _db, prefs: _prefs),
           ));
           _reload();
         },
       ),
-      body: _GlobalChatBody(auth: _auth, global: _global, repo: _repo, onContactAdded: _reload),
+      body: _GlobalChatBody(auth: _auth, global: _global, repo: _repo, prefs: _prefs, onContactAdded: _reload),
     );
   }
 }
@@ -199,6 +207,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
 class _ChatDrawer extends StatelessWidget {
   final ChatAuthService auth;
   final ChatMessagesRepository repo;
+  final ChatPreferences prefs;
   final List<ChatContact> contacts;
   final VoidCallback onContactsChanged;
   final void Function(ChatContact) onOpenThread;
@@ -206,6 +215,7 @@ class _ChatDrawer extends StatelessWidget {
   const _ChatDrawer({
     required this.auth,
     required this.repo,
+    required this.prefs,
     required this.contacts,
     required this.onContactsChanged,
     required this.onOpenThread,
@@ -332,6 +342,15 @@ class _ChatDrawer extends StatelessWidget {
             ),
             const Divider(height: 1),
             ListTile(
+              leading: const Icon(Icons.palette_outlined),
+              title: const Text('Настройки чата'),
+              subtitle: const Text('Перевод, оформление пузырей'),
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChatAppearanceScreen(prefs: prefs)));
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.logout),
               title: const Text('Выйти из чата'),
               onTap: () {
@@ -352,9 +371,16 @@ class _GlobalChatBody extends StatefulWidget {
   final ChatAuthService auth;
   final ChatGlobalService global;
   final ChatMessagesRepository repo;
+  final ChatPreferences prefs;
   final VoidCallback onContactAdded;
 
-  const _GlobalChatBody({required this.auth, required this.global, required this.repo, required this.onContactAdded});
+  const _GlobalChatBody({
+    required this.auth,
+    required this.global,
+    required this.repo,
+    required this.prefs,
+    required this.onContactAdded,
+  });
 
   @override
   State<_GlobalChatBody> createState() => _GlobalChatBodyState();
@@ -419,6 +445,33 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
     }
   }
 
+  /// Фото/файл в общую ленту (пункт 1 списка правок — раньше вложения
+  /// умел только личный чат). Картинка сжимается перед загрузкой, как и
+  /// в личном чате.
+  Future<void> _attach() async {
+    final result = await FilePicker.platform.pickFiles(withData: true);
+    final file = result?.files.first;
+    final bytes = file?.bytes;
+    if (file == null || bytes == null) return;
+
+    setState(() => _sending = true);
+    try {
+      final isImage = ChatMediaUtils.looksLikeImage(file.name);
+      final compressed = isImage ? ChatMediaUtils.compressImage(bytes) : null;
+      await widget.global.sendAttachment(
+        bytes: compressed ?? bytes,
+        fileName: file.name,
+        mime: isImage ? ChatMediaUtils.mimeFor(file.name) : 'application/octet-stream',
+      );
+      await _load();
+      _scrollToEnd();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не отправлено: $e')));
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
   /// Пункт списка правок: "общедоступный чат со списком пользователей" —
   /// список тех, кто уже писал в ленту (по загруженным сообщениям), с
   /// возможностью сразу добавить в контакты для личной переписки. Код
@@ -474,6 +527,13 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
 
   @override
   Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: widget.prefs,
+      builder: (context, _) => _buildBody(context),
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
     return Column(
       children: [
         Padding(
@@ -498,8 +558,12 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
                       controller: _scroll,
                       padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
                       itemCount: _messages.length,
-                      itemBuilder: (context, i) =>
-                          _GlobalBubble(message: _messages[i], mine: _messages[i].senderId == widget.auth.userId),
+                      itemBuilder: (context, i) => _GlobalBubble(
+                        message: _messages[i],
+                        mine: _messages[i].senderId == widget.auth.userId,
+                        preset: widget.prefs.bubblePreset,
+                        global: widget.global,
+                      ),
                     ),
         ),
         const Divider(height: 1),
@@ -510,6 +574,11 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
+                IconButton(
+                  onPressed: _sending ? null : _attach,
+                  icon: const Icon(Icons.attach_file),
+                  tooltip: 'Прикрепить фото или файл',
+                ),
                 Expanded(
                   child: TextField(
                     controller: _input,
@@ -533,43 +602,142 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
 class _GlobalBubble extends StatelessWidget {
   final ChatGlobalMessage message;
   final bool mine;
-  const _GlobalBubble({required this.message, required this.mine});
+  final ChatBubblePreset preset;
+  final ChatGlobalService global;
+  const _GlobalBubble({required this.message, required this.mine, required this.preset, required this.global});
+
+  void _copy(BuildContext context) {
+    if (message.text == null || message.text!.isEmpty) return;
+    Clipboard.setData(ClipboardData(text: message.text!));
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Скопировано')));
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final bg = mine ? cs.primaryContainer : cs.surfaceContainerHigh;
-    final fg = mine ? cs.onPrimaryContainer : cs.onSurface;
+    final base = mine ? preset.mine : preset.other;
+    const fg = Colors.white;
 
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 480),
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (!mine)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 2),
-                child: Text(
-                  message.senderNickname ?? '—',
-                  style: theme.textTheme.labelMedium?.copyWith(color: fg, fontWeight: FontWeight.w600),
-                ),
+      child: Column(
+        crossAxisAlignment: mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          // Отправитель — НАД пузырём, а не внутри (пункт 2 списка правок).
+          if (!mine)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 2, left: 4),
+              child: Text(
+                message.senderNickname ?? '—',
+                style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
-            SelectableText(message.text, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
-            const SizedBox(height: 4),
-            Text(
-              DateFormat('HH:mm').format(message.createdAt.toLocal()),
-              style: theme.textTheme.labelSmall?.copyWith(color: fg.withValues(alpha: 0.65)),
             ),
-          ],
-        ),
+          GestureDetector(
+            onLongPress: message.text == null ? null : () => _copy(context),
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 480),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color.lerp(base, Colors.white, 0.08)!, Color.lerp(base, Colors.black, 0.10)!],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.22), blurRadius: 10, offset: const Offset(0, 4)),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (message.hasAttachment) _GlobalAttachment(message: message, global: global, fg: fg),
+                  if (message.text != null && message.text!.isNotEmpty)
+                    SelectableText(message.text!, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 3),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              DateFormat('HH:mm').format(message.createdAt.toLocal()),
+              style: theme.textTheme.labelSmall?.copyWith(color: theme.hintColor),
+            ),
+          ),
+          const SizedBox(height: 5),
+        ],
       ),
+    );
+  }
+}
+
+/// Вложение общего чата — бакет приватный, поэтому картинка грузится по
+/// временной подписанной ссылке (см. `ChatGlobalService.signedUrl`), а
+/// не напрямую по адресу объекта. Файл (не фото) открывается той же
+/// ссылкой через системный обработчик — свою логику скачивания под
+/// каждую платформу не пишем, `url_launcher` уже есть в проекте.
+class _GlobalAttachment extends StatefulWidget {
+  final ChatGlobalMessage message;
+  final ChatGlobalService global;
+  final Color fg;
+  const _GlobalAttachment({required this.message, required this.global, required this.fg});
+
+  @override
+  State<_GlobalAttachment> createState() => _GlobalAttachmentState();
+}
+
+class _GlobalAttachmentState extends State<_GlobalAttachment> {
+  late final Future<String?> _urlFuture = widget.global.signedUrl(widget.message.attachmentPath!);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return FutureBuilder<String?>(
+      future: _urlFuture,
+      builder: (context, snapshot) {
+        final url = snapshot.data;
+        if (!snapshot.hasData) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Center(child: SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+          );
+        }
+        if (url == null) {
+          return Text('Вложение недоступно', style: theme.textTheme.bodySmall?.copyWith(color: widget.fg));
+        }
+        if (widget.message.isImage) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.network(url, fit: BoxFit.contain),
+            ),
+          );
+        }
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: InkWell(
+            onTap: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.insert_drive_file_outlined, color: widget.fg),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    '${widget.message.attachmentName ?? 'Файл'} · ${ChatMediaUtils.formatSize(widget.message.attachmentSize)}',
+                    style: theme.textTheme.bodyMedium?.copyWith(color: widget.fg, decoration: TextDecoration.underline),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

@@ -106,6 +106,10 @@ class LocalDbService {
         'chat_nickname': 'TEXT',
         'chat_code': 'TEXT',
         'chat_avatar_base64': 'TEXT',
+        // Настройки чата, не завязанные на конкретный аккаунт (перевод,
+        // оформление пузырей) — см. ChatPreferences.
+        'chat_translation_mode': "TEXT NOT NULL DEFAULT 'off'",
+        'chat_bubble_preset': "TEXT NOT NULL DEFAULT 'classic'",
       },
       // На части устройств chat_local_messages создалась ещё САМОЙ
       // первой версией чата (только текст, без вложений) — CREATE

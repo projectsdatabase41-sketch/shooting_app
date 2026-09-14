@@ -3,14 +3,19 @@ import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:intl/intl.dart';
 
 import '../logic/chat_media_utils.dart';
 import '../models/chat_contact.dart';
 import '../models/chat_message.dart';
+import '../services/ai_settings.dart';
 import '../services/chat_auth_service.dart';
 import '../services/chat_messages_repository.dart';
+import '../services/chat_preferences.dart';
 import '../services/chat_sync_service.dart';
+import '../services/chat_translation_service.dart';
+import '../services/local_db_service.dart';
 import '../widgets/chat_avatar.dart';
 import '../widgets/empty_state.dart';
 
@@ -22,6 +27,8 @@ class ChatThreadScreen extends StatefulWidget {
   final ChatAuthService auth;
   final ChatMessagesRepository repo;
   final ChatSyncService sync;
+  final LocalDbService db;
+  final ChatPreferences prefs;
 
   const ChatThreadScreen({
     super.key,
@@ -29,6 +36,8 @@ class ChatThreadScreen extends StatefulWidget {
     required this.auth,
     required this.repo,
     required this.sync,
+    required this.db,
+    required this.prefs,
   });
 
   @override
@@ -42,6 +51,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   List<ChatMessage> _messages = [];
   bool _sending = false;
   ChatMessage? _replyingTo;
+
+  /// Переводы по id сообщения — только в памяти экрана, не сохраняются:
+  /// дешевле перевести заново, чем городить локальное хранилище ради
+  /// текста, который и так живёт на устройстве получателя.
+  final Map<String, String> _translations = {};
+  final Set<String> _translating = {};
+  late final ChatTranslationService _translator = ChatTranslationService(AiSettings(widget.db));
 
   @override
   void initState() {
@@ -66,7 +82,40 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     super.dispose();
   }
 
-  void _reload() => setState(() => _messages = widget.repo.forContact(widget.contact.id));
+  void _reload() {
+    setState(() => _messages = widget.repo.forContact(widget.contact.id));
+    if (widget.prefs.translationMode == ChatTranslationMode.auto) _autoTranslateIncoming();
+  }
+
+  /// Режим "всегда автоматически" — переводит новые входящие в фоне,
+  /// без действия пользователя. Свои же сообщения не трогает: их язык
+  /// человек и так знает — он их написал.
+  void _autoTranslateIncoming() {
+    for (final m in _messages) {
+      if (m.direction != ChatMessageDirection.incoming) continue;
+      if (m.text == null || m.text!.isEmpty) continue;
+      if (_translations.containsKey(m.id) || _translating.contains(m.id)) continue;
+      _translate(m, silent: true);
+    }
+  }
+
+  Future<void> _translate(ChatMessage m, {bool silent = false}) async {
+    if (m.text == null || m.text!.isEmpty) return;
+    setState(() => _translating.add(m.id));
+    try {
+      final translated = await _translator.translateIfNeeded(m.text!);
+      if (!mounted) return;
+      setState(() {
+        if (translated != null) _translations[m.id] = translated;
+        _translating.remove(m.id);
+      });
+    } catch (e) {
+      _translating.remove(m.id);
+      if (!silent && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось перевести: $e')));
+      }
+    }
+  }
 
   void _scrollToEnd() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -126,6 +175,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
 
   void _reply(ChatMessage m) => setState(() => _replyingTo = m);
 
+  void _copy(ChatMessage m) {
+    if (m.text == null || m.text!.isEmpty) return;
+    Clipboard.setData(ClipboardData(text: m.text!));
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Скопировано')));
+  }
+
   Future<void> _edit(ChatMessage m) async {
     final ctrl = TextEditingController(text: m.text);
     final newText = await showDialog<String>(
@@ -147,12 +202,21 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   Future<void> _delete(ChatMessage m) async {
     final mine = m.direction == ChatMessageDirection.outgoing;
     await widget.sync.deleteMessage(m, alsoRemote: mine);
+    _translations.remove(m.id);
     _reload();
   }
 
+  /// Все действия над сообщением — одним долгим нажатием: копировать,
+  /// повторить отправку, ответить, удалить, перевести (решение
+  /// пользователя, вместо разрозненных кнопок/жестов на каждое
+  /// действие по отдельности). Свайп по пузырю остаётся отдельным
+  /// быстрым путём к "Ответить", меню его не заменяет, а дополняет.
   Future<void> _showMessageMenu(ChatMessage m) async {
     final mine = m.direction == ChatMessageDirection.outgoing;
     final canEdit = mine && m.type == ChatMessageType.text;
+    final canCopy = m.text != null && m.text!.isNotEmpty;
+    final canTranslate = canCopy && widget.prefs.translationMode != ChatTranslationMode.off;
+    final canRetry = mine && m.status == ChatMessageStatus.error;
     final action = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
@@ -160,11 +224,29 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (canCopy)
+              ListTile(
+                leading: const Icon(Icons.copy_outlined),
+                title: const Text('Копировать текст'),
+                onTap: () => Navigator.of(ctx).pop('copy'),
+              ),
+            if (canRetry)
+              ListTile(
+                leading: const Icon(Icons.refresh),
+                title: const Text('Отправить ещё раз'),
+                onTap: () => Navigator.of(ctx).pop('retry'),
+              ),
             ListTile(
               leading: const Icon(Icons.reply_outlined),
               title: const Text('Ответить'),
               onTap: () => Navigator.of(ctx).pop('reply'),
             ),
+            if (canTranslate)
+              ListTile(
+                leading: const Icon(Icons.translate_outlined),
+                title: const Text('Перевести'),
+                onTap: () => Navigator.of(ctx).pop('translate'),
+              ),
             if (canEdit)
               ListTile(
                 leading: const Icon(Icons.edit_outlined),
@@ -181,8 +263,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       ),
     );
     switch (action) {
+      case 'copy':
+        _copy(m);
+      case 'retry':
+        await _retry(m);
       case 'reply':
         _reply(m);
+      case 'translate':
+        await _translate(m);
       case 'edit':
         await _edit(m);
       case 'delete':
@@ -222,88 +310,97 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: [
-            ChatAvatar(base64: widget.contact.avatarBase64, nickname: widget.contact.nickname, radius: 16),
-            const SizedBox(width: 10),
-            Text(widget.contact.nickname),
+    return AnimatedBuilder(
+      animation: widget.prefs,
+      builder: (context, _) => Scaffold(
+        appBar: AppBar(
+          title: Row(
+            children: [
+              ChatAvatar(base64: widget.contact.avatarBase64, nickname: widget.contact.nickname, radius: 16),
+              const SizedBox(width: 10),
+              Text(widget.contact.nickname),
+            ],
+          ),
+          actions: [
+            IconButton(
+              onPressed: _sending ? null : _call,
+              icon: const Icon(Icons.campaign_outlined),
+              tooltip: 'Позвать',
+            ),
           ],
         ),
-        actions: [
-          IconButton(
-            onPressed: _sending ? null : _call,
-            icon: const Icon(Icons.campaign_outlined),
-            tooltip: 'Позвать',
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: _messages.isEmpty
-                ? const EmptyState(icon: Icons.forum_outlined, text: 'Переписки пока нет')
-                : ListView.builder(
-                    controller: _scroll,
-                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                    itemCount: _messages.length,
-                    itemBuilder: (context, i) {
-                      final m = _messages[i];
-                      return Dismissible(
-                        key: ValueKey(m.id),
-                        direction: DismissDirection.startToEnd,
-                        // Свайп только показывает жест "ответить" и
-                        // всегда возвращает пузырь на место (решение
-                        // пользователя: ответ свайпом за само
-                        // сообщение, а не отдельной кнопкой).
-                        confirmDismiss: (_) async {
-                          _reply(m);
-                          return false;
-                        },
-                        background: Container(
-                          alignment: Alignment.centerLeft,
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: Icon(Icons.reply_outlined, color: Theme.of(context).colorScheme.primary),
-                        ),
-                        child: GestureDetector(
-                          onLongPress: () => _showMessageMenu(m),
-                          child: _Bubble(message: m, onRetry: () => _retry(m)),
-                        ),
-                      );
-                    },
-                  ),
-          ),
-          if (_replyingTo != null) _ReplyPreviewBar(message: _replyingTo!, onCancel: () => setState(() => _replyingTo = null)),
-          const Divider(height: 1),
-          SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  IconButton(
-                    onPressed: _sending ? null : _attach,
-                    icon: const Icon(Icons.attach_file),
-                    tooltip: 'Прикрепить фото или файл',
-                  ),
-                  Expanded(
-                    child: TextField(
-                      controller: _input,
-                      minLines: 1,
-                      maxLines: 4,
-                      textInputAction: TextInputAction.newline,
-                      decoration: const InputDecoration(hintText: 'Сообщение'),
+        body: Column(
+          children: [
+            Expanded(
+              child: _messages.isEmpty
+                  ? const EmptyState(icon: Icons.forum_outlined, text: 'Переписки пока нет')
+                  : ListView.builder(
+                      controller: _scroll,
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                      itemCount: _messages.length,
+                      itemBuilder: (context, i) {
+                        final m = _messages[i];
+                        return Dismissible(
+                          key: ValueKey(m.id),
+                          direction: DismissDirection.startToEnd,
+                          // Свайп только показывает жест "ответить" и
+                          // всегда возвращает пузырь на место (решение
+                          // пользователя: ответ свайпом за само
+                          // сообщение, а не отдельной кнопкой).
+                          confirmDismiss: (_) async {
+                            _reply(m);
+                            return false;
+                          },
+                          background: Container(
+                            alignment: Alignment.centerLeft,
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: Icon(Icons.reply_outlined, color: Theme.of(context).colorScheme.primary),
+                          ),
+                          child: GestureDetector(
+                            onLongPress: () => _showMessageMenu(m),
+                            child: _Bubble(
+                              message: m,
+                              preset: widget.prefs.bubblePreset,
+                              translation: _translations[m.id],
+                              translating: _translating.contains(m.id),
+                              onRetry: () => _retry(m),
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton.filled(onPressed: _sending ? null : _send, icon: const Icon(Icons.send)),
-                ],
+            ),
+            if (_replyingTo != null) _ReplyPreviewBar(message: _replyingTo!, onCancel: () => setState(() => _replyingTo = null)),
+            const Divider(height: 1),
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    IconButton(
+                      onPressed: _sending ? null : _attach,
+                      icon: const Icon(Icons.attach_file),
+                      tooltip: 'Прикрепить фото или файл',
+                    ),
+                    Expanded(
+                      child: TextField(
+                        controller: _input,
+                        minLines: 1,
+                        maxLines: 4,
+                        textInputAction: TextInputAction.newline,
+                        decoration: const InputDecoration(hintText: 'Сообщение'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton.filled(onPressed: _sending ? null : _send, icon: const Icon(Icons.send)),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -346,119 +443,162 @@ class _ReplyPreviewBar extends StatelessWidget {
 
 class _Bubble extends StatelessWidget {
   final ChatMessage message;
+  final ChatBubblePreset preset;
+  final String? translation;
+  final bool translating;
   final VoidCallback onRetry;
-  const _Bubble({required this.message, required this.onRetry});
+  const _Bubble({
+    required this.message,
+    required this.preset,
+    required this.translation,
+    required this.translating,
+    required this.onRetry,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final mine = message.direction == ChatMessageDirection.outgoing;
-    final bg = message.status == ChatMessageStatus.error
-        ? cs.errorContainer
-        : (mine ? cs.primaryContainer : cs.surfaceContainerHigh);
-    final fg = message.status == ChatMessageStatus.error
-        ? cs.onErrorContainer
-        : (mine ? cs.onPrimaryContainer : cs.onSurface);
+    final isError = message.status == ChatMessageStatus.error;
+    final base = isError ? cs.errorContainer : (mine ? preset.mine : preset.other);
+    final fg = isError ? cs.onErrorContainer : Colors.white;
 
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 480),
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (message.replyToPreview != null) ...[
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                margin: const EdgeInsets.only(bottom: 6),
-                decoration: BoxDecoration(
-                  color: fg.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border(left: BorderSide(color: fg.withValues(alpha: 0.5), width: 3)),
-                ),
-                child: Text(
-                  message.replyToPreview!,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(color: fg.withValues(alpha: 0.8)),
-                ),
+      child: Column(
+        crossAxisAlignment: mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          // Рамка — только содержимое сообщения. Дата, статус и пометка
+          // "изменено" вынесены НАРУЖУ, тем же краем, что и сам пузырь
+          // (решение пользователя, пункт 2 списка правок).
+          Container(
+            constraints: const BoxConstraints(maxWidth: 480),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              // Лёгкий градиент вместо плоской заливки — тот самый
+              // "3D"-эффект (пункт 7): верх чуть светлее, низ чуть темнее.
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color.lerp(base, Colors.white, 0.08)!, Color.lerp(base, Colors.black, 0.10)!],
               ),
-            ],
-            if (message.type == ChatMessageType.image && message.attachmentBase64 != null) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Image.memory(base64Decode(message.attachmentBase64!), fit: BoxFit.contain),
-              ),
-              const SizedBox(height: 6),
-            ] else if (message.type == ChatMessageType.file) ...[
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.insert_drive_file_outlined, color: fg),
-                  const SizedBox(width: 8),
-                  Flexible(
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withValues(alpha: 0.22), blurRadius: 10, offset: const Offset(0, 4)),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (message.replyToPreview != null) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    margin: const EdgeInsets.only(bottom: 6),
+                    decoration: BoxDecoration(
+                      color: fg.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border(left: BorderSide(color: fg.withValues(alpha: 0.5), width: 3)),
+                    ),
                     child: Text(
-                      '${message.attachmentName ?? 'Файл'} · ${ChatMediaUtils.formatSize(message.attachmentSize)}',
-                      style: theme.textTheme.bodyMedium?.copyWith(color: fg),
+                      message.replyToPreview!,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(color: fg.withValues(alpha: 0.85)),
                     ),
                   ),
                 ],
-              ),
-              const SizedBox(height: 6),
-            ] else if (message.type == ChatMessageType.call) ...[
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.campaign_outlined, color: fg),
-                  const SizedBox(width: 8),
-                  Text(
-                    mine ? 'Вы позвали' : 'Вас позвали',
-                    style: theme.textTheme.bodyMedium?.copyWith(color: fg, fontWeight: FontWeight.w600),
+                if (message.type == ChatMessageType.image && message.attachmentBase64 != null) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.memory(base64Decode(message.attachmentBase64!), fit: BoxFit.contain),
+                  ),
+                  const SizedBox(height: 6),
+                ] else if (message.type == ChatMessageType.file) ...[
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.insert_drive_file_outlined, color: fg),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          '${message.attachmentName ?? 'Файл'} · ${ChatMediaUtils.formatSize(message.attachmentSize)}',
+                          style: theme.textTheme.bodyMedium?.copyWith(color: fg),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                ] else if (message.type == ChatMessageType.call) ...[
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.campaign_outlined, color: fg),
+                      const SizedBox(width: 8),
+                      Text(
+                        mine ? 'Вы позвали' : 'Вас позвали',
+                        style: theme.textTheme.bodyMedium?.copyWith(color: fg, fontWeight: FontWeight.w600),
+                      ),
+                    ],
                   ),
                 ],
-              ),
-            ],
-            if (message.text != null && message.text!.isNotEmpty)
-              SelectableText(message.text!, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
-            const SizedBox(height: 4),
-            Row(
+                if (message.text != null && message.text!.isNotEmpty)
+                  SelectableText(message.text!, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
+                if (translating) ...[
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    height: 12,
+                    width: 12,
+                    child: CircularProgressIndicator(strokeWidth: 1.5, color: fg.withValues(alpha: 0.7)),
+                  ),
+                ] else if (translation != null) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.only(top: 6),
+                    decoration: BoxDecoration(border: Border(top: BorderSide(color: fg.withValues(alpha: 0.25)))),
+                    child: Text(
+                      translation!,
+                      style: theme.textTheme.bodyMedium?.copyWith(color: fg.withValues(alpha: 0.85), fontStyle: FontStyle.italic),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 3),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (message.edited) ...[
-                  Text('изменено', style: theme.textTheme.labelSmall?.copyWith(color: fg.withValues(alpha: 0.65))),
+                  Text('изменено', style: theme.textTheme.labelSmall?.copyWith(color: theme.hintColor)),
                   const SizedBox(width: 6),
                 ],
                 Text(
                   DateFormat('HH:mm').format(message.createdAt.toLocal()),
-                  style: theme.textTheme.labelSmall?.copyWith(color: fg.withValues(alpha: 0.65)),
+                  style: theme.textTheme.labelSmall?.copyWith(color: theme.hintColor),
                 ),
                 if (mine) ...[
                   const SizedBox(width: 6),
-                  Icon(_statusIcon(message.status), size: 14, color: fg.withValues(alpha: 0.65)),
+                  Icon(_statusIcon(message.status), size: 14, color: theme.hintColor),
                 ],
               ],
             ),
-            if (mine && message.status == ChatMessageStatus.error) ...[
-              const SizedBox(height: 4),
-              TextButton.icon(
-                onPressed: onRetry,
-                icon: const Icon(Icons.refresh, size: 14),
-                label: const Text('Отправить ещё раз'),
-                style: TextButton.styleFrom(
-                  foregroundColor: fg,
-                  visualDensity: VisualDensity.compact,
-                  padding: EdgeInsets.zero,
-                ),
-              ),
-            ],
+          ),
+          if (mine && message.status == ChatMessageStatus.error) ...[
+            const SizedBox(height: 2),
+            TextButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh, size: 14),
+              label: const Text('Отправить ещё раз'),
+              style: TextButton.styleFrom(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero),
+            ),
           ],
-        ),
+          const SizedBox(height: 5),
+        ],
       ),
     );
   }

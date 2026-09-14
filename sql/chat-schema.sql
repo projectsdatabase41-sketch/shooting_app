@@ -237,9 +237,27 @@ create policy chat_media_delete on storage.objects
 create table if not exists chat_global_messages (
   id          uuid primary key default gen_random_uuid(),
   sender_id   uuid not null references auth.users(id) on delete cascade,
-  text        text not null,
-  created_at  timestamptz not null default now()
+  text        text,
+  -- Вложения — тот же бакет chat-media, что и в личном чате, но путь с
+  -- префиксом "global/" (см. политики ниже) и БЕЗ удаления после
+  -- просмотра: лента общая и постоянная, а не транзит на доставку.
+  attachment_path   text,
+  attachment_name   text,
+  attachment_mime    text,
+  attachment_size   bigint,
+  created_at  timestamptz not null default now(),
+  check (text is not null or attachment_path is not null)
 );
+
+alter table chat_global_messages alter column text drop not null;
+alter table chat_global_messages add column if not exists attachment_path text;
+alter table chat_global_messages add column if not exists attachment_name text;
+alter table chat_global_messages add column if not exists attachment_mime text;
+alter table chat_global_messages add column if not exists attachment_size bigint;
+
+alter table chat_global_messages drop constraint if exists chat_global_messages_check;
+alter table chat_global_messages add constraint chat_global_messages_check
+  check (text is not null or attachment_path is not null);
 
 create index if not exists idx_chat_global_created on chat_global_messages(created_at desc);
 
@@ -259,6 +277,42 @@ create policy chat_global_insert on chat_global_messages
   for insert
   to authenticated
   with check (sender_id = auth.uid());
+
+-- Вложения общего чата — тот же бакет chat-media, путь
+-- "global/<sender_id>/<...>" (отличает их от личных, которые лежат
+-- прямо в "<sender_id>/..."). Смотреть может любой вошедший (лента
+-- открыта всем), загружать/удалять — только в свою папку/своё.
+--
+-- ponytail: удаление объекта при чистке ленты (500-cap триггер,
+-- chat_global_trim) не реализовано — при обрезке старых сообщений
+-- с фото файл в Storage остаётся сиротой. Для MVP не критично (это
+-- расход места, не дыра в безопасности); чистить — периодической
+-- задачей, если объём вложений станет заметным.
+drop policy if exists chat_global_media_insert on storage.objects;
+create policy chat_global_media_insert on storage.objects
+  for insert
+  to authenticated
+  with check (
+    bucket_id = 'chat-media'
+    and (storage.foldername(name))[1] = 'global'
+    and (storage.foldername(name))[2] = auth.uid()::text
+  );
+
+drop policy if exists chat_global_media_select on storage.objects;
+create policy chat_global_media_select on storage.objects
+  for select
+  to authenticated
+  using (bucket_id = 'chat-media' and (storage.foldername(name))[1] = 'global');
+
+drop policy if exists chat_global_media_delete on storage.objects;
+create policy chat_global_media_delete on storage.objects
+  for delete
+  to authenticated
+  using (
+    bucket_id = 'chat-media'
+    and (storage.foldername(name))[1] = 'global'
+    and (storage.foldername(name))[2] = auth.uid()::text
+  );
 
 -- Профиль по списку id — для отображения ников/аватаров в ленте общего
 -- чата и в списке "Участники" (не отдаёт chat_code — им по-прежнему
