@@ -28,8 +28,7 @@ import '../widgets/chat_avatar.dart';
 import '../widgets/chat_quick_menu.dart';
 import '../widgets/chat_reply_bar.dart';
 import '../widgets/empty_state.dart';
-import 'chat_appearance_screen.dart';
-import 'chat_privacy_screen.dart';
+import 'chat_settings_screen.dart';
 import 'chat_thread_screen.dart';
 
 /// Публичный чат — отдельная учётная запись от личной базы тренировок
@@ -271,52 +270,6 @@ class _ChatDrawer extends StatelessWidget {
     onContactsChanged();
   }
 
-  /// Один переключатель на все уведомления (решение пользователя, вместо
-  /// двух отдельных пунктов) + режим ниже, пока он включён. Под капотом
-  /// это по-прежнему два разных поля на сервере (`personal_push_mode`,
-  /// `global_push_mode`, см. `ChatAuthService`/send-chat-push) — экран
-  /// просто комбинирует их в один понятный выбор.
-  static const List<(String, String)> _pushModes = [
-    ('personal_only', 'Только личный чат'),
-    ('personal_and_replies', 'Личный чат и ответы на мои сообщения в общем чате'),
-    ('personal_and_all', 'Личный и общий чат'),
-  ];
-
-  bool get _pushEnabled => auth.personalPushMode != 'none' || auth.globalPushMode != 'none';
-
-  String get _pushMode {
-    if (auth.globalPushMode == 'all') return 'personal_and_all';
-    if (auth.globalPushMode == 'replies') return 'personal_and_replies';
-    return 'personal_only';
-  }
-
-  Future<void> _setPushEnabled(BuildContext context, bool enabled) => _updatePush(
-        context,
-        personal: enabled ? 'all' : 'none',
-        // Выключали и раньше был выбран какой-то режим общего чата —
-        // включили обратно тем же режимом, а не молча только личным.
-        global: enabled ? (auth.globalPushMode == 'none' ? 'all' : auth.globalPushMode) : 'none',
-      );
-
-  Future<void> _setPushMode(BuildContext context, String mode) => _updatePush(
-        context,
-        personal: 'all',
-        global: switch (mode) {
-          'personal_and_all' => 'all',
-          'personal_and_replies' => 'replies',
-          _ => 'none',
-        },
-      );
-
-  Future<void> _updatePush(BuildContext context, {required String personal, required String global}) async {
-    try {
-      await Future.wait([auth.updatePersonalPushMode(personal), auth.updateGlobalPushMode(global)]);
-      onContactsChanged();
-    } catch (e) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
-    }
-  }
-
   Future<void> _addContact(BuildContext context) async {
     final codeCtrl = TextEditingController();
     final code = await showDialog<String>(
@@ -428,39 +381,21 @@ class _ChatDrawer extends StatelessWidget {
             ),
             const Divider(height: 1),
             ListTile(
-              leading: const Icon(Icons.palette_outlined),
-              title: const Text('Настройки чата'),
-              subtitle: const Text('Перевод, оформление пузырей'),
+              leading: const Icon(Icons.settings_outlined),
+              title: const Text('Настройки'),
+              subtitle: const Text('Оформление, уведомления, приватность'),
               onTap: () {
                 Navigator.of(context).pop();
-                Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChatAppearanceScreen(prefs: prefs, db: db)));
-              },
-            ),
-            SwitchListTile(
-              secondary: const Icon(Icons.notifications_outlined),
-              title: const Text('Уведомления приложения'),
-              value: _pushEnabled,
-              onChanged: (v) => _setPushEnabled(context, v),
-            ),
-            if (_pushEnabled)
-              for (final (value, label) in _pushModes)
-                ListTile(
-                  contentPadding: const EdgeInsets.only(left: 32, right: 16),
-                  dense: true,
-                  title: Text(label),
-                  trailing: _pushMode == value ? const Icon(Icons.check) : null,
-                  onTap: () => _setPushMode(context, value),
-                ),
-            ListTile(
-              leading: const Icon(Icons.shield_outlined),
-              title: const Text('Приватность'),
-              subtitle: Text(auth.privacyMode == 'friends_only' ? 'Только по заявке' : 'Все могут написать'),
-              onTap: () async {
-                Navigator.of(context).pop();
-                await Navigator.of(context).push(MaterialPageRoute(
-                  builder: (_) => ChatPrivacyScreen(auth: auth, repo: repo, sync: sync, onChanged: onContactsChanged),
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => ChatSettingsScreen(
+                    auth: auth,
+                    repo: repo,
+                    sync: sync,
+                    prefs: prefs,
+                    db: db,
+                    onChanged: onContactsChanged,
+                  ),
                 ));
-                onContactsChanged();
               },
             ),
             ListTile(
