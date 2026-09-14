@@ -107,6 +107,7 @@ class LocalDbService {
         'chat_code': 'TEXT',
         'chat_avatar_base64': 'TEXT',
         'chat_global_push_mode': 'TEXT',
+        'chat_personal_push_mode': 'TEXT',
         // Настройки чата, не завязанные на конкретный аккаунт (перевод,
         // оформление пузырей) — см. ChatPreferences.
         'chat_translation_mode': "TEXT NOT NULL DEFAULT 'off'",

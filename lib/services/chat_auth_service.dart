@@ -135,6 +135,40 @@ class ChatAuthService {
     }
   }
 
+  /// 'all' (по умолчанию) или 'none' — в отличие от общего чата, в личной
+  /// переписке любое сообщение и так адресовано лично тебе, отдельного
+  /// смысла в варианте "только ответы" здесь нет. "Позвать" эту настройку
+  /// не учитывает (см. send-chat-push) — это разовый явный вызов, а не
+  /// рядовое сообщение.
+  String get personalPushMode {
+    final raw = _read('chat_personal_push_mode');
+    return raw.isEmpty ? 'all' : raw;
+  }
+
+  Future<void> updatePersonalPushMode(String mode) async {
+    final token = await ensureFreshToken();
+    if (token == null) throw const AuthException('Сначала войдите в чат');
+    final client = clientFactory();
+    try {
+      final res = await client
+          .patch(
+            Uri.parse('$url/rest/v1/chat_profiles?user_id=eq.$userId'),
+            headers: {
+              'apikey': anonKey,
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal',
+            },
+            body: jsonEncode({'personal_push_mode': mode}),
+          )
+          .timeout(const Duration(seconds: 20));
+      if (res.statusCode >= 400) throw AuthException(_message(res.body));
+      _write('chat_personal_push_mode', mode);
+    } finally {
+      client.close();
+    }
+  }
+
   /// Меняет никнейм — например, если он достался по умолчанию из почты
   /// (см. комментарий в `signIn`) и пользователь хочет вписать свой.
   Future<void> updateNickname(String value) async {

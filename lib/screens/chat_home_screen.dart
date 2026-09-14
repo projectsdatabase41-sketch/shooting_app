@@ -244,13 +244,15 @@ class _ChatDrawer extends StatelessWidget {
       };
 
   /// Компактный выбор, тем же приёмом, что язык перевода в "Настройках
-  /// чата" — список из трёх вариантов в мини-листе, а не отдельный экран.
-  /// Значение хранится на сервере (`chat_profiles.global_push_mode`) —
-  /// им пользуется рассылка push (см. supabase/functions/send-chat-push),
-  /// а не сам клиент, поэтому здесь только отправка, без локальной фильтрации.
-  Future<void> _pickGlobalPushMode(BuildContext context) async {
-    const options = [('all', 'Все сообщения'), ('replies', 'Только ответы на мои сообщения'), ('none', 'Отключены')];
-    final current = auth.globalPushMode;
+  /// чата" — список вариантов в мини-листе, а не отдельный экран. Общий
+  /// для обеих настроек уведомлений (общий/личные чаты) — отличаются
+  /// только список вариантов и то, куда сохранить выбор.
+  Future<void> _pickPushMode(
+    BuildContext context, {
+    required List<(String, String)> options,
+    required String current,
+    required Future<void> Function(String) onSave,
+  }) async {
     final picked = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
@@ -270,12 +272,33 @@ class _ChatDrawer extends StatelessWidget {
     );
     if (picked == null || picked == current) return;
     try {
-      await auth.updateGlobalPushMode(picked);
+      await onSave(picked);
       onContactsChanged();
     } catch (e) {
       if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     }
   }
+
+  /// Значение хранится на сервере (`chat_profiles.global_push_mode`) —
+  /// им пользуется рассылка push (см. supabase/functions/send-chat-push),
+  /// а не сам клиент, поэтому здесь только отправка, без локальной фильтрации.
+  Future<void> _pickGlobalPushMode(BuildContext context) => _pickPushMode(
+        context,
+        options: const [
+          ('all', 'Все сообщения'),
+          ('replies', 'Только ответы на мои сообщения'),
+          ('none', 'Отключены'),
+        ],
+        current: auth.globalPushMode,
+        onSave: auth.updateGlobalPushMode,
+      );
+
+  Future<void> _pickPersonalPushMode(BuildContext context) => _pickPushMode(
+        context,
+        options: const [('all', 'Включены'), ('none', 'Отключены')],
+        current: auth.personalPushMode,
+        onSave: auth.updatePersonalPushMode,
+      );
 
   Future<void> _addContact(BuildContext context) async {
     final codeCtrl = TextEditingController();
@@ -401,6 +424,12 @@ class _ChatDrawer extends StatelessWidget {
               title: const Text('Уведомления общего чата'),
               subtitle: Text(_globalPushModeLabel(auth.globalPushMode)),
               onTap: () => _pickGlobalPushMode(context),
+            ),
+            ListTile(
+              leading: const Icon(Icons.notifications_outlined),
+              title: const Text('Уведомления личных чатов'),
+              subtitle: Text(auth.personalPushMode == 'none' ? 'Отключены' : 'Включены'),
+              onTap: () => _pickPersonalPushMode(context),
             ),
             ListTile(
               leading: const Icon(Icons.logout),

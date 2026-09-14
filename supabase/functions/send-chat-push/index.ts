@@ -169,7 +169,21 @@ Deno.serve(async (req: Request) => {
       }
     }
   } else {
-    recipientIds.push(row.recipient_id as string);
+    const recipientId = row.recipient_id as string;
+    // "Позвать" — мимо настройки "Уведомления личных чатов" (тот же
+    // принцип, что звонок мимо беззвучного режима телефона): это явный
+    // разовый вызов, а не рядовое сообщение, которое можно отложить.
+    if (msgType === 'call') {
+      recipientIds.push(recipientId);
+    } else {
+      const profileRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/chat_profiles?select=personal_push_mode&user_id=eq.${recipientId}`,
+        { headers: { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` } },
+      );
+      const rows = await profileRes.json();
+      const mode = rows[0]?.personal_push_mode ?? 'all';
+      if (mode !== 'none') recipientIds.push(recipientId);
+    }
   }
   if (recipientIds.length === 0) return new Response('ok');
 

@@ -31,6 +31,10 @@ create table if not exists chat_profiles (
   -- только ответы на свои сообщения, 'none' — отключены. Личный чат это
   -- не затрагивает (там и так пишут напрямую тебе).
   global_push_mode text not null default 'all',
+  -- Уведомления личных чатов: 'all' — как обычно, 'none' — отключены
+  -- (без "только ответы" — в личной переписке любое сообщение и так
+  -- адресовано лично тебе, отдельного смысла в этом варианте нет).
+  personal_push_mode text not null default 'all',
   created_at     timestamptz not null default now()
 );
 
@@ -38,6 +42,11 @@ alter table chat_profiles add column if not exists global_push_mode text not nul
 alter table chat_profiles drop constraint if exists chat_profiles_global_push_mode_check;
 alter table chat_profiles add constraint chat_profiles_global_push_mode_check
   check (global_push_mode in ('all', 'replies', 'none'));
+
+alter table chat_profiles add column if not exists personal_push_mode text not null default 'all';
+alter table chat_profiles drop constraint if exists chat_profiles_personal_push_mode_check;
+alter table chat_profiles add constraint chat_profiles_personal_push_mode_check
+  check (personal_push_mode in ('all', 'none'));
 
 -- Сообщения — временная очередь. Строка живёт от отправки до того, как
 -- получатель её заберёт (клиент удаляет её сам после чтения, см.
