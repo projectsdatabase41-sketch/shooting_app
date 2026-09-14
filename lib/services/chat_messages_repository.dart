@@ -14,6 +14,13 @@ class ChatMessagesRepository {
     return rows.map(ChatContact.fromRow).toList();
   }
 
+  /// Для перехода в нужную переписку по тапу на push-уведомление (см.
+  /// `PushService`/`main.dart`) — там известен только id отправителя.
+  ChatContact? contactById(String id) {
+    final rows = db.db.select('SELECT * FROM chat_contacts WHERE id = ?', [id]);
+    return rows.isEmpty ? null : ChatContact.fromRow(rows.first);
+  }
+
   void addContact(ChatContact c) {
     db.db.execute(
       'INSERT INTO chat_contacts (id, nickname, chat_code, avatar_base64) VALUES (?, ?, ?, ?) '

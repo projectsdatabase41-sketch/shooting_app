@@ -237,6 +237,46 @@ class _ChatDrawer extends StatelessWidget {
     onContactsChanged();
   }
 
+  static String _globalPushModeLabel(String mode) => switch (mode) {
+        'replies' => 'Только ответы на мои сообщения',
+        'none' => 'Отключены',
+        _ => 'Все сообщения',
+      };
+
+  /// Компактный выбор, тем же приёмом, что язык перевода в "Настройках
+  /// чата" — список из трёх вариантов в мини-листе, а не отдельный экран.
+  /// Значение хранится на сервере (`chat_profiles.global_push_mode`) —
+  /// им пользуется рассылка push (см. supabase/functions/send-chat-push),
+  /// а не сам клиент, поэтому здесь только отправка, без локальной фильтрации.
+  Future<void> _pickGlobalPushMode(BuildContext context) async {
+    const options = [('all', 'Все сообщения'), ('replies', 'Только ответы на мои сообщения'), ('none', 'Отключены')];
+    final current = auth.globalPushMode;
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final (value, label) in options)
+              ListTile(
+                title: Text(label),
+                trailing: current == value ? const Icon(Icons.check) : null,
+                onTap: () => Navigator.of(ctx).pop(value),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null || picked == current) return;
+    try {
+      await auth.updateGlobalPushMode(picked);
+      onContactsChanged();
+    } catch (e) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
   Future<void> _addContact(BuildContext context) async {
     final codeCtrl = TextEditingController();
     final code = await showDialog<String>(
@@ -355,6 +395,12 @@ class _ChatDrawer extends StatelessWidget {
                 Navigator.of(context).pop();
                 Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChatAppearanceScreen(prefs: prefs, db: db)));
               },
+            ),
+            ListTile(
+              leading: const Icon(Icons.notifications_outlined),
+              title: const Text('Уведомления общего чата'),
+              subtitle: Text(_globalPushModeLabel(auth.globalPushMode)),
+              onTap: () => _pickGlobalPushMode(context),
             ),
             ListTile(
               leading: const Icon(Icons.logout),
@@ -883,12 +929,15 @@ class _GlobalBubble extends StatelessWidget {
                         child: Icon(Icons.translate_outlined, size: 13, color: fg.withValues(alpha: 0.7)),
                       ),
                       Flexible(
-                        child: SelectableText(translation!, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
+                        child: Text(translation!, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
                       ),
                     ],
                   )
                 else if (message.text != null && message.text!.isNotEmpty)
-                  SelectableText(message.text!, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
+                  // Text, не SelectableText — своё выделение перехватывало
+                  // долгое нажатие раньше меню действий (мешало открыть его
+                  // на Android). Копирование теперь только через меню.
+                  Text(message.text!, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
               ],
             ),
           ),

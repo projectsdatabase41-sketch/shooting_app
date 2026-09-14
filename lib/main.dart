@@ -6,6 +6,10 @@ import 'logic/ai_context.dart';
 import 'services/ai_memory_service.dart';
 import 'services/ai_service.dart';
 import 'services/ai_settings.dart';
+import 'services/chat_auth_service.dart';
+import 'services/chat_messages_repository.dart';
+import 'services/chat_preferences.dart';
+import 'services/chat_sync_service.dart';
 import 'services/firebase_settings.dart';
 import 'services/knowledge_service.dart';
 import 'services/local_db_service.dart';
@@ -14,8 +18,16 @@ import 'services/supabase_auth_service.dart';
 import 'state/ai_chat_view_model.dart';
 import 'state/app_data_store.dart';
 import 'state/personalization_view_model.dart';
+import 'screens/chat_home_screen.dart';
+import 'screens/chat_thread_screen.dart';
 import 'screens/home_shell.dart';
 import 'theme/app_theme.dart';
+
+/// Один навигатор на всё приложение — нужен, чтобы открыть конкретный
+/// чат по тапу на push-уведомление (см. `push_service.dart`) из места,
+/// где нет BuildContext текущего экрана: холодный старт приложения
+/// именно с этого тапа приходит раньше, чем отрисуется первый экран.
+final navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -64,6 +76,14 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
     _store = AppDataStore(widget.db)..loadAll();
     _personalization = PersonalizationViewModel(widget.db)..loadFromDb();
 
+    // Холодный старт по тапу на push (уже вошедшего в чат пользователя) —
+    // ChatHomeScreen мог ещё ни разу не открыться в этой сессии, значит
+    // и getInitialMessage() внутри PushService.init() тоже. Если чат ещё
+    // не настроен или пользователь не входил — init() сам ничего не делает.
+    pushChatTapHandler = _openChatFromPush;
+    final chatAuth = ChatAuthService(widget.db);
+    if (chatAuth.isSignedIn) PushService(chatAuth).init();
+
     final aiSettings = AiSettings(widget.db);
     _aiChat = AiChatViewModel(
       service: AiService(aiSettings),
@@ -89,6 +109,34 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _aiChat.dispose();
     super.dispose();
+  }
+
+  /// Открывает нужный чат по тапу на уведомление (см.
+  /// `push_service.dart`). Общий чат — просто ChatHomeScreen (это и есть
+  /// его главный экран); личный — сначала опрашивает сервер, чтобы
+  /// первое сообщение от ещё незнакомого контакта успело завести его
+  /// локально (см. `ChatSyncService.pollIncoming`), иначе для чужого
+  /// открылся бы список контактов вместо самой переписки.
+  Future<void> _openChatFromPush(PushChatTarget target) async {
+    final nav = navigatorKey.currentState;
+    if (nav == null) return;
+    final auth = ChatAuthService(widget.db);
+    if (!auth.isSignedIn) return;
+    final repo = ChatMessagesRepository(widget.db);
+    if (target.isGlobal) {
+      nav.push(MaterialPageRoute(builder: (_) => const ChatHomeScreen()));
+      return;
+    }
+    final sync = ChatSyncService(auth, repo);
+    await sync.pollIncoming();
+    final contact = repo.contactById(target.contactId!);
+    if (contact == null) {
+      nav.push(MaterialPageRoute(builder: (_) => const ChatHomeScreen()));
+      return;
+    }
+    nav.push(MaterialPageRoute(
+      builder: (_) => ChatThreadScreen(contact: contact, auth: auth, repo: repo, sync: sync, prefs: ChatPreferences(widget.db)),
+    ));
   }
 
   /// Сброс базы на диск, когда приложение уходит из фокуса.
@@ -123,6 +171,7 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
       child: Selector<PersonalizationViewModel, ThemeMode>(
         selector: (_, vm) => vm.themeMode,
         builder: (context, themeMode, _) => MaterialApp(
+          navigatorKey: navigatorKey,
           title: 'Shooting App',
           debugShowCheckedModeBanner: false,
           theme: _lightTheme,

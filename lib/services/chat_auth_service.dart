@@ -102,6 +102,39 @@ class ChatAuthService {
     await _post('/auth/v1/recover', {'email': email.trim()});
   }
 
+  /// 'all' (по умолчанию) — каждое сообщение общего чата, 'replies' —
+  /// только ответы на свои сообщения, 'none' — отключены. Кэш локальный
+  /// (мгновенно для UI), источник истины — `chat_profiles` на сервере,
+  /// его читает Edge Function при рассылке (см. send-chat-push).
+  String get globalPushMode {
+    final raw = _read('chat_global_push_mode');
+    return raw.isEmpty ? 'all' : raw;
+  }
+
+  Future<void> updateGlobalPushMode(String mode) async {
+    final token = await ensureFreshToken();
+    if (token == null) throw const AuthException('Сначала войдите в чат');
+    final client = clientFactory();
+    try {
+      final res = await client
+          .patch(
+            Uri.parse('$url/rest/v1/chat_profiles?user_id=eq.$userId'),
+            headers: {
+              'apikey': anonKey,
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal',
+            },
+            body: jsonEncode({'global_push_mode': mode}),
+          )
+          .timeout(const Duration(seconds: 20));
+      if (res.statusCode >= 400) throw AuthException(_message(res.body));
+      _write('chat_global_push_mode', mode);
+    } finally {
+      client.close();
+    }
+  }
+
   /// Меняет никнейм — например, если он достался по умолчанию из почты
   /// (см. комментарий в `signIn`) и пользователь хочет вписать свой.
   Future<void> updateNickname(String value) async {

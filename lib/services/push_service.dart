@@ -11,6 +11,26 @@ import 'chat_auth_service.dart';
 import 'chat_settings.dart';
 import 'firebase_settings.dart';
 
+/// Куда открыть чат по тапу на уведомление — общий чат или переписка с
+/// конкретным контактом (см. `PushService._handleTap`, обработчик
+/// навигации в `main.dart`).
+class PushChatTarget {
+  final bool isGlobal;
+  final String? contactId;
+  const PushChatTarget.global()
+      : isGlobal = true,
+        contactId = null;
+  const PushChatTarget.personal(String this.contactId) : isGlobal = false;
+}
+
+/// Единственный обработчик на всё приложение — куда бы ни пришёл тап
+/// (уведомление FCM или локальное "Позвать"), логика "какой экран
+/// открыть" одна и та же, и владеет ей корневой виджет (`main.dart`),
+/// у которого есть доступ к `Navigator`.
+void Function(PushChatTarget target)? pushChatTapHandler;
+
+bool _tapHandlingRegistered = false;
+
 /// Push-уведомления чата через Firebase (FCM) — ДОБАВКА к Supabase, не
 /// замена: сообщения/контакты/вход остаются там же, Firebase здесь
 /// только доставляет сигнал "новое сообщение" в закрытое приложение
@@ -60,7 +80,10 @@ class PushService {
   Future<void> init() async {
     if (!FirebaseSettings.isConfigured || !_supportedPlatform || !auth.isSignedIn) return;
     try {
-      await Firebase.initializeApp(options: _options);
+      // init() вызывается из нескольких мест (корень приложения — ради
+      // холодного старта по тапу на уведомление, и ChatHomeScreen — после
+      // входа в чат), Firebase инициализируется только один раз.
+      if (Firebase.apps.isEmpty) await Firebase.initializeApp(options: _options);
       // Канал с рингтоном/вибрацией — только Android (см. showCallNotification).
       if (_isAndroid) await _initLocalNotifications();
       final messaging = FirebaseMessaging.instance;
@@ -71,6 +94,7 @@ class PushService {
       if (token != null) await _saveToken(token);
       messaging.onTokenRefresh.listen(_saveToken);
       FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+      await _initTapHandling(messaging);
     } catch (_) {
       // Push — необязательное усиление доставки (опрос раз в 10-20с и
       // так работает) — сбой здесь не должен ронять чат.
@@ -82,6 +106,30 @@ class PushService {
     // пока приложение открыто, новое "Позвать" и так почти сразу
     // покажет опрос (10-20с), отдельно тут его не дублируем.
     if (_isAndroid && message.data['type'] == 'call') showCallNotification(message.data);
+  }
+
+  /// Тап на уведомление должен открыть ИМЕННО тот чат, откуда сообщение,
+  /// а не просто запустить приложение на главный экран. `init()` зовут и
+  /// из корня приложения, и из ChatHomeScreen — подписка нужна только
+  /// один раз, дальше `pushChatTapHandler` вызывается напрямую.
+  Future<void> _initTapHandling(FirebaseMessaging messaging) async {
+    if (_tapHandlingRegistered) return;
+    _tapHandlingRegistered = true;
+    final initial = await messaging.getInitialMessage();
+    if (initial != null) _handleTap(initial);
+    FirebaseMessaging.onMessageOpenedApp.listen(_handleTap);
+  }
+
+  void _handleTap(RemoteMessage message) {
+    final type = message.data['type'];
+    if (type == 'global') {
+      pushChatTapHandler?.call(const PushChatTarget.global());
+    } else {
+      final contactId = message.data['contact_id'];
+      if (contactId is String && contactId.isNotEmpty) {
+        pushChatTapHandler?.call(PushChatTarget.personal(contactId));
+      }
+    }
   }
 
   static FirebaseOptions get _options {
@@ -167,7 +215,19 @@ Future<void> _initLocalNotifications() async {
 final Int64List _callVibrationPattern = Int64List.fromList([0, 800, 400, 800, 400, 800]);
 
 void _onNotificationAction(NotificationResponse response) {
-  if (response.actionId == 'decline') _localNotifications.cancel(PushService._callNotificationId);
+  if (response.actionId == 'decline') {
+    _localNotifications.cancel(PushService._callNotificationId);
+    return;
+  }
+  // Тап по телу уведомления (не по кнопке "Сбросить") — открыть чат со
+  // звонящим, тот же payload-приём, что и у FCM-уведомлений обычных
+  // сообщений (см. PushService._handleTap), но здесь контакт передан
+  // через payload, а не через data сообщения — это ЛОКАЛЬНОЕ
+  // уведомление, Android/iOS ничего не знают о FCM data при его тапе.
+  final contactId = response.payload;
+  if (contactId != null && contactId.isNotEmpty) {
+    pushChatTapHandler?.call(PushChatTarget.personal(contactId));
+  }
 }
 
 /// Показывает уведомление "Позвать" вручную — вызывается и из
@@ -191,6 +251,7 @@ Future<void> showCallNotification(Map<String, dynamic> data) async {
         actions: [AndroidNotificationAction('decline', 'Сбросить', cancelNotification: true)],
       ),
     ),
+    payload: data['contact_id'] as String?,
   );
 }
 

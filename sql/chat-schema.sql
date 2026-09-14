@@ -27,8 +27,17 @@ create table if not exists chat_profiles (
   nickname       text not null,
   chat_code      text not null unique,
   avatar_base64  text,
+  -- Уведомления из общего чата: 'all' — каждое сообщение, 'replies' —
+  -- только ответы на свои сообщения, 'none' — отключены. Личный чат это
+  -- не затрагивает (там и так пишут напрямую тебе).
+  global_push_mode text not null default 'all',
   created_at     timestamptz not null default now()
 );
+
+alter table chat_profiles add column if not exists global_push_mode text not null default 'all';
+alter table chat_profiles drop constraint if exists chat_profiles_global_push_mode_check;
+alter table chat_profiles add constraint chat_profiles_global_push_mode_check
+  check (global_push_mode in ('all', 'replies', 'none'));
 
 -- Сообщения — временная очередь. Строка живёт от отправки до того, как
 -- получатель её заберёт (клиент удаляет её сам после чтения, см.

@@ -605,12 +605,15 @@ class _Bubble extends StatelessWidget {
                         child: Icon(Icons.translate_outlined, size: 13, color: fg.withValues(alpha: 0.7)),
                       ),
                       Flexible(
-                        child: SelectableText(translation!, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
+                        child: Text(translation!, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
                       ),
                     ],
                   ),
                 ] else if (message.text != null && message.text!.isNotEmpty)
-                  SelectableText(message.text!, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
+                  // Text, не SelectableText — своё выделение перехватывало
+                  // долгое нажатие раньше меню действий (мешало открыть его
+                  // на Android). Копирование теперь только через меню.
+                  Text(message.text!, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
               ],
             ),
           ),

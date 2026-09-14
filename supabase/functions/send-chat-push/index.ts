@@ -78,12 +78,12 @@ async function getAccessToken(): Promise<string> {
   return json.access_token;
 }
 
-async function sendPush(token: string, title: string, body: string) {
+async function sendPush(token: string, title: string, body: string, data: Record<string, string>) {
   const accessToken = await getAccessToken();
   await fetch(`https://fcm.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/messages:send`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message: { token, notification: { title, body } } }),
+    body: JSON.stringify({ message: { token, notification: { title, body }, data } }),
   });
 }
 
@@ -94,13 +94,13 @@ async function sendPush(token: string, title: string, body: string) {
 // рисует уведомление САМО через flutter_local_notifications. `priority:
 // high` — чтобы data-сообщение доставилось сразу, а не с задержкой
 // (Android иначе может придержать его до следующей синхронизации).
-async function sendCallPush(token: string, title: string, body: string) {
+async function sendCallPush(token: string, title: string, body: string, contactId: string) {
   const accessToken = await getAccessToken();
   await fetch(`https://fcm.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/messages:send`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      message: { token, data: { type: 'call', title, body }, android: { priority: 'high' } },
+      message: { token, data: { type: 'call', title, body, contact_id: contactId }, android: { priority: 'high' } },
     }),
   });
 }
@@ -134,7 +134,40 @@ Deno.serve(async (req: Request) => {
       { headers: { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` } },
     );
     const rows = await res.json();
-    for (const r of rows) recipientIds.push(r.user_id);
+    const candidateIds = [...new Set(rows.map((r: { user_id: string }) => r.user_id))] as string[];
+
+    if (candidateIds.length > 0) {
+      // Настройка "Уведомления общего чата" (chat_profiles.global_push_mode,
+      // см. ChatAuthService.updateGlobalPushMode): 'all' — как раньше,
+      // 'replies' — только если это ответ на СВОЁ сообщение, 'none' —
+      // молчим. По умолчанию 'all' (для профилей без строки в ответе тоже).
+      const profilesRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/chat_profiles?select=user_id,global_push_mode&user_id=in.(${candidateIds.join(',')})`,
+        { headers: { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` } },
+      );
+      const profileRows = await profilesRes.json();
+      const modeOf = new Map<string, string>(
+        profileRows.map((r: { user_id: string; global_push_mode?: string }) => [r.user_id, r.global_push_mode ?? 'all']),
+      );
+
+      let repliedToSenderId: string | null = null;
+      const replyToId = row.reply_to_id as string | undefined;
+      if (replyToId) {
+        const replyRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/chat_global_messages?id=eq.${replyToId}&select=sender_id`,
+          { headers: { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` } },
+        );
+        const replyRows = await replyRes.json();
+        repliedToSenderId = replyRows[0]?.sender_id ?? null;
+      }
+
+      for (const id of candidateIds) {
+        const mode = modeOf.get(id) ?? 'all';
+        if (mode === 'none') continue;
+        if (mode === 'replies' && id !== repliedToSenderId) continue;
+        recipientIds.push(id);
+      }
+    }
   } else {
     recipientIds.push(row.recipient_id as string);
   }
@@ -164,7 +197,7 @@ Deno.serve(async (req: Request) => {
   if (msgType === 'call') {
     const title = senderNickname ?? 'Звонок';
     const body = 'вызывает вас';
-    await Promise.all(tokens.map((t) => sendCallPush(t, title, body).catch(() => {})));
+    await Promise.all(tokens.map((t) => sendCallPush(t, title, body, senderId).catch(() => {})));
     return new Response('ok');
   }
 
@@ -181,8 +214,11 @@ Deno.serve(async (req: Request) => {
 
   const title = isGlobal ? 'Общий чат' : (senderNickname ?? 'Личное сообщение');
   const body = isGlobal ? `${senderNickname ?? '—'}: ${preview(row)}` : preview(row);
+  // type/contact_id — чтобы тап по уведомлению открывал именно этот чат
+  // (см. PushService._handleTap), а не просто главный экран приложения.
+  const data = isGlobal ? { type: 'global' } : { type: 'chat', contact_id: senderId };
 
-  await Promise.all(tokens.map((t) => sendPush(t, title, body).catch(() => {})));
+  await Promise.all(tokens.map((t) => sendPush(t, title, body, data).catch(() => {})));
 
   return new Response('ok');
 });
