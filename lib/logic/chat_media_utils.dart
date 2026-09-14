@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:image/image.dart' as img;
+import 'package:share_plus/share_plus.dart';
 
 /// Подготовка фото для отправки в чат — в отличие от аватара
 /// (`AvatarUtils`, квадратный кроп под миниатюру), здесь только
@@ -9,6 +10,14 @@ import 'package:image/image.dart' as img;
 class ChatMediaUtils {
   static const int maxSide = 1600;
   static const int jpegQuality = 80;
+
+  /// Совпадает с лимитом бакета chat-media в Storage (см.
+  /// sql/chat-schema.sql) — проверка на клиенте до отправки, а не после
+  /// отказа сервера. Личный чат хранит вложение как base64 в локальной
+  /// sqlite и целиком гоняет его в теле JSON-запроса — гораздо большие
+  /// файлы (сотни МБ) там не просто "долго", а реально рискуют уронить
+  /// приложение по памяти, поэтому лимит consciously не поднят выше.
+  static const int maxAttachmentBytes = 50 * 1024 * 1024;
 
   /// `null`, если файл не распознан как изображение — тогда стоит
   /// отправить как есть, типом `file`, а не `image`.
@@ -49,6 +58,16 @@ class ChatMediaUtils {
   static String safePathSegment(String name) {
     final sanitized = name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
     return sanitized.isEmpty ? 'file' : sanitized;
+  }
+
+  /// "Сохранить" у вложения (см. ChatPreferences.photoDownloadEnabled) —
+  /// системный лист "Поделиться", а не прямая запись в галерею/загрузки:
+  /// уже есть в зависимостях, работает на всех платформах без отдельных
+  /// разрешений на хранилище, и пользователь сам решает, куда сохранить.
+  static Future<void> shareAttachment(Uint8List bytes, String fileName, String? mime) {
+    return SharePlus.instance.share(ShareParams(
+      files: [XFile.fromData(bytes, name: fileName, mimeType: mime)],
+    ));
   }
 
   /// Читаемый размер — "2.4 МБ" вместо голого числа байт.

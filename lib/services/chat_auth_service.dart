@@ -112,9 +112,17 @@ class ChatAuthService {
     return raw.isEmpty ? 'all' : raw;
   }
 
+  /// Локальный кэш пишется сразу, до сети — та же причина, что у
+  /// `updatePrivacyMode` (см. комментарий там): галочка в настройках не
+  /// должна ждать ответа сервера, откатывается назад при неудаче.
   Future<void> updateGlobalPushMode(String mode) async {
+    final previous = globalPushMode;
+    _write('chat_global_push_mode', mode);
     final token = await ensureFreshToken();
-    if (token == null) throw const AuthException('Сначала войдите в чат');
+    if (token == null) {
+      _write('chat_global_push_mode', previous);
+      throw const AuthException('Сначала войдите в чат');
+    }
     final client = clientFactory();
     try {
       final res = await client
@@ -129,8 +137,10 @@ class ChatAuthService {
             body: jsonEncode({'global_push_mode': mode}),
           )
           .timeout(const Duration(seconds: 20));
-      if (res.statusCode >= 400) throw AuthException(_message(res.body));
-      _write('chat_global_push_mode', mode);
+      if (res.statusCode >= 400) {
+        _write('chat_global_push_mode', previous);
+        throw AuthException(_message(res.body));
+      }
     } finally {
       client.close();
     }
@@ -147,8 +157,13 @@ class ChatAuthService {
   }
 
   Future<void> updatePersonalPushMode(String mode) async {
+    final previous = personalPushMode;
+    _write('chat_personal_push_mode', mode);
     final token = await ensureFreshToken();
-    if (token == null) throw const AuthException('Сначала войдите в чат');
+    if (token == null) {
+      _write('chat_personal_push_mode', previous);
+      throw const AuthException('Сначала войдите в чат');
+    }
     final client = clientFactory();
     try {
       final res = await client
@@ -163,8 +178,10 @@ class ChatAuthService {
             body: jsonEncode({'personal_push_mode': mode}),
           )
           .timeout(const Duration(seconds: 20));
-      if (res.statusCode >= 400) throw AuthException(_message(res.body));
-      _write('chat_personal_push_mode', mode);
+      if (res.statusCode >= 400) {
+        _write('chat_personal_push_mode', previous);
+        throw AuthException(_message(res.body));
+      }
     } finally {
       client.close();
     }
@@ -179,9 +196,19 @@ class ChatAuthService {
     return raw.isEmpty ? 'everyone' : raw;
   }
 
+  /// Локальный кэш пишется СРАЗУ, синхронно, до сетевого запроса —
+  /// экран настроек читает `privacyMode` для галочки сразу после вызова,
+  /// не дожидаясь ответа сервера (решение пользователя: анимация выбора
+  /// не должна тормозить, пока крутится сеть — откатывается назад, если
+  /// сохранить не удалось).
   Future<void> updatePrivacyMode(String mode) async {
+    final previous = privacyMode;
+    _write('chat_privacy_mode', mode);
     final token = await ensureFreshToken();
-    if (token == null) throw const AuthException('Сначала войдите в чат');
+    if (token == null) {
+      _write('chat_privacy_mode', previous);
+      throw const AuthException('Сначала войдите в чат');
+    }
     final client = clientFactory();
     try {
       final res = await client
@@ -196,8 +223,10 @@ class ChatAuthService {
             body: jsonEncode({'privacy_mode': mode}),
           )
           .timeout(const Duration(seconds: 20));
-      if (res.statusCode >= 400) throw AuthException(_message(res.body));
-      _write('chat_privacy_mode', mode);
+      if (res.statusCode >= 400) {
+        _write('chat_privacy_mode', previous);
+        throw AuthException(_message(res.body));
+      }
     } finally {
       client.close();
     }
@@ -437,6 +466,33 @@ class ChatAuthService {
     _write('chat_nickname', '');
     _write('chat_code', '');
     _write('chat_avatar_base64', '');
+  }
+
+  /// Удаляет чат-аккаунт целиком на сервере (профиль, друзья/заявки,
+  /// push-токены, сообщения — всё каскадом по внешним ключам, см.
+  /// `delete_own_chat_account` в sql/chat-schema.sql), затем выходит
+  /// локально. Необратимо — подтверждение спрашивает вызывающий экран.
+  Future<void> deleteAccount() async {
+    final token = await ensureFreshToken();
+    if (token == null) throw const AuthException('Сначала войдите в чат');
+    final client = clientFactory();
+    try {
+      final res = await client
+          .post(
+            Uri.parse('$url/rest/v1/rpc/delete_own_chat_account'),
+            headers: {
+              'apikey': anonKey,
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+            body: '{}',
+          )
+          .timeout(const Duration(seconds: 20));
+      if (res.statusCode >= 400) throw AuthException(_message(res.body));
+      signOutLocally();
+    } finally {
+      client.close();
+    }
   }
 
   /// Ищет собеседника по коду контакта — через RPC (`security definer`),

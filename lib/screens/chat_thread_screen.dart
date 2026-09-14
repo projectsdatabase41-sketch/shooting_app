@@ -18,6 +18,7 @@ import '../widgets/chat_avatar.dart';
 import '../widgets/chat_quick_menu.dart';
 import '../widgets/chat_reply_bar.dart';
 import '../widgets/empty_state.dart';
+import 'attachment_compose_screen.dart';
 
 /// Переписка с одним контактом. Открытие ветки сразу отмечает входящие
 /// прочитанными локально (сервер их к этому моменту уже не хранит — см.
@@ -256,6 +257,26 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
 
   void _reply(ChatMessage m) => setState(() => _replyingTo = m);
 
+  /// Переписка на устройстве не трогается — удаляется только сама
+  /// запись контакта (не будет в списке слева); написать снова можно
+  /// через код или из общего чата, как и добавляли в первый раз.
+  Future<void> _removeContact() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Удалить из контактов?'),
+        content: Text('Переписка с ${widget.contact.nickname} останется на устройстве, но сам контакт пропадёт из списка.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Отмена')),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Удалить')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    widget.repo.deleteContact(widget.contact.id);
+    if (mounted) Navigator.of(context).pop();
+  }
+
   void _copy(ChatMessage m) {
     if (m.text == null || m.text!.isEmpty) return;
     Clipboard.setData(ClipboardData(text: m.text!));
@@ -335,17 +356,33 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
 
   /// Прикрепить фото или файл — запись видео/голоса пока не встроена в
   /// интерфейс (см. комментарий у `ChatSyncService.sendAttachment`).
+  /// Открывает предпросмотр (`AttachmentComposeScreen`) для подписи,
+  /// вместо отправки сразу по выбору файла (решение пользователя).
   /// Картинка сжимается перед отправкой (`ChatMediaUtils.compressImage`),
   /// остальные файлы уходят как есть.
   Future<void> _attach() async {
     final result = await FilePicker.platform.pickFiles(withData: true);
+    if (!mounted) return;
     final file = result?.files.first;
     final bytes = file?.bytes;
     if (file == null || bytes == null) return;
+    if (bytes.length > ChatMediaUtils.maxAttachmentBytes) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Слишком большой файл — до ${ChatMediaUtils.formatSize(ChatMediaUtils.maxAttachmentBytes)}'),
+        ));
+      }
+      return;
+    }
+
+    final isImage = ChatMediaUtils.looksLikeImage(file.name);
+    final caption = await Navigator.of(context).push<String>(MaterialPageRoute(
+      builder: (_) => AttachmentComposeScreen(bytes: bytes, fileName: file.name, isImage: isImage),
+    ));
+    if (caption == null) return; // экран закрыли без отправки
 
     setState(() => _sending = true);
     try {
-      final isImage = ChatMediaUtils.looksLikeImage(file.name);
       final compressed = isImage ? ChatMediaUtils.compressImage(bytes) : null;
       await widget.sync.sendAttachment(
         contactId: widget.contact.id,
@@ -355,6 +392,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         // — mime должен это отражать, а не оставаться от исходного .png/.webp.
         mime: isImage ? (compressed != null ? 'image/jpeg' : ChatMediaUtils.mimeFor(file.name)) : 'application/octet-stream',
         type: isImage ? ChatMessageType.image : ChatMessageType.file,
+        caption: caption.isEmpty ? null : caption,
       );
       _scrollToEnd();
     } catch (e) {
@@ -380,6 +418,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
               Text(widget.contact.nickname),
             ],
           ),
+          // Пока единственный пункт — удаление контакта (решение
+          // пользователя: убрать эту возможность из списка "Участники" и
+          // держать настройки конкретного контакта здесь, тут же со
+          // временем появятся остальные).
+          actions: [
+            PopupMenuButton<String>(
+              onSelected: (v) {
+                if (v == 'remove') _removeContact();
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: 'remove', child: Text('Удалить из контактов')),
+              ],
+            ),
+          ],
         ),
         // resizeToAvoidBottomInset выключен намеренно — Scaffold сам иногда
         // не отыгрывает обратное схлопывание после закрытия клавиатуры
@@ -442,7 +494,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
             SafeArea(
               top: false,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                // Ниже на ~10% (решение пользователя) — было 8 сверху/снизу.
+                padding: const EdgeInsets.fromLTRB(12, 7, 12, 7),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -457,7 +510,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                         minLines: 1,
                         maxLines: 4,
                         textInputAction: TextInputAction.newline,
-                        decoration: const InputDecoration(hintText: 'Сообщение'),
+                        decoration: const InputDecoration(hintText: 'Сообщение', isDense: true),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -492,6 +545,8 @@ class _Bubble extends StatelessWidget {
     required this.onRetry,
   });
 
+  static const double _imageMaxWidth = 260;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -500,6 +555,191 @@ class _Bubble extends StatelessWidget {
     final isError = message.status == ChatMessageStatus.error;
     final base = isError ? cs.errorContainer : (mine ? prefs.mineBubbleColor : prefs.otherBubbleColor);
     final fg = isError ? cs.onErrorContainer : (mine ? prefs.mineTextColor : prefs.otherTextColor);
+    final hasCaption = message.text != null && message.text!.isNotEmpty;
+    final isImage = message.type == ChatMessageType.image && message.attachmentBase64 != null;
+    // Фото без подписи — совсем без рамки/фона (решение пользователя):
+    // рамка появляется, только только когда под фото есть что оборачивать
+    // (подпись или цитата ответа).
+    final isBareImage = isImage && !hasCaption && message.replyToPreview == null;
+
+    final decoration = BoxDecoration(
+      // Лёгкий градиент вместо плоской заливки — тот самый "3D"-эффект
+      // (пункт 7): верх чуть светлее, низ чуть темнее.
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color.lerp(base, Colors.white, 0.08)!, Color.lerp(base, Colors.black, 0.10)!],
+      ),
+      boxShadow: prefs.shadowEnabled
+          ? [BoxShadow(color: Colors.black.withValues(alpha: prefs.shadowIntensity), blurRadius: 10, offset: const Offset(0, 4))]
+          : null,
+    );
+
+    // Всё, что идёт ПОСЛЕ фото (или само по себе, если фото нет) —
+    // цитата ответа, подпись/текст, статус перевода. У фото с подписью
+    // это отдельный блок под картинкой, у остальных типов — единственное
+    // содержимое рамки.
+    final captionContent = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (message.replyToPreview != null) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            margin: const EdgeInsets.only(bottom: 6),
+            decoration: BoxDecoration(
+              color: fg.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+              border: Border(left: BorderSide(color: fg.withValues(alpha: 0.5), width: 3)),
+            ),
+            child: Text(
+              message.replyToPreview!,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(color: fg.withValues(alpha: 0.85)),
+            ),
+          ),
+        ],
+        if (!isImage && message.type == ChatMessageType.file) ...[
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.insert_drive_file_outlined, color: fg),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  '${message.attachmentName ?? 'Файл'} · ${ChatMediaUtils.formatSize(message.attachmentSize)}',
+                  style: theme.textTheme.bodyMedium?.copyWith(color: fg),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (prefs.photoDownloadEnabled && message.attachmentBase64 != null) ...[
+                const SizedBox(width: 4),
+                InkWell(
+                  onTap: () => ChatMediaUtils.shareAttachment(
+                    base64Decode(message.attachmentBase64!),
+                    message.attachmentName ?? 'file',
+                    message.attachmentMime,
+                  ),
+                  child: Icon(Icons.download_outlined, color: fg, size: 20),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 6),
+        ] else if (!isImage && message.type == ChatMessageType.call) ...[
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.campaign_outlined, color: fg),
+              const SizedBox(width: 8),
+              Text(
+                mine ? 'Вы позвали' : 'Вас позвали',
+                style: theme.textTheme.bodyMedium?.copyWith(color: fg, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ],
+        // "Маска" — перевод показывается ВМЕСТО оригинала, не вместе с
+        // ним (решение пользователя): либо/либо, с маленькой
+        // иконкой-подсказкой, что это перевод.
+        if (translating) ...[
+          SizedBox(
+            height: 14,
+            width: 14,
+            child: CircularProgressIndicator(strokeWidth: 1.5, color: fg.withValues(alpha: 0.7)),
+          ),
+        ] else if (masked && translation != null) ...[
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 3, right: 4),
+                child: Icon(Icons.translate_outlined, size: 13, color: fg.withValues(alpha: 0.7)),
+              ),
+              Flexible(
+                child: Text(translation!, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
+              ),
+            ],
+          ),
+        ] else if (hasCaption)
+          // Text, не SelectableText — своё выделение перехватывало долгое
+          // нажатие раньше меню действий (мешало открыть его на
+          // Android). Копирование теперь только через меню.
+          Text(message.text!, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
+      ],
+    );
+
+    Widget withDownloadButton(Widget image) {
+      if (!prefs.photoDownloadEnabled) return image;
+      return Stack(
+        children: [
+          image,
+          Positioned(
+            right: 6,
+            bottom: 6,
+            child: Material(
+              color: Colors.black.withValues(alpha: 0.45),
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: () => ChatMediaUtils.shareAttachment(
+                  base64Decode(message.attachmentBase64!),
+                  message.attachmentName ?? 'photo.jpg',
+                  message.attachmentMime,
+                ),
+                child: const Padding(
+                  padding: EdgeInsets.all(6),
+                  child: Icon(Icons.download_outlined, color: Colors.white, size: 18),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    final Widget frame;
+    if (isBareImage) {
+      frame = ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: withDownloadButton(ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: _imageMaxWidth),
+          child: Image.memory(base64Decode(message.attachmentBase64!), fit: BoxFit.contain),
+        )),
+      );
+    } else if (isImage) {
+      // Рамка только позади подписи, шириной ровно с фото (решение
+      // пользователя) — IntrinsicWidth подгоняет колонку под самый
+      // широкий элемент (фото), а stretch растягивает подпись под неё.
+      frame = IntrinsicWidth(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              child: withDownloadButton(ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: _imageMaxWidth),
+                child: Image.memory(base64Decode(message.attachmentBase64!), fit: BoxFit.cover),
+              )),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: decoration.copyWith(borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16))),
+              child: captionContent,
+            ),
+          ],
+        ),
+      );
+    } else {
+      frame = Container(
+        constraints: const BoxConstraints(maxWidth: 480),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: decoration.copyWith(borderRadius: BorderRadius.circular(16)),
+        child: captionContent,
+      );
+    }
 
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
@@ -509,115 +749,7 @@ class _Bubble extends StatelessWidget {
           // Рамка — только содержимое сообщения. Дата, статус и пометка
           // "изменено" вынесены НАРУЖУ, тем же краем, что и сам пузырь
           // (решение пользователя, пункт 2 списка правок).
-          Container(
-            constraints: const BoxConstraints(maxWidth: 480),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              // Лёгкий градиент вместо плоской заливки — тот самый
-              // "3D"-эффект (пункт 7): верх чуть светлее, низ чуть темнее.
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color.lerp(base, Colors.white, 0.08)!, Color.lerp(base, Colors.black, 0.10)!],
-              ),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: prefs.shadowEnabled
-                  ? [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: prefs.shadowIntensity),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (message.replyToPreview != null) ...[
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                    margin: const EdgeInsets.only(bottom: 6),
-                    decoration: BoxDecoration(
-                      color: fg.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border(left: BorderSide(color: fg.withValues(alpha: 0.5), width: 3)),
-                    ),
-                    child: Text(
-                      message.replyToPreview!,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(color: fg.withValues(alpha: 0.85)),
-                    ),
-                  ),
-                ],
-                if (message.type == ChatMessageType.image && message.attachmentBase64 != null) ...[
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Image.memory(base64Decode(message.attachmentBase64!), fit: BoxFit.contain),
-                  ),
-                  const SizedBox(height: 6),
-                ] else if (message.type == ChatMessageType.file) ...[
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.insert_drive_file_outlined, color: fg),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          '${message.attachmentName ?? 'Файл'} · ${ChatMediaUtils.formatSize(message.attachmentSize)}',
-                          style: theme.textTheme.bodyMedium?.copyWith(color: fg),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                ] else if (message.type == ChatMessageType.call) ...[
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.campaign_outlined, color: fg),
-                      const SizedBox(width: 8),
-                      Text(
-                        mine ? 'Вы позвали' : 'Вас позвали',
-                        style: theme.textTheme.bodyMedium?.copyWith(color: fg, fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                ],
-                // "Маска" — перевод показывается ВМЕСТО оригинала, не
-                // вместе с ним (решение пользователя): либо/либо, с
-                // маленькой иконкой-подсказкой, что это перевод.
-                if (translating) ...[
-                  SizedBox(
-                    height: 14,
-                    width: 14,
-                    child: CircularProgressIndicator(strokeWidth: 1.5, color: fg.withValues(alpha: 0.7)),
-                  ),
-                ] else if (masked && translation != null) ...[
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(top: 3, right: 4),
-                        child: Icon(Icons.translate_outlined, size: 13, color: fg.withValues(alpha: 0.7)),
-                      ),
-                      Flexible(
-                        child: Text(translation!, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
-                      ),
-                    ],
-                  ),
-                ] else if (message.text != null && message.text!.isNotEmpty)
-                  // Text, не SelectableText — своё выделение перехватывало
-                  // долгое нажатие раньше меню действий (мешало открыть его
-                  // на Android). Копирование теперь только через меню.
-                  Text(message.text!, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
-              ],
-            ),
-          ),
+          frame,
           const SizedBox(height: 3),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),

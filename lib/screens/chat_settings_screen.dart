@@ -68,13 +68,24 @@ class _ChatSettingsScreenState extends State<ChatSettingsScreen> {
         },
       );
 
+  /// Обе `update...` пишут свой локальный кэш СИНХРОННО в самом начале
+  /// (до первого await внутри) — вызов ниже уже обновил то, что читает
+  /// `_pushEnabled`/`_pushMode`, поэтому `setState` сразу после вызова
+  /// показывает новый выбор без задержки на сеть; сеть просто донастраивает
+  /// сервер в фоне и откатывает кэш назад, если не получилось (тогда
+  /// заметно по SnackBar и второму `setState`).
   Future<void> _updatePush({required String personal, required String global}) async {
+    final personalFuture = widget.auth.updatePersonalPushMode(personal);
+    final globalFuture = widget.auth.updateGlobalPushMode(global);
+    setState(() {});
+    widget.onChanged();
     try {
-      await Future.wait([widget.auth.updatePersonalPushMode(personal), widget.auth.updateGlobalPushMode(global)]);
-      widget.onChanged();
-      if (mounted) setState(() {});
+      await Future.wait([personalFuture, globalFuture]);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+        setState(() {});
+      }
     }
   }
 
@@ -91,6 +102,14 @@ class _ChatSettingsScreenState extends State<ChatSettingsScreen> {
             onTap: () => Navigator.of(context).push(MaterialPageRoute(
               builder: (_) => ChatAppearanceScreen(prefs: widget.prefs, db: widget.db),
             )),
+          ),
+          const Divider(height: 1),
+          SwitchListTile(
+            secondary: const Icon(Icons.download_outlined),
+            title: const Text('Скачивание фото и файлов'),
+            subtitle: const Text('Кнопка "Сохранить" у вложений в чате'),
+            value: widget.prefs.photoDownloadEnabled,
+            onChanged: (v) => setState(() => widget.prefs.photoDownloadEnabled = v),
           ),
           const Divider(height: 1),
           SwitchListTile(
@@ -126,8 +145,45 @@ class _ChatSettingsScreenState extends State<ChatSettingsScreen> {
               if (mounted) setState(() {});
             },
           ),
+          const Divider(height: 1),
+          ListTile(
+            leading: Icon(Icons.delete_forever_outlined, color: Theme.of(context).colorScheme.error),
+            title: Text('Удалить аккаунт', style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            subtitle: const Text('Профиль, друзья, переписка на сервере — необратимо'),
+            onTap: _deleteAccount,
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _deleteAccount() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Удалить аккаунт чата?'),
+        content: const Text(
+          'Никнейм, код контакта, список друзей и заявки будут удалены безвозвратно. '
+          'Переписка, уже сохранённая на этом устройстве, останется в контактах локально. '
+          'Отменить это действие нельзя.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Отмена')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.error),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await widget.auth.deleteAccount();
+      widget.onChanged();
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
   }
 }

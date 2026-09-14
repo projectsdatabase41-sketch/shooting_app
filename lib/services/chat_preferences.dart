@@ -120,6 +120,17 @@ class ChatPreferences extends ChangeNotifier {
   static const Color _defaultOther = Color(0xFF3A3F4B);
   static const double _defaultShadow = 0.22;
 
+  /// 'view_and_download' (по умолчанию) — у фото/файла есть кнопка
+  /// "Сохранить"; 'view_only' — только просмотр в самом чате, без неё.
+  /// Локальная настройка устройства (как и остальные ChatPreferences) —
+  /// каждый решает сам для СВОЕГО экрана, не влияет на собеседника.
+  bool get photoDownloadEnabled => _read('chat_photo_download') != '0';
+
+  set photoDownloadEnabled(bool value) {
+    _write('chat_photo_download', value ? '1' : '0');
+    notifyListeners();
+  }
+
   /// Ручной перевод одного сообщения (кнопка в меню долгого нажатия)
   /// доступен всегда — этот тумблер только про АВТОМАТИЧЕСКУЮ маску на
   /// каждое входящее сообщение сразу.

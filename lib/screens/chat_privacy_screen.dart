@@ -56,13 +56,20 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
     });
   }
 
+  /// updatePrivacyMode пишет локальный кэш синхронно до сети (см.
+  /// ChatAuthService) — setState сразу после вызова уже показывает новый
+  /// режим, не дожидаясь ответа сервера; откатывается назад при ошибке.
   Future<void> _setMode(String mode) async {
     if (mode == widget.auth.privacyMode) return;
+    final future = widget.auth.updatePrivacyMode(mode);
+    setState(() {});
     try {
-      await widget.auth.updatePrivacyMode(mode);
-      setState(() {});
+      await future;
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+        setState(() {});
+      }
     }
   }
 

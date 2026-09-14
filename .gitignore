@@ -55,3 +55,7 @@ hs_err_pid*.log
 
 # Локальный ключ OpenRouter для сборок с этой машины — не для git.
 .local/
+
+# Кэш Supabase CLI (`supabase functions deploy`) — локальная привязка
+# проекта на этой машине, не имеет отношения к коду.
+supabase/.temp/

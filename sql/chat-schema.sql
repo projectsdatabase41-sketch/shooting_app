@@ -410,6 +410,29 @@ as $$
   where user_id = any(p_ids);
 $$;
 
+-- Удаление СВОЕГО ЖЕ чат-аккаунта целиком (настройка "Удалить аккаунт",
+-- см. ChatSettingsScreen) — удаляет саму строку auth.users, всё
+-- остальное (chat_profiles/chat_friends/chat_push_tokens/сообщения)
+-- уходит каскадом по внешним ключам "on delete cascade", отдельно
+-- чистить не нужно. SECURITY DEFINER — обычный пользователь не может
+-- писать в auth.users напрямую, функция выполняется от имени её
+-- владельца (postgres), но только для auth.uid() самого вызывающего.
+-- Файлы вложений в Storage при этом НЕ удаляются (см. пункт "orphaned
+-- storage" в комментариях ниже по файлу) — расход места, не дыра в
+-- безопасности, можно почистить отдельно при необходимости.
+create or replace function delete_own_chat_account()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  delete from auth.users where id = auth.uid();
+end;
+$$;
+
+grant execute on function delete_own_chat_account() to authenticated;
+
 -- ============================================================
 -- Push-уведомления через Firebase (FCM) — ДОБАВКА к этой базе, не
 -- замена: сама переписка/контакты/вход остаются здесь как есть, Firebase

@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -28,6 +29,7 @@ import '../widgets/chat_avatar.dart';
 import '../widgets/chat_quick_menu.dart';
 import '../widgets/chat_reply_bar.dart';
 import '../widgets/empty_state.dart';
+import 'attachment_compose_screen.dart';
 import 'chat_settings_screen.dart';
 import 'chat_thread_screen.dart';
 
@@ -664,18 +666,33 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
   /// в личном чате.
   Future<void> _attach() async {
     final result = await FilePicker.platform.pickFiles(withData: true);
+    if (!mounted) return;
     final file = result?.files.first;
     final bytes = file?.bytes;
     if (file == null || bytes == null) return;
+    if (bytes.length > ChatMediaUtils.maxAttachmentBytes) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Слишком большой файл — до ${ChatMediaUtils.formatSize(ChatMediaUtils.maxAttachmentBytes)}'),
+        ));
+      }
+      return;
+    }
+
+    final isImage = ChatMediaUtils.looksLikeImage(file.name);
+    final caption = await Navigator.of(context).push<String>(MaterialPageRoute(
+      builder: (_) => AttachmentComposeScreen(bytes: bytes, fileName: file.name, isImage: isImage),
+    ));
+    if (caption == null) return;
 
     setState(() => _sending = true);
     try {
-      final isImage = ChatMediaUtils.looksLikeImage(file.name);
       final compressed = isImage ? ChatMediaUtils.compressImage(bytes) : null;
       await widget.global.sendAttachment(
         bytes: compressed ?? bytes,
         fileName: file.name,
         mime: isImage ? (compressed != null ? 'image/jpeg' : ChatMediaUtils.mimeFor(file.name)) : 'application/octet-stream',
+        caption: caption.isEmpty ? null : caption,
       );
       await _load();
       _scrollToEnd();
@@ -712,25 +729,32 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
                   itemCount: participants.length,
                   itemBuilder: (context, i) {
                     final p = participants[i];
+                    // Уже в контактах — кнопка выглядит "нажатой" и больше
+                    // не реагирует на тап (решение пользователя): убрать из
+                    // контактов теперь отдельное действие, через меню (⋮)
+                    // в самом чате с этим контактом, а не отсюда.
+                    final isContact = widget.repo.contactById(p.senderId) != null;
                     return ListTile(
                       leading: ChatAvatar(base64: p.senderAvatarBase64, nickname: p.senderNickname ?? '?'),
                       title: Text(p.senderNickname ?? '—'),
-                      trailing: OutlinedButton(
-                        onPressed: () {
-                          widget.repo.addContact(ChatContact(
-                            id: p.senderId,
-                            nickname: p.senderNickname ?? '—',
-                            chatCode: '',
-                            avatarBase64: p.senderAvatarBase64,
-                            addedAt: DateTime.now(),
-                          ));
-                          widget.onContactAdded();
-                          Navigator.of(ctx).pop();
-                          ScaffoldMessenger.of(context)
-                              .showSnackBar(const SnackBar(content: Text('Добавлено в контакты')));
-                        },
-                        child: const Text('В контакты'),
-                      ),
+                      trailing: isContact
+                          ? const FilledButton(onPressed: null, child: Text('В контактах'))
+                          : OutlinedButton(
+                              onPressed: () {
+                                widget.repo.addContact(ChatContact(
+                                  id: p.senderId,
+                                  nickname: p.senderNickname ?? '—',
+                                  chatCode: '',
+                                  avatarBase64: p.senderAvatarBase64,
+                                  addedAt: DateTime.now(),
+                                ));
+                                widget.onContactAdded();
+                                Navigator.of(ctx).pop();
+                                ScaffoldMessenger.of(context)
+                                    .showSnackBar(const SnackBar(content: Text('Добавлено в контакты')));
+                              },
+                              child: const Text('В контакты'),
+                            ),
                     );
                   },
                 ),
@@ -799,7 +823,8 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
         SafeArea(
           top: false,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+            // Ниже на ~10% (решение пользователя) — было 8 сверху/снизу.
+            padding: const EdgeInsets.fromLTRB(12, 7, 12, 7),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -814,7 +839,7 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
                     minLines: 1,
                     maxLines: 4,
                     textInputAction: TextInputAction.newline,
-                    decoration: const InputDecoration(hintText: 'Сообщение всем'),
+                    decoration: const InputDecoration(hintText: 'Сообщение всем', isDense: true),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -848,11 +873,120 @@ class _GlobalBubble extends StatelessWidget {
     required this.translationError,
   });
 
+  static const double _imageMaxWidth = 260;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final base = mine ? prefs.mineBubbleColor : prefs.otherBubbleColor;
     final fg = mine ? prefs.mineTextColor : prefs.otherTextColor;
+    final hasCaption = message.text != null && message.text!.isNotEmpty;
+    // Фото без подписи — совсем без рамки/фона (тот же приём, что в
+    // личном чате, см. _Bubble в chat_thread_screen.dart).
+    final isBareImage = message.isImage && !hasCaption && message.replyToPreview == null;
+
+    final decoration = BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color.lerp(base, Colors.white, 0.08)!, Color.lerp(base, Colors.black, 0.10)!],
+      ),
+      boxShadow: prefs.shadowEnabled
+          ? [BoxShadow(color: Colors.black.withValues(alpha: prefs.shadowIntensity), blurRadius: 10, offset: const Offset(0, 4))]
+          : null,
+    );
+
+    final captionContent = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (message.replyToPreview != null)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            margin: const EdgeInsets.only(bottom: 6),
+            decoration: BoxDecoration(
+              color: fg.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+              border: Border(left: BorderSide(color: fg.withValues(alpha: 0.5), width: 3)),
+            ),
+            child: Text(
+              message.replyToPreview!,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(color: fg.withValues(alpha: 0.85)),
+            ),
+          ),
+        if (message.hasAttachment && !message.isImage)
+          _GlobalAttachment(message: message, global: global, fg: fg, showDownload: prefs.photoDownloadEnabled),
+        if (translating)
+          SizedBox(
+            height: 14,
+            width: 14,
+            child: CircularProgressIndicator(strokeWidth: 1.5, color: fg.withValues(alpha: 0.7)),
+          )
+        else if (masked && translation != null)
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 3, right: 4),
+                child: Icon(Icons.translate_outlined, size: 13, color: fg.withValues(alpha: 0.7)),
+              ),
+              Flexible(
+                child: Text(translation!, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
+              ),
+            ],
+          )
+        else if (hasCaption)
+          // Text, не SelectableText — своё выделение перехватывало
+          // долгое нажатие раньше меню действий (мешало открыть его
+          // на Android). Копирование теперь только через меню.
+          Text(message.text!, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
+      ],
+    );
+
+    final Widget frame;
+    if (isBareImage) {
+      frame = ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: _imageMaxWidth),
+          child: _GlobalAttachment(
+              message: message, global: global, fg: fg, bare: true, showDownload: prefs.photoDownloadEnabled),
+        ),
+      );
+    } else if (message.isImage) {
+      // Рамка только позади подписи, шириной ровно с фото — тот же
+      // приём, что в личном чате.
+      frame = IntrinsicWidth(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: _imageMaxWidth),
+                child: _GlobalAttachment(
+                    message: message, global: global, fg: fg, bare: true, showDownload: prefs.photoDownloadEnabled),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: decoration.copyWith(borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16))),
+              child: captionContent,
+            ),
+          ],
+        ),
+      );
+    } else {
+      frame = Container(
+        constraints: const BoxConstraints(maxWidth: 480),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: decoration.copyWith(borderRadius: BorderRadius.circular(16)),
+        child: captionContent,
+      );
+    }
 
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
@@ -868,75 +1002,7 @@ class _GlobalBubble extends StatelessWidget {
                 style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
             ),
-          Container(
-            constraints: const BoxConstraints(maxWidth: 480),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color.lerp(base, Colors.white, 0.08)!, Color.lerp(base, Colors.black, 0.10)!],
-              ),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: prefs.shadowEnabled
-                  ? [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: prefs.shadowIntensity),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (message.replyToPreview != null)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                    margin: const EdgeInsets.only(bottom: 6),
-                    decoration: BoxDecoration(
-                      color: fg.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border(left: BorderSide(color: fg.withValues(alpha: 0.5), width: 3)),
-                    ),
-                    child: Text(
-                      message.replyToPreview!,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(color: fg.withValues(alpha: 0.85)),
-                    ),
-                  ),
-                if (message.hasAttachment) _GlobalAttachment(message: message, global: global, fg: fg),
-                if (translating)
-                  SizedBox(
-                    height: 14,
-                    width: 14,
-                    child: CircularProgressIndicator(strokeWidth: 1.5, color: fg.withValues(alpha: 0.7)),
-                  )
-                else if (masked && translation != null)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(top: 3, right: 4),
-                        child: Icon(Icons.translate_outlined, size: 13, color: fg.withValues(alpha: 0.7)),
-                      ),
-                      Flexible(
-                        child: Text(translation!, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
-                      ),
-                    ],
-                  )
-                else if (message.text != null && message.text!.isNotEmpty)
-                  // Text, не SelectableText — своё выделение перехватывало
-                  // долгое нажатие раньше меню действий (мешало открыть его
-                  // на Android). Копирование теперь только через меню.
-                  Text(message.text!, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
-              ],
-            ),
-          ),
+          frame,
           const SizedBox(height: 3),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -973,7 +1039,18 @@ class _GlobalAttachment extends StatefulWidget {
   final ChatGlobalMessage message;
   final ChatGlobalService global;
   final Color fg;
-  const _GlobalAttachment({required this.message, required this.global, required this.fg});
+  // true — без своей рамки/отступа снизу: обрезку и ширину задаёт
+  // родитель (_GlobalBubble), сама картинка кладётся туда как есть.
+  final bool bare;
+  // "Скачивание фото и файлов" в настройках (ChatPreferences.photoDownloadEnabled).
+  final bool showDownload;
+  const _GlobalAttachment({
+    required this.message,
+    required this.global,
+    required this.fg,
+    this.bare = false,
+    this.showDownload = false,
+  });
 
   @override
   State<_GlobalAttachment> createState() => _GlobalAttachmentState();
@@ -981,6 +1058,20 @@ class _GlobalAttachment extends StatefulWidget {
 
 class _GlobalAttachmentState extends State<_GlobalAttachment> {
   late final Future<String?> _urlFuture = widget.global.signedUrl(widget.message.attachmentPath!);
+
+  /// В общем чате вложение живёт только в Storage (не как base64
+  /// локально, в отличие от личного чата) — скачиваем по той же
+  /// подписанной ссылке, что уже открыта на просмотр, и отдаём в
+  /// системный лист "Поделиться".
+  Future<void> _download(String url) async {
+    final res = await http.get(Uri.parse(url));
+    if (res.statusCode != 200) return;
+    await ChatMediaUtils.shareAttachment(
+      res.bodyBytes,
+      widget.message.attachmentName ?? (widget.message.isImage ? 'photo.jpg' : 'file'),
+      widget.message.attachmentMime,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -999,32 +1090,66 @@ class _GlobalAttachmentState extends State<_GlobalAttachment> {
           return Text('Вложение недоступно', style: theme.textTheme.bodySmall?.copyWith(color: widget.fg));
         }
         if (widget.message.isImage) {
+          final image = Image.network(url, fit: widget.bare ? BoxFit.cover : BoxFit.contain);
+          final withButton = !widget.showDownload
+              ? image
+              : Stack(
+                  children: [
+                    image,
+                    Positioned(
+                      right: 6,
+                      bottom: 6,
+                      child: Material(
+                        color: Colors.black.withValues(alpha: 0.45),
+                        shape: const CircleBorder(),
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: () => _download(url),
+                          child: const Padding(
+                            padding: EdgeInsets.all(6),
+                            child: Icon(Icons.download_outlined, color: Colors.white, size: 18),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+          if (widget.bare) return withButton;
           return Padding(
             padding: const EdgeInsets.only(bottom: 6),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: Image.network(url, fit: BoxFit.contain),
-            ),
+            child: ClipRRect(borderRadius: BorderRadius.circular(10), child: withButton),
           );
         }
         return Padding(
           padding: const EdgeInsets.only(bottom: 6),
-          child: InkWell(
-            onTap: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.insert_drive_file_outlined, color: widget.fg),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    '${widget.message.attachmentName ?? 'Файл'} · ${ChatMediaUtils.formatSize(widget.message.attachmentSize)}',
-                    style: theme.textTheme.bodyMedium?.copyWith(color: widget.fg, decoration: TextDecoration.underline),
-                    overflow: TextOverflow.ellipsis,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: InkWell(
+                  onTap: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.insert_drive_file_outlined, color: widget.fg),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          '${widget.message.attachmentName ?? 'Файл'} · ${ChatMediaUtils.formatSize(widget.message.attachmentSize)}',
+                          style:
+                              theme.textTheme.bodyMedium?.copyWith(color: widget.fg, decoration: TextDecoration.underline),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+              ),
+              if (widget.showDownload) ...[
+                const SizedBox(width: 4),
+                InkWell(onTap: () => _download(url), child: Icon(Icons.download_outlined, color: widget.fg, size: 20)),
               ],
-            ),
+            ],
           ),
         );
       },
