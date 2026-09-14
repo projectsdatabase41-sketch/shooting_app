@@ -51,6 +51,7 @@ class LocalDbService {
     }
     _addMissingColumns();
     _upgradeCommentsLevelCheck();
+    _upgradeChatLocalMessagesTypeCheck();
   }
 
   /// Догоняет схему на УЖЕ СОЗДАННОЙ базе.
@@ -172,6 +173,57 @@ CREATE TABLE comments (
     db.execute('DROP TABLE comments_pre_coach_level');
     db.execute('CREATE INDEX IF NOT EXISTS idx_comments_session ON comments(session_id)');
     db.execute('CREATE INDEX IF NOT EXISTS idx_comments_shot ON comments(shot_id)');
+  }
+
+  /// Тот же приём, что `_upgradeCommentsLevelCheck` — пересоздаёт
+  /// `chat_local_messages`, если её CHECK на `msg_type` ещё не знает
+  /// про `'call'` ("Позвать тренера"): иначе `INSERT` с msg_type='call'
+  /// падает с CHECK constraint failed на уже установленных копиях.
+  void _upgradeChatLocalMessagesTypeCheck() {
+    final rows = db.select(
+      "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'chat_local_messages'",
+    );
+    if (rows.isEmpty) return; // таблицы ещё нет — её создал CREATE TABLE выше, уже с новым CHECK
+    final ddl = rows.first['sql'] as String? ?? '';
+    if (ddl.contains("'call'")) return; // уже обновлена
+
+    db.execute('ALTER TABLE chat_local_messages RENAME TO chat_local_messages_pre_call_type');
+    db.execute('''
+CREATE TABLE chat_local_messages (
+  id                  TEXT PRIMARY KEY,
+  client_message_id   TEXT NOT NULL,
+  contact_id          TEXT NOT NULL REFERENCES chat_contacts(id) ON DELETE CASCADE,
+  direction           TEXT NOT NULL CHECK (direction IN ('outgoing','incoming')),
+  text                TEXT,
+  status              TEXT NOT NULL DEFAULT 'sending' CHECK (status IN ('sending','sent','delivered','error')),
+  seen                INTEGER NOT NULL DEFAULT 0,
+  msg_type            TEXT NOT NULL DEFAULT 'text' CHECK (msg_type IN ('text','image','video','audio','file','call')),
+  attachment_base64   TEXT,
+  attachment_name     TEXT,
+  attachment_mime     TEXT,
+  attachment_size     INTEGER,
+  edited              INTEGER NOT NULL DEFAULT 0,
+  reply_to_client_message_id TEXT,
+  reply_to_preview    TEXT,
+  created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+)''');
+    // Явный список колонок по ИМЕНИ с обеих сторон — а не SELECT * —
+    // потому что физический порядок колонок в старой таблице мог
+    // разъехаться с порядком ниже из-за более ранних ALTER TABLE ADD
+    // COLUMN (см. _addMissingColumns, который выполняется раньше и уже
+    // догнал старую таблицу до этого набора колонок). Позиционная
+    // вставка при разном порядке молча запишет значения не в те поля.
+    db.execute('''
+INSERT INTO chat_local_messages
+  (id, client_message_id, contact_id, direction, text, status, seen, msg_type,
+   attachment_base64, attachment_name, attachment_mime, attachment_size,
+   edited, reply_to_client_message_id, reply_to_preview, created_at)
+SELECT id, client_message_id, contact_id, direction, text, status, seen, msg_type,
+   attachment_base64, attachment_name, attachment_mime, attachment_size,
+   edited, reply_to_client_message_id, reply_to_preview, created_at
+FROM chat_local_messages_pre_call_type''');
+    db.execute('DROP TABLE chat_local_messages_pre_call_type');
+    db.execute('CREATE INDEX IF NOT EXISTS idx_chat_local_messages_contact ON chat_local_messages(contact_id)');
   }
 
   Future<String> _loadSchemaSql() async {

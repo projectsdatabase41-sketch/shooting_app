@@ -143,7 +143,7 @@ CREATE TABLE IF NOT EXISTS chat_local_messages (
   -- приём, что уже применён для аватара (AvatarUtils), только без
   -- ограничения на размер: локальная база не пытается его сжать,
   -- сжатие уже произошло на отправке.
-  msg_type            TEXT NOT NULL DEFAULT 'text' CHECK (msg_type IN ('text','image','video','audio','file')),
+  msg_type            TEXT NOT NULL DEFAULT 'text' CHECK (msg_type IN ('text','image','video','audio','file','call')),
   attachment_base64   TEXT,
   attachment_name     TEXT,
   attachment_mime     TEXT,

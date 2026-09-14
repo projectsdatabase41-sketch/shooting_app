@@ -102,6 +102,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     }
   }
 
+  /// "Позвать" — отдельная кнопка в шапке, не текстовое сообщение:
+  /// собеседник получает push с усиленным звуком/вибрацией (см.
+  /// sql/chat-schema.sql и Edge Function), а не просто прочитает
+  /// сообщение когда-нибудь.
+  Future<void> _call() async {
+    setState(() => _sending = true);
+    try {
+      await widget.sync.sendCall(widget.contact.id);
+      _reload();
+      _scrollToEnd();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось позвать: $e')));
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
   Future<void> _retry(ChatMessage m) async {
     await widget.sync.retry(m);
     _reload();
@@ -214,6 +231,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
             Text(widget.contact.nickname),
           ],
         ),
+        actions: [
+          IconButton(
+            onPressed: _sending ? null : _call,
+            icon: const Icon(Icons.campaign_outlined),
+            tooltip: 'Позвать',
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -387,6 +411,18 @@ class _Bubble extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 6),
+            ] else if (message.type == ChatMessageType.call) ...[
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.campaign_outlined, color: fg),
+                  const SizedBox(width: 8),
+                  Text(
+                    mine ? 'Вы позвали' : 'Вас позвали',
+                    style: theme.textTheme.bodyMedium?.copyWith(color: fg, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
             ],
             if (message.text != null && message.text!.isNotEmpty)
               SelectableText(message.text!, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),

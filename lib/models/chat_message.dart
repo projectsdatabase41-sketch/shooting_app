@@ -15,7 +15,11 @@ enum ChatMessageStatus { sending, sent, delivered, error }
 /// а сигналы, которые `ChatSyncService.pollIncoming` применяет к уже
 /// существующей локальной строке (меняет текст / удаляет) и сам не
 /// сохраняет как новую запись — см. `ChatSyncService`.
-enum ChatMessageType { text, image, video, audio, file, edit, delete }
+///
+/// `call` — "позвать" (кнопка в `ChatThreadScreen`): в отличие от
+/// edit/delete это НАСТОЯЩЕЕ сообщение (остаётся в истории переписки),
+/// просто без текста и вложения — весь смысл в push с усиленным звуком.
+enum ChatMessageType { text, image, video, audio, file, edit, delete, call }
 
 class ChatMessage {
   final String id;

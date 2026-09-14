@@ -87,6 +87,24 @@ async function sendPush(token: string, title: string, body: string) {
   });
 }
 
+// "Позвать" — БЕЗ `notification`-поля (данными), намеренно: иначе ОС
+// показала бы его сама, в канале по умолчанию с обычным звуком —
+// нужный канал (`coach_call`, рингтон устройства + вибрация, см.
+// lib/services/push_service.dart) применяется только когда приложение
+// рисует уведомление САМО через flutter_local_notifications. `priority:
+// high` — чтобы data-сообщение доставилось сразу, а не с задержкой
+// (Android иначе может придержать его до следующей синхронизации).
+async function sendCallPush(token: string, title: string, body: string) {
+  const accessToken = await getAccessToken();
+  await fetch(`https://fcm.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/messages:send`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message: { token, data: { type: 'call', title, body }, android: { priority: 'high' } },
+    }),
+  });
+}
+
 // ---- Обработчик webhook'а ----
 
 Deno.serve(async (req: Request) => {
@@ -140,6 +158,16 @@ Deno.serve(async (req: Request) => {
   const profileRows = await profileRes.json();
   const senderNickname = profileRows[0]?.nickname as string | undefined;
 
+  // FCM v1 шлёт одно сообщение на один токен — параллельно на все
+  // устройства получателя (обычно одно, но пользователь может быть
+  // залогинен на нескольких).
+  if (msgType === 'call') {
+    const title = senderNickname ?? 'Звонок';
+    const body = 'вызывает вас';
+    await Promise.all(tokens.map((t) => sendCallPush(t, title, body).catch(() => {})));
+    return new Response('ok');
+  }
+
   const preview = (r: Record<string, unknown>): string => {
     if (r.text) return r.text as string;
     switch (r.msg_type) {
@@ -154,9 +182,6 @@ Deno.serve(async (req: Request) => {
   const title = isGlobal ? 'Общий чат' : (senderNickname ?? 'Личное сообщение');
   const body = isGlobal ? `${senderNickname ?? '—'}: ${preview(row)}` : preview(row);
 
-  // FCM v1 шлёт одно сообщение на один токен — параллельно на все
-  // устройства получателя (обычно одно, но пользователь может быть
-  // залогинен на нескольких).
   await Promise.all(tokens.map((t) => sendPush(t, title, body).catch(() => {})));
 
   return new Response('ok');

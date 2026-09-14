@@ -49,9 +49,11 @@ create table if not exists chat_messages (
   text                   text,
   -- 'text' — только текст; 'image'/'video'/'audio'/'file' — есть вложение;
   -- 'edit'/'delete' — служебные сигналы к уже отправленному сообщению
-  -- (см. ниже), а не новые сообщения сами по себе.
+  -- (см. ниже), а не новые сообщения сами по себе; 'call' — "позвать"
+  -- (кнопка в ChatThreadScreen) — без текста и вложения, только сигнал
+  -- для push с усиленным звуком/вибрацией (см. Edge Function).
   msg_type               text not null default 'text'
-                           check (msg_type in ('text','image','video','audio','file','edit','delete')),
+                           check (msg_type in ('text','image','video','audio','file','edit','delete','call')),
   attachment_path        text,   -- путь объекта в бакете chat-media
   attachment_name        text,   -- исходное имя файла (для 'file')
   attachment_mime        text,
@@ -78,6 +80,7 @@ create table if not exists chat_messages (
     or (msg_type in ('image','video','audio','file') and attachment_path is not null)
     or (msg_type = 'edit' and edit_of_client_message_id is not null and text is not null)
     or (msg_type = 'delete' and delete_of_client_message_id is not null)
+    or (msg_type = 'call')
   )
 );
 
@@ -103,7 +106,7 @@ alter table chat_messages add column if not exists reply_to_preview text;
 -- накатывать многократно.
 alter table chat_messages drop constraint if exists chat_messages_msg_type_check;
 alter table chat_messages add constraint chat_messages_msg_type_check
-  check (msg_type in ('text','image','video','audio','file','edit','delete'));
+  check (msg_type in ('text','image','video','audio','file','edit','delete','call'));
 
 alter table chat_messages drop constraint if exists chat_messages_check;
 alter table chat_messages drop constraint if exists chat_messages_content_check;
@@ -113,6 +116,7 @@ alter table chat_messages add constraint chat_messages_content_check
     or (msg_type in ('image','video','audio','file') and attachment_path is not null)
     or (msg_type = 'edit' and edit_of_client_message_id is not null and text is not null)
     or (msg_type = 'delete' and delete_of_client_message_id is not null)
+    or (msg_type = 'call')
   );
 
 create index if not exists idx_chat_messages_recipient on chat_messages(recipient_id);

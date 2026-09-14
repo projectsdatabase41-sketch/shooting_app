@@ -33,6 +33,30 @@ class ChatSyncService {
 
   static const _uuid = Uuid();
   static const Duration _timeout = Duration(seconds: 60);
+  static const _attachmentTypes = {
+    ChatMessageType.image,
+    ChatMessageType.video,
+    ChatMessageType.audio,
+    ChatMessageType.file,
+  };
+
+  /// "Позвать" — настоящее сообщение (остаётся в истории), но без
+  /// текста и вложения: весь смысл в push с усиленным звуком/вибрацией
+  /// (см. `chat_notify_push`/Edge Function), а не в содержимом.
+  Future<ChatMessage> sendCall(String contactId) async {
+    final message = ChatMessage(
+      id: _uuid.v4(),
+      clientMessageId: _uuid.v4(),
+      contactId: contactId,
+      direction: ChatMessageDirection.outgoing,
+      status: ChatMessageStatus.sending,
+      type: ChatMessageType.call,
+      createdAt: DateTime.now(),
+    );
+    repo.addMessage(message);
+    await retry(message);
+    return message;
+  }
 
   /// Отправляет текстовое сообщение: сохраняет локально сразу (видно в
   /// переписке немедленно), затем пытается уйти на сервер. Неудача —
@@ -196,7 +220,7 @@ class ChatSyncService {
     final client = clientFactory();
     try {
       String? attachmentPath;
-      if (message.type != ChatMessageType.text) {
+      if (_attachmentTypes.contains(message.type)) {
         final b64 = message.attachmentBase64;
         if (b64 == null) {
           repo.updateStatus(message.id, ChatMessageStatus.error);
