@@ -34,13 +34,26 @@ const List<ChatLanguage> chatLanguages = [
 /// `ChatPreferences.applyPreset`), а не отдельное самостоятельное
 /// состояние: после ручной правки понятия "текущий пресет" не остаётся,
 /// как и с любым другим редактируемым поверх шаблона оформлением.
+///
+/// Цвет текста — часть пресета, а не всегда белый: чистый белый на
+/// ярком насыщенном фоне и в тёмной комнате (стрелковый тир, вечер)
+/// сильнее устаёт глаза, чем тёплый неяркий оттенок с тем же контрастом.
 class ChatBubblePreset {
   final String id;
   final String label;
   final Color mine;
   final Color other;
+  final Color mineText;
+  final Color otherText;
 
-  const ChatBubblePreset({required this.id, required this.label, required this.mine, required this.other});
+  const ChatBubblePreset({
+    required this.id,
+    required this.label,
+    required this.mine,
+    required this.other,
+    this.mineText = Colors.white,
+    this.otherText = Colors.white,
+  });
 }
 
 /// Настройки чата, не завязанные на конкретный аккаунт (тот же экран
@@ -55,6 +68,52 @@ class ChatPreferences extends ChangeNotifier {
     ChatBubblePreset(id: 'forest', label: 'Лес', mine: Color(0xFF2F8F5B), other: Color(0xFF33403A)),
     ChatBubblePreset(id: 'sunset', label: 'Закат', mine: Color(0xFFD9633B), other: Color(0xFF40393F)),
     ChatBubblePreset(id: 'violet', label: 'Фиолет', mine: Color(0xFF8256D0), other: Color(0xFF3B3A45)),
+    // Ночной — без синего и без чистого белого: меньше нагружает глаза
+    // при чтении в темноте (перед стрельбой в помещении вечером и т.п.).
+    ChatBubblePreset(
+      id: 'night',
+      label: 'Ночной',
+      mine: Color(0xFF2B211B),
+      other: Color(0xFF1E1E20),
+      mineText: Color(0xFFE7B27A),
+      otherText: Color(0xFFC9A87A),
+    ),
+    // Хаки — тактическая тема, в тон самому приложению.
+    ChatBubblePreset(
+      id: 'khaki',
+      label: 'Хаки',
+      mine: Color(0xFF4B5320),
+      other: Color(0xFF3B3B2E),
+      mineText: Color(0xFFEDEAE0),
+      otherText: Color(0xFFD8CBB0),
+    ),
+    // Графит — низкий контраст без ярких цветов вообще, самый спокойный.
+    ChatBubblePreset(
+      id: 'graphite',
+      label: 'Графит',
+      mine: Color(0xFF565B66),
+      other: Color(0xFF34383F),
+      mineText: Color(0xFFF0F0F0),
+      otherText: Color(0xFFC7CCD6),
+    ),
+    // Кофе — тёплая сепия вместо серого/синего.
+    ChatBubblePreset(
+      id: 'coffee',
+      label: 'Кофе',
+      mine: Color(0xFF6F4E37),
+      other: Color(0xFF3E2F27),
+      mineText: Color(0xFFF3E5D8),
+      otherText: Color(0xFFD9C7B8),
+    ),
+    // Мята — приглушённый холодный цвет вместо насыщенного зелёного.
+    ChatBubblePreset(
+      id: 'mint',
+      label: 'Мята',
+      mine: Color(0xFF3E8E7E),
+      other: Color(0xFF33403D),
+      mineText: Color(0xFFEAFBF6),
+      otherText: Color(0xFFB8D8CF),
+    ),
   ];
 
   static const Color _defaultMine = Color(0xFF3D6BF2);
@@ -139,8 +198,8 @@ class ChatPreferences extends ChangeNotifier {
   void applyPreset(ChatBubblePreset preset) {
     _writeColor('chat_color_mine_bubble', preset.mine);
     _writeColor('chat_color_other_bubble', preset.other);
-    _writeColor('chat_color_mine_text', Colors.white);
-    _writeColor('chat_color_other_text', Colors.white);
+    _writeColor('chat_color_mine_text', preset.mineText);
+    _writeColor('chat_color_other_text', preset.otherText);
     notifyListeners();
   }
 

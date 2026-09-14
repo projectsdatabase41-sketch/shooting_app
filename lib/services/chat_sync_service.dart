@@ -55,6 +55,7 @@ class ChatSyncService {
       createdAt: DateTime.now(),
     );
     repo.addMessage(message);
+    auth.ensureFriendRequest(contactId);
     await retry(message);
     return message;
   }
@@ -80,6 +81,7 @@ class ChatSyncService {
       createdAt: DateTime.now(),
     );
     repo.addMessage(message);
+    auth.ensureFriendRequest(contactId);
     await retry(message);
     return message;
   }
@@ -202,6 +204,7 @@ class ChatSyncService {
       createdAt: DateTime.now(),
     );
     repo.addMessage(message);
+    auth.ensureFriendRequest(contactId);
     await retry(message);
     return message;
   }
@@ -311,14 +314,27 @@ class ChatSyncService {
       // было бы негде увидеть — в списке контактов такого отправителя
       // просто нет. Поэтому первое сообщение от незнакомца заводит его
       // в контакты автоматически, как "запрос на переписку" в обычных
-      // мессенджерах.
+      // мессенджерах — если только пользователь не включил режим
+      // "только по заявке" (см. ниже).
       final knownContacts = repo.listContacts().map((c) => c.id).toSet();
+      // Не друзья ещё в этом опросе — их строки оставляем на сервере
+      // нетронутыми (не скачиваем, не удаляем), пока заявку не примут;
+      // без этого кэша каждое их сообщение слало бы отдельный запрос
+      // статуса заявки на каждый цикл опроса.
+      final notYetFriends = <String>{};
+      final friendsOnly = auth.privacyMode == 'friends_only';
       for (final row in decoded) {
         if (row is! Map) continue;
         final senderId = '${row['sender_id']}';
         final rawType = '${row['msg_type']}';
 
+        if (notYetFriends.contains(senderId)) continue;
+
         if (!knownContacts.contains(senderId)) {
+          if (friendsOnly && await auth.friendStatusWith(senderId) != 'accepted') {
+            notYetFriends.add(senderId);
+            continue;
+          }
           final profile = (await _global.resolveProfiles([senderId]))[senderId];
           repo.addContact(ChatContact(
             id: senderId,

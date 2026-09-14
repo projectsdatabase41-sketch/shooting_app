@@ -48,6 +48,56 @@ alter table chat_profiles drop constraint if exists chat_profiles_personal_push_
 alter table chat_profiles add constraint chat_profiles_personal_push_mode_check
   check (personal_push_mode in ('all', 'none'));
 
+-- Приватность личных чатов: 'everyone' (по умолчанию) — как раньше,
+-- первый встречный может просто написать; 'friends_only' — написать
+-- может кто угодно, но это ЗАЯВКА (см. chat_friends ниже) — сообщения
+-- видны, только когда её примут.
+alter table chat_profiles add column if not exists privacy_mode text not null default 'everyone';
+alter table chat_profiles drop constraint if exists chat_profiles_privacy_mode_check;
+alter table chat_profiles add constraint chat_profiles_privacy_mode_check
+  check (privacy_mode in ('everyone', 'friends_only'));
+
+-- Заявки/друзья — переживают переустановку и смену телефона (в отличие
+-- от chat_contacts, который живёт только на устройстве): при входе с
+-- нового устройства список принятых заявок подтягивается заново в
+-- локальный список контактов (см. ChatAuthService.listFriends).
+create table if not exists chat_friends (
+  requester_id  uuid not null references auth.users(id) on delete cascade,
+  addressee_id  uuid not null references auth.users(id) on delete cascade,
+  status        text not null default 'pending' check (status in ('pending', 'accepted')),
+  created_at    timestamptz not null default now(),
+  primary key (requester_id, addressee_id)
+);
+
+alter table chat_friends enable row level security;
+
+-- Видно обеим сторонам — и кто отправил, и кому адресовано.
+drop policy if exists chat_friends_select on chat_friends;
+create policy chat_friends_select on chat_friends
+  for select
+  using (requester_id = auth.uid() or addressee_id = auth.uid());
+
+-- Заявку создаёт только сам отправитель, от своего имени (см.
+-- ChatAuthService.ensureFriendRequest — вызывается при отправке
+-- сообщения новому собеседнику).
+drop policy if exists chat_friends_insert on chat_friends;
+create policy chat_friends_insert on chat_friends
+  for insert
+  with check (requester_id = auth.uid());
+
+-- Принять заявку может только адресат (перевод в 'accepted').
+drop policy if exists chat_friends_update on chat_friends;
+create policy chat_friends_update on chat_friends
+  for update
+  using (addressee_id = auth.uid())
+  with check (addressee_id = auth.uid());
+
+-- Отклонить/удалить из друзей может любая из сторон.
+drop policy if exists chat_friends_delete on chat_friends;
+create policy chat_friends_delete on chat_friends
+  for delete
+  using (requester_id = auth.uid() or addressee_id = auth.uid());
+
 -- Сообщения — временная очередь. Строка живёт от отправки до того, как
 -- получатель её заберёт (клиент удаляет её сам после чтения, см.
 -- ChatSyncService.pollIncoming) — история не копится в базе вовсе.

@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:http/http.dart' as http;
 
+import 'chat_global_service.dart';
 import 'chat_settings.dart';
 import 'local_db_service.dart';
 import 'supabase_auth_service.dart' show AuthException;
@@ -164,6 +165,237 @@ class ChatAuthService {
           .timeout(const Duration(seconds: 20));
       if (res.statusCode >= 400) throw AuthException(_message(res.body));
       _write('chat_personal_push_mode', mode);
+    } finally {
+      client.close();
+    }
+  }
+
+  /// 'everyone' (по умолчанию) — как раньше, первый встречный может
+  /// просто написать; 'friends_only' — написать может кто угодно, но
+  /// это ЗАЯВКА (см. `chat_friends`/`ensureFriendRequest`), сообщения
+  /// видны только после её принятия (см. `ChatSyncService.pollIncoming`).
+  String get privacyMode {
+    final raw = _read('chat_privacy_mode');
+    return raw.isEmpty ? 'everyone' : raw;
+  }
+
+  Future<void> updatePrivacyMode(String mode) async {
+    final token = await ensureFreshToken();
+    if (token == null) throw const AuthException('Сначала войдите в чат');
+    final client = clientFactory();
+    try {
+      final res = await client
+          .patch(
+            Uri.parse('$url/rest/v1/chat_profiles?user_id=eq.$userId'),
+            headers: {
+              'apikey': anonKey,
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal',
+            },
+            body: jsonEncode({'privacy_mode': mode}),
+          )
+          .timeout(const Duration(seconds: 20));
+      if (res.statusCode >= 400) throw AuthException(_message(res.body));
+      _write('chat_privacy_mode', mode);
+    } finally {
+      client.close();
+    }
+  }
+
+  /// Заявка в друзья — вызывается при отправке сообщения новому
+  /// собеседнику (см. `ChatSyncService.send`/`sendAttachment`/`sendCall`),
+  /// независимо от режима приватности получателя (отправитель его не
+  /// знает заранее). Идемпотентно — `ignore-duplicates` даёт звать это
+  /// на каждое сообщение без отдельной проверки "уже отправляли".
+  /// Ошибка здесь не должна мешать самой отправке сообщения — молча
+  /// проглатывается, заявка просто не создастся в этот раз.
+  Future<void> ensureFriendRequest(String contactId) async {
+    final token = await ensureFreshToken();
+    if (token == null) return;
+    final client = clientFactory();
+    try {
+      await client
+          .post(
+            Uri.parse('$url/rest/v1/chat_friends'),
+            headers: {
+              'apikey': anonKey,
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal,resolution=ignore-duplicates',
+            },
+            body: jsonEncode({'requester_id': userId, 'addressee_id': contactId}),
+          )
+          .timeout(const Duration(seconds: 20));
+    } catch (_) {
+      // необязательно
+    } finally {
+      client.close();
+    }
+  }
+
+  /// 'accepted' — можно показывать сообщения от [otherId] (в любую
+  /// сторону — не важно, кто кому писал первым), иначе они остаются
+  /// ждать на сервере, пока заявку не примут (см. `pollIncoming`).
+  Future<String?> friendStatusWith(String otherId) async {
+    final token = await ensureFreshToken();
+    if (token == null) return null;
+    final client = clientFactory();
+    try {
+      final res = await client
+          .get(
+            Uri.parse('$url/rest/v1/chat_friends').replace(queryParameters: {
+              'select': 'status',
+              'or': '(and(requester_id.eq.$userId,addressee_id.eq.$otherId),'
+                  'and(requester_id.eq.$otherId,addressee_id.eq.$userId))',
+            }),
+            headers: {'apikey': anonKey, 'Authorization': 'Bearer $token'},
+          )
+          .timeout(const Duration(seconds: 20));
+      if (res.statusCode >= 400) return null;
+      final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+      if (decoded is! List || decoded.isEmpty) return null;
+      for (final row in decoded) {
+        if (row['status'] == 'accepted') return 'accepted';
+      }
+      return 'pending';
+    } catch (_) {
+      return null;
+    } finally {
+      client.close();
+    }
+  }
+
+  /// Входящие заявки (я — адресат, статус ещё не принят) — экран
+  /// "Приватность" (см. `ChatPrivacyScreen`).
+  Future<List<({String userId, String nickname, String? avatarBase64, DateTime createdAt})>>
+      fetchFriendRequests() async {
+    final token = await ensureFreshToken();
+    if (token == null) return const [];
+    final client = clientFactory();
+    try {
+      final res = await client
+          .get(
+            Uri.parse('$url/rest/v1/chat_friends').replace(queryParameters: {
+              'select': 'requester_id,created_at',
+              'addressee_id': 'eq.$userId',
+              'status': 'eq.pending',
+            }),
+            headers: {'apikey': anonKey, 'Authorization': 'Bearer $token'},
+          )
+          .timeout(const Duration(seconds: 20));
+      if (res.statusCode >= 400) return const [];
+      final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+      if (decoded is! List || decoded.isEmpty) return const [];
+      final ids = decoded.map((r) => '${r['requester_id']}').toList();
+      final profiles = await ChatGlobalService(this, clientFactory: clientFactory).resolveProfiles(ids);
+      return [
+        for (final row in decoded)
+          (
+            userId: '${row['requester_id']}',
+            nickname: profiles['${row['requester_id']}']?.$1 ?? '—',
+            avatarBase64: profiles['${row['requester_id']}']?.$2,
+            createdAt: DateTime.tryParse('${row['created_at']}') ?? DateTime.now(),
+          ),
+      ];
+    } catch (_) {
+      return const [];
+    } finally {
+      client.close();
+    }
+  }
+
+  Future<void> acceptFriendRequest(String requesterId) async {
+    final token = await ensureFreshToken();
+    if (token == null) throw const AuthException('Сначала войдите в чат');
+    final client = clientFactory();
+    try {
+      final res = await client
+          .patch(
+            Uri.parse('$url/rest/v1/chat_friends').replace(queryParameters: {
+              'requester_id': 'eq.$requesterId',
+              'addressee_id': 'eq.$userId',
+            }),
+            headers: {
+              'apikey': anonKey,
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal',
+            },
+            body: jsonEncode({'status': 'accepted'}),
+          )
+          .timeout(const Duration(seconds: 20));
+      if (res.statusCode >= 400) throw AuthException(_message(res.body));
+    } finally {
+      client.close();
+    }
+  }
+
+  /// Отклонить заявку — убирает саму заявку и подчищает уже пришедшие,
+  /// но так и не показанные сообщения этого отправителя (см.
+  /// `pollIncoming`: пока заявка не принята, они остаются на сервере
+  /// нетронутыми) — иначе они молча копились бы там навсегда.
+  Future<void> declineFriendRequest(String requesterId) async {
+    final token = await ensureFreshToken();
+    if (token == null) throw const AuthException('Сначала войдите в чат');
+    final client = clientFactory();
+    try {
+      final res = await client
+          .delete(
+            Uri.parse('$url/rest/v1/chat_friends').replace(queryParameters: {
+              'requester_id': 'eq.$requesterId',
+              'addressee_id': 'eq.$userId',
+            }),
+            headers: {'apikey': anonKey, 'Authorization': 'Bearer $token'},
+          )
+          .timeout(const Duration(seconds: 20));
+      if (res.statusCode >= 400) throw AuthException(_message(res.body));
+      await client
+          .delete(
+            Uri.parse('$url/rest/v1/chat_messages').replace(queryParameters: {
+              'sender_id': 'eq.$requesterId',
+              'recipient_id': 'eq.$userId',
+            }),
+            headers: {'apikey': anonKey, 'Authorization': 'Bearer $token'},
+          )
+          .timeout(const Duration(seconds: 20));
+    } finally {
+      client.close();
+    }
+  }
+
+  /// Принятые заявки (в любую сторону) — переживают переустановку
+  /// приложения и смену телефона, в отличие от `chat_contacts` (только
+  /// на устройстве): при входе на новом устройстве список подтягивается
+  /// заново в локальные контакты (см. `_ChatHomeScreenState._syncFriends`).
+  Future<List<({String userId, String nickname, String? avatarBase64})>> listFriends() async {
+    final token = await ensureFreshToken();
+    if (token == null) return const [];
+    final client = clientFactory();
+    try {
+      final res = await client
+          .get(
+            Uri.parse('$url/rest/v1/chat_friends').replace(queryParameters: {
+              'select': 'requester_id,addressee_id',
+              'status': 'eq.accepted',
+              'or': '(requester_id.eq.$userId,addressee_id.eq.$userId)',
+            }),
+            headers: {'apikey': anonKey, 'Authorization': 'Bearer $token'},
+          )
+          .timeout(const Duration(seconds: 20));
+      if (res.statusCode >= 400) return const [];
+      final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+      if (decoded is! List || decoded.isEmpty) return const [];
+      final otherIds = decoded
+          .map((r) => '${r['requester_id']}' == userId ? '${r['addressee_id']}' : '${r['requester_id']}')
+          .toSet()
+          .toList();
+      final profiles = await ChatGlobalService(this, clientFactory: clientFactory).resolveProfiles(otherIds);
+      return [
+        for (final id in otherIds) (userId: id, nickname: profiles[id]?.$1 ?? '—', avatarBase64: profiles[id]?.$2),
+      ];
+    } catch (_) {
+      return const [];
     } finally {
       client.close();
     }

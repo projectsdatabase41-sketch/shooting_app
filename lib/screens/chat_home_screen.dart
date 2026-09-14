@@ -29,6 +29,7 @@ import '../widgets/chat_quick_menu.dart';
 import '../widgets/chat_reply_bar.dart';
 import '../widgets/empty_state.dart';
 import 'chat_appearance_screen.dart';
+import 'chat_privacy_screen.dart';
 import 'chat_thread_screen.dart';
 
 /// Публичный чат — отдельная учётная запись от личной базы тренировок
@@ -75,6 +76,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
     if (_auth.isSignedIn) {
       _startPolling();
       PushService(_auth).init();
+      _syncFriends();
     } else if (_mainAuth.isSignedIn) {
       _autoProvisioning = true;
       _ensureChatSession();
@@ -88,6 +90,24 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
   }
 
   void _reload() => setState(() => _contacts = _repo.listContacts());
+
+  /// Заявки/друзья живут на сервере (см. `ChatAuthService.listFriends`) —
+  /// после переустановки или на новом телефоне их ещё нет только в
+  /// локальном `chat_contacts`, здесь пробел восполняется при входе.
+  Future<void> _syncFriends() async {
+    final friends = await _auth.listFriends();
+    if (friends.isEmpty) return;
+    for (final f in friends) {
+      _repo.addContact(ChatContact(
+        id: f.userId,
+        nickname: f.nickname,
+        chatCode: '',
+        avatarBase64: f.avatarBase64,
+        addedAt: DateTime.now(),
+      ));
+    }
+    if (mounted) _reload();
+  }
 
   /// Заводит/открывает чат-аккаунт тем же email, что и основной вход —
   /// без видимой формы регистрации (решение пользователя: трение
@@ -133,6 +153,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
         if (_auth.isSignedIn) {
           _startPolling();
           PushService(_auth).init();
+          _syncFriends();
         }
       }
     }
@@ -179,6 +200,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
           _reload();
           _startPolling();
           PushService(_auth).init();
+          _syncFriends();
           setState(() {});
         },
       );
@@ -189,6 +211,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
       drawer: _ChatDrawer(
         auth: _auth,
         repo: _repo,
+        sync: _sync,
         prefs: _prefs,
         db: _db,
         contacts: _contacts,
@@ -211,6 +234,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
 class _ChatDrawer extends StatelessWidget {
   final ChatAuthService auth;
   final ChatMessagesRepository repo;
+  final ChatSyncService sync;
   final ChatPreferences prefs;
   final LocalDbService db;
   final List<ChatContact> contacts;
@@ -220,6 +244,7 @@ class _ChatDrawer extends StatelessWidget {
   const _ChatDrawer({
     required this.auth,
     required this.repo,
+    required this.sync,
     required this.prefs,
     required this.db,
     required this.contacts,
@@ -430,6 +455,18 @@ class _ChatDrawer extends StatelessWidget {
               title: const Text('Уведомления личных чатов'),
               subtitle: Text(auth.personalPushMode == 'none' ? 'Отключены' : 'Включены'),
               onTap: () => _pickPersonalPushMode(context),
+            ),
+            ListTile(
+              leading: const Icon(Icons.shield_outlined),
+              title: const Text('Приватность'),
+              subtitle: Text(auth.privacyMode == 'friends_only' ? 'Только по заявке' : 'Все могут написать'),
+              onTap: () async {
+                Navigator.of(context).pop();
+                await Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => ChatPrivacyScreen(auth: auth, repo: repo, sync: sync, onChanged: onContactsChanged),
+                ));
+                onContactsChanged();
+              },
             ),
             ListTile(
               leading: const Icon(Icons.logout),

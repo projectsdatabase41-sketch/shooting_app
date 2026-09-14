@@ -24,6 +24,8 @@ Future<String?> showChatQuickMenu(BuildContext context, Offset at, List<ChatQuic
     context: context,
     position: _popupPosition(context, at),
     color: Theme.of(context).colorScheme.surfaceContainerHigh,
+    elevation: 10,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
     items: [
       PopupMenuItem<String>(
         enabled: false,
@@ -58,6 +60,8 @@ void showChatErrorBubble(BuildContext context, Offset at, String message) {
     context: context,
     position: _popupPosition(context, at),
     color: Theme.of(context).colorScheme.errorContainer,
+    elevation: 10,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
     items: [
       PopupMenuItem<void>(
         enabled: false,
