@@ -120,6 +120,7 @@ class LocalDbService {
         'chat_color_other_text': 'TEXT',
         'chat_shadow_enabled': 'INTEGER NOT NULL DEFAULT 1',
         'chat_shadow_intensity': 'TEXT',
+        'chat_global_hidden_ids': 'TEXT',
       },
       // На части устройств chat_local_messages создалась ещё САМОЙ
       // первой версией чата (только текст, без вложений) — CREATE

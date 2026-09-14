@@ -15,6 +15,8 @@ import '../services/chat_preferences.dart';
 import '../services/chat_sync_service.dart';
 import '../services/chat_translation_service.dart';
 import '../widgets/chat_avatar.dart';
+import '../widgets/chat_quick_menu.dart';
+import '../widgets/chat_reply_bar.dart';
 import '../widgets/empty_state.dart';
 
 /// Переписка с одним контактом. Открытие ветки сразу отмечает входящие
@@ -54,6 +56,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   final Map<String, String> _translations = {};
   final Set<String> _translating = {};
 
+  /// Сообщения, перевод которых упал с ошибкой — текст ошибки, чтобы
+  /// показать по тапу на красный значок. Без этого списка автоперевод
+  /// бесконечно повторял попытку на каждый `_reload()`/опрос сервера для
+  /// сообщения, которое в принципе не переводится (лишняя сетевая
+  /// нагрузка при сотнях сообщений выглядела как "зависание").
+  final Map<String, String> _translationErrors = {};
+
   /// "Маска" — показывать ли перевод ВМЕСТО оригинала (пункт из
   /// обсуждения). Явный выбор пользователя по конкретному сообщению
   /// (кнопка "Перевести" в меню — тумблер, а не одноразовое действие);
@@ -61,6 +70,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   /// маска на входящих включена сама, в "по кнопке" — выключена.
   final Map<String, bool> _maskOverride = {};
   late final ChatTranslationService _translator = ChatTranslationService();
+
+  /// Автоперевод грузит только "хвост" списка (последние сообщения),
+  /// не всю историю сразу — иначе сотни сообщений сразу шлют сотни
+  /// запросов к переводчику. Прокрутка к началу подгружает следующую
+  /// пачку (решение пользователя).
+  static const int _translateBatch = 10;
+  int _translateVisibleCount = _translateBatch;
+  String _lastTranslationLanguage = '';
 
   bool _isMasked(ChatMessage m) {
     final override = _maskOverride[m.id];
@@ -73,8 +90,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   @override
   void initState() {
     super.initState();
+    _lastTranslationLanguage = widget.prefs.translationLanguage;
+    widget.prefs.addListener(_onPrefsChanged);
     widget.repo.markThreadSeen(widget.contact.id);
     _reload();
+    _scroll.addListener(_onScroll);
     _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
       final added = await widget.sync.pollIncoming();
       if (added > 0 && mounted) {
@@ -87,10 +107,37 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
 
   @override
   void dispose() {
+    widget.prefs.removeListener(_onPrefsChanged);
     _pollTimer?.cancel();
     _input.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  /// Смена языка перевода в настройках — старые переводы сделаны на
+  /// прежний язык, маска с ними бессмысленна (решение пользователя):
+  /// сбрасываем кэш и переводим заново.
+  void _onPrefsChanged() {
+    if (!mounted) return;
+    if (widget.prefs.translationLanguage != _lastTranslationLanguage) {
+      _lastTranslationLanguage = widget.prefs.translationLanguage;
+      setState(() {
+        _translations.clear();
+        _maskOverride.clear();
+        _translationErrors.clear();
+      });
+      if (widget.prefs.autoTranslate) _autoTranslateIncoming();
+    } else {
+      setState(() {});
+    }
+  }
+
+  void _onScroll() {
+    if (!_scroll.hasClients || _translateVisibleCount >= _messages.length) return;
+    if (_scroll.position.pixels <= _scroll.position.minScrollExtent + 200) {
+      _translateVisibleCount += _translateBatch;
+      if (widget.prefs.autoTranslate) _autoTranslateIncoming();
+    }
   }
 
   void _reload() {
@@ -98,21 +145,32 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     if (widget.prefs.autoTranslate) _autoTranslateIncoming();
   }
 
-  /// Режим "всегда автоматически" — переводит новые входящие в фоне,
-  /// без действия пользователя. Свои же сообщения не трогает: их язык
+  /// Режим "всегда автоматически" — переводит входящие в фоне, без
+  /// действия пользователя. Только последние `_translateVisibleCount`
+  /// (прокрутка вверх открывает следующую пачку) и только те, что ещё не
+  /// пробовали и не упали с ошибкой — иначе на истории в сотни сообщений
+  /// это сотни одновременных запросов и бесконечный повтор для того, что
+  /// в принципе не переводится. Свои сообщения не трогает: их язык
   /// человек и так знает — он их написал.
   void _autoTranslateIncoming() {
-    for (final m in _messages) {
+    final from = _messages.length - _translateVisibleCount;
+    for (var i = _messages.length - 1; i >= 0 && i >= from; i--) {
+      final m = _messages[i];
       if (m.direction != ChatMessageDirection.incoming) continue;
       if (m.text == null || m.text!.isEmpty) continue;
-      if (_translations.containsKey(m.id) || _translating.contains(m.id)) continue;
+      if (_translations.containsKey(m.id) || _translating.contains(m.id) || _translationErrors.containsKey(m.id)) {
+        continue;
+      }
       _translate(m, silent: true);
     }
   }
 
   Future<void> _translate(ChatMessage m, {bool silent = false}) async {
     if (m.text == null || m.text!.isEmpty) return;
-    setState(() => _translating.add(m.id));
+    setState(() {
+      _translating.add(m.id);
+      _translationErrors.remove(m.id);
+    });
     try {
       final translated =
           await _translator.translateIfNeeded(m.text!, targetLanguage: widget.prefs.translationLanguage);
@@ -122,8 +180,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         _translating.remove(m.id);
       });
     } catch (e) {
-      _translating.remove(m.id);
-      if (!silent && mounted) {
+      if (!mounted) return;
+      setState(() {
+        _translating.remove(m.id);
+        _translationErrors[m.id] = '$e';
+      });
+      if (!silent) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось перевести: $e')));
       }
     }
@@ -228,6 +290,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     final mine = m.direction == ChatMessageDirection.outgoing;
     await widget.sync.deleteMessage(m, alsoRemote: mine);
     _translations.remove(m.id);
+    _translationErrors.remove(m.id);
     _reload();
   }
 
@@ -236,7 +299,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   /// пользователя, вместо разрозненных кнопок/жестов на каждое
   /// действие по отдельности). Свайп по пузырю остаётся отдельным
   /// быстрым путём к "Ответить", меню его не заменяет, а дополняет.
-  Future<void> _showMessageMenu(ChatMessage m) async {
+  Future<void> _showMessageMenu(ChatMessage m, Offset at) async {
     final mine = m.direction == ChatMessageDirection.outgoing;
     final canEdit = mine && m.type == ChatMessageType.text;
     final canCopy = m.text != null && m.text!.isNotEmpty;
@@ -245,52 +308,21 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     // ПО УМОЛЧАНИЮ, а не на доступность самой кнопки.
     final canTranslate = canCopy;
     final canRetry = mine && m.status == ChatMessageStatus.error;
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (canCopy)
-              ListTile(
-                leading: const Icon(Icons.copy_outlined),
-                title: const Text('Копировать текст'),
-                onTap: () => Navigator.of(ctx).pop('copy'),
-              ),
-            if (canRetry)
-              ListTile(
-                leading: const Icon(Icons.refresh),
-                title: const Text('Отправить ещё раз'),
-                onTap: () => Navigator.of(ctx).pop('retry'),
-              ),
-            ListTile(
-              leading: const Icon(Icons.reply_outlined),
-              title: const Text('Ответить'),
-              onTap: () => Navigator.of(ctx).pop('reply'),
-            ),
-            if (canTranslate)
-              ListTile(
-                leading: Icon(Icons.translate_outlined, color: _isMasked(m) ? Theme.of(ctx).colorScheme.primary : null),
-                title: const Text('Перевести'),
-                trailing: _isMasked(m) ? Icon(Icons.check, color: Theme.of(ctx).colorScheme.primary) : null,
-                onTap: () => Navigator.of(ctx).pop('translate'),
-              ),
-            if (canEdit)
-              ListTile(
-                leading: const Icon(Icons.edit_outlined),
-                title: const Text('Редактировать'),
-                onTap: () => Navigator.of(ctx).pop('edit'),
-              ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline),
-              title: Text(mine ? 'Удалить' : 'Удалить у себя'),
-              onTap: () => Navigator.of(ctx).pop('delete'),
-            ),
-          ],
+    final primary = Theme.of(context).colorScheme.primary;
+    final action = await showChatQuickMenu(context, at, [
+      if (canCopy) const ChatQuickAction(value: 'copy', icon: Icons.copy_outlined, label: 'Копировать'),
+      if (canRetry) const ChatQuickAction(value: 'retry', icon: Icons.refresh, label: 'Отправить ещё раз'),
+      const ChatQuickAction(value: 'reply', icon: Icons.reply_outlined, label: 'Ответить'),
+      if (canTranslate)
+        ChatQuickAction(
+          value: 'translate',
+          icon: Icons.translate_outlined,
+          label: 'Перевести',
+          color: _isMasked(m) ? primary : null,
         ),
-      ),
-    );
+      if (canEdit) const ChatQuickAction(value: 'edit', icon: Icons.edit_outlined, label: 'Редактировать'),
+      ChatQuickAction(value: 'delete', icon: Icons.delete_outline, label: mine ? 'Удалить' : 'Удалить у себя'),
+    ]);
     switch (action) {
       case 'copy':
         _copy(m);
@@ -386,13 +418,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                             child: Icon(Icons.reply_outlined, color: Theme.of(context).colorScheme.primary),
                           ),
                           child: GestureDetector(
-                            onLongPress: () => _showMessageMenu(m),
+                            onLongPressStart: (d) => _showMessageMenu(m, d.globalPosition),
                             child: _Bubble(
                               message: m,
                               prefs: widget.prefs,
                               translation: _translations[m.id],
                               masked: _isMasked(m),
                               translating: _translating.contains(m.id),
+                              translationError: _translationErrors[m.id],
                               onRetry: () => _retry(m),
                             ),
                           ),
@@ -400,7 +433,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                       },
                     ),
             ),
-            if (_replyingTo != null) _ReplyPreviewBar(message: _replyingTo!, onCancel: () => setState(() => _replyingTo = null)),
+            if (_replyingTo != null)
+              ChatReplyBar(
+                preview: ChatSyncService.previewOf(_replyingTo!),
+                onCancel: () => setState(() => _replyingTo = null),
+              ),
             const Divider(height: 1),
             SafeArea(
               top: false,
@@ -436,47 +473,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   }
 }
 
-/// Полоска над полем ввода, пока выбран "ответ на сообщение" (свайп по
-/// пузырю в списке) — цитата + крестик отмены, как в Telegram/WhatsApp.
-class _ReplyPreviewBar extends StatelessWidget {
-  final ChatMessage message;
-  final VoidCallback onCancel;
-  const _ReplyPreviewBar({required this.message, required this.onCancel});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHigh,
-        border: Border(top: BorderSide(color: theme.dividerColor)),
-      ),
-      child: Row(
-        children: [
-          Container(width: 3, height: 32, color: theme.colorScheme.primary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              ChatSyncService.previewOf(message),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall,
-            ),
-          ),
-          IconButton(icon: const Icon(Icons.close, size: 18), onPressed: onCancel),
-        ],
-      ),
-    );
-  }
-}
-
 class _Bubble extends StatelessWidget {
   final ChatMessage message;
   final ChatPreferences prefs;
   final String? translation;
   final bool masked;
   final bool translating;
+  final String? translationError;
   final VoidCallback onRetry;
   const _Bubble({
     required this.message,
@@ -484,6 +487,7 @@ class _Bubble extends StatelessWidget {
     required this.translation,
     required this.masked,
     required this.translating,
+    required this.translationError,
     required this.onRetry,
   });
 
@@ -627,6 +631,13 @@ class _Bubble extends StatelessWidget {
                 if (mine) ...[
                   const SizedBox(width: 6),
                   Icon(_statusIcon(message.status), size: 14, color: theme.hintColor),
+                ],
+                if (translationError != null) ...[
+                  const SizedBox(width: 6),
+                  GestureDetector(
+                    onTapDown: (d) => showChatErrorBubble(context, d.globalPosition, translationError!),
+                    child: const Icon(Icons.translate_outlined, size: 13, color: Colors.red),
+                  ),
                 ],
               ],
             ),

@@ -25,6 +25,8 @@ import '../services/push_service.dart';
 import '../services/supabase_auth_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/chat_avatar.dart';
+import '../widgets/chat_quick_menu.dart';
+import '../widgets/chat_reply_bar.dart';
 import '../widgets/empty_state.dart';
 import 'chat_appearance_screen.dart';
 import 'chat_thread_screen.dart';
@@ -397,27 +399,58 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
   List<ChatGlobalMessage> _messages = [];
   bool _loading = true;
   bool _sending = false;
+  ChatGlobalMessage? _replyingTo;
 
   /// Перевод — та же "маска" и тот же тумблер, что в личном чате (см.
   /// `ChatThreadScreen`), просто своя копия состояния для этой ленты.
   final Map<String, String> _translations = {};
   final Set<String> _translating = {};
   final Map<String, bool> _maskOverride = {};
+  final Map<String, String> _translationErrors = {};
   final ChatTranslationService _translator = ChatTranslationService();
+
+  static const int _translateBatch = 10;
+  int _translateVisibleCount = _translateBatch;
+  String _lastTranslationLanguage = '';
 
   @override
   void initState() {
     super.initState();
+    _lastTranslationLanguage = widget.prefs.translationLanguage;
+    widget.prefs.addListener(_onPrefsChanged);
     _load();
+    _scroll.addListener(_onScroll);
     _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) => _load(silent: true));
   }
 
   @override
   void dispose() {
+    widget.prefs.removeListener(_onPrefsChanged);
     _pollTimer?.cancel();
     _input.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  void _onPrefsChanged() {
+    if (!mounted) return;
+    if (widget.prefs.translationLanguage != _lastTranslationLanguage) {
+      _lastTranslationLanguage = widget.prefs.translationLanguage;
+      setState(() {
+        _translations.clear();
+        _maskOverride.clear();
+        _translationErrors.clear();
+      });
+      _autoTranslateIncoming();
+    }
+  }
+
+  void _onScroll() {
+    if (!_scroll.hasClients || _translateVisibleCount >= _messages.length) return;
+    if (_scroll.position.pixels <= _scroll.position.minScrollExtent + 200) {
+      _translateVisibleCount += _translateBatch;
+      _autoTranslateIncoming();
+    }
   }
 
   bool _isMasked(ChatGlobalMessage m) {
@@ -428,7 +461,10 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
 
   Future<void> _translate(ChatGlobalMessage m, {bool silent = false}) async {
     if (m.text == null || m.text!.isEmpty) return;
-    setState(() => _translating.add(m.id));
+    setState(() {
+      _translating.add(m.id);
+      _translationErrors.remove(m.id);
+    });
     try {
       final translated =
           await _translator.translateIfNeeded(m.text!, targetLanguage: widget.prefs.translationLanguage);
@@ -438,8 +474,12 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
         _translating.remove(m.id);
       });
     } catch (e) {
-      _translating.remove(m.id);
-      if (!silent && mounted) {
+      if (!mounted) return;
+      setState(() {
+        _translating.remove(m.id);
+        _translationErrors[m.id] = '$e';
+      });
+      if (!silent) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось перевести: $e')));
       }
     }
@@ -455,12 +495,20 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
     setState(() => _maskOverride[m.id] = true);
   }
 
+  /// Та же пакетная загрузка, что в личном чате (см. `ChatThreadScreen`):
+  /// только последние `_translateVisibleCount` сообщений и не те, что уже
+  /// упали с ошибкой — иначе сотни сообщений разом шлют сотни запросов и
+  /// то, что не переводится, пробуется бесконечно на каждый опрос сервера.
   void _autoTranslateIncoming() {
     if (!widget.prefs.autoTranslate) return;
-    for (final m in _messages) {
+    final from = _messages.length - _translateVisibleCount;
+    for (var i = _messages.length - 1; i >= 0 && i >= from; i--) {
+      final m = _messages[i];
       if (m.senderId == widget.auth.userId) continue;
       if (m.text == null || m.text!.isEmpty) continue;
-      if (_translations.containsKey(m.id) || _translating.contains(m.id)) continue;
+      if (_translations.containsKey(m.id) || _translating.contains(m.id) || _translationErrors.containsKey(m.id)) {
+        continue;
+      }
       _translate(m, silent: true);
     }
   }
@@ -471,7 +519,19 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Скопировано')));
   }
 
+  void _reply(ChatGlobalMessage m) => setState(() => _replyingTo = m);
+
+  /// Своё сообщение удаляется на сервере (RLS и так не даст чужое);
+  /// чужое — только локально, "у себя" (решение пользователя, тот же
+  /// принцип, что и в личном чате): список скрытых id хранится в
+  /// `ChatPreferences`, само сообщение остаётся видимым остальным.
   Future<void> _delete(ChatGlobalMessage m) async {
+    final mine = m.senderId == widget.auth.userId;
+    if (!mine) {
+      widget.prefs.hideGlobalMessage(m.id);
+      setState(() => _messages.removeWhere((x) => x.id == m.id));
+      return;
+    }
     try {
       await widget.global.delete(m.id);
       setState(() => _messages.removeWhere((x) => x.id == m.id));
@@ -480,45 +540,30 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
     }
   }
 
-  /// Раньше долгое нажатие сразу копировало текст — решение
-  /// пользователя: заменить на то же меню, что в личном чате
-  /// (копировать/перевести/удалить своё), а не одно действие сразу.
-  Future<void> _showMessageMenu(ChatGlobalMessage m) async {
+  /// Маленькое окошко рядом с сообщением вместо листа снизу — те же
+  /// действия, что в личном чате: копировать/ответить/перевести/удалить
+  /// (решение пользователя).
+  Future<void> _showMessageMenu(ChatGlobalMessage m, Offset at) async {
     final mine = m.senderId == widget.auth.userId;
     final canCopy = m.text != null && m.text!.isNotEmpty;
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (canCopy)
-              ListTile(
-                leading: const Icon(Icons.copy_outlined),
-                title: const Text('Копировать текст'),
-                onTap: () => Navigator.of(ctx).pop('copy'),
-              ),
-            if (canCopy)
-              ListTile(
-                leading: Icon(Icons.translate_outlined, color: _isMasked(m) ? Theme.of(ctx).colorScheme.primary : null),
-                title: const Text('Перевести'),
-                trailing: _isMasked(m) ? Icon(Icons.check, color: Theme.of(ctx).colorScheme.primary) : null,
-                onTap: () => Navigator.of(ctx).pop('translate'),
-              ),
-            if (mine)
-              ListTile(
-                leading: const Icon(Icons.delete_outline),
-                title: const Text('Удалить'),
-                onTap: () => Navigator.of(ctx).pop('delete'),
-              ),
-          ],
+    final primary = Theme.of(context).colorScheme.primary;
+    final action = await showChatQuickMenu(context, at, [
+      if (canCopy) const ChatQuickAction(value: 'copy', icon: Icons.copy_outlined, label: 'Копировать'),
+      const ChatQuickAction(value: 'reply', icon: Icons.reply_outlined, label: 'Ответить'),
+      if (canCopy)
+        ChatQuickAction(
+          value: 'translate',
+          icon: Icons.translate_outlined,
+          label: 'Перевести',
+          color: _isMasked(m) ? primary : null,
         ),
-      ),
-    );
+      ChatQuickAction(value: 'delete', icon: Icons.delete_outline, label: mine ? 'Удалить' : 'Удалить у себя'),
+    ]);
     switch (action) {
       case 'copy':
         _copy(m);
+      case 'reply':
+        _reply(m);
       case 'translate':
         await _toggleMask(m);
       case 'delete':
@@ -530,8 +575,9 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
     if (!silent) setState(() => _loading = true);
     final messages = await widget.global.fetchRecent();
     if (!mounted) return;
+    final hidden = widget.prefs.hiddenGlobalIds;
     setState(() {
-      _messages = messages;
+      _messages = hidden.isEmpty ? messages : messages.where((m) => !hidden.contains(m.id)).toList();
       _loading = false;
     });
     _autoTranslateIncoming();
@@ -550,10 +596,18 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
   Future<void> _send() async {
     final text = _input.text.trim();
     if (text.isEmpty || _sending) return;
+    final replyTo = _replyingTo;
     _input.clear();
-    setState(() => _sending = true);
+    setState(() {
+      _sending = true;
+      _replyingTo = null;
+    });
     try {
-      await widget.global.send(text);
+      await widget.global.send(
+        text,
+        replyToId: replyTo?.id,
+        replyToPreview: replyTo == null ? null : ChatGlobalService.previewOf(replyTo),
+      );
       await _load();
       _scrollToEnd();
     } catch (e) {
@@ -679,7 +733,7 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
                       itemBuilder: (context, i) {
                         final m = _messages[i];
                         return GestureDetector(
-                          onLongPress: () => _showMessageMenu(m),
+                          onLongPressStart: (d) => _showMessageMenu(m, d.globalPosition),
                           child: _GlobalBubble(
                             message: m,
                             mine: m.senderId == widget.auth.userId,
@@ -688,11 +742,17 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
                             translation: _translations[m.id],
                             masked: _isMasked(m),
                             translating: _translating.contains(m.id),
+                            translationError: _translationErrors[m.id],
                           ),
                         );
                       },
                     ),
         ),
+        if (_replyingTo != null)
+          ChatReplyBar(
+            preview: ChatGlobalService.previewOf(_replyingTo!),
+            onCancel: () => setState(() => _replyingTo = null),
+          ),
         const Divider(height: 1),
         SafeArea(
           top: false,
@@ -734,6 +794,7 @@ class _GlobalBubble extends StatelessWidget {
   final String? translation;
   final bool masked;
   final bool translating;
+  final String? translationError;
   const _GlobalBubble({
     required this.message,
     required this.mine,
@@ -742,6 +803,7 @@ class _GlobalBubble extends StatelessWidget {
     required this.translation,
     required this.masked,
     required this.translating,
+    required this.translationError,
   });
 
   @override
@@ -788,6 +850,22 @@ class _GlobalBubble extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (message.replyToPreview != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    margin: const EdgeInsets.only(bottom: 6),
+                    decoration: BoxDecoration(
+                      color: fg.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border(left: BorderSide(color: fg.withValues(alpha: 0.5), width: 3)),
+                    ),
+                    child: Text(
+                      message.replyToPreview!,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(color: fg.withValues(alpha: 0.85)),
+                    ),
+                  ),
                 if (message.hasAttachment) _GlobalAttachment(message: message, global: global, fg: fg),
                 if (translating)
                   SizedBox(
@@ -817,9 +895,21 @@ class _GlobalBubble extends StatelessWidget {
           const SizedBox(height: 3),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Text(
-              DateFormat('HH:mm').format(message.createdAt.toLocal()),
-              style: theme.textTheme.labelSmall?.copyWith(color: theme.hintColor),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  DateFormat('HH:mm').format(message.createdAt.toLocal()),
+                  style: theme.textTheme.labelSmall?.copyWith(color: theme.hintColor),
+                ),
+                if (translationError != null) ...[
+                  const SizedBox(width: 6),
+                  GestureDetector(
+                    onTapDown: (d) => showChatErrorBubble(context, d.globalPosition, translationError!),
+                    child: const Icon(Icons.translate_outlined, size: 13, color: Colors.red),
+                  ),
+                ],
+              ],
             ),
           ),
           const SizedBox(height: 5),

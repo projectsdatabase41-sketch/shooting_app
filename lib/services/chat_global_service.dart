@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 
+import '../logic/chat_media_utils.dart';
 import '../models/chat_global_message.dart';
 import 'chat_auth_service.dart';
 import 'chat_settings.dart';
@@ -53,7 +54,7 @@ class ChatGlobalService {
     }
   }
 
-  Future<void> send(String text) async {
+  Future<void> send(String text, {String? replyToId, String? replyToPreview}) async {
     final token = await auth.ensureFreshToken();
     if (token == null) throw Exception('Сначала войдите в чат');
     final client = clientFactory();
@@ -67,13 +68,29 @@ class ChatGlobalService {
               'Content-Type': 'application/json',
               'Prefer': 'return=minimal',
             },
-            body: jsonEncode({'sender_id': auth.userId, 'text': text}),
+            body: jsonEncode({
+              'sender_id': auth.userId,
+              'text': text,
+              if (replyToId != null) 'reply_to_id': replyToId,
+              if (replyToPreview != null) 'reply_to_preview': replyToPreview,
+            }),
           )
           .timeout(_timeout);
       if (res.statusCode >= 300) throw Exception('Не удалось отправить (${res.statusCode})');
     } finally {
       client.close();
     }
+  }
+
+  /// Короткая цитата для превью "ответ на сообщение" — тот же приём, что
+  /// `ChatSyncService.previewOf`, своя копия под другую модель сообщения.
+  static String previewOf(ChatGlobalMessage m) {
+    if (m.text != null && m.text!.isNotEmpty) {
+      return m.text!.length > 80 ? '${m.text!.substring(0, 80)}…' : m.text!;
+    }
+    if (m.isImage) return '📷 Фото';
+    if (m.hasAttachment) return '📎 ${m.attachmentName ?? 'Файл'}';
+    return 'Сообщение';
   }
 
   /// Удаляет своё сообщение из общей ленты (меню долгого нажатия) —
@@ -106,7 +123,7 @@ class ChatGlobalService {
   }) async {
     final token = await auth.ensureFreshToken();
     if (token == null) throw Exception('Сначала войдите в чат');
-    final path = 'global/${auth.userId}/${_uuid.v4()}/$fileName';
+    final path = 'global/${auth.userId}/${_uuid.v4()}/${ChatMediaUtils.safePathSegment(fileName)}';
     final client = clientFactory();
     try {
       final uploadRes = await client

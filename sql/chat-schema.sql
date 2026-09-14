@@ -245,6 +245,10 @@ create table if not exists chat_global_messages (
   attachment_name   text,
   attachment_mime    text,
   attachment_size   bigint,
+  -- Ответ на сообщение — только id + готовая цитата, без FK: исходное
+  -- сообщение может быть уже удалено триггером обрезки (500 штук).
+  reply_to_id       uuid,
+  reply_to_preview  text,
   created_at  timestamptz not null default now(),
   check (text is not null or attachment_path is not null)
 );
@@ -254,6 +258,8 @@ alter table chat_global_messages add column if not exists attachment_path text;
 alter table chat_global_messages add column if not exists attachment_name text;
 alter table chat_global_messages add column if not exists attachment_mime text;
 alter table chat_global_messages add column if not exists attachment_size bigint;
+alter table chat_global_messages add column if not exists reply_to_id uuid;
+alter table chat_global_messages add column if not exists reply_to_preview text;
 
 alter table chat_global_messages drop constraint if exists chat_global_messages_check;
 alter table chat_global_messages add constraint chat_global_messages_check

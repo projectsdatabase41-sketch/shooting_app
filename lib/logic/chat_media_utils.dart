@@ -42,6 +42,15 @@ class ChatMediaUtils {
     return 'application/octet-stream';
   }
 
+  /// Имя файла с пробелами/скобками/юникодом (обычное дело — "Screenshot
+  /// 2024-01-01 (1).png") ломает путь объекта в Storage: сырой пробел в
+  /// URL сервер отклоняет 400-й ошибкой. Читаемое имя всё равно хранится
+  /// отдельно (`attachment_name`), в пути нужна только уникальность.
+  static String safePathSegment(String name) {
+    final sanitized = name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+    return sanitized.isEmpty ? 'file' : sanitized;
+  }
+
   /// Читаемый размер — "2.4 МБ" вместо голого числа байт.
   static String formatSize(int? bytes) {
     if (bytes == null) return '';

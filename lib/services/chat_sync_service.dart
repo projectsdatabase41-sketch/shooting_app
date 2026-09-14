@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 
+import '../logic/chat_media_utils.dart';
 import '../models/chat_contact.dart';
 import '../models/chat_message.dart';
 import 'chat_auth_service.dart';
@@ -226,7 +227,8 @@ class ChatSyncService {
           repo.updateStatus(message.id, ChatMessageStatus.error);
           return;
         }
-        attachmentPath = '${auth.userId}/${message.clientMessageId}/${message.attachmentName ?? 'file'}';
+        attachmentPath =
+            '${auth.userId}/${message.clientMessageId}/${ChatMediaUtils.safePathSegment(message.attachmentName ?? 'file')}';
         final uploadRes = await client
             .post(
               Uri.parse('${ChatSettings.url}/storage/v1/object/chat-media/$attachmentPath'),

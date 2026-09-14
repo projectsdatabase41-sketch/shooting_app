@@ -18,6 +18,13 @@ class ChatGlobalMessage {
   final String? attachmentMime;
   final int? attachmentSize;
 
+  /// Ответ на сообщение — только id + короткая цитата (см.
+  /// `ChatGlobalService.previewOf`), как в личном чате: полноценную связь
+  /// незачем тянуть, цитата уже даёт контекст, а исходное сообщение может
+  /// быть обрезано лимитом в 500 штук.
+  final String? replyToId;
+  final String? replyToPreview;
+
   /// Заполняются отдельным запросом (`resolve_profiles`) — сама лента
   /// отдаёт только `sender_id`, никнейм/аватар не хранятся построчно.
   final String? senderNickname;
@@ -32,6 +39,8 @@ class ChatGlobalMessage {
     this.attachmentName,
     this.attachmentMime,
     this.attachmentSize,
+    this.replyToId,
+    this.replyToPreview,
     this.senderNickname,
     this.senderAvatarBase64,
   });
@@ -52,6 +61,8 @@ class ChatGlobalMessage {
         attachmentName: attachmentName,
         attachmentMime: attachmentMime,
         attachmentSize: attachmentSize,
+        replyToId: replyToId,
+        replyToPreview: replyToPreview,
         senderNickname: nickname ?? senderNickname,
         senderAvatarBase64: avatarBase64 ?? senderAvatarBase64,
       );
@@ -65,5 +76,7 @@ class ChatGlobalMessage {
         attachmentName: row['attachment_name'] as String?,
         attachmentMime: row['attachment_mime'] as String?,
         attachmentSize: (row['attachment_size'] as num?)?.toInt(),
+        replyToId: row['reply_to_id'] as String?,
+        replyToPreview: row['reply_to_preview'] as String?,
       );
 }
