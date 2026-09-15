@@ -237,7 +237,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
       body: AnimatedPadding(
         padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
         duration: const Duration(milliseconds: 100),
-        child: _GlobalChatBody(auth: _auth, global: _global, repo: _repo, prefs: _prefs, onContactAdded: _reload),
+        child: _GlobalChatBody(auth: _auth, global: _global, repo: _repo, prefs: _prefs),
       ),
     );
   }
@@ -426,14 +426,12 @@ class _GlobalChatBody extends StatefulWidget {
   final ChatGlobalService global;
   final ChatMessagesRepository repo;
   final ChatPreferences prefs;
-  final VoidCallback onContactAdded;
 
   const _GlobalChatBody({
     required this.auth,
     required this.global,
     required this.repo,
     required this.prefs,
-    required this.onContactAdded,
   });
 
   @override
@@ -810,66 +808,6 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
     }
   }
 
-  /// Пункт списка правок: "общедоступный чат со списком пользователей" —
-  /// список тех, кто уже писал в ленту (по загруженным сообщениям), с
-  /// возможностью сразу добавить в контакты для личной переписки. Код
-  /// контакта тут не нужен — id/никнейм/аватар уже известны из
-  /// собственных публичных сообщений человека.
-  void _openParticipants(BuildContext context) {
-    final seen = <String, ChatGlobalMessage>{};
-    for (final m in _messages) {
-      seen[m.senderId] = m;
-    }
-    final participants = seen.values.where((m) => m.senderId != widget.auth.userId).toList()
-      ..sort((a, b) => (a.senderNickname ?? '').compareTo(b.senderNickname ?? ''));
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: SizedBox(
-          height: MediaQuery.sizeOf(ctx).height * 0.6,
-          child: participants.isEmpty
-              ? const EmptyState(icon: Icons.groups_outlined, text: 'Пока никто, кроме вас, не писал')
-              : ListView.builder(
-                  itemCount: participants.length,
-                  itemBuilder: (context, i) {
-                    final p = participants[i];
-                    // Уже в контактах — кнопка выглядит "нажатой" и больше
-                    // не реагирует на тап (решение пользователя): убрать из
-                    // контактов теперь отдельное действие, через меню (⋮)
-                    // в самом чате с этим контактом, а не отсюда.
-                    final isContact = widget.repo.contactById(p.senderId) != null;
-                    return ListTile(
-                      leading: ChatAvatar(base64: p.senderAvatarBase64, nickname: p.senderNickname ?? '?'),
-                      title: Text(p.senderNickname ?? '—'),
-                      trailing: isContact
-                          ? const FilledButton(onPressed: null, child: Text('В контактах'))
-                          : OutlinedButton(
-                              onPressed: () {
-                                widget.repo.addContact(ChatContact(
-                                  id: p.senderId,
-                                  nickname: p.senderNickname ?? '—',
-                                  chatCode: '',
-                                  avatarBase64: p.senderAvatarBase64,
-                                  addedAt: DateTime.now(),
-                                ));
-                                widget.onContactAdded();
-                                Navigator.of(ctx).pop();
-                                ScaffoldMessenger.of(context)
-                                    .showSnackBar(const SnackBar(content: Text('Добавлено в контакты')));
-                              },
-                              child: const Text('В контакты'),
-                            ),
-                    );
-                  },
-                ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -881,19 +819,6 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
   Widget _buildBody(BuildContext context) {
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-          child: Row(
-            children: [
-              const Expanded(child: SizedBox()),
-              TextButton.icon(
-                onPressed: () => _openParticipants(context),
-                icon: const Icon(Icons.groups_outlined, size: 18),
-                label: const Text('Участники'),
-              ),
-            ],
-          ),
-        ),
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
