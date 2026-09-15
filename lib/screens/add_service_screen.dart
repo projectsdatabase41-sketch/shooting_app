@@ -170,7 +170,7 @@ class _AddServiceScreenState extends State<AddServiceScreen> with SingleTickerPr
             '"method": "GET или POST, по умолчанию GET", '
             '"headers": {"Authorization": "Bearer ключ, если он есть в тексте"}}. '
             'Поле headers — объект, пустой {} если ключа/заголовков в тексте нет. '
-            'Если явного названия сервиса нет — придумай короткое по домену ссылки.',
+            'Если явного названия сервиса нет — придумай короткое по домену ссылки, на том же языке, что и вставленный текст.',
         contextBlock: '',
         history: [(role: 'user', text: pasted)],
       );
