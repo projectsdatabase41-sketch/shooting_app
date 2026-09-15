@@ -147,6 +147,7 @@ class LocalDbService {
       },
       'chat_global_cache': {
         'download_allowed': 'INTEGER NOT NULL DEFAULT 1',
+        'chart_json': 'TEXT',
       },
     };
 

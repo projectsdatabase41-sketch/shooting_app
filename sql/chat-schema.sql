@@ -333,10 +333,15 @@ alter table chat_global_messages add column if not exists attachment_size bigint
 alter table chat_global_messages add column if not exists reply_to_id uuid;
 alter table chat_global_messages add column if not exists reply_to_preview text;
 alter table chat_global_messages add column if not exists download_allowed boolean not null default true;
+-- График в сообщении (кнопка "AI" — решение пользователя: тот же
+-- ```chart JSON, что и в чате с ассистентом, "универсальный язык"
+-- вместо отдельного формата для чата) — тот же формат, что у
+-- coach_notes.chart_json.
+alter table chat_global_messages add column if not exists chart_json text;
 
 alter table chat_global_messages drop constraint if exists chat_global_messages_check;
 alter table chat_global_messages add constraint chat_global_messages_check
-  check (text is not null or attachment_path is not null);
+  check (text is not null or attachment_path is not null or chart_json is not null);
 
 create index if not exists idx_chat_global_created on chat_global_messages(created_at desc);
 

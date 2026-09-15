@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 /// Одно сообщение общего (всемирного) чата — в отличие от `ChatMessage`
 /// (личная переписка, транзит-и-удаление), эти сообщения ХРАНЯТСЯ на
 /// сервере и не привязаны к конкретному собеседнику: лента одна на всех
@@ -34,6 +36,11 @@ class ChatGlobalMessage {
   /// (личный чат), тот же принцип: решение отправителя на момент отправки.
   final bool downloadAllowed;
 
+  /// График (кнопка "AI" — решение пользователя: тот же ```chart JSON,
+  /// что и в чате с ассистентом, см. `AiService.splitChart`/`AiChartView`,
+  /// "универсальный язык" вместо своего формата для чата).
+  final Map<String, dynamic>? chart;
+
   const ChatGlobalMessage({
     required this.id,
     required this.senderId,
@@ -48,6 +55,7 @@ class ChatGlobalMessage {
     this.senderNickname,
     this.senderAvatarBase64,
     this.downloadAllowed = true,
+    this.chart,
   });
 
   bool get hasAttachment => attachmentPath != null;
@@ -71,6 +79,7 @@ class ChatGlobalMessage {
         senderNickname: nickname ?? senderNickname,
         senderAvatarBase64: avatarBase64 ?? senderAvatarBase64,
         downloadAllowed: downloadAllowed,
+        chart: chart,
       );
 
   factory ChatGlobalMessage.fromRow(Map<String, dynamic> row) => ChatGlobalMessage(
@@ -85,5 +94,16 @@ class ChatGlobalMessage {
         replyToId: row['reply_to_id'] as String?,
         replyToPreview: row['reply_to_preview'] as String?,
         downloadAllowed: row['download_allowed'] == null || row['download_allowed'] == 1 || row['download_allowed'] == true,
+        chart: _decodeChart(row['chart_json'] as String?),
       );
+
+  static Map<String, dynamic>? _decodeChart(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      return decoded is Map<String, dynamic> ? decoded : null;
+    } catch (_) {
+      return null;
+    }
+  }
 }

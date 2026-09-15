@@ -27,6 +27,7 @@ import '../services/local_db_service.dart';
 import '../services/push_service.dart';
 import '../services/supabase_auth_service.dart';
 import '../state/app_data_store.dart';
+import '../widgets/ai_chart_view.dart';
 import '../widgets/chat_avatar.dart';
 import '../widgets/chat_quick_menu.dart';
 import '../widgets/chat_reply_bar.dart';
@@ -449,6 +450,11 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
   bool _aiBusy = false;
   ChatGlobalMessage? _replyingTo;
 
+  /// График, составленный кнопкой "AI" (решение пользователя) — ждёт
+  /// отправки вместе со следующим сообщением, показывается полоской над
+  /// полем ввода (см. `ChatReplyBar`), пока не отправлен или не убран.
+  Map<String, dynamic>? _pendingChart;
+
   /// Перевод — та же "маска" и тот же тумблер, что в личном чате (см.
   /// `ChatThreadScreen`), просто своя копия состояния для этой ленты.
   final Map<String, String> _translations = {};
@@ -663,18 +669,24 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
 
   Future<void> _send() async {
     final text = _input.text.trim();
-    if (text.isEmpty || _sending) return;
+    final chart = _pendingChart;
+    // Чистый график без подписи — тоже валидное сообщение (решение
+    // пользователя: "нужно, чтобы он смог ещё графиком скидывать").
+    if (text.isEmpty && chart == null) return;
+    if (_sending) return;
     final replyTo = _replyingTo;
     _input.clear();
     setState(() {
       _sending = true;
       _replyingTo = null;
+      _pendingChart = null;
     });
     try {
       await widget.global.send(
         text,
         replyToId: replyTo?.id,
         replyToPreview: replyTo == null ? null : ChatGlobalService.previewOf(replyTo),
+        chart: chart,
       );
       await _load();
       _scrollToEnd();
@@ -732,13 +744,24 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
             '(его увидят другие пользователи) на основе его собственных тренировок. '
             'Тебе дан КОНТЕКСТ с данными его тренировок и задание — о чём написать. '
             'Отвечай ТОЛЬКО готовым текстом сообщения для отправки — без пояснений, без рассуждений, '
-            'без markdown, без кавычек вокруг текста. Пиши от первого лица, по-русски, коротко (1-4 предложения), '
-            'как обычное сообщение в чат, а не отчёт.',
+            'без кавычек вокруг текста. Пиши от первого лица, по-русски, коротко (1-4 предложения), '
+            'как обычное сообщение в чат, а не отчёт.\n'
+            'Если задание явно просит график (или он тут уместнее слов — например, сравнить несколько '
+            'тренировок) — добавь его блоком ```chart В КОНЦЕ ответа, ТОЧНО в том же формате, что описан '
+            'ниже; иначе не добавляй график вовсе. Тип — ровно одно слово: line, bar или table.\n'
+            '```chart\n'
+            '{"type":"line","title":"Результат по выстрелам","x":["1","2","3"],'
+            '"series":[{"name":"Очки","values":[10.3,9.8,10.5]}]}\n'
+            '```',
         contextBlock: ctx.buildContextBlock(DateTime.now()),
         history: [(role: 'user', text: instruction)],
       );
       if (!mounted) return;
-      setState(() => _input.text = reply.text.trim());
+      final (caption, chart) = AiService.splitChart(reply.text.trim());
+      setState(() {
+        _input.text = caption.trim();
+        _pendingChart = chart;
+      });
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     } finally {
@@ -898,6 +921,11 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
                       },
                     ),
         ),
+        if (_pendingChart != null)
+          ChatReplyBar(
+            preview: '📊 График готов к отправке — «${_pendingChart!['title'] ?? 'без названия'}»',
+            onCancel: () => setState(() => _pendingChart = null),
+          ),
         if (_replyingTo != null)
           ChatReplyBar(
             preview: ChatGlobalService.previewOf(_replyingTo!),
@@ -1009,6 +1037,10 @@ class _GlobalBubble extends StatelessWidget {
           ),
         if (message.hasAttachment && !message.isImage)
           _GlobalAttachment(message: message, global: global, fg: fg, showDownload: mine || message.downloadAllowed),
+        if (message.chart != null) ...[
+          AiChartView(spec: message.chart!),
+          if (hasCaption) const SizedBox(height: 6),
+        ],
         if (translating)
           SizedBox(
             height: 14,

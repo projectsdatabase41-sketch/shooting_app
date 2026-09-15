@@ -280,7 +280,7 @@ class AiService {
     }
     final reasoning = parts.join('\n\n');
 
-    final parsedChart = _splitChart(split.$1);
+    final parsedChart = splitChart(split.$1);
     final parsedExercise = _splitExercise(parsedChart.$1);
     final parsedNote = _splitNote(parsedExercise.$1);
     final parsedFeedback = _splitFeedback(parsedNote.$1);
@@ -337,7 +337,12 @@ class AiService {
   /// дословно (`"type":"line|bar|table"`), — пользователь видел нашу
   /// внутреннюю ошибку вместо графика. Теперь негодная спецификация
   /// молча отбрасывается, текст ответа остаётся.
-  static (String, Map<String, dynamic>?) _splitChart(String raw) {
+  /// Публичный (не `_splitChart`) — переиспользуется вне модели ответа
+  /// ассистента: та же проверка нужна для кнопки "AI" в общем чате
+  /// (решение пользователя: график в сообщении — тот же ```chart, что и
+  /// везде в приложении, "универсальный язык" вместо отдельного формата
+  /// для чата).
+  static (String, Map<String, dynamic>?) splitChart(String raw) {
     final matches = RegExp(r'```chart\s*([\s\S]*?)```').allMatches(raw).toList();
     if (matches.isEmpty) return (raw, null);
 

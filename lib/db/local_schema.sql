@@ -190,6 +190,9 @@ CREATE TABLE IF NOT EXISTS chat_global_cache (
   -- (см. chat_local_messages.download_allowed), приезжает вместе со
   -- строкой из chat_global_messages.
   download_allowed      INTEGER NOT NULL DEFAULT 1,
+  -- График в сообщении (кнопка "AI") — тот же ```chart JSON, что и
+  -- в чате с ассистентом (см. AiService.splitChart/AiChartView).
+  chart_json            TEXT,
   created_at            TEXT NOT NULL
 );
 

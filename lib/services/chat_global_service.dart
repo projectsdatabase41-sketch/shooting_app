@@ -54,7 +54,12 @@ class ChatGlobalService {
     }
   }
 
-  Future<void> send(String text, {String? replyToId, String? replyToPreview}) async {
+  Future<void> send(
+    String text, {
+    String? replyToId,
+    String? replyToPreview,
+    Map<String, dynamic>? chart,
+  }) async {
     final token = await auth.ensureFreshToken();
     if (token == null) throw Exception('Сначала войдите в чат');
     final client = clientFactory();
@@ -70,9 +75,13 @@ class ChatGlobalService {
             },
             body: jsonEncode({
               'sender_id': auth.userId,
-              'text': text,
+              // text может быть пустым, если сообщение — ЧИСТЫЙ график без
+              // подписи: серверное ограничение допускает это (см.
+              // sql/chat-schema.sql, chat_global_messages_check).
+              if (text.isNotEmpty) 'text': text,
               if (replyToId != null) 'reply_to_id': replyToId,
               if (replyToPreview != null) 'reply_to_preview': replyToPreview,
+              if (chart != null) 'chart_json': jsonEncode(chart),
             }),
           )
           .timeout(_timeout);
@@ -90,6 +99,7 @@ class ChatGlobalService {
     }
     if (m.isImage) return '📷 Фото';
     if (m.hasAttachment) return '📎 ${m.attachmentName ?? 'Файл'}';
+    if (m.chart != null) return '📊 График';
     return 'Сообщение';
   }
 
