@@ -19,8 +19,11 @@ class HomeTabsViewModel extends ChangeNotifier {
   /// Все известные id вкладок этого режима — источник истины при первом
   /// запуске и при появлении новой вкладки в будущей версии приложения
   /// (её не было ни в сохранённых видимых, ни в скрытых — по умолчанию
-  /// видима, дописывается в конец).
-  final List<String> allIds;
+  /// видима, дописывается в конец). Не `final` — плитки сервисов
+  /// (`service_<id>`) появляются и пропадают во время работы
+  /// приложения, когда пользователь добавляет/удаляет сервис в
+  /// настройках (см. `HomeShell._onServicesChanged`).
+  List<String> allIds;
 
   /// Вкладки, которые нельзя скрыть (например, "Мишень" — без неё
   /// негде записывать выстрелы; "Настройки" — иначе скрытые вкладки
@@ -77,6 +80,24 @@ class HomeTabsViewModel extends ChangeNotifier {
   void show(String id) {
     if (!_hidden.remove(id)) return;
     if (!_visible.contains(id)) _visible.add(id);
+    _persist();
+    notifyListeners();
+  }
+
+  /// Пересчитывает набор известных id — вызывается, когда появляется
+  /// или пропадает плитка сервиса (см. `HomeShell._onServicesChanged`):
+  /// новый id по умолчанию видим и дописывается в конец, пропавший
+  /// молча убирается из обоих списков (нет отдельного случая "сервис
+  /// удалили, а он висел скрытым" — просто исчезает отовсюду).
+  void setAllIds(List<String> ids) {
+    if (listEquals(ids, allIds)) return;
+    allIds = ids;
+    final known = ids.toSet();
+    _visible = _visible.where(known.contains).toList();
+    _hidden = _hidden.where(known.contains).toSet();
+    for (final id in ids) {
+      if (!_visible.contains(id) && !_hidden.contains(id)) _visible.add(id);
+    }
     _persist();
     notifyListeners();
   }

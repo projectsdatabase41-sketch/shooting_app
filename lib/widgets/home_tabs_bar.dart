@@ -191,50 +191,89 @@ class _HomeTileGridState extends State<HomeTileGrid> {
     showHideTabPopup(context, _keyFor(id), () => widget.vm.hide(id));
   }
 
+  static const _spacing = 16.0;
+  static const _padding = 16.0;
+  static const _crossAxisCount = 2;
+
+  /// Плитки не в `GridView` (решение пользователя: "более плавная
+  /// анимация перемещения плиток") — обычная сетка перекладывает виджеты
+  /// в новые ячейки МГНОВЕННО, без перехода. Здесь каждая плитка сама
+  /// вычисляет свой пиксельный прямоугольник и едет туда через
+  /// `AnimatedPositioned`, с `key: ValueKey(id)` — тем же элементом, не
+  /// пересозданным, поэтому Flutter действительно анимирует переезд, а
+  /// не крестфейд одного виджета в другой.
   @override
   Widget build(BuildContext context) {
     final ids = widget.vm.visible;
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 16,
-        childAspectRatio: 1,
-      ),
-      itemCount: ids.length,
-      itemBuilder: (context, index) {
-        final id = ids[index];
-        // Плитка на 20% меньше своей ячейки (решение пользователя) —
-        // FractionallySizedBox вместо уменьшения самой сетки: позиции
-        // ячеек не двигаются, разница уходит в отступ вокруг плитки.
-        return Center(
-          child: FractionallySizedBox(
-            widthFactor: 0.8,
-            heightFactor: 0.8,
-            child: DragTarget<String>(
-              onWillAcceptWithDetails: (details) => details.data != id,
-              onAcceptWithDetails: (details) {
-                final oldIndex = widget.vm.visible.indexOf(details.data);
-                if (oldIndex < 0) return;
-                widget.vm.move(oldIndex, index);
-              },
-              builder: (context, candidateData, rejectedData) => LongPressDraggable<String>(
-                data: id,
-                feedback: SizedBox(width: 96, height: 96, child: _tileCard(context, id, elevated: true)),
-                childWhenDragging: Opacity(opacity: 0.3, child: _tileCard(context, id)),
-                onDragStarted: () => setState(() => _dragging = id),
-                onDraggableCanceled: (_, __) => setState(() => _dragging = null),
-                onDragEnd: (_) {
-                  setState(() => _dragging = null);
-                  _showHidePopup(id);
-                },
-                child: KeyedSubtree(key: _keyFor(id), child: _tileCard(context, id)),
-              ),
+    final rows = (ids.length / _crossAxisCount).ceil();
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tileSize = (constraints.maxWidth - _padding * 2 - _spacing * (_crossAxisCount - 1)) / _crossAxisCount;
+        final gaps = rows > 0 ? rows - 1 : 0;
+        final contentHeight = _padding * 2 + rows * tileSize + gaps * _spacing;
+
+        Rect rectFor(int index) {
+          final row = index ~/ _crossAxisCount;
+          final col = index % _crossAxisCount;
+          final x = _padding + col * (tileSize + _spacing);
+          final y = _padding + row * (tileSize + _spacing);
+          return Rect.fromLTWH(x, y, tileSize, tileSize);
+        }
+
+        return SingleChildScrollView(
+          child: SizedBox(
+            height: contentHeight,
+            child: Stack(
+              children: [
+                for (var index = 0; index < ids.length; index++)
+                  AnimatedPositioned(
+                    key: ValueKey(ids[index]),
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                    left: rectFor(index).left,
+                    top: rectFor(index).top,
+                    width: rectFor(index).width,
+                    height: rectFor(index).height,
+                    child: _buildTile(context, ids[index], index),
+                  ),
+              ],
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildTile(BuildContext context, String id, int index) {
+    // Плитка на 20% меньше своей ячейки (решение пользователя) —
+    // FractionallySizedBox вместо уменьшения самой сетки: разница уходит
+    // в отступ вокруг плитки, а не в размер занимаемого места.
+    return Center(
+      child: FractionallySizedBox(
+        widthFactor: 0.8,
+        heightFactor: 0.8,
+        child: DragTarget<String>(
+          onWillAcceptWithDetails: (details) => details.data != id,
+          onAcceptWithDetails: (details) {
+            final oldIndex = widget.vm.visible.indexOf(details.data);
+            if (oldIndex < 0) return;
+            widget.vm.move(oldIndex, index);
+          },
+          builder: (context, candidateData, rejectedData) => LongPressDraggable<String>(
+            data: id,
+            feedback: SizedBox(width: 96, height: 96, child: _tileCard(context, id, elevated: true)),
+            childWhenDragging: Opacity(opacity: 0.3, child: _tileCard(context, id)),
+            onDragStarted: () => setState(() => _dragging = id),
+            onDraggableCanceled: (_, __) => setState(() => _dragging = null),
+            onDragEnd: (_) {
+              setState(() => _dragging = null);
+              _showHidePopup(id);
+            },
+            child: KeyedSubtree(key: _keyFor(id), child: _tileCard(context, id)),
+          ),
+        ),
+      ),
     );
   }
 

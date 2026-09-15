@@ -206,6 +206,22 @@ CREATE TABLE IF NOT EXISTS coach_notes (
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Плитки сторонних сервисов (раздел настроек "Сервисы") — пользователь
+-- сам описывает подключение (ссылка / cURL / JSON, см.
+-- ServiceConnectionParser), получаются одни и те же поля ниже.
+-- headers хранятся JSON-строкой — сама таблица key-value для заголовков
+-- ради обычно одной-двух записей избыточна.
+CREATE TABLE IF NOT EXISTS custom_services (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  icon_name   TEXT NOT NULL DEFAULT 'link',
+  url         TEXT NOT NULL,
+  method      TEXT NOT NULL DEFAULT 'GET',
+  headers_json TEXT,
+  body        TEXT,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS shots (
   id                  TEXT PRIMARY KEY,
   session_id          TEXT NOT NULL REFERENCES training_sessions(id) ON DELETE CASCADE,

@@ -4,14 +4,18 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/home_tab_specs.dart';
 import '../services/ai_settings.dart';
+import '../services/custom_services_repository.dart';
 import '../services/knowledge_column_discovery.dart';
 import '../services/supabase_auth_service.dart';
 import '../state/app_data_store.dart';
 import '../state/home_tabs_view_model.dart';
+import '../widgets/home_tabs_bar.dart';
+import '../widgets/service_icon_picker.dart';
 import 'ai_settings_screen.dart';
 import 'settings_appearance_screen.dart';
 import 'settings_data_screen.dart';
 import 'settings_home_tabs_screen.dart';
+import 'settings_services_screen.dart';
 
 /// Настройки (раздел 9 ТЗ) — сгруппированы по назначению в отдельные
 /// "папки" (решение пользователя), вместо одного длинного списка:
@@ -24,12 +28,18 @@ class SettingsScreen extends StatelessWidget {
   /// от `HomeShell`, а не через Provider (см. комментарий у
   /// `HomeShell._pageFor`).
   final HomeTabsViewModel homeTabs;
+  final CustomServicesRepository services;
 
-  const SettingsScreen({super.key, required this.homeTabs});
+  const SettingsScreen({super.key, required this.homeTabs, required this.services});
 
   @override
   Widget build(BuildContext context) {
     final store = context.watch<AppDataStore>();
+    final specs = <String, HomeTabSpec>{
+      ...homeTabSpecs,
+      for (final s in services.list())
+        '$serviceTabPrefix${s.id}': HomeTabSpec(icon: iconForService(s.iconName), label: s.name),
+    };
 
     return Scaffold(
       appBar: AppBar(title: const Text('Настройки')),
@@ -69,7 +79,16 @@ class SettingsScreen extends StatelessWidget {
             subtitle: const Text('Какие вкладки показывать на главном экране и в каком порядке'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => SettingsHomeTabsScreen(specs: homeTabSpecs, tabs: homeTabs)),
+              MaterialPageRoute(builder: (_) => SettingsHomeTabsScreen(specs: specs, tabs: homeTabs)),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.extension_outlined),
+            title: const Text('Сервисы'),
+            subtitle: const Text('Google Диск, Supabase, заметки и другие свои плитки'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => SettingsServicesScreen(repo: services)),
             ),
           ),
           const Divider(height: 24),

@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/home_tab_specs.dart';
 import '../models/training_session.dart';
+import '../services/custom_services_repository.dart';
 import '../state/app_data_store.dart';
 import '../state/home_tabs_view_model.dart';
 import '../widgets/finished_edit_exit_dialog.dart';
 import '../widgets/home_tabs_bar.dart';
+import '../widgets/service_icon_picker.dart';
 import 'ai_chat_screen.dart';
 import 'coach_ai_chat_screen.dart';
 import 'coach_athletes_screen.dart';
@@ -14,6 +16,7 @@ import 'coach_statistics_screen.dart';
 import 'coach_tasks_screen.dart';
 import 'chat_home_screen.dart';
 import 'exercises_screen.dart';
+import 'service_tile_screen.dart';
 import 'settings_screen.dart';
 import 'statistics_screen.dart';
 import 'target_screen.dart';
@@ -37,6 +40,7 @@ class _HomeShellState extends State<HomeShell> {
 
   late final HomeTabsViewModel _athleteTabs;
   late final HomeTabsViewModel _coachTabs;
+  late final CustomServicesRepository _services;
 
   @override
   void initState() {
@@ -44,7 +48,31 @@ class _HomeShellState extends State<HomeShell> {
     final db = context.read<AppDataStore>().db;
     _athleteTabs = HomeTabsViewModel(db, mode: 'athlete', allIds: athleteTabIds, unhidable: athleteUnhidable);
     _coachTabs = HomeTabsViewModel(db, mode: 'coach', allIds: coachTabIds, unhidable: coachUnhidable);
+    _services = CustomServicesRepository(db);
+    _services.addListener(_onServicesChanged);
+    _onServicesChanged(); // сервисы, добавленные в прошлой сессии
   }
+
+  @override
+  void dispose() {
+    _services.removeListener(_onServicesChanged);
+    super.dispose();
+  }
+
+  /// Плитки сервисов — общие для обоих режимов (решение пользователя не
+  /// уточняло разделение по ролям, а разделять было бы лишней сложностью
+  /// без явной причины).
+  void _onServicesChanged() {
+    final serviceIds = [for (final s in _services.list()) '$serviceTabPrefix${s.id}'];
+    _athleteTabs.setAllIds([...athleteTabIds, ...serviceIds]);
+    _coachTabs.setAllIds([...coachTabIds, ...serviceIds]);
+  }
+
+  Map<String, HomeTabSpec> _specsWithServices() => {
+        ...homeTabSpecs,
+        for (final s in _services.list())
+          '$serviceTabPrefix${s.id}': HomeTabSpec(icon: iconForService(s.iconName), label: s.name),
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -74,6 +102,8 @@ class _HomeShellState extends State<HomeShell> {
         // проверка несохранённых правок (см. _onDestinationSelected) не
         // нужна — уход с экрана мишени идёт обычным Navigator.pop,
         // который PopScope самого TargetScreen и так видит.
+        final specs = _specsWithServices();
+
         if (tabs.layout == 'tiles') {
           return Scaffold(
             appBar: AppBar(title: const Text('Pusl')),
@@ -83,7 +113,7 @@ class _HomeShellState extends State<HomeShell> {
                 Expanded(
                   child: HomeTileGrid(
                     vm: tabs,
-                    specs: homeTabSpecs,
+                    specs: specs,
                     onSelect: (id) => Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => _pageFor(id, store, isCoach, tabs)),
                     ),
@@ -108,7 +138,7 @@ class _HomeShellState extends State<HomeShell> {
           ),
           bottomNavigationBar: HomeTabsBar(
             vm: tabs,
-            specs: homeTabSpecs,
+            specs: specs,
             selected: current,
             onSelect: (id) => _onDestinationSelected(context, store, isCoach, id),
           ),
@@ -123,6 +153,10 @@ class _HomeShellState extends State<HomeShell> {
   // поддерева HomeShell, пушнутому поверх всего маршруту не виден
   // (см. `SettingsHomeTabsScreen`).
   Widget _pageFor(String id, AppDataStore store, bool isCoach, HomeTabsViewModel tabs) {
+    if (id.startsWith(serviceTabPrefix)) {
+      final service = _services.byId(id.substring(serviceTabPrefix.length));
+      if (service != null) return ServiceTileScreen(service: service);
+    }
     if (isCoach) {
       return switch (id) {
         'diary' => const CoachDiaryNotesScreen(),
@@ -131,7 +165,7 @@ class _HomeShellState extends State<HomeShell> {
         'assistant_coach' => const CoachAiChatScreen(),
         'tasks' => const CoachTasksScreen(),
         'messenger' => const ChatHomeScreen(),
-        _ => SettingsScreen(homeTabs: tabs),
+        _ => SettingsScreen(homeTabs: tabs, services: _services),
       };
     }
     return switch (id) {
@@ -144,7 +178,7 @@ class _HomeShellState extends State<HomeShell> {
       // с контекстом конкретной тренировки.
       'assistant' => const AiChatScreen(),
       'messenger' => const ChatHomeScreen(),
-      _ => SettingsScreen(homeTabs: tabs),
+      _ => SettingsScreen(homeTabs: tabs, services: _services),
     };
   }
 

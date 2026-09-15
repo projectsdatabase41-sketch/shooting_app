@@ -161,7 +161,18 @@ class _AiChatBodyState extends State<_AiChatBody> {
           ),
         ],
       ),
-      body: body,
+      // resizeToAvoidBottomInset выключен намеренно — Scaffold сам иногда
+      // не отыгрывает обратное схлопывание после закрытия клавиатуры
+      // системным жестом "назад" (а не тапом), оставляя пустой отступ
+      // (та же жалоба, что уже чинили в личном/общем чате). AnimatedPadding
+      // реагирует на MediaQuery сам, на каждой перестройке, и не завязан
+      // на то, как именно клавиатуру закрыли.
+      resizeToAvoidBottomInset: false,
+      body: AnimatedPadding(
+        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+        duration: const Duration(milliseconds: 100),
+        child: body,
+      ),
     );
   }
 
@@ -338,9 +349,9 @@ class _AiChatBodyState extends State<_AiChatBody> {
     // embedded: true — экран живёт внутри PageView мишени, а не под
     // своим Scaffold, и не подвигается под клавиатуру сам (жалоба
     // пользователя: поле ввода уезжало под клавиатуру). Вне embedded
-    // об этом уже заботится сам Scaffold (resizeToAvoidBottomInset),
-    // и дублировать отступ здесь не нужно — на вебе он к тому же не
-    // возвращается ровно к нулю после закрытия клавиатуры.
+    // об этом заботится AnimatedPadding вокруг всего тела в build() —
+    // дублировать отступ здесь не нужно (и на вебе `viewInsets` к тому
+    // же не всегда возвращается ровно к нулю после закрытия клавиатуры).
     final keyboardInset =
         widget.embedded && !kIsWeb ? MediaQuery.of(context).viewInsets.bottom : 0.0;
     return SafeArea(

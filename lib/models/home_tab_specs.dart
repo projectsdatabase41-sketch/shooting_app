@@ -19,6 +19,12 @@ const athleteUnhidable = {'target', 'settings'};
 const coachTabIds = ['diary', 'athletes', 'statistics_coach', 'assistant_coach', 'tasks', 'messenger', 'settings'];
 const coachUnhidable = {'settings'};
 
+/// Префикс id вкладки сервиса в `HomeTabsViewModel.allIds` — плитки
+/// сервисов (`SettingsServicesScreen`) добавляются/убираются во время
+/// работы приложения, поэтому их id не входят в списки выше, а
+/// домешиваются к ним по этому префиксу (см. `HomeShell._onServicesChanged`).
+const serviceTabPrefix = 'service_';
+
 const Map<String, HomeTabSpec> homeTabSpecs = {
   'exercises': HomeTabSpec(icon: Icons.fitness_center, label: 'Упражнения'),
   'target': HomeTabSpec(icon: Icons.gps_fixed, label: 'Мишень'),
