@@ -205,24 +205,33 @@ class _HomeTileGridState extends State<HomeTileGrid> {
       itemCount: ids.length,
       itemBuilder: (context, index) {
         final id = ids[index];
-        return DragTarget<String>(
-          onWillAcceptWithDetails: (details) => details.data != id,
-          onAcceptWithDetails: (details) {
-            final oldIndex = widget.vm.visible.indexOf(details.data);
-            if (oldIndex < 0) return;
-            widget.vm.move(oldIndex, index);
-          },
-          builder: (context, candidateData, rejectedData) => LongPressDraggable<String>(
-            data: id,
-            feedback: SizedBox(width: 120, height: 120, child: _tileCard(context, id, elevated: true)),
-            childWhenDragging: Opacity(opacity: 0.3, child: _tileCard(context, id)),
-            onDragStarted: () => setState(() => _dragging = id),
-            onDraggableCanceled: (_, __) => setState(() => _dragging = null),
-            onDragEnd: (_) {
-              setState(() => _dragging = null);
-              _showHidePopup(id);
-            },
-            child: KeyedSubtree(key: _keyFor(id), child: _tileCard(context, id)),
+        // Плитка на 20% меньше своей ячейки (решение пользователя) —
+        // FractionallySizedBox вместо уменьшения самой сетки: позиции
+        // ячеек не двигаются, разница уходит в отступ вокруг плитки.
+        return Center(
+          child: FractionallySizedBox(
+            widthFactor: 0.8,
+            heightFactor: 0.8,
+            child: DragTarget<String>(
+              onWillAcceptWithDetails: (details) => details.data != id,
+              onAcceptWithDetails: (details) {
+                final oldIndex = widget.vm.visible.indexOf(details.data);
+                if (oldIndex < 0) return;
+                widget.vm.move(oldIndex, index);
+              },
+              builder: (context, candidateData, rejectedData) => LongPressDraggable<String>(
+                data: id,
+                feedback: SizedBox(width: 96, height: 96, child: _tileCard(context, id, elevated: true)),
+                childWhenDragging: Opacity(opacity: 0.3, child: _tileCard(context, id)),
+                onDragStarted: () => setState(() => _dragging = id),
+                onDraggableCanceled: (_, __) => setState(() => _dragging = null),
+                onDragEnd: (_) {
+                  setState(() => _dragging = null);
+                  _showHidePopup(id);
+                },
+                child: KeyedSubtree(key: _keyFor(id), child: _tileCard(context, id)),
+              ),
+            ),
           ),
         );
       },

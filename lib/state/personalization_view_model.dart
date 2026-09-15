@@ -1,6 +1,7 @@
 import 'dart:ui' show Color, Locale;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show ThemeMode;
+import '../models/app_color_presets.dart';
 import '../models/color_presets.dart';
 import '../models/target_color_scheme.dart';
 import '../services/ai_settings.dart';
@@ -78,6 +79,60 @@ class PersonalizationViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ---- Цвета ПРИЛОЖЕНИЯ (не мишени) — фон экранов, кнопки, текст на
+  // кнопках (решение пользователя: "в настройках цвета мало"). `null` —
+  // цвет темы по умолчанию (`AppTheme`), не тронут пользователем.
+  // Намеренно НЕ часть `TargetColorScheme` — см. комментарий в
+  // `AppTheme` о том, почему цвета мишени и цвета интерфейса не связаны.
+  static const String appBackgroundKey = 'app_bg_color';
+  static const String appButtonKey = 'app_button_color';
+  static const String appButtonTextKey = 'app_button_text_color';
+  static const List<String> appColorKeys = [appBackgroundKey, appButtonKey, appButtonTextKey];
+
+  Color? _appBackgroundColor;
+  Color? _appButtonColor;
+  Color? _appButtonTextColor;
+  Color? get appBackgroundColor => _appBackgroundColor;
+  Color? get appButtonColor => _appButtonColor;
+  Color? get appButtonTextColor => _appButtonTextColor;
+
+  void setAppBackgroundColor(Color? c) => _setAppColor(appBackgroundKey, c, (v) => _appBackgroundColor = v);
+  void setAppButtonColor(Color? c) => _setAppColor(appButtonKey, c, (v) => _appButtonColor = v);
+  void setAppButtonTextColor(Color? c) => _setAppColor(appButtonTextKey, c, (v) => _appButtonTextColor = v);
+
+  void _setAppColor(String key, Color? c, void Function(Color?) assign) {
+    assign(c);
+    if (c == null) {
+      db.db.execute('DELETE FROM color_prefs WHERE key = ?', [key]);
+    } else {
+      _persistKey(key, c);
+      _pushRecent(c);
+    }
+    notifyListeners();
+  }
+
+  /// Готовый набор из трёх цветов приложения разом — "пресеты для меню"
+  /// (решение пользователя), тот же приём, что `applyPreset` у мишени.
+  void applyAppColorPreset(AppColorPreset preset) {
+    _appBackgroundColor = preset.background;
+    _appButtonColor = preset.button;
+    _appButtonTextColor = preset.buttonText;
+    _persistKey(appBackgroundKey, preset.background);
+    _persistKey(appButtonKey, preset.button);
+    _persistKey(appButtonTextKey, preset.buttonText);
+    notifyListeners();
+  }
+
+  bool get hasCustomAppColors => _appBackgroundColor != null || _appButtonColor != null || _appButtonTextColor != null;
+
+  void resetAppColors() {
+    _appBackgroundColor = null;
+    _appButtonColor = null;
+    _appButtonTextColor = null;
+    db.db.execute('DELETE FROM color_prefs WHERE key IN (?, ?, ?)', appColorKeys);
+    notifyListeners();
+  }
+
   static ThemeMode _themeModeFromString(String? value) {
     switch (value) {
       case 'light':
@@ -114,6 +169,17 @@ class PersonalizationViewModel extends ChangeNotifier {
     final localeRow = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [localeKey]);
     final localeValue = localeRow.isEmpty ? 'system' : localeRow.first['hex'] as String;
     _localeCode = localeValue == 'system' ? null : localeValue;
+
+    Color? readAppColor(String key) {
+      final row = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [key]);
+      if (row.isEmpty) return null;
+      final hex = row.first['hex'] as String?;
+      return (hex == null || !TargetColorScheme.isValidHex(hex)) ? null : TargetColorScheme.hexToColor(hex);
+    }
+
+    _appBackgroundColor = readAppColor(appBackgroundKey);
+    _appButtonColor = readAppColor(appButtonKey);
+    _appButtonTextColor = readAppColor(appButtonTextKey);
 
     notifyListeners();
   }
@@ -179,6 +245,7 @@ class PersonalizationViewModel extends ChangeNotifier {
       ...AiSettings.allKeys,
       ...WorkspaceViewModel.allKeys,
       ...HomeTabsViewModel.allKeys,
+      ...appColorKeys,
     ];
     final placeholders = List.filled(protected.length, '?').join(', ');
     db.db.execute('DELETE FROM color_prefs WHERE key NOT IN ($placeholders)', protected);

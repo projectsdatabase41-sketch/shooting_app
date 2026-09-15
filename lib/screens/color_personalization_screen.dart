@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:provider/provider.dart';
+import '../models/app_color_presets.dart';
 import '../models/color_presets.dart';
 import '../models/target_face.dart';
 import '../painters/target_painter.dart';
@@ -197,6 +198,49 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
           ),
         ),
         const _ThemeModeSelector(),
+        const SizedBox(height: 16),
+        // Цвета ПРИЛОЖЕНИЯ (не мишени) — фон экранов, кнопки, текст на
+        // кнопках (решение пользователя: "в настройках цвета мало").
+        // Отдельная секция, не строка `_sections`/`TargetColorScheme`:
+        // это не персонализация мишени, а оформление интерфейса вокруг
+        // неё (см. комментарий в `AppTheme`).
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+          child: Text(
+            'ПРИЛОЖЕНИЕ',
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  letterSpacing: 0.6,
+                ),
+          ),
+        ),
+        const _AppColorPresetsRow(),
+        _AppColorRow(
+          title: 'Фон приложения',
+          color: vm.appBackgroundColor,
+          onChanged: vm.setAppBackgroundColor,
+        ),
+        _AppColorRow(
+          title: 'Кнопки',
+          color: vm.appButtonColor,
+          onChanged: vm.setAppButtonColor,
+        ),
+        _AppColorRow(
+          title: 'Текст на кнопках',
+          color: vm.appButtonTextColor,
+          onChanged: vm.setAppButtonTextColor,
+        ),
+        if (vm.hasCustomAppColors)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: vm.resetAppColors,
+                child: const Text('Сбросить цвета приложения'),
+              ),
+            ),
+          ),
         const SizedBox(height: 8),
         for (final section in _sections.entries) ...[
           Padding(
@@ -441,7 +485,7 @@ class _ColorRow extends StatelessWidget {
             ? null
             : () => _confirmReset(context, vm),
       ),
-      onTap: () => ColorPickerDialog.show(context, colorKey, title),
+      onTap: () => ColorPickerDialog.showForTargetKey(context, colorKey, title),
     );
   }
 
@@ -460,6 +504,109 @@ class _ColorRow extends StatelessWidget {
             child: const Text('Сбросить'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Строка цвета ПРИЛОЖЕНИЯ (фон/кнопки/текст кнопок) — тот же вид, что
+/// `_ColorRow`, но без привязки к `TargetColorScheme`: `color == null`
+/// значит "цвет темы по умолчанию", а не конкретный HEX.
+class _AppColorRow extends StatelessWidget {
+  final String title;
+  final Color? color;
+  final ValueChanged<Color?> onChanged;
+
+  const _AppColorRow({required this.title, required this.color, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final shown = color ?? theme.colorScheme.surfaceContainerHigh;
+
+    return ListTile(
+      leading: Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          color: shown,
+          border: Border.all(color: theme.colorScheme.outline),
+          borderRadius: BorderRadius.circular(6),
+        ),
+      ),
+      title: Text(title),
+      subtitle: color == null ? const Text('По умолчанию') : null,
+      trailing: IconButton(
+        icon: Icon(
+          Icons.replay,
+          color: color == null
+              ? theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.35)
+              : theme.colorScheme.primary,
+        ),
+        onPressed: color == null ? null : () => onChanged(null),
+      ),
+      onTap: () => ColorPickerDialog.showForColor(
+        context,
+        title: title,
+        color: shown,
+        onApply: onChanged,
+      ),
+    );
+  }
+}
+
+/// Полоса готовых сочетаний (фон + кнопки + текст кнопок разом) —
+/// "пресеты для меню" (решение пользователя), горизontal-скролл вместо
+/// отдельной вкладки: их всего несколько штук, вкладка ради этого
+/// избыточна (в отличие от пресетов мишени, которых много и у каждого
+/// свой предпросмотр рисунком).
+class _AppColorPresetsRow extends StatelessWidget {
+  const _AppColorPresetsRow();
+
+  @override
+  Widget build(BuildContext context) {
+    final vm = context.watch<PersonalizationViewModel>();
+    return SizedBox(
+      height: 72,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        itemCount: appColorPresets.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (context, i) {
+          final preset = appColorPresets[i];
+          final active = vm.appBackgroundColor == preset.background &&
+              vm.appButtonColor == preset.button &&
+              vm.appButtonTextColor == preset.buttonText;
+          return GestureDetector(
+            onTap: () => vm.applyAppColorPreset(preset),
+            child: Container(
+              width: 64,
+              decoration: BoxDecoration(
+                color: preset.background,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: active ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.outlineVariant,
+                  width: active ? 2 : 1,
+                ),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 28,
+                    height: 18,
+                    decoration: BoxDecoration(color: preset.button, borderRadius: BorderRadius.circular(4)),
+                    alignment: Alignment.center,
+                    child: Container(width: 14, height: 3, color: preset.buttonText),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(preset.label, style: const TextStyle(fontSize: 10), overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

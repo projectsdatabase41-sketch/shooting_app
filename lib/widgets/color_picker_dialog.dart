@@ -6,21 +6,65 @@ import '../state/personalization_view_model.dart';
 /// Диалог выбора цвета (часть A.3.1 логики-спека). Два таба: "Палитра"
 /// (круг+слайдер яркости — упрощено до HSV picker) и "HEX" (ручной ввод +
 /// read-only RGB/HSL + чипы прозрачности для alpha-capable ключей).
-/// "Недавние цвета" и переключатель "Автоконтраст текста" для ключей
-/// цветов пробоин.
+/// "Недавние цвета" и переключатель "Автоконтраст текста" — только для
+/// ключей цветов пробоин (`showForTargetKey`).
+///
+/// Сам диалог не завязан на `TargetColorScheme` — принимает готовый цвет
+/// и колбэк (`ColorPickerDialog._`), а `showForTargetKey`/`showForColor`
+/// — два способа его открыть: под цвет мишени (ключ в `PersonalizationViewModel.scheme`)
+/// и под произвольный цвет приложения (фон, кнопки — не часть
+/// `TargetColorScheme`, см. комментарий там же о том, почему их нельзя
+/// смешивать).
 class ColorPickerDialog extends StatefulWidget {
-  final String colorKey;
   final String title;
+  final Color initialColor;
+  final ValueChanged<Color> onApply;
+  final List<Color> recentColors;
+  final bool showAutoContrast;
+  final bool autoContrastValue;
+  final ValueChanged<bool>? onAutoContrastChanged;
 
-  const ColorPickerDialog({super.key, required this.colorKey, required this.title});
+  const ColorPickerDialog._({
+    required this.title,
+    required this.initialColor,
+    required this.onApply,
+    this.recentColors = const [],
+    this.showAutoContrast = false,
+    this.autoContrastValue = false,
+    this.onAutoContrastChanged,
+  });
 
-  static Future<void> show(BuildContext context, String colorKey, String title) {
+  /// Цвет из `TargetColorScheme` (мишень, пробоины, панель правки).
+  static Future<void> showForTargetKey(BuildContext context, String colorKey, String title) {
+    final vm = context.read<PersonalizationViewModel>();
     return showDialog(
       context: context,
-      builder: (_) => ChangeNotifierProvider.value(
-        value: context.read<PersonalizationViewModel>(),
-        child: ColorPickerDialog(colorKey: colorKey, title: title),
+      builder: (_) => AnimatedBuilder(
+        animation: vm,
+        builder: (context, _) => ColorPickerDialog._(
+          title: title,
+          initialColor: vm.scheme[colorKey],
+          onApply: (c) => vm.setColor(colorKey, c),
+          recentColors: vm.recentColors,
+          showAutoContrast: TargetColorScheme.autoContrastRelevantKeys.contains(colorKey),
+          autoContrastValue: vm.scheme.shotNumberTextAuto,
+          onAutoContrastChanged: vm.setShotNumberTextAuto,
+        ),
       ),
+    );
+  }
+
+  /// Произвольный цвет приложения (фон, кнопки, текст кнопок) — готовый
+  /// цвет и колбэк применения, без привязки к `TargetColorScheme`.
+  static Future<void> showForColor(
+    BuildContext context, {
+    required String title,
+    required Color color,
+    required ValueChanged<Color> onApply,
+  }) {
+    return showDialog(
+      context: context,
+      builder: (_) => ColorPickerDialog._(title: title, initialColor: color, onApply: onApply),
     );
   }
 
@@ -33,14 +77,11 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> with SingleTicker
   late TextEditingController _hexController;
   late Color _color;
 
-  bool get _autoContrastRelevant => TargetColorScheme.autoContrastRelevantKeys.contains(widget.colorKey);
-
   @override
   void initState() {
     super.initState();
     _tab = TabController(length: 2, vsync: this);
-    final vm = context.read<PersonalizationViewModel>();
-    _color = vm.scheme[widget.colorKey];
+    _color = widget.initialColor;
     _hexController = TextEditingController(text: TargetColorScheme.colorToHex(_color));
   }
 
@@ -60,7 +101,6 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> with SingleTicker
 
   @override
   Widget build(BuildContext context) {
-    final vm = context.watch<PersonalizationViewModel>();
     return AlertDialog(
       title: Text(widget.title),
       content: SizedBox(
@@ -76,8 +116,8 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> with SingleTicker
                 children: [_buildPaletteTab(), _buildHexTab()],
               ),
             ),
-            if (vm.recentColors.isNotEmpty) _buildRecentColors(vm),
-            if (_autoContrastRelevant) _buildAutoContrastToggle(vm),
+            if (widget.recentColors.isNotEmpty) _buildRecentColors(),
+            if (widget.showAutoContrast) _buildAutoContrastToggle(),
           ],
         ),
       ),
@@ -85,7 +125,7 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> with SingleTicker
         TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Отмена')),
         FilledButton(
           onPressed: () {
-            vm.setColor(widget.colorKey, _color);
+            widget.onApply(_color);
             Navigator.of(context).pop();
           },
           child: const Text('Применить'),
@@ -185,13 +225,13 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> with SingleTicker
     );
   }
 
-  Widget _buildRecentColors(PersonalizationViewModel vm) {
+  Widget _buildRecentColors() {
     return Padding(
       padding: const EdgeInsets.only(top: 8),
       child: Row(
         children: [
           const Text('Недавние: ', style: TextStyle(fontSize: 12)),
-          ...vm.recentColors.map((c) => GestureDetector(
+          ...widget.recentColors.map((c) => GestureDetector(
                 onTap: () => _apply(c),
                 child: Container(
                   width: 24,
@@ -209,14 +249,14 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> with SingleTicker
     );
   }
 
-  Widget _buildAutoContrastToggle(PersonalizationViewModel vm) {
+  Widget _buildAutoContrastToggle() {
     return SwitchListTile(
       dense: true,
       title: const Text('Автоконтраст текста', style: TextStyle(fontSize: 13)),
       subtitle: const Text('Текст внутри пробоин будет выбран автоматически для максимальной читаемости',
           style: TextStyle(fontSize: 11)),
-      value: vm.scheme.shotNumberTextAuto,
-      onChanged: vm.setShotNumberTextAuto,
+      value: widget.autoContrastValue,
+      onChanged: widget.onAutoContrastChanged,
     );
   }
 }

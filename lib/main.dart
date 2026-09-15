@@ -113,10 +113,6 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
   /// Хранится только в памяти: закрыл приложение — переписка исчезла.
   late final AiChatViewModel _aiChat;
 
-  // Темы строятся один раз: AppTheme.light()/dark() собирают несколько
-  // десятков подтем, и пересобирать их на каждой перерисовке незачем.
-  final ThemeData _lightTheme = AppTheme.light();
-  final ThemeData _darkTheme = AppTheme.dark();
 
   @override
   void initState() {
@@ -215,16 +211,20 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
       // Selector, а не Consumer: PersonalizationViewModel уведомляет
       // слушателей на КАЖДОЕ изменение цвета мишени (в том числе пока
       // пользователь тянет ползунок в пипетке), а пересобирать всё
-      // приложение ради этого не нужно — здесь важна только смена
-      // светлой/тёмной темы.
-      child: Selector<PersonalizationViewModel, ThemeMode>(
-        selector: (_, vm) => vm.themeMode,
-        builder: (context, themeMode, _) => MaterialApp(
+      // приложение ради этого не нужно — здесь важны только смена
+      // светлой/тёмной темы и цвета ПРИЛОЖЕНИЯ (фон/кнопки, отдельные от
+      // цветов мишени — см. `AppTheme`), которые пользователь тоже может
+      // поменять.
+      child: Selector<PersonalizationViewModel, (ThemeMode, Color?, Color?, Color?)>(
+        selector: (_, vm) => (vm.themeMode, vm.appBackgroundColor, vm.appButtonColor, vm.appButtonTextColor),
+        builder: (context, data, _) {
+          final (themeMode, background, buttonColor, buttonTextColor) = data;
+          return MaterialApp(
           navigatorKey: navigatorKey,
           title: 'Pusl',
           debugShowCheckedModeBanner: false,
-          theme: _lightTheme,
-          darkTheme: _darkTheme,
+          theme: AppTheme.light(background: background, buttonColor: buttonColor, buttonTextColor: buttonTextColor),
+          darkTheme: AppTheme.dark(background: background, buttonColor: buttonColor, buttonTextColor: buttonTextColor),
           themeMode: themeMode,
           // null — системный язык устройства (по умолчанию). Сам текст
           // экранов при этом не переводится — см. комментарий у
@@ -240,7 +240,8 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
           // необязательной возможности — значит запирать дверь, за
           // которой ничего нет. Подключение к базе живёт в настройках.
           home: const HomeShell(),
-        ),
+        );
+        },
       ),
     );
   }

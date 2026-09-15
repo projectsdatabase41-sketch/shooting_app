@@ -40,9 +40,11 @@ class AppTheme {
   static const Color _slate = Color(0xFF2C4A63);
   static const Color _amber = Color(0xFFC98A15);
 
-  static ThemeData light() => _build(_scheme(Brightness.light));
+  static ThemeData light({Color? background, Color? buttonColor, Color? buttonTextColor}) =>
+      _build(_scheme(Brightness.light), background: background, buttonColor: buttonColor, buttonTextColor: buttonTextColor);
 
-  static ThemeData dark() => _build(_scheme(Brightness.dark));
+  static ThemeData dark({Color? background, Color? buttonColor, Color? buttonTextColor}) =>
+      _build(_scheme(Brightness.dark), background: background, buttonColor: buttonColor, buttonTextColor: buttonTextColor);
 
   static ColorScheme _scheme(Brightness brightness) {
     final base = ColorScheme.fromSeed(seedColor: _slate, brightness: brightness);
@@ -107,7 +109,11 @@ class AppTheme {
   static Color accentFor(ColorScheme cs) =>
       cs.brightness == Brightness.light ? _amber : _amberLight;
 
-  static ThemeData _build(ColorScheme cs) {
+  /// `background`/`buttonColor`/`buttonTextColor` — персонализация
+  /// пользователя (`PersonalizationViewModel.appBackgroundColor` и т.п.,
+  /// решение пользователя: "в настройках цвета мало"), `null` — цвет по
+  /// умолчанию из палитры выше, ничем не переопределён.
+  static ThemeData _build(ColorScheme cs, {Color? background, Color? buttonColor, Color? buttonTextColor}) {
     final base = ThemeData(colorScheme: cs);
     final t = base.textTheme;
 
@@ -142,7 +148,7 @@ class AppTheme {
 
     return base.copyWith(
       textTheme: textTheme,
-      scaffoldBackgroundColor: cs.surface,
+      scaffoldBackgroundColor: background ?? cs.surface,
       splashFactory: InkSparkle.splashFactory,
       visualDensity: VisualDensity.standard,
 
@@ -230,10 +236,10 @@ class AppTheme {
         }),
       ),
 
-      filledButtonTheme: FilledButtonThemeData(style: _buttonStyle()),
-      elevatedButtonTheme: ElevatedButtonThemeData(style: _buttonStyle()),
+      filledButtonTheme: FilledButtonThemeData(style: _buttonStyle(buttonColor, buttonTextColor)),
+      elevatedButtonTheme: ElevatedButtonThemeData(style: _buttonStyle(buttonColor, buttonTextColor)),
       outlinedButtonTheme: OutlinedButtonThemeData(
-        style: _buttonStyle().copyWith(
+        style: _buttonStyle(null, buttonTextColor).copyWith(
           side: WidgetStatePropertyAll(BorderSide(color: cs.outline)),
         ),
       ),
@@ -246,8 +252,8 @@ class AppTheme {
       ),
 
       floatingActionButtonTheme: FloatingActionButtonThemeData(
-        backgroundColor: cs.primary,
-        foregroundColor: cs.onPrimary,
+        backgroundColor: buttonColor ?? cs.primary,
+        foregroundColor: buttonTextColor ?? cs.onPrimary,
         elevation: 2,
         highlightElevation: 4,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radiusLarge)),
@@ -303,7 +309,12 @@ class AppTheme {
     );
   }
 
-  static ButtonStyle _buttonStyle() => ButtonStyle(
+  /// `color`/`textColor` — переопределение из настроек пользователя;
+  /// `null` — оставить цвет по умолчанию (тема сама решает через
+  /// `ColorScheme`, `color`/`textColor` здесь ничего не трогают).
+  static ButtonStyle _buttonStyle([Color? color, Color? textColor]) => ButtonStyle(
+        backgroundColor: color == null ? null : WidgetStatePropertyAll(color),
+        foregroundColor: textColor == null ? null : WidgetStatePropertyAll(textColor),
         minimumSize: const WidgetStatePropertyAll(Size(0, 44)),
         padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 18)),
         shape: WidgetStatePropertyAll(
