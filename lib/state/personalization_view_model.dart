@@ -4,6 +4,7 @@ import 'package:flutter/material.dart' show ThemeMode;
 import '../models/color_presets.dart';
 import '../models/target_color_scheme.dart';
 import '../services/ai_settings.dart';
+import 'home_tabs_view_model.dart';
 import 'workspace_view_model.dart';
 import '../services/local_db_service.dart';
 
@@ -172,7 +173,13 @@ class PersonalizationViewModel extends ChangeNotifier {
     // тема интерфейса и настройки ИИ (ключ, модели, адрес книг) — снести
     // их вместе с цветами было бы неожиданностью для того, кто нажал
     // "сбросить все цвета".
-    final protected = [themeModeKey, localeKey, ...AiSettings.allKeys, ...WorkspaceViewModel.allKeys];
+    final protected = [
+      themeModeKey,
+      localeKey,
+      ...AiSettings.allKeys,
+      ...WorkspaceViewModel.allKeys,
+      ...HomeTabsViewModel.allKeys,
+    ];
     final placeholders = List.filled(protected.length, '?').join(', ');
     db.db.execute('DELETE FROM color_prefs WHERE key NOT IN ($placeholders)', protected);
     notifyListeners();

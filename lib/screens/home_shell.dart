@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/home_tab_specs.dart';
 import '../models/training_session.dart';
 import '../state/app_data_store.dart';
+import '../state/home_tabs_view_model.dart';
 import '../widgets/finished_edit_exit_dialog.dart';
+import '../widgets/home_tabs_bar.dart';
 import 'ai_chat_screen.dart';
 import 'coach_ai_chat_screen.dart';
 import 'coach_athletes_screen.dart';
@@ -17,11 +20,10 @@ import 'target_screen.dart';
 import 'trainings_history_screen.dart';
 
 /// Домашняя оболочка с нижней навигацией. Состав вкладок зависит от
-/// `workMode` (часть C.1 логики-спека). По решению пользователя — состав
-/// СПОРТСМЕНА из 5 вкладок по макетам (часть C.6):
-/// Тренировка · История · Мишень (центр) · Статистика · Настройки.
-/// Тренер — Дневник · Настройки (раздел 8/9 ТЗ, макетов с 5 вкладками
-/// для тренера не присылали).
+/// `workMode` (часть C.1 логики-спека). Порядок и видимость каждой
+/// вкладки пользователь настраивает сам — долгое нажатие на значок в
+/// нижней навигации (см. `HomeTabsBar`) и раздел "Рабочие пространства"
+/// в настройках.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -30,14 +32,26 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
-  int _athleteIndex = 2; // старт на вкладке "Мишень"
-  int _coachIndex = 0;
+  String _athleteTab = 'target';
+  String _coachTab = 'diary';
   WorkMode? _lastMode;
+
+  late final HomeTabsViewModel _athleteTabs;
+  late final HomeTabsViewModel _coachTabs;
+
+  @override
+  void initState() {
+    super.initState();
+    final db = context.read<AppDataStore>().db;
+    _athleteTabs = HomeTabsViewModel(db, mode: 'athlete', allIds: athleteTabIds, unhidable: athleteUnhidable);
+    _coachTabs = HomeTabsViewModel(db, mode: 'coach', allIds: coachTabIds, unhidable: coachUnhidable);
+  }
 
   @override
   Widget build(BuildContext context) {
     final store = context.watch<AppDataStore>();
     final isCoach = store.workMode == WorkMode.coach;
+    final tabs = isCoach ? _coachTabs : _athleteTabs;
 
     // Рубильник "Режим тренера" переключают со страницы настроек —
     // после смены роли логичнее увидеть домашнюю вкладку нового режима
@@ -45,95 +59,69 @@ class _HomeShellState extends State<HomeShell> {
     // листали до переключения (обычно это и есть сами настройки).
     if (_lastMode != null && _lastMode != store.workMode) {
       if (isCoach) {
-        _coachIndex = 0;
+        _coachTab = 'diary';
       } else {
-        _athleteIndex = 2;
+        _athleteTab = 'target';
       }
     }
     _lastMode = store.workMode;
 
-    if (isCoach) {
-      // Главный экран тренера (раздел 8 ТЗ): Дневник · Спортсмены ·
-      // Статистика · Чат с ИИ · Задания · Настройки. Мульти-спортсменский
-      // режим (решение пользователя): "Дневник" со списком тренировок
-      // одного подключения заменён на список спортсменов — тап на
-      // конкретного открывает его тренировки отдельным экраном.
-      final pages = [
-        const CoachDiaryNotesScreen(),
-        const CoachAthletesScreen(),
-        const CoachStatisticsScreen(),
-        const CoachAiChatScreen(),
-        const CoachTasksScreen(),
-        const ChatHomeScreen(),
-        const SettingsScreen(),
-      ];
-      return Scaffold(
-        body: Column(
-          children: [
-            if (store.isBackgroundSyncing) const _SyncBanner(),
-            Expanded(child: pages[_coachIndex]),
-          ],
-        ),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _coachIndex,
-          onDestinationSelected: (i) => setState(() => _coachIndex = i),
-          // Шесть вкладок — тот же приём, что у спортсмена: подпись
-          // только у выбранной, иначе не помещаются на узком экране.
-          labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
-          destinations: const [
-            NavigationDestination(icon: Icon(Icons.menu_book_outlined), label: 'Дневник'),
-            NavigationDestination(icon: Icon(Icons.groups_outlined), label: 'Спортсмены'),
-            NavigationDestination(icon: Icon(Icons.bar_chart), label: 'Статистика'),
-            NavigationDestination(icon: Icon(Icons.auto_awesome_outlined), label: 'Ассистент'),
-            NavigationDestination(icon: Icon(Icons.assignment_outlined), label: 'Задания'),
-            NavigationDestination(icon: Icon(Icons.forum_outlined), label: 'Мессенджер'),
-            NavigationDestination(icon: Icon(Icons.settings_outlined), label: 'Настройки'),
-          ],
-        ),
-      );
-    }
+    return AnimatedBuilder(
+      animation: tabs,
+      builder: (context, _) {
+        final selected = isCoach ? _coachTab : _athleteTab;
+        // Скрыли вкладку, на которой стояли — переезжаем на первую
+        // оставшуюся видимую, а не оставляем экран без вкладки вовсе.
+        final current = tabs.visible.contains(selected) ? selected : tabs.visible.first;
 
-    final pages = [
-      const ExercisesScreen(),
-      const TrainingsHistoryScreen(),
-      _ActiveTargetTab(key: ValueKey(_activeSessionKey(store))),
-      const StatisticsScreen(),
+        return Scaffold(
+          body: Column(
+            children: [
+              if (store.isBackgroundSyncing) const _SyncBanner(),
+              Expanded(child: _pageFor(current, store, isCoach, tabs)),
+            ],
+          ),
+          bottomNavigationBar: HomeTabsBar(
+            vm: tabs,
+            specs: homeTabSpecs,
+            selected: current,
+            onSelect: (id) => _onDestinationSelected(context, store, isCoach, id),
+          ),
+        );
+      },
+    );
+  }
+
+  // `HomeTabsViewModel` передаётся явно, а не через Provider — экран
+  // настроек открывается через `Navigator.push` НА КОРНЕВОЙ навигатор
+  // приложения (у HomeShell нет своего), а Provider, объявленный внутри
+  // поддерева HomeShell, пушнутому поверх всего маршруту не виден
+  // (см. `SettingsHomeTabsScreen`).
+  Widget _pageFor(String id, AppDataStore store, bool isCoach, HomeTabsViewModel tabs) {
+    if (isCoach) {
+      return switch (id) {
+        'diary' => const CoachDiaryNotesScreen(),
+        'athletes' => const CoachAthletesScreen(),
+        'statistics_coach' => const CoachStatisticsScreen(),
+        'assistant_coach' => const CoachAiChatScreen(),
+        'tasks' => const CoachTasksScreen(),
+        'messenger' => const ChatHomeScreen(),
+        _ => SettingsScreen(homeTabs: tabs),
+      };
+    }
+    return switch (id) {
+      'exercises' => const ExercisesScreen(),
+      'trainings' => const TrainingsHistoryScreen(),
+      'target' => _ActiveTargetTab(key: ValueKey(_activeSessionKey(store))),
+      'statistics' => const StatisticsScreen(),
       // Чат с ассистентом без привязки к тренировке (решение
       // пользователя: «чат с ИИ без выбора тренировок, на главный
       // экран»). Тот же экран открывается и из шапки мишени, но там —
       // с контекстом конкретной тренировки.
-      const AiChatScreen(),
-      const ChatHomeScreen(),
-      const SettingsScreen(),
-    ];
-
-    return Scaffold(
-      body: Column(
-        children: [
-          if (store.isBackgroundSyncing) const _SyncBanner(),
-          Expanded(child: pages[_athleteIndex]),
-        ],
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _athleteIndex,
-        onDestinationSelected: (i) => _onDestinationSelected(context, store, i),
-        // Шесть вкладок на узком экране (375dp и меньше) не помещаются
-        // с подписью у каждой — "Тренировка"/"Ассистент"/"Настройки"
-        // переносились на две строки или обрезались. Подпись остаётся
-        // только у выбранной вкладки — Material-паттерн для навигации
-        // с большим числом пунктов, а не сокращение слов до нечитаемого.
-        labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.fitness_center), label: 'Упражнения'),
-          NavigationDestination(icon: Icon(Icons.calendar_month_outlined), label: 'Тренировки'),
-          NavigationDestination(icon: Icon(Icons.gps_fixed), label: 'Мишень'),
-          NavigationDestination(icon: Icon(Icons.bar_chart), label: 'Статистика'),
-          NavigationDestination(icon: Icon(Icons.auto_awesome_outlined), label: 'Ассистент'),
-          NavigationDestination(icon: Icon(Icons.forum_outlined), label: 'Мессенджер'),
-          NavigationDestination(icon: Icon(Icons.settings_outlined), label: 'Настройки'),
-        ],
-      ),
-    );
+      'assistant' => const AiChatScreen(),
+      'messenger' => const ChatHomeScreen(),
+      _ => SettingsScreen(homeTabs: tabs),
+    };
   }
 
   /// Переключение нижней вкладки — не Navigator.pop, поэтому PopScope
@@ -144,13 +132,20 @@ class _HomeShellState extends State<HomeShell> {
   /// running/paused тренировки, а редактирование завершённой открыто
   /// отдельным экраном из истории — но это дешёвая защита на будущее,
   /// если это когда-нибудь изменится).
-  Future<void> _onDestinationSelected(BuildContext context, AppDataStore store, int index) async {
-    if (index != _athleteIndex && store.hasUnsavedFinishedEdit) {
+  Future<void> _onDestinationSelected(BuildContext context, AppDataStore store, bool isCoach, String id) async {
+    final current = isCoach ? _coachTab : _athleteTab;
+    if (id != current && store.hasUnsavedFinishedEdit) {
       final keep = await confirmFinishedEditExit(context);
       if (keep == null) return; // остаёмся на текущей вкладке
       store.resolvePendingFinishedEdit?.call(keep: keep);
     }
-    setState(() => _athleteIndex = index);
+    setState(() {
+      if (isCoach) {
+        _coachTab = id;
+      } else {
+        _athleteTab = id;
+      }
+    });
   }
 
   String _activeSessionKey(AppDataStore store) {

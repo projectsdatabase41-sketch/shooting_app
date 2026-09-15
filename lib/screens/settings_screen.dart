@@ -2,13 +2,16 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../models/home_tab_specs.dart';
 import '../services/ai_settings.dart';
 import '../services/knowledge_column_discovery.dart';
 import '../services/supabase_auth_service.dart';
 import '../state/app_data_store.dart';
+import '../state/home_tabs_view_model.dart';
 import 'ai_settings_screen.dart';
 import 'settings_appearance_screen.dart';
 import 'settings_data_screen.dart';
+import 'settings_home_tabs_screen.dart';
 
 /// Настройки (раздел 9 ТЗ) — сгруппированы по назначению в отдельные
 /// "папки" (решение пользователя), вместо одного длинного списка:
@@ -17,7 +20,12 @@ import 'settings_data_screen.dart';
 /// больше не относится — теперь это отдельная вкладка главного экрана
 /// (`HomeShell`), а не раздел настроек.
 class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({super.key});
+  /// Модель вкладок ТЕКУЩЕГО режима (спортсмен/тренер) — передана явно
+  /// от `HomeShell`, а не через Provider (см. комментарий у
+  /// `HomeShell._pageFor`).
+  final HomeTabsViewModel homeTabs;
+
+  const SettingsScreen({super.key, required this.homeTabs});
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +61,15 @@ class SettingsScreen extends StatelessWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const SettingsDataScreen()),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.dashboard_customize_outlined),
+            title: const Text('Рабочие пространства'),
+            subtitle: const Text('Какие вкладки показывать на главном экране и в каком порядке'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => SettingsHomeTabsScreen(specs: homeTabSpecs, tabs: homeTabs)),
             ),
           ),
           const Divider(height: 24),
