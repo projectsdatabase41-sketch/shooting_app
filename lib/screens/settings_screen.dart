@@ -7,14 +7,15 @@ import '../services/knowledge_column_discovery.dart';
 import '../services/supabase_auth_service.dart';
 import '../state/app_data_store.dart';
 import 'ai_settings_screen.dart';
-import 'chat_home_screen.dart';
 import 'settings_appearance_screen.dart';
 import 'settings_data_screen.dart';
 
 /// Настройки (раздел 9 ТЗ) — сгруппированы по назначению в отдельные
 /// "папки" (решение пользователя), вместо одного длинного списка:
-/// внешний вид отдельно от данных/синхронизации, часто нужное (ИИ, чат,
-/// режим тренера, учётная запись) остаётся на первом экране.
+/// внешний вид отдельно от данных/синхронизации, часто нужное (ИИ, режим
+/// тренера, учётная запись) остаётся на первом экране. Мессенджер сюда
+/// больше не относится — теперь это отдельная вкладка главного экрана
+/// (`HomeShell`), а не раздел настроек.
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
@@ -43,15 +44,6 @@ class SettingsScreen extends StatelessWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const AiSettingsScreen()),
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.forum_outlined),
-            title: const Text('Чат'),
-            subtitle: const Text('Общение с другими пользователями приложения'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ChatHomeScreen()),
             ),
           ),
           ListTile(

@@ -9,6 +9,7 @@ import 'coach_athletes_screen.dart';
 import 'coach_diary_notes_screen.dart';
 import 'coach_statistics_screen.dart';
 import 'coach_tasks_screen.dart';
+import 'chat_home_screen.dart';
 import 'exercises_screen.dart';
 import 'settings_screen.dart';
 import 'statistics_screen.dart';
@@ -63,6 +64,7 @@ class _HomeShellState extends State<HomeShell> {
         const CoachStatisticsScreen(),
         const CoachAiChatScreen(),
         const CoachTasksScreen(),
+        const ChatHomeScreen(),
         const SettingsScreen(),
       ];
       return Scaffold(
@@ -84,6 +86,7 @@ class _HomeShellState extends State<HomeShell> {
             NavigationDestination(icon: Icon(Icons.bar_chart), label: 'Статистика'),
             NavigationDestination(icon: Icon(Icons.auto_awesome_outlined), label: 'Ассистент'),
             NavigationDestination(icon: Icon(Icons.assignment_outlined), label: 'Задания'),
+            NavigationDestination(icon: Icon(Icons.forum_outlined), label: 'Мессенджер'),
             NavigationDestination(icon: Icon(Icons.settings_outlined), label: 'Настройки'),
           ],
         ),
@@ -100,6 +103,7 @@ class _HomeShellState extends State<HomeShell> {
       // экран»). Тот же экран открывается и из шапки мишени, но там —
       // с контекстом конкретной тренировки.
       const AiChatScreen(),
+      const ChatHomeScreen(),
       const SettingsScreen(),
     ];
 
@@ -125,6 +129,7 @@ class _HomeShellState extends State<HomeShell> {
           NavigationDestination(icon: Icon(Icons.gps_fixed), label: 'Мишень'),
           NavigationDestination(icon: Icon(Icons.bar_chart), label: 'Статистика'),
           NavigationDestination(icon: Icon(Icons.auto_awesome_outlined), label: 'Ассистент'),
+          NavigationDestination(icon: Icon(Icons.forum_outlined), label: 'Мессенджер'),
           NavigationDestination(icon: Icon(Icons.settings_outlined), label: 'Настройки'),
         ],
       ),

@@ -208,7 +208,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Общий чат')),
+      appBar: AppBar(title: const Text('Мессенджер')),
       drawer: _ChatDrawer(
         auth: _auth,
         repo: _repo,
@@ -1296,7 +1296,7 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Чат')),
+      appBar: AppBar(title: const Text('Мессенджер')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
