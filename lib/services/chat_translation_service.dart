@@ -40,6 +40,14 @@ class ChatTranslationService {
     final decoded = jsonDecode(utf8.decode(res.bodyBytes));
     if (decoded is! Map) return null;
 
+    // MyMemory отвечает HTTP 200 даже когда сам перевод не удался —
+    // например, автоопределённый язык текста совпал с целевым (сообщение
+    // и так уже на нужном языке). Тогда responseStatus не "200"
+    // (иногда строкой, иногда числом — сравниваем как строку), а в
+    // translatedText лежит не перевод, а текст ошибки вида "PLEASE
+    // SELECT TWO DISTINCT LANGUAGES" — не самих слов пользователя.
+    if ('${decoded['responseStatus']}' != '200') return null;
+
     final data = decoded['responseData'];
     if (data is! Map) return null;
 
