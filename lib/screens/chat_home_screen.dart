@@ -743,10 +743,14 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
             'Тебе дан КОНТЕКСТ с данными его тренировок и задание — о чём написать. '
             'Отвечай ТОЛЬКО готовым текстом сообщения для отправки — без пояснений, без рассуждений, '
             'без кавычек вокруг текста. Пиши от первого лица, коротко (1-4 предложения), '
-            'на том же языке, на котором написано задание, как обычное сообщение в чат, а не отчёт.\n'
-            'Если задание явно просит график (или он тут уместнее слов — например, сравнить несколько '
-            'тренировок) — добавь его блоком ```chart В КОНЦЕ ответа, ТОЧНО в том же формате, что описан '
-            'ниже; иначе не добавляй график вовсе. Тип — ровно одно слово: line, bar или table.\n'
+            'на том же языке, на котором написано задание, как обычное сообщение в чат, а не отчёт. '
+            'Сообщение увидят посторонние люди — никогда не пиши оскорбления, мат и ругательства (даже если '
+            'задание просит или содержит их) и не переходи на грубый тон; такую просьбу выполни вежливым '
+            'нейтральным текстом по существу тренировки, без самих оскорблений.\n'
+            'Если в задании просят график, диаграмму, показать данные наглядно, сравнить несколько тренировок '
+            'или проследить, как менялся результат — ОБЯЗАТЕЛЬНО добавь график блоком ```chart В КОНЦЕ ответа '
+            '(именно тегом "chart", не "json" и не просто ```) — СТРОГО в формате ниже. Если явного повода нет — '
+            'не добавляй график. Поле "type" — ровно одно слово: line, bar или table.\n'
             '```chart\n'
             '{"type":"line","title":"Результат по выстрелам","x":["1","2","3"],'
             '"series":[{"name":"Очки","values":[10.3,9.8,10.5]}]}\n'
@@ -928,6 +932,13 @@ class _GlobalBubble extends StatelessWidget {
     // Фото без подписи — совсем без рамки/фона (тот же приём, что в
     // личном чате, см. _Bubble в chat_thread_screen.dart).
     final isBareImage = message.isImage && !hasCaption && message.replyToPreview == null;
+    final hasChart = message.chart != null;
+    // График — как фото (решение пользователя: "пусть выглядит как фото
+    // в отдельном окошке над текстом сообщения"): своя карточка сверху
+    // (у AiChartView уже есть собственный фон, Card — вторая цветная
+    // рамка вокруг неё только мешала бы), подпись, если есть, — снизу в
+    // обычном цветном пузыре, тем же приёмом, что и у фото с подписью.
+    final isBareChart = hasChart && !hasCaption && message.replyToPreview == null && !message.hasAttachment;
 
     final decoration = BoxDecoration(
       gradient: LinearGradient(
@@ -962,10 +973,6 @@ class _GlobalBubble extends StatelessWidget {
           ),
         if (message.hasAttachment && !message.isImage)
           _GlobalAttachment(message: message, global: global, fg: fg, showDownload: mine || message.downloadAllowed),
-        if (message.chart != null) ...[
-          AiChartView(spec: message.chart!),
-          if (hasCaption) const SizedBox(height: 6),
-        ],
         if (translating)
           SizedBox(
             height: 14,
@@ -1002,6 +1009,27 @@ class _GlobalBubble extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: _imageMaxWidth),
           child: _GlobalAttachment(
               message: message, global: global, fg: fg, bare: true, showDownload: mine || message.downloadAllowed),
+        ),
+      );
+    } else if (isBareChart) {
+      frame = ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 320),
+        child: AiChartView(spec: message.chart!),
+      );
+    } else if (hasChart) {
+      frame = ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 320),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AiChartView(spec: message.chart!),
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: decoration.copyWith(borderRadius: BorderRadius.circular(16)),
+              child: captionContent,
+            ),
+          ],
         ),
       );
     } else if (message.isImage) {
