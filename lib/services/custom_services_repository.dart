@@ -51,6 +51,22 @@ class CustomServicesRepository extends ChangeNotifier {
     return service;
   }
 
+  void update(
+    String id, {
+    required String name,
+    required String iconName,
+    required String url,
+    String method = 'GET',
+    Map<String, String> headers = const {},
+    String? body,
+  }) {
+    db.db.execute(
+      'UPDATE custom_services SET name = ?, icon_name = ?, url = ?, method = ?, headers_json = ?, body = ? WHERE id = ?',
+      [name, iconName, url, method, headers.isEmpty ? null : jsonEncode(headers), body, id],
+    );
+    notifyListeners();
+  }
+
   void delete(String id) {
     db.db.execute('DELETE FROM custom_services WHERE id = ?', [id]);
     notifyListeners();

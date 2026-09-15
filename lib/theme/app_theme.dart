@@ -153,7 +153,7 @@ class AppTheme {
       visualDensity: VisualDensity.standard,
 
       appBarTheme: base.appBarTheme.copyWith(
-        backgroundColor: cs.surface,
+        backgroundColor: background ?? cs.surface,
         foregroundColor: cs.onSurface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,

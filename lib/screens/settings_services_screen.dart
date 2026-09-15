@@ -45,6 +45,9 @@ class SettingsServicesScreen extends StatelessWidget {
                         leading: Icon(iconForService(s.iconName)),
                         title: Text(s.name),
                         subtitle: Text(s.url, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => AddServiceScreen(repo: repo, existing: s)),
+                        ),
                         trailing: IconButton(
                           icon: const Icon(Icons.delete_outline),
                           onPressed: () => _confirmDelete(context, s.id, s.name),

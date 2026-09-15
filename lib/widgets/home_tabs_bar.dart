@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../state/home_tabs_view_model.dart';
+import '../state/personalization_view_model.dart';
 
 /// Значок + подпись одной вкладки нижней навигации.
 class HomeTabSpec {
@@ -102,9 +104,13 @@ class _HomeTabsBarState extends State<HomeTabsBar> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final visible = widget.vm.visible;
+    // Тот же фон приложения, что и у AppBar (AppTheme) — иначе нижняя
+    // панель осталась бы старого цвета при выбранном пользователем фоне,
+    // как уже было с верхней шапкой.
+    final background = context.watch<PersonalizationViewModel>().appBackgroundColor;
 
     return Material(
-      color: theme.colorScheme.surfaceContainer,
+      color: background ?? theme.colorScheme.surfaceContainer,
       child: SafeArea(
         top: false,
         child: SizedBox(
@@ -184,6 +190,12 @@ class _HomeTileGridState extends State<HomeTileGrid> {
   final Map<String, GlobalKey> _tileKeys = {};
   String? _dragging;
 
+  /// Индекс ячейки, над которой сейчас завис держащийся палец —
+  /// `null`, пока не наведено ни на одну (решение пользователя: другие
+  /// плитки должны расступаться ЖИВЬЁМ, ещё до отпускания, а не только
+  /// после — иначе непонятно, сработает ли перенос вообще).
+  int? _hoverIndex;
+
   GlobalKey _keyFor(String id) => _tileKeys.putIfAbsent(id, GlobalKey.new);
 
   void _showHidePopup(String id) {
@@ -195,6 +207,27 @@ class _HomeTileGridState extends State<HomeTileGrid> {
   static const _padding = 16.0;
   static const _crossAxisCount = 2;
 
+  /// Куда встанет каждая плитка, если отпустить ПРЯМО СЕЙЧАС — та же
+  /// поправка на индекс, что и в `HomeTabsViewModel.move` (иначе
+  /// предпросмотр во время перетаскивания не совпадал бы с тем, что
+  /// реально происходит на отпускании).
+  List<String> _previewOrder(List<String> ids) {
+    final dragging = _dragging;
+    final hover = _hoverIndex;
+    if (dragging == null || hover == null) return ids;
+    final from = ids.indexOf(dragging);
+    if (from < 0) return ids;
+    var target = hover;
+    if (target > from) target -= 1;
+    if (target < 0) target = 0;
+    if (target >= ids.length) target = ids.length - 1;
+    if (target == from) return ids;
+    final list = [...ids];
+    final item = list.removeAt(from);
+    list.insert(target, item);
+    return list;
+  }
+
   /// Плитки не в `GridView` (решение пользователя: "более плавная
   /// анимация перемещения плиток") — обычная сетка перекладывает виджеты
   /// в новые ячейки МГНОВЕННО, без перехода. Здесь каждая плитка сама
@@ -205,6 +238,7 @@ class _HomeTileGridState extends State<HomeTileGrid> {
   @override
   Widget build(BuildContext context) {
     final ids = widget.vm.visible;
+    final preview = _previewOrder(ids);
     final rows = (ids.length / _crossAxisCount).ceil();
 
     return LayoutBuilder(
@@ -226,16 +260,19 @@ class _HomeTileGridState extends State<HomeTileGrid> {
             height: contentHeight,
             child: Stack(
               children: [
-                for (var index = 0; index < ids.length; index++)
+                // Позиция каждой плитки — её место в ПРЕДПРОСМОТРЕ
+                // (расступились или нет), а исходный индекс (для
+                // DragTarget/vm.move) — из настоящего порядка `ids`.
+                for (var originalIndex = 0; originalIndex < ids.length; originalIndex++)
                   AnimatedPositioned(
-                    key: ValueKey(ids[index]),
+                    key: ValueKey(ids[originalIndex]),
                     duration: const Duration(milliseconds: 220),
                     curve: Curves.easeOutCubic,
-                    left: rectFor(index).left,
-                    top: rectFor(index).top,
-                    width: rectFor(index).width,
-                    height: rectFor(index).height,
-                    child: _buildTile(context, ids[index], index),
+                    left: rectFor(preview.indexOf(ids[originalIndex])).left,
+                    top: rectFor(preview.indexOf(ids[originalIndex])).top,
+                    width: rectFor(preview.indexOf(ids[originalIndex])).width,
+                    height: rectFor(preview.indexOf(ids[originalIndex])).height,
+                    child: _buildTile(context, ids[originalIndex], originalIndex),
                   ),
               ],
             ),
@@ -255,19 +292,32 @@ class _HomeTileGridState extends State<HomeTileGrid> {
         heightFactor: 0.8,
         child: DragTarget<String>(
           onWillAcceptWithDetails: (details) => details.data != id,
+          onMove: (details) {
+            if (_hoverIndex != index) setState(() => _hoverIndex = index);
+          },
+          onLeave: (data) {
+            if (_hoverIndex == index) setState(() => _hoverIndex = null);
+          },
           onAcceptWithDetails: (details) {
             final oldIndex = widget.vm.visible.indexOf(details.data);
             if (oldIndex < 0) return;
             widget.vm.move(oldIndex, index);
+            setState(() => _hoverIndex = null);
           },
           builder: (context, candidateData, rejectedData) => LongPressDraggable<String>(
             data: id,
             feedback: SizedBox(width: 96, height: 96, child: _tileCard(context, id, elevated: true)),
             childWhenDragging: Opacity(opacity: 0.3, child: _tileCard(context, id)),
             onDragStarted: () => setState(() => _dragging = id),
-            onDraggableCanceled: (_, __) => setState(() => _dragging = null),
+            onDraggableCanceled: (_, __) => setState(() {
+              _dragging = null;
+              _hoverIndex = null;
+            }),
             onDragEnd: (_) {
-              setState(() => _dragging = null);
+              setState(() {
+                _dragging = null;
+                _hoverIndex = null;
+              });
               _showHidePopup(id);
             },
             child: KeyedSubtree(key: _keyFor(id), child: _tileCard(context, id)),
@@ -282,10 +332,16 @@ class _HomeTileGridState extends State<HomeTileGrid> {
     if (spec == null) return const SizedBox.shrink();
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    // Плитки — самые заметные "кнопки" рабочего стола, поэтому реагируют
+    // на цвета приложения из настроек (решение пользователя), а не
+    // только обычные Filled/ElevatedButton.
+    final personalization = context.watch<PersonalizationViewModel>();
+    final bg = personalization.appButtonColor ?? cs.surfaceContainerHigh;
+    final fg = personalization.appButtonTextColor ?? cs.primary;
 
     return Material(
       elevation: elevated ? 6 : 0,
-      color: cs.surfaceContainerHigh,
+      color: bg,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
@@ -295,14 +351,14 @@ class _HomeTileGridState extends State<HomeTileGrid> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(spec.icon, size: 40, color: cs.primary),
+              Icon(spec.icon, size: 40, color: fg),
               const SizedBox(height: 8),
               Text(
                 spec.label,
                 textAlign: TextAlign.center,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelMedium,
+                style: theme.textTheme.labelMedium?.copyWith(color: fg),
               ),
             ],
           ),
