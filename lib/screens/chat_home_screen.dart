@@ -317,6 +317,62 @@ class _ChatDrawer extends StatelessWidget {
     }
   }
 
+  /// Список тех, кто уже писал в общую ленту (из локального кэша —
+  /// `ChatMessagesRepository.cachedGlobalMessages`, без похода в сеть),
+  /// с возможностью сразу добавить в контакты. Раньше это была отдельная
+  /// кнопка "Участники" прямо над лентой, убрана как лишняя строка —
+  /// теперь то же самое здесь, в шторке.
+  void _openParticipants(BuildContext context) {
+    final seen = <String, ChatGlobalMessage>{};
+    for (final m in repo.cachedGlobalMessages()) {
+      seen[m.senderId] = m;
+    }
+    final participants = seen.values.where((m) => m.senderId != auth.userId).toList()
+      ..sort((a, b) => (a.senderNickname ?? '').compareTo(b.senderNickname ?? ''));
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.sizeOf(ctx).height * 0.6,
+          child: participants.isEmpty
+              ? const EmptyState(icon: Icons.groups_outlined, text: 'Пока никто, кроме вас, не писал')
+              : ListView.builder(
+                  itemCount: participants.length,
+                  itemBuilder: (context, i) {
+                    final p = participants[i];
+                    final isContact = repo.contactById(p.senderId) != null;
+                    return ListTile(
+                      leading: ChatAvatar(base64: p.senderAvatarBase64, nickname: p.senderNickname ?? '?'),
+                      title: Text(p.senderNickname ?? '—'),
+                      trailing: isContact
+                          ? const FilledButton(onPressed: null, child: Text('В контактах'))
+                          : OutlinedButton(
+                              onPressed: () {
+                                repo.addContact(ChatContact(
+                                  id: p.senderId,
+                                  nickname: p.senderNickname ?? '—',
+                                  chatCode: '',
+                                  avatarBase64: p.senderAvatarBase64,
+                                  addedAt: DateTime.now(),
+                                ));
+                                onContactsChanged();
+                                Navigator.of(ctx).pop();
+                                ScaffoldMessenger.of(context)
+                                    .showSnackBar(const SnackBar(content: Text('Добавлено в контакты')));
+                              },
+                              child: const Text('В контакты'),
+                            ),
+                    );
+                  },
+                ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -384,6 +440,13 @@ class _ChatDrawer extends StatelessWidget {
                         );
                       },
                     ),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.groups_outlined),
+              title: const Text('Участники'),
+              subtitle: const Text('Кто писал в общий чат'),
+              onTap: () => _openParticipants(context),
             ),
             const Divider(height: 1),
             ListTile(

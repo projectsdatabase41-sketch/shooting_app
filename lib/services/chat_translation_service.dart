@@ -8,13 +8,13 @@ import 'package:http/http.dart' as http;
 /// ИИ, а то лимит сожрём быстро" — у OpenRouter общий дневной лимит на
 /// бесплатные модели, шаренный со всем остальным ассистентом).
 ///
-/// Использован тот же бесплатный endpoint Google Translate (`gtx`),
-/// на котором построены популярные open-source библиотеки перевода
-/// (googletrans и т.п.) — без ключа, без регистрации, с автоопределением
-/// языка исходного текста. Неофициальный (это не публичный Cloud
-/// Translation API), поэтому асинхронно может измениться на стороне
-/// Google — если это когда-нибудь случится, перевод просто перестанет
-/// работать (сообщение останется без маски), это не уронит остальной чат.
+/// Использован бесплатный API MyMemory (mymemory.translated.net) — без
+/// ключа, без регистрации, с автоопределением языка исходного текста.
+/// Раньше здесь был неофициальный endpoint Google Translate (`gtx`), но
+/// он работает только там, где нет CORS (нативные сборки) — в вебе
+/// браузер блокирует fetch к translate.googleapis.com (нет заголовков
+/// Access-Control-Allow-Origin), запрос падает с "Failed to fetch".
+/// MyMemory отдаёт CORS-заголовки и работает одинаково везде.
 class ChatTranslationService {
   final http.Client _client;
   ChatTranslationService({http.Client? client}) : _client = client ?? http.Client();
@@ -31,24 +31,22 @@ class ChatTranslationService {
   /// язык системы).
   Future<String?> translateIfNeeded(String text, {required String targetLanguage}) async {
     final target = targetLanguage.isEmpty ? systemLanguageCode() : targetLanguage;
-    final uri = Uri.https('translate.googleapis.com', '/translate_a/single', {
-      'client': 'gtx',
-      'sl': 'auto',
-      'tl': target,
-      'dt': 't',
+    final uri = Uri.https('api.mymemory.translated.net', '/get', {
       'q': text,
+      'langpair': 'autodetect|$target',
     });
     final res = await _client.get(uri).timeout(_timeout);
     if (res.statusCode != 200) throw Exception('Переводчик ответил ${res.statusCode}');
     final decoded = jsonDecode(utf8.decode(res.bodyBytes));
-    if (decoded is! List || decoded.isEmpty) return null;
+    if (decoded is! Map) return null;
 
-    final detected = decoded.length > 2 ? '${decoded[2]}' : null;
-    if (detected != null && detected == target) return null;
+    final data = decoded['responseData'];
+    if (data is! Map) return null;
 
-    final segments = decoded[0];
-    if (segments is! List) return null;
-    final translated = segments.map((s) => s is List && s.isNotEmpty ? '${s[0]}' : '').join();
-    return translated.trim().isEmpty ? null : translated.trim();
+    final detected = '${data['detectedLanguage'] ?? ''}'.split('-').first.toLowerCase();
+    if (detected.isNotEmpty && detected == target.toLowerCase()) return null;
+
+    final translated = '${data['translatedText'] ?? ''}'.trim();
+    return translated.isEmpty ? null : translated;
   }
 }
