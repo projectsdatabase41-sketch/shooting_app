@@ -9,10 +9,13 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../logic/ai_context.dart';
 import '../logic/avatar_utils.dart';
 import '../logic/chat_media_utils.dart';
 import '../models/chat_contact.dart';
 import '../models/chat_global_message.dart';
+import '../services/ai_service.dart';
+import '../services/ai_settings.dart';
 import '../services/chat_auth_service.dart';
 import '../services/chat_global_service.dart';
 import '../services/chat_messages_repository.dart';
@@ -443,6 +446,7 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
   List<ChatGlobalMessage> _messages = [];
   bool _loading = true;
   bool _sending = false;
+  bool _aiBusy = false;
   ChatGlobalMessage? _replyingTo;
 
   /// Перевод — та же "маска" и тот же тумблер, что в личном чате (см.
@@ -681,6 +685,67 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
     }
   }
 
+  /// Кнопка "AI" рядом с полем ввода — пишешь запрос ("расскажи как
+  /// прошла тренировка сегодня"), ассистент составляет готовое
+  /// сообщение по своим тренировкам (тот же `AiContext`, что у обычного
+  /// чата с ассистентом) и просто ПОДСТАВЛЯЕТ его в поле ввода — не
+  /// отправляет сам (решение пользователя: "пользователь проверит
+  /// конечно, просто без мыслей ИИ к контенту"), тот же принцип, что у
+  /// кнопки "AI" в заметках тренера (`CoachDiaryNotesScreen`).
+  Future<void> _composeWithAi() async {
+    final instruction = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        final ctrl = TextEditingController();
+        return AlertDialog(
+          title: const Text('Составить сообщение с ИИ'),
+          content: TextField(
+            controller: ctrl,
+            autofocus: true,
+            minLines: 2,
+            maxLines: 6,
+            decoration: const InputDecoration(hintText: 'О чём написать в чат'),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()),
+              child: const Text('Составить'),
+            ),
+          ],
+        );
+      },
+    );
+    if (instruction == null || instruction.isEmpty || !mounted) return;
+
+    setState(() => _aiBusy = true);
+    try {
+      final store = context.read<AppDataStore>();
+      final aiSettings = AiSettings(store.db);
+      final ctx = AiContext(
+        scope: AiScope.general,
+        allSessions: store.sessions,
+        exerciseNameOf: (s) => store.exerciseFor(s)?.label ?? 'без упражнения',
+      );
+      final reply = await AiService(aiSettings).ask(
+        systemPrompt: 'Ты помогаешь спортсмену-стрелку написать короткое сообщение в общий чат приложения '
+            '(его увидят другие пользователи) на основе его собственных тренировок. '
+            'Тебе дан КОНТЕКСТ с данными его тренировок и задание — о чём написать. '
+            'Отвечай ТОЛЬКО готовым текстом сообщения для отправки — без пояснений, без рассуждений, '
+            'без markdown, без кавычек вокруг текста. Пиши от первого лица, по-русски, коротко (1-4 предложения), '
+            'как обычное сообщение в чат, а не отчёт.',
+        contextBlock: ctx.buildContextBlock(DateTime.now()),
+        history: [(role: 'user', text: instruction)],
+      );
+      if (!mounted) return;
+      setState(() => _input.text = reply.text.trim());
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    } finally {
+      if (mounted) setState(() => _aiBusy = false);
+    }
+  }
+
   /// Фото/файл в общую ленту (пункт 1 списка правок — раньше вложения
   /// умел только личный чат). Картинка сжимается перед загрузкой, как и
   /// в личном чате.
@@ -847,6 +912,13 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
+                IconButton(
+                  onPressed: (_sending || _aiBusy) ? null : _composeWithAi,
+                  icon: _aiBusy
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.auto_awesome_outlined),
+                  tooltip: 'Составить сообщение с ИИ',
+                ),
                 IconButton(
                   onPressed: _sending ? null : _attach,
                   icon: const Icon(Icons.attach_file),
