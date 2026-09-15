@@ -58,7 +58,21 @@ class SettingsHomeTabsScreen extends StatelessWidget {
       body: CustomScrollView(
         slivers: [
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            sliver: SliverToBoxAdapter(
+              child: SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'pages', icon: Icon(Icons.view_agenda_outlined), label: Text('Страницы')),
+                  ButtonSegment(value: 'tiles', icon: Icon(Icons.grid_view_outlined), label: Text('Плитки')),
+                ],
+                selected: {tabs.layout},
+                showSelectedIcon: false,
+                onSelectionChanged: (s) => tabs.layout = s.first,
+              ),
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             sliver: SliverToBoxAdapter(
               child: Text(
                 'Удержать и перетащить — поменять порядок на главном экране. '

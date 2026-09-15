@@ -9,13 +9,67 @@ class HomeTabSpec {
   const HomeTabSpec({required this.icon, required this.label});
 }
 
-/// Нижняя навигация главного экрана — как обычная `NavigationBar`, но с
-/// редактированием прямо на месте (решение пользователя): удержал
-/// значок — можно перетащить туда, куда нужно, средь остальных; отпустил
-/// — над ним всплывает крестик. Нажатие на крестик скрывает вкладку (не
-/// удаляет — вернуть можно в настройках, "Рабочие пространства", или
-/// заново открыв её здесь тем же способом никак — только оттуда).
-/// Нажатие куда угодно ещё просто прячет крестик, ничего не меняя.
+/// Единственная одновременно открытая всплывашка-крестик на всё
+/// приложение — второе долгое нажатие (в любом из режимов отображения)
+/// просто закрывает предыдущую вместо двух одновременно висящих.
+OverlayEntry? _hidePopup;
+
+/// Крестик над значком (решение пользователя): появляется, когда
+/// ОТПУСТИЛИ значок после удержания — не важно, сдвинули его при этом
+/// или нет. Нажатие на крестик скрывает вкладку; нажатие куда угодно
+/// ещё просто закрывает всплывашку, ничего не меняя. Общая реализация
+/// для `HomeTabsBar` (режим "страницы") и `HomeTileGrid` (режим
+/// "плитки") — оба долго нажимают на один и тот же значок одинаково.
+void showHideTabPopup(BuildContext context, GlobalKey anchorKey, VoidCallback onHide) {
+  _hidePopup?.remove();
+  final box = anchorKey.currentContext?.findRenderObject() as RenderBox?;
+  if (box == null) return;
+  final pos = box.localToGlobal(Offset.zero);
+
+  final entry = OverlayEntry(
+    builder: (ctx) => Stack(
+      children: [
+        // Прозрачный барьер на весь экран — тап куда угодно, кроме
+        // самой кнопки ниже, просто закрывает всплывашку без действия.
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => _hidePopup?.remove(),
+          ),
+        ),
+        Positioned(
+          left: pos.dx + box.size.width / 2 - 14,
+          top: pos.dy - 18,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: () {
+                onHide();
+                _hidePopup?.remove();
+              },
+              child: Container(
+                width: 28,
+                height: 28,
+                decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                child: const Icon(Icons.close, size: 16, color: Colors.white),
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+  _hidePopup = entry;
+  Overlay.of(context).insert(entry);
+}
+
+/// Нижняя навигация главного экрана (режим "страницы") — как обычная
+/// `NavigationBar`, но с редактированием прямо на месте (решение
+/// пользователя): удержал значок — можно перетащить туда, куда нужно,
+/// средь остальных; отпустил — над ним всплывает крестик (см.
+/// `showHideTabPopup`). Вернуть скрытую вкладку — в настройках,
+/// "Рабочие пространства".
 class HomeTabsBar extends StatefulWidget {
   final HomeTabsViewModel vm;
   final Map<String, HomeTabSpec> specs;
@@ -36,60 +90,12 @@ class HomeTabsBar extends StatefulWidget {
 
 class _HomeTabsBarState extends State<HomeTabsBar> {
   final Map<String, GlobalKey> _tileKeys = {};
-  OverlayEntry? _popup;
 
   GlobalKey _keyFor(String id) => _tileKeys.putIfAbsent(id, GlobalKey.new);
 
-  @override
-  void dispose() {
-    _popup?.remove();
-    super.dispose();
-  }
-
   void _showHidePopup(String id) {
     if (!widget.vm.canHide(id)) return;
-    _popup?.remove();
-    final box = _keyFor(id).currentContext?.findRenderObject() as RenderBox?;
-    if (box == null) return;
-    final pos = box.localToGlobal(Offset.zero);
-
-    final entry = OverlayEntry(
-      builder: (ctx) => Stack(
-        children: [
-          // Прозрачный барьер на весь экран — тап куда угодно, кроме
-          // самой кнопки ниже, просто закрывает всплывашку без действия
-          // (решение пользователя).
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => _popup?.remove(),
-            ),
-          ),
-          Positioned(
-            left: pos.dx + box.size.width / 2 - 14,
-            top: pos.dy - 18,
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                customBorder: const CircleBorder(),
-                onTap: () {
-                  widget.vm.hide(id);
-                  _popup?.remove();
-                },
-                child: Container(
-                  width: 28,
-                  height: 28,
-                  decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                  child: const Icon(Icons.close, size: 16, color: Colors.white),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-    _popup = entry;
-    Overlay.of(context).insert(entry);
+    showHideTabPopup(context, _keyFor(id), () => widget.vm.hide(id));
   }
 
   @override
@@ -110,9 +116,6 @@ class _HomeTabsBarState extends State<HomeTabsBar> {
                 scrollDirection: Axis.horizontal,
                 buildDefaultDragHandles: false,
                 onReorder: widget.vm.move,
-                // По решению пользователя: крестик появляется, когда
-                // ОТПУСТИЛИ значок после удержания — не важно, сдвинули
-                // его при этом или нет (index — уже итоговый).
                 onReorderEnd: (index) => _showHidePopup(widget.vm.visible[index]),
                 children: [
                   for (final id in visible) _tile(context, id, tileWidth, key: ValueKey(id)),
@@ -152,6 +155,109 @@ class _HomeTabsBarState extends State<HomeTabsBar> {
               Text(spec.label, style: theme.textTheme.labelSmall?.copyWith(color: color)),
             ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Режим "плитки" — один рабочий стол (решение пользователя): все
+/// вкладки квадратными плитками в два столбика, тап открывает вкладку
+/// отдельным экраном (с обычной кнопкой "назад" — сюда же и возвращает).
+/// Выбор/скрытие/порядок — та же модель и тот же жест (удержать,
+/// перетащить, отпустить — крестик), что у `HomeTabsBar`, только
+/// перетаскивание в `GridView` не встроено во Flutter и собрано вручную
+/// на `LongPressDraggable`/`DragTarget` (аналога `ReorderableListView`
+/// для сетки в стандартной библиотеке нет).
+class HomeTileGrid extends StatefulWidget {
+  final HomeTabsViewModel vm;
+  final Map<String, HomeTabSpec> specs;
+  final ValueChanged<String> onSelect;
+
+  const HomeTileGrid({super.key, required this.vm, required this.specs, required this.onSelect});
+
+  @override
+  State<HomeTileGrid> createState() => _HomeTileGridState();
+}
+
+class _HomeTileGridState extends State<HomeTileGrid> {
+  final Map<String, GlobalKey> _tileKeys = {};
+  String? _dragging;
+
+  GlobalKey _keyFor(String id) => _tileKeys.putIfAbsent(id, GlobalKey.new);
+
+  void _showHidePopup(String id) {
+    if (!widget.vm.canHide(id)) return;
+    showHideTabPopup(context, _keyFor(id), () => widget.vm.hide(id));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ids = widget.vm.visible;
+    return GridView.builder(
+      padding: const EdgeInsets.all(16),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 16,
+        crossAxisSpacing: 16,
+        childAspectRatio: 1,
+      ),
+      itemCount: ids.length,
+      itemBuilder: (context, index) {
+        final id = ids[index];
+        return DragTarget<String>(
+          onWillAcceptWithDetails: (details) => details.data != id,
+          onAcceptWithDetails: (details) {
+            final oldIndex = widget.vm.visible.indexOf(details.data);
+            if (oldIndex < 0) return;
+            widget.vm.move(oldIndex, index);
+          },
+          builder: (context, candidateData, rejectedData) => LongPressDraggable<String>(
+            data: id,
+            feedback: SizedBox(width: 120, height: 120, child: _tileCard(context, id, elevated: true)),
+            childWhenDragging: Opacity(opacity: 0.3, child: _tileCard(context, id)),
+            onDragStarted: () => setState(() => _dragging = id),
+            onDraggableCanceled: (_, __) => setState(() => _dragging = null),
+            onDragEnd: (_) {
+              setState(() => _dragging = null);
+              _showHidePopup(id);
+            },
+            child: KeyedSubtree(key: _keyFor(id), child: _tileCard(context, id)),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _tileCard(BuildContext context, String id, {bool elevated = false}) {
+    final spec = widget.specs[id];
+    if (spec == null) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    return Material(
+      elevation: elevated ? 6 : 0,
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: _dragging == null ? () => widget.onSelect(id) : null,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(spec.icon, size: 40, color: cs.primary),
+              const SizedBox(height: 8),
+              Text(
+                spec.label,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelMedium,
+              ),
+            ],
+          ),
         ),
       ),
     );

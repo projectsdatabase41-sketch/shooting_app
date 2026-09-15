@@ -36,10 +36,26 @@ class HomeTabsViewModel extends ChangeNotifier {
     'home_tabs_hidden_athlete',
     'home_tabs_visible_coach',
     'home_tabs_hidden_coach',
+    'home_tabs_layout_athlete',
+    'home_tabs_layout_coach',
   ];
 
   late List<String> _visible = List.of(allIds);
   Set<String> _hidden = {};
+
+  /// 'pages' (по умолчанию) — как обычная нижняя навигация, одна вкладка
+  /// на весь экран; 'tiles' — один рабочий стол, все вкладки квадратными
+  /// плитками в два столбика (решение пользователя). Выбор/удаление/
+  /// порядок — общие для обоих режимов, отображение отличается только
+  /// оформлением.
+  String _layout = 'pages';
+  String get layout => _layout;
+  set layout(String value) {
+    if (value == _layout) return;
+    _layout = value;
+    _write('home_tabs_layout_$mode', value);
+    notifyListeners();
+  }
 
   List<String> get visible => List.unmodifiable(_visible);
 
@@ -84,12 +100,21 @@ class HomeTabsViewModel extends ChangeNotifier {
   String get _keyHidden => 'home_tabs_hidden_$mode';
 
   void _load() {
+    final savedLayout = _readRaw('home_tabs_layout_$mode');
+    if (savedLayout.isNotEmpty) _layout = savedLayout;
+
     final savedVisible = _readRaw(_keyVisible);
     final savedHidden = _readRaw(_keyHidden);
     if (savedVisible.isEmpty && savedHidden.isEmpty) return; // ничего не сохранено — умолчание уже стоит
 
-    final hiddenSet = (savedHidden.isEmpty || savedHidden == '-') ? <String>{} : savedHidden.split(',').toSet();
-    final visList = savedVisible.isEmpty ? <String>[] : savedVisible.split(',').toList();
+    final knownIds = allIds.toSet();
+    // Только известные id — вкладка, убранная в более новой версии
+    // приложения (например, "Тренировки", объединённые с "Упражнениями"),
+    // могла остаться в сохранённых строках старой установки.
+    final hiddenSet = (savedHidden.isEmpty || savedHidden == '-')
+        ? <String>{}
+        : savedHidden.split(',').where(knownIds.contains).toSet();
+    final visList = savedVisible.isEmpty ? <String>[] : savedVisible.split(',').where(knownIds.contains).toList();
 
     // id, добавленный в более новой версии приложения — не встречается
     // ни там, ни там: по умолчанию видим, дописывается в конец.

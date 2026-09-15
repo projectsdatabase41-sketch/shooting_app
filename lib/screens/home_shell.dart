@@ -17,7 +17,6 @@ import 'exercises_screen.dart';
 import 'settings_screen.dart';
 import 'statistics_screen.dart';
 import 'target_screen.dart';
-import 'trainings_history_screen.dart';
 
 /// Домашняя оболочка с нижней навигацией. Состав вкладок зависит от
 /// `workMode` (часть C.1 логики-спека). Порядок и видимость каждой
@@ -69,6 +68,32 @@ class _HomeShellState extends State<HomeShell> {
     return AnimatedBuilder(
       animation: tabs,
       builder: (context, _) {
+        // Режим "плитки" (решение пользователя) — один рабочий стол,
+        // вкладки открываются отдельным экраном по тапу, а не в этом же
+        // Scaffold: своей "текущей вкладки" тут нет, поэтому и
+        // проверка несохранённых правок (см. _onDestinationSelected) не
+        // нужна — уход с экрана мишени идёт обычным Navigator.pop,
+        // который PopScope самого TargetScreen и так видит.
+        if (tabs.layout == 'tiles') {
+          return Scaffold(
+            appBar: AppBar(title: const Text('Pusl')),
+            body: Column(
+              children: [
+                if (store.isBackgroundSyncing) const _SyncBanner(),
+                Expanded(
+                  child: HomeTileGrid(
+                    vm: tabs,
+                    specs: homeTabSpecs,
+                    onSelect: (id) => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => _pageFor(id, store, isCoach, tabs)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
         final selected = isCoach ? _coachTab : _athleteTab;
         // Скрыли вкладку, на которой стояли — переезжаем на первую
         // оставшуюся видимую, а не оставляем экран без вкладки вовсе.
@@ -111,7 +136,6 @@ class _HomeShellState extends State<HomeShell> {
     }
     return switch (id) {
       'exercises' => const ExercisesScreen(),
-      'trainings' => const TrainingsHistoryScreen(),
       'target' => _ActiveTargetTab(key: ValueKey(_activeSessionKey(store))),
       'statistics' => const StatisticsScreen(),
       // Чат с ассистентом без привязки к тренировке (решение

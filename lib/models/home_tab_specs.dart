@@ -9,7 +9,11 @@ import '../widgets/home_tabs_bar.dart';
 /// "Мишень" и "Настройки" нельзя скрыть: без "Мишени" негде записывать
 /// выстрелы идущей тренировки, а без "Настроек" скрытые вкладки стало бы
 /// неоткуда вернуть (см. `SettingsHomeTabsScreen`).
-const athleteTabIds = ['exercises', 'trainings', 'target', 'statistics', 'assistant', 'messenger', 'settings'];
+// 'trainings' больше не отдельная вкладка — по решению пользователя
+// "Упражнения" и "Тренировки" объединены визуально в одну плитку: тап
+// по упражнению в `ExercisesScreen` открывает список ЕГО тренировок
+// (`TrainingsHistoryScreen(exercise: ...)`).
+const athleteTabIds = ['exercises', 'target', 'statistics', 'assistant', 'messenger', 'settings'];
 const athleteUnhidable = {'target', 'settings'};
 
 const coachTabIds = ['diary', 'athletes', 'statistics_coach', 'assistant_coach', 'tasks', 'messenger', 'settings'];
@@ -17,7 +21,6 @@ const coachUnhidable = {'settings'};
 
 const Map<String, HomeTabSpec> homeTabSpecs = {
   'exercises': HomeTabSpec(icon: Icons.fitness_center, label: 'Упражнения'),
-  'trainings': HomeTabSpec(icon: Icons.calendar_month_outlined, label: 'Тренировки'),
   'target': HomeTabSpec(icon: Icons.gps_fixed, label: 'Мишень'),
   'statistics': HomeTabSpec(icon: Icons.bar_chart, label: 'Статистика'),
   'assistant': HomeTabSpec(icon: Icons.auto_awesome_outlined, label: 'Ассистент'),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
+import '../models/exercise.dart';
 import '../models/training_session.dart';
 import '../state/app_data_store.dart';
 import '../theme/app_theme.dart';
@@ -9,33 +11,56 @@ import '../widgets/swipe_to_delete.dart';
 import 'exercise_history_detail_screen.dart';
 import 'target_screen.dart';
 
-/// Вкладка "История" (по составу навигации из макетов — переименование
-/// вкладки "Тренировки" из раздела 1 ТЗ). Список завершённых/начатых
-/// тренировок по датам, тап открывает экран мишени в режиме просмотра
-/// истории (правка разрешена только если тренировка ещё не завершена —
-/// см. canEdit, часть C.2).
+/// Список тренировок. Без `exercise` — вся история разом (раньше это
+/// была отдельная вкладка); с `exercise` — только тренировки ПО ЭТОМУ
+/// упражнению, открывается тапом по нему из "Упражнения" (решение
+/// пользователя: визуально объединить упражнения и тренировки в одну
+/// плитку — открыл упражнение, увидел, что по нему настреляно, и тут же
+/// кнопкой "+" начал следующую тренировку РОВНО по нему).
+///
+/// Тап на тренировку открывает экран мишени в режиме просмотра истории
+/// (правка разрешена только если тренировка ещё не завершена — см.
+/// canEdit, часть C.2).
 ///
 /// Оформление: карточки вместо голых `ListTile` — в списке важны три
 /// вещи сразу (что за упражнение, когда, с каким результатом) плюс
 /// статус, а `ListTile` с `trailing: Text` их не различал по важности.
 class TrainingsHistoryScreen extends StatelessWidget {
-  const TrainingsHistoryScreen({super.key});
+  final Exercise? exercise;
+  const TrainingsHistoryScreen({super.key, this.exercise});
 
   @override
   Widget build(BuildContext context) {
     final store = context.watch<AppDataStore>();
-    final sessions = store.sessions;
+    final ex = exercise;
+    final sessions = ex == null ? store.sessions : store.sessions.where((s) => s.exerciseId == ex.id).toList();
     final df = DateFormat('dd.MM.yyyy · HH:mm');
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Тренировки')),
+      appBar: AppBar(title: Text(ex?.label ?? 'Тренировки')),
+      floatingActionButton: ex == null
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _startTraining(context, ex),
+              icon: const Icon(Icons.add),
+              label: const Text('Тренировка'),
+            ),
       body: sessions.isEmpty
-          ? const EmptyState(
+          ? EmptyState(
               icon: Icons.history,
-              text: 'Тренировок пока нет. Начните первую на вкладке «Тренировка».',
+              text: ex == null
+                  ? 'Тренировок пока нет. Начните первую на вкладке «Упражнения».'
+                  : 'У «${ex.label}» пока нет тренировок.',
+              action: ex == null
+                  ? null
+                  : FilledButton.icon(
+                      onPressed: () => _startTraining(context, ex),
+                      icon: const Icon(Icons.add),
+                      label: const Text('Создать первую'),
+                    ),
             )
           : ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+              padding: EdgeInsets.fromLTRB(16, 16, 16, ex == null ? 32 : 96),
               itemCount: sessions.length,
               separatorBuilder: (_, __) => const SizedBox(height: 10),
               itemBuilder: (context, i) {
@@ -84,6 +109,19 @@ class TrainingsHistoryScreen extends StatelessWidget {
                 );
               },
             ),
+    );
+  }
+
+  void _startTraining(BuildContext context, Exercise exercise) {
+    final session = TrainingSession(
+      id: const Uuid().v4(),
+      exerciseId: exercise.id,
+      targetFaceCode: exercise.targetFaceCode,
+    );
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => TargetScreen(session: session, exercise: exercise),
+      ),
     );
   }
 }

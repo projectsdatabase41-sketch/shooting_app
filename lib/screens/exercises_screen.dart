@@ -1,21 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:uuid/uuid.dart';
 import '../models/exercise.dart';
 import '../models/series_spec.dart';
 import '../models/target_face.dart';
-import '../models/training_session.dart';
 import '../state/app_data_store.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/swipe_to_delete.dart';
 import 'exercise_editor_screen.dart';
-import 'target_screen.dart';
+import 'trainings_history_screen.dart';
 
-/// Вкладка "Тренировка" — список упражнений-шаблонов + быстрый старт.
-/// Тап по упражнению сразу открывает новую тренировку по нему (раздел
-/// 5.1 ТЗ, обновление 2026-09-01) — общая точка входа, используется и
-/// отсюда, и (в будущем) с других экранов. Приложение стартует пустым —
-/// без предустановленного набора упражнений (раздел 10 ТЗ).
+/// Список упражнений-шаблонов (решение пользователя: "Упражнения" и
+/// "Тренировки" объединены визуально в одну плитку) — тап по упражнению
+/// открывает список ЕГО тренировок (`TrainingsHistoryScreen`), а не
+/// сразу новую тренировку: там же, кнопкой "+", создают следующую по
+/// этому упражнению. Приложение стартует пустым — без предустановленного
+/// набора упражнений (раздел 10 ТЗ).
 class ExercisesScreen extends StatelessWidget {
   const ExercisesScreen({super.key});
 
@@ -70,7 +69,9 @@ class ExercisesScreen extends StatelessWidget {
                     totalShots: ex.totalShots,
                     seriesSize: ex.seriesSize,
                     series: ex.series,
-                    onTap: () => _startTraining(context, ex),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => TrainingsHistoryScreen(exercise: ex)),
+                    ),
                   ),
                 );
               },
@@ -101,19 +102,6 @@ class ExercisesScreen extends StatelessWidget {
           label: 'Отменить',
           onPressed: () => store.restoreExercise(ex.id),
         ),
-      ),
-    );
-  }
-
-  void _startTraining(BuildContext context, Exercise exercise) {
-    final session = TrainingSession(
-      id: const Uuid().v4(),
-      exerciseId: exercise.id,
-      targetFaceCode: exercise.targetFaceCode,
-    );
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => TargetScreen(session: session, exercise: exercise),
       ),
     );
   }
@@ -215,7 +203,7 @@ class _ExerciseCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Icon(Icons.play_arrow_rounded, color: cs.primary, size: 28),
+              Icon(Icons.chevron_right, color: cs.onSurfaceVariant, size: 28),
             ],
           ),
         ),
