@@ -30,6 +30,10 @@ class ChatGlobalMessage {
   final String? senderNickname;
   final String? senderAvatarBase64;
 
+  /// Разрешил ли отправитель скачивание — см. `ChatMessage.downloadAllowed`
+  /// (личный чат), тот же принцип: решение отправителя на момент отправки.
+  final bool downloadAllowed;
+
   const ChatGlobalMessage({
     required this.id,
     required this.senderId,
@@ -43,6 +47,7 @@ class ChatGlobalMessage {
     this.replyToPreview,
     this.senderNickname,
     this.senderAvatarBase64,
+    this.downloadAllowed = true,
   });
 
   bool get hasAttachment => attachmentPath != null;
@@ -65,6 +70,7 @@ class ChatGlobalMessage {
         replyToPreview: replyToPreview,
         senderNickname: nickname ?? senderNickname,
         senderAvatarBase64: avatarBase64 ?? senderAvatarBase64,
+        downloadAllowed: downloadAllowed,
       );
 
   factory ChatGlobalMessage.fromRow(Map<String, dynamic> row) => ChatGlobalMessage(
@@ -78,5 +84,6 @@ class ChatGlobalMessage {
         attachmentSize: (row['attachment_size'] as num?)?.toInt(),
         replyToId: row['reply_to_id'] as String?,
         replyToPreview: row['reply_to_preview'] as String?,
+        downloadAllowed: row['download_allowed'] == null || row['download_allowed'] == 1 || row['download_allowed'] == true,
       );
 }

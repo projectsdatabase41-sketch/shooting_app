@@ -66,8 +66,22 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  # Только для разовой генерации ярлыка (icon: Pusl) — не рантайм-зависимость.
+  flutter_launcher_icons: ^0.14.1
 
 flutter:
   uses-material-design: true
   assets:
     - lib/db/local_schema.sql
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon/icon.png"
+  adaptive_icon_background: "#37474F"
+  adaptive_icon_foreground: "assets/icon/icon_adaptive_fg.png"
+  web:
+    generate: true
+    image_path: "assets/icon/icon.png"
+    background_color: "#1a202c"
+    theme_color: "#1a202c"

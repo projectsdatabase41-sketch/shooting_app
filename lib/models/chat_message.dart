@@ -57,6 +57,13 @@ class ChatMessage {
   /// Только для входящих — открыл ли получатель ветку с этим сообщением
   /// (см. комментарий у колонки `seen` в схеме).
   final bool seen;
+
+  /// Разрешил ли ОТПРАВИТЕЛЬ скачивание вложения — его собственный выбор
+  /// на момент отправки (см. `ChatPreferences.photoDownloadMode`), не
+  /// имеет отношения к настройкам получателя. У своих сообщений
+  /// (`direction == outgoing`) экраны игнорируют это поле — свой файл
+  /// можно сохранить себе всегда.
+  final bool downloadAllowed;
   final DateTime createdAt;
 
   const ChatMessage({
@@ -75,6 +82,7 @@ class ChatMessage {
     this.replyToClientMessageId,
     this.replyToPreview,
     this.seen = false,
+    this.downloadAllowed = true,
     required this.createdAt,
   });
 
@@ -94,6 +102,7 @@ class ChatMessage {
         replyToClientMessageId: replyToClientMessageId,
         replyToPreview: replyToPreview,
         seen: seen ?? this.seen,
+        downloadAllowed: downloadAllowed,
         createdAt: createdAt,
       );
 
@@ -116,6 +125,7 @@ class ChatMessage {
         replyToClientMessageId: row['reply_to_client_message_id'] as String?,
         replyToPreview: row['reply_to_preview'] as String?,
         seen: row['seen'] == 1 || row['seen'] == true,
+        downloadAllowed: row['download_allowed'] == null || row['download_allowed'] == 1 || row['download_allowed'] == true,
         createdAt: DateTime.parse(row['created_at'] as String),
       );
 }

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:http/http.dart' as http;
@@ -686,11 +685,9 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
   /// умел только личный чат). Картинка сжимается перед загрузкой, как и
   /// в личном чате.
   Future<void> _attach() async {
-    final result = await FilePicker.platform.pickFiles(withData: true);
-    if (!mounted) return;
-    final file = result?.files.first;
-    final bytes = file?.bytes;
-    if (file == null || bytes == null) return;
+    final picked = await ChatMediaUtils.pickAttachment(context);
+    if (!mounted || picked == null) return;
+    final bytes = picked.bytes;
     if (bytes.length > ChatMediaUtils.maxAttachmentBytes) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -700,9 +697,9 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
       return;
     }
 
-    final isImage = ChatMediaUtils.looksLikeImage(file.name);
+    final isImage = ChatMediaUtils.looksLikeImage(picked.name);
     final caption = await Navigator.of(context).push<String>(MaterialPageRoute(
-      builder: (_) => AttachmentComposeScreen(bytes: bytes, fileName: file.name, isImage: isImage),
+      builder: (_) => AttachmentComposeScreen(bytes: bytes, fileName: picked.name, isImage: isImage),
     ));
     if (caption == null) return;
 
@@ -711,9 +708,10 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
       final compressed = isImage ? ChatMediaUtils.compressImage(bytes) : null;
       await widget.global.sendAttachment(
         bytes: compressed ?? bytes,
-        fileName: file.name,
-        mime: isImage ? (compressed != null ? 'image/jpeg' : ChatMediaUtils.mimeFor(file.name)) : 'application/octet-stream',
+        fileName: picked.name,
+        mime: isImage ? (compressed != null ? 'image/jpeg' : ChatMediaUtils.mimeFor(picked.name)) : 'application/octet-stream',
         caption: caption.isEmpty ? null : caption,
+        downloadAllowed: widget.prefs.downloadAllowedFor(isPersonal: false),
       );
       await _load();
       _scrollToEnd();
@@ -938,7 +936,7 @@ class _GlobalBubble extends StatelessWidget {
             ),
           ),
         if (message.hasAttachment && !message.isImage)
-          _GlobalAttachment(message: message, global: global, fg: fg, showDownload: prefs.photoDownloadEnabled),
+          _GlobalAttachment(message: message, global: global, fg: fg, showDownload: mine || message.downloadAllowed),
         if (translating)
           SizedBox(
             height: 14,
@@ -974,7 +972,7 @@ class _GlobalBubble extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: _imageMaxWidth),
           child: _GlobalAttachment(
-              message: message, global: global, fg: fg, bare: true, showDownload: prefs.photoDownloadEnabled),
+              message: message, global: global, fg: fg, bare: true, showDownload: mine || message.downloadAllowed),
         ),
       );
     } else if (message.isImage) {
@@ -989,7 +987,7 @@ class _GlobalBubble extends StatelessWidget {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: _imageMaxWidth),
                 child: _GlobalAttachment(
-                    message: message, global: global, fg: fg, bare: true, showDownload: prefs.photoDownloadEnabled),
+                    message: message, global: global, fg: fg, bare: true, showDownload: mine || message.downloadAllowed),
               ),
             ),
             Container(

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:intl/intl.dart';
@@ -362,11 +361,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   /// Картинка сжимается перед отправкой (`ChatMediaUtils.compressImage`),
   /// остальные файлы уходят как есть.
   Future<void> _attach() async {
-    final result = await FilePicker.platform.pickFiles(withData: true);
-    if (!mounted) return;
-    final file = result?.files.first;
-    final bytes = file?.bytes;
-    if (file == null || bytes == null) return;
+    final picked = await ChatMediaUtils.pickAttachment(context);
+    if (!mounted || picked == null) return;
+    final bytes = picked.bytes;
     if (bytes.length > ChatMediaUtils.maxAttachmentBytes) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -376,9 +373,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       return;
     }
 
-    final isImage = ChatMediaUtils.looksLikeImage(file.name);
+    final isImage = ChatMediaUtils.looksLikeImage(picked.name);
     final caption = await Navigator.of(context).push<String>(MaterialPageRoute(
-      builder: (_) => AttachmentComposeScreen(bytes: bytes, fileName: file.name, isImage: isImage),
+      builder: (_) => AttachmentComposeScreen(bytes: bytes, fileName: picked.name, isImage: isImage),
     ));
     if (caption == null) return; // экран закрыли без отправки
 
@@ -388,12 +385,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       await widget.sync.sendAttachment(
         contactId: widget.contact.id,
         bytes: compressed ?? bytes,
-        fileName: file.name,
+        fileName: picked.name,
         // Сжатие всегда перекодирует в JPEG (см. ChatMediaUtils.compressImage)
         // — mime должен это отражать, а не оставаться от исходного .png/.webp.
-        mime: isImage ? (compressed != null ? 'image/jpeg' : ChatMediaUtils.mimeFor(file.name)) : 'application/octet-stream',
+        mime: isImage ? (compressed != null ? 'image/jpeg' : ChatMediaUtils.mimeFor(picked.name)) : 'application/octet-stream',
         type: isImage ? ChatMessageType.image : ChatMessageType.file,
         caption: caption.isEmpty ? null : caption,
+        downloadAllowed: widget.prefs.downloadAllowedFor(isPersonal: true),
       );
       _scrollToEnd();
     } catch (e) {
@@ -614,7 +612,7 @@ class _Bubble extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              if (prefs.photoDownloadEnabled && message.attachmentBase64 != null) ...[
+              if ((mine || message.downloadAllowed) && message.attachmentBase64 != null) ...[
                 const SizedBox(width: 4),
                 InkWell(
                   onTap: () => ChatMediaUtils.shareAttachment(
@@ -673,7 +671,7 @@ class _Bubble extends StatelessWidget {
     );
 
     Widget withDownloadButton(Widget image) {
-      if (!prefs.photoDownloadEnabled) return image;
+      if (!mine && !message.downloadAllowed) return image;
       return Stack(
         children: [
           image,

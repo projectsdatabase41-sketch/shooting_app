@@ -143,6 +143,10 @@ class LocalDbService {
         'edited': 'INTEGER NOT NULL DEFAULT 0',
         'reply_to_client_message_id': 'TEXT',
         'reply_to_preview': 'TEXT',
+        'download_allowed': 'INTEGER NOT NULL DEFAULT 1',
+      },
+      'chat_global_cache': {
+        'download_allowed': 'INTEGER NOT NULL DEFAULT 1',
       },
     };
 

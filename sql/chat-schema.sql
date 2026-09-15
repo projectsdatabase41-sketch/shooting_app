@@ -167,6 +167,10 @@ alter table chat_messages add column if not exists edit_of_client_message_id tex
 alter table chat_messages add column if not exists delete_of_client_message_id text;
 alter table chat_messages add column if not exists reply_to_client_message_id text;
 alter table chat_messages add column if not exists reply_to_preview text;
+-- Разрешил ли отправитель скачивание вложения (настройка ОТПРАВИТЕЛЯ,
+-- ChatPreferences.photoDownloadMode) — приезжает вместе с сообщением,
+-- получатель уже не спрашивает профиль отправителя отдельно.
+alter table chat_messages add column if not exists download_allowed boolean not null default true;
 
 -- CHECK не подвинуть ни ADD COLUMN, ни повторным CREATE TABLE — только
 -- пересозданием ограничения. Оба варианта имени учтены (авто-имя из
@@ -328,6 +332,7 @@ alter table chat_global_messages add column if not exists attachment_mime text;
 alter table chat_global_messages add column if not exists attachment_size bigint;
 alter table chat_global_messages add column if not exists reply_to_id uuid;
 alter table chat_global_messages add column if not exists reply_to_preview text;
+alter table chat_global_messages add column if not exists download_allowed boolean not null default true;
 
 alter table chat_global_messages drop constraint if exists chat_global_messages_check;
 alter table chat_global_messages add constraint chat_global_messages_check

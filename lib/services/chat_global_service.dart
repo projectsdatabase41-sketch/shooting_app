@@ -120,6 +120,7 @@ class ChatGlobalService {
     required String fileName,
     required String mime,
     String? caption,
+    bool downloadAllowed = true,
   }) async {
     final token = await auth.ensureFreshToken();
     if (token == null) throw Exception('Сначала войдите в чат');
@@ -155,6 +156,7 @@ class ChatGlobalService {
               'attachment_name': fileName,
               'attachment_mime': mime,
               'attachment_size': bytes.length,
+              'download_allowed': downloadAllowed,
             }),
           )
           .timeout(_timeout);

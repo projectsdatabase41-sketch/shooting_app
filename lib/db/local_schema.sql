@@ -157,6 +157,12 @@ CREATE TABLE IF NOT EXISTS chat_local_messages (
   -- превью на случай, если оригинал уже не найдётся локально.
   reply_to_client_message_id TEXT,
   reply_to_preview    TEXT,
+  -- Разрешил ли ОТПРАВИТЕЛЬ скачивание этого вложения — его собственная
+  -- настройка (ChatPreferences.photoDownloadMode), переданная вместе с
+  -- сообщением на отправке, а не настройка получателя. По умолчанию 1:
+  -- свои же вложения (direction='outgoing') всегда можно переслать себе,
+  -- да и старые строки до этой колонки не должны внезапно потерять кнопку.
+  download_allowed    INTEGER NOT NULL DEFAULT 1,
   created_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -180,6 +186,10 @@ CREATE TABLE IF NOT EXISTS chat_global_cache (
   reply_to_preview      TEXT,
   sender_nickname       TEXT,
   sender_avatar_base64  TEXT,
+  -- Разрешил ли отправитель скачивание — то же поле, что у личного чата
+  -- (см. chat_local_messages.download_allowed), приезжает вместе со
+  -- строкой из chat_global_messages.
+  download_allowed      INTEGER NOT NULL DEFAULT 1,
   created_at            TEXT NOT NULL
 );
 

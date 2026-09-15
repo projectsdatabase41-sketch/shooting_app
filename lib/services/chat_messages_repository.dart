@@ -57,8 +57,8 @@ class ChatMessagesRepository {
       'INSERT INTO chat_local_messages '
       '(id, client_message_id, contact_id, direction, text, status, msg_type, '
       'attachment_base64, attachment_name, attachment_mime, attachment_size, '
-      'reply_to_client_message_id, reply_to_preview, created_at) '
-      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'reply_to_client_message_id, reply_to_preview, download_allowed, created_at) '
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         m.id,
         m.clientMessageId,
@@ -73,6 +73,7 @@ class ChatMessagesRepository {
         m.attachmentSize,
         m.replyToClientMessageId,
         m.replyToPreview,
+        m.downloadAllowed ? 1 : 0,
         m.createdAt.toIso8601String(),
       ],
     );
@@ -152,6 +153,7 @@ class ChatMessagesRepository {
                 'attachment_size': r['attachment_size'],
                 'reply_to_id': r['reply_to_id'],
                 'reply_to_preview': r['reply_to_preview'],
+                'download_allowed': r['download_allowed'],
                 'created_at': r['created_at'],
               }).withProfile(
                   nickname: r['sender_nickname'] as String?, avatarBase64: r['sender_avatar_base64'] as String?))
@@ -168,8 +170,8 @@ class ChatMessagesRepository {
         db.db.execute(
           'INSERT INTO chat_global_cache '
           '(id, sender_id, text, attachment_path, attachment_name, attachment_mime, attachment_size, '
-          'reply_to_id, reply_to_preview, sender_nickname, sender_avatar_base64, created_at) '
-          'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          'reply_to_id, reply_to_preview, sender_nickname, sender_avatar_base64, download_allowed, created_at) '
+          'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
           [
             m.id,
             m.senderId,
@@ -182,6 +184,7 @@ class ChatMessagesRepository {
             m.replyToPreview,
             m.senderNickname,
             m.senderAvatarBase64,
+            m.downloadAllowed ? 1 : 0,
             m.createdAt.toIso8601String(),
           ],
         );

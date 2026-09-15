@@ -106,11 +106,20 @@ class _ChatSettingsScreenState extends State<ChatSettingsScreen> {
           const Divider(height: 1),
           SwitchListTile(
             secondary: const Icon(Icons.download_outlined),
-            title: const Text('Скачивание фото и файлов'),
-            subtitle: const Text('Кнопка "Сохранить" у вложений в чате'),
-            value: widget.prefs.photoDownloadEnabled,
-            onChanged: (v) => setState(() => widget.prefs.photoDownloadEnabled = v),
+            title: const Text('Разрешить скачивание моих фото и файлов'),
+            subtitle: const Text('Кнопка "Сохранить" у ОТПРАВЛЕННЫХ мной вложений'),
+            value: widget.prefs.photoDownloadMode != 'off',
+            onChanged: (v) => setState(() => widget.prefs.photoDownloadMode = v ? 'all' : 'off'),
           ),
+          if (widget.prefs.photoDownloadMode != 'off')
+            for (final (value, label) in const [('all', 'Во всех чатах'), ('personal', 'Только в личных')])
+              ListTile(
+                contentPadding: const EdgeInsets.only(left: 32, right: 16),
+                dense: true,
+                title: Text(label),
+                trailing: widget.prefs.photoDownloadMode == value ? const Icon(Icons.check) : null,
+                onTap: () => setState(() => widget.prefs.photoDownloadMode = value),
+              ),
           const Divider(height: 1),
           SwitchListTile(
             secondary: const Icon(Icons.notifications_outlined),

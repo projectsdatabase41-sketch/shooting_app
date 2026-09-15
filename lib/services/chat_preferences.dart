@@ -120,15 +120,36 @@ class ChatPreferences extends ChangeNotifier {
   static const Color _defaultOther = Color(0xFF3A3F4B);
   static const double _defaultShadow = 0.22;
 
-  /// 'view_and_download' (по умолчанию) — у фото/файла есть кнопка
-  /// "Сохранить"; 'view_only' — только просмотр в самом чате, без неё.
-  /// Локальная настройка устройства (как и остальные ChatPreferences) —
-  /// каждый решает сам для СВОЕГО экрана, не влияет на собеседника.
-  bool get photoDownloadEnabled => _read('chat_photo_download') != '0';
+  /// Разрешает ли пользователь скачивание СВОИХ отправленных фото/файлов
+  /// (решение пользователя: это выбор ОТПРАВИТЕЛЯ, а не получателя —
+  /// значение передаётся вместе с сообщением на отправке, см.
+  /// `ChatSyncService.sendAttachment`/`ChatGlobalService.sendAttachment`,
+  /// и хранится на самом сообщении, `ChatMessage.downloadAllowed`).
+  /// 'all' (по умолчанию, для совместимости со старым единственным
+  /// переключателем) — везде; 'personal' — только в личных чатах;
+  /// 'off' — нигде.
+  String get photoDownloadMode {
+    final raw = _read('chat_photo_download');
+    return raw.isEmpty || raw == '1' ? 'all' : raw;
+  }
 
-  set photoDownloadEnabled(bool value) {
-    _write('chat_photo_download', value ? '1' : '0');
+  set photoDownloadMode(String mode) {
+    _write('chat_photo_download', mode);
     notifyListeners();
+  }
+
+  /// Значение для конкретного отправляемого сообщения — вычисляется на
+  /// отправке и дальше едет вместе с ним, получатель уже смотрит только
+  /// на это поле, а не заново спрашивает настройки отправителя.
+  bool downloadAllowedFor({required bool isPersonal}) {
+    switch (photoDownloadMode) {
+      case 'off':
+        return false;
+      case 'personal':
+        return isPersonal;
+      default:
+        return true;
+    }
   }
 
   /// Ручной перевод одного сообщения (кнопка в меню долгого нажатия)

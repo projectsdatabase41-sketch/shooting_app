@@ -1,7 +1,18 @@
 import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
+import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
+
+/// Результат выбора вложения — байты плюс исходное имя файла.
+class ChatAttachmentPick {
+  final Uint8List bytes;
+  final String name;
+  const ChatAttachmentPick(this.bytes, this.name);
+}
 
 /// Подготовка фото для отправки в чат — в отличие от аватара
 /// (`AvatarUtils`, квадратный кроп под миниатюру), здесь только
@@ -58,6 +69,55 @@ class ChatMediaUtils {
   static String safePathSegment(String name) {
     final sanitized = name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
     return sanitized.isEmpty ? 'file' : sanitized;
+  }
+
+  /// Свой выбор вложения (Камера/Галерея/Файл) вместо системного
+  /// chooser'а `file_picker` без ограничений — тот на Android показывает
+  /// длинный список приложений вперемешку с двумя "Камера" (см. правку
+  /// пользователя). Камера и галерея — через `image_picker` (как у
+  /// аватара, `AvatarUtils`), файл — через `file_picker`, как раньше.
+  /// На Windows `image_picker` не работает (см. `AvatarUtils`) — там
+  /// сразу открывается обычный выбор файла, без листа выбора.
+  static Future<ChatAttachmentPick?> pickAttachment(BuildContext context) async {
+    final windows = !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+    if (windows) return _pickFile();
+
+    final choice = await showModalBottomSheet<int>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            leading: const Icon(Icons.camera_alt),
+            title: const Text('Камера'),
+            onTap: () => Navigator.pop(ctx, 0),
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library),
+            title: const Text('Галерея'),
+            onTap: () => Navigator.pop(ctx, 1),
+          ),
+          ListTile(
+            leading: const Icon(Icons.insert_drive_file),
+            title: const Text('Файл'),
+            onTap: () => Navigator.pop(ctx, 2),
+          ),
+        ]),
+      ),
+    );
+    if (choice == null) return null;
+    if (choice == 2) return _pickFile();
+
+    final xfile = await ImagePicker().pickImage(source: choice == 0 ? ImageSource.camera : ImageSource.gallery);
+    if (xfile == null) return null;
+    return ChatAttachmentPick(await xfile.readAsBytes(), xfile.name);
+  }
+
+  static Future<ChatAttachmentPick?> _pickFile() async {
+    final result = await FilePicker.platform.pickFiles(withData: true);
+    final file = result?.files.first;
+    final bytes = file?.bytes;
+    if (file == null || bytes == null) return null;
+    return ChatAttachmentPick(bytes, file.name);
   }
 
   /// "Сохранить" у вложения (см. ChatPreferences.photoDownloadEnabled) —

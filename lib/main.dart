@@ -221,7 +221,7 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
         selector: (_, vm) => vm.themeMode,
         builder: (context, themeMode, _) => MaterialApp(
           navigatorKey: navigatorKey,
-          title: 'Shooting App',
+          title: 'Pusl',
           debugShowCheckedModeBanner: false,
           theme: _lightTheme,
           darkTheme: _darkTheme,

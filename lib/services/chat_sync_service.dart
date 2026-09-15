@@ -188,6 +188,7 @@ class ChatSyncService {
     required String mime,
     required ChatMessageType type,
     String? caption,
+    bool downloadAllowed = true,
   }) async {
     final message = ChatMessage(
       id: _uuid.v4(),
@@ -201,6 +202,7 @@ class ChatSyncService {
       attachmentName: fileName,
       attachmentMime: mime,
       attachmentSize: bytes.length,
+      downloadAllowed: downloadAllowed,
       createdAt: DateTime.now(),
     );
     repo.addMessage(message);
@@ -279,6 +281,7 @@ class ChatSyncService {
               if (message.attachmentSize != null) 'attachment_size': message.attachmentSize,
               if (message.replyToClientMessageId != null) 'reply_to_client_message_id': message.replyToClientMessageId,
               if (message.replyToPreview != null) 'reply_to_preview': message.replyToPreview,
+              'download_allowed': message.downloadAllowed,
             }),
           )
           .timeout(_timeout);
@@ -403,6 +406,7 @@ class ChatSyncService {
           attachmentSize: (row['attachment_size'] as num?)?.toInt(),
           replyToClientMessageId: row['reply_to_client_message_id'] as String?,
           replyToPreview: row['reply_to_preview'] as String?,
+          downloadAllowed: row['download_allowed'] == null || row['download_allowed'] == true,
           createdAt: DateTime.tryParse('${row['created_at']}') ?? DateTime.now(),
         ));
         added++;
