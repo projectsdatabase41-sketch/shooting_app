@@ -66,10 +66,16 @@ jobs:
         # использовался. Подозревается как причина «не грузится в
         # Safari на айфоне» — сеть до gstatic не всегда доступна там, где
         # доступен сам сайт (блокировщики, приватные режимы, MDM).
+        # --pwa-strategy=none: без него Flutter ставит service worker,
+        # который кеширует main.dart.js офлайн-первым — телефон может
+        # показывать старую сборку ещё долго после деплоя новой,
+        # пока воркер сам не решит обновиться. Приложению офлайн-режим
+        # не нужен, а бага «на телефоне всё ещё старое» не нужна тем более.
         run: |
           flutter build web --release \
             --base-href "/${{ github.event.repository.name }}/" \
             --no-web-resources-cdn \
+            --pwa-strategy=none \
             --dart-define=OPENROUTER_KEY="${{ secrets.OPENROUTER_KEY }}"
 
       - uses: actions/upload-pages-artifact@v3
