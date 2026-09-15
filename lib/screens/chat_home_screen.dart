@@ -511,6 +511,18 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
   bool _aiBusy = false;
   ChatGlobalMessage? _replyingTo;
 
+  /// Множественное выделение (решение пользователя, "как с одним
+  /// сообщением") — начинается пунктом "Выбрать" в том же меню, что и
+  /// одиночные действия; дальше обычный тап по другим сообщениям
+  /// добавляет/убирает их из выделения. Копировать/перевести/удалить
+  /// работают на весь набор; "Ответить" — только когда выбрано ровно
+  /// одно (модель данных хранит один reply на сообщение, не список).
+  final Set<String> _selected = {};
+  bool get _selecting => _selected.isNotEmpty;
+  void _toggleSelect(String id) => setState(() {
+        if (!_selected.remove(id)) _selected.add(id);
+      });
+
   /// График, составленный кнопкой "AI" (решение пользователя) — ждёт
   /// отправки вместе со следующим сообщением, показывается полоской над
   /// полем ввода (см. `ChatReplyBar`), пока не отправлен или не убран.
@@ -688,6 +700,7 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
           label: 'Перевести',
           color: _isMasked(m) ? primary : null,
         ),
+      const ChatQuickAction(value: 'select', icon: Icons.check_circle_outline, label: 'Выбрать'),
       ChatQuickAction(value: 'delete', icon: Icons.delete_outline, label: mine ? 'Удалить' : 'Удалить у себя'),
     ]);
     switch (action) {
@@ -697,8 +710,43 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
         _reply(m);
       case 'translate':
         await _toggleMask(m);
+      case 'select':
+        _toggleSelect(m.id);
       case 'delete':
         await _delete(m);
+    }
+  }
+
+  Future<void> _copySelected() async {
+    final ordered = _messages.where((m) => _selected.contains(m.id));
+    final text = ordered.map((m) => m.text ?? '').where((t) => t.isNotEmpty).join('\n\n');
+    setState(() => _selected.clear());
+    if (text.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: text));
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Скопировано')));
+  }
+
+  Future<void> _translateSelected() async {
+    final ids = Set<String>.from(_selected);
+    setState(() => _selected.clear());
+    await Future.wait([
+      for (final m in _messages.where((m) => ids.contains(m.id)))
+        if (m.text != null && m.text!.isNotEmpty) _translate(m),
+    ]);
+  }
+
+  void _replySelected() {
+    final id = _selected.single;
+    final m = _messages.firstWhere((m) => m.id == id);
+    setState(() => _selected.clear());
+    _reply(m);
+  }
+
+  Future<void> _deleteSelected() async {
+    final ids = Set<String>.from(_selected);
+    setState(() => _selected.clear());
+    for (final m in _messages.where((m) => ids.contains(m.id)).toList()) {
+      await _delete(m);
     }
   }
 
@@ -883,9 +931,38 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
     );
   }
 
+  Widget _buildSelectionBar(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: SafeArea(
+        bottom: false,
+        child: SizedBox(
+          height: 48,
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => setState(() => _selected.clear()),
+              ),
+              Text('${_selected.length}', style: theme.textTheme.titleMedium),
+              const Spacer(),
+              IconButton(icon: const Icon(Icons.copy_outlined), tooltip: 'Копировать', onPressed: _copySelected),
+              IconButton(icon: const Icon(Icons.translate_outlined), tooltip: 'Перевести', onPressed: _translateSelected),
+              if (_selected.length == 1)
+                IconButton(icon: const Icon(Icons.reply_outlined), tooltip: 'Ответить', onPressed: _replySelected),
+              IconButton(icon: const Icon(Icons.delete_outline), tooltip: 'Удалить', onPressed: _deleteSelected),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildBody(BuildContext context) {
     return Column(
       children: [
+        if (_selecting) _buildSelectionBar(context),
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
@@ -897,17 +974,22 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
                       itemCount: _messages.length,
                       itemBuilder: (context, i) {
                         final m = _messages[i];
+                        final selected = _selected.contains(m.id);
                         return GestureDetector(
-                          onLongPressStart: (d) => _showMessageMenu(m, d.globalPosition),
-                          child: _GlobalBubble(
-                            message: m,
-                            mine: m.senderId == widget.auth.userId,
-                            prefs: widget.prefs,
-                            global: widget.global,
-                            translation: _translations[m.id],
-                            masked: _isMasked(m),
-                            translating: _translating.contains(m.id),
-                            translationError: _translationErrors[m.id],
+                          onTap: _selecting ? () => _toggleSelect(m.id) : null,
+                          onLongPressStart: (d) => _selecting ? _toggleSelect(m.id) : _showMessageMenu(m, d.globalPosition),
+                          child: Container(
+                            color: selected ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15) : null,
+                            child: _GlobalBubble(
+                              message: m,
+                              mine: m.senderId == widget.auth.userId,
+                              prefs: widget.prefs,
+                              global: widget.global,
+                              translation: _translations[m.id],
+                              masked: _isMasked(m),
+                              translating: _translating.contains(m.id),
+                              translationError: _translationErrors[m.id],
+                            ),
                           ),
                         );
                       },

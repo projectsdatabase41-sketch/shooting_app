@@ -51,6 +51,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   bool _sending = false;
   ChatMessage? _replyingTo;
 
+  /// Множественное выделение — то же самое, что и одиночные действия в
+  /// `_showMessageMenu` (копировать/перевести/удалить), просто разом на
+  /// весь набор; "Ответить" доступно только при ровно одном выбранном
+  /// (один reply на сообщение в модели данных, не список).
+  final Set<String> _selected = {};
+  bool get _selecting => _selected.isNotEmpty;
+  void _toggleSelect(String id) => setState(() {
+        if (!_selected.remove(id)) _selected.add(id);
+      });
+
   /// Переводы по id сообщения — только в памяти экрана, не сохраняются:
   /// дешевле перевести заново, чем городить локальное хранилище ради
   /// текста, который и так живёт на устройстве получателя.
@@ -283,6 +293,39 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Скопировано')));
   }
 
+  Future<void> _copySelected() async {
+    final ordered = _messages.where((m) => _selected.contains(m.id));
+    final text = ordered.map((m) => m.text ?? '').where((t) => t.isNotEmpty).join('\n\n');
+    setState(() => _selected.clear());
+    if (text.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: text));
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Скопировано')));
+  }
+
+  Future<void> _translateSelected() async {
+    final ids = Set<String>.from(_selected);
+    setState(() => _selected.clear());
+    await Future.wait([
+      for (final m in _messages.where((m) => ids.contains(m.id)))
+        if (m.text != null && m.text!.isNotEmpty) _translate(m),
+    ]);
+  }
+
+  void _replySelected() {
+    final id = _selected.single;
+    final m = _messages.firstWhere((m) => m.id == id);
+    setState(() => _selected.clear());
+    _reply(m);
+  }
+
+  Future<void> _deleteSelected() async {
+    final ids = Set<String>.from(_selected);
+    setState(() => _selected.clear());
+    for (final m in _messages.where((m) => ids.contains(m.id)).toList()) {
+      await _delete(m);
+    }
+  }
+
   Future<void> _edit(ChatMessage m) async {
     final ctrl = TextEditingController(text: m.text);
     final newText = await showDialog<String>(
@@ -336,6 +379,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
           color: _isMasked(m) ? primary : null,
         ),
       if (canEdit) const ChatQuickAction(value: 'edit', icon: Icons.edit_outlined, label: 'Редактировать'),
+      const ChatQuickAction(value: 'select', icon: Icons.check_circle_outline, label: 'Выбрать'),
       ChatQuickAction(value: 'delete', icon: Icons.delete_outline, label: mine ? 'Удалить' : 'Удалить у себя'),
     ]);
     switch (action) {
@@ -349,6 +393,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         await _toggleMask(m);
       case 'edit':
         await _edit(m);
+      case 'select':
+        _toggleSelect(m.id);
       case 'delete':
         await _delete(m);
     }
@@ -409,7 +455,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     return AnimatedBuilder(
       animation: widget.prefs,
       builder: (context, _) => Scaffold(
-        appBar: AppBar(
+        appBar: _selecting
+            ? AppBar(
+                leading: IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _selected.clear())),
+                title: Text('${_selected.length}'),
+                actions: [
+                  IconButton(icon: const Icon(Icons.copy_outlined), tooltip: 'Копировать', onPressed: _copySelected),
+                  IconButton(
+                      icon: const Icon(Icons.translate_outlined), tooltip: 'Перевести', onPressed: _translateSelected),
+                  if (_selected.length == 1)
+                    IconButton(icon: const Icon(Icons.reply_outlined), tooltip: 'Ответить', onPressed: _replySelected),
+                  IconButton(icon: const Icon(Icons.delete_outline), tooltip: 'Удалить', onPressed: _deleteSelected),
+                ],
+              )
+            : AppBar(
           title: Row(
             children: [
               ChatAvatar(base64: widget.contact.avatarBase64, nickname: widget.contact.nickname, radius: 16),
@@ -452,9 +511,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                       itemCount: _messages.length,
                       itemBuilder: (context, i) {
                         final m = _messages[i];
+                        final selected = _selected.contains(m.id);
                         return Dismissible(
                           key: ValueKey(m.id),
-                          direction: DismissDirection.startToEnd,
+                          direction: _selecting ? DismissDirection.none : DismissDirection.startToEnd,
                           // Свайп только показывает жест "ответить" и
                           // всегда возвращает пузырь на место (решение
                           // пользователя: ответ свайпом за само
@@ -469,15 +529,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                             child: Icon(Icons.reply_outlined, color: Theme.of(context).colorScheme.primary),
                           ),
                           child: GestureDetector(
-                            onLongPressStart: (d) => _showMessageMenu(m, d.globalPosition),
-                            child: _Bubble(
-                              message: m,
-                              prefs: widget.prefs,
-                              translation: _translations[m.id],
-                              masked: _isMasked(m),
-                              translating: _translating.contains(m.id),
-                              translationError: _translationErrors[m.id],
-                              onRetry: () => _retry(m),
+                            onTap: _selecting ? () => _toggleSelect(m.id) : null,
+                            onLongPressStart: (d) => _selecting ? _toggleSelect(m.id) : _showMessageMenu(m, d.globalPosition),
+                            child: Container(
+                              color: selected ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15) : null,
+                              child: _Bubble(
+                                message: m,
+                                prefs: widget.prefs,
+                                translation: _translations[m.id],
+                                masked: _isMasked(m),
+                                translating: _translating.contains(m.id),
+                                translationError: _translationErrors[m.id],
+                                onRetry: () => _retry(m),
+                              ),
                             ),
                           ),
                         );
