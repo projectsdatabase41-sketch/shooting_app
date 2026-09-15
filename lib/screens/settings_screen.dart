@@ -1,69 +1,39 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/ai_settings.dart';
 import '../services/knowledge_column_discovery.dart';
 import '../services/supabase_auth_service.dart';
-import '../services/supabase_service.dart';
 import '../state/app_data_store.dart';
-import '../state/personalization_view_model.dart';
-import '../widgets/section_header.dart';
-import 'export_screen.dart';
 import 'ai_settings_screen.dart';
 import 'chat_home_screen.dart';
-import 'color_personalization_screen.dart';
+import 'settings_appearance_screen.dart';
+import 'settings_data_screen.dart';
 
-/// Настройки (раздел 9 ТЗ).
-class SettingsScreen extends StatefulWidget {
+/// Настройки (раздел 9 ТЗ) — сгруппированы по назначению в отдельные
+/// "папки" (решение пользователя), вместо одного длинного списка:
+/// внешний вид отдельно от данных/синхронизации, часто нужное (ИИ, чат,
+/// режим тренера, учётная запись) остаётся на первом экране.
+class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
-
-  @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
-}
-
-class _SettingsScreenState extends State<SettingsScreen> {
-  bool _syncing = false;
-  String? _syncMessage;
 
   @override
   Widget build(BuildContext context) {
     final store = context.watch<AppDataStore>();
-    final personalization = context.watch<PersonalizationViewModel>();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Настройки')),
       body: ListView(
         padding: const EdgeInsets.only(bottom: 32),
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: SectionHeader(title: 'Язык', subtitle: 'По умолчанию — язык системы'),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: SizedBox(
-              width: double.infinity,
-              child: SegmentedButton<String?>(
-                segments: const [
-                  ButtonSegment(value: null, label: Text('Системный')),
-                  ButtonSegment(value: 'ru', label: Text('Русский')),
-                  ButtonSegment(value: 'en', label: Text('English')),
-                ],
-                selected: {personalization.localeCode},
-                showSelectedIcon: false,
-                onSelectionChanged: (set) => personalization.setLocaleCode(set.first),
-              ),
-            ),
-          ),
           ListTile(
             leading: const Icon(Icons.palette_outlined),
-            title: const Text('Цветовые настройки'),
-            subtitle: const Text('Тема интерфейса, бумага, яблоко, кольца, пробоины'),
+            title: const Text('Внешний вид'),
+            subtitle: const Text('Язык, цвета и тема интерфейса'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ColorPersonalizationScreen()),
+              MaterialPageRoute(builder: (_) => const SettingsAppearanceScreen()),
             ),
           ),
           ListTile(
@@ -85,19 +55,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           ListTile(
-            leading: const Icon(Icons.file_download_outlined),
-            title: const Text('Импорт тренировок'),
-            subtitle: const Text('Через чат с ИИ-ассистентом'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _showImportDialog(context),
-          ),
-          ListTile(
-            leading: const Icon(Icons.ios_share_outlined),
-            title: const Text('Экспорт тренировок'),
-            subtitle: const Text('В файл: для резервной копии или переноса на другое устройство'),
+            leading: const Icon(Icons.storage_outlined),
+            title: const Text('Данные и синхронизация'),
+            subtitle: const Text('Импорт, экспорт, облако, доступ тренерам'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ExportScreen()),
+              MaterialPageRoute(builder: (_) => const SettingsDataScreen()),
             ),
           ),
           const Divider(height: 24),
@@ -122,116 +85,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               store.isCoach = v;
               store.isAthlete = !v;
               store.saveSettings();
-              // setState() здесь перерисовывает только сам экран
-              // настроек — нижнюю навигацию (HomeShell, отдельный виджет
-              // выше по дереву) он не трогает, и состав вкладок менялся
-              // будто бы "только после переключения на другую вкладку".
-              // notifyListeners() — тот же AppDataStore, который уже
-              // слушает HomeShell через context.watch.
+              // notifyListeners() (тот же AppDataStore, который слушает
+              // HomeShell через context.watch) сам перерисует нижнюю
+              // навигацию — здесь достаточно просто сохранить.
               store.refreshView();
-              setState(() {});
             },
           ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: SectionHeader(
-              title: 'Хранение',
-              subtitle: 'Что держать на устройстве, а что только в облаке',
-            ),
-          ),
-          // Три состояния вместо одного ползунка: «только облако»,
-          // «последние N» и «всё на устройстве». Ползунок сам по себе
-          // не отвечал на главный вопрос — держать ли данные локально
-          // вообще.
-          SwitchListTile(
-            title: const Text('Хранить только в облаке'),
-            subtitle: const Text('На устройстве не остаётся ничего'),
-            value: store.storageKeepCount == 0,
-            onChanged: (v) {
-              store.storageKeepCount = v ? 0 : 200;
-              store.saveSettings();
-              setState(() {});
-            },
-          ),
-          if (store.storageKeepCount != 0) ...[
-            SwitchListTile(
-              title: const Text('Хранить всё на устройстве'),
-              subtitle: const Text('Ничего не вытесняется'),
-              value: store.storageKeepCount >= AppDataStore.keepAll,
-              onChanged: (v) {
-                store.storageKeepCount = v ? AppDataStore.keepAll : 200;
-                store.saveSettings();
-                setState(() {});
-              },
-            ),
-            if (store.storageKeepCount < AppDataStore.keepAll)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: TextFormField(
-                  initialValue: '${store.storageKeepCount}',
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Сколько тренировок держать на устройстве',
-                    helperText: 'Остальные — только в облаке',
-                  ),
-                  onChanged: (v) {
-                    final n = int.tryParse(v);
-                    if (n == null || n <= 0) return;
-                    store.storageKeepCount = n;
-                    store.saveSettings();
-                  },
-                ),
-              ),
-          ],
-          const Divider(height: 24),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
-            child: SectionHeader(title: 'Синхронизация'),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Разделено на "из" и "в" (решение пользователя): раньше
-                // одна кнопка делала оба разом, и новую тренировку на
-                // телефоне нельзя было ТОЛЬКО подтянуть с сервера, не
-                // отправив заодно локальные.
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: _syncing ? null : () => _pullNow(context),
-                      icon: _syncing
-                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Icon(Icons.cloud_download_outlined),
-                      label: const Text('Загрузить из облака'),
-                    ),
-                    FilledButton.icon(
-                      onPressed: _syncing ? null : () => _pushNow(context),
-                      icon: _syncing
-                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Icon(Icons.cloud_upload_outlined),
-                      label: const Text('Отправить в облако'),
-                    ),
-                  ],
-                ),
-                if (_syncMessage != null) ...[
-                  const SizedBox(height: 8),
-                  Text(_syncMessage!, style: Theme.of(context).textTheme.bodySmall),
-                ],
-              ],
-            ),
-          ),
-          // Тренер не ведёт свои тренировки и никому не передаёт свои
-          // данные — токен доступа тренерам нужен только спортсмену
-          // (пункт списка правок: "тренер не будет свои данные
-          // передавать").
-          if (store.workMode != WorkMode.coach) ...[
-            const Divider(height: 24),
-            const _ShareTokensSection(),
-          ],
           const Divider(height: 24),
           // Учётная запись — в самом низу, как просил пользователь:
           // заходят сюда раз в жизни, а место наверху занимает то, что
@@ -239,293 +98,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const _AccountTile(),
         ],
       ),
-    );
-  }
-
-  Future<void> _pullNow(BuildContext context) async {
-    setState(() {
-      _syncing = true;
-      _syncMessage = null;
-    });
-    final store = context.read<AppDataStore>();
-    final sync = SupabaseSyncService(SupabaseAuthService(store.db));
-    try {
-      final result = await sync.pull(store);
-      final parts = <String>[];
-      if (result.pulledSessions > 0) parts.add('получено тренировок: ${result.pulledSessions}');
-      if (result.pulledExercises > 0) parts.add('упражнений: ${result.pulledExercises}');
-      if (result.pulledComments > 0) parts.add('комментариев: ${result.pulledComments}');
-      setState(() => _syncMessage = parts.isEmpty ? 'Готово, новых данных не было' : 'Готово — ${parts.join(', ')}');
-    } catch (e) {
-      setState(() => _syncMessage = '$e');
-    } finally {
-      setState(() => _syncing = false);
-    }
-  }
-
-  Future<void> _pushNow(BuildContext context) async {
-    setState(() {
-      _syncing = true;
-      _syncMessage = null;
-    });
-    final store = context.read<AppDataStore>();
-    final sync = SupabaseSyncService(SupabaseAuthService(store.db));
-    try {
-      final deleted = await sync.pushDeletions(store);
-      final pushed = await sync.push(store);
-      final parts = <String>[];
-      if (deleted > 0) parts.add('удалено: $deleted');
-      if (pushed > 0) parts.add('отправлено: $pushed');
-      setState(() => _syncMessage = parts.isEmpty ? 'Готово, новых данных не было' : 'Готово — ${parts.join(', ')}');
-    } catch (e) {
-      setState(() => _syncMessage = '$e');
-    } finally {
-      setState(() => _syncing = false);
-    }
-  }
-}
-
-/// Импорт тренировок пока не встроен в приложение — вместо этого
-/// открываем чат с ИИ-ассистентом, где пользователь может выгрузить
-/// свою переписку/данные и попросить помочь перенести их (решение
-/// пользователя). Каждая кнопка — ссылка на веб-чат сервиса; на
-/// телефоне с установленным приложением ОС сама предложит открыть его
-/// вместо браузера.
-void _showImportDialog(BuildContext context) {
-  const links = {
-    'ChatGPT': 'https://chat.openai.com',
-    'Claude': 'https://claude.ai',
-    'Qwen': 'https://chat.qwen.ai',
-  };
-  showDialog(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Text('Импорт через ИИ-ассистента'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (final entry in links.entries) ...[
-            OutlinedButton(
-              onPressed: () => launchUrl(Uri.parse(entry.value), mode: LaunchMode.externalApplication),
-              child: Text(entry.key),
-            ),
-            const SizedBox(height: 8),
-          ],
-          const SizedBox(height: 8),
-          Text(
-            'Импорт внутри самого приложения пока в разработке.',
-            style: Theme.of(ctx).textTheme.bodySmall,
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Закрыть')),
-      ],
-    ),
-  );
-}
-
-class _ShareTokensSection extends StatefulWidget {
-  const _ShareTokensSection();
-
-  @override
-  State<_ShareTokensSection> createState() => _ShareTokensSectionState();
-}
-
-class _ShareTokensSectionState extends State<_ShareTokensSection> {
-  String? _lastCreatedToken;
-  bool _busy = false;
-  String? _error;
-
-  late final SupabaseAuthService _auth;
-  late final SupabaseSyncService _sync;
-
-  @override
-  void initState() {
-    super.initState();
-    final store = context.read<AppDataStore>();
-    _auth = SupabaseAuthService(store.db);
-    _sync = SupabaseSyncService(_auth);
-    // Список токенов на сервере — источник истины (отозвать можно и с
-    // другого устройства), поэтому подтягиваем его при открытии
-    // экрана, а не полагаемся на то, что осело в локальной базе.
-    if (_auth.isSignedIn) _refresh();
-  }
-
-  Future<void> _refresh() async {
-    try {
-      await _sync.refreshShareGrants(context.read<AppDataStore>());
-    } catch (_) {
-      // Не удалось обновить список — покажем то, что уже есть локально;
-      // отдельно сообщать об ошибке здесь не за что: пользователь ничего
-      // не запрашивал явно.
-    }
-  }
-
-  /// Спрашивает, кому предназначен токен, ДО создания — само поле уже
-  /// давно поддержано на сервере (`athleteLabel`/`share_grants.label`),
-  /// не хватало только запроса имени в интерфейсе (пункт 13 списка
-  /// правок). Пустое имя — тоже валидный ответ, просто без подписи.
-  Future<String?> _askTokenLabel() {
-    final controller = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Название токена'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'Имя, кому предназначен',
-            hintText: 'например «Тренер Иванов»',
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
-            child: const Text('Создать'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _create() async {
-    final label = await _askTokenLabel();
-    if (label == null) return; // отменили в диалоге
-    if (!mounted) return;
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      final token = await _sync.createShareToken(context.read<AppDataStore>(), athleteLabel: label);
-      if (!mounted) return;
-      setState(() => _lastCreatedToken = token);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = '$e');
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _revoke(String grantId) async {
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      await _sync.revokeShareToken(context.read<AppDataStore>(), grantId);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = '$e');
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final store = context.watch<AppDataStore>();
-    final signedIn = _auth.isSignedIn;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: SectionHeader(
-            title: 'Доступ тренерам',
-            subtitle: 'Токены на просмотр вашего дневника',
-          ),
-        ),
-        if (!signedIn)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: Text(
-              // Токен без базы работать не может — тренеру попросту
-              // некуда его подставить, поэтому честнее не предлагать
-              // создать его локально "про запас".
-              'Сначала войдите в базу Supabase — токен проверяется на сервере, '
-              'без неё выдавать его некому.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
-        if (_error != null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-          ),
-        if (_lastCreatedToken != null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Card(
-              // Предупреждающая карточка: янтарный контейнер темы вместо
-              // прежнего хардкода Colors.amber.shade50, который в тёмной
-              // теме давал светлую плашку со светлым текстом.
-              color: Theme.of(context).colorScheme.secondaryContainer,
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.warning_amber_rounded,
-                            size: 16, color: Theme.of(context).colorScheme.onSecondaryContainer),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            'Токен показывается только один раз',
-                            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSecondaryContainer,
-                                ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    // Сам токен на экран не выводим — только кнопка
-                    // копирования (решение пользователя): скопировать и
-                    // сразу отправить тренеру, глазами читать незачем,
-                    // а плечом подсмотреть — риск.
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        Clipboard.setData(ClipboardData(text: _lastCreatedToken!));
-                        ScaffoldMessenger.of(context)
-                          ..hideCurrentSnackBar()
-                          ..showSnackBar(const SnackBar(content: Text('Токен скопирован')));
-                      },
-                      icon: const Icon(Icons.copy, size: 16),
-                      label: const Text('Скопировать токен'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ...store.shareGrants.map((g) => ListTile(
-              title: Text(g.athleteLabel.isEmpty ? 'Токен ${g.id.substring(0, 6)}' : g.athleteLabel),
-              subtitle: Text('Создан ${g.createdAt.toLocal()}'),
-              trailing: TextButton(
-                onPressed: _busy ? null : () => _revoke(g.id),
-                child: const Text('Отозвать'),
-              ),
-            )),
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: OutlinedButton.icon(
-            icon: _busy
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.add),
-            label: const Text('Создать токен'),
-            onPressed: (!signedIn || _busy) ? null : _create,
-          ),
-        ),
-      ],
     );
   }
 }
