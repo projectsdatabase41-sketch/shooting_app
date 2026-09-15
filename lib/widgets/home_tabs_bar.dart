@@ -196,6 +196,14 @@ class _HomeTileGridState extends State<HomeTileGrid> {
   /// после — иначе непонятно, сработает ли перенос вообще).
   int? _hoverIndex;
 
+  /// Плитка, которую сейчас держат пальцем (не путать с `_dragging` —
+  /// тот только про перетаскивание, этот про обычное нажатие) — решение
+  /// пользователя "добавь больше 3D эффектов, где можешь": та же физика
+  /// вдавливания, что у `Raised3DButton`, только своя копия (плитка
+  /// остаётся ещё и `DragTarget`/`LongPressDraggable`, обычную кнопку
+  /// внутрь не завернуть).
+  String? _pressedId;
+
   GlobalKey _keyFor(String id) => _tileKeys.putIfAbsent(id, GlobalKey.new);
 
   void _showHidePopup(String id) {
@@ -338,29 +346,57 @@ class _HomeTileGridState extends State<HomeTileGrid> {
     final personalization = context.watch<PersonalizationViewModel>();
     final bg = personalization.appButtonColor ?? cs.surfaceContainerHigh;
     final fg = personalization.appButtonTextColor ?? cs.primary;
+    // Вдавливание — только у "живой" плитки на месте, не у теней
+    // перетаскивания (elevated — палец уже держит её приподнятой).
+    final pressed = !elevated && _pressedId == id;
+    final canTap = _dragging == null;
 
-    return Material(
-      elevation: elevated ? 6 : 0,
-      color: bg,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: _dragging == null ? () => widget.onSelect(id) : null,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(spec.icon, size: 40, color: fg),
-              const SizedBox(height: 8),
-              Text(
-                spec.label,
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelMedium?.copyWith(color: fg),
+    return GestureDetector(
+      onTapDown: canTap ? (_) => setState(() => _pressedId = id) : null,
+      onTapCancel: () => setState(() => _pressedId = null),
+      onTapUp: (_) => setState(() => _pressedId = null),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 90),
+        curve: Curves.easeOut,
+        transform: Matrix4.translationValues(0, pressed ? 3 : 0, 0),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color.lerp(bg, Colors.white, 0.10)!, Color.lerp(bg, Colors.black, 0.08)!],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: pressed ? 0.10 : (elevated ? 0.35 : 0.22)),
+              offset: Offset(0, pressed ? 1 : (elevated ? 8 : 4)),
+              blurRadius: pressed ? 2 : (elevated ? 12 : 6),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: canTap ? () => widget.onSelect(id) : null,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(spec.icon, size: 40, color: fg),
+                  const SizedBox(height: 8),
+                  Text(
+                    spec.label,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelMedium?.copyWith(color: fg),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),

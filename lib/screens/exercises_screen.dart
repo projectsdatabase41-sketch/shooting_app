@@ -5,6 +5,7 @@ import '../models/series_spec.dart';
 import '../models/target_face.dart';
 import '../state/app_data_store.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/raised_3d_button.dart';
 import '../widgets/swipe_to_delete.dart';
 import 'exercise_editor_screen.dart';
 import 'trainings_history_screen.dart';
@@ -32,19 +33,21 @@ class ExercisesScreen extends StatelessWidget {
       // тогда центральной кнопки нет и создавать больше не откуда.
       floatingActionButton: list.isEmpty
           ? null
-          : FloatingActionButton.extended(
-              onPressed: () => _showCreateExerciseDialog(context),
-              icon: const Icon(Icons.add),
-              label: const Text('Упражнение'),
+          : Raised3DButton(
+              icon: Icons.add,
+              label: 'Упражнение',
+              baseColor: Theme.of(context).colorScheme.primary,
+              onTap: () => _showCreateExerciseDialog(context),
             ),
       body: list.isEmpty
           ? EmptyState(
               icon: Icons.fitness_center,
               text: 'Упражнений пока нет — приложение стартует полностью пустым.',
-              action: FilledButton.icon(
-                onPressed: () => _showCreateExerciseDialog(context),
-                icon: const Icon(Icons.add),
-                label: const Text('Создать первое'),
+              action: Raised3DButton(
+                icon: Icons.add,
+                label: 'Создать первое',
+                baseColor: Theme.of(context).colorScheme.primary,
+                onTap: () => _showCreateExerciseDialog(context),
               ),
             )
           : ListView.separated(

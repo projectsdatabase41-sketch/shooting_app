@@ -7,6 +7,7 @@ import '../models/training_session.dart';
 import '../state/app_data_store.dart';
 import '../theme/app_theme.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/raised_3d_button.dart';
 import '../widgets/swipe_to_delete.dart';
 import 'exercise_history_detail_screen.dart';
 import 'target_screen.dart';
@@ -40,10 +41,11 @@ class TrainingsHistoryScreen extends StatelessWidget {
       appBar: AppBar(title: Text(ex?.label ?? 'Тренировки')),
       floatingActionButton: ex == null
           ? null
-          : FloatingActionButton.extended(
-              onPressed: () => _startTraining(context, ex),
-              icon: const Icon(Icons.add),
-              label: const Text('Тренировка'),
+          : Raised3DButton(
+              icon: Icons.add,
+              label: 'Тренировка',
+              baseColor: Theme.of(context).colorScheme.primary,
+              onTap: () => _startTraining(context, ex),
             ),
       body: sessions.isEmpty
           ? EmptyState(
@@ -53,10 +55,11 @@ class TrainingsHistoryScreen extends StatelessWidget {
                   : 'У «${ex.label}» пока нет тренировок.',
               action: ex == null
                   ? null
-                  : FilledButton.icon(
-                      onPressed: () => _startTraining(context, ex),
-                      icon: const Icon(Icons.add),
-                      label: const Text('Создать первую'),
+                  : Raised3DButton(
+                      icon: Icons.add,
+                      label: 'Создать первую',
+                      baseColor: Theme.of(context).colorScheme.primary,
+                      onTap: () => _startTraining(context, ex),
                     ),
             )
           : ListView.separated(
