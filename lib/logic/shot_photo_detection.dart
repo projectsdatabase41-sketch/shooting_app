@@ -143,6 +143,17 @@ List<HoleCandidate> findCandidateHoles({
   // горизонтали, по часовой стрелке (экранные координаты, Y вниз).
   double? radiusYPx,
   double angleRad = 0,
+  // Печатные цифры габаритов (1..8) — детектор иногда принимает их за
+  // пробоины (реальная находка пользователя: "путает с цифрами").
+  // Позиции цифр на бланке ФИКСИРОВАНЫ относительно колец (тот же
+  // принцип рисования, что у `TargetPainter._paintRingLabels` — середина
+  // каждого габарита, четыре стороны света), поэтому их можно заранее
+  // исключить из поиска, а не полагаться на то, что фильтр круглости
+  // случайно отсеет ещё и цифру. Оба параметра нужны вместе — без них
+  // исключение просто не применяется (ничего не меняется для вызовов,
+  // где мишень ещё не выбрана).
+  List<double>? ringRadiiMm,
+  double? faceRadiusMm,
 }) {
   final blurRadius = math.max(2, (caliberRadiusPx * 1.6).round());
   final blurred = boxBlur(image, blurRadius);
@@ -262,9 +273,25 @@ List<HoleCandidate> findCandidateHoles({
     if (!overlaps) deduped.add(c);
   }
 
-  if (knownHolesPx.isEmpty) return deduped;
+  // Печатные цифры габаритов — фиксированное расположение относительно
+  // колец (см. параметры `ringRadiiMm`/`faceRadiusMm` выше), считается
+  // в ТОЙ ЖЕ системе координат (включая эллипс), что и `insideTarget`.
+  final withoutLabels = (ringRadiiMm == null || faceRadiusMm == null || ringRadiiMm.length < 10 || faceRadiusMm <= 0)
+      ? deduped
+      : deduped.where((c) => !_nearRingLabel(
+            c.center,
+            center: center,
+            radiusPx: radiusPx,
+            radiusYPx: ry,
+            angleRad: angleRad,
+            ringRadiiMm: ringRadiiMm,
+            faceRadiusMm: faceRadiusMm,
+            tolerancePx: caliberRadiusPx * 1.3,
+          )).toList();
+
+  if (knownHolesPx.isEmpty) return withoutLabels;
   final matchTolerancePx = caliberRadiusPx * 1.2;
-  return deduped.where((c) {
+  return withoutLabels.where((c) {
     for (final known in knownHolesPx) {
       final dx = c.center.x - known.x;
       final dy = c.center.y - known.y;
@@ -272,6 +299,44 @@ List<HoleCandidate> findCandidateHoles({
     }
     return true;
   }).toList();
+}
+
+/// Позиция печатной цифры габарита N — середина кольца N, четыре
+/// стороны света (тот же расчёт, что `TargetPainter._paintRingLabels`
+/// использует для отрисовки в приложении, только в пиксельной системе
+/// координат ФОТО, а не мм-системе экрана). `radiusYPx`/`angleRad` —
+/// та же эллиптическая калибровка, что у `insideTarget` в
+/// [findCandidateHoles], чтобы позиции цифр не "съезжали" на фото,
+/// снятом под углом.
+bool _nearRingLabel(
+  PixelPoint p, {
+  required PixelPoint center,
+  required double radiusPx,
+  required double radiusYPx,
+  required double angleRad,
+  required List<double> ringRadiiMm,
+  required double faceRadiusMm,
+  required double tolerancePx,
+}) {
+  const localDirs = [(-1.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0)];
+  final cosA = math.cos(angleRad), sinA = math.sin(angleRad);
+  final tol2 = tolerancePx * tolerancePx;
+
+  for (var ring = 1; ring <= 8; ring++) {
+    final outerMm = ringRadiiMm[10 - ring];
+    final innerMm = ringRadiiMm[9 - ring];
+    final midMm = (outerMm + innerMm) / 2;
+    final localX = midMm / faceRadiusMm * radiusPx;
+    final localY = midMm / faceRadiusMm * radiusYPx;
+    for (final d in localDirs) {
+      final lx = d.$1 * localX, ly = d.$2 * localY;
+      final labelX = center.x + (lx * cosA - ly * sinA);
+      final labelY = center.y + (lx * sinA + ly * cosA);
+      final dx = p.x - labelX, dy = p.y - labelY;
+      if (dx * dx + dy * dy <= tol2) return true;
+    }
+  }
+  return false;
 }
 
 /// Автоматическая калибровка круга мишени по фото: центр и радиус,

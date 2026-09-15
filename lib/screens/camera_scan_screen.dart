@@ -304,6 +304,8 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
       radiusPx: _lockedRadius,
       caliberRadiusPx: caliberRadiusPx,
       knownHolesPx: knownPx,
+      ringRadiiMm: widget.face.ringRadiiMm,
+      faceRadiusMm: widget.face.faceRadiusMm,
     );
 
     if (candidates.isEmpty) {

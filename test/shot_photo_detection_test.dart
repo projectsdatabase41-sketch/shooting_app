@@ -60,6 +60,35 @@ void main() {
       expect(result, isEmpty);
     });
 
+    test('пятно на месте печатной цифры габарита не предлагается как пробоина', () {
+      const face = TargetFace.rifle10m;
+      const center = PixelPoint(300, 300);
+      const radiusPx = 250.0;
+      const ring = 5;
+      final outerMm = face.ringRadiiMm[10 - ring];
+      final innerMm = face.ringRadiiMm[9 - ring];
+      final midMm = (outerMm + innerMm) / 2;
+      final labelR = midMm / face.faceRadiusMm * radiusPx;
+      final labelX = center.x + labelR; // направление "вправо"
+
+      final img = GrayImage.filled(600, 600, 210);
+      img.fillCircle(labelX, center.y, 8, 40); // "цифра" — тёмное пятно на ожидаемом месте
+      img.fillCircle(150, 450, 8, 40); // настоящая пробоина в стороне от подписей
+
+      final result = findCandidateHoles(
+        image: img,
+        center: center,
+        radiusPx: radiusPx,
+        caliberRadiusPx: 8,
+        ringRadiiMm: face.ringRadiiMm,
+        faceRadiusMm: face.faceRadiusMm,
+      );
+
+      expect(result, hasLength(1));
+      expect(result.first.center.x, closeTo(150, 1.5));
+      expect(result.first.center.y, closeTo(450, 1.5));
+    });
+
     test('пятно намного крупнее калибра отсеивается по размеру', () {
       final img = GrayImage.filled(200, 200, 210);
       img.fillCircle(100, 100, 40, 40); // радиус в разы больше калибра 8

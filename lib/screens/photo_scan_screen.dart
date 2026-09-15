@@ -23,6 +23,8 @@ List<HoleCandidate> _detectInIsolate(_DetectArgs args) {
     angleRad: args.angleRad,
     caliberRadiusPx: args.caliberRadiusPx,
     knownHolesPx: args.knownHolesPx,
+    ringRadiiMm: args.ringRadiiMm,
+    faceRadiusMm: args.faceRadiusMm,
   );
 }
 
@@ -64,6 +66,8 @@ class _DetectArgs {
   final double angleRad;
   final double caliberRadiusPx;
   final List<PixelPoint> knownHolesPx;
+  final List<double> ringRadiiMm;
+  final double faceRadiusMm;
   const _DetectArgs({
     required this.image,
     required this.center,
@@ -72,6 +76,8 @@ class _DetectArgs {
     required this.angleRad,
     required this.caliberRadiusPx,
     required this.knownHolesPx,
+    required this.ringRadiiMm,
+    required this.faceRadiusMm,
   });
 }
 
@@ -284,6 +290,8 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
           angleRad: _calibAngle,
           caliberRadiusPx: caliberRadiusPx,
           knownHolesPx: knownPx,
+          ringRadiiMm: widget.face.ringRadiiMm,
+          faceRadiusMm: widget.face.faceRadiusMm,
         ),
       );
 
