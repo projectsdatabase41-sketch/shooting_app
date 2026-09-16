@@ -14,9 +14,11 @@ import '../services/ai_settings.dart';
 /// или уточнить пожеланием).
 class ServiceDisplayAi {
   /// Выполняет запрос сервиса. Возвращает читаемый текст ответа (код +
-  /// JSON с отступами, если это JSON) и разобранные записи, если ответ —
-  /// список (или один объект-запись).
-  static Future<(String response, List<Map<String, dynamic>>? rows)> fetchRows(CustomService s) async {
+  /// JSON с отступами, если это JSON), сырой текст тела ответа (для
+  /// [discoverAndSuggestSpec], если обычная эвристика не распознает
+  /// список) и разобранные записи, если ответ — список (или один
+  /// объект-запись).
+  static Future<(String response, String rawText, List<Map<String, dynamic>>? rows)> fetchRows(CustomService s) async {
     final uri = Uri.parse(s.url);
     final http.Response res;
     switch (s.method) {
@@ -30,7 +32,7 @@ class ServiceDisplayAi {
         res = await http.get(uri, headers: s.headers);
     }
     final text = utf8.decode(res.bodyBytes);
-    return ('${res.statusCode}\n\n${_prettyIfJson(text)}', _tryParseRows(text));
+    return ('${res.statusCode}\n\n${_prettyIfJson(text)}', text, _tryParseRows(text));
   }
 
   static String _prettyIfJson(String text) {
@@ -123,6 +125,88 @@ class ServiceDisplayAi {
       'detail': asFieldList(decoded['detail']),
     };
     return jsonEncode(spec);
+  }
+
+  /// Идёт по точечному пути ("data.items") внутри разобранного JSON и
+  /// возвращает найденный список записей — пусто/не указано означает,
+  /// что сам корень и есть одна запись.
+  static List<Map<String, dynamic>>? _applyListPath(dynamic root, String listPath) {
+    var node = root;
+    if (listPath.trim().isNotEmpty) {
+      for (final segment in listPath.split('.')) {
+        if (node is Map && node.containsKey(segment)) {
+          node = node[segment];
+        } else {
+          return null;
+        }
+      }
+    }
+    List? list;
+    if (node is List) {
+      list = node;
+    } else if (node is Map && node.isNotEmpty) {
+      list = [node];
+    }
+    if (list == null || list.isEmpty || list.any((e) => e is! Map)) return null;
+    return list.map((e) => _flattenRecord((e as Map).map((k, v) => MapEntry('$k', v)))).toList();
+  }
+
+  /// Когда обычная эвристика (`fetchRows`) не нашла список записей —
+  /// ответ нестандартной формы — просит ИИ одновременно найти путь к
+  /// списку И разложить поля по ролям, по обрезанному образцу самого
+  /// ответа (не целиком, чтобы не заваливать контекст). Бросает
+  /// исключение, если модель не смогла найти в ответе ничего похожего
+  /// на список записей.
+  static Future<(List<Map<String, dynamic>> rows, String specJson)> discoverAndSuggestSpec(
+    AiSettings settings,
+    String rawResponseText, {
+    String note = '',
+  }) async {
+    final dynamic root;
+    try {
+      root = jsonDecode(rawResponseText);
+    } catch (_) {
+      throw const FormatException('Ответ сервиса не в формате JSON');
+    }
+    final preview = truncate(const JsonEncoder().convert(root), 3000);
+    final reply = await AiService(settings).ask(
+      systemPrompt: 'Тебе дан обрезанный пример ответа стороннего API (JSON), в котором обычная эвристика не '
+          'нашла список записей по стандартным ключам (records/items/data/results/rows). '
+          'Найди сама путь к списку записей и разложи поля по ролям отображения в карточке списка. '
+          'Ответь ТОЛЬКО JSON-объектом без пояснений, без markdown, без ```: '
+          '{"listPath": "путь через точку до массива записей внутри ответа, например data.items или result.rows; '
+          'пусто, если сам корень ответа — уже список или одна запись", '
+          '"title": "поле для заголовка карточки", '
+          '"subtitle": ["1-3 поля для краткой строки под заголовком"], '
+          '"detail": ["остальные значимые поля — показываются полностью в развороте карточки"]}. '
+          'Путь и названия полей бери СТРОГО из данного JSON, не придумывай.',
+      contextBlock: '',
+      history: [
+        (
+          role: 'user',
+          text: jsonEncode({
+            'response_preview': preview,
+            if (note.trim().isNotEmpty) 'пожелание': note.trim(),
+          }),
+        ),
+      ],
+    );
+    final decoded = jsonDecode(_stripCodeFence(reply.text));
+    if (decoded is! Map) throw const FormatException('Ассистент ответил не JSON-объектом');
+
+    final rows = _applyListPath(root, '${decoded['listPath'] ?? ''}');
+    if (rows == null || rows.isEmpty) {
+      throw const FormatException('Не нашлось список записей в ответе — проверьте адрес сервиса');
+    }
+    final columnSet = <String>{for (final r in rows) ...r.keys};
+    final title = decoded['title'] is String && columnSet.contains(decoded['title']) ? decoded['title'] as String : null;
+    List<String> asFieldList(dynamic v) => v is List ? v.map((e) => '$e').where(columnSet.contains).toList() : const [];
+    final spec = {
+      if (title != null) 'title': title,
+      'subtitle': asFieldList(decoded['subtitle']),
+      'detail': asFieldList(decoded['detail']),
+    };
+    return (rows, jsonEncode(spec));
   }
 
   /// На случай, если модель всё же обернула ответ в ```json — снимаем

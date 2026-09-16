@@ -34,6 +34,7 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
   String? _error;
   bool _showRaw = false;
   late CustomService _service = widget.service;
+  String _rawText = '';
 
   /// Если ответ — список записей (Airtable `{"records":[{"fields":{...}}]}`,
   /// обычный `{"items"/"data"/"results":[...]}`, один объект-запись или
@@ -65,9 +66,10 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
       _error = null;
     });
     try {
-      final (response, rows) = await ServiceDisplayAi.fetchRows(widget.service);
+      final (response, rawText, rows) = await ServiceDisplayAi.fetchRows(widget.service);
       setState(() {
         _response = response;
+        _rawText = rawText;
         _rows = rows;
       });
     } catch (e) {
@@ -77,12 +79,15 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
     }
   }
 
-  /// Ручной вызов с экрана плитки — в отличие от автоматического подбора
-  /// сразу при сохранении сервиса (см. `AddServiceScreen._save`), тут
-  /// можно ещё и уточнить пожеланием, и вызвать повторно.
+  /// Ручной вызов с экрана плитки — доступен ВСЕГДА, пока есть хоть
+  /// какой-то ответ, даже если обычная эвристика не смогла распознать
+  /// в нём список записей (тогда ИИ ищет список сама по образцу самого
+  /// ответа — см. `ServiceDisplayAi.discoverAndSuggestSpec`). В отличие
+  /// от автоматического подбора сразу при сохранении сервиса (см.
+  /// `AddServiceScreen._save`), тут можно ещё уточнить пожеланием и
+  /// вызвать повторно.
   Future<void> _configureDisplay() async {
-    final rows = _rows;
-    if (rows == null || rows.isEmpty) return;
+    if (_response == null) return;
 
     final noteCtrl = TextEditingController();
     final proceed = await showDialog<bool>(
@@ -109,10 +114,22 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
     setState(() => _aiBusy = true);
     try {
       final aiSettings = AiSettings(context.read<AppDataStore>().db);
-      final specJson = await ServiceDisplayAi.suggestSpec(aiSettings, rows, note: noteCtrl.text);
+      final rows = _rows;
+      final String specJson;
+      final List<Map<String, dynamic>> resultRows;
+      if (rows != null && rows.isNotEmpty) {
+        specJson = await ServiceDisplayAi.suggestSpec(aiSettings, rows, note: noteCtrl.text);
+        resultRows = rows;
+      } else {
+        (resultRows, specJson) =
+            await ServiceDisplayAi.discoverAndSuggestSpec(aiSettings, _rawText, note: noteCtrl.text);
+      }
       widget.repo.setDisplaySpec(_service.id, specJson);
       if (!mounted) return;
-      setState(() => _service = _withDisplaySpec(specJson));
+      setState(() {
+        _rows = resultRows;
+        _service = _withDisplaySpec(specJson);
+      });
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось настроить вид: $e')));
     } finally {
@@ -170,7 +187,7 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
       appBar: AppBar(
         title: Text(widget.service.name),
         actions: [
-          if (_rows != null && !_aiBusy)
+          if (_response != null && !_aiBusy)
             PopupMenuButton<String>(
               icon: const Icon(Icons.auto_awesome_outlined),
               tooltip: 'Вид записей',
@@ -286,10 +303,13 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
         final titleText =
             title != null ? ServiceDisplayAi.cell(r[title]) : (r.values.isEmpty ? '' : ServiceDisplayAi.cell(r.values.first));
         final subtitleText =
-            subtitle.map((k) => ServiceDisplayAi.cell(r[k])).where((v) => v.isNotEmpty).join(' · ');
+            subtitle.map((k) => ServiceDisplayAi.cell(r[k]).trim()).where((v) => v.isNotEmpty).join(' · ');
+        // .trim() — поле может быть непустой строкой из одних пробелов/
+        // переносов ("\n"), тогда лучше вовсе не показывать пустой на
+        // вид пункт, чем строку без видимого содержания.
         final detailEntries = [
           for (final k in detail)
-            if (ServiceDisplayAi.cell(r[k]).isNotEmpty) MapEntry(k, ServiceDisplayAi.cell(r[k])),
+            if (ServiceDisplayAi.cell(r[k]).trim().isNotEmpty) MapEntry(k, ServiceDisplayAi.cell(r[k]).trim()),
         ];
         return Card(
           margin: const EdgeInsets.only(bottom: 8),

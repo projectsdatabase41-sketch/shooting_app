@@ -38,7 +38,13 @@ class _AddServiceScreenState extends State<AddServiceScreen> with SingleTickerPr
   String _icon = 'link';
   String? _error;
   bool _aiBusy = false;
-  bool _hideApiKey = true;
+  // По умолчанию видимый, не скрытый: маскировка (obscureText) на
+  // многих платформах ломает системное меню выделения/вставки — оно
+  // мелькает и тут же исчезает при отпускании пальца, вставить ничего
+  // не успеваешь (жалоба пользователя). Ключ и так не секрет от самого
+  // устройства — хранится в открытом виде в локальной базе и виден на
+  // вкладке JSON целиком, маскировка тут декоративная.
+  bool _hideApiKey = false;
 
   bool get _editing => widget.existing != null;
 
@@ -145,7 +151,7 @@ class _AddServiceScreenState extends State<AddServiceScreen> with SingleTickerPr
     if (!service.isPlainLink) {
       setState(() => _aiBusy = true);
       try {
-        final (_, rows) = await ServiceDisplayAi.fetchRows(service);
+        final (_, _, rows) = await ServiceDisplayAi.fetchRows(service);
         if (rows != null && rows.isNotEmpty) {
           final aiSettings = AiSettings(context.read<AppDataStore>().db);
           final specJson = await ServiceDisplayAi.suggestSpec(aiSettings, rows);
