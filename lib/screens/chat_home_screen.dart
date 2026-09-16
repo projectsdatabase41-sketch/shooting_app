@@ -628,16 +628,6 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
     }
   }
 
-  Future<void> _toggleMask(ChatGlobalMessage m) async {
-    if (_isMasked(m)) {
-      setState(() => _maskOverride[m.id] = false);
-      return;
-    }
-    if (!_translations.containsKey(m.id)) await _translate(m);
-    if (!mounted || !_translations.containsKey(m.id)) return;
-    setState(() => _maskOverride[m.id] = true);
-  }
-
   /// Та же пакетная загрузка, что в личном чате (см. `ChatThreadScreen`):
   /// только последние `_translateVisibleCount` сообщений и не те, что уже
   /// упали с ошибкой — иначе сотни сообщений разом шлют сотни запросов и
@@ -654,12 +644,6 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
       }
       _translate(m, silent: true);
     }
-  }
-
-  void _copy(ChatGlobalMessage m) {
-    if (m.text == null || m.text!.isEmpty) return;
-    Clipboard.setData(ClipboardData(text: m.text!));
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Скопировано')));
   }
 
   void _reply(ChatGlobalMessage m) => setState(() => _replyingTo = m);
@@ -683,40 +667,6 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
     }
   }
 
-  /// Маленькое окошко рядом с сообщением вместо листа снизу — те же
-  /// действия, что в личном чате: копировать/ответить/перевести/удалить
-  /// (решение пользователя).
-  Future<void> _showMessageMenu(ChatGlobalMessage m, Offset at) async {
-    final mine = m.senderId == widget.auth.userId;
-    final canCopy = m.text != null && m.text!.isNotEmpty;
-    final primary = Theme.of(context).colorScheme.primary;
-    final action = await showChatQuickMenu(context, at, [
-      if (canCopy) const ChatQuickAction(value: 'copy', icon: Icons.copy_outlined, label: 'Копировать'),
-      const ChatQuickAction(value: 'reply', icon: Icons.reply_outlined, label: 'Ответить'),
-      if (canCopy)
-        ChatQuickAction(
-          value: 'translate',
-          icon: Icons.translate_outlined,
-          label: 'Перевести',
-          color: _isMasked(m) ? primary : null,
-        ),
-      const ChatQuickAction(value: 'select', icon: Icons.check_circle_outline, label: 'Выбрать'),
-      ChatQuickAction(value: 'delete', icon: Icons.delete_outline, label: mine ? 'Удалить' : 'Удалить у себя'),
-    ]);
-    switch (action) {
-      case 'copy':
-        _copy(m);
-      case 'reply':
-        _reply(m);
-      case 'translate':
-        await _toggleMask(m);
-      case 'select':
-        _toggleSelect(m.id);
-      case 'delete':
-        await _delete(m);
-    }
-  }
-
   Future<void> _copySelected() async {
     final ordered = _messages.where((m) => _selected.contains(m.id));
     final text = ordered.map((m) => m.text ?? '').where((t) => t.isNotEmpty).join('\n\n');
@@ -726,6 +676,9 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Скопировано')));
   }
 
+  /// Переводит и сразу показывает перевод ВМЕСТО оригинала (та же
+  /// "маска", что и у автоперевода) — иначе при включённом "по кнопке"
+  /// перевод бы тихо загрузился в память и никак не отобразился.
   Future<void> _translateSelected() async {
     final ids = Set<String>.from(_selected);
     setState(() => _selected.clear());
@@ -733,6 +686,12 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
       for (final m in _messages.where((m) => ids.contains(m.id)))
         if (m.text != null && m.text!.isNotEmpty) _translate(m),
     ]);
+    if (!mounted) return;
+    setState(() {
+      for (final id in ids) {
+        if (_translations.containsKey(id)) _maskOverride[id] = true;
+      }
+    });
   }
 
   void _replySelected() {
@@ -755,6 +714,10 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
     // кэша); если что-то уже нарисовано из _loadFromCache, обновление
     // происходит незаметно поверх него.
     if (!silent && _messages.isEmpty) setState(() => _loading = true);
+    // До перезагрузки — иначе каждый опрос сервера (раз в 15 секунд)
+    // силой утаскивал ленту вниз, даже если читаешь историю выше и
+    // ничего нового не пришло (жалоба пользователя: "интерфейс дёргается").
+    final wasAtEnd = !_scroll.hasClients || _scroll.position.pixels >= _scroll.position.maxScrollExtent - 80;
     final messages = await widget.global.fetchRecent();
     if (!mounted) return;
     widget.repo.cacheGlobalMessages(messages);
@@ -764,7 +727,7 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
       _loading = false;
     });
     _autoTranslateIncoming();
-    if (silent) _scrollToEnd();
+    if (silent && wasAtEnd) _scrollToEnd();
   }
 
   void _scrollToEnd() {
@@ -977,7 +940,7 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
                         final selected = _selected.contains(m.id);
                         return GestureDetector(
                           onTap: _selecting ? () => _toggleSelect(m.id) : null,
-                          onLongPressStart: (d) => _selecting ? _toggleSelect(m.id) : _showMessageMenu(m, d.globalPosition),
+                          onLongPress: () => _toggleSelect(m.id),
                           child: Container(
                             color: selected ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15) : null,
                             child: _GlobalBubble(

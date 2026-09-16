@@ -202,19 +202,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     }
   }
 
-  /// Кнопка "Перевести" в меню — тумблер маски, а не разовое действие:
-  /// уже включена (по умолчанию режима "всегда" или включена вручную) —
-  /// выключает; иначе переводит (если ещё не переведено) и включает.
-  Future<void> _toggleMask(ChatMessage m) async {
-    if (_isMasked(m)) {
-      setState(() => _maskOverride[m.id] = false);
-      return;
-    }
-    if (!_translations.containsKey(m.id)) await _translate(m);
-    if (!mounted || !_translations.containsKey(m.id)) return;
-    setState(() => _maskOverride[m.id] = true);
-  }
-
   void _scrollToEnd() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) {
@@ -287,12 +274,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     if (mounted) Navigator.of(context).pop();
   }
 
-  void _copy(ChatMessage m) {
-    if (m.text == null || m.text!.isEmpty) return;
-    Clipboard.setData(ClipboardData(text: m.text!));
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Скопировано')));
-  }
-
   Future<void> _copySelected() async {
     final ordered = _messages.where((m) => _selected.contains(m.id));
     final text = ordered.map((m) => m.text ?? '').where((t) => t.isNotEmpty).join('\n\n');
@@ -302,6 +283,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Скопировано')));
   }
 
+  /// Переводит и сразу показывает перевод ВМЕСТО оригинала (та же
+  /// "маска", что и у автоперевода) — иначе при включённом "по кнопке"
+  /// перевод бы тихо загрузился в память и никак не отобразился.
   Future<void> _translateSelected() async {
     final ids = Set<String>.from(_selected);
     setState(() => _selected.clear());
@@ -309,13 +293,39 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       for (final m in _messages.where((m) => ids.contains(m.id)))
         if (m.text != null && m.text!.isNotEmpty) _translate(m),
     ]);
+    if (!mounted) return;
+    setState(() {
+      for (final id in ids) {
+        if (_translations.containsKey(id)) _maskOverride[id] = true;
+      }
+    });
+  }
+
+  ChatMessage? _singleSelectedMessage() {
+    if (_selected.length != 1) return null;
+    final id = _selected.single;
+    for (final m in _messages) {
+      if (m.id == id) return m;
+    }
+    return null;
   }
 
   void _replySelected() {
-    final id = _selected.single;
-    final m = _messages.firstWhere((m) => m.id == id);
+    final m = _singleSelectedMessage();
     setState(() => _selected.clear());
-    _reply(m);
+    if (m != null) _reply(m);
+  }
+
+  Future<void> _editSelected() async {
+    final m = _singleSelectedMessage();
+    setState(() => _selected.clear());
+    if (m != null) await _edit(m);
+  }
+
+  Future<void> _retrySelected() async {
+    final m = _singleSelectedMessage();
+    setState(() => _selected.clear());
+    if (m != null) await _retry(m);
   }
 
   Future<void> _deleteSelected() async {
@@ -350,54 +360,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     _translations.remove(m.id);
     _translationErrors.remove(m.id);
     _reload();
-  }
-
-  /// Все действия над сообщением — одним долгим нажатием: копировать,
-  /// повторить отправку, ответить, удалить, перевести (решение
-  /// пользователя, вместо разрозненных кнопок/жестов на каждое
-  /// действие по отдельности). Свайп по пузырю остаётся отдельным
-  /// быстрым путём к "Ответить", меню его не заменяет, а дополняет.
-  Future<void> _showMessageMenu(ChatMessage m, Offset at) async {
-    final mine = m.direction == ChatMessageDirection.outgoing;
-    final canEdit = mine && m.type == ChatMessageType.text;
-    final canCopy = m.text != null && m.text!.isNotEmpty;
-    // Ручной перевод (тумблер маски) доступен всегда — настройка
-    // "автоперевод" влияет только на то, замаскировано ли сообщение
-    // ПО УМОЛЧАНИЮ, а не на доступность самой кнопки.
-    final canTranslate = canCopy;
-    final canRetry = mine && m.status == ChatMessageStatus.error;
-    final primary = Theme.of(context).colorScheme.primary;
-    final action = await showChatQuickMenu(context, at, [
-      if (canCopy) const ChatQuickAction(value: 'copy', icon: Icons.copy_outlined, label: 'Копировать'),
-      if (canRetry) const ChatQuickAction(value: 'retry', icon: Icons.refresh, label: 'Отправить ещё раз'),
-      const ChatQuickAction(value: 'reply', icon: Icons.reply_outlined, label: 'Ответить'),
-      if (canTranslate)
-        ChatQuickAction(
-          value: 'translate',
-          icon: Icons.translate_outlined,
-          label: 'Перевести',
-          color: _isMasked(m) ? primary : null,
-        ),
-      if (canEdit) const ChatQuickAction(value: 'edit', icon: Icons.edit_outlined, label: 'Редактировать'),
-      const ChatQuickAction(value: 'select', icon: Icons.check_circle_outline, label: 'Выбрать'),
-      ChatQuickAction(value: 'delete', icon: Icons.delete_outline, label: mine ? 'Удалить' : 'Удалить у себя'),
-    ]);
-    switch (action) {
-      case 'copy':
-        _copy(m);
-      case 'retry':
-        await _retry(m);
-      case 'reply':
-        _reply(m);
-      case 'translate':
-        await _toggleMask(m);
-      case 'edit':
-        await _edit(m);
-      case 'select':
-        _toggleSelect(m.id);
-      case 'delete':
-        await _delete(m);
-    }
   }
 
   /// Прикрепить фото или файл — запись видео/голоса пока не встроена в
@@ -463,8 +425,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                   IconButton(icon: const Icon(Icons.copy_outlined), tooltip: 'Копировать', onPressed: _copySelected),
                   IconButton(
                       icon: const Icon(Icons.translate_outlined), tooltip: 'Перевести', onPressed: _translateSelected),
-                  if (_selected.length == 1)
+                  if (_singleSelectedMessage() case final single?) ...[
                     IconButton(icon: const Icon(Icons.reply_outlined), tooltip: 'Ответить', onPressed: _replySelected),
+                    if (single.direction == ChatMessageDirection.outgoing && single.type == ChatMessageType.text)
+                      IconButton(icon: const Icon(Icons.edit_outlined), tooltip: 'Редактировать', onPressed: _editSelected),
+                    if (single.direction == ChatMessageDirection.outgoing && single.status == ChatMessageStatus.error)
+                      IconButton(icon: const Icon(Icons.refresh), tooltip: 'Отправить ещё раз', onPressed: _retrySelected),
+                  ],
                   IconButton(icon: const Icon(Icons.delete_outline), tooltip: 'Удалить', onPressed: _deleteSelected),
                 ],
               )
@@ -530,7 +497,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                           ),
                           child: GestureDetector(
                             onTap: _selecting ? () => _toggleSelect(m.id) : null,
-                            onLongPressStart: (d) => _selecting ? _toggleSelect(m.id) : _showMessageMenu(m, d.globalPosition),
+                            onLongPress: () => _toggleSelect(m.id),
                             child: Container(
                               color: selected ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15) : null,
                               child: _Bubble(
