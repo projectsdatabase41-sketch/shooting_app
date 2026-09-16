@@ -14,6 +14,20 @@ class ParsedConnection {
 class ServiceConnectionParser {
   const ServiceConnectionParser._();
 
+  /// Ссылки на веб-интерфейс, у которых есть отдельный REST API —
+  /// подставляют вместо себя настоящий API-адрес. Без этого пользователь
+  /// (или ИИ в "Заполнить с ИИ" — он копирует ссылку как есть, не зная,
+  /// что это веб-страница, а не API) сохраняет ссылку на страницу вида
+  /// `airtable.com/appXXX/tblXXX/viwXXX`, а плитка получает в ответ HTML
+  /// самой страницы вместо JSON с записями.
+  static final _airtableWebUrl = RegExp(r'^https?://(?:www\.)?airtable\.com/(app[A-Za-z0-9]+)/(tbl[A-Za-z0-9]+)(?:/|$|\?)');
+
+  static String _normalizeUrl(String url) {
+    final m = _airtableWebUrl.firstMatch(url);
+    if (m != null) return 'https://api.airtable.com/v0/${m[1]}/${m[2]}';
+    return url;
+  }
+
   /// Просто URL — самый частый случай (Google Диск, дашборд Supabase,
   /// заметки и т.п., решение пользователя): открывается как обычная
   /// ссылка, без заголовков и метода.
@@ -23,7 +37,7 @@ class ServiceConnectionParser {
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
       throw const FormatException('Ссылка должна начинаться с http:// или https://');
     }
-    return ParsedConnection(url: url);
+    return ParsedConnection(url: _normalizeUrl(url));
   }
 
   /// `{"url": "...", "method": "GET", "headers": {...}, "body": "..."}` —
@@ -45,7 +59,7 @@ class ServiceConnectionParser {
     };
     final bodyRaw = decoded['body'];
     return ParsedConnection(
-      url: url,
+      url: _normalizeUrl(url),
       method: '${decoded['method'] ?? (bodyRaw != null ? 'POST' : 'GET')}'.toUpperCase(),
       headers: headers,
       body: bodyRaw == null ? null : (bodyRaw is String ? bodyRaw : jsonEncode(bodyRaw)),
@@ -95,7 +109,7 @@ class ServiceConnectionParser {
 
     if (url == null || url.isEmpty) throw const FormatException('Не нашёл ссылку в команде curl');
     return ParsedConnection(
-      url: url,
+      url: _normalizeUrl(url),
       method: method ?? (body != null ? 'POST' : 'GET'),
       headers: headers,
       body: body,
