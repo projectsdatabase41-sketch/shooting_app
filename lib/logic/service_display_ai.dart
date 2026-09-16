@@ -209,6 +209,71 @@ class ServiceDisplayAi {
     return (rows, jsonEncode(spec));
   }
 
+  /// "Второй уровень" ИИ (решение пользователя) — не меняет вид записей
+  /// (это делает [suggestSpec]/[discoverAndSuggestSpec]), а отбирает
+  /// нужные по свободному запросу вроде "покажи все про долги". Модели
+  /// НЕ даём сами записи — только названия полей и уникальные значения
+  /// по каждому (обрезанный "словарь" значений, не содержимое таблицы:
+  /// на большой таблице это быстро провалит контекст и раскрыло бы ИИ
+  /// личные данные, которых просить не нужно). Она выбирает ОДНО поле и
+  /// подходящие значения СТРОГО из данного набора; сам отбор строк —
+  /// точное сравнение в Dart-коде ниже, ИИ никогда не видит и не
+  /// пересказывает содержимое конкретных записей.
+  static Future<({String field, List<String> values, String reply})> suggestFilter(
+    AiSettings settings,
+    List<Map<String, dynamic>> rows,
+    String query,
+  ) async {
+    final columns = <String>{for (final r in rows) ...r.keys}.toList();
+    final valuesByField = <String, List<String>>{};
+    for (final c in columns) {
+      final values = <String>{};
+      for (final r in rows) {
+        final v = cell(r[c]).trim();
+        if (v.isNotEmpty) values.add(truncate(v, 60));
+        if (values.length >= 40) break;
+      }
+      if (values.isNotEmpty) valuesByField[c] = values.toList();
+    }
+    final reply = await AiService(settings).ask(
+      systemPrompt: 'Ты помогаешь отобрать нужные записи из таблицы стороннего сервиса по свободному запросу '
+          'пользователя. Тебе НЕ дана сама таблица — только список полей и уникальные значения по каждому '
+          '(могут быть обрезаны). Выбери РОВНО ОДНО поле для фильтра и подходящие значения СТРОГО из данного '
+          'набора (не придумывай новых, не исправляй их). Ответь ТОЛЬКО JSON-объектом без пояснений, без '
+          'markdown, без ```: {"field": "название поля из списка или пусто", '
+          '"values": ["подходящие значения строго из набора"], '
+          '"reply": "короткий ответ пользователю о том, что будет показано, 1 предложение, на языке запроса"}. '
+          'Если запрос не про отбор по конкретному полю (общий вопрос, не про фильтр) — "field" и "values" пустые.',
+      contextBlock: '',
+      history: [
+        (role: 'user', text: jsonEncode({'fields': columns, 'значения_по_полю': valuesByField, 'запрос': query})),
+      ],
+    );
+    final decoded = jsonDecode(_stripCodeFence(reply.text));
+    if (decoded is! Map) throw const FormatException('Ассистент ответил не JSON-объектом');
+    final field = decoded['field'] is String && columns.contains(decoded['field']) ? decoded['field'] as String : '';
+    final values = decoded['values'] is List ? (decoded['values'] as List).map((e) => '$e').toList() : <String>[];
+    final replyText = decoded['reply'] is String ? decoded['reply'] as String : '';
+    return (field: field, values: values, reply: replyText);
+  }
+
+  /// Применяет фильтр из [suggestFilter] к записям — сравнение без учёта
+  /// регистра, по вхождению (значение из набора могло быть обрезано на
+  /// 60 символах, поэтому не строгое равенство).
+  static List<Map<String, dynamic>> applyFilter(
+    List<Map<String, dynamic>> rows,
+    String field,
+    List<String> values,
+  ) {
+    if (field.isEmpty || values.isEmpty) return rows;
+    final needles = values.map((v) => v.replaceAll('…', '').trim().toLowerCase()).where((v) => v.isNotEmpty).toList();
+    if (needles.isEmpty) return rows;
+    return rows.where((r) {
+      final v = cell(r[field]).toLowerCase();
+      return needles.any((n) => v.contains(n) || n.contains(v));
+    }).toList();
+  }
+
   /// На случай, если модель всё же обернула ответ в ```json — снимаем
   /// код-забор, а не отклоняем ответ целиком.
   static String _stripCodeFence(String text) {

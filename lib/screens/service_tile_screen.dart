@@ -43,6 +43,12 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
   /// пользователя: вывести данные из нужной таблицы, а не текстом ответа).
   List<Map<String, dynamic>>? _rows;
 
+  /// "Второй уровень" ИИ (решение пользователя) — отбор записей по
+  /// свободному запросу ("покажи все про долги"), поверх [_rows]. `null`
+  /// — фильтр не задан, показываются все записи.
+  List<Map<String, dynamic>>? _filteredRows;
+  String? _filterReply;
+
   @override
   void initState() {
     super.initState();
@@ -71,6 +77,8 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
         _response = response;
         _rawText = rawText;
         _rows = rows;
+        _filteredRows = null;
+        _filterReply = null;
       });
     } catch (e) {
       setState(() => _error = '$e');
@@ -142,6 +150,62 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
     setState(() => _service = _withDisplaySpec(null));
   }
 
+  /// "Второй уровень" ИИ (решение пользователя) — свободный запрос вроде
+  /// "покажи все про долги" вместо смены вида. ИИ не видит сами записи
+  /// (см. `ServiceDisplayAi.suggestFilter`), только выбирает поле и
+  /// значения из уже готового "словаря" — отбор строк дальше делает
+  /// точное сравнение в Dart, не пересказ содержимого моделью.
+  Future<void> _askAiFilter() async {
+    final rows = _rows;
+    if (rows == null || rows.isEmpty) return;
+
+    final queryCtrl = TextEditingController();
+    final query = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Спросить ИИ'),
+        content: TextField(
+          controller: queryCtrl,
+          autofocus: true,
+          minLines: 1,
+          maxLines: 3,
+          decoration: const InputDecoration(hintText: 'Например: покажи все записи про долги'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(queryCtrl.text.trim()),
+            child: const Text('Спросить'),
+          ),
+        ],
+      ),
+    );
+    if (query == null || query.isEmpty || !mounted) return;
+
+    setState(() => _aiBusy = true);
+    try {
+      final aiSettings = AiSettings(context.read<AppDataStore>().db);
+      final result = await ServiceDisplayAi.suggestFilter(aiSettings, rows, query);
+      final filtered = ServiceDisplayAi.applyFilter(rows, result.field, result.values);
+      if (!mounted) return;
+      setState(() {
+        _filteredRows = filtered;
+        _filterReply = result.reply.isNotEmpty
+            ? result.reply
+            : (result.field.isEmpty ? 'Не нашлось поле для фильтра по этому запросу' : 'Показаны подходящие записи');
+      });
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось отфильтровать: $e')));
+    } finally {
+      if (mounted) setState(() => _aiBusy = false);
+    }
+  }
+
+  void _clearFilter() => setState(() {
+        _filteredRows = null;
+        _filterReply = null;
+      });
+
   CustomService _withDisplaySpec(String? displaySpec) => CustomService(
         id: _service.id,
         name: _service.name,
@@ -182,11 +246,18 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
     }
 
     final spec = _parsedSpec();
+    final displayRows = _filteredRows ?? _rows;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.service.name),
         actions: [
+          if (_rows != null && !_aiBusy)
+            IconButton(
+              icon: const Icon(Icons.search),
+              tooltip: 'Спросить ИИ',
+              onPressed: _askAiFilter,
+            ),
           if (_response != null && !_aiBusy)
             PopupMenuButton<String>(
               icon: const Icon(Icons.auto_awesome_outlined),
@@ -222,21 +293,29 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
           ),
         ],
       ),
-      body: _busy
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                )
-              : (_rows != null && !_showRaw)
-                  ? (spec != null ? _buildCards(_rows!, spec) : _buildTable(_rows!))
-                  : ListView(
-                      padding: const EdgeInsets.all(16),
-                      children: [
-                        SelectableText(_response ?? '', style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
-                      ],
+      body: Column(
+        children: [
+          if (_filteredRows != null)
+            Material(
+              color: Theme.of(context).colorScheme.primaryContainer,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${_filterReply ?? ''} · показано ${_filteredRows!.length} из ${_rows?.length ?? 0}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
                     ),
+                    TextButton(onPressed: _clearFilter, child: const Text('Сбросить')),
+                  ],
+                ),
+              ),
+            ),
+          Expanded(child: _buildContent(context, spec, displayRows)),
+        ],
+      ),
       floatingActionButton: _response == null
           ? null
           : FloatingActionButton.small(
@@ -247,6 +326,24 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
               child: const Icon(Icons.copy),
             ),
     );
+  }
+
+  Widget _buildContent(BuildContext context, Map<String, dynamic>? spec, List<Map<String, dynamic>>? displayRows) {
+    return _busy
+        ? const Center(child: CircularProgressIndicator())
+        : _error != null
+            ? Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              )
+            : (displayRows != null && !_showRaw)
+                ? (spec != null ? _buildCards(displayRows, spec) : _buildTable(displayRows))
+                : ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                      SelectableText(_response ?? '', style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+                    ],
+                  );
   }
 
   Map<String, dynamic>? _parsedSpec() {
