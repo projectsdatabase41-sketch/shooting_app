@@ -51,10 +51,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   bool _sending = false;
   ChatMessage? _replyingTo;
 
-  /// Множественное выделение — то же самое, что и одиночные действия в
-  /// `_showMessageMenu` (копировать/перевести/удалить), просто разом на
-  /// весь набор; "Ответить" доступно только при ровно одном выбранном
-  /// (один reply на сообщение в модели данных, не список).
+  /// Кнопка "вниз к недавним" — появляется, когда прокрутили далеко
+  /// вверх по истории.
+  bool _showJumpToEnd = false;
+
+  /// Множественное выделение — долгое нажатие сразу выделяет сообщение,
+  /// дальше обычный тап по другим добавляет/убирает их из набора.
+  /// Копировать/перевести/удалить работают на весь набор; ответить/
+  /// редактировать/повторить — только когда выбрано ровно одно (один
+  /// reply на сообщение в модели данных, не список).
   final Set<String> _selected = {};
   bool get _selecting => _selected.isNotEmpty;
   void _toggleSelect(String id) => setState(() {
@@ -144,7 +149,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   }
 
   void _onScroll() {
-    if (!_scroll.hasClients || _translateVisibleCount >= _messages.length) return;
+    if (!_scroll.hasClients) return;
+    final jump = _scroll.position.pixels < _scroll.position.maxScrollExtent - 400;
+    if (jump != _showJumpToEnd) setState(() => _showJumpToEnd = jump);
+    if (_translateVisibleCount >= _messages.length) return;
     if (_scroll.position.pixels <= _scroll.position.minScrollExtent + 200) {
       _translateVisibleCount += _translateBatch;
       if (widget.prefs.autoTranslate) _autoTranslateIncoming();
@@ -470,50 +478,64 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
           child: Column(
           children: [
             Expanded(
-              child: _messages.isEmpty
-                  ? const EmptyState(icon: Icons.forum_outlined, text: 'Переписки пока нет')
-                  : ListView.builder(
-                      controller: _scroll,
-                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                      itemCount: _messages.length,
-                      itemBuilder: (context, i) {
-                        final m = _messages[i];
-                        final selected = _selected.contains(m.id);
-                        return Dismissible(
-                          key: ValueKey(m.id),
-                          direction: _selecting ? DismissDirection.none : DismissDirection.startToEnd,
-                          // Свайп только показывает жест "ответить" и
-                          // всегда возвращает пузырь на место (решение
-                          // пользователя: ответ свайпом за само
-                          // сообщение, а не отдельной кнопкой).
-                          confirmDismiss: (_) async {
-                            _reply(m);
-                            return false;
-                          },
-                          background: Container(
-                            alignment: Alignment.centerLeft,
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            child: Icon(Icons.reply_outlined, color: Theme.of(context).colorScheme.primary),
-                          ),
-                          child: GestureDetector(
-                            onTap: _selecting ? () => _toggleSelect(m.id) : null,
-                            onLongPress: () => _toggleSelect(m.id),
-                            child: Container(
-                              color: selected ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15) : null,
-                              child: _Bubble(
-                                message: m,
-                                prefs: widget.prefs,
-                                translation: _translations[m.id],
-                                masked: _isMasked(m),
-                                translating: _translating.contains(m.id),
-                                translationError: _translationErrors[m.id],
-                                onRetry: () => _retry(m),
+              child: Stack(
+                children: [
+                  _messages.isEmpty
+                      ? const EmptyState(icon: Icons.forum_outlined, text: 'Переписки пока нет')
+                      : ListView.builder(
+                          controller: _scroll,
+                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                          itemCount: _messages.length,
+                          itemBuilder: (context, i) {
+                            final m = _messages[i];
+                            final selected = _selected.contains(m.id);
+                            return Dismissible(
+                              key: ValueKey(m.id),
+                              direction: _selecting ? DismissDirection.none : DismissDirection.startToEnd,
+                              // Свайп только показывает жест "ответить" и
+                              // всегда возвращает пузырь на место (решение
+                              // пользователя: ответ свайпом за само
+                              // сообщение, а не отдельной кнопкой).
+                              confirmDismiss: (_) async {
+                                _reply(m);
+                                return false;
+                              },
+                              background: Container(
+                                alignment: Alignment.centerLeft,
+                                padding: const EdgeInsets.symmetric(horizontal: 20),
+                                child: Icon(Icons.reply_outlined, color: Theme.of(context).colorScheme.primary),
                               ),
-                            ),
-                          ),
-                        );
-                      },
+                              child: GestureDetector(
+                                onTap: _selecting ? () => _toggleSelect(m.id) : null,
+                                onLongPress: () => _toggleSelect(m.id),
+                                child: Container(
+                                  color: selected ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15) : null,
+                                  child: _Bubble(
+                                    message: m,
+                                    prefs: widget.prefs,
+                                    translation: _translations[m.id],
+                                    masked: _isMasked(m),
+                                    translating: _translating.contains(m.id),
+                                    translationError: _translationErrors[m.id],
+                                    onRetry: () => _retry(m),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                  if (_showJumpToEnd)
+                    Positioned(
+                      right: 12,
+                      bottom: 12,
+                      child: FloatingActionButton.small(
+                        heroTag: 'thread_chat_jump_to_end',
+                        onPressed: _scrollToEnd,
+                        child: const Icon(Icons.arrow_downward),
+                      ),
                     ),
+                ],
+              ),
             ),
             if (_replyingTo != null)
               ChatReplyBar(

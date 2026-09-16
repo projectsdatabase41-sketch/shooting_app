@@ -511,6 +511,11 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
   bool _aiBusy = false;
   ChatGlobalMessage? _replyingTo;
 
+  /// Кнопка "вниз к недавним" — появляется, когда прокрутили далеко
+  /// вверх по истории (решение пользователя: быстро вернуться к концу
+  /// ленты, не листая руками).
+  bool _showJumpToEnd = false;
+
   /// Множественное выделение (решение пользователя, "как с одним
   /// сообщением") — начинается пунктом "Выбрать" в том же меню, что и
   /// одиночные действия; дальше обычный тап по другим сообщениям
@@ -589,7 +594,10 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
   }
 
   void _onScroll() {
-    if (!_scroll.hasClients || _translateVisibleCount >= _messages.length) return;
+    if (!_scroll.hasClients) return;
+    final jump = _scroll.position.pixels < _scroll.position.maxScrollExtent - 400;
+    if (jump != _showJumpToEnd) setState(() => _showJumpToEnd = jump);
+    if (_translateVisibleCount >= _messages.length) return;
     if (_scroll.position.pixels <= _scroll.position.minScrollExtent + 200) {
       _translateVisibleCount += _translateBatch;
       _autoTranslateIncoming();
@@ -927,36 +935,50 @@ class _GlobalChatBodyState extends State<_GlobalChatBody> {
       children: [
         if (_selecting) _buildSelectionBar(context),
         Expanded(
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : _messages.isEmpty
-                  ? const EmptyState(icon: Icons.public_outlined, text: 'В общем чате пока тихо — напишите первым')
-                  : ListView.builder(
-                      controller: _scroll,
-                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-                      itemCount: _messages.length,
-                      itemBuilder: (context, i) {
-                        final m = _messages[i];
-                        final selected = _selected.contains(m.id);
-                        return GestureDetector(
-                          onTap: _selecting ? () => _toggleSelect(m.id) : null,
-                          onLongPress: () => _toggleSelect(m.id),
-                          child: Container(
-                            color: selected ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15) : null,
-                            child: _GlobalBubble(
-                              message: m,
-                              mine: m.senderId == widget.auth.userId,
-                              prefs: widget.prefs,
-                              global: widget.global,
-                              translation: _translations[m.id],
-                              masked: _isMasked(m),
-                              translating: _translating.contains(m.id),
-                              translationError: _translationErrors[m.id],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
+          child: Stack(
+            children: [
+              _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _messages.isEmpty
+                      ? const EmptyState(icon: Icons.public_outlined, text: 'В общем чате пока тихо — напишите первым')
+                      : ListView.builder(
+                          controller: _scroll,
+                          padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+                          itemCount: _messages.length,
+                          itemBuilder: (context, i) {
+                            final m = _messages[i];
+                            final selected = _selected.contains(m.id);
+                            return GestureDetector(
+                              onTap: _selecting ? () => _toggleSelect(m.id) : null,
+                              onLongPress: () => _toggleSelect(m.id),
+                              child: Container(
+                                color: selected ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15) : null,
+                                child: _GlobalBubble(
+                                  message: m,
+                                  mine: m.senderId == widget.auth.userId,
+                                  prefs: widget.prefs,
+                                  global: widget.global,
+                                  translation: _translations[m.id],
+                                  masked: _isMasked(m),
+                                  translating: _translating.contains(m.id),
+                                  translationError: _translationErrors[m.id],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+              if (_showJumpToEnd)
+                Positioned(
+                  right: 12,
+                  bottom: 12,
+                  child: FloatingActionButton.small(
+                    heroTag: 'global_chat_jump_to_end',
+                    onPressed: _scrollToEnd,
+                    child: const Icon(Icons.arrow_downward),
+                  ),
+                ),
+            ],
+          ),
         ),
         if (_pendingChart != null)
           ChatReplyBar(
