@@ -26,6 +26,14 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
   bool _busy = false;
   String? _response;
   String? _error;
+  bool _showRaw = false;
+
+  /// Если ответ — список записей (Airtable `{"records":[{"fields":{...}}]}`,
+  /// обычный `{"items"/"data"/"results":[...]}` или просто массив объектов
+  /// верхнего уровня), показываем таблицей вместо сырого JSON — ради
+  /// этого и завели универсальные "Сервисы" (решение пользователя: вывести
+  /// данные из нужной таблицы в интерфейсе, а не просто текстом ответа).
+  List<Map<String, dynamic>>? _rows;
 
   @override
   void initState() {
@@ -64,7 +72,10 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
           res = await http.get(uri, headers: s.headers);
       }
       final text = utf8.decode(res.bodyBytes);
-      setState(() => _response = '${res.statusCode}\n\n${_prettyIfJson(text)}');
+      setState(() {
+        _response = '${res.statusCode}\n\n${_prettyIfJson(text)}';
+        _rows = _tryParseRows(text);
+      });
     } catch (e) {
       setState(() => _error = '$e');
     } finally {
@@ -80,6 +91,37 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
     }
   }
 
+  /// Airtable кладёт поля записи не на верхний уровень, а в `fields` —
+  /// разворачиваем, чтобы колонки таблицы были содержательными (имя
+  /// поля из базы), а не одним общим "fields".
+  static Map<String, dynamic> _flattenRecord(Map<String, dynamic> r) {
+    final fields = r['fields'];
+    if (fields is Map) return {if (r['id'] != null) 'id': r['id'], ...fields.map((k, v) => MapEntry('$k', v))};
+    return r;
+  }
+
+  List<Map<String, dynamic>>? _tryParseRows(String text) {
+    try {
+      final decoded = jsonDecode(text);
+      List? list;
+      if (decoded is List) {
+        list = decoded;
+      } else if (decoded is Map) {
+        for (final key in ['records', 'items', 'data', 'results', 'rows']) {
+          final v = decoded[key];
+          if (v is List) {
+            list = v;
+            break;
+          }
+        }
+      }
+      if (list == null || list.isEmpty || list.any((e) => e is! Map)) return null;
+      return list.map((e) => _flattenRecord((e as Map).map((k, v) => MapEntry('$k', v)))).toList();
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.service.isPlainLink) {
@@ -92,6 +134,12 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
       appBar: AppBar(
         title: Text(widget.service.name),
         actions: [
+          if (_rows != null)
+            IconButton(
+              icon: Icon(_showRaw ? Icons.table_chart_outlined : Icons.code),
+              tooltip: _showRaw ? 'Показать таблицей' : 'Показать как есть',
+              onPressed: () => setState(() => _showRaw = !_showRaw),
+            ),
           IconButton(
             icon: const Icon(Icons.open_in_new),
             tooltip: 'Открыть ссылку в браузере',
@@ -110,12 +158,14 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
                   padding: const EdgeInsets.all(16),
                   child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
                 )
-              : ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    SelectableText(_response ?? '', style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
-                  ],
-                ),
+              : (_rows != null && !_showRaw)
+                  ? _buildTable(_rows!)
+                  : ListView(
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        SelectableText(_response ?? '', style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+                      ],
+                    ),
       floatingActionButton: _response == null
           ? null
           : FloatingActionButton.small(
@@ -126,5 +176,29 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
               child: const Icon(Icons.copy),
             ),
     );
+  }
+
+  Widget _buildTable(List<Map<String, dynamic>> rows) {
+    final columns = <String>{for (final r in rows) ...r.keys}.toList();
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: SingleChildScrollView(
+        child: DataTable(
+          columns: [for (final c in columns) DataColumn(label: Text(c))],
+          rows: [
+            for (final r in rows)
+              DataRow(cells: [
+                for (final c in columns) DataCell(Text(_cell(r[c]))),
+              ]),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _cell(dynamic v) {
+    if (v == null) return '';
+    if (v is List || v is Map) return jsonEncode(v);
+    return '$v';
   }
 }
