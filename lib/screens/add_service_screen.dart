@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../logic/service_connection_parser.dart';
+import '../logic/service_display_ai.dart';
 import '../models/custom_service.dart';
 import '../services/ai_service.dart';
 import '../services/ai_settings.dart';
@@ -37,6 +38,7 @@ class _AddServiceScreenState extends State<AddServiceScreen> with SingleTickerPr
   String _icon = 'link';
   String? _error;
   bool _aiBusy = false;
+  bool _hideApiKey = true;
 
   bool get _editing => widget.existing != null;
 
@@ -72,7 +74,7 @@ class _AddServiceScreenState extends State<AddServiceScreen> with SingleTickerPr
     super.dispose();
   }
 
-  void _save() {
+  Future<void> _save() async {
     if (_name.text.trim().isEmpty) {
       setState(() => _error = 'Введите название');
       return;
@@ -102,8 +104,9 @@ class _AddServiceScreenState extends State<AddServiceScreen> with SingleTickerPr
       );
     }
     final existing = widget.existing;
+    final CustomService service;
     if (existing == null) {
-      widget.repo.add(
+      service = widget.repo.add(
         name: _name.text.trim(),
         iconName: _icon,
         url: parsed.url,
@@ -121,8 +124,40 @@ class _AddServiceScreenState extends State<AddServiceScreen> with SingleTickerPr
         headers: parsed.headers,
         body: parsed.body,
       );
+      service = CustomService(
+        id: existing.id,
+        name: _name.text.trim(),
+        iconName: _icon,
+        url: parsed.url,
+        method: parsed.method,
+        headers: parsed.headers,
+        body: parsed.body,
+      );
     }
-    Navigator.of(context).pop();
+
+    // Похоже на вызов API (не голая ссылка) — сразу пробуем понять, что
+    // вернёт сервис, и подобрать вид записей с ИИ, чтобы плитка сразу
+    // открывалась читаемой карточкой, а не сырым JSON (решение
+    // пользователя: маска должна появляться сама, без отдельного похода в
+    // плитку и ручного вызова "Настроить вид"). Лучший эффорт — если
+    // сеть/ключ ИИ подведут, сервис всё равно уже сохранён, просто
+    // останется обычная таблица до ручной настройки.
+    if (!service.isPlainLink) {
+      setState(() => _aiBusy = true);
+      try {
+        final (_, rows) = await ServiceDisplayAi.fetchRows(service);
+        if (rows != null && rows.isNotEmpty) {
+          final aiSettings = AiSettings(context.read<AppDataStore>().db);
+          final specJson = await ServiceDisplayAi.suggestSpec(aiSettings, rows);
+          widget.repo.setDisplaySpec(service.id, specJson);
+        }
+      } catch (_) {
+        // Не удалось — не страшно, обычная таблица тоже читаема.
+      } finally {
+        if (mounted) setState(() => _aiBusy = false);
+      }
+    }
+    if (mounted) Navigator.of(context).pop();
   }
 
   /// "Заполнить с ИИ" (решение пользователя: должно быть прямо в
@@ -218,7 +253,12 @@ class _AddServiceScreenState extends State<AddServiceScreen> with SingleTickerPr
             tooltip: 'Заполнить с ИИ',
             onPressed: _aiBusy ? null : _fillWithAi,
           ),
-          TextButton(onPressed: _save, child: Text(_editing ? 'СОХРАНИТЬ' : 'СОЗДАТЬ')),
+          TextButton(
+            onPressed: _aiBusy ? null : _save,
+            child: _aiBusy
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : Text(_editing ? 'СОХРАНИТЬ' : 'СОЗДАТЬ'),
+          ),
         ],
       ),
       body: ListView(
@@ -258,12 +298,21 @@ class _AddServiceScreenState extends State<AddServiceScreen> with SingleTickerPr
                     const SizedBox(height: 12),
                     TextField(
                       controller: _apiKey,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Ключ API (необязательно)',
                         hintText: 'Если сервис требует авторизацию',
+                        // Маска по умолчанию, но с переключателем — иначе
+                        // не видно, вставился ли скопированный токен и
+                        // целиком ли (жалоба пользователя: "не могу
+                        // вставить нормально", когда поле сплошь точки).
+                        suffixIcon: IconButton(
+                          icon: Icon(_hideApiKey ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                          onPressed: () => setState(() => _hideApiKey = !_hideApiKey),
+                        ),
                       ),
                       autocorrect: false,
-                      obscureText: true,
+                      obscureText: _hideApiKey,
+                      enableInteractiveSelection: true,
                     ),
                   ],
                 ),

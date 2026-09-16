@@ -2,12 +2,11 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
-import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../logic/service_display_ai.dart';
 import '../models/custom_service.dart';
-import '../services/ai_service.dart';
 import '../services/ai_settings.dart';
 import '../services/custom_services_repository.dart';
 import '../state/app_data_store.dart';
@@ -37,10 +36,10 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
   late CustomService _service = widget.service;
 
   /// Если ответ — список записей (Airtable `{"records":[{"fields":{...}}]}`,
-  /// обычный `{"items"/"data"/"results":[...]}` или просто массив объектов
-  /// верхнего уровня), показываем таблицей вместо сырого JSON — ради
-  /// этого и завели универсальные "Сервисы" (решение пользователя: вывести
-  /// данные из нужной таблицы в интерфейсе, а не просто текстом ответа).
+  /// обычный `{"items"/"data"/"results":[...]}`, один объект-запись или
+  /// просто массив объектов верхнего уровня), показываем таблицей вместо
+  /// сырого JSON — ради этого и завели универсальные "Сервисы" (решение
+  /// пользователя: вывести данные из нужной таблицы, а не текстом ответа).
   List<Map<String, dynamic>>? _rows;
 
   @override
@@ -65,24 +64,11 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
       _busy = true;
       _error = null;
     });
-    final s = widget.service;
     try {
-      final uri = Uri.parse(s.url);
-      final http.Response res;
-      switch (s.method) {
-        case 'POST':
-          res = await http.post(uri, headers: s.headers, body: s.body);
-        case 'PUT':
-          res = await http.put(uri, headers: s.headers, body: s.body);
-        case 'DELETE':
-          res = await http.delete(uri, headers: s.headers, body: s.body);
-        default:
-          res = await http.get(uri, headers: s.headers);
-      }
-      final text = utf8.decode(res.bodyBytes);
+      final (response, rows) = await ServiceDisplayAi.fetchRows(widget.service);
       setState(() {
-        _response = '${res.statusCode}\n\n${_prettyIfJson(text)}';
-        _rows = _tryParseRows(text);
+        _response = response;
+        _rows = rows;
       });
     } catch (e) {
       setState(() => _error = '$e');
@@ -91,57 +77,12 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
     }
   }
 
-  String _prettyIfJson(String text) {
-    try {
-      return const JsonEncoder.withIndent('  ').convert(jsonDecode(text));
-    } catch (_) {
-      return text;
-    }
-  }
-
-  /// Airtable кладёт поля записи не на верхний уровень, а в `fields` —
-  /// разворачиваем, чтобы колонки таблицы были содержательными (имя
-  /// поля из базы), а не одним общим "fields".
-  static Map<String, dynamic> _flattenRecord(Map<String, dynamic> r) {
-    final fields = r['fields'];
-    if (fields is Map) return {if (r['id'] != null) 'id': r['id'], ...fields.map((k, v) => MapEntry('$k', v))};
-    return r;
-  }
-
-  List<Map<String, dynamic>>? _tryParseRows(String text) {
-    try {
-      final decoded = jsonDecode(text);
-      List? list;
-      if (decoded is List) {
-        list = decoded;
-      } else if (decoded is Map) {
-        for (final key in ['records', 'items', 'data', 'results', 'rows']) {
-          final v = decoded[key];
-          if (v is List) {
-            list = v;
-            break;
-          }
-        }
-      }
-      if (list == null || list.isEmpty || list.any((e) => e is! Map)) return null;
-      return list.map((e) => _flattenRecord((e as Map).map((k, v) => MapEntry('$k', v)))).toList();
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// Просит ИИ разложить поля записи по ролям отображения (заголовок,
-  /// краткая строка, разворачиваемые подробности) — вместо таблицы,
-  /// где длинный текст обрезается и не читается. Показывает ИИ только
-  /// НАЗВАНИЯ полей и обрезанные до 60 символов примеры первых двух
-  /// записей, а не всю таблицу (решение пользователя: не заваливать
-  /// контекст и не гнать в модель приватные данные всех строк). Результат
-  /// сохраняется в `custom_services.display_spec` — можно вызвать снова,
-  /// чтобы попросить ИИ пересобрать вид, в том числе со своим пожеланием.
+  /// Ручной вызов с экрана плитки — в отличие от автоматического подбора
+  /// сразу при сохранении сервиса (см. `AddServiceScreen._save`), тут
+  /// можно ещё и уточнить пожеланием, и вызвать повторно.
   Future<void> _configureDisplay() async {
     final rows = _rows;
     if (rows == null || rows.isEmpty) return;
-    final columns = <String>{for (final r in rows) ...r.keys}.toList();
 
     final noteCtrl = TextEditingController();
     final proceed = await showDialog<bool>(
@@ -167,56 +108,11 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
 
     setState(() => _aiBusy = true);
     try {
-      final samples = rows.take(2).map((r) => {for (final c in columns) c: _truncate(_cell(r[c]), 60)}).toList();
       final aiSettings = AiSettings(context.read<AppDataStore>().db);
-      final reply = await AiService(aiSettings).ask(
-        systemPrompt: 'Ты раскладываешь поля записей стороннего API по ролям отображения в карточке списка. '
-            'Тебе дан только список названий полей и по паре обрезанных примеров значений — не вся таблица. '
-            'Ответь ТОЛЬКО JSON-объектом без пояснений, без markdown, без ```: '
-            '{"title": "одно поле для заголовка карточки", '
-            '"subtitle": ["1-3 поля для краткой строки под заголовком"], '
-            '"detail": ["остальные значимые поля — показываются полностью в развороте карточки"]}. '
-            'Названия полей бери СТРОГО из списка "fields" — не придумывай новых. '
-            'Поле с самым длинным текстом (описание, заметка, комментарий) — всегда в detail, не в title/subtitle.',
-        contextBlock: '',
-        history: [
-          (
-            role: 'user',
-            text: jsonEncode({
-              'fields': columns,
-              'examples': samples,
-              if (noteCtrl.text.trim().isNotEmpty) 'пожелание': noteCtrl.text.trim(),
-            }),
-          ),
-        ],
-      );
-      final decoded = jsonDecode(_stripCodeFence(reply.text));
-      if (decoded is! Map) throw const FormatException('Ассистент ответил не JSON-объектом');
-
-      final columnSet = columns.toSet();
-      final title = decoded['title'] is String && columnSet.contains(decoded['title']) ? decoded['title'] as String : null;
-      List<String> asFieldList(dynamic v) =>
-          v is List ? v.map((e) => '$e').where(columnSet.contains).toList() : const [];
-      final spec = {
-        if (title != null) 'title': title,
-        'subtitle': asFieldList(decoded['subtitle']),
-        'detail': asFieldList(decoded['detail']),
-      };
-      final specJson = jsonEncode(spec);
+      final specJson = await ServiceDisplayAi.suggestSpec(aiSettings, rows, note: noteCtrl.text);
       widget.repo.setDisplaySpec(_service.id, specJson);
       if (!mounted) return;
-      setState(() {
-        _service = CustomService(
-          id: _service.id,
-          name: _service.name,
-          iconName: _service.iconName,
-          url: _service.url,
-          method: _service.method,
-          headers: _service.headers,
-          body: _service.body,
-          displaySpec: specJson,
-        );
-      });
+      setState(() => _service = _withDisplaySpec(specJson));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось настроить вид: $e')));
     } finally {
@@ -226,8 +122,10 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
 
   void _resetDisplay() {
     widget.repo.setDisplaySpec(_service.id, null);
-    setState(() {
-      _service = CustomService(
+    setState(() => _service = _withDisplaySpec(null));
+  }
+
+  CustomService _withDisplaySpec(String? displaySpec) => CustomService(
         id: _service.id,
         name: _service.name,
         iconName: _service.iconName,
@@ -235,21 +133,8 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
         method: _service.method,
         headers: _service.headers,
         body: _service.body,
+        displaySpec: displaySpec,
       );
-    });
-  }
-
-  /// На случай, если модель всё же обернула ответ в ```json — снимаем
-  /// код-забор, а не отклоняем ответ целиком.
-  String _stripCodeFence(String text) {
-    final trimmed = text.trim();
-    if (!trimmed.startsWith('```')) return trimmed;
-    final withoutFirst = trimmed.substring(trimmed.indexOf('\n') + 1);
-    final end = withoutFirst.lastIndexOf('```');
-    return end == -1 ? withoutFirst.trim() : withoutFirst.substring(0, end).trim();
-  }
-
-  static String _truncate(String s, int max) => s.length <= max ? s : '${s.substring(0, max)}…';
 
   void _showFullCell(String column, String value) {
     showDialog<void>(
@@ -372,12 +257,12 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
                   DataCell(
                     ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 220),
-                      child: Text(_cell(r[c]), overflow: TextOverflow.ellipsis, maxLines: 2),
+                      child: Text(ServiceDisplayAi.cell(r[c]), overflow: TextOverflow.ellipsis, maxLines: 2),
                     ),
                     // Ячейка режется по ширине колонки — полный текст (не
                     // помещающаяся заметка и т.п.) смотрим по тапу в диалоге,
                     // а не растягиваем таблицу под самое длинное значение.
-                    onTap: () => _showFullCell(c, _cell(r[c])),
+                    onTap: () => _showFullCell(c, ServiceDisplayAi.cell(r[c])),
                   ),
               ]),
           ],
@@ -398,11 +283,13 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
       itemCount: rows.length,
       itemBuilder: (context, i) {
         final r = rows[i];
-        final titleText = title != null ? _cell(r[title]) : (r.values.isEmpty ? '' : _cell(r.values.first));
-        final subtitleText = subtitle.map((k) => _cell(r[k])).where((v) => v.isNotEmpty).join(' · ');
+        final titleText =
+            title != null ? ServiceDisplayAi.cell(r[title]) : (r.values.isEmpty ? '' : ServiceDisplayAi.cell(r.values.first));
+        final subtitleText =
+            subtitle.map((k) => ServiceDisplayAi.cell(r[k])).where((v) => v.isNotEmpty).join(' · ');
         final detailEntries = [
           for (final k in detail)
-            if (_cell(r[k]).isNotEmpty) MapEntry(k, _cell(r[k])),
+            if (ServiceDisplayAi.cell(r[k]).isNotEmpty) MapEntry(k, ServiceDisplayAi.cell(r[k])),
         ];
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
@@ -426,11 +313,5 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
         );
       },
     );
-  }
-
-  static String _cell(dynamic v) {
-    if (v == null) return '';
-    if (v is List || v is Map) return jsonEncode(v);
-    return '$v';
   }
 }
