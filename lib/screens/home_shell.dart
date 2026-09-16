@@ -155,7 +155,7 @@ class _HomeShellState extends State<HomeShell> {
   Widget _pageFor(String id, AppDataStore store, bool isCoach, HomeTabsViewModel tabs) {
     if (id.startsWith(serviceTabPrefix)) {
       final service = _services.byId(id.substring(serviceTabPrefix.length));
-      if (service != null) return ServiceTileScreen(service: service);
+      if (service != null) return ServiceTileScreen(service: service, repo: _services);
     }
     if (isCoach) {
       return switch (id) {

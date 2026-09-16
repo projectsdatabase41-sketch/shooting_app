@@ -222,6 +222,7 @@ CREATE TABLE IF NOT EXISTS custom_services (
   method      TEXT NOT NULL DEFAULT 'GET',
   headers_json TEXT,
   body        TEXT,
+  display_spec TEXT,
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

@@ -67,6 +67,13 @@ class CustomServicesRepository extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Сохраняет только подобранное ИИ отображение записей (см.
+  /// `ServiceTileScreen._configureDisplay`) — не трогает адрес/ключ.
+  void setDisplaySpec(String id, String? displaySpec) {
+    db.db.execute('UPDATE custom_services SET display_spec = ? WHERE id = ?', [displaySpec, id]);
+    notifyListeners();
+  }
+
   void delete(String id) {
     db.db.execute('DELETE FROM custom_services WHERE id = ?', [id]);
     notifyListeners();
@@ -85,6 +92,7 @@ class CustomServicesRepository extends ChangeNotifier {
       method: row['method'] as String,
       headers: headers,
       body: row['body'] as String?,
+      displaySpec: row['display_spec'] as String?,
     );
   }
 }

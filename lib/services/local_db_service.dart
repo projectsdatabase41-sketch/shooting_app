@@ -149,6 +149,7 @@ class LocalDbService {
         'download_allowed': 'INTEGER NOT NULL DEFAULT 1',
         'chart_json': 'TEXT',
       },
+      'custom_services': {'display_spec': 'TEXT'},
     };
 
     for (final table in additions.keys) {

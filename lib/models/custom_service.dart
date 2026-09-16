@@ -23,6 +23,12 @@ class CustomService {
   final Map<String, String> headers;
   final String? body;
 
+  /// Как показывать записи (если ответ — список) вместо голой таблицы —
+  /// JSON вида `{"title":"поле","subtitle":["поле",...],"detail":["поле",...]}`,
+  /// подбирает ИИ по образцу ответа (см. `ServiceTileScreen._configureDisplay`).
+  /// `null` — используется обычная таблица по умолчанию.
+  final String? displaySpec;
+
   const CustomService({
     required this.id,
     required this.name,
@@ -31,6 +37,7 @@ class CustomService {
     this.method = 'GET',
     this.headers = const {},
     this.body,
+    this.displaySpec,
   });
 
   /// Простая ссылка (сайт/дашборд) — без заголовков и тела запроса
