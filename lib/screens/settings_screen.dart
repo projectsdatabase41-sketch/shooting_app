@@ -9,6 +9,7 @@ import '../services/knowledge_column_discovery.dart';
 import '../services/supabase_auth_service.dart';
 import '../state/app_data_store.dart';
 import '../state/home_tabs_view_model.dart';
+import '../state/personalization_view_model.dart';
 import '../widgets/home_tabs_bar.dart';
 import '../widgets/service_icon_picker.dart';
 import 'ai_settings_screen.dart';
@@ -42,7 +43,7 @@ class SettingsScreen extends StatelessWidget {
     };
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Настройки')),
+      appBar: AppBar(title: const _HiddenDevModeToggle()),
       body: ListView(
         padding: const EdgeInsets.only(bottom: 32),
         children: [
@@ -545,6 +546,78 @@ class _AccountSheetState extends State<_AccountSheet> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Заголовок "Настройки", который по 7 нажатиям открывает включение/
+/// выключение режима разработчика — намеренно не отдельный пункт меню,
+/// иначе сам факт его существования был бы на виду у всех (решение
+/// пользователя).
+class _HiddenDevModeToggle extends StatefulWidget {
+  const _HiddenDevModeToggle();
+
+  @override
+  State<_HiddenDevModeToggle> createState() => _HiddenDevModeToggleState();
+}
+
+class _HiddenDevModeToggleState extends State<_HiddenDevModeToggle> {
+  int _taps = 0;
+
+  Future<void> _onTap() async {
+    _taps++;
+    if (_taps < 7) return;
+    _taps = 0;
+    final personalization = context.read<PersonalizationViewModel>();
+
+    if (personalization.devMode) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Режим разработчика'),
+          content: const Text('Выключить? Недоделанные вкладки (Мессенджер, Задания) снова скроются.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Отмена')),
+            FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Выключить')),
+          ],
+        ),
+      );
+      if (confirmed == true) personalization.disableDevMode();
+      return;
+    }
+
+    final ctrl = TextEditingController();
+    final password = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Режим разработчика'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          obscureText: true,
+          onSubmitted: (v) => Navigator.of(ctx).pop(v),
+          decoration: const InputDecoration(labelText: 'Пароль'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(ctrl.text), child: const Text('Включить')),
+        ],
+      ),
+    );
+    if (password == null || !mounted) return;
+    final ok = personalization.tryEnableDevMode(password);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(ok ? 'Режим разработчика включён' : 'Неверный пароль')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _onTap,
+      child: const Text('Настройки'),
     );
   }
 }

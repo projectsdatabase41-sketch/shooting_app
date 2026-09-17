@@ -5,6 +5,7 @@ import '../models/training_session.dart';
 import '../services/custom_services_repository.dart';
 import '../state/app_data_store.dart';
 import '../state/home_tabs_view_model.dart';
+import '../state/personalization_view_model.dart';
 import '../widgets/finished_edit_exit_dialog.dart';
 import '../widgets/home_tabs_bar.dart';
 import '../widgets/service_icon_picker.dart';
@@ -41,6 +42,14 @@ class _HomeShellState extends State<HomeShell> {
   late final HomeTabsViewModel _athleteTabs;
   late final HomeTabsViewModel _coachTabs;
   late final CustomServicesRepository _services;
+  late final PersonalizationViewModel _personalization;
+
+  /// Вкладки недоделанных функций — скрыты от обычных пользователей,
+  /// пока не включён "режим разработчика" (решение пользователя: чат
+  /// между пользователями и задания тренера ещё не готовы к нагрузке
+  /// реальных пользователей). Не про удаление функции, только про то,
+  /// чтобы её не увидели раньше времени — сам код никуда не делся.
+  static const _devOnlyTabIds = {'messenger', 'tasks'};
 
   @override
   void initState() {
@@ -49,23 +58,30 @@ class _HomeShellState extends State<HomeShell> {
     _athleteTabs = HomeTabsViewModel(db, mode: 'athlete', allIds: athleteTabIds, unhidable: athleteUnhidable);
     _coachTabs = HomeTabsViewModel(db, mode: 'coach', allIds: coachTabIds, unhidable: coachUnhidable);
     _services = CustomServicesRepository(db);
+    _personalization = context.read<PersonalizationViewModel>();
     _services.addListener(_onServicesChanged);
+    _personalization.addListener(_onServicesChanged);
     _onServicesChanged(); // сервисы, добавленные в прошлой сессии
   }
 
   @override
   void dispose() {
     _services.removeListener(_onServicesChanged);
+    _personalization.removeListener(_onServicesChanged);
     super.dispose();
   }
 
   /// Плитки сервисов — общие для обоих режимов (решение пользователя не
   /// уточняло разделение по ролям, а разделять было бы лишней сложностью
-  /// без явной причины).
+  /// без явной причины). Заодно пересчитывается при включении/выключении
+  /// режима разработчика — те же id, просто с учётом `_devOnlyTabIds`.
   void _onServicesChanged() {
+    final devMode = _personalization.devMode;
     final serviceIds = [for (final s in _services.list()) '$serviceTabPrefix${s.id}'];
-    _athleteTabs.setAllIds([...athleteTabIds, ...serviceIds]);
-    _coachTabs.setAllIds([...coachTabIds, ...serviceIds]);
+    List<String> withDevFilter(List<String> ids) =>
+        devMode ? ids : ids.where((id) => !_devOnlyTabIds.contains(id)).toList();
+    _athleteTabs.setAllIds([...withDevFilter(athleteTabIds), ...serviceIds]);
+    _coachTabs.setAllIds([...withDevFilter(coachTabIds), ...serviceIds]);
   }
 
   Map<String, HomeTabSpec> _specsWithServices() => {

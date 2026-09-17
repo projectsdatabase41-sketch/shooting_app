@@ -41,6 +41,42 @@ class PersonalizationViewModel extends ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.system;
   ThemeMode get themeMode => _themeMode;
 
+  /// "Режим разработчика" (решение пользователя) — открывает недоделанные
+  /// вкладки (сейчас: Мессенджер, Задания тренера), которые иначе не
+  /// показываются обычным пользователям. Пароль не про защиту от
+  /// взлома — приложение и так не умеет прятать секреты от того, кто
+  /// откроет исходники или собранный код — а про то, чтобы случайный
+  /// человек не наткнулся на сырую функцию. Включается скрытым жестом
+  /// в настройках (7 нажатий на заголовок экрана), не отдельным пунктом
+  /// меню — иначе сам факт его существования был бы на виду у всех.
+  static const String devModeKey = 'dev_mode_enabled';
+  static const String devModePassword = 'pusl-dev-2026';
+
+  bool _devMode = false;
+  bool get devMode => _devMode;
+
+  bool tryEnableDevMode(String password) {
+    if (password != devModePassword) return false;
+    _devMode = true;
+    _persistDevMode();
+    notifyListeners();
+    return true;
+  }
+
+  void disableDevMode() {
+    _devMode = false;
+    _persistDevMode();
+    notifyListeners();
+  }
+
+  void _persistDevMode() {
+    db.db.execute(
+      'INSERT INTO color_prefs (key, hex) VALUES (?, ?) '
+      'ON CONFLICT(key) DO UPDATE SET hex = excluded.hex',
+      [devModeKey, _devMode ? '1' : '0'],
+    );
+  }
+
   void setThemeMode(ThemeMode mode) {
     if (mode == _themeMode) return;
     _themeMode = mode;
@@ -181,6 +217,9 @@ class PersonalizationViewModel extends ChangeNotifier {
     _appButtonColor = readAppColor(appButtonKey);
     _appButtonTextColor = readAppColor(appButtonTextKey);
 
+    final devModeRow = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [devModeKey]);
+    _devMode = devModeRow.isNotEmpty && devModeRow.first['hex'] == '1';
+
     notifyListeners();
   }
 
@@ -242,6 +281,7 @@ class PersonalizationViewModel extends ChangeNotifier {
     final protected = [
       themeModeKey,
       localeKey,
+      devModeKey,
       ...AiSettings.allKeys,
       ...WorkspaceViewModel.allKeys,
       ...HomeTabsViewModel.allKeys,
