@@ -1,0 +1,63 @@
+# Сборка Android APK и публикация его в GitHub Releases.
+#
+# Тот же принцип, что у веб-сборки (deploy-web.yml) — ключи OpenRouter
+# приходят из секретов репозитория при сборке, не хранятся в исходниках.
+# Собранный APK всё равно содержит ключи открытым текстом (клиентское
+# приложение секретов не хранит), но их не нужно пересылать вручную
+# при каждой сборке — GitHub подставляет их сам.
+name: Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Толкать релиз может только одна сборка одновременно.
+concurrency:
+  group: apk
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.4'
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter analyze --no-fatal-infos
+      - run: flutter test
+
+      - name: Сборка APK
+        run: |
+          flutter build apk --release \
+            --dart-define=OPENROUTER_KEY="${{ secrets.OPENROUTER_KEY }}" \
+            --dart-define=OPENROUTER_KEY_2="${{ secrets.OPENROUTER_KEY_2 }}" \
+            --dart-define=OPENROUTER_KEY_3="${{ secrets.OPENROUTER_KEY_3 }}" \
+            --dart-define=OPENROUTER_KEY_4="${{ secrets.OPENROUTER_KEY_4 }}"
+
+      # Артефакт сборки — доступен на вкладке Actions у этого запуска,
+      # хранится 90 дней. Удобно сразу после пуша, без похода в Releases.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+      # Стабильная ссылка "последний АПК" — перезаписывает один и тот
+      # же релиз-тег при каждой сборке, а не плодит новый релиз на
+      # каждый пуш (решение: не нужна история версий, нужен один
+      # актуальный файл под рукой).
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-apk
+          name: Последняя сборка
+          body: Автособрано из ${{ github.sha }}
+          files: build/app/outputs/flutter-apk/app-release.apk
