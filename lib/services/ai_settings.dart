@@ -95,14 +95,15 @@ class AiSettings {
   /// сборки.
   static const String testApiKey = String.fromEnvironment('OPENROUTER_KEY');
 
-  /// Ещё два запасных встроенных ключа — тот же принцип, что у
-  /// [testApiKey] (только на сборке, в git не попадают). Если у одного
-  /// кончился дневной/минутный лимit бесплатных моделей, `AiService.ask()`
+  /// Ещё запасные встроенные ключи — тот же принцип, что у [testApiKey]
+  /// (только на сборке, в git не попадают). Если у одного кончился
+  /// дневной/минутный лимit бесплатных моделей, `AiService.ask()`
   /// пробует следующий ключ целиком со своей цепочкой моделей, а не
-  /// сдаётся сразу (пользователь принёс два дополнительных ключа именно
-  /// для такого автоматического переключения).
+  /// сдаётся сразу (пользователь принёс несколько ключей именно для
+  /// такого автоматического переключения).
   static const String testApiKey2 = String.fromEnvironment('OPENROUTER_KEY_2');
   static const String testApiKey3 = String.fromEnvironment('OPENROUTER_KEY_3');
+  static const String testApiKey4 = String.fromEnvironment('OPENROUTER_KEY_4');
 
   /// Все встроенные ключи по порядку — пустые (не переданные на сборке)
   /// отфильтрованы.
@@ -110,6 +111,7 @@ class AiSettings {
     if (testApiKey != '') testApiKey,
     if (testApiKey2 != '') testApiKey2,
     if (testApiKey3 != '') testApiKey3,
+    if (testApiKey4 != '') testApiKey4,
   ];
 
   /// Модели по умолчанию — бесплатные на OpenRouter, по приоритету.
