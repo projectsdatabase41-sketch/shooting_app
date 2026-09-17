@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:provider/provider.dart';
 import '../models/target_color_scheme.dart';
 import '../state/personalization_view_model.dart';
@@ -109,11 +110,19 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> with SingleTicker
           mainAxisSize: MainAxisSize.min,
           children: [
             TabBar(controller: _tab, tabs: const [Tab(text: 'Палитра'), Tab(text: 'HEX')]),
+            // ClipRect — у ColorPicker (flutter_colorpicker) внутренний
+            // Stack иногда рисует чуть шире отведённой ему полосы
+            // TabBarView и "протекает" на соседнюю вкладку без обрезки
+            // (сама TabBarView клипует по страницам, а не по контенту
+            // internal Stack'а пакета). Без ClipRect на HEX-вкладке было
+            // видно обрывок колеса и слайдера с "Палитры".
             SizedBox(
-              height: 260,
-              child: TabBarView(
-                controller: _tab,
-                children: [_buildPaletteTab(), _buildHexTab()],
+              height: 340,
+              child: ClipRect(
+                child: TabBarView(
+                  controller: _tab,
+                  children: [_buildPaletteTab(), _buildHexTab()],
+                ),
               ),
             ),
             if (widget.recentColors.isNotEmpty) _buildRecentColors(),
@@ -135,43 +144,19 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> with SingleTicker
   }
 
   Widget _buildPaletteTab() {
-    // Упрощённый цветовой круг + слайдер яркости через HSV-компоненты.
-    final hsv = HSVColor.fromColor(_color);
-    return Column(
-      children: [
-        Expanded(
-          child: GridView.count(
-            crossAxisCount: 8,
-            children: List.generate(64, (i) {
-              final hue = (i % 8) * 45.0;
-              final sat = 0.3 + (i ~/ 8) * 0.1;
-              final c = HSVColor.fromAHSV(1, hue, sat.clamp(0, 1), hsv.value).toColor();
-              final selected = c == _color;
-              return GestureDetector(
-                onTap: () => _apply(c),
-                child: Container(
-                  margin: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(
-                    color: c,
-                    border: selected ? Border.all(color: Colors.white, width: 3) : null,
-                  ),
-                ),
-              );
-            }),
-          ),
-        ),
-        Row(
-          children: [
-            const Text('Яркость'),
-            Expanded(
-              child: Slider(
-                value: hsv.value,
-                onChanged: (v) => _apply(hsv.withValue(v).toColor()),
-              ),
-            ),
-          ],
-        ),
-      ],
+    // БЕЗ ScrollView вокруг: он даёт дочернему виджету бесконечную высоту
+    // по оси прокрутки, а ColorPicker считает размер колеса как долю
+    // (pickerAreaHeightPercent) от полученной высоты — на бесконечности
+    // колесо рисуется схлопнутым в полоску и вылезает за рамки диалога.
+    // Здесь высота и так конечная — задана снаружи через SizedBox.
+    return ColorPicker(
+      pickerColor: _color,
+      onColorChanged: _apply,
+      paletteType: PaletteType.hueWheel,
+      enableAlpha: false,
+      labelTypes: const [],
+      colorPickerWidth: 280,
+      pickerAreaHeightPercent: 0.7,
     );
   }
 
