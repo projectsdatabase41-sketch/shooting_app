@@ -423,30 +423,6 @@ class _TargetCanvasState extends State<TargetCanvas> {
   }
 }
 
-/// Скруглённая подложка под угловые значения — просто текст поверх
-/// мишени терялся на пёстром фоне (кольца, пробоины) даже с
-/// авто-контрастным цветом; полупрозрачная карточка даёт своей текст
-/// собственную ровную подложку независимо от того, что под ней.
-class _StatChip extends StatelessWidget {
-  final Widget child;
-  const _StatChip({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: scheme.surface.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        child: child,
-      ),
-    );
-  }
-}
-
 /// Значение в углу бланка. Без словесной подписи — смысл несёт само
 /// обозначение внутри строки (мм, Σ).
 class _CornerText extends StatelessWidget {
@@ -459,12 +435,10 @@ class _CornerText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return _StatChip(
-      child: Text(
-        text,
-        style: (big ? theme.textTheme.headlineSmall : theme.textTheme.titleMedium)
-            ?.copyWith(color: color),
-      ),
+    return Text(
+      text,
+      style: (big ? theme.textTheme.headlineSmall : theme.textTheme.titleMedium)
+          ?.copyWith(color: color),
     );
   }
 }
@@ -503,18 +477,16 @@ class _DirectionValue extends StatelessWidget {
       // вообще не показано. Теперь угол честно подписан: пробоина
       // накрыла центр, направления у неё нет — показывать стрелку
       // значило бы выдавать шум округления координат за снос.
-      return _StatChip(
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.adjust, size: 20, color: color),
-            const SizedBox(width: 6),
-            Text(
-              'центр',
-              style: theme.textTheme.titleMedium?.copyWith(color: color),
-            ),
-          ],
-        ),
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.adjust, size: 20, color: color),
+          const SizedBox(width: 6),
+          Text(
+            'центр',
+            style: theme.textTheme.titleMedium?.copyWith(color: color),
+          ),
+        ],
       );
     }
 
@@ -522,24 +494,22 @@ class _DirectionValue extends StatelessWidget {
     // Восемь румбов: округляем к ближайшему кратному 45°.
     final snapped = (deg / 45).round() * 45.0;
 
-    return _StatChip(
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Transform.rotate(
-            // Icons.arrow_upward смотрит вверх, а угол отсчитывается от
-            // 12 часов по часовой стрелке — как раз поворот по часовой,
-            // положительный в системе координат Flutter.
-            angle: snapped * math.pi / 180,
-            child: Icon(Icons.arrow_upward, size: 22, color: color),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            '$h:${m.toString().padLeft(2, '0')}',
-            style: theme.textTheme.titleMedium?.copyWith(color: color),
-          ),
-        ],
-      ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Transform.rotate(
+          // Icons.arrow_upward смотрит вверх, а угол отсчитывается от
+          // 12 часов по часовой стрелке — как раз поворот по часовой,
+          // положительный в системе координат Flutter.
+          angle: snapped * math.pi / 180,
+          child: Icon(Icons.arrow_upward, size: 22, color: color),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          '$h:${m.toString().padLeft(2, '0')}',
+          style: theme.textTheme.titleMedium?.copyWith(color: color),
+        ),
+      ],
     );
   }
 }

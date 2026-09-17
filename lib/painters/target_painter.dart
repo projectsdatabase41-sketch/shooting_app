@@ -87,16 +87,9 @@ class TargetPainter extends CustomPainter {
     // 5. Подписи габаритов — после перекрестия, см. комментарий к классу
     _paintRingLabels(canvas, size, center, mmToPx);
 
-    // 6. Компас — полный (с часами-делениями) во время редактирования,
-    // лёгкий (только N/E/S/W) в остальное время — решение пользователя
-    // "улучшить визуализацию", по образцу присланного макета. Полные
-    // цифры-градусы вне правки не рисуем намеренно: мишень существует
-    // ради чтения группы выстрелов, а не ради компаса, и цифры кругом
-    // мешали бы смотреть на пробоины.
+    // 6. Компас — только во время редактирования
     if (isEditing) {
       _paintCompass(canvas, center, radiusPx);
-    } else {
-      _paintIdleCompass(canvas, center, radiusPx);
     }
 
     // 7. Пробоины
@@ -262,30 +255,6 @@ class TargetPainter extends CustomPainter {
         (radiusPx - inner) * 0.32,
         Paint()..color = colors.shotSelected,
       );
-    }
-  }
-
-  /// Лёгкая версия компаса вне режима правки — тонкое кольцо и четыре
-  /// стороны света, без часов-делений и без цифр (см. комментарий у
-  /// места вызова). Рисуется СНАРУЖИ разметки мишени, не поверх неё —
-  /// тем же кольцевым поясом, что и полный компас при правке.
-  void _paintIdleCompass(Canvas canvas, Offset center, double radiusPx) {
-    final inner = radiusPx * compassZoneFraction;
-    final mid = (radiusPx + inner) / 2;
-
-    canvas.drawCircle(
-      center,
-      mid,
-      Paint()
-        ..color = colors.compassRing.withValues(alpha: 0.18)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2,
-    );
-
-    const marks = [('N', -math.pi / 2), ('E', 0.0), ('S', math.pi / 2), ('W', math.pi)];
-    for (final (label, angle) in marks) {
-      final dir = Offset(math.cos(angle), math.sin(angle));
-      _drawText(canvas, label, center + dir * mid, colors.compassRing.withValues(alpha: 0.45), 11);
     }
   }
 
