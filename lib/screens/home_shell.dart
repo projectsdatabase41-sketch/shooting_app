@@ -128,19 +128,36 @@ class _HomeShellState extends State<HomeShell> {
         // Скрыли вкладку, на которой стояли — переезжаем на первую
         // оставшуюся видимую, а не оставляем экран без вкладки вовсе.
         final current = tabs.visible.contains(selected) ? selected : tabs.visible.first;
+        final homeTabId = isCoach ? 'diary' : 'target';
 
-        return Scaffold(
-          body: Column(
-            children: [
-              if (store.isBackgroundSyncing) const _SyncBanner(),
-              Expanded(child: _pageFor(current, store, isCoach, tabs)),
-            ],
-          ),
-          bottomNavigationBar: HomeTabsBar(
-            vm: tabs,
-            specs: specs,
-            selected: current,
-            onSelect: (id) => _onDestinationSelected(context, store, isCoach, id),
+        // Вкладки в "страничном" режиме — не отдельные маршруты
+        // Navigator (только один Scaffold на весь HomeShell, тело
+        // подменяется по тапу на нижней панели), поэтому без этого
+        // PopScope системный жест "назад" на любой вкладке, кроме
+        // домашней, сразу закрывал приложение — свернуть было некуда,
+        // ведь для Navigator это был единственный маршрут (жалоба
+        // пользователя: "в некоторых окнах он полностью закрывает
+        // приложение"). Теперь сперва возвращает на домашнюю вкладку,
+        // как в большинстве приложений с нижней навигацией.
+        return PopScope(
+          canPop: current == homeTabId,
+          onPopInvokedWithResult: (didPop, _) {
+            if (didPop) return;
+            _onDestinationSelected(context, store, isCoach, homeTabId);
+          },
+          child: Scaffold(
+            body: Column(
+              children: [
+                if (store.isBackgroundSyncing) const _SyncBanner(),
+                Expanded(child: _pageFor(current, store, isCoach, tabs)),
+              ],
+            ),
+            bottomNavigationBar: HomeTabsBar(
+              vm: tabs,
+              specs: specs,
+              selected: current,
+              onSelect: (id) => _onDestinationSelected(context, store, isCoach, id),
+            ),
           ),
         );
       },
