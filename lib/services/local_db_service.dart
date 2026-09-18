@@ -146,6 +146,8 @@ class LocalDbService {
         'reply_to_preview': 'TEXT',
         'download_allowed': 'INTEGER NOT NULL DEFAULT 1',
         'call_status': 'TEXT',
+        'drive_file_id': 'TEXT',
+        'attachment_local_path': 'TEXT',
       },
       'chat_global_cache': {
         'download_allowed': 'INTEGER NOT NULL DEFAULT 1',

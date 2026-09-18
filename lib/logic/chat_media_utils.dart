@@ -14,6 +14,17 @@ class ChatAttachmentPick {
   const ChatAttachmentPick(this.bytes, this.name);
 }
 
+/// Результат выбора БОЛЬШОГО файла — только путь на диске, БЕЗ чтения
+/// байт в память (`file_picker` с `withData: false`): файл на несколько
+/// гигабайт `Uint8List` не выдержит. Дальше идёт через `ChatDriveService`
+/// (см. `ChatSyncService.sendLargeAttachment`), а не через Storage/base64.
+class ChatLargeFilePick {
+  final String path;
+  final String name;
+  final int size;
+  const ChatLargeFilePick(this.path, this.name, this.size);
+}
+
 /// Подготовка фото для отправки в чат — в отличие от аватара
 /// (`AvatarUtils`, квадратный кроп под миниатюру), здесь только
 /// уменьшение длинной стороны и сжатие: пропорции кадра сохраняются,
@@ -50,6 +61,11 @@ class ChatMediaUtils {
   static bool looksLikeImage(String fileName) {
     final lower = fileName.toLowerCase();
     return ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.heic'].any(lower.endsWith);
+  }
+
+  static bool looksLikeVideo(String fileName) {
+    final lower = fileName.toLowerCase();
+    return ['.mp4', '.mov', '.mkv', '.avi', '.webm', '.m4v'].any(lower.endsWith);
   }
 
   static String mimeFor(String fileName) {
@@ -120,6 +136,18 @@ class ChatMediaUtils {
     return ChatAttachmentPick(bytes, file.name);
   }
 
+  /// Выбор большого файла (видео, архив и т.п.) — отдельная точка входа
+  /// от обычного `pickAttachment` (нажатие и удержание кнопки скрепки в
+  /// личном чате, см. `ChatThreadScreen._attachLarge`), намеренно без
+  /// сжатия/предпросмотра: `withData: false` не читает файл в память.
+  static Future<ChatLargeFilePick?> pickLargeFile() async {
+    final result = await FilePicker.platform.pickFiles(withData: false);
+    final file = result?.files.first;
+    final path = file?.path;
+    if (file == null || path == null) return null;
+    return ChatLargeFilePick(path, file.name, file.size);
+  }
+
   /// "Сохранить" у вложения (см. ChatPreferences.photoDownloadEnabled) —
   /// системный лист "Поделиться", а не прямая запись в галерею/загрузки:
   /// уже есть в зависимостях, работает на всех платформах без отдельных
@@ -128,6 +156,13 @@ class ChatMediaUtils {
     return SharePlus.instance.share(ShareParams(
       files: [XFile.fromData(bytes, name: fileName, mimeType: mime)],
     ));
+  }
+
+  /// То же самое, но для уже скачанного НА ДИСК большого вложения
+  /// (Google Drive, см. `ChatDriveService`) — по пути, а не по байтам в
+  /// памяти: гигабайты через `Uint8List` не гоняют.
+  static Future<void> shareAttachmentPath(String path, String? mime) {
+    return SharePlus.instance.share(ShareParams(files: [XFile(path, mimeType: mime)]));
   }
 
   /// Читаемый размер — "2.4 МБ" вместо голого числа байт.

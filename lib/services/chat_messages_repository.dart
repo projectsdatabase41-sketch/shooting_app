@@ -59,8 +59,9 @@ class ChatMessagesRepository {
       'INSERT INTO chat_local_messages '
       '(id, client_message_id, contact_id, direction, text, status, msg_type, '
       'attachment_base64, attachment_name, attachment_mime, attachment_size, '
+      'drive_file_id, attachment_local_path, '
       'reply_to_client_message_id, reply_to_preview, download_allowed, created_at) '
-      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         m.id,
         m.clientMessageId,
@@ -73,6 +74,8 @@ class ChatMessagesRepository {
         m.attachmentName,
         m.attachmentMime,
         m.attachmentSize,
+        m.driveFileId,
+        m.attachmentLocalPath,
         m.replyToClientMessageId,
         m.replyToPreview,
         m.downloadAllowed ? 1 : 0,
@@ -83,6 +86,18 @@ class ChatMessagesRepository {
 
   void updateStatus(String id, ChatMessageStatus status) {
     db.db.execute('UPDATE chat_local_messages SET status = ? WHERE id = ?', [status.name, id]);
+  }
+
+  /// После успешной загрузки большого вложения на Drive — записать
+  /// выданный id файла (см. `ChatSyncService.retryLargeAttachment`).
+  void updateDriveFileId(String id, String driveFileId) {
+    db.db.execute('UPDATE chat_local_messages SET drive_file_id = ? WHERE id = ?', [driveFileId, id]);
+  }
+
+  /// После скачивания большого вложения получателем — путь к файлу НА
+  /// УСТРОЙСТВЕ (см. `ChatSyncService.downloadLargeAttachment`).
+  void updateAttachmentLocalPath(String id, String path) {
+    db.db.execute('UPDATE chat_local_messages SET attachment_local_path = ? WHERE id = ?', [path, id]);
   }
 
   /// "Иду"/отмена вызова (см. `ChatSyncService.acknowledgeCall`/`cancelCall`) —

@@ -133,6 +133,13 @@ create table if not exists chat_messages (
   msg_type               text not null default 'text'
                            check (msg_type in ('text','image','video','audio','file','edit','delete','call','call_ack','call_cancel')),
   attachment_path        text,   -- путь объекта в бакете chat-media
+  -- Большие вложения (свыше лимита бакета, см. ChatMediaUtils.maxAttachmentBytes)
+  -- идут не через Storage, а через отдельный Google Drive (см.
+  -- ChatDriveService/google-apps-script/chat-drive-relay.gs) — тогда
+  -- attachment_path пуст, а здесь id файла на Диске. Само тело файла
+  -- через эту таблицу и через Storage не проходит ни в том, ни в другом
+  -- случае — тут только метаданные.
+  drive_file_id          text,
   attachment_name        text,   -- исходное имя файла (для 'file')
   attachment_mime        text,
   attachment_size        bigint, -- байты — показать "2.4 МБ" и свериться с лимитом на клиенте
@@ -156,8 +163,8 @@ create table if not exists chat_messages (
   -- (текст + ссылка на оригинал) или delete-сигнал (только ссылка на
   -- оригинал, без текста/вложения).
   check (
-    (msg_type = 'text' and text is not null and attachment_path is null)
-    or (msg_type in ('image','video','audio','file') and attachment_path is not null)
+    (msg_type = 'text' and text is not null and attachment_path is null and drive_file_id is null)
+    or (msg_type in ('image','video','audio','file') and (attachment_path is not null or drive_file_id is not null))
     or (msg_type = 'edit' and edit_of_client_message_id is not null and text is not null)
     or (msg_type = 'delete' and delete_of_client_message_id is not null)
     or (msg_type = 'call')
@@ -171,6 +178,7 @@ create table if not exists chat_messages (
 alter table chat_messages alter column text drop not null;
 alter table chat_messages add column if not exists msg_type text not null default 'text';
 alter table chat_messages add column if not exists attachment_path text;
+alter table chat_messages add column if not exists drive_file_id text;
 alter table chat_messages add column if not exists attachment_name text;
 alter table chat_messages add column if not exists attachment_mime text;
 alter table chat_messages add column if not exists attachment_size bigint;
@@ -200,8 +208,8 @@ alter table chat_messages drop constraint if exists chat_messages_check;
 alter table chat_messages drop constraint if exists chat_messages_content_check;
 alter table chat_messages add constraint chat_messages_content_check
   check (
-    (msg_type = 'text' and text is not null and attachment_path is null)
-    or (msg_type in ('image','video','audio','file') and attachment_path is not null)
+    (msg_type = 'text' and text is not null and attachment_path is null and drive_file_id is null)
+    or (msg_type in ('image','video','audio','file') and (attachment_path is not null or drive_file_id is not null))
     or (msg_type = 'edit' and edit_of_client_message_id is not null and text is not null)
     or (msg_type = 'delete' and delete_of_client_message_id is not null)
     or (msg_type = 'call')

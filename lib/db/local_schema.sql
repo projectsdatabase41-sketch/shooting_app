@@ -148,6 +148,14 @@ CREATE TABLE IF NOT EXISTS chat_local_messages (
   attachment_name     TEXT,
   attachment_mime     TEXT,
   attachment_size     INTEGER,
+  -- Большие вложения (свыше лимита Storage, см. ChatMediaUtils.maxAttachmentBytes)
+  -- идут не через attachment_base64, а через отдельный Google Drive
+  -- (см. ChatDriveService) — drive_file_id заполнен, пока файл ещё не
+  -- скачан получателем (или ждёт подтверждения у отправителя).
+  -- attachment_local_path — путь к уже скачанному файлу НА УСТРОЙСТВЕ
+  -- (не base64: 5ГБ строкой в SQLite не кладут).
+  drive_file_id       TEXT,
+  attachment_local_path TEXT,
   -- Правка текста задним числом — правится локально сразу и рассылается
   -- собеседнику отдельным "edit"-сигналом (см. sql/chat-schema.sql),
   -- который применяется к уже сохранённой строке, а не создаёт новую.

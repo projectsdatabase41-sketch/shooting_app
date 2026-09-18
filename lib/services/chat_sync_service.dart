@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -7,6 +8,7 @@ import '../logic/chat_media_utils.dart';
 import '../models/chat_contact.dart';
 import '../models/chat_message.dart';
 import 'chat_auth_service.dart';
+import 'chat_drive_service.dart';
 import 'chat_global_service.dart';
 import 'chat_messages_repository.dart';
 import 'chat_settings.dart';
@@ -31,6 +33,11 @@ class ChatSyncService {
   /// ещё не в контактах (см. комментарий в `pollIncoming`) — та же
   /// RPC, что и в общем чате, отдельного клиента не заводим.
   late final ChatGlobalService _global = ChatGlobalService(auth, clientFactory: clientFactory);
+
+  /// Большие вложения (свыше `ChatMediaUtils.maxAttachmentBytes`) — идут
+  /// не через `chat-media` в Storage, а через отдельный Google Drive
+  /// (см. `ChatDriveService`).
+  late final ChatDriveService drive = ChatDriveService(auth, clientFactory: clientFactory);
 
   static const _uuid = Uuid();
   static const Duration _timeout = Duration(seconds: 60);
@@ -283,6 +290,42 @@ class ChatSyncService {
     return message;
   }
 
+  /// Отправляет БОЛЬШОЕ вложение (свыше `ChatMediaUtils.maxAttachmentBytes`)
+  /// через Google Drive вместо Storage — [filePath] уже лежит на диске
+  /// (выбран через `ChatMediaUtils.pickLargeFile`, байты в память не
+  /// читаются). Дальше та же схема статусов sending/sent/error, что и у
+  /// обычного вложения — `retry` умеет повторить именно эту загрузку.
+  Future<ChatMessage> sendLargeAttachment({
+    required String contactId,
+    required String filePath,
+    required String fileName,
+    required String mime,
+    required ChatMessageType type,
+    required int fileSize,
+    String? caption,
+    bool downloadAllowed = true,
+  }) async {
+    final message = ChatMessage(
+      id: _uuid.v4(),
+      clientMessageId: _uuid.v4(),
+      contactId: contactId,
+      direction: ChatMessageDirection.outgoing,
+      text: caption,
+      status: ChatMessageStatus.sending,
+      type: type,
+      attachmentName: fileName,
+      attachmentMime: mime,
+      attachmentSize: fileSize,
+      attachmentLocalPath: filePath,
+      downloadAllowed: downloadAllowed,
+      createdAt: DateTime.now(),
+    );
+    repo.addMessage(message);
+    auth.ensureFriendRequest(contactId);
+    await retry(message);
+    return message;
+  }
+
   /// Повторная отправка уже существующего (в статусе `error`)
   /// сообщения — текстового или с вложением, различает по `type`.
   ///
@@ -294,6 +337,11 @@ class ChatSyncService {
   /// выше — статус на пузыре выставляется всё равно, но пользователь ещё
   /// и видит, что и почему не отправилось.
   Future<void> retry(ChatMessage message) async {
+    // Большое вложение (Google Drive) — путь на диске есть, а обычных
+    // байт для Storage нет: своя ветка, см. `_retryLargeAttachment`.
+    if (message.attachmentLocalPath != null && _attachmentTypes.contains(message.type)) {
+      return _retryLargeAttachment(message);
+    }
     if (!ChatSettings.isConfigured) {
       repo.updateStatus(message.id, ChatMessageStatus.error);
       throw Exception('Чат не настроен');
@@ -367,6 +415,85 @@ class ChatSyncService {
     } finally {
       client.close();
     }
+  }
+
+  /// Загружает большое вложение на Drive (если ещё не загружено —
+  /// `driveFileId == null`) и шлёт метаданные в `chat_messages` тем же
+  /// способом, что и обычное вложение, только с `drive_file_id` вместо
+  /// `attachment_path`. Повторный вызов (после ошибки) пропускает уже
+  /// готовую загрузку и просто досылает строку.
+  Future<void> _retryLargeAttachment(ChatMessage message) async {
+    if (!ChatSettings.isConfigured) {
+      repo.updateStatus(message.id, ChatMessageStatus.error);
+      throw Exception('Чат не настроен');
+    }
+    final token = await auth.ensureFreshToken();
+    if (token == null) {
+      repo.updateStatus(message.id, ChatMessageStatus.error);
+      throw Exception('Сначала войдите в чат');
+    }
+    try {
+      var driveFileId = message.driveFileId;
+      if (driveFileId == null) {
+        driveFileId = await drive.upload(
+          filePath: message.attachmentLocalPath!,
+          fileName: message.attachmentName ?? 'file',
+          mime: message.attachmentMime ?? 'application/octet-stream',
+        );
+        repo.updateDriveFileId(message.id, driveFileId);
+      }
+
+      final client = clientFactory();
+      try {
+        final res = await client
+            .post(
+              Uri.parse('${ChatSettings.url}/rest/v1/chat_messages'),
+              headers: {
+                'apikey': ChatSettings.anonKey,
+                'Authorization': 'Bearer $token',
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal,resolution=ignore-duplicates',
+              },
+              body: jsonEncode({
+                'client_message_id': message.clientMessageId,
+                'sender_id': auth.userId,
+                'recipient_id': message.contactId,
+                'text': message.text,
+                'msg_type': message.type.name,
+                'drive_file_id': driveFileId,
+                if (message.attachmentName != null) 'attachment_name': message.attachmentName,
+                if (message.attachmentMime != null) 'attachment_mime': message.attachmentMime,
+                if (message.attachmentSize != null) 'attachment_size': message.attachmentSize,
+                if (message.replyToClientMessageId != null) 'reply_to_client_message_id': message.replyToClientMessageId,
+                if (message.replyToPreview != null) 'reply_to_preview': message.replyToPreview,
+                'download_allowed': message.downloadAllowed,
+              }),
+            )
+            .timeout(_timeout);
+        if (res.statusCode >= 300) {
+          throw Exception('Сервер ответил ${res.statusCode}: ${res.body}');
+        }
+        repo.updateStatus(message.id, ChatMessageStatus.sent);
+      } finally {
+        client.close();
+      }
+    } catch (e) {
+      repo.updateStatus(message.id, ChatMessageStatus.error);
+      rethrow;
+    }
+  }
+
+  /// Скачивает большое вложение (кнопка "Скачать" на пузыре в чате) —
+  /// потоково в [destPath], без буферизации в памяти. После успешного
+  /// скачивания стирает файл с Диска (самоочистка, как и просил
+  /// пользователь) — best-effort, неудача чистки не мешает пользователю
+  /// увидеть уже скачанный файл.
+  Future<void> downloadLargeAttachment(ChatMessage message, {required String destPath, void Function(int, int?)? onProgress}) async {
+    final fileId = message.driveFileId;
+    if (fileId == null) throw Exception('Нечего скачивать');
+    await drive.download(fileId: fileId, destPath: destPath, onProgress: onProgress);
+    repo.updateAttachmentLocalPath(message.id, destPath);
+    unawaited(drive.deleteFile(fileId));
   }
 
   /// Забирает новые входящие сообщения ОТ ВСЕХ контактов разом — вызывать
@@ -469,6 +596,11 @@ class ChatSyncService {
         );
         String? attachmentBase64;
         final path = row['attachment_path'] as String?;
+        // drive_file_id — большое вложение: строка приезжает сразу, а
+        // сам файл получатель скачивает позже вручную (кнопка
+        // "Скачать" в чате, см. `downloadLargeAttachment`) — тянуть
+        // гигабайты прямо тут, при обычном опросе, нельзя.
+        final driveFileId = row['drive_file_id'] as String?;
         if (type != ChatMessageType.text && path != null) {
           final bytes = await _downloadAttachment(path, token, client);
           if (bytes == null) continue; // не скачалось — попробуем в следующий опрос, строку не трогаем
@@ -488,6 +620,7 @@ class ChatSyncService {
           attachmentName: row['attachment_name'] as String?,
           attachmentMime: row['attachment_mime'] as String?,
           attachmentSize: (row['attachment_size'] as num?)?.toInt(),
+          driveFileId: driveFileId,
           replyToClientMessageId: row['reply_to_client_message_id'] as String?,
           replyToPreview: row['reply_to_preview'] as String?,
           downloadAllowed: row['download_allowed'] == null || row['download_allowed'] == true,

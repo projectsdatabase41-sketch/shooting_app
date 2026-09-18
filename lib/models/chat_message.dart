@@ -51,6 +51,16 @@ class ChatMessage {
   final String? attachmentMime;
   final int? attachmentSize;
 
+  /// Большое вложение (свыше `ChatMediaUtils.maxAttachmentBytes`) — идёт
+  /// не через `attachmentBase64`, а через отдельный Google Drive (см.
+  /// `ChatDriveService`). `driveFileId` — id файла на Диске, пока он там
+  /// ещё лежит (или до подтверждённого скачивания получателем).
+  /// `attachmentLocalPath` — путь к уже скачанному файлу НА УСТРОЙСТВЕ:
+  /// 5ГБ в SQLite строкой не кладут, поэтому в отличие от малых вложений
+  /// байты тут не хранятся, только путь на диске.
+  final String? driveFileId;
+  final String? attachmentLocalPath;
+
   /// Правили ли текст после отправки (см. `edited` в локальной схеме).
   final bool edited;
 
@@ -89,6 +99,8 @@ class ChatMessage {
     this.attachmentName,
     this.attachmentMime,
     this.attachmentSize,
+    this.driveFileId,
+    this.attachmentLocalPath,
     this.edited = false,
     this.replyToClientMessageId,
     this.replyToPreview,
@@ -98,7 +110,13 @@ class ChatMessage {
     required this.createdAt,
   });
 
-  ChatMessage copyWith({ChatMessageStatus? status, bool? seen}) => ChatMessage(
+  ChatMessage copyWith({
+    ChatMessageStatus? status,
+    bool? seen,
+    String? driveFileId,
+    String? attachmentLocalPath,
+  }) =>
+      ChatMessage(
         id: id,
         clientMessageId: clientMessageId,
         contactId: contactId,
@@ -110,6 +128,8 @@ class ChatMessage {
         attachmentName: attachmentName,
         attachmentMime: attachmentMime,
         attachmentSize: attachmentSize,
+        driveFileId: driveFileId ?? this.driveFileId,
+        attachmentLocalPath: attachmentLocalPath ?? this.attachmentLocalPath,
         edited: edited,
         replyToClientMessageId: replyToClientMessageId,
         replyToPreview: replyToPreview,
@@ -134,6 +154,8 @@ class ChatMessage {
         attachmentName: row['attachment_name'] as String?,
         attachmentMime: row['attachment_mime'] as String?,
         attachmentSize: (row['attachment_size'] as num?)?.toInt(),
+        driveFileId: row['drive_file_id'] as String?,
+        attachmentLocalPath: row['attachment_local_path'] as String?,
         edited: row['edited'] == 1 || row['edited'] == true,
         replyToClientMessageId: row['reply_to_client_message_id'] as String?,
         replyToPreview: row['reply_to_preview'] as String?,

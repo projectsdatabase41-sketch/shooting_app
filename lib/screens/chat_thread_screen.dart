@@ -1,9 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:intl/intl.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import '../logic/chat_media_utils.dart';
 import '../models/chat_contact.dart';
@@ -290,6 +293,25 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     _reload();
   }
 
+  /// Скачивание большого вложения (кнопка на пузыре) — в папку документов
+  /// приложения, потоково (см. `ChatSyncService.downloadLargeAttachment`).
+  /// Прогресс не показываем отдельным индикатором (ponytail: сначала
+  /// самое простое) — только "идёт загрузка" на время ожидания.
+  Future<void> _downloadLarge(ChatMessage m) async {
+    setState(() => _sending = true);
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final destPath = p.join(dir.path, 'chat_downloads', '${m.clientMessageId}_${m.attachmentName ?? 'file'}');
+      await Directory(p.dirname(destPath)).create(recursive: true);
+      await widget.sync.downloadLargeAttachment(m, destPath: destPath);
+      _reload();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось скачать: $e')));
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
   void _reply(ChatMessage m) => setState(() => _replyingTo = m);
 
   /// Переписка на устройстве не трогается — удаляется только сама
@@ -450,6 +472,37 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     }
   }
 
+  /// Большой файл (видео, архив...) — минуя Storage (лимит 50 МБ), через
+  /// Google Drive (см. `ChatDriveService`). Долгое нажатие на скрепку, а
+  /// не отдельная видимая кнопка (пока это редкий случай) — без
+  /// сжатия/предпросмотра, отправляется сразу с диска, байты в память не
+  /// читаются.
+  Future<void> _attachLarge() async {
+    final picked = await ChatMediaUtils.pickLargeFile();
+    if (!mounted || picked == null) return;
+
+    setState(() => _sending = true);
+    try {
+      await widget.sync.sendLargeAttachment(
+        contactId: widget.contact.id,
+        filePath: picked.path,
+        fileName: picked.name,
+        mime: ChatMediaUtils.looksLikeImage(picked.name) ? ChatMediaUtils.mimeFor(picked.name) : 'application/octet-stream',
+        type: ChatMessageType.file,
+        fileSize: picked.size,
+        downloadAllowed: widget.prefs.downloadAllowedFor(isPersonal: true),
+      );
+      _scrollToEnd();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не отправлено: $e')));
+    } finally {
+      if (mounted) {
+        _reload();
+        setState(() => _sending = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -555,6 +608,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                                     onRetry: () => _retry(m),
                                     onAckCall: () => _ackCall(m),
                                     onCancelCall: () => _cancelCall(m),
+                                    onDownloadLarge: () => _downloadLarge(m),
                                   ),
                                 ),
                               ),
@@ -588,10 +642,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    IconButton(
-                      onPressed: _sending ? null : _attach,
-                      icon: const Icon(Icons.attach_file),
-                      tooltip: 'Прикрепить фото или файл',
+                    GestureDetector(
+                      // Долгое нажатие — большой файл через Google Drive,
+                      // в обход лимита обычных вложений (см. `_attachLarge`).
+                      onLongPress: _sending ? null : _attachLarge,
+                      child: IconButton(
+                        onPressed: _sending ? null : _attach,
+                        icon: const Icon(Icons.attach_file),
+                        tooltip: 'Прикрепить фото или файл (долгое нажатие — большой файл)',
+                      ),
                     ),
                     Expanded(
                       child: TextField(
@@ -626,6 +685,7 @@ class _Bubble extends StatelessWidget {
   final VoidCallback onRetry;
   final VoidCallback onAckCall;
   final VoidCallback onCancelCall;
+  final VoidCallback onDownloadLarge;
   const _Bubble({
     required this.message,
     required this.prefs,
@@ -636,6 +696,7 @@ class _Bubble extends StatelessWidget {
     required this.onRetry,
     required this.onAckCall,
     required this.onCancelCall,
+    required this.onDownloadLarge,
   });
 
   static const double _imageMaxWidth = 260;
@@ -731,6 +792,24 @@ class _Bubble extends StatelessWidget {
                     message.attachmentMime,
                   ),
                   child: Icon(Icons.download_outlined, color: fg, size: 20),
+                ),
+              ] else if ((mine || message.downloadAllowed) && message.attachmentLocalPath != null) ...[
+                // Большое вложение уже скачано (или это своя же
+                // исходная копия у отправителя) — байты не в SQLite,
+                // делимся по пути на диске.
+                const SizedBox(width: 4),
+                InkWell(
+                  onTap: () => ChatMediaUtils.shareAttachmentPath(message.attachmentLocalPath!, message.attachmentMime),
+                  child: Icon(Icons.folder_open_outlined, color: fg, size: 20),
+                ),
+              ] else if (!mine && message.downloadAllowed && message.driveFileId != null) ...[
+                // Большое вложение ещё лежит на Диске — сама передача
+                // начинается только по явному тапу, не сама по себе при
+                // получении сообщения (см. `ChatSyncService.pollIncoming`).
+                const SizedBox(width: 4),
+                InkWell(
+                  onTap: onDownloadLarge,
+                  child: Icon(Icons.cloud_download_outlined, color: fg, size: 20),
                 ),
               ],
             ],
