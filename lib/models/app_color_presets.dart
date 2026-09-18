@@ -32,10 +32,15 @@ const List<AppColorPreset> appColorPresets = [
     buttonText: Color(0xFFEDEAE0),
   ),
   AppColorPreset(
+    // Раньше карточки/кнопки были шоколадно-коричневыми (0xFF2B211B) —
+    // по отзыву на скриншот рабочего экрана это читалось как "коричневые
+    // карточки", а не техничный тёмный интерфейс. Заменено на
+    // серо-графитовый нейтральный тон (тот же принцип, что и фон), тёплый
+    // золотой акцент — оставлен, он и был единственной сильной стороной.
     label: 'Ночь',
     background: Color(0xFF0B0F13),
-    button: Color(0xFF2B211B),
-    buttonText: Color(0xFFE7B27A),
+    button: Color(0xFF34302B),
+    buttonText: Color(0xFFD9A855),
   ),
   AppColorPreset(
     label: 'Кофе',
