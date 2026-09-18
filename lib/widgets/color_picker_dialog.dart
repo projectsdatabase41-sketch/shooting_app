@@ -121,6 +121,13 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> with SingleTicker
               child: ClipRect(
                 child: TabBarView(
                   controller: _tab,
+                  // Свайп между вкладками отключён (переключение и так по
+                  // тапу на "Палитра"/"HEX") — иначе горизонтальный драг
+                  // слайдера яркости внутри ColorPicker конкурирует с
+                  // жестом PageView у TabBarView, и тот, как родитель,
+                  // почти всегда перехватывает его первым: слайдер
+                  // реагировал на тап, но не тащился пальцем.
+                  physics: const NeverScrollableScrollPhysics(),
                   children: [_buildPaletteTab(), _buildHexTab()],
                 ),
               ),
