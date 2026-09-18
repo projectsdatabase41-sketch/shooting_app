@@ -1,8 +1,12 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/home_tab_specs.dart';
+import '../services/ai_service.dart';
 import '../services/ai_settings.dart';
 import '../services/custom_services_repository.dart';
 import '../services/knowledge_column_discovery.dart';
@@ -320,6 +324,70 @@ class _AccountSheetState extends State<_AccountSheet> {
     }
     if (!mounted) return;
     setState(() => _message = 'Таблицы для ИИ обновлены');
+
+    // Понять, что за таблицу подключили: без описания ИИ видит только
+    // имя таблицы и колонки, но не знает, дневник это или что-то ещё
+    // (пункт: "при добавлении новой базы... ИИ сам запрашивает структуру
+    // базы... сохраняет во внутреннюю память, что это за база"). Пустую
+    // таблицу описываем только по структуре — само содержание опишется
+    // при следующем открытии этого экрана, когда данные уже появятся.
+    final needsDescription =
+        settings.tables.where((t) => t.description.isEmpty || t.description == _emptyTableNote).toList();
+    if (needsDescription.isNotEmpty) {
+      await _run(() => _describeTables(settings, needsDescription));
+    }
+  }
+
+  static const _emptyTableNote = 'Таблица пока пустая, содержимого ещё нет.';
+
+  Future<String?> _describeTables(AiSettings settings, List<KnowledgeTableConfig> tables) async {
+    final token = await _auth.ensureFreshToken() ?? _auth.anonKey;
+    final baseUrl = '${_auth.url}/rest/v1';
+    final aiService = AiService(settings);
+    final updated = {for (final t in settings.tables) t.name: t};
+    for (final t in tables) {
+      final desc = await _describeOneTable(t, baseUrl, token, aiService);
+      if (desc != null) {
+        updated[t.name] = KnowledgeTableConfig(name: t.name, label: t.label, description: desc, contentColumn: t.contentColumn);
+      }
+    }
+    settings.tables = updated.values.toList();
+    return 'Таблицы для ИИ обновлены';
+  }
+
+  Future<String?> _describeOneTable(
+    KnowledgeTableConfig t,
+    String baseUrl,
+    String token,
+    AiService aiService,
+  ) async {
+    try {
+      final uri = Uri.parse('$baseUrl/${t.name}').replace(queryParameters: {'select': '*', 'limit': '3'});
+      final res = await http.get(uri, headers: {
+        'apikey': token,
+        'Authorization': 'Bearer $token',
+      }).timeout(const Duration(seconds: 20));
+      if (res.statusCode != 200) return null;
+      final rows = jsonDecode(utf8.decode(res.bodyBytes));
+      if (rows is! List) return null;
+      if (rows.isEmpty) return _emptyTableNote;
+
+      final firstRow = rows.first;
+      if (firstRow is! Map) return null;
+      final reply = await aiService.ask(
+        systemPrompt: 'Ты помогаешь приложению для стрельбы понять смысл ЧУЖОЙ таблицы базы данных, '
+            'которую подключил пользователь. Дан список колонок и примеры строк. Опиши ОДНИМ коротким '
+            'предложением, что это за таблица и как её содержимое использовать при ответах пользователю. '
+            'Без markdown, без кавычек, только суть.',
+        contextBlock: 'Таблица "${t.name}". Колонки: ${firstRow.keys.join(", ")}. '
+            'Примеры строк: ${jsonEncode(rows.take(2).toList())}',
+        history: const [(role: 'user', text: 'Что это за таблица?')],
+      );
+      final desc = reply.text.trim();
+      return desc.isEmpty ? null : desc;
+    } catch (_) {
+      return null;
+    }
   }
 
   @override

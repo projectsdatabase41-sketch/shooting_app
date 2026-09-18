@@ -18,6 +18,12 @@ class KnowledgeChunk {
   final String heading;
   final String text;
 
+  /// Дата самой записи (не текущая дата) — если в строке нашлась
+  /// колонка вроде `created_at`/`date`, или значение похоже на дату.
+  /// `null`, если такой колонки не нашлось (пункт: "ИИ должен понимать
+  /// даты... записи, чтобы лучше понимать пользователя").
+  final String? recordDate;
+
   const KnowledgeChunk({
     required this.table,
     required this.tableLabel,
@@ -25,6 +31,7 @@ class KnowledgeChunk {
     required this.source,
     required this.heading,
     required this.text,
+    this.recordDate,
   });
 }
 
@@ -75,15 +82,18 @@ class KnowledgeService {
   static const Duration _timeout = Duration(seconds: 20);
 
   /// Сколько кусков берём из каждой таблицы.
-  static const int perTableLimit = 3;
+  static const int perTableLimit = 6;
 
   /// Предел на один кусок и на всю выдачу, символов.
   ///
   /// Куски в базе бывают под 2000 символов, а окно бесплатной модели
-  /// маленькое. Режем на нашей стороне: лучше отдать модели три коротких
-  /// фрагмента, чем один огромный и получить ошибку переполнения.
-  static const int chunkCharLimit = 1200;
-  static const int totalCharLimit = 6000;
+  /// маленькое. Режем на нашей стороне: лучше отдать модели несколько
+  /// коротких фрагментов, чем один огромный и получить ошибку
+  /// переполнения. Подняты с 1200/6000 (решение пользователя: "ИИ мало
+  /// информации получает") — даже у самых скромных бесплатных моделей в
+  /// цепочке контекст на порядки больше 14000 символов (~3500 токенов).
+  static const int chunkCharLimit = 2000;
+  static const int totalCharLimit = 14000;
 
   /// Ключевые слова и «это болтовня, не вопрос» — общая логика,
   /// см. `TextSearch` (вынесена оттуда же, где раньше жила здесь одна,
@@ -258,11 +268,30 @@ class KnowledgeService {
               source: '${row['file_name'] ?? table.label}',
               heading: '${row['heading_path'] ?? ''}',
               text: _clean('${row[table.contentColumn]}'),
+              recordDate: _findRecordDate(row, table.contentColumn),
             )
       ];
     } catch (_) {
       return const [];
     }
+  }
+
+  /// Ищет дату самой записи в строке — сначала по обычным именам
+  /// колонок, потом (для чужих таблиц с другими названиями) по первому
+  /// строковому значению, которое парсится как дата.
+  static const List<String> _dateColumnNames = ['created_at', 'date', 'created', 'updated_at', 'timestamp'];
+
+  static String? _findRecordDate(Map row, String contentColumn) {
+    for (final key in _dateColumnNames) {
+      final v = row[key];
+      if (v is String && v.isNotEmpty) return v;
+    }
+    for (final entry in row.entries) {
+      if (entry.key == contentColumn) continue;
+      final v = entry.value;
+      if (v is String && v.isNotEmpty && DateTime.tryParse(v) != null) return v;
+    }
+    return null;
   }
 
   /// В базе текст лежит с табуляциями вместо пробелов и переносами
@@ -277,14 +306,19 @@ class KnowledgeService {
   /// лимит символов.
   static String? asPromptBlock(List<KnowledgeChunk> chunks) {
     if (chunks.isEmpty) return null;
-    final buf = StringBuffer();
+    // Текущие дата и время — отдельной строкой один раз, а не в каждом
+    // куске: модель должна знать "сейчас", чтобы отличать "давно" от
+    // "недавно" у дат самих записей (пункт: "какое сейчас время и дату
+    // записи, чтобы лучше понимать пользователя").
+    final buf = StringBuffer('Текущие дата и время: ${DateTime.now().toIso8601String()}\n\n');
     for (final c in chunks) {
       // Название/описание таблицы — чтобы модель понимала, ЧТО за
       // источник перед ней (личный дневник — не то же самое, что
       // официальные правила ISSF, даже если оба совпали по слову),
       // а не только откуда файл (пункт 12 списка правок).
       final tableTag = c.tableDescription.isEmpty ? c.tableLabel : '${c.tableLabel}: ${c.tableDescription}';
-      final piece = '[$tableTag — ${c.source}${c.heading.isEmpty ? '' : ', ${c.heading}'}]\n${c.text}\n\n';
+      final dateTag = c.recordDate == null ? '' : ', запись от ${c.recordDate}';
+      final piece = '[$tableTag — ${c.source}${c.heading.isEmpty ? '' : ', ${c.heading}'}$dateTag]\n${c.text}\n\n';
       if (buf.length + piece.length > totalCharLimit) break;
       buf.write(piece);
     }
