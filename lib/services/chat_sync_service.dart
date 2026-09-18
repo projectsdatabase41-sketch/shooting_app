@@ -176,6 +176,78 @@ class ChatSyncService {
     }
   }
 
+  /// Тренер жмёт "Иду" на входящем вызове — обновляет свою локальную
+  /// копию сразу и шлёт спортсмену `call_ack`-сигнал (тот же принцип,
+  /// что у edit/delete): у спортсмена статус вызова переключится на
+  /// "тренер идёт", без этого он бы не узнал, заметили ли его вообще.
+  Future<void> acknowledgeCall(ChatMessage original) async {
+    repo.updateCallStatus(original.id, 'acknowledged');
+    if (!ChatSettings.isConfigured) return;
+    final token = await auth.ensureFreshToken();
+    if (token == null) return;
+    final client = clientFactory();
+    try {
+      await client
+          .post(
+            Uri.parse('${ChatSettings.url}/rest/v1/chat_messages'),
+            headers: {
+              'apikey': ChatSettings.anonKey,
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal',
+            },
+            body: jsonEncode({
+              'client_message_id': _uuid.v4(),
+              'sender_id': auth.userId,
+              'recipient_id': original.contactId,
+              'msg_type': 'call_ack',
+              'ack_of_client_message_id': original.clientMessageId,
+            }),
+          )
+          .timeout(_timeout);
+    } catch (_) {
+      // Необязательное усиление — своя копия уже обновлена локально.
+    } finally {
+      client.close();
+    }
+  }
+
+  /// Спортсмен передумал/справился сам — отменяет СВОЙ уже отправленный
+  /// вызов. Обновляет локальную копию сразу и шлёт тренеру `call_cancel`-
+  /// сигнал, чтобы у него вызов выглядел как "пропущенный, но уже не
+  /// актуальный", а не висел вечно немым ожиданием ответа.
+  Future<void> cancelCall(ChatMessage original) async {
+    repo.updateCallStatus(original.id, 'cancelled');
+    if (!ChatSettings.isConfigured) return;
+    final token = await auth.ensureFreshToken();
+    if (token == null) return;
+    final client = clientFactory();
+    try {
+      await client
+          .post(
+            Uri.parse('${ChatSettings.url}/rest/v1/chat_messages'),
+            headers: {
+              'apikey': ChatSettings.anonKey,
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal',
+            },
+            body: jsonEncode({
+              'client_message_id': _uuid.v4(),
+              'sender_id': auth.userId,
+              'recipient_id': original.contactId,
+              'msg_type': 'call_cancel',
+              'cancel_of_client_message_id': original.clientMessageId,
+            }),
+          )
+          .timeout(_timeout);
+    } catch (_) {
+      // Необязательное усиление — своя копия уже обновлена локально.
+    } finally {
+      client.close();
+    }
+  }
+
   /// Отправляет вложение (фото/файл — запись видео/голоса пока не
   /// реализована в интерфейсе, хотя схема и этот метод их уже
   /// поддерживают, `type` принимает любое значение). [bytes] — уже
@@ -369,6 +441,18 @@ class ChatSyncService {
         if (rawType == 'delete') {
           final target = repo.byClientId(senderId, '${row['delete_of_client_message_id']}');
           if (target != null) repo.deleteMessage(target.id);
+          doneIds.add('${row['id']}');
+          continue;
+        }
+        if (rawType == 'call_ack') {
+          final target = repo.byClientId(senderId, '${row['ack_of_client_message_id']}');
+          if (target != null) repo.updateCallStatus(target.id, 'acknowledged');
+          doneIds.add('${row['id']}');
+          continue;
+        }
+        if (rawType == 'call_cancel') {
+          final target = repo.byClientId(senderId, '${row['cancel_of_client_message_id']}');
+          if (target != null) repo.updateCallStatus(target.id, 'cancelled');
           doneIds.add('${row['id']}');
           continue;
         }

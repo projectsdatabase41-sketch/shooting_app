@@ -187,6 +187,45 @@ class ChatAuthService {
     }
   }
 
+  /// Громкий канал "Позвать" (рингтон устройства + усиленная вибрация,
+  /// см. `push_service.dart`) — можно отключить у себя (актуально для
+  /// тренера, которому могут звонить чаще и в любое время): тогда вызов
+  /// приходит обычным тихим уведомлением вместо звонка поверх всего.
+  /// В отличие от personalPushMode это не "заглушить совсем", а именно
+  /// понизить громкость одного конкретного типа сигнала.
+  bool get callAlertsEnabled => _read('chat_call_alerts_enabled') != '0';
+
+  Future<void> updateCallAlertsEnabled(bool enabled) async {
+    final previous = callAlertsEnabled;
+    _write('chat_call_alerts_enabled', enabled ? '1' : '0');
+    final token = await ensureFreshToken();
+    if (token == null) {
+      _write('chat_call_alerts_enabled', previous ? '1' : '0');
+      throw const AuthException('Сначала войдите в чат');
+    }
+    final client = clientFactory();
+    try {
+      final res = await client
+          .patch(
+            Uri.parse('$url/rest/v1/chat_profiles?user_id=eq.$userId'),
+            headers: {
+              'apikey': anonKey,
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal',
+            },
+            body: jsonEncode({'call_alerts_enabled': enabled}),
+          )
+          .timeout(const Duration(seconds: 20));
+      if (res.statusCode >= 400) {
+        _write('chat_call_alerts_enabled', previous ? '1' : '0');
+        throw AuthException(_message(res.body));
+      }
+    } finally {
+      client.close();
+    }
+  }
+
   /// 'everyone' (по умолчанию) — как раньше, первый встречный может
   /// просто написать; 'friends_only' — написать может кто угодно, но
   /// это ЗАЯВКА (см. `chat_friends`/`ensureFriendRequest`), сообщения

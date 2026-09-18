@@ -19,6 +19,12 @@ enum ChatMessageStatus { sending, sent, delivered, error }
 /// `call` — "позвать" (кнопка в `ChatThreadScreen`): в отличие от
 /// edit/delete это НАСТОЯЩЕЕ сообщение (остаётся в истории переписки),
 /// просто без текста и вложения — весь смысл в push с усиленным звуком.
+///
+/// На проводе (не в этом enum — они никогда не сохраняются как
+/// самостоятельная строка, только сигнал) есть ещё `call_ack`/
+/// `call_cancel` — тот же принцип, что у edit/delete: правят поле
+/// `callStatus` у уже существующей `call`-строки, см.
+/// `ChatSyncService.acknowledgeCall`/`cancelCall`/`pollIncoming`.
 enum ChatMessageType { text, image, video, audio, file, edit, delete, call }
 
 class ChatMessage {
@@ -64,6 +70,11 @@ class ChatMessage {
   /// (`direction == outgoing`) экраны игнорируют это поле — свой файл
   /// можно сохранить себе всегда.
   final bool downloadAllowed;
+
+  /// Только для `type == call` — `null` (никак не отреагировали),
+  /// `'acknowledged'` (тренер нажал "Иду") или `'cancelled'` (сам
+  /// спортсмен отменил вызов, помощь больше не нужна). См. класс-докстринг.
+  final String? callStatus;
   final DateTime createdAt;
 
   const ChatMessage({
@@ -83,6 +94,7 @@ class ChatMessage {
     this.replyToPreview,
     this.seen = false,
     this.downloadAllowed = true,
+    this.callStatus,
     required this.createdAt,
   });
 
@@ -103,6 +115,7 @@ class ChatMessage {
         replyToPreview: replyToPreview,
         seen: seen ?? this.seen,
         downloadAllowed: downloadAllowed,
+        callStatus: callStatus,
         createdAt: createdAt,
       );
 
@@ -126,6 +139,7 @@ class ChatMessage {
         replyToPreview: row['reply_to_preview'] as String?,
         seen: row['seen'] == 1 || row['seen'] == true,
         downloadAllowed: row['download_allowed'] == null || row['download_allowed'] == 1 || row['download_allowed'] == true,
+        callStatus: row['call_status'] as String?,
         createdAt: DateTime.parse(row['created_at'] as String),
       );
 }

@@ -170,10 +170,12 @@ Deno.serve(async (req: Request) => {
     }
   } else {
     const recipientId = row.recipient_id as string;
-    // "Позвать" — мимо настройки "Уведомления личных чатов" (тот же
-    // принцип, что звонок мимо беззвучного режима телефона): это явный
-    // разовый вызов, а не рядовое сообщение, которое можно отложить.
-    if (msgType === 'call') {
+    // "Позвать" и его сигналы (call_ack — тренер идёт, call_cancel —
+    // спортсмен передумал) — мимо настройки "Уведомления личных чатов"
+    // (тот же принцип, что звонок мимо беззвучного режима телефона):
+    // это явный разовый вызов и ответ на него, а не рядовое сообщение,
+    // которое можно отложить.
+    if (msgType === 'call' || msgType === 'call_ack' || msgType === 'call_cancel') {
       recipientIds.push(recipientId);
     } else {
       const profileRes = await fetch(
@@ -209,9 +211,40 @@ Deno.serve(async (req: Request) => {
   // устройства получателя (обычно одно, но пользователь может быть
   // залогинен на нескольких).
   if (msgType === 'call') {
+    // Тренер мог отключить громкий канал (chat_profiles.call_alerts_enabled,
+    // см. ChatAuthService.callAlertsEnabled) — тогда шлём как обычное
+    // уведомление, а не рингтон+вибрацию поверх всего.
+    const prefRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/chat_profiles?select=call_alerts_enabled&user_id=eq.${recipientIds[0]}`,
+      { headers: { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` } },
+    );
+    const prefRows = await prefRes.json();
+    const alertsEnabled = prefRows[0]?.call_alerts_enabled ?? true;
     const title = senderNickname ?? 'Звонок';
     const body = 'вызывает вас';
-    await Promise.all(tokens.map((t) => sendCallPush(t, title, body, senderId).catch(() => {})));
+    if (alertsEnabled) {
+      await Promise.all(tokens.map((t) => sendCallPush(t, title, body, senderId).catch(() => {})));
+    } else {
+      await Promise.all(
+        tokens.map((t) => sendPush(t, title, body, { type: 'chat', contact_id: senderId }).catch(() => {})),
+      );
+    }
+    return new Response('ok');
+  }
+  if (msgType === 'call_ack') {
+    const title = senderNickname ?? 'Тренер';
+    const body = 'идёт к вам';
+    await Promise.all(
+      tokens.map((t) => sendPush(t, title, body, { type: 'chat', contact_id: senderId }).catch(() => {})),
+    );
+    return new Response('ok');
+  }
+  if (msgType === 'call_cancel') {
+    const title = senderNickname ?? 'Спортсмен';
+    const body = 'отменил вызов — помощь больше не нужна';
+    await Promise.all(
+      tokens.map((t) => sendPush(t, title, body, { type: 'chat', contact_id: senderId }).catch(() => {})),
+    );
     return new Response('ok');
   }
 

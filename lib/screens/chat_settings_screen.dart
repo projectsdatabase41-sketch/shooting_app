@@ -74,6 +74,17 @@ class _ChatSettingsScreenState extends State<ChatSettingsScreen> {
   /// показывает новый выбор без задержки на сеть; сеть просто донастраивает
   /// сервер в фоне и откатывает кэш назад, если не получилось (тогда
   /// заметно по SnackBar и второму `setState`).
+  Future<void> _setCallAlertsEnabled(bool enabled) async {
+    setState(() {});
+    try {
+      await widget.auth.updateCallAlertsEnabled(enabled);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    } finally {
+      if (mounted) setState(() {});
+    }
+  }
+
   Future<void> _updatePush({required String personal, required String global}) async {
     final personalFuture = widget.auth.updatePersonalPushMode(personal);
     final globalFuture = widget.auth.updateGlobalPushMode(global);
@@ -136,6 +147,14 @@ class _ChatSettingsScreenState extends State<ChatSettingsScreen> {
                 trailing: _pushMode == value ? const Icon(Icons.check) : null,
                 onTap: () => _setPushMode(value),
               ),
+          const Divider(height: 1),
+          SwitchListTile(
+            secondary: const Icon(Icons.campaign_outlined),
+            title: const Text('Громкий сигнал "Позвать"'),
+            subtitle: const Text('Рингтон устройства и усиленная вибрация вместо обычного уведомления'),
+            value: widget.auth.callAlertsEnabled,
+            onChanged: _setCallAlertsEnabled,
+          ),
           const Divider(height: 1),
           ListTile(
             leading: const Icon(Icons.shield_outlined),

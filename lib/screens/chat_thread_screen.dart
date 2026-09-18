@@ -260,6 +260,36 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     }
   }
 
+  /// "Позвать" — отдельная кнопка в шапке, не текстовое сообщение:
+  /// собеседник получает push с усиленным звуком/вибрацией (см.
+  /// `push_service.dart`), а не просто прочитает сообщение когда-нибудь.
+  /// Была убрана из личного чата, пользователь попросил вернуть именно
+  /// сюда (а не в отдельный режим тренировки).
+  Future<void> _call() async {
+    setState(() => _sending = true);
+    try {
+      await widget.sync.sendCall(widget.contact.id);
+      _reload();
+      _scrollToEnd();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось позвать: $e')));
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  /// Собеседник (обычно тренер) жмёт "Иду" на входящем вызове.
+  Future<void> _ackCall(ChatMessage m) async {
+    await widget.sync.acknowledgeCall(m);
+    _reload();
+  }
+
+  /// Сам звонивший передумал/справился — отменяет СВОЙ вызов.
+  Future<void> _cancelCall(ChatMessage m) async {
+    await widget.sync.cancelCall(m);
+    _reload();
+  }
+
   void _reply(ChatMessage m) => setState(() => _replyingTo = m);
 
   /// Переписка на устройстве не трогается — удаляется только сама
@@ -456,6 +486,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
           // держать настройки конкретного контакта здесь, тут же со
           // временем появятся остальные).
           actions: [
+            IconButton(
+              onPressed: _sending ? null : _call,
+              icon: const Icon(Icons.campaign_outlined),
+              tooltip: 'Позвать',
+            ),
             PopupMenuButton<String>(
               onSelected: (v) {
                 if (v == 'remove') _removeContact();
@@ -518,6 +553,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                                     translating: _translating.contains(m.id),
                                     translationError: _translationErrors[m.id],
                                     onRetry: () => _retry(m),
+                                    onAckCall: () => _ackCall(m),
+                                    onCancelCall: () => _cancelCall(m),
                                   ),
                                 ),
                               ),
@@ -587,6 +624,8 @@ class _Bubble extends StatelessWidget {
   final bool translating;
   final String? translationError;
   final VoidCallback onRetry;
+  final VoidCallback onAckCall;
+  final VoidCallback onCancelCall;
   const _Bubble({
     required this.message,
     required this.prefs,
@@ -595,9 +634,27 @@ class _Bubble extends StatelessWidget {
     required this.translating,
     required this.translationError,
     required this.onRetry,
+    required this.onAckCall,
+    required this.onCancelCall,
   });
 
   static const double _imageMaxWidth = 260;
+
+  /// Иконка вызова — меняется по статусу (см. класс-докстринг
+  /// `ChatMessage.callStatus`), чтобы "висящий" вызов, "тренер идёт" и
+  /// "отменён" были заметно разными пузырями, а не одинаковым рупором.
+  static IconData _callIcon(String? status) => switch (status) {
+        'acknowledged' => Icons.directions_walk,
+        'cancelled' => Icons.call_missed_outlined,
+        _ => Icons.campaign_outlined,
+      };
+
+  /// [mine] — это МОЙ исходный вызов (я звонил) или чужой (звонили мне).
+  static String _callLabel(bool mine, String? status) => switch (status) {
+        'acknowledged' => mine ? 'Тренер идёт' : 'Вы согласились идти',
+        'cancelled' => mine ? 'Вызов отменён' : 'Пропущенный — помощь не нужна',
+        _ => mine ? 'Вы позвали' : 'Вас позвали',
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -683,14 +740,33 @@ class _Bubble extends StatelessWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.campaign_outlined, color: fg),
+              Icon(_callIcon(message.callStatus), color: fg),
               const SizedBox(width: 8),
               Text(
-                mine ? 'Вы позвали' : 'Вас позвали',
+                _callLabel(mine, message.callStatus),
                 style: theme.textTheme.bodyMedium?.copyWith(color: fg, fontWeight: FontWeight.w600),
               ),
             ],
           ),
+          // Кнопка действия — только пока вызов ещё "висит" (никто не
+          // отреагировал): собеседник может подтвердить "Иду", сам
+          // звонивший — отменить, если помощь больше не нужна.
+          if (message.callStatus == null) ...[
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: mine
+                  ? TextButton(
+                      style: TextButton.styleFrom(foregroundColor: fg, padding: EdgeInsets.zero),
+                      onPressed: onCancelCall,
+                      child: const Text('Отменить'),
+                    )
+                  : FilledButton(
+                      onPressed: onAckCall,
+                      child: const Text('Иду'),
+                    ),
+            ),
+          ],
         ],
         // "Маска" — перевод показывается ВМЕСТО оригинала, не вместе с
         // ним (решение пользователя): либо/либо, с маленькой

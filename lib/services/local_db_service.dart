@@ -109,6 +109,7 @@ class LocalDbService {
         'chat_global_push_mode': 'TEXT',
         'chat_personal_push_mode': 'TEXT',
         'chat_privacy_mode': 'TEXT',
+        'chat_call_alerts_enabled': 'TEXT',
         // Настройки чата, не завязанные на конкретный аккаунт (перевод,
         // оформление пузырей) — см. ChatPreferences.
         'chat_translation_mode': "TEXT NOT NULL DEFAULT 'off'",
@@ -144,6 +145,7 @@ class LocalDbService {
         'reply_to_client_message_id': 'TEXT',
         'reply_to_preview': 'TEXT',
         'download_allowed': 'INTEGER NOT NULL DEFAULT 1',
+        'call_status': 'TEXT',
       },
       'chat_global_cache': {
         'download_allowed': 'INTEGER NOT NULL DEFAULT 1',

@@ -85,6 +85,13 @@ class ChatMessagesRepository {
     db.db.execute('UPDATE chat_local_messages SET status = ? WHERE id = ?', [status.name, id]);
   }
 
+  /// "Иду"/отмена вызова (см. `ChatSyncService.acknowledgeCall`/`cancelCall`) —
+  /// правит уже существующую `call`-строку, ту же самую и у отправителя,
+  /// и (через сигнал) у получателя.
+  void updateCallStatus(String id, String status) {
+    db.db.execute('UPDATE chat_local_messages SET call_status = ? WHERE id = ?', [status, id]);
+  }
+
   /// Находит локальное сообщение этой переписки по `client_message_id` —
   /// нужно, чтобы применить входящий edit/delete-сигнал (см.
   /// `ChatSyncService.pollIncoming`) к уже сохранённой строке.

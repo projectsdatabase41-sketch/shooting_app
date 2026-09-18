@@ -163,6 +163,13 @@ CREATE TABLE IF NOT EXISTS chat_local_messages (
   -- свои же вложения (direction='outgoing') всегда можно переслать себе,
   -- да и старые строки до этой колонки не должны внезапно потерять кнопку.
   download_allowed    INTEGER NOT NULL DEFAULT 1,
+  -- Только для msg_type='call' — что стало с вызовом: NULL, пока
+  -- собеседник никак не отреагировал, 'acknowledged', когда тренер
+  -- нажал "Иду" (спортсмен видит, что его заметили), 'cancelled',
+  -- когда сам спортсмен отменил вызов (помощь больше не нужна) — и
+  -- своя копия, и копия у тренера помечаются одинаково через тот же
+  -- сигнальный механизм, что у edit/delete (см. ChatSyncService).
+  call_status         TEXT CHECK (call_status IN ('acknowledged','cancelled')),
   created_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

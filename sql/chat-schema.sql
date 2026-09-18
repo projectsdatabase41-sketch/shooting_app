@@ -35,6 +35,11 @@ create table if not exists chat_profiles (
   -- (без "только ответы" — в личной переписке любое сообщение и так
   -- адресовано лично тебе, отдельного смысла в этом варианте нет).
   personal_push_mode text not null default 'all',
+  -- Громкий канал "Позвать" (рингтон устройства + усиленная вибрация,
+  -- см. lib/services/push_service.dart) — тренер может отключить его у
+  -- себя, тогда вызов приходит обычным тихим уведомлением вместо
+  -- звонка поверх всего (см. Edge Function send-chat-push).
+  call_alerts_enabled boolean not null default true,
   created_at     timestamptz not null default now()
 );
 
@@ -47,6 +52,8 @@ alter table chat_profiles add column if not exists personal_push_mode text not n
 alter table chat_profiles drop constraint if exists chat_profiles_personal_push_mode_check;
 alter table chat_profiles add constraint chat_profiles_personal_push_mode_check
   check (personal_push_mode in ('all', 'none'));
+
+alter table chat_profiles add column if not exists call_alerts_enabled boolean not null default true;
 
 -- Приватность личных чатов: 'everyone' (по умолчанию) — как раньше,
 -- первый встречный может просто написать; 'friends_only' — написать
@@ -119,9 +126,12 @@ create table if not exists chat_messages (
   -- 'edit'/'delete' — служебные сигналы к уже отправленному сообщению
   -- (см. ниже), а не новые сообщения сами по себе; 'call' — "позвать"
   -- (кнопка в ChatThreadScreen) — без текста и вложения, только сигнал
-  -- для push с усиленным звуком/вибрацией (см. Edge Function).
+  -- для push с усиленным звуком/вибрацией (см. Edge Function);
+  -- 'call_ack'/'call_cancel' — служебные сигналы к уже отправленному
+  -- 'call' (тот же принцип, что у edit/delete): тренер жмёт "Иду" →
+  -- 'call_ack' спортсмену, спортсмен передумал → 'call_cancel' тренеру.
   msg_type               text not null default 'text'
-                           check (msg_type in ('text','image','video','audio','file','edit','delete','call')),
+                           check (msg_type in ('text','image','video','audio','file','edit','delete','call','call_ack','call_cancel')),
   attachment_path        text,   -- путь объекта в бакете chat-media
   attachment_name        text,   -- исходное имя файла (для 'file')
   attachment_mime        text,
@@ -136,6 +146,8 @@ create table if not exists chat_messages (
   -- уже не найдётся у получателя локально.
   edit_of_client_message_id   text,
   delete_of_client_message_id text,
+  ack_of_client_message_id    text,
+  cancel_of_client_message_id text,
   reply_to_client_message_id  text,
   reply_to_preview             text,
   created_at             timestamptz not null default now(),
@@ -149,6 +161,8 @@ create table if not exists chat_messages (
     or (msg_type = 'edit' and edit_of_client_message_id is not null and text is not null)
     or (msg_type = 'delete' and delete_of_client_message_id is not null)
     or (msg_type = 'call')
+    or (msg_type = 'call_ack' and ack_of_client_message_id is not null)
+    or (msg_type = 'call_cancel' and cancel_of_client_message_id is not null)
   )
 );
 
@@ -165,6 +179,8 @@ alter table chat_messages add column if not exists attachment_width integer;
 alter table chat_messages add column if not exists attachment_height integer;
 alter table chat_messages add column if not exists edit_of_client_message_id text;
 alter table chat_messages add column if not exists delete_of_client_message_id text;
+alter table chat_messages add column if not exists ack_of_client_message_id text;
+alter table chat_messages add column if not exists cancel_of_client_message_id text;
 alter table chat_messages add column if not exists reply_to_client_message_id text;
 alter table chat_messages add column if not exists reply_to_preview text;
 -- Разрешил ли отправитель скачивание вложения (настройка ОТПРАВИТЕЛЯ,
@@ -178,7 +194,7 @@ alter table chat_messages add column if not exists download_allowed boolean not 
 -- накатывать многократно.
 alter table chat_messages drop constraint if exists chat_messages_msg_type_check;
 alter table chat_messages add constraint chat_messages_msg_type_check
-  check (msg_type in ('text','image','video','audio','file','edit','delete','call'));
+  check (msg_type in ('text','image','video','audio','file','edit','delete','call','call_ack','call_cancel'));
 
 alter table chat_messages drop constraint if exists chat_messages_check;
 alter table chat_messages drop constraint if exists chat_messages_content_check;
@@ -189,6 +205,8 @@ alter table chat_messages add constraint chat_messages_content_check
     or (msg_type = 'edit' and edit_of_client_message_id is not null and text is not null)
     or (msg_type = 'delete' and delete_of_client_message_id is not null)
     or (msg_type = 'call')
+    or (msg_type = 'call_ack' and ack_of_client_message_id is not null)
+    or (msg_type = 'call_cancel' and cancel_of_client_message_id is not null)
   );
 
 create index if not exists idx_chat_messages_recipient on chat_messages(recipient_id);

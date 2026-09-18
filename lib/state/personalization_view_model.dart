@@ -50,7 +50,7 @@ class PersonalizationViewModel extends ChangeNotifier {
   /// в настройках (7 нажатий на заголовок экрана), не отдельным пунктом
   /// меню — иначе сам факт его существования был бы на виду у всех.
   static const String devModeKey = 'dev_mode_enabled';
-  static const String devModePassword = 'pusl-dev-2026';
+  static const String devModePassword = '9612';
 
   bool _devMode = false;
   bool get devMode => _devMode;
