@@ -9,12 +9,12 @@
 -- Обновить текст: delete from qwen_public_instructions where topic = 'Puls: ...';
 -- и запустить нужную часть заново.
 --
--- id в таблице без автонумерации — считается как max(id)+1 в каждой части.
+-- id заполняется таблицей сам (identity GENERATED ALWAYS) — в вставках не указывается.
 -- category = 'workflow' (как у существующих записей), confidence/status по умолчанию.
 
 -- ============================================================ ЧАСТЬ 1
-insert into qwen_public_instructions (id, topic, category, problem, solution, tags)
-select (select coalesce(max(id), 0) + 1 from qwen_public_instructions),
+insert into qwen_public_instructions (topic, category, problem, solution, tags)
+select
 $t$Puls: что это и как устроено$t$,
 'workflow',
 $t$Пользователь спрашивает, что за приложение, где что лежит, или вы впервые готовите данные для Puls.$t$,
@@ -28,8 +28,8 @@ array['puls','обзор','структура']
 where not exists (select 1 from qwen_public_instructions where topic = $t$Puls: что это и как устроено$t$);
 
 -- ============================================================ ЧАСТЬ 2
-insert into qwen_public_instructions (id, topic, category, problem, solution, tags)
-select (select coalesce(max(id), 0) + 1 from qwen_public_instructions),
+insert into qwen_public_instructions (topic, category, problem, solution, tags)
+select
 $t$Puls: настройки приложения (где что искать)$t$,
 'workflow',
 $t$Пользователь спрашивает «где это включить или поменять».$t$,
@@ -46,8 +46,8 @@ array['puls','настройки']
 where not exists (select 1 from qwen_public_instructions where topic = $t$Puls: настройки приложения (где что искать)$t$);
 
 -- ============================================================ ЧАСТЬ 3
-insert into qwen_public_instructions (id, topic, category, problem, solution, tags)
-select (select coalesce(max(id), 0) + 1 from qwen_public_instructions),
+insert into qwen_public_instructions (topic, category, problem, solution, tags)
+select
 $t$Puls: где живут данные и как работает облако$t$,
 'workflow',
 $t$Вопросы «где мои данные», «пропадёт ли при переустановке», «как перенести на другой телефон».$t$,
@@ -59,8 +59,8 @@ array['puls','данные','облако','синхронизация']
 where not exists (select 1 from qwen_public_instructions where topic = $t$Puls: где живут данные и как работает облако$t$);
 
 -- ============================================================ ЧАСТЬ 4
-insert into qwen_public_instructions (id, topic, category, problem, solution, details, tags)
-select (select coalesce(max(id), 0) + 1 from qwen_public_instructions),
+insert into qwen_public_instructions (topic, category, problem, solution, details, tags)
+select
 $t$Puls: как подготовить тренировки для импорта (главный способ)$t$,
 'workflow',
 $t$Пользователь прислал результат тренировки — PDF, фото, скриншот, таблицу, текст — в любом виде и хочет увидеть его в приложении.$t$,
@@ -95,8 +95,8 @@ array['puls','импорт','json','тренировки']
 where not exists (select 1 from qwen_public_instructions where topic = $t$Puls: как подготовить тренировки для импорта (главный способ)$t$);
 
 -- ============================================================ ЧАСТЬ 5
-insert into qwen_public_instructions (id, topic, category, problem, solution, tags)
-select (select coalesce(max(id), 0) + 1 from qwen_public_instructions),
+insert into qwen_public_instructions (topic, category, problem, solution, tags)
+select
 $t$Puls: правила создания записей (что и как заполнять)$t$,
 'workflow',
 $t$Вы формируете файл импорта или запись в базу и сомневаетесь в значениях.$t$,
@@ -113,8 +113,8 @@ array['puls','правила','импорт','координаты']
 where not exists (select 1 from qwen_public_instructions where topic = $t$Puls: правила создания записей (что и как заполнять)$t$);
 
 -- ============================================================ ЧАСТЬ 6
-insert into qwen_public_instructions (id, topic, category, problem, solution, tags)
-select (select coalesce(max(id), 0) + 1 from qwen_public_instructions),
+insert into qwen_public_instructions (topic, category, problem, solution, tags)
+select
 $t$Puls: прямая запись в базу пользователя (запасной способ)$t$,
 'workflow',
 $t$Пользователь явно попросил записать тренировку прямо в его базу Supabase, минуя файл импорта, и сам вошёл под своей учётной записью в вашем сеансе.$t$,
@@ -129,8 +129,8 @@ array['puls','запись','база','supabase']
 where not exists (select 1 from qwen_public_instructions where topic = $t$Puls: прямая запись в базу пользователя (запасной способ)$t$);
 
 -- ============================================================ ЧАСТЬ 7
-insert into qwen_public_instructions (id, topic, category, problem, solution, tags)
-select (select coalesce(max(id), 0) + 1 from qwen_public_instructions),
+insert into qwen_public_instructions (topic, category, problem, solution, tags)
+select
 $t$Puls: встроенный ассистент — что он видит и умеет$t$,
 'workflow',
 $t$Вопросы «а ассистент в приложении это знает?», «как научить его читать мою таблицу».$t$,
@@ -140,8 +140,8 @@ array['puls','ассистент','таблицы для ИИ']
 where not exists (select 1 from qwen_public_instructions where topic = $t$Puls: встроенный ассистент — что он видит и умеет$t$);
 
 -- ============================================================ ЧАСТЬ 8
-insert into qwen_public_instructions (id, topic, category, problem, solution, tags)
-select (select coalesce(max(id), 0) + 1 from qwen_public_instructions),
+insert into qwen_public_instructions (topic, category, problem, solution, tags)
+select
 $t$Puls: правила безопасности для любого ИИ, работающего с Puls$t$,
 'workflow',
 $t$Всегда, когда вы работаете с Puls или данными его пользователя.$t$,
