@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:uuid/uuid.dart';
 
+import '../logic/scoring.dart';
 import '../models/exercise.dart';
 import '../models/shot.dart';
 import '../models/target_face.dart';
@@ -99,12 +101,11 @@ class SessionImport {
     for (var i = 0; i < rawShots.length; i++) {
       final s = rawShots[i];
       if (s is! Map) throw ImportException('выстрел ${i + 1}: ожидался объект');
-      final x = _num(s['x_mm'], 'выстрел ${i + 1}: x_mm');
-      final y = _num(s['y_mm'], 'выстрел ${i + 1}: y_mm');
       final score = _num(s['score'], 'выстрел ${i + 1}: score');
       if (score < 0 || score > 10.9) {
         throw ImportException('выстрел ${i + 1}: результат $score вне шкалы 0…10.9');
       }
+      final (x, y, coordsNote) = _coordinates(s, i, faceCode, score);
       shots.add(Shot(
         id: uuid.v4(),
         shotNumber: (s['n'] as num?)?.toInt() ?? (i + 1),
@@ -122,7 +123,9 @@ class SessionImport {
         // По умолчанию выстрел зачётный; источник может пометить
         // пристрелку явно.
         counts: s['counts'] != false,
-        extra: _extra(s['extra']),
+        extra: coordsNote == null
+            ? _extra(s['extra'])
+            : {...?_extra(s['extra']), 'координаты': coordsNote},
       ));
     }
 
@@ -145,6 +148,80 @@ class SessionImport {
         },
       ),
     );
+  }
+
+  /// Координаты выстрела. Есть `x_mm` и `y_mm` — берём как есть. Нет ни
+  /// одного — восстанавливаем из результата и направления: радиус даёт
+  /// проверенная `radiusForScore` (модели, читающие фото/PDF, ошибаются в
+  /// арифметике и в знаке оси Y — считать за них должно приложение), а от
+  /// источника нужно только НАПРАВЛЕНИЕ (`angle_deg`, `clock` или
+  /// `direction`). Направления нет вовсе — радиус верный, угол
+  /// раскладывается по золотому углу (выстрелы не слипаются в одну
+  /// точку, а среднее не смещается в одну сторону) и это помечается в
+  /// `extra`, чтобы не выдавать выдуманное положение за измеренное.
+  static (double, double, String?) _coordinates(Map s, int i, String faceCode, double score) {
+    final hasX = s.containsKey('x_mm') && s['x_mm'] != null;
+    final hasY = s.containsKey('y_mm') && s['y_mm'] != null;
+    if (hasX && hasY) {
+      return (_num(s['x_mm'], 'выстрел ${i + 1}: x_mm'), _num(s['y_mm'], 'выстрел ${i + 1}: y_mm'), null);
+    }
+    if (hasX != hasY) {
+      throw ImportException('выстрел ${i + 1}: нужны оба x_mm и y_mm — либо ни одного (тогда направление и результат)');
+    }
+    final face = TargetFace.all.firstWhere((f) => f.code == faceCode);
+    final r = _radiusFromScore(score, face);
+    final angle = _angleDeg(s);
+    final deg = angle ?? (i * 137.50776) % 360;
+    final rad = deg * math.pi / 180;
+    return (
+      r * math.sin(rad),
+      r * math.cos(rad),
+      angle == null
+          ? 'радиус из результата, направление неизвестно (условное)'
+          : 'восстановлены из результата и направления',
+    );
+  }
+
+  /// Расстояние от центра по результату `ring.decimal`. Результат ниже
+  /// единицы — за внешним кольцом: `radiusForScore` для него вернул бы 0.
+  static double _radiusFromScore(double score, TargetFace face) {
+    final tenths = (score * 10).round();
+    final ring = tenths ~/ 10;
+    if (ring < 1) return face.ringRadiiMm.last + face.caliberRadiusMm + 1;
+    return radiusForScore(ring, tenths % 10, face);
+  }
+
+  static const Map<String, double> _compass = {
+    '↑': 0, 'N': 0, 'С': 0, '↗': 45, 'NE': 45, 'СВ': 45, '→': 90, 'E': 90, 'В': 90,
+    '↘': 135, 'SE': 135, 'ЮВ': 135, '↓': 180, 'S': 180, 'Ю': 180, '↙': 225, 'SW': 225,
+    'ЮЗ': 225, '←': 270, 'W': 270, 'З': 270, '↖': 315, 'NW': 315, 'СЗ': 315,
+  };
+
+  /// Направление в градусах: 0 — вверх, по часовой стрелке (как на
+  /// циферблате). Источники: `angle_deg`, `clock` (`3`, `3.5`, `"3:25"`),
+  /// `direction` (стрелка ↑↗→↘↓↙←↖, N/NE/E…, С/СВ/В…, «центр»). `null` —
+  /// направления в выстреле нет.
+  static double? _angleDeg(Map s) {
+    final a = s['angle_deg'];
+    if (a is num) return a.toDouble() % 360;
+
+    final c = s['clock'];
+    if (c is num) return (c.toDouble() % 12) * 30;
+    if (c is String) {
+      final m = RegExp(r'^\s*(\d{1,2})(?::(\d{1,2}))?\s*$').firstMatch(c);
+      if (m != null) {
+        final h = int.parse(m.group(1)!) % 12;
+        return h * 30 + int.parse(m.group(2) ?? '0') * 0.5;
+      }
+    }
+
+    final d = s['direction'];
+    if (d is String) {
+      final key = d.trim().toUpperCase();
+      if (key == 'ЦЕНТР' || key == 'CENTER' || key == '●' || key == 'О') return 0;
+      return _compass[key];
+    }
+    return null;
   }
 
   static Map<String, dynamic>? _extra(Object? v) {
