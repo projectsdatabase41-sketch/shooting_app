@@ -20,7 +20,7 @@ insert into table_docs (entry_key, kind, title, body) values
    запись protect:<таблица> в table_docs.
 2. Таблицы приложения (тренировки, выстрелы, комментарии и т.д.): доступ только
    владельцу через is_project_owner(). Ослаблять нельзя — там личные данные.
-3. Таблицы, созданные другим ИИ (notes, qwen_ops_memory, search_log): открыты
+3. Таблицы, созданные другим ИИ (notes, ai_shared_memory, search_log): открыты
    на чтение/вставку/правку и для anon — это осознанный выбор их автора,
    приложение Puls читает notes. Не закрывать без согласования: сломается их
    рабочий процесс. DELETE там намеренно НЕ выдан — не добавлять.
@@ -40,11 +40,11 @@ notes_update (UPDATE) для anon и authenticated. DELETE нет — намер
 Векторы заполняет процесс владельца — записи, добавленные приложением,
 получают embedding позже (embedding_created_at null до этого).'),
 
-  ('protect:qwen_ops_memory', 'table', 'qwen_ops_memory — рабочая память другого ИИ',
-'Создана и используется ИИ Qwen (назначение колонок здесь не подтверждено —
-уточнить у владельца процесса перед любой правкой). Политики: SELECT/INSERT/UPDATE
-для anon и authenticated, DELETE не выдан. Приложение Puls её не использует.
-НЕ удалять и НЕ менять права: это состояние чужого рабочего процесса.'),
+  ('protect:ai_shared_memory', 'table', 'ai_shared_memory — общая память всех ИИ (бывшая qwen_ops_memory)',
+'Общая рабочая память ВСЕХ ИИ, работающих с этой базой (см. sql/ai-shared-memory-rename.sql).
+Читается ролью anon -> СЕКРЕТЫ СЮДА НЕЛЬЗЯ (пароли, service_role, токены). Права:
+SELECT/INSERT/UPDATE для anon и authenticated, DELETE не выдан. НЕ удалять, НЕ менять
+права, не затирать чужие записи. Старое имя qwen_ops_memory — view для совместимости.'),
 
   ('protect:search_log', 'table', 'search_log — журнал поиска другого ИИ',
 'Создана процессом Qwen (назначение колонок не подтверждено). Политики:
