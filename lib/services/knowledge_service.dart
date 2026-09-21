@@ -237,10 +237,24 @@ class KnowledgeService {
       // ассистента), а contentColumn настраивается пользователем и не
       // обязан называться "content" (пункт: "хочу, чтобы ИИ мог читать
       // и заметки, и другие таблицы, которые я подключу").
+      // Таблицы вроде заметок хранят смысл не в одной колонке: у
+      // `notes` часто пуст `content`, а текст лежит в `topic`/`summary`.
+      // Ищем по всем текстовым колонкам из известного списка, а тяжёлые
+      // векторные (`embedding`, `*_tsv`) не тянем вовсе — это тысячи
+      // чисел на строку, модели они ни к чему.
+      final all = _discovery.cachedAllColumns(table.name);
+      final searchCols = <String>{
+        table.contentColumn,
+        if (all != null) ...all.where(_searchColumnNames.contains),
+      };
+      final safeWord = word.replaceAll(RegExp(r'[,()*]'), '');
+      final filter = searchCols.length == 1
+          ? {table.contentColumn: 'ilike.*$safeWord*'}
+          : {'or': '(${searchCols.map((c) => '$c.ilike.*$safeWord*').join(',')})'};
       final uri = Uri.parse('$baseUrl/${table.name}').replace(
         queryParameters: {
-          'select': '*',
-          table.contentColumn: 'ilike.*$word*',
+          'select': all == null ? '*' : all.where((c) => !_heavyColumn.hasMatch(c)).join(','),
+          ...filter,
           'limit': '$perWordFetch',
         },
       );
@@ -258,23 +272,35 @@ class KnowledgeService {
       final data = jsonDecode(utf8.decode(res.bodyBytes));
       if (data is! List) return const [];
 
-      return [
-        for (final row in data)
-          if (row is Map && row[table.contentColumn] is String)
-            KnowledgeChunk(
-              table: table.name,
-              tableLabel: table.label,
-              tableDescription: table.description,
-              source: '${row['file_name'] ?? table.label}',
-              heading: '${row['heading_path'] ?? ''}',
-              text: _clean('${row[table.contentColumn]}'),
-              recordDate: _findRecordDate(row, table.contentColumn),
-            )
-      ];
+      final chunks = <KnowledgeChunk>[];
+      for (final row in data) {
+        if (row is! Map) continue;
+        final heading = '${row['heading_path'] ?? row['topic'] ?? row['title'] ?? ''}';
+        final parts = <String>[
+          for (final c in {'summary', 'description', table.contentColumn})
+            if (row[c] is String && (row[c] as String).trim().isNotEmpty) row[c] as String,
+          if (row['tags'] is List && (row['tags'] as List).isNotEmpty) 'теги: ${(row['tags'] as List).join(', ')}',
+        ];
+        final text = parts.isEmpty ? heading : parts.join('\n');
+        if (text.trim().isEmpty) continue;
+        chunks.add(KnowledgeChunk(
+          table: table.name,
+          tableLabel: table.label,
+          tableDescription: table.description,
+          source: '${row['file_name'] ?? table.label}',
+          heading: heading,
+          text: _clean(text),
+          recordDate: _findRecordDate(row, table.contentColumn),
+        ));
+      }
+      return chunks;
     } catch (_) {
       return const [];
     }
   }
+
+  static const List<String> _searchColumnNames = ['content', 'topic', 'title', 'summary', 'description'];
+  static final RegExp _heavyColumn = RegExp(r'embedding|tsv|vector');
 
   /// Ищет дату самой записи в строке — сначала по обычным именам
   /// колонок, потом (для чужих таблиц с другими названиями) по первому

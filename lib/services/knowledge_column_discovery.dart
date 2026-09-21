@@ -28,6 +28,18 @@ class KnowledgeColumnDiscovery {
     return rows.isEmpty ? null : rows.first['content_column'] as String;
   }
 
+  /// Все колонки таблицы, как они были видны при определении основной
+  /// (`null`, если таблицу ещё не определяли).
+  List<String>? cachedAllColumns(String tableName) {
+    final rows = db.db.select('SELECT all_columns FROM ai_knowledge_columns WHERE table_name = ?', [tableName]);
+    if (rows.isEmpty) return null;
+    try {
+      return (jsonDecode(rows.first['all_columns'] as String) as List).map((e) => '$e').toList();
+    } catch (_) {
+      return null;
+    }
+  }
+
   void forget(String tableName) {
     db.db.execute('DELETE FROM ai_knowledge_columns WHERE table_name = ?', [tableName]);
   }
