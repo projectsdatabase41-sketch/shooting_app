@@ -78,6 +78,7 @@ flutter:
   uses-material-design: true
   assets:
     - lib/db/local_schema.sql
+    - lib/db/puls_install.sql
 
 flutter_launcher_icons:
   android: true

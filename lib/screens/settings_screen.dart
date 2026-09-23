@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData, rootBundle;
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -223,6 +224,27 @@ class _AccountSheetState extends State<_AccountSheet> {
 
   void _saveBase() {
     _auth.setBase(url: _url.text, anonKey: _key.text);
+  }
+
+  /// Копирует установочный SQL (lib/db/puls_install.sql — та же схема,
+  /// что и в приложении: тренировки, защита, таблица заметок для ИИ,
+  /// инструкции в базе, "пульс" для GitHub) в буфер обмена одним нажатием
+  /// — дальше только вставить в SQL Editor Supabase и один раз нажать Run.
+  /// Полная объяснённая версия с разбивкой по файлам — в репозитории
+  /// приложения, папка Puls-Database-Setup.
+  Future<void> _copyInstallSql(BuildContext context) async {
+    String message;
+    try {
+      final sql = await rootBundle.loadString('lib/db/puls_install.sql');
+      await Clipboard.setData(ClipboardData(text: sql));
+      message = 'SQL скопирован — вставьте в SQL Editor Supabase и нажмите Run';
+    } catch (e) {
+      // Браузер иногда отказывает в доступе к буферу обмена (нет разрешения,
+      // окно не в фокусе) — тогда честно сказать об этом, а не падать молча.
+      message = 'Не удалось скопировать: $e';
+    }
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _run(Future<String?> Function() action) async {
@@ -498,12 +520,24 @@ class _AccountSheetState extends State<_AccountSheet> {
                   const SizedBox(height: 4),
                   Text(
                     'Откроется сайт Supabase — зарегистрируйтесь и создайте новый '
-                    'проект. Затем вернитесь сюда и вставьте адрес и ключ из '
-                    'Settings → API этого проекта.',
+                    'проект (пустой, без своих таблиц).',
                     style: theme.textTheme.bodySmall,
                   ),
                   const SizedBox(height: 14),
-                  Text('2. Вставить адрес и ключ', style: theme.textTheme.labelLarge),
+                  OutlinedButton.icon(
+                    onPressed: () => _copyInstallSql(context),
+                    icon: const Icon(Icons.copy_outlined),
+                    label: const Text('2. Скопировать SQL для настройки базы'),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'В проекте Supabase откройте SQL Editor → New query, вставьте '
+                    '(уже в буфере обмена) и нажмите Run. Один раз, весь текст сразу — '
+                    'создаст все таблицы и покажет строку проверки.',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 14),
+                  Text('3. Вставить адрес и ключ', style: theme.textTheme.labelLarge),
                   const SizedBox(height: 10),
                 ],
                 TextField(
