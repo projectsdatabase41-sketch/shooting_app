@@ -1,7 +1,8 @@
 // Edge Function: отправляет push через Firebase (FCM), когда в чате
-// появляется новое сообщение — вызывается Database Webhook'ом Supabase
-// (Dashboard → Database → Webhooks) на INSERT в chat_messages и
-// chat_global_messages. Сама переписка остаётся полностью на Supabase —
+// появляется новое сообщение — вызывается триггером chat_push_gate
+// (sql/chat-push-gate.sql; он шлёт push не чаще раза в 2 минуты на пару
+// отправитель→получатель, чтобы уложиться в квоту Edge Function) или, пока
+// он не установлен, Database Webhook'ом на INSERT в chat_messages. Сама переписка остаётся полностью на Supabase —
 // эта функция только "будит" закрытое приложение (см. lib/services/push_service.dart).
 //
 // Использует FCM HTTP v1 API (legacy-ключ Google полностью отключил в
@@ -25,7 +26,7 @@
 //        SUPABASE_SERVICE_ROLE_KEY — тоже автоматически (project secrets)
 //   3. Dashboard → Database → Webhooks → Create:
 //      - таблица chat_messages, событие INSERT, URL этой функции
-//      - таблица chat_global_messages, событие INSERT, тот же URL
+//      (либо вместо вебхука — sql/chat-push-gate.sql и секрет PUSH_SECRET)
 
 const FIREBASE_CLIENT_EMAIL = Deno.env.get('FIREBASE_CLIENT_EMAIL') ?? '';
 const FIREBASE_PRIVATE_KEY = (Deno.env.get('FIREBASE_PRIVATE_KEY') ?? '').replace(/\\n/g, '\n');
@@ -112,80 +113,42 @@ Deno.serve(async (req: Request) => {
     return new Response('not configured', { status: 500 });
   }
 
+  // Секрет общий с триггером chat_push_gate (sql/chat-push-gate.sql): без него
+  // любой мог бы вызвать функцию и рассылать push от чужого имени. Пока
+  // PUSH_SECRET не задан, работает как раньше (Database Webhook).
+  const expected = Deno.env.get('PUSH_SECRET') ?? '';
+  if (expected && req.headers.get('x-push-secret') !== expected) return new Response('forbidden', { status: 403 });
+
   const payload = await req.json();
   const row = payload.record;
-  if (!row) return new Response('ok');
+  // Общий чат убран — только личные сообщения (chat_messages).
+  if (!row || payload.table === 'chat_global_messages') return new Response('ok');
 
-  // chat_messages (личное) — получатель известен напрямую;
-  // chat_global_messages (общий чат) — уведомляем всех, кроме автора.
-  const isGlobal = payload.table === 'chat_global_messages';
   const senderId = row.sender_id as string;
 
   // edit/delete — служебные сигналы к уже отправленному сообщению (см.
   // ChatSyncService.editMessage/deleteMessage), не новые сообщения —
   // пуш по ним слать нечего и незачем.
   const msgType = row.msg_type as string | undefined;
-  if (!isGlobal && (msgType === 'edit' || msgType === 'delete')) return new Response('ok');
+  if (msgType === 'edit' || msgType === 'delete') return new Response('ok');
 
   const recipientIds: string[] = [];
-  if (isGlobal) {
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/chat_push_tokens?select=user_id&user_id=neq.${senderId}`,
+  const recipientId = row.recipient_id as string;
+  // "Позвать" и его сигналы (call_ack — тренер идёт, call_cancel —
+  // спортсмен передумал) — мимо настройки "Уведомления личных чатов"
+  // (тот же принцип, что звонок мимо беззвучного режима телефона):
+  // это явный разовый вызов и ответ на него, а не рядовое сообщение,
+  // которое можно отложить.
+  if (msgType === 'call' || msgType === 'call_ack' || msgType === 'call_cancel') {
+    recipientIds.push(recipientId);
+  } else {
+    const profileRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/chat_profiles?select=personal_push_mode&user_id=eq.${recipientId}`,
       { headers: { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` } },
     );
-    const rows = await res.json();
-    const candidateIds = [...new Set(rows.map((r: { user_id: string }) => r.user_id))] as string[];
-
-    if (candidateIds.length > 0) {
-      // Настройка "Уведомления общего чата" (chat_profiles.global_push_mode,
-      // см. ChatAuthService.updateGlobalPushMode): 'all' — как раньше,
-      // 'replies' — только если это ответ на СВОЁ сообщение, 'none' —
-      // молчим. По умолчанию 'all' (для профилей без строки в ответе тоже).
-      const profilesRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/chat_profiles?select=user_id,global_push_mode&user_id=in.(${candidateIds.join(',')})`,
-        { headers: { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` } },
-      );
-      const profileRows = await profilesRes.json();
-      const modeOf = new Map<string, string>(
-        profileRows.map((r: { user_id: string; global_push_mode?: string }) => [r.user_id, r.global_push_mode ?? 'all']),
-      );
-
-      let repliedToSenderId: string | null = null;
-      const replyToId = row.reply_to_id as string | undefined;
-      if (replyToId) {
-        const replyRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/chat_global_messages?id=eq.${replyToId}&select=sender_id`,
-          { headers: { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` } },
-        );
-        const replyRows = await replyRes.json();
-        repliedToSenderId = replyRows[0]?.sender_id ?? null;
-      }
-
-      for (const id of candidateIds) {
-        const mode = modeOf.get(id) ?? 'all';
-        if (mode === 'none') continue;
-        if (mode === 'replies' && id !== repliedToSenderId) continue;
-        recipientIds.push(id);
-      }
-    }
-  } else {
-    const recipientId = row.recipient_id as string;
-    // "Позвать" и его сигналы (call_ack — тренер идёт, call_cancel —
-    // спортсмен передумал) — мимо настройки "Уведомления личных чатов"
-    // (тот же принцип, что звонок мимо беззвучного режима телефона):
-    // это явный разовый вызов и ответ на него, а не рядовое сообщение,
-    // которое можно отложить.
-    if (msgType === 'call' || msgType === 'call_ack' || msgType === 'call_cancel') {
-      recipientIds.push(recipientId);
-    } else {
-      const profileRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/chat_profiles?select=personal_push_mode&user_id=eq.${recipientId}`,
-        { headers: { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` } },
-      );
-      const rows = await profileRes.json();
-      const mode = rows[0]?.personal_push_mode ?? 'all';
-      if (mode !== 'none') recipientIds.push(recipientId);
-    }
+    const rows = await profileRes.json();
+    const mode = rows[0]?.personal_push_mode ?? 'all';
+    if (mode !== 'none') recipientIds.push(recipientId);
   }
   if (recipientIds.length === 0) return new Response('ok');
 
@@ -259,11 +222,11 @@ Deno.serve(async (req: Request) => {
     }
   };
 
-  const title = isGlobal ? 'Общий чат' : (senderNickname ?? 'Личное сообщение');
-  const body = isGlobal ? `${senderNickname ?? '—'}: ${preview(row)}` : preview(row);
+  const title = senderNickname ?? 'Личное сообщение';
+  const body = preview(row);
   // type/contact_id — чтобы тап по уведомлению открывал именно этот чат
   // (см. PushService._handleTap), а не просто главный экран приложения.
-  const data = isGlobal ? { type: 'global' } : { type: 'chat', contact_id: senderId };
+  const data = { type: 'chat', contact_id: senderId };
 
   await Promise.all(tokens.map((t) => sendPush(t, title, body, data).catch(() => {})));
 
