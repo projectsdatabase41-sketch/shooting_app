@@ -150,6 +150,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         return added > 0;
       },
     )..start();
+    _pollLoop!.poke(); // открыли диалог — сразу забираем то, что лежит в базе
   }
 
   @override
