@@ -17,6 +17,7 @@ import '../services/chat_messages_repository.dart';
 import '../services/chat_preferences.dart';
 import '../services/chat_sync_service.dart';
 import '../services/chat_translation_service.dart';
+import '../services/remote_config.dart';
 import '../widgets/chat_avatar.dart';
 import '../widgets/chat_quick_menu.dart';
 import '../widgets/chat_reply_bar.dart';
@@ -119,7 +120,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     // растёт до 30 (см. AdaptivePoller). Отправка своего сообщения возвращает
     // частый режим — ответ обычно приходит скоро.
     _pollLoop = PollLoop(
-      poller: AdaptivePoller(min: const Duration(seconds: 5), max: const Duration(seconds: 30)),
+      poller: AdaptivePoller(
+          min: const Duration(seconds: 5), max: const Duration(seconds: 30), scale: () => RemoteConfig.pollScale),
       tick: () async {
         final added = await widget.sync.pollIncoming();
         if (added > 0 && mounted) {

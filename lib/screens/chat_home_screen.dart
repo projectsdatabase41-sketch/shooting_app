@@ -17,6 +17,7 @@ import '../services/chat_settings.dart';
 import '../services/chat_sync_service.dart';
 import '../services/local_db_service.dart';
 import '../services/push_service.dart';
+import '../services/remote_config.dart';
 import '../services/supabase_auth_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/chat_avatar.dart';
@@ -160,7 +161,8 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
     // переписка, редко в покое, ещё реже — если сервер отвечает тяжело.
     // Личный опрос и так дешёвый (в транзитной таблице только МОИ строки).
     _pollLoop = PollLoop(
-      poller: AdaptivePoller(min: const Duration(seconds: 10), max: const Duration(seconds: 60)),
+      poller: AdaptivePoller(
+          min: const Duration(seconds: 10), max: const Duration(seconds: 60), scale: () => RemoteConfig.pollScale),
       tick: () async {
         final added = await _sync.pollIncoming();
         // _reload(), а не голый setState — новое входящее от ещё не

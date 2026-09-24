@@ -80,6 +80,8 @@ class LocalDbService {
         'local_hidden': 'INTEGER NOT NULL DEFAULT 0',
       },
       'project_settings': {
+        'remote_config_json': 'TEXT',
+        'remote_config_at': 'TEXT',
         'auth_user_id': 'TEXT',
         'auth_access_token': 'TEXT',
         'auth_refresh_token': 'TEXT',

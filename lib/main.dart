@@ -14,6 +14,7 @@ import 'services/firebase_settings.dart';
 import 'services/knowledge_service.dart';
 import 'services/local_db_service.dart';
 import 'services/push_service.dart';
+import 'services/remote_config.dart';
 import 'services/supabase_auth_service.dart';
 import 'state/ai_chat_view_model.dart';
 import 'state/app_data_store.dart';
@@ -50,6 +51,8 @@ Future<void> main() async {
     runApp(_DbOpenFailedApp(error: e));
     return;
   }
+  RemoteConfig.loadCached(db);
+  RemoteConfig.refresh(db); // в фоне, без ожидания
   runApp(ShootingApp(db: db));
 }
 

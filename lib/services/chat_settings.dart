@@ -1,3 +1,5 @@
+import 'remote_config.dart';
+
 /// Публичный чат — общий бэкенд ОДИН на всех пользователей приложения
 /// (отдельный проект Supabase, только транзит сообщений между разными
 /// личными аккаунтами — тот же принцип, что и у общей базы книг/правил,
@@ -11,8 +13,17 @@
 /// включится сам, как только здесь появятся настоящие значения —
 /// остальной код чата их не хардкодит нигде повторно.
 class ChatSettings {
-  static const String url = 'https://frbptucrvmyikencyspu.supabase.co';
-  static const String anonKey = 'sb_publishable_4kAWR6cYksf6cE0Ch13Tpw_nZZjT1M0';
+  static const String _defaultUrl = 'https://frbptucrvmyikencyspu.supabase.co';
+  static const String _defaultAnonKey = 'sb_publishable_4kAWR6cYksf6cE0Ch13Tpw_nZZjT1M0';
+
+  /// Адрес и ключ можно сменить удалённо (`RemoteConfig`, только вместе и
+  /// только для *.supabase.co) — без выпуска новой версии.
+  static String get url => RemoteConfig.chatUrl != null && RemoteConfig.chatAnonKey != null
+      ? RemoteConfig.chatUrl!
+      : _defaultUrl;
+  static String get anonKey => RemoteConfig.chatUrl != null && RemoteConfig.chatAnonKey != null
+      ? RemoteConfig.chatAnonKey!
+      : _defaultAnonKey;
 
   static bool get isConfigured => url.isNotEmpty && anonKey.isNotEmpty;
 }
