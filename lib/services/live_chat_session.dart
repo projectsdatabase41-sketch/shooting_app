@@ -6,6 +6,7 @@ import '../models/chat_message.dart';
 import 'chat_auth_service.dart';
 import 'chat_messages_repository.dart';
 import 'chat_settings.dart';
+import 'peer_link.dart';
 import 'realtime_client.dart';
 import 'remote_config.dart';
 
@@ -29,6 +30,7 @@ class LiveChatSession {
     this.onIncoming,
     this.ackTimeout = const Duration(seconds: 3),
     this.clientFactory,
+    this.linkFactory,
   });
 
   final ChatAuthService auth;
@@ -40,6 +42,10 @@ class LiveChatSession {
   final Duration ackTimeout;
   final RealtimeChannelClient Function(String topic)? clientFactory;
 
+  /// Фабрика прямого соединения (WebRTC). Пока `null` или флаг `webrtc`
+  /// выключен — только Broadcast.
+  final PeerLink Function()? linkFactory;
+
   static const _uuid = Uuid();
   static const _maxText = 8000;
 
@@ -49,12 +55,18 @@ class LiveChatSession {
   Timer? _tokenTimer;
   int _attempt = 0;
   bool _closed = false;
+  PeerLink? _link;
+  int _rtcTries = 0;
+  static const int _maxRtcTries = 2;
 
   /// Пауза после неудачного входа (лимит соединений, отказ RLS): не
   /// долбим канал, пока экран открыт, — просто остаёмся на базе.
   static const List<Duration> _backoff = [Duration(seconds: 5), Duration(seconds: 20), Duration(minutes: 2)];
 
-  bool get peerOnline => _client?.isJoined == true && _client!.peers.contains(contactId);
+  bool get peerOnline => _link?.isOpen == true || (_client?.isJoined == true && _client!.peers.contains(contactId));
+
+  /// Идёт ли обмен напрямую (WebRTC), минуя сервер.
+  bool get isDirect => _link?.isOpen == true;
 
   String get topic {
     final ids = [auth.userId, contactId]..sort();
@@ -72,7 +84,14 @@ class LiveChatSession {
           topic: topic,
           presenceKey: auth.userId,
         );
-    c.onBroadcast = _onBroadcast;
+    c.onBroadcast = (event, p) {
+      if (event == 'rtc') {
+        _onSignal(p);
+      } else {
+        _onBroadcast(event, p);
+      }
+    };
+    c.onPresenceChanged = _maybeStartRtc;
     c.onClosed = () {
       _failPending();
       _scheduleRetry();
@@ -110,11 +129,10 @@ class LiveChatSession {
   /// текст: вложения, правки и «позвать» идут как раньше.
   Future<bool> trySend(ChatMessage m) async {
     if (m.type != ChatMessageType.text || m.text == null || m.text!.length > _maxText) return false;
-    final c = _client;
-    if (c == null || !peerOnline) return false;
+    if (!peerOnline) return false;
     final ack = Completer<bool>();
     _acks[m.clientMessageId] = ack;
-    final sent = c.sendBroadcast('msg', {
+    final sent = _emit('msg', {
       'client_message_id': m.clientMessageId,
       'text': m.text,
       if (m.replyToClientMessageId != null) 'reply_to_client_message_id': m.replyToClientMessageId,
@@ -156,11 +174,60 @@ class LiveChatSession {
       ));
       onIncoming?.call();
     }
-    _client?.sendBroadcast('ack', {'client_message_id': clientId});
+    _emit('ack', {'client_message_id': clientId});
+  }
+
+  /// Сначала прямой канал, иначе Broadcast через сервер.
+  bool _emit(String event, Map<String, dynamic> payload) {
+    final l = _link;
+    if (l != null && l.isOpen && l.send(encodePeerFrame(event, payload))) return true;
+    return _client?.sendBroadcast(event, payload) ?? false;
+  }
+
+  /// Соединение по WebRTC поднимает тот, у кого id меньше (иначе оба
+  /// одновременно отправили бы offer). Второй создаёт линк, когда придёт
+  /// первый сигнал.
+  void _maybeStartRtc() {
+    if (_closed || _link != null || linkFactory == null || !RemoteConfig.webrtcEnabled) return;
+    if (_rtcTries >= _maxRtcTries || _client?.peers.contains(contactId) != true) return;
+    if (auth.userId.compareTo(contactId) >= 0) return;
+    _newLink().start(initiator: true);
+  }
+
+  PeerLink _newLink() {
+    _rtcTries++;
+    final l = linkFactory!();
+    _link = l;
+    l.onSignal = (s) => _client?.sendBroadcast('rtc', s);
+    l.onMessage = (raw) {
+      final f = decodePeerFrame(raw);
+      if (f != null) _onBroadcast(f.$1, f.$2);
+    };
+    // onState зовётся только при открытии и закрытии канала.
+    l.onState = () {
+      if (_link == l && !l.isOpen) {
+        _link = null;
+        _maybeStartRtc(); // не более _maxRtcTries попыток за диалог
+      }
+    };
+    return l;
+  }
+
+  void _onSignal(Map<String, dynamic> s) {
+    if (_closed || linkFactory == null || !RemoteConfig.webrtcEnabled) return;
+    var l = _link;
+    if (l == null) {
+      if (s['kind'] != 'offer' || _rtcTries >= _maxRtcTries) return; // начинает только тот, у кого id меньше
+      l = _newLink();
+      l.start(initiator: false);
+    }
+    l.handleSignal(s);
   }
 
   void close() {
     _closed = true;
+    _link?.close();
+    _link = null;
     _retry?.cancel();
     _tokenTimer?.cancel();
     _client?.onClosed = null;

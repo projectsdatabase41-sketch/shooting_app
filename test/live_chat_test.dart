@@ -14,6 +14,7 @@ import 'package:shooting_app/services/chat_auth_service.dart';
 import 'package:shooting_app/services/chat_messages_repository.dart';
 import 'package:shooting_app/services/live_chat_session.dart';
 import 'package:shooting_app/services/local_db_service.dart';
+import 'package:shooting_app/services/peer_link.dart';
 import 'package:shooting_app/services/realtime_client.dart';
 import 'package:shooting_app/services/remote_config.dart';
 
@@ -22,6 +23,7 @@ class _MockRealtime {
   final topics = <String, Map<String, WebSocket>>{};
   bool rejectJoin = false;
   bool dropBroadcast = false;
+  int msgBroadcasts = 0; // сколько 'msg' прошло через сервер
   final joinPayloads = <Map<String, dynamic>>[];
 
   Future<void> start() async {
@@ -61,6 +63,7 @@ class _MockRealtime {
               }));
             }
           case 'broadcast':
+            if (payload['event'] == 'msg') msgBroadcasts++;
             if (dropBroadcast) return;
             for (final e in (topics[topic] ?? {}).entries.where((e) => e.key != key)) {
               e.value.add(jsonEncode({'topic': m['topic'], 'event': 'broadcast', 'payload': payload}));
@@ -118,6 +121,70 @@ ChatMessage _out(String contactId, String text, {String clientId = 'c1'}) => Cha
       status: ChatMessageStatus.sending,
       createdAt: DateTime.now(),
     );
+
+/// Подмена WebRTC: линки в паре «соединяются» после offer/answer, кадры
+/// идут напрямую друг другу — сервер их не видит.
+class _FakeLink implements PeerLink {
+  static final List<_FakeLink> created = [];
+  _FakeLink() {
+    created.add(this);
+  }
+  _FakeLink? other;
+  bool open = false;
+  bool started = false;
+  void Function(String)? _msg;
+  void Function()? _state;
+  void Function(Map<String, dynamic>)? _sig;
+  @override
+  bool get isOpen => open;
+  @override
+  set onMessage(void Function(String)? cb) => _msg = cb;
+  @override
+  set onState(void Function()? cb) => _state = cb;
+  @override
+  set onSignal(void Function(Map<String, dynamic>)? cb) => _sig = cb;
+  @override
+  Future<void> start({required bool initiator}) async {
+    started = true;
+    if (initiator) _sig?.call({'kind': 'offer', 'sdp': 'x'});
+  }
+
+  @override
+  Future<void> handleSignal(Map<String, dynamic> s) async {
+    if (s['kind'] == 'offer') {
+      _sig?.call({'kind': 'answer', 'sdp': 'y'});
+      open = true;
+      _state?.call();
+    } else if (s['kind'] == 'answer') {
+      open = true;
+      _state?.call();
+    }
+  }
+
+  @override
+  bool send(String data) {
+    if (!open || other == null) return false;
+    other!._msg?.call(data);
+    return true;
+  }
+
+  @override
+  void close() {
+    final was = open;
+    open = false;
+    if (was) _state?.call();
+  }
+}
+
+PeerLink _pairedFake() {
+  final l = _FakeLink();
+  if (_FakeLink.created.length.isEven) {
+    final prev = _FakeLink.created[_FakeLink.created.length - 2];
+    l.other = prev;
+    prev.other = l;
+  }
+  return l;
+}
 
 void main() {
   late _MockRealtime server;
@@ -250,6 +317,57 @@ void main() {
     await _until(() => repoB.forContact('uA').isNotEmpty);
     expect(repoB.forContact('uA').map((m) => m.text), ['нормально']);
     raw.close();
+    sb.close();
+  });
+
+  test('WebRTC: линк поднимается, сообщения идут мимо сервера; без флага — через Broadcast', () async {
+    _FakeLink.created.clear();
+    RemoteConfig.setForTest({'realtime': {'enabled': true}, 'webrtc': {'enabled': true}});
+    final (authA, repoA) = await _user('uA', 'uB');
+    final (authB, repoB) = await _user('uB', 'uA');
+    final sa = LiveChatSession(
+        auth: authA, repo: repoA, contactId: 'uB', clientFactory: factoryFor('uA'), linkFactory: _pairedFake);
+    final sb = LiveChatSession(
+        auth: authB, repo: repoB, contactId: 'uA', clientFactory: factoryFor('uB'), linkFactory: _pairedFake);
+    await sa.open();
+    await sb.open();
+    await _until(() => sa.isDirect && sb.isDirect);
+    expect(sa.isDirect && sb.isDirect, isTrue);
+    expect(_FakeLink.created, hasLength(2)); // начал только uA (id меньше), uB ответил
+
+    final m = _out('uB', 'напрямую');
+    repoA.addMessage(m);
+    expect(await sa.trySend(m), isTrue);
+    expect(repoB.forContact('uA').single.text, 'напрямую');
+    expect(server.msgBroadcasts, 0);
+
+    // прямой канал оборвался → тот же диалог продолжает работать через Broadcast
+    _FakeLink.created[0].close();
+    _FakeLink.created[1].open = false;
+    final m2 = _out('uB', 'через сервер', clientId: 'c2');
+    repoA.addMessage(m2);
+    await _until(() => sa.peerOnline);
+    expect(await sa.trySend(m2), isTrue);
+    expect(server.msgBroadcasts, 1);
+    expect(repoB.forContact('uA'), hasLength(2));
+    sa.close();
+    sb.close();
+  });
+
+  test('WebRTC выключен флагом — линки не создаются', () async {
+    _FakeLink.created.clear();
+    final (authA, repoA) = await _user('uA', 'uB');
+    final (authB, repoB) = await _user('uB', 'uA');
+    final sa = LiveChatSession(
+        auth: authA, repo: repoA, contactId: 'uB', clientFactory: factoryFor('uA'), linkFactory: _pairedFake);
+    final sb = LiveChatSession(
+        auth: authB, repo: repoB, contactId: 'uA', clientFactory: factoryFor('uB'), linkFactory: _pairedFake);
+    await sa.open();
+    await sb.open();
+    await _until(() => sa.peerOnline);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    expect(_FakeLink.created, isEmpty);
+    sa.close();
     sb.close();
   });
 }

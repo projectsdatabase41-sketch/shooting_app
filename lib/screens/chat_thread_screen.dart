@@ -19,6 +19,7 @@ import '../services/chat_sync_service.dart';
 import '../services/chat_translation_service.dart';
 import '../services/live_chat_session.dart';
 import '../services/remote_config.dart';
+import '../services/webrtc_peer_link.dart';
 import '../widgets/chat_avatar.dart';
 import '../widgets/chat_quick_menu.dart';
 import '../widgets/chat_reply_bar.dart';
@@ -123,6 +124,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       auth: widget.auth,
       repo: widget.repo,
       contactId: widget.contact.id,
+      linkFactory: WebRtcPeerLink.new,
       onIncoming: () {
         if (!mounted) return;
         widget.repo.markThreadSeen(widget.contact.id);
