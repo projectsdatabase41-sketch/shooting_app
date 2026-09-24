@@ -43,6 +43,10 @@ create table if not exists chat_profiles (
   created_at     timestamptz not null default now()
 );
 
+alter table chat_profiles add column if not exists about text not null default '';
+alter table chat_profiles drop constraint if exists chat_profiles_about_len;
+alter table chat_profiles add constraint chat_profiles_about_len check (char_length(about) <= 120);
+
 alter table chat_profiles add column if not exists global_push_mode text not null default 'all';
 alter table chat_profiles drop constraint if exists chat_profiles_global_push_mode_check;
 alter table chat_profiles add constraint chat_profiles_global_push_mode_check
@@ -251,13 +255,14 @@ create policy chat_messages_delete on chat_messages
 -- не мог читать всю таблицу профилей, только находить один по точному
 -- коду (пункт из обсуждения: внутренний ID и полный список пользователей
 -- наружу не отдаются).
+drop function if exists resolve_chat_code(text);
 create or replace function resolve_chat_code(p_code text)
-returns table(user_id uuid, nickname text, avatar_base64 text)
+returns table(user_id uuid, nickname text, avatar_base64 text, about text)
 language sql
 security definer
 set search_path = public
 as $$
-  select user_id, nickname, avatar_base64
+  select user_id, nickname, avatar_base64, about
   from chat_profiles
   where chat_code = p_code;
 $$;
@@ -435,13 +440,14 @@ create policy chat_global_media_delete on storage.objects
 -- Профиль по списку id — для отображения ников/аватаров в ленте общего
 -- чата и в списке "Участники" (не отдаёт chat_code — им по-прежнему
 -- находят собеседника только для ЛИЧНОГО чата, а не через общий поток).
+drop function if exists resolve_profiles(uuid[]);
 create or replace function resolve_profiles(p_ids uuid[])
-returns table(user_id uuid, nickname text, avatar_base64 text)
+returns table(user_id uuid, nickname text, avatar_base64 text, about text)
 language sql
 security definer
 set search_path = public
 as $$
-  select user_id, nickname, avatar_base64
+  select user_id, nickname, avatar_base64, about
   from chat_profiles
   where user_id = any(p_ids);
 $$;

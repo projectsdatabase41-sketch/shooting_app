@@ -540,7 +540,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
             children: [
               ChatAvatar(base64: widget.contact.avatarBase64, nickname: widget.contact.nickname, radius: 16),
               const SizedBox(width: 10),
-              Text(widget.contact.nickname),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(widget.contact.nickname, overflow: TextOverflow.ellipsis),
+                    if (widget.contact.about.isNotEmpty)
+                      Text(widget.contact.about,
+                          maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall),
+                  ],
+                ),
+              ),
             ],
           ),
           // Пока единственный пункт — удаление контакта (решение

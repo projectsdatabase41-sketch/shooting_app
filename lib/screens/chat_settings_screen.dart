@@ -35,38 +35,9 @@ class ChatSettingsScreen extends StatefulWidget {
 }
 
 class _ChatSettingsScreenState extends State<ChatSettingsScreen> {
-  /// Под капотом по-прежнему два разных поля на сервере
-  /// (`personal_push_mode`, `global_push_mode`, см. `ChatAuthService`/
-  /// send-chat-push) — экран просто комбинирует их в один понятный выбор.
-  static const List<(String, String)> _pushModes = [
-    ('personal_only', 'Только личный чат'),
-    ('personal_and_replies', 'Личный чат и ответы на мои сообщения в общем чате'),
-    ('personal_and_all', 'Личный и общий чат'),
-  ];
+  bool get _pushEnabled => widget.auth.personalPushMode != 'none';
 
-  bool get _pushEnabled => widget.auth.personalPushMode != 'none' || widget.auth.globalPushMode != 'none';
-
-  String get _pushMode {
-    if (widget.auth.globalPushMode == 'all') return 'personal_and_all';
-    if (widget.auth.globalPushMode == 'replies') return 'personal_and_replies';
-    return 'personal_only';
-  }
-
-  Future<void> _setPushEnabled(bool enabled) => _updatePush(
-        personal: enabled ? 'all' : 'none',
-        // Выключали и раньше был выбран какой-то режим общего чата —
-        // включили обратно тем же режимом, а не молча только личным.
-        global: enabled ? (widget.auth.globalPushMode == 'none' ? 'all' : widget.auth.globalPushMode) : 'none',
-      );
-
-  Future<void> _setPushMode(String mode) => _updatePush(
-        personal: 'all',
-        global: switch (mode) {
-          'personal_and_all' => 'all',
-          'personal_and_replies' => 'replies',
-          _ => 'none',
-        },
-      );
+  Future<void> _setPushEnabled(bool enabled) => _updatePush(enabled ? 'all' : 'none');
 
   /// Обе `update...` пишут свой локальный кэш СИНХРОННО в самом начале
   /// (до первого await внутри) — вызов ниже уже обновил то, что читает
@@ -85,13 +56,12 @@ class _ChatSettingsScreenState extends State<ChatSettingsScreen> {
     }
   }
 
-  Future<void> _updatePush({required String personal, required String global}) async {
-    final personalFuture = widget.auth.updatePersonalPushMode(personal);
-    final globalFuture = widget.auth.updateGlobalPushMode(global);
+  Future<void> _updatePush(String personal) async {
+    final future = widget.auth.updatePersonalPushMode(personal);
     setState(() {});
     widget.onChanged();
     try {
-      await Future.wait([personalFuture, globalFuture]);
+      await future;
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
@@ -138,15 +108,6 @@ class _ChatSettingsScreenState extends State<ChatSettingsScreen> {
             value: _pushEnabled,
             onChanged: _setPushEnabled,
           ),
-          if (_pushEnabled)
-            for (final (value, label) in _pushModes)
-              ListTile(
-                contentPadding: const EdgeInsets.only(left: 32, right: 16),
-                dense: true,
-                title: Text(label),
-                trailing: _pushMode == value ? const Icon(Icons.check) : null,
-                onTap: () => _setPushMode(value),
-              ),
           const Divider(height: 1),
           SwitchListTile(
             secondary: const Icon(Icons.campaign_outlined),

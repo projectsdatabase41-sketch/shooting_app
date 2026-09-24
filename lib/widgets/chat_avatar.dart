@@ -21,8 +21,15 @@ class ChatAvatar extends StatelessWidget {
         // битые данные — падаем на плейсхолдер ниже
       }
     }
-    final trimmed = nickname.trim();
-    final letter = trimmed.isEmpty ? '?' : trimmed[0].toUpperCase();
-    return CircleAvatar(radius: radius, child: Text(letter));
+    // Без фото — инициалы на цвете, зависящем от ника: тёзок-без-фото
+    // всё равно отличить проще, чем по одинаковым серым кружкам.
+    final words = nickname.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    final initials = words.isEmpty ? '?' : words.take(2).map((w) => w[0].toUpperCase()).join();
+    final hue = (nickname.codeUnits.fold<int>(7, (h, c) => (h * 31 + c) & 0xFFFF) % 360).toDouble();
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: HSLColor.fromAHSL(1, hue, 0.45, 0.42).toColor(),
+      child: Text(initials, style: TextStyle(color: Colors.white, fontSize: radius * 0.75)),
+    );
   }
 }

@@ -212,22 +212,6 @@ class ChatPreferences extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// "Удалить у себя" чужое сообщение общего чата — самого сообщения на
-  /// сервере это не касается (RLS и так не даст удалить чужое), просто
-  /// список id, скрытых локально на этом устройстве.
-  Set<String> get hiddenGlobalIds {
-    final raw = _read('chat_global_hidden_ids');
-    // <String>{}, не const {} — hideGlobalMessage мутирует результат этого
-    // геттера через каскад (..add), а на const-литерале это бросает
-    // исключение "Cannot add to an unmodifiable set".
-    return raw.isEmpty ? <String>{} : raw.split(',').toSet();
-  }
-
-  void hideGlobalMessage(String id) {
-    _write('chat_global_hidden_ids', (hiddenGlobalIds..add(id)).join(','));
-    notifyListeners();
-  }
-
   /// Быстро заполняет все 4 цвета сразу — то, что раньше называлось
   /// "выбрать пресет".
   void applyPreset(ChatBubblePreset preset) {

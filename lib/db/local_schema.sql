@@ -123,6 +123,7 @@ CREATE TABLE IF NOT EXISTS chat_contacts (
   nickname       TEXT NOT NULL,
   chat_code      TEXT NOT NULL,
   avatar_base64  TEXT,
+  about          TEXT NOT NULL DEFAULT '',
   added_at       TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

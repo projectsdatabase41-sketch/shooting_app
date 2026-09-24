@@ -149,6 +149,7 @@ class LocalDbService {
         'drive_file_id': 'TEXT',
         'attachment_local_path': 'TEXT',
       },
+      'chat_contacts': {'about': "TEXT NOT NULL DEFAULT ''"},
       'chat_global_cache': {
         'download_allowed': 'INTEGER NOT NULL DEFAULT 1',
         'chart_json': 'TEXT',

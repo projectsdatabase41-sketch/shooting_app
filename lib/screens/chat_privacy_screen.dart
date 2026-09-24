@@ -31,7 +31,7 @@ class ChatPrivacyScreen extends StatefulWidget {
   State<ChatPrivacyScreen> createState() => _ChatPrivacyScreenState();
 }
 
-typedef _Person = ({String userId, String nickname, String? avatarBase64});
+typedef _Person = ({String userId, String nickname, String? avatarBase64, String about});
 
 class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
   bool _loading = true;

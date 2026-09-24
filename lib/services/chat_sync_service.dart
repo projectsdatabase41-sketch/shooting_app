@@ -9,7 +9,6 @@ import '../models/chat_contact.dart';
 import '../models/chat_message.dart';
 import 'chat_auth_service.dart';
 import 'chat_drive_service.dart';
-import 'chat_global_service.dart';
 import 'chat_messages_repository.dart';
 import 'chat_settings.dart';
 
@@ -32,7 +31,6 @@ class ChatSyncService {
   /// Только для того, чтобы подтянуть ник/аватар отправителя, который
   /// ещё не в контактах (см. комментарий в `pollIncoming`) — та же
   /// RPC, что и в общем чате, отдельного клиента не заводим.
-  late final ChatGlobalService _global = ChatGlobalService(auth, clientFactory: clientFactory);
 
   /// Большие вложения (свыше `ChatMediaUtils.maxAttachmentBytes`) — идут
   /// не через `chat-media` в Storage, а через отдельный Google Drive
@@ -545,12 +543,13 @@ class ChatSyncService {
             notYetFriends.add(senderId);
             continue;
           }
-          final profile = (await _global.resolveProfiles([senderId]))[senderId];
+          final profile = (await auth.resolveProfiles([senderId]))[senderId];
           repo.addContact(ChatContact(
             id: senderId,
-            nickname: profile?.$1 ?? '—',
+            nickname: profile?.nickname ?? '—',
             chatCode: '',
-            avatarBase64: profile?.$2,
+            avatarBase64: profile?.avatarBase64,
+            about: profile?.about ?? '',
             addedAt: DateTime.now(),
           ));
           knownContacts.add(senderId);

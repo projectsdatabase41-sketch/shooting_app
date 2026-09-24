@@ -8,6 +8,10 @@ class ChatContact {
   final String nickname;
   final String chatCode;
   final String? avatarBase64;
+
+  /// Короткая строка о человеке (клуб, город, дисциплина) — чтобы отличать
+  /// тёзок, когда нет фото.
+  final String about;
   final DateTime addedAt;
 
   const ChatContact({
@@ -15,6 +19,7 @@ class ChatContact {
     required this.nickname,
     required this.chatCode,
     this.avatarBase64,
+    this.about = '',
     required this.addedAt,
   });
 
@@ -23,6 +28,7 @@ class ChatContact {
         nickname: row['nickname'] as String,
         chatCode: row['chat_code'] as String,
         avatarBase64: row['avatar_base64'] as String?,
+        about: (row['about'] as String?) ?? '',
         addedAt: DateTime.parse(row['added_at'] as String),
       );
 }

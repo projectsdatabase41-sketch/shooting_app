@@ -3,7 +3,6 @@ import 'dart:math';
 
 import 'package:http/http.dart' as http;
 
-import 'chat_global_service.dart';
 import 'chat_settings.dart';
 import 'local_db_service.dart';
 import 'supabase_auth_service.dart' show AuthException;
@@ -33,6 +32,7 @@ class ChatAuthService {
   String get nickname => _read('chat_nickname');
   String get chatCode => _read('chat_code');
   String get avatarBase64 => _read('chat_avatar_base64');
+  String get about => _read('chat_about');
 
   DateTime? get expiresAt {
     final raw = _read('chat_expires_at');
@@ -356,13 +356,13 @@ class ChatAuthService {
       final decoded = jsonDecode(utf8.decode(res.bodyBytes));
       if (decoded is! List || decoded.isEmpty) return const [];
       final ids = decoded.map((r) => '${r['requester_id']}').toList();
-      final profiles = await ChatGlobalService(this, clientFactory: clientFactory).resolveProfiles(ids);
+      final profiles = await resolveProfiles(ids);
       return [
         for (final row in decoded)
           (
             userId: '${row['requester_id']}',
-            nickname: profiles['${row['requester_id']}']?.$1 ?? '—',
-            avatarBase64: profiles['${row['requester_id']}']?.$2,
+            nickname: profiles['${row['requester_id']}']?.nickname ?? '—',
+            avatarBase64: profiles['${row['requester_id']}']?.avatarBase64,
             createdAt: DateTime.tryParse('${row['created_at']}') ?? DateTime.now(),
           ),
       ];
@@ -436,7 +436,7 @@ class ChatAuthService {
   /// приложения и смену телефона, в отличие от `chat_contacts` (только
   /// на устройстве): при входе на новом устройстве список подтягивается
   /// заново в локальные контакты (см. `_ChatHomeScreenState._syncFriends`).
-  Future<List<({String userId, String nickname, String? avatarBase64})>> listFriends() async {
+  Future<List<({String userId, String nickname, String? avatarBase64, String about})>> listFriends() async {
     final token = await ensureFreshToken();
     if (token == null) return const [];
     final client = clientFactory();
@@ -458,9 +458,15 @@ class ChatAuthService {
           .map((r) => '${r['requester_id']}' == userId ? '${r['addressee_id']}' : '${r['requester_id']}')
           .toSet()
           .toList();
-      final profiles = await ChatGlobalService(this, clientFactory: clientFactory).resolveProfiles(otherIds);
+      final profiles = await resolveProfiles(otherIds);
       return [
-        for (final id in otherIds) (userId: id, nickname: profiles[id]?.$1 ?? '—', avatarBase64: profiles[id]?.$2),
+        for (final id in otherIds)
+          (
+            userId: id,
+            nickname: profiles[id]?.nickname ?? '—',
+            avatarBase64: profiles[id]?.avatarBase64,
+            about: profiles[id]?.about ?? '',
+          ),
       ];
     } catch (_) {
       return const [];
@@ -497,6 +503,66 @@ class ChatAuthService {
     }
   }
 
+  /// Короткая строка о себе (клуб, город, дисциплина) — видна контактам.
+  Future<void> updateAbout(String value) async {
+    final token = await ensureFreshToken();
+    if (token == null) throw const AuthException('Сначала войдите в чат');
+    final trimmed = value.trim();
+    final client = clientFactory();
+    try {
+      final res = await client
+          .patch(
+            Uri.parse('$url/rest/v1/chat_profiles?user_id=eq.$userId'),
+            headers: {
+              'apikey': anonKey,
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal',
+            },
+            body: jsonEncode({'about': trimmed}),
+          )
+          .timeout(const Duration(seconds: 20));
+      if (res.statusCode >= 400) throw AuthException(_message(res.body));
+      _write('chat_about', trimmed);
+    } finally {
+      client.close();
+    }
+  }
+
+  /// Профили по списку id (ник, аватар, «о себе») — RPC `resolve_profiles`
+  /// не отдаёт chat_code. Ошибка сети — пустой результат.
+  Future<Map<String, ({String nickname, String? avatarBase64, String about})>> resolveProfiles(
+      List<String> ids) async {
+    if (ids.isEmpty) return {};
+    final token = await ensureFreshToken();
+    if (token == null) return {};
+    final client = clientFactory();
+    try {
+      final res = await client
+          .post(
+            Uri.parse('$url/rest/v1/rpc/resolve_profiles'),
+            headers: {'apikey': anonKey, 'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
+            body: jsonEncode({'p_ids': ids}),
+          )
+          .timeout(const Duration(seconds: 20));
+      if (res.statusCode >= 400) return {};
+      final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+      if (decoded is! List) return {};
+      return {
+        for (final row in decoded.cast<Map<String, dynamic>>())
+          '${row['user_id']}': (
+            nickname: '${row['nickname']}',
+            avatarBase64: row['avatar_base64'] as String?,
+            about: '${row['about'] ?? ''}',
+          ),
+      };
+    } catch (_) {
+      return {};
+    } finally {
+      client.close();
+    }
+  }
+
   void signOutLocally() {
     _write('chat_user_id', '');
     _write('chat_access_token', '');
@@ -505,6 +571,7 @@ class ChatAuthService {
     _write('chat_nickname', '');
     _write('chat_code', '');
     _write('chat_avatar_base64', '');
+    _write('chat_about', '');
   }
 
   /// Удаляет чат-аккаунт целиком на сервере (профиль, друзья/заявки,
@@ -537,7 +604,7 @@ class ChatAuthService {
   /// Ищет собеседника по коду контакта — через RPC (`security definer`),
   /// а не прямым чтением `chat_profiles`: обычная строка не должна давать
   /// читать чужие профили целиком, только находить один по точному коду.
-  Future<({String userId, String nickname, String? avatarBase64})?> resolveChatCode(String code) async {
+  Future<({String userId, String nickname, String? avatarBase64, String about})?> resolveChatCode(String code) async {
     final token = await ensureFreshToken();
     if (token == null) throw const AuthException('Сначала войдите в чат');
     final client = clientFactory();
@@ -561,6 +628,7 @@ class ChatAuthService {
         userId: '${row['user_id']}',
         nickname: '${row['nickname']}',
         avatarBase64: row['avatar_base64'] as String?,
+        about: '${row['about'] ?? ''}',
       );
     } finally {
       client.close();
@@ -657,7 +725,7 @@ class ChatAuthService {
     final client = clientFactory();
     try {
       final res = await client.get(
-        Uri.parse('$url/rest/v1/chat_profiles?user_id=eq.$userId&select=nickname,chat_code,avatar_base64'),
+        Uri.parse('$url/rest/v1/chat_profiles?user_id=eq.$userId&select=nickname,chat_code,avatar_base64,about'),
         headers: {'apikey': anonKey, 'Authorization': 'Bearer $token'},
       ).timeout(const Duration(seconds: 20));
       if (res.statusCode >= 400) return;
@@ -667,6 +735,7 @@ class ChatAuthService {
       _write('chat_nickname', '${row['nickname'] ?? ''}');
       _write('chat_code', '${row['chat_code'] ?? ''}');
       _write('chat_avatar_base64', '${row['avatar_base64'] ?? ''}');
+      _write('chat_about', '${row['about'] ?? ''}');
     } finally {
       client.close();
     }
