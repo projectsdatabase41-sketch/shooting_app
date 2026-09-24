@@ -593,3 +593,27 @@ create trigger chat_global_messages_trim
   for each statement execute function chat_global_trim();
 
 notify pgrst, 'reload schema';
+
+-- ============================================================
+-- Живой канал личного чата (Supabase Realtime, приватные каналы).
+--
+-- Канал диалога называется `dm:<id1>:<id2>` (id по возрастанию), войти
+-- и писать в него может только один из двух участников — иначе любой
+-- залогиненный мог бы подслушать чужой диалог, угадав имя канала.
+-- Включается на клиенте удалённо (config/chat-config.json, realtime.enabled).
+-- ============================================================
+drop policy if exists dm_realtime_read on realtime.messages;
+create policy dm_realtime_read on realtime.messages
+  for select to authenticated
+  using (
+    realtime.topic() like 'dm:%'
+    and auth.uid()::text = any (string_to_array(substr(realtime.topic(), 4), ':'))
+  );
+
+drop policy if exists dm_realtime_write on realtime.messages;
+create policy dm_realtime_write on realtime.messages
+  for insert to authenticated
+  with check (
+    realtime.topic() like 'dm:%'
+    and auth.uid()::text = any (string_to_array(substr(realtime.topic(), 4), ':'))
+  );

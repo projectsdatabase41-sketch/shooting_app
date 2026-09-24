@@ -11,6 +11,7 @@ import 'chat_auth_service.dart';
 import 'chat_drive_service.dart';
 import 'chat_messages_repository.dart';
 import 'chat_settings.dart';
+import 'live_chat_session.dart';
 
 /// Сетевой обмен публичного чата — общий проект как ВРЕМЕННЫЙ транзит:
 /// сообщение (и вложение, если есть) попадает на сервер при отправке и
@@ -36,6 +37,10 @@ class ChatSyncService {
   /// не через `chat-media` в Storage, а через отдельный Google Drive
   /// (см. `ChatDriveService`).
   late final ChatDriveService drive = ChatDriveService(auth, clientFactory: clientFactory);
+
+  /// Живой канал открытого диалога (см. `LiveChatSession`) — если задан и
+  /// собеседник в нём, текст уходит напрямую, иначе как обычно через базу.
+  LiveChatSession? live;
 
   static const _uuid = Uuid();
   static const Duration _timeout = Duration(seconds: 60);
@@ -340,6 +345,8 @@ class ChatSyncService {
     if (message.attachmentLocalPath != null && _attachmentTypes.contains(message.type)) {
       return _retryLargeAttachment(message);
     }
+    final l = live;
+    if (l != null && l.contactId == message.contactId && await l.trySend(message)) return;
     if (!ChatSettings.isConfigured) {
       repo.updateStatus(message.id, ChatMessageStatus.error);
       throw Exception('Чат не настроен');

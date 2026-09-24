@@ -17,6 +17,7 @@ import '../services/chat_messages_repository.dart';
 import '../services/chat_preferences.dart';
 import '../services/chat_sync_service.dart';
 import '../services/chat_translation_service.dart';
+import '../services/live_chat_session.dart';
 import '../services/remote_config.dart';
 import '../widgets/chat_avatar.dart';
 import '../widgets/chat_quick_menu.dart';
@@ -52,6 +53,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
   PollLoop? _pollLoop;
+  LiveChatSession? _live;
   List<ChatMessage> _messages = [];
   bool _sending = false;
   ChatMessage? _replyingTo;
@@ -116,12 +118,26 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     widget.repo.markThreadSeen(widget.contact.id);
     _reload();
     _scroll.addListener(_onScroll);
+    // Живой канал (WebSocket) — включается удалённо, по умолчанию выключен.
+    _live = LiveChatSession(
+      auth: widget.auth,
+      repo: widget.repo,
+      contactId: widget.contact.id,
+      onIncoming: () {
+        if (!mounted) return;
+        widget.repo.markThreadSeen(widget.contact.id);
+        _reload();
+        _scrollToEnd();
+      },
+    );
+    widget.sync.live = _live;
+    _live!.open();
     // Адаптивный опрос: пока собеседник пишет — каждые 5 секунд, в тишине
     // растёт до 30 (см. AdaptivePoller). Отправка своего сообщения возвращает
     // частый режим — ответ обычно приходит скоро.
     _pollLoop = PollLoop(
       poller: AdaptivePoller(
-          min: const Duration(seconds: 5), max: const Duration(seconds: 30), scale: () => RemoteConfig.pollScale),
+          min: const Duration(seconds: 5), max: const Duration(seconds: 30), scale: () => RemoteConfig.pollScale * (_live?.peerOnline == true ? 4 : 1)),
       tick: () async {
         final added = await widget.sync.pollIncoming();
         if (added > 0 && mounted) {
@@ -138,6 +154,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   void dispose() {
     widget.prefs.removeListener(_onPrefsChanged);
     _pollLoop?.stop();
+    if (widget.sync.live == _live) widget.sync.live = null;
+    _live?.close();
     _input.dispose();
     _scroll.dispose();
     super.dispose();
