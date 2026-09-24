@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../logic/adaptive_poller.dart';
 import '../logic/chat_media_utils.dart';
 import '../models/chat_contact.dart';
 import '../models/chat_message.dart';
@@ -49,7 +50,7 @@ class ChatThreadScreen extends StatefulWidget {
 class _ChatThreadScreenState extends State<ChatThreadScreen> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
-  Timer? _pollTimer;
+  PollLoop? _pollLoop;
   List<ChatMessage> _messages = [];
   bool _sending = false;
   ChatMessage? _replyingTo;
@@ -114,20 +115,27 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     widget.repo.markThreadSeen(widget.contact.id);
     _reload();
     _scroll.addListener(_onScroll);
-    _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
-      final added = await widget.sync.pollIncoming();
-      if (added > 0 && mounted) {
-        widget.repo.markThreadSeen(widget.contact.id);
-        _reload();
-        _scrollToEnd();
-      }
-    });
+    // Адаптивный опрос: пока собеседник пишет — каждые 5 секунд, в тишине
+    // растёт до 30 (см. AdaptivePoller). Отправка своего сообщения возвращает
+    // частый режим — ответ обычно приходит скоро.
+    _pollLoop = PollLoop(
+      poller: AdaptivePoller(min: const Duration(seconds: 5), max: const Duration(seconds: 30)),
+      tick: () async {
+        final added = await widget.sync.pollIncoming();
+        if (added > 0 && mounted) {
+          widget.repo.markThreadSeen(widget.contact.id);
+          _reload();
+          _scrollToEnd();
+        }
+        return added > 0;
+      },
+    )..start();
   }
 
   @override
   void dispose() {
     widget.prefs.removeListener(_onPrefsChanged);
-    _pollTimer?.cancel();
+    _pollLoop?.stop();
     _input.dispose();
     _scroll.dispose();
     super.dispose();
@@ -232,6 +240,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       _replyingTo = null;
     });
     try {
+      _pollLoop?.poller.nudge(); // ждём ответ — опрашиваем чаще
       await widget.sync.send(widget.contact.id, text, replyTo: replyTo);
       _scrollToEnd();
     } catch (e) {

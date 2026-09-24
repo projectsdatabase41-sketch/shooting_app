@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../logic/ai_context.dart';
 import '../logic/avatar_utils.dart';
+import '../logic/adaptive_poller.dart';
 import '../logic/chat_media_utils.dart';
 import '../models/chat_contact.dart';
 import '../models/chat_global_message.dart';
@@ -58,7 +59,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
   late final ChatSyncService _sync;
   late final ChatGlobalService _global;
   late final ChatPreferences _prefs;
-  Timer? _pollTimer;
+  PollLoop? _pollLoop;
   List<ChatContact> _contacts = [];
 
   /// Идёт попытка тихого входа в чат тем же email, что и основной вход
@@ -90,7 +91,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
 
   @override
   void dispose() {
-    _pollTimer?.cancel();
+    _pollLoop?.stop();
     super.dispose();
   }
 
@@ -171,17 +172,23 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
   }
 
   void _startPolling() {
-    _pollTimer?.cancel();
-    // Раз в 20 секунд, пока экран открыт — редкий опрос вместо push
-    // (решение пользователя: сначала MVP без push).
-    _pollTimer = Timer.periodic(const Duration(seconds: 20), (_) async {
-      final added = await _sync.pollIncoming();
-      // _reload(), а не голый setState — новое входящее от ещё не
-      // добавленного отправителя заводит контакт автоматически (см.
-      // ChatSyncService.pollIncoming), и он должен сразу появиться в
-      // списке слева, а не только после ручного обновления экрана.
-      if (added > 0 && mounted) _reload();
-    });
+    _pollLoop?.stop();
+    // Адаптивный опрос вместо фиксированных 20 секунд (решение
+    // пользователя, подготовка к 1000+ пользователей): часто, пока идёт
+    // переписка, редко в покое, ещё реже — если сервер отвечает тяжело.
+    // Личный опрос и так дешёвый (в транзитной таблице только МОИ строки).
+    _pollLoop = PollLoop(
+      poller: AdaptivePoller(min: const Duration(seconds: 10), max: const Duration(seconds: 60)),
+      tick: () async {
+        final added = await _sync.pollIncoming();
+        // _reload(), а не голый setState — новое входящее от ещё не
+        // добавленного отправителя заводит контакт автоматически (см.
+        // ChatSyncService.pollIncoming), и он должен сразу появиться в
+        // списке слева, а не только после ручного обновления экрана.
+        if (added > 0 && mounted) _reload();
+        return added > 0;
+      },
+    )..start();
   }
 
   @override
