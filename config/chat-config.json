@@ -1,6 +1,6 @@
 {
   "poll": { "scale": 1.0 },
-  "realtime": { "enabled": false },
-  "webrtc": { "enabled": false, "stun": ["stun:stun.l.google.com:19302"] },
+  "realtime": { "enabled": true },
+  "webrtc": { "enabled": true, "stun": ["stun:stun.l.google.com:19302"] },
   "push": { "quietSeconds": 120 }
 }

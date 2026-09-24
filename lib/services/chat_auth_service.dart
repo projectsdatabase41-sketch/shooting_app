@@ -724,10 +724,14 @@ class ChatAuthService {
     final token = accessToken;
     final client = clientFactory();
     try {
-      final res = await client.get(
-        Uri.parse('$url/rest/v1/chat_profiles?user_id=eq.$userId&select=nickname,chat_code,avatar_base64,about'),
-        headers: {'apikey': anonKey, 'Authorization': 'Bearer $token'},
-      ).timeout(const Duration(seconds: 20));
+      Future<http.Response> load(String columns) => client.get(
+            Uri.parse('$url/rest/v1/chat_profiles?user_id=eq.$userId&select=$columns'),
+            headers: {'apikey': anonKey, 'Authorization': 'Bearer $token'},
+          ).timeout(const Duration(seconds: 20));
+      var res = await load('nickname,chat_code,avatar_base64,about');
+      // Колонки about на сервере ещё нет (sql/chat-schema.sql не накатан) —
+      // профиль всё равно должен загрузиться.
+      if (res.statusCode >= 400) res = await load('nickname,chat_code,avatar_base64');
       if (res.statusCode >= 400) return;
       final decoded = jsonDecode(utf8.decode(res.bodyBytes));
       if (decoded is! List || decoded.isEmpty) return;
