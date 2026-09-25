@@ -91,6 +91,23 @@ void main() {
     expect(store.sessions.first.shots.length, 2, reason: 'не должно затереться пустым списком выстрелов');
   });
 
+  test('тренировка есть в базе, но не в списке (например, в корзине) — pull не падает и не воскрешает её', () async {
+    final store = await _freshStore();
+    store.upsertExerciseFromRemote(_exercise);
+    final session = TrainingSession(
+      id: 'se1',
+      exerciseId: 'ex1',
+      targetFaceCode: 'rifle_10m',
+      status: SessionStatus.finished,
+      shots: [_shot('sh1', 1)],
+      syncedToCloud: true,
+    );
+    store.upsertSessionFromRemote(session);
+    store.sessions = []; // в памяти её нет, в базе — есть
+    expect(() => store.upsertSessionFromRemote(session), returnsNormally);
+    expect(store.sessions, isEmpty);
+  });
+
   test('markSessionSynced — ставит флаг локально и в памяти', () async {
     final store = await _freshStore();
     store.upsertExerciseFromRemote(_exercise);

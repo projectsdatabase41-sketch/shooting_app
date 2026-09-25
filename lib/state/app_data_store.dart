@@ -457,12 +457,13 @@ class AppDataStore extends ChangeNotifier {
     if (exercises.any((e) => e.id == ex.id)) return;
     db.db.execute(
       'INSERT INTO exercises (id, code, name, target_face_code, total_shots, series_size, gender, series, deleted_at) '
-      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING',
       [
         ex.id, ex.name, ex.name, ex.targetFaceCode, ex.totalShots, ex.seriesSize,
         ex.gender.name, ex.series.isEmpty ? null : seriesToJson(ex.series), ex.deletedAt?.toIso8601String(),
       ],
     );
+    if (db.db.updatedRows == 0) return; // уже есть в базе (например, удалено)
     exercises = [ex, ...exercises];
     notifyListeners();
   }
@@ -486,8 +487,11 @@ class AppDataStore extends ChangeNotifier {
     db.db.execute('BEGIN');
     try {
       db.db.execute(
+        // DO NOTHING: тренировка может уже лежать в базе, но не в списке
+        // [sessions] (например, удалена в корзину) — не падаем на дубле и не
+        // «воскрешаем» её из облака.
         'INSERT INTO training_sessions (id, exercise_id, target_face_code, status, started_at, finished_at, pause_intervals, synced_to_cloud, extra) '
-        'VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)',
+        'VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?) ON CONFLICT(id) DO NOTHING',
         [
           session.id,
           session.exerciseId,
@@ -499,6 +503,10 @@ class AppDataStore extends ChangeNotifier {
           session.extra == null ? null : jsonEncode(session.extra),
         ],
       );
+      if (db.db.updatedRows == 0) {
+        db.db.execute('COMMIT');
+        return; // уже была в базе
+      }
       for (final shot in session.shots) {
         _insertShot(session.id, shot, trashed: false);
       }
