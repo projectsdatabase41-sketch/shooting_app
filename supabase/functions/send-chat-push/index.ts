@@ -13,11 +13,11 @@
 // и без npm-зависимостей, которые в Deno утяжелили бы холодный старт.
 //
 // Деплой (нужно сделать вручную, у меня нет доступа к CLI/дашборду
-// проекта frbptucrvmyikencyspu — это ДРУГОЙ Supabase-проект, не тот,
+// проекта yirvomezybprdlntxyas — это ДРУГОЙ Supabase-проект, не тот,
 // что подключён к MCP в этой сессии):
-//   1. supabase functions deploy send-chat-push --project-ref frbptucrvmyikencyspu
+//   1. supabase functions deploy send-chat-push --project-ref yirvomezybprdlntxyas
 //   2. Secrets (Dashboard → Edge Functions → Manage secrets, или CLI
-//      `supabase secrets set --project-ref frbptucrvmyikencyspu KEY=value`):
+//      `supabase secrets set --project-ref yirvomezybprdlntxyas KEY=value`):
 //        FIREBASE_CLIENT_EMAIL   — client_email из .local/firebase-service-account.json
 //        FIREBASE_PRIVATE_KEY    — private_key оттуда же (весь блок,
 //                                  вместе с -----BEGIN/END PRIVATE KEY-----)

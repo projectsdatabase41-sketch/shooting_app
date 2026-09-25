@@ -4,7 +4,7 @@ compatibility_date = "2025-09-01"
 
 [vars]
 # Открытые ключи подписи токенов чат-базы — ими проверяется пользователь.
-JWKS_URL = "https://frbptucrvmyikencyspu.supabase.co/auth/v1/.well-known/jwks.json"
+JWKS_URL = "https://yirvomezybprdlntxyas.supabase.co/auth/v1/.well-known/jwks.json"
 # Пороги трафика через ретранслятор в месяц — ниже бесплатных объёмов
 # (Cloudflare 1000 ГБ, Metered 500 МБ), чтобы не платить никогда.
 CF_TURN_LIMIT_GB = "800"

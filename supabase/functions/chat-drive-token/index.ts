@@ -12,9 +12,9 @@
 //
 // Деплой (ДРУГОЙ Supabase-проект, не тот, что подключён к MCP в этой
 // сессии — доступа к CLI/дашборду нет, только вручную):
-//   supabase functions deploy chat-drive-token --project-ref frbptucrvmyikencyspu
+//   supabase functions deploy chat-drive-token --project-ref yirvomezybprdlntxyas
 // Secrets:
-//   supabase secrets set --project-ref frbptucrvmyikencyspu \
+//   supabase secrets set --project-ref yirvomezybprdlntxyas \
 //     DRIVE_SCRIPT_URL=https://script.google.com/macros/s/ВАШ_ID/exec \
 //     DRIVE_API_TOKEN=<тот же секрет, что в Код.gs выделенного Диска>
 

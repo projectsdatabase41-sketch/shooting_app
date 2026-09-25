@@ -1,6 +1,21 @@
 {
-  "poll": { "scale": 1.0 },
-  "realtime": { "enabled": true },
-  "webrtc": { "enabled": true, "stun": ["stun:stun.l.google.com:19302"] },
-  "push": { "quietSeconds": 120 }
+  "poll": {
+    "scale": 1.0
+  },
+  "realtime": {
+    "enabled": true
+  },
+  "webrtc": {
+    "enabled": true,
+    "stun": [
+      "stun:stun.l.google.com:19302"
+    ]
+  },
+  "push": {
+    "quietSeconds": 120
+  },
+  "chat": {
+    "url": "https://yirvomezybprdlntxyas.supabase.co",
+    "anonKey": "sb_publishable_2nW7G7lKueMQamuFeoC3Cw_iql48Xj3"
+  }
 }

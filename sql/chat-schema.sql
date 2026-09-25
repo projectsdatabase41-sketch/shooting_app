@@ -559,7 +559,7 @@ begin
 
     if service_key is not null then
       perform net.http_post(
-        url := 'https://frbptucrvmyikencyspu.supabase.co/functions/v1/send-chat-push',
+        url := 'https://yirvomezybprdlntxyas.supabase.co/functions/v1/send-chat-push',
         headers := jsonb_build_object(
           'Content-Type', 'application/json',
           'Authorization', 'Bearer ' || service_key

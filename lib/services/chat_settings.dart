@@ -13,8 +13,9 @@ import 'remote_config.dart';
 /// включится сам, как только здесь появятся настоящие значения —
 /// остальной код чата их не хардкодит нигде повторно.
 class ChatSettings {
-  static const String _defaultUrl = 'https://frbptucrvmyikencyspu.supabase.co';
-  static const String _defaultAnonKey = 'sb_publishable_4kAWR6cYksf6cE0Ch13Tpw_nZZjT1M0';
+  // Сервер мессенджера — публичная база (та же, что книги/правила для ИИ).
+  static const String _defaultUrl = 'https://yirvomezybprdlntxyas.supabase.co';
+  static const String _defaultAnonKey = 'sb_publishable_2nW7G7lKueMQamuFeoC3Cw_iql48Xj3';
 
   /// Адрес и ключ можно сменить удалённо (`RemoteConfig`, только вместе и
   /// только для *.supabase.co) — без выпуска новой версии.
