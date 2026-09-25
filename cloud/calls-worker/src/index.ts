@@ -10,7 +10,8 @@
 //   GET  /room/<callId>?token=…  (WebSocket)       — обмен offer/answer/ice/hangup
 //
 // Секреты (wrangler secret put …): FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY,
-// FIREBASE_PROJECT_ID, TURN_KEY_ID, TURN_KEY_API_TOKEN.
+// FIREBASE_PROJECT_ID; TURN — либо Cloudflare (TURN_KEY_ID, TURN_KEY_API_TOKEN),
+// либо Metered (METERED_ICE_URL — адрес выдачи доступов вместе с ключом).
 
 export interface Env {
   ROOMS: DurableObjectNamespace;
@@ -21,6 +22,8 @@ export interface Env {
   FIREBASE_PROJECT_ID: string;
   TURN_KEY_ID: string;
   TURN_KEY_API_TOKEN: string;
+  /** Metered TURN: https://<app>.metered.live/api/v1/turn/credentials?apiKey=… */
+  METERED_ICE_URL: string;
 }
 
 const MAX_PEERS = 4; // напрямую (mesh) больше 4 не потянет
@@ -164,6 +167,16 @@ export default {
           },
         );
         if (res.ok) ice.push(...((await res.json()) as { iceServers: RTCIceServerLike[] }).iceServers);
+      }
+      if (env.METERED_ICE_URL) {
+        try {
+          const res = await fetch(env.METERED_ICE_URL);
+          if (res.ok) {
+            const list = (await res.json()) as RTCIceServerLike[];
+            // только TURN — STUN у нас уже есть
+            ice.push(...list.filter((s) => JSON.stringify(s.urls).includes('turn')));
+          }
+        } catch {}
       }
       return json({ iceServers: ice });
     }

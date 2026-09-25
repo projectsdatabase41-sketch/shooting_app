@@ -8,7 +8,16 @@ import { webcrypto as crypto } from 'node:crypto';
 const JWKS_PORT = 8788, DEV_PORT = 8799;
 const { publicKey, privateKey } = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
 const pub = { ...(await crypto.subtle.exportKey('jwk', publicKey)), kid: 'test-kid', alg: 'ES256' };
-const jwksServer = http.createServer((_, res) => res.end(JSON.stringify({ keys: [pub] }))).listen(JWKS_PORT);
+const jwksServer = http.createServer((req, res) => {
+  // тот же сервер изображает и выдачу доступов Metered
+  if (req.url.startsWith('/metered')) {
+    return res.end(JSON.stringify([
+      { urls: 'stun:stun.relay.metered.ca:80' },
+      { urls: 'turn:global.relay.metered.ca:80', username: 'u', credential: 'c' },
+    ]));
+  }
+  res.end(JSON.stringify({ keys: [pub] }));
+}).listen(JWKS_PORT);
 
 const b64u = (b) => Buffer.from(b).toString('base64url');
 async function token(sub, { exp = Math.floor(Date.now() / 1000) + 600, kid = 'test-kid' } = {}) {
@@ -18,7 +27,7 @@ async function token(sub, { exp = Math.floor(Date.now() / 1000) + 600, kid = 'te
   return `${h}.${p}.${b64u(sig)}`;
 }
 
-const dev = spawn('npx', ['wrangler', 'dev', '--port', String(DEV_PORT), '--var', `JWKS_URL:http://127.0.0.1:${JWKS_PORT}/`], { shell: true, stdio: ['ignore', 'pipe', 'pipe'] });
+const dev = spawn('npx', ['wrangler', 'dev', '--port', String(DEV_PORT), '--var', `JWKS_URL:http://127.0.0.1:${JWKS_PORT}/`, '--var', `METERED_ICE_URL:http://127.0.0.1:${JWKS_PORT}/metered?apiKey=x`], { shell: true, stdio: ['ignore', 'pipe', 'pipe'] });
 await new Promise((resolve, reject) => {
   const t = setTimeout(() => reject(new Error('wrangler dev не поднялся')), 90000);
   const onData = (d) => { if (/Ready on/.test(`${d}`)) { clearTimeout(t); resolve(); } };
@@ -38,6 +47,7 @@ try {
   ok((await fetch(`${base}/ice`, { headers: { authorization: `Bearer ${await token(A, { kid: 'other' })}` } })).status === 401, 'чужой ключ — 401');
   const ice = await (await fetch(`${base}/ice`, { headers: { authorization: `Bearer ${await token(A)}` } })).json();
   ok(Array.isArray(ice.iceServers) && JSON.stringify(ice).includes('stun:'), 'ICE-серверы выдаются (STUN)');
+  ok(JSON.stringify(ice).includes('turn:global.relay.metered.ca') && !JSON.stringify(ice).includes('stun.relay.metered'), 'TURN от Metered добавлен (без их STUN)');
   const call = await (await fetch(`${base}/call`, {
     method: 'POST', headers: { authorization: `Bearer ${await token(A)}`, 'content-type': 'application/json' },
     body: JSON.stringify({ callId, to: B, name: 'Ваня' }),
