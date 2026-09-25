@@ -125,7 +125,8 @@ class KnowledgeService {
     if (auth != null && auth.hasBase && settings.tables.isNotEmpty) {
       final token = await auth.ensureFreshToken() ?? auth.anonKey;
       final baseUrl = '${auth.url}/rest/v1';
-      for (final t in settings.tables) {
+      // Таблицы самого приложения ИИ не читает, даже если попали в список раньше.
+      for (final t in settings.tables.where((t) => !AiSettings.appOwnTables.contains(t.name))) {
         out.add((await _withDiscoveredColumn(t, baseUrl, token), baseUrl, token));
       }
     }
@@ -193,10 +194,18 @@ class KnowledgeService {
     if (trimmed.length < minQuestionLength) return const [];
     if (isSmallTalk(trimmed)) return const [];
     final words = keywords(trimmed);
-    if (words.isEmpty) return const [];
+    final personal = {for (final t in settings.tables) t.name};
 
     final results = <KnowledgeChunk>[];
     for (final (table, baseUrl, token) in await _allTables()) {
+      // Своя таблица пользователя, в которой по словам вопроса ничего не
+      // нашлось («что у меня в заметках?» — слово «заметках» внутри самих
+      // заметок не встречается): отдаём её последние записи, иначе ИИ
+      // вообще не видит, что там лежит.
+      if (words.isEmpty) {
+        if (personal.contains(table.name)) results.addAll(await _latest(table, baseUrl, token));
+        continue;
+      }
       // Запросы по словам — параллельно: это одна и та же база, и
       // ждать их по очереди значит втрое затянуть ответ в чате.
       final batches = await Future.wait([
@@ -214,10 +223,21 @@ class KnowledgeService {
 
       final ranked = unique.values.toList()
         ..sort((a, b) => _relevance(b, words).compareTo(_relevance(a, words)));
-      results.addAll(ranked.take(perTableLimit));
+      if (ranked.isEmpty && personal.contains(table.name)) {
+        results.addAll(await _latest(table, baseUrl, token));
+      } else {
+        results.addAll(ranked.take(perTableLimit));
+      }
     }
     return results;
   }
+
+  /// Сколько последних записей своей таблицы отдаём, если поиск по словам
+  /// ничего не дал.
+  static const int latestLimit = 5;
+
+  Future<List<KnowledgeChunk>> _latest(KnowledgeTableConfig table, String baseUrl, String token) =>
+      _searchTable(table, null, baseUrl, token, limit: latestLimit);
 
   /// Сколько разных ключевых слов встретилось в куске. Заголовок весит
   /// столько же, сколько текст: попадание в заголовок раздела обычно
@@ -225,12 +245,15 @@ class KnowledgeService {
   static int _relevance(KnowledgeChunk c, List<String> words) =>
       TextSearch.relevance('${c.heading} ${c.text}', words);
 
+  /// [word] == null — без фильтра, самые свежие записи (по дате, если
+  /// в таблице есть колонка даты).
   Future<List<KnowledgeChunk>> _searchTable(
     KnowledgeTableConfig table,
-    String word,
+    String? word,
     String baseUrl,
-    String token,
-  ) async {
+    String token, {
+    int limit = perWordFetch,
+  }) async {
     try {
       // select=* вместо конкретных имён — file_name/heading_path не
       // обязаны существовать в чужой таблице (например, notes другого
@@ -247,15 +270,19 @@ class KnowledgeService {
         table.contentColumn,
         if (all != null) ...all.where(_searchColumnNames.contains),
       };
-      final safeWord = word.replaceAll(RegExp(r'[,()*]'), '');
-      final filter = searchCols.length == 1
-          ? {table.contentColumn: 'ilike.*$safeWord*'}
-          : {'or': '(${searchCols.map((c) => '$c.ilike.*$safeWord*').join(',')})'};
+      final safeWord = (word ?? '').replaceAll(RegExp(r'[,()*]'), '');
+      final filter = word == null
+          ? const <String, String>{}
+          : searchCols.length == 1
+              ? {table.contentColumn: 'ilike.*$safeWord*'}
+              : {'or': '(${searchCols.map((c) => '$c.ilike.*$safeWord*').join(',')})'};
+      final dateCol = all == null ? null : _dateColumnNames.where(all.contains).firstOrNull;
       final uri = Uri.parse('$baseUrl/${table.name}').replace(
         queryParameters: {
           'select': all == null ? '*' : all.where((c) => !_heavyColumn.hasMatch(c)).join(','),
           ...filter,
-          'limit': '$perWordFetch',
+          if (word == null && dateCol != null) 'order': '$dateCol.desc',
+          'limit': '$limit',
         },
       );
 
@@ -330,13 +357,22 @@ class KnowledgeService {
 
   /// Собирает найденное в блок для системного промпта, соблюдая общий
   /// лимит символов.
-  static String? asPromptBlock(List<KnowledgeChunk> chunks) {
-    if (chunks.isEmpty) return null;
+  static String? asPromptBlock(List<KnowledgeChunk> chunks, {List<KnowledgeTableConfig> tables = const []}) {
+    if (chunks.isEmpty && tables.isEmpty) return null;
     // Текущие дата и время — отдельной строкой один раз, а не в каждом
     // куске: модель должна знать "сейчас", чтобы отличать "давно" от
     // "недавно" у дат самих записей (пункт: "какое сейчас время и дату
     // записи, чтобы лучше понимать пользователя").
     final buf = StringBuffer('Текущие дата и время: ${DateTime.now().toIso8601String()}\n\n');
+    // Какие свои таблицы подключил пользователь — ИИ должен знать о них,
+    // даже если в этот раз ничего из них не нашлось.
+    if (tables.isNotEmpty) {
+      buf.writeln('Подключённые таблицы пользователя (его личные данные, их можно и нужно использовать):');
+      for (final t in tables) {
+        buf.writeln('- ${t.label}${t.description.isEmpty ? '' : ': ${t.description}'}');
+      }
+      buf.writeln(chunks.isEmpty ? '(по этому вопросу записей из них не найдено)' : '');
+    }
     for (final c in chunks) {
       // Название/описание таблицы — чтобы модель понимала, ЧТО за
       // источник перед ней (личный дневник — не то же самое, что

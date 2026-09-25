@@ -180,7 +180,7 @@ class AiChatViewModel extends ChangeNotifier {
       final pastSummaries = await memory.search(trimmed);
       final ctx = pastSummaries.isEmpty ? rawCtx : rawCtx.withPastSummaries(pastSummaries);
       final chunks = await knowledge.search(trimmed);
-      final books = KnowledgeService.asPromptBlock(chunks);
+      final books = KnowledgeService.asPromptBlock(chunks, tables: knowledge.settings.tables);
       final history = <({String role, String text})>[
         for (final m in _recent()) (role: m.fromUser ? 'user' : 'assistant', text: m.text),
       ];

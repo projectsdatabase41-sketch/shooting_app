@@ -344,8 +344,15 @@ class _AccountSheetState extends State<_AccountSheet> {
     for (final n in existing.keys) {
       if (selected[n] != true) discovery.forget(n);
     }
-    if (!mounted) return;
-    setState(() => _message = 'Таблицы для ИИ обновлены');
+    if (!mounted || !context.mounted) return;
+    // Сохранили — закрываем и лист учётной записи, чтобы было видно, что
+    // настройка применилась (решение пользователя).
+    final messenger = ScaffoldMessenger.of(context);
+    Navigator.of(context).pop();
+    final chosen = settings.tables.map((t) => t.label).join(', ');
+    messenger.showSnackBar(SnackBar(
+      content: Text(chosen.isEmpty ? 'Таблицы для ИИ отключены' : 'ИИ теперь видит: $chosen'),
+    ));
 
     // Понять, что за таблицу подключили: без описания ИИ видит только
     // имя таблицы и колонки, но не знает, дневник это или что-то ещё
@@ -355,9 +362,8 @@ class _AccountSheetState extends State<_AccountSheet> {
     // при следующем открытии этого экрана, когда данные уже появятся.
     final needsDescription =
         settings.tables.where((t) => t.description.isEmpty || t.description == _emptyTableNote).toList();
-    if (needsDescription.isNotEmpty) {
-      await _run(() => _describeTables(settings, needsDescription));
-    }
+    // Описание — в фоне: лист уже закрыт, результат просто сохранится.
+    if (needsDescription.isNotEmpty) _describeTables(settings, needsDescription);
   }
 
   static const _emptyTableNote = 'Таблица пока пустая, содержимого ещё нет.';

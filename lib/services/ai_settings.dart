@@ -291,6 +291,10 @@ class AiSettings {
     'comments',
     'training_notes',
     'ai_conversation_summaries',
+    // служебные таблицы установщика (lib/db/puls_install.sql)
+    'keepalive_log',
+    'table_docs',
+    'table_protection',
   };
 
   /// Короткая инструкция от пользователя — что ассистенту стоит знать
