@@ -529,8 +529,22 @@ set search_path = public
 as $$
 declare
   service_key text;
+  gid uuid;
 begin
   begin
+    -- Сообщение группы лежит строкой на каждого участника, но push нужен
+    -- один вызов на сообщение: функция сама разошлёт всем. Вызываем только
+    -- для строки «первого» получателя. to_jsonb — чтобы не падать, пока
+    -- колонки group_id ещё нет (sql/chat-groups.sql не выполнен).
+    gid := (to_jsonb(NEW) ->> 'group_id')::uuid;
+    if gid is not null and NEW.recipient_id <> (
+      select user_id from chat_group_members
+      where group_id = gid and user_id <> NEW.sender_id
+      order by user_id limit 1
+    ) then
+      return NEW;
+    end if;
+
     select decrypted_secret into service_key
     from vault.decrypted_secrets
     where name = 'service_role_key';

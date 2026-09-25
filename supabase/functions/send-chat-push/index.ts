@@ -153,8 +153,34 @@ Deno.serve(async (req: Request) => {
   const msgType = row.msg_type as string | undefined;
   if (msgType === 'edit' || msgType === 'delete') return new Response('ok');
 
+  const H = { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` };
+  const groupId = row.group_id as string | undefined;
+  let groupName: string | undefined;
+
   const recipientIds: string[] = [];
   const recipientId = row.recipient_id as string;
+  if (groupId) {
+    // Группа: триггер вызвал нас один раз на сообщение — рассылаем всем
+    // участникам, кроме автора, у кого не выключены уведомления.
+    const [membersRes, groupRes] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/chat_group_members?select=user_id&group_id=eq.${groupId}&user_id=neq.${senderId}`, { headers: H }),
+      fetch(`${SUPABASE_URL}/rest/v1/chat_groups?select=name&id=eq.${groupId}`, { headers: H }),
+    ]);
+    const ids = ((await membersRes.json()) as { user_id: string }[]).map((m) => m.user_id);
+    groupName = ((await groupRes.json()) as { name: string }[])[0]?.name;
+    if (ids.length > 0) {
+      const modesRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/chat_profiles?select=user_id,personal_push_mode&user_id=in.(${ids.join(',')})`,
+        { headers: H },
+      );
+      const off = new Set(
+        ((await modesRes.json()) as { user_id: string; personal_push_mode?: string }[])
+          .filter((p) => p.personal_push_mode === 'none')
+          .map((p) => p.user_id),
+      );
+      recipientIds.push(...ids.filter((id) => !off.has(id)));
+    }
+  } else
   // "Позвать" и его сигналы (call_ack — тренер идёт, call_cancel —
   // спортсмен передумал) — мимо настройки "Уведомления личных чатов"
   // (тот же принцип, что звонок мимо беззвучного режима телефона):
@@ -233,7 +259,11 @@ Deno.serve(async (req: Request) => {
   }
 
   const preview = (r: Record<string, unknown>): string => {
-    if (r.text) return r.text as string;
+    if (r.text) {
+      // График (```chart) в уведомлении — просто пометкой.
+      const caption = (r.text as string).replace(/```chart[\s\S]*?```/g, '').trim();
+      return caption || '📊 График';
+    }
     switch (r.msg_type) {
       case 'image': return '📷 Фото';
       case 'video': return '🎥 Видео';
@@ -243,10 +273,12 @@ Deno.serve(async (req: Request) => {
     }
   };
 
-  const title = senderNickname ?? 'Личное сообщение';
-  const body = preview(row);
+  const title = groupName ?? senderNickname ?? 'Личное сообщение';
+  const body = groupName ? `${senderNickname ?? '—'}: ${preview(row)}` : preview(row);
+  // Тап по уведомлению открывает диалог группы, а не личку с автором.
+  const threadId = groupId ?? senderId;
 
-  await Promise.all(tokens.map((t) => sendMessagePush(t, title, body, senderId).catch(() => {})));
+  await Promise.all(tokens.map((t) => sendMessagePush(t, title, body, threadId).catch(() => {})));
 
   return new Response('ok');
 });
