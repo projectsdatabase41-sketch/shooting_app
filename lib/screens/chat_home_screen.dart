@@ -302,7 +302,7 @@ class _ChatContactsView extends StatelessWidget {
   static String _time(DateTime t) {
     final now = DateTime.now();
     if (t.year == now.year && t.month == now.month && t.day == now.day) return DateFormat.Hm().format(t);
-    if (t.year == now.year) return DateFormat('d MMM', 'ru').format(t);
+    if (t.year == now.year) return DateFormat('dd.MM').format(t);
     return DateFormat('dd.MM.yy').format(t);
   }
 

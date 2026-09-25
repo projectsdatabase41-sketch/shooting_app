@@ -81,6 +81,7 @@ class LocalDbService {
       },
       'project_settings': {
         'remote_config_json': 'TEXT',
+        'chat_about': 'TEXT',
         'remote_config_at': 'TEXT',
         'auth_user_id': 'TEXT',
         'auth_access_token': 'TEXT',
