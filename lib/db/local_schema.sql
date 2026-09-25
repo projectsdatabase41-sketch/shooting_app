@@ -183,6 +183,9 @@ CREATE TABLE IF NOT EXISTS chat_local_messages (
   call_status         TEXT CHECK (call_status IN ('acknowledged','cancelled')),
   -- Только входящие в группе: кто написал.
   sender_id           TEXT,
+  -- Своё: собеседник прочитал. Входящее: «прочитано» уже отправлено.
+  peer_read           INTEGER NOT NULL DEFAULT 0,
+  read_reported       INTEGER NOT NULL DEFAULT 0,
   created_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

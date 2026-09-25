@@ -15,7 +15,10 @@ import 'chat_avatar.dart';
 /// Тренеров несколько — выбор запоминается, долгое нажатие меняет его.
 class CallCoachButton extends StatefulWidget {
   final LocalDbService db;
-  const CallCoachButton({super.key, required this.db});
+
+  /// Большая кнопка с подписью (страница «Тренер» на тренировке), иначе — значок.
+  final bool large;
+  const CallCoachButton({super.key, required this.db, this.large = false});
 
   @override
   State<CallCoachButton> createState() => _CallCoachButtonState();
@@ -77,6 +80,12 @@ class _CallCoachButtonState extends State<CallCoachButton> {
 
   Future<void> _call({bool choose = false}) async {
     final messenger = ScaffoldMessenger.of(context);
+    if (!_auth.isSignedIn) {
+      messenger.showSnackBar(const SnackBar(
+        content: Text('Сначала войдите в мессенджер — через него тренер получит вызов'),
+      ));
+      return;
+    }
     if (!_main.isSignedIn) {
       messenger.showSnackBar(const SnackBar(
         content: Text('Войдите в свою базу (Настройки → Данные и синхронизация) — там выданы токены тренерам'),
@@ -111,7 +120,19 @@ class _CallCoachButtonState extends State<CallCoachButton> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_auth.isSignedIn) return const SizedBox.shrink();
+    if (widget.large) {
+      return GestureDetector(
+        onLongPress: _busy ? null : () => _call(choose: true),
+        child: FilledButton.icon(
+          style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+          onPressed: _busy ? null : _call,
+          icon: _busy
+              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.campaign_outlined),
+          label: const Text('Позвать тренера'),
+        ),
+      );
+    }
     return GestureDetector(
       onLongPress: _busy ? null : () => _call(choose: true),
       child: IconButton(

@@ -160,6 +160,8 @@ class LocalDbService {
         'drive_file_id': 'TEXT',
         'attachment_local_path': 'TEXT',
         'sender_id': 'TEXT',
+        'peer_read': 'INTEGER NOT NULL DEFAULT 0',
+        'read_reported': 'INTEGER NOT NULL DEFAULT 0',
       },
       'chat_contacts': {'about': "TEXT NOT NULL DEFAULT ''", 'kind': "TEXT NOT NULL DEFAULT 'person'", 'group_json': 'TEXT'},
       'chat_global_cache': {
@@ -252,6 +254,8 @@ CREATE TABLE chat_local_messages (
   download_allowed    INTEGER NOT NULL DEFAULT 1,
   call_status         TEXT,
   sender_id           TEXT,
+  peer_read           INTEGER NOT NULL DEFAULT 0,
+  read_reported       INTEGER NOT NULL DEFAULT 0,
   created_at          TEXT NOT NULL DEFAULT (datetime('now'))
 )''');
     // Явный список колонок по ИМЕНИ с обеих сторон — а не SELECT * —
@@ -265,11 +269,11 @@ INSERT INTO chat_local_messages
   (id, client_message_id, contact_id, direction, text, status, seen, msg_type,
    attachment_base64, attachment_name, attachment_mime, attachment_size,
    edited, reply_to_client_message_id, reply_to_preview,
-   drive_file_id, attachment_local_path, download_allowed, call_status, sender_id, created_at)
+   drive_file_id, attachment_local_path, download_allowed, call_status, sender_id, peer_read, read_reported, created_at)
 SELECT id, client_message_id, contact_id, direction, text, status, seen, msg_type,
    attachment_base64, attachment_name, attachment_mime, attachment_size,
    edited, reply_to_client_message_id, reply_to_preview,
-   drive_file_id, attachment_local_path, download_allowed, call_status, sender_id, created_at
+   drive_file_id, attachment_local_path, download_allowed, call_status, sender_id, peer_read, read_reported, created_at
 FROM chat_local_messages_pre_call_type''');
     db.execute('DROP TABLE chat_local_messages_pre_call_type');
     db.execute('CREATE INDEX IF NOT EXISTS idx_chat_local_messages_contact ON chat_local_messages(contact_id)');

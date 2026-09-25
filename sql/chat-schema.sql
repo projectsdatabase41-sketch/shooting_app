@@ -206,7 +206,7 @@ alter table chat_messages add column if not exists download_allowed boolean not 
 -- накатывать многократно.
 alter table chat_messages drop constraint if exists chat_messages_msg_type_check;
 alter table chat_messages add constraint chat_messages_msg_type_check
-  check (msg_type in ('text','image','video','audio','file','edit','delete','call','call_ack','call_cancel'));
+  check (msg_type in ('text','image','video','audio','file','edit','delete','call','call_ack','call_cancel','read'));
 
 alter table chat_messages drop constraint if exists chat_messages_check;
 alter table chat_messages drop constraint if exists chat_messages_content_check;
@@ -219,6 +219,8 @@ alter table chat_messages add constraint chat_messages_content_check
     or (msg_type = 'call')
     or (msg_type = 'call_ack' and ack_of_client_message_id is not null)
     or (msg_type = 'call_cancel' and cancel_of_client_message_id is not null)
+    -- «прочитано»: text — JSON-список client_message_id прочитанных сообщений
+    or (msg_type = 'read' and text is not null)
   );
 
 create index if not exists idx_chat_messages_recipient on chat_messages(recipient_id);
@@ -536,6 +538,12 @@ begin
     -- один вызов на сообщение: функция сама разошлёт всем. Вызываем только
     -- для строки «первого» получателя. to_jsonb — чтобы не падать, пока
     -- колонки group_id ещё нет (sql/chat-groups.sql не выполнен).
+    -- Служебные сигналы без уведомления (правка, «прочитано») — функцию не
+    -- вызываем вовсе, экономим квоту. Удаление — вызываем: функция уберёт
+    -- показанное уведомление с текстом удалённого сообщения.
+    if NEW.msg_type in ('edit', 'read') then
+      return NEW;
+    end if;
     gid := (to_jsonb(NEW) ->> 'group_id')::uuid;
     if gid is not null and NEW.recipient_id <> (
       select user_id from chat_group_members

@@ -148,6 +148,35 @@ class ChatMessagesRepository {
     );
   }
 
+  /// Прочитанные входящие, о которых собеседник ещё не знает.
+  List<String> unreportedRead(String contactId) => [
+        for (final r in db.db.select(
+          "SELECT client_message_id FROM chat_local_messages WHERE contact_id = ? AND direction = 'incoming' "
+          'AND seen = 1 AND read_reported = 0 ORDER BY created_at DESC LIMIT 200',
+          [contactId],
+        ))
+          r['client_message_id'] as String,
+      ];
+
+  void markReadReported(String contactId, List<String> clientIds) {
+    for (final id in clientIds) {
+      db.db.execute(
+        'UPDATE chat_local_messages SET read_reported = 1 WHERE contact_id = ? AND client_message_id = ?',
+        [contactId, id],
+      );
+    }
+  }
+
+  /// Собеседник прочитал мои сообщения.
+  void markPeerRead(String contactId, List<String> clientIds) {
+    for (final id in clientIds) {
+      db.db.execute(
+        "UPDATE chat_local_messages SET peer_read = 1 WHERE contact_id = ? AND direction = 'outgoing' AND client_message_id = ?",
+        [contactId, id],
+      );
+    }
+  }
+
   bool existsByClientId(String clientMessageId) {
     final rows = db.db.select(
       'SELECT 1 FROM chat_local_messages WHERE client_message_id = ? LIMIT 1',

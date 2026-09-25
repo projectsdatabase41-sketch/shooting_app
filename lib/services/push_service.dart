@@ -133,6 +133,9 @@ class PushService {
       if (_isAndroid) showIncomingCallNotification(message.data);
       incomingCallHandler?.call(message.data, accepted: false);
     }
+    if (message.data['type'] == 'msg_delete' && _isAndroid) {
+      _localNotifications.cancel('${message.data['contact_id']}'.hashCode & 0x3fffffff);
+    }
     if (message.data['type'] == 'call_end') {
       cancelIncomingCallNotification();
       incomingCallEndHandler?.call('${message.data['call_id']}');
@@ -404,6 +407,10 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   } else if (type == 'msg') {
     await _initLocalNotifications();
     await showMessageNotification(message.data);
+  } else if (type == 'msg_delete') {
+    // Сообщение удалили — убрать уведомление с его текстом.
+    await _initLocalNotifications();
+    await _localNotifications.cancel('${message.data['contact_id']}'.hashCode & 0x3fffffff);
   } else if (type == 'call_in') {
     await _initLocalNotifications();
     await showIncomingCallNotification(message.data);

@@ -127,6 +127,16 @@ async function sendMessagePush(token: string, title: string, body: string, conta
   });
 }
 
+// Только данные, без показа — приложение само решает (например, убрать уведомление).
+async function sendDataOnly(token: string, data: Record<string, string>) {
+  const accessToken = await getAccessToken();
+  await fetch(`https://fcm.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/messages:send`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: { token, data, android: { priority: 'high' } } }),
+  });
+}
+
 // ---- Обработчик webhook'а ----
 
 Deno.serve(async (req: Request) => {
@@ -151,7 +161,23 @@ Deno.serve(async (req: Request) => {
   // ChatSyncService.editMessage/deleteMessage), не новые сообщения —
   // пуш по ним слать нечего и незачем.
   const msgType = row.msg_type as string | undefined;
-  if (msgType === 'edit' || msgType === 'delete') return new Response('ok');
+  if (msgType === 'edit' || msgType === 'read') return new Response('ok');
+  if (msgType === 'delete') {
+    // Сообщение удалили — убрать у получателя уведомление с его текстом.
+    const threadId = (row.group_id as string | undefined) ?? senderId;
+    const H0 = { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` };
+    // В группе триггер вызвал нас один раз — чистим уведомление у всех участников.
+    let targets = [row.recipient_id as string];
+    if (row.group_id) {
+      const m = await fetch(`${SUPABASE_URL}/rest/v1/chat_group_members?select=user_id&group_id=eq.${row.group_id}&user_id=neq.${senderId}`, { headers: H0 });
+      targets = ((await m.json()) as { user_id: string }[]).map((x) => x.user_id);
+    }
+    if (targets.length === 0) return new Response('ok');
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/chat_push_tokens?select=token&user_id=in.(${targets.join(',')})`, { headers: H0 });
+    const toks = ((await res.json()) as { token: string }[]).map((t) => t.token);
+    await Promise.all(toks.map((t) => sendDataOnly(t, { type: 'msg_delete', contact_id: threadId }).catch(() => {})));
+    return new Response('ok');
+  }
 
   const H = { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` };
   const groupId = row.group_id as string | undefined;

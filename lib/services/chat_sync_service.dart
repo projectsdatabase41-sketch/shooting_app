@@ -382,14 +382,17 @@ class ChatSyncService {
                 'apikey': ChatSettings.anonKey,
                 'Authorization': 'Bearer $token',
                 'Content-Type': message.attachmentMime ?? 'application/octet-stream',
-                // Повторная отправка перезаписывает тот же путь вместо
-                // ошибки "уже существует".
-                'x-upsert': 'true',
+                // Без x-upsert: перезапись требует ещё и права ЧИТАТЬ файл, а
+                // оно появляется только после записи сообщения — Supabase
+                // отвечал «violates row-level security policy».
               },
               body: base64Decode(b64),
             )
             .timeout(_timeout);
-        if (uploadRes.statusCode >= 300) {
+        // «Уже существует» — это повторная отправка после сбоя: файл уже на
+        // месте, дальше просто записываем сообщение.
+        final duplicate = uploadRes.statusCode == 409 || uploadRes.body.contains('Duplicate') || uploadRes.body.contains('already exists');
+        if (uploadRes.statusCode >= 300 && !duplicate) {
           throw Exception('Не удалось загрузить файл (${uploadRes.statusCode}): ${uploadRes.body}');
         }
       }
@@ -597,6 +600,14 @@ class ChatSyncService {
           doneIds.add('${row['id']}');
           continue;
         }
+        if (rawType == 'read') {
+          try {
+            final ids = (jsonDecode('${row['text']}') as List).map((e) => '$e').toList();
+            repo.markPeerRead(threadId, ids);
+          } catch (_) {}
+          doneIds.add('${row['id']}');
+          continue;
+        }
         if (rawType == 'call_ack') {
           final target = repo.byClientId(threadId, '${row['ack_of_client_message_id']}');
           if (target != null) repo.updateCallStatus(target.id, 'acknowledged');
@@ -662,6 +673,43 @@ class ChatSyncService {
       return added;
     } catch (_) {
       return 0;
+    } finally {
+      client.close();
+    }
+  }
+
+  /// Сообщает собеседнику, что его сообщения прочитаны (личный чат; в
+  /// группах отметки не шлём — это N сообщений на каждое прочтение).
+  Future<void> reportRead(String contactId) async {
+    final contact = repo.contactById(contactId);
+    if (contact == null || contact.isGroup || !ChatSettings.isConfigured) return;
+    final ids = repo.unreportedRead(contactId);
+    if (ids.isEmpty) return;
+    final token = await auth.ensureFreshToken();
+    if (token == null) return;
+    final client = clientFactory();
+    try {
+      final res = await client
+          .post(
+            Uri.parse('${ChatSettings.url}/rest/v1/chat_messages'),
+            headers: {
+              'apikey': ChatSettings.anonKey,
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal',
+            },
+            body: jsonEncode({
+              'client_message_id': _uuid.v4(),
+              'sender_id': auth.userId,
+              'recipient_id': contactId,
+              'msg_type': 'read',
+              'text': jsonEncode(ids),
+            }),
+          )
+          .timeout(_timeout);
+      // Сервер без типа 'read' (SQL не обновлён) ответит 400 — попробуем позже.
+      if (res.statusCode < 300) repo.markReadReported(contactId, ids);
+    } catch (_) {
     } finally {
       client.close();
     }

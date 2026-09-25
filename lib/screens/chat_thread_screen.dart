@@ -132,6 +132,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     _lastTranslationLanguage = widget.prefs.translationLanguage;
     widget.prefs.addListener(_onPrefsChanged);
     widget.repo.markThreadSeen(_contact.id);
+    widget.sync.reportRead(_contact.id);
     _reload();
     _scroll.addListener(_onScroll);
     // Живой канал (WebSocket) — включается удалённо, по умолчанию выключен.
@@ -144,6 +145,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       onIncoming: () {
         if (!mounted) return;
         widget.repo.markThreadSeen(_contact.id);
+    widget.sync.reportRead(_contact.id);
         _reload();
         _scrollToEnd();
       },
@@ -161,6 +163,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         final added = await widget.sync.pollIncoming();
         if (added > 0 && mounted) {
           widget.repo.markThreadSeen(_contact.id);
+    widget.sync.reportRead(_contact.id);
           _reload();
           _scrollToEnd();
         }
@@ -359,7 +362,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         history: [(role: 'user', text: instruction)],
       );
       if (!mounted) return;
-      final (caption, chart) = AiService.splitChart(reply.text.trim());
+      // График ask() уже вынул из текста в reply.chart — второй разбор его не найдёт.
+      final (caption, parsed) = AiService.splitChart(reply.text.trim());
+      final chart = reply.chart ?? parsed;
       setState(() {
         _input.text = caption.trim();
         _pendingChart = chart;
@@ -512,11 +517,32 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     if (m != null) await _retry(m);
   }
 
+  /// Удалить у меня или у всех. «У всех» — только свои сообщения, которые
+  /// собеседник ещё не прочитал (решение пользователя); остальные — у меня.
   Future<void> _deleteSelected() async {
     final ids = Set<String>.from(_selected);
+    final chosen = _messages.where((m) => ids.contains(m.id)).toList();
+    final canForAll = chosen.where((m) => m.direction == ChatMessageDirection.outgoing && !m.readByPeer).length;
+    final read = chosen.where((m) => m.direction == ChatMessageDirection.outgoing && m.readByPeer).length;
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(chosen.length == 1 ? 'Удалить сообщение?' : 'Удалить ${chosen.length} сообщ.?'),
+        content: canForAll == 0
+            ? Text(read > 0 ? 'Собеседник уже прочитал — удалить можно только у себя.' : 'Удалится только у вас.')
+            : Text(read > 0 ? 'Уже прочитанные ($read) удалятся только у вас.' : 'Можно удалить и у собеседника — он ещё не прочитал.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop('me'), child: const Text('У меня')),
+          if (canForAll > 0)
+            FilledButton(onPressed: () => Navigator.of(ctx).pop('all'), child: const Text('У всех')),
+        ],
+      ),
+    );
+    if (choice == null) return;
     setState(() => _selected.clear());
-    for (final m in _messages.where((m) => ids.contains(m.id)).toList()) {
-      await _delete(m);
+    for (final m in chosen) {
+      await _delete(m, forAll: choice == 'all');
     }
   }
 
@@ -538,9 +564,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     _reload();
   }
 
-  Future<void> _delete(ChatMessage m) async {
+  Future<void> _delete(ChatMessage m, {bool forAll = false}) async {
     final mine = m.direction == ChatMessageDirection.outgoing;
-    await widget.sync.deleteMessage(m, alsoRemote: mine);
+    await widget.sync.deleteMessage(m, alsoRemote: forAll && mine && !m.readByPeer);
     _translations.remove(m.id);
     _translationErrors.remove(m.id);
     _reload();
@@ -1203,7 +1229,12 @@ class _Bubble extends StatelessWidget {
                 ),
                 if (mine) ...[
                   const SizedBox(width: 6),
-                  Icon(_statusIcon(message.status), size: 14, color: theme.hintColor),
+                  // ✓ отправлено, ✓✓ доставлено, синие ✓✓ — прочитано.
+                  Icon(
+                    message.readByPeer ? Icons.done_all : _statusIcon(message.status),
+                    size: 14,
+                    color: message.readByPeer ? const Color(0xFF34B7F1) : theme.hintColor,
+                  ),
                 ],
                 if (translationError != null) ...[
                   const SizedBox(width: 6),

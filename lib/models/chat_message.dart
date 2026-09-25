@@ -86,6 +86,9 @@ class ChatMessage {
   /// спортсмен отменил вызов, помощь больше не нужна). См. класс-докстринг.
   final String? callStatus;
 
+  /// Своё сообщение прочитано собеседником (личный чат).
+  final bool readByPeer;
+
   /// Только входящие в ГРУППЕ: кто написал (в личном чате это и так [contactId]).
   final String? senderId;
   final DateTime createdAt;
@@ -111,6 +114,7 @@ class ChatMessage {
     this.downloadAllowed = true,
     this.callStatus,
     this.senderId,
+    this.readByPeer = false,
     required this.createdAt,
   });
 
@@ -141,6 +145,7 @@ class ChatMessage {
         downloadAllowed: downloadAllowed,
         callStatus: callStatus,
         senderId: senderId,
+        readByPeer: readByPeer,
         createdAt: createdAt,
       );
 
@@ -168,6 +173,7 @@ class ChatMessage {
         downloadAllowed: row['download_allowed'] == null || row['download_allowed'] == 1 || row['download_allowed'] == true,
         callStatus: row['call_status'] as String?,
         senderId: row['sender_id'] as String?,
+        readByPeer: row['peer_read'] == 1,
         createdAt: DateTime.parse(row['created_at'] as String),
       );
 }
