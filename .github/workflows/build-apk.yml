@@ -22,6 +22,8 @@ permissions:
 
 jobs:
   build:
+    # «[no-apk]» в сообщении коммита — обновить только веб, без новой сборки APK.
+    if: ${{ !contains(github.event.head_commit.message, '[no-apk]') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
