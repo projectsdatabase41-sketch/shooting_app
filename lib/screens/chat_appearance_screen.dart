@@ -6,7 +6,6 @@ import '../models/target_color_scheme.dart' show TargetColorScheme;
 import '../services/ai_service.dart';
 import '../services/ai_settings.dart';
 import '../services/chat_preferences.dart';
-import '../services/chat_translation_service.dart';
 import '../services/local_db_service.dart';
 
 /// Настройки чата (пункты 4, 6, 7 списка правок) — открывается из левой
@@ -22,50 +21,12 @@ class ChatAppearanceScreen extends StatefulWidget {
 }
 
 class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
-  /// Системный язык — всегда первым в списке (решение пользователя),
-  /// остальные следом в исходном порядке.
-  late final List<ChatLanguage> _languages = () {
-    final systemCode = ChatTranslationService.systemLanguageCode();
-    final list = [...chatLanguages];
-    final systemIndex = list.indexWhere((l) => l.code == systemCode);
-    if (systemIndex > 0) list.insert(0, list.removeAt(systemIndex));
-    return list;
-  }();
-
   Future<void> _pickColor(String title, Color current, ValueChanged<Color> onPicked) async {
     final picked = await showDialog<Color>(
       context: context,
       builder: (_) => _ColorPickerDialog(title: title, initial: current),
     );
     if (picked != null) setState(() => onPicked(picked));
-  }
-
-  Future<void> _pickLanguage() async {
-    final prefs = widget.prefs;
-    final current = prefs.translationLanguage.isEmpty ? _languages.first.code : prefs.translationLanguage;
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (ctx) => SafeArea(
-        child: SizedBox(
-          height: MediaQuery.sizeOf(ctx).height * 0.6,
-          child: ListView(
-            children: [
-              for (final lang in _languages)
-                ListTile(
-                  title: Text(lang.label),
-                  subtitle: lang.code == ChatTranslationService.systemLanguageCode() ? const Text('Язык системы') : null,
-                  trailing: lang.code == current ? const Icon(Icons.check) : null,
-                  onTap: () => Navigator.of(ctx).pop(lang.code),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (picked == null) return;
-    setState(() => prefs.translationLanguage = picked == _languages.first.code ? '' : picked);
   }
 
   @override
@@ -80,14 +41,9 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
   Widget _buildScaffold(BuildContext context) {
     final theme = Theme.of(context);
     final prefs = widget.prefs;
-    final selectedLanguage = prefs.translationLanguage;
-    final currentLang = _languages.firstWhere(
-      (l) => l.code == (selectedLanguage.isEmpty ? _languages.first.code : selectedLanguage),
-      orElse: () => _languages.first,
-    );
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Настройки чата'),
+        title: const Text('Персонализация'),
         actions: [
           IconButton(
             onPressed: () => showModalBottomSheet(
@@ -104,30 +60,8 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Автоперевод'),
-            subtitle: const Text('Входящие сообщения переводятся сразу, без нажатий'),
-            value: prefs.autoTranslate,
-            onChanged: (v) => setState(() => prefs.autoTranslate = v),
-          ),
-          Text(
-            'Перевести одно сообщение вручную можно всегда — долгим нажатием на него.',
-            style: theme.textTheme.bodySmall,
-          ),
+          _preview(),
           const SizedBox(height: 24),
-          Text('Язык перевода', style: theme.textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Card(
-            margin: EdgeInsets.zero,
-            child: ListTile(
-              title: Text(currentLang.label),
-              subtitle: currentLang.code == ChatTranslationService.systemLanguageCode() ? const Text('Язык системы') : null,
-              trailing: const Icon(Icons.expand_more),
-              onTap: _pickLanguage,
-            ),
-          ),
-          const SizedBox(height: 28),
           Text('Оформление сообщений', style: theme.textTheme.titleMedium),
           const SizedBox(height: 4),
           Text('Готовые сочетания цветов — заполняют поля ниже сразу.', style: theme.textTheme.bodySmall),
@@ -165,6 +99,148 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
                 const Text('Сильнее'),
               ],
             ),
+          const SizedBox(height: 20),
+          Text('Текст и форма', style: theme.textTheme.titleMedium),
+          Row(
+            children: [
+              const SizedBox(width: 110, child: Text('Размер текста')),
+              Expanded(
+                child: Slider(
+                  value: prefs.fontScale,
+                  min: 0.85,
+                  max: 1.3,
+                  divisions: 9,
+                  label: '${(prefs.fontScale * 100).round()}%',
+                  onChanged: (v) => prefs.fontScale = v,
+                ),
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              const SizedBox(width: 110, child: Text('Скругление')),
+              Expanded(
+                child: Slider(
+                  value: prefs.bubbleRadius,
+                  min: 4,
+                  max: 28,
+                  divisions: 12,
+                  label: prefs.bubbleRadius.round().toString(),
+                  onChanged: (v) => prefs.bubbleRadius = v,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Text('Фон переписки', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              _wallpaperTile('', 'Как в приложении', null),
+              for (final e in ChatPreferences.chatWallpapers.entries)
+                _wallpaperTile(
+                  e.key,
+                  e.value.$1,
+                  BoxDecoration(
+                    gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: e.value.$2),
+                  ),
+                ),
+              _wallpaperTile(
+                prefs.wallpaper.startsWith('#') ? prefs.wallpaper : '#custom',
+                'Свой цвет',
+                prefs.wallpaper.startsWith('#') ? prefs.wallpaperDecoration : null,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Живой предпросмотр: пара сообщений на выбранном фоне.
+  Widget _preview() {
+    final prefs = widget.prefs;
+    final theme = Theme.of(context);
+    Widget bubble(String text, bool mine) {
+      final base = mine ? prefs.mineBubbleColor : prefs.otherBubbleColor;
+      return Align(
+        alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(prefs.bubbleRadius),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color.lerp(base, Colors.white, 0.08)!, Color.lerp(base, Colors.black, 0.10)!],
+            ),
+            boxShadow: prefs.shadowEnabled
+                ? [BoxShadow(color: Colors.black.withValues(alpha: prefs.shadowIntensity), blurRadius: 10, offset: const Offset(0, 4))]
+                : null,
+          ),
+          child: Text(
+            text,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: mine ? prefs.mineTextColor : prefs.otherTextColor,
+              fontSize: (theme.textTheme.bodyMedium?.fontSize ?? 14) * prefs.fontScale,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: prefs.wallpaperDecoration ??
+            BoxDecoration(color: theme.colorScheme.surfaceContainerLow, border: Border.all(color: theme.dividerColor)),
+        child: Column(
+          children: [
+            bubble('Как прошла тренировка?', false),
+            bubble('Отлично: 98 из 100, хват держал 👍', true),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _wallpaperTile(String id, String label, BoxDecoration? decoration) {
+    final theme = Theme.of(context);
+    final prefs = widget.prefs;
+    final selected = id == '#custom' ? false : prefs.wallpaper == id;
+    return GestureDetector(
+      onTap: () async {
+        if (id == '#custom' || id.startsWith('#')) {
+          final current = prefs.wallpaper.startsWith('#')
+              ? TargetColorScheme.hexToColor(prefs.wallpaper)
+              : theme.colorScheme.surface;
+          await _pickColor('Цвет фона', current, (c) {
+            prefs.wallpaper = TargetColorScheme.colorToHex(c, withAlpha: false);
+          });
+        } else {
+          prefs.wallpaper = id;
+        }
+      },
+      child: Column(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: (decoration ?? BoxDecoration(color: theme.colorScheme.surface)).copyWith(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: selected ? theme.colorScheme.primary : theme.dividerColor,
+                width: selected ? 3 : 1,
+              ),
+            ),
+            child: id == '#custom' ? const Icon(Icons.colorize_outlined) : null,
+          ),
+          const SizedBox(height: 4),
+          SizedBox(width: 72, child: Text(label, textAlign: TextAlign.center, style: theme.textTheme.bodySmall)),
         ],
       ),
     );

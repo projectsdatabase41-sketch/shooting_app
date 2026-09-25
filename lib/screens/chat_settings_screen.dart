@@ -4,14 +4,13 @@ import '../services/chat_auth_service.dart';
 import '../services/chat_messages_repository.dart';
 import '../services/chat_preferences.dart';
 import '../services/chat_sync_service.dart';
+import '../services/chat_translation_service.dart';
 import '../services/local_db_service.dart';
 import 'chat_appearance_screen.dart';
 import 'chat_privacy_screen.dart';
 
-/// Единая точка входа во все настройки чата (решение пользователя,
-/// вместо трёх разных пунктов в панели) — оформление и приватность
-/// открываются отдельными страницами (они сами по себе большие),
-/// уведомления — прямо здесь, это всего один переключатель и список.
+/// Настройки мессенджера — разделами-папками (решение пользователя):
+/// язык и перевод, оформление, уведомления, приватность, аккаунт.
 class ChatSettingsScreen extends StatefulWidget {
   final ChatAuthService auth;
   final ChatMessagesRepository repo;
@@ -35,20 +34,175 @@ class ChatSettingsScreen extends StatefulWidget {
 }
 
 class _ChatSettingsScreenState extends State<ChatSettingsScreen> {
-  bool get _pushEnabled => widget.auth.personalPushMode != 'none';
+  Future<void> _open(Widget page) async {
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
+    widget.onChanged();
+    if (mounted) setState(() {});
+  }
 
-  Future<void> _setPushEnabled(bool enabled) => _updatePush(enabled ? 'all' : 'none');
+  @override
+  Widget build(BuildContext context) {
+    final prefs = widget.prefs;
+    final auth = widget.auth;
+    final lang = chatLanguageLabel(prefs.translationLanguage);
+    Widget folder(IconData icon, String title, String subtitle, Widget page) => ListTile(
+          leading: Icon(icon),
+          title: Text(title),
+          subtitle: Text(subtitle),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => _open(page),
+        );
+    return Scaffold(
+      appBar: AppBar(title: const Text('Настройки')),
+      body: ListView(
+        children: [
+          folder(
+            Icons.translate_outlined,
+            'Язык и перевод',
+            '$lang · автоперевод ${prefs.autoTranslate ? 'во всех чатах' : 'по выбору в чате'}',
+            ChatTranslationSettingsScreen(prefs: prefs),
+          ),
+          folder(
+            Icons.palette_outlined,
+            'Персонализация',
+            'Цвета, шрифт, форма сообщений, фон',
+            ChatAppearanceScreen(prefs: prefs, db: widget.db),
+          ),
+          folder(
+            Icons.notifications_outlined,
+            'Уведомления',
+            auth.personalPushMode == 'none' ? 'Выключены' : 'Включены',
+            ChatNotificationSettingsScreen(auth: auth),
+          ),
+          folder(
+            Icons.shield_outlined,
+            'Приватность',
+            '${auth.privacyMode == 'friends_only' ? 'Только по заявке' : 'Все могут написать'} · скачивание файлов',
+            ChatPrivacyScreen(auth: auth, repo: widget.repo, sync: widget.sync, prefs: prefs, onChanged: widget.onChanged),
+          ),
+          folder(
+            Icons.manage_accounts_outlined,
+            'Аккаунт',
+            'Выход, удаление аккаунта',
+            ChatAccountSettingsScreen(auth: auth, onChanged: widget.onChanged),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
-  /// Обе `update...` пишут свой локальный кэш СИНХРОННО в самом начале
-  /// (до первого await внутри) — вызов ниже уже обновил то, что читает
-  /// `_pushEnabled`/`_pushMode`, поэтому `setState` сразу после вызова
-  /// показывает новый выбор без задержки на сеть; сеть просто донастраивает
-  /// сервер в фоне и откатывает кэш назад, если не получилось (тогда
-  /// заметно по SnackBar и второму `setState`).
-  Future<void> _setCallAlertsEnabled(bool enabled) async {
+/// Название языка перевода; пусто — язык системы.
+String chatLanguageLabel(String code) {
+  final effective = code.isEmpty ? ChatTranslationService.systemLanguageCode() : code;
+  for (final l in chatLanguages) {
+    if (l.code == effective) return l.label;
+  }
+  return effective;
+}
+
+/// Язык перевода и автоперевод по умолчанию. В конкретном чате
+/// автоперевод включается/выключается в меню ⋮.
+class ChatTranslationSettingsScreen extends StatelessWidget {
+  final ChatPreferences prefs;
+  const ChatTranslationSettingsScreen({super.key, required this.prefs});
+
+  /// Язык системы — первым (решение пользователя), остальные следом.
+  List<ChatLanguage> get _languages {
+    final systemCode = ChatTranslationService.systemLanguageCode();
+    final list = [...chatLanguages];
+    final i = list.indexWhere((l) => l.code == systemCode);
+    if (i > 0) list.insert(0, list.removeAt(i));
+    return list;
+  }
+
+  Future<void> _pickLanguage(BuildContext context) async {
+    final languages = _languages;
+    final current = prefs.translationLanguage.isEmpty ? languages.first.code : prefs.translationLanguage;
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.sizeOf(ctx).height * 0.6,
+          child: ListView(
+            children: [
+              for (final lang in languages)
+                ListTile(
+                  title: Text(lang.label),
+                  subtitle: lang.code == ChatTranslationService.systemLanguageCode() ? const Text('Язык системы') : null,
+                  trailing: lang.code == current ? const Icon(Icons.check) : null,
+                  onTap: () => Navigator.of(ctx).pop(lang.code),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (picked == null) return;
+    prefs.translationLanguage = picked == languages.first.code ? '' : picked;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AnimatedBuilder(
+      animation: prefs,
+      builder: (context, _) => Scaffold(
+        appBar: AppBar(title: const Text('Язык и перевод')),
+        body: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Text('Переводить на', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Card(
+              margin: EdgeInsets.zero,
+              child: ListTile(
+                title: Text(chatLanguageLabel(prefs.translationLanguage)),
+                subtitle: prefs.translationLanguage.isEmpty ? const Text('Язык системы') : null,
+                trailing: const Icon(Icons.expand_more),
+                onTap: () => _pickLanguage(context),
+              ),
+            ),
+            const SizedBox(height: 16),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Автоперевод во всех чатах'),
+              subtitle: const Text('Входящие переводятся сразу. В отдельном чате можно включить или выключить в меню ⋮'),
+              value: prefs.autoTranslate,
+              onChanged: (v) => prefs.autoTranslate = v,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Переводятся последние 15 сообщений; листаете выше — ещё 20, дальше по 30. '
+              'Одно сообщение можно перевести вручную: долгое нажатие → «Перевести».',
+              style: theme.textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Уведомления: push о сообщениях и громкий сигнал «Позвать тренера».
+class ChatNotificationSettingsScreen extends StatefulWidget {
+  final ChatAuthService auth;
+  const ChatNotificationSettingsScreen({super.key, required this.auth});
+
+  @override
+  State<ChatNotificationSettingsScreen> createState() => _ChatNotificationSettingsScreenState();
+}
+
+class _ChatNotificationSettingsScreenState extends State<ChatNotificationSettingsScreen> {
+  /// `update...` пишут локальный кэш сразу, до сети — переключатель не
+  /// ждёт сервер; при ошибке кэш откатывается и видно SnackBar.
+  Future<void> _apply(Future<void> Function() update) async {
+    final future = update();
     setState(() {});
     try {
-      await widget.auth.updateCallAlertsEnabled(enabled);
+      await future;
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     } finally {
@@ -56,105 +210,47 @@ class _ChatSettingsScreenState extends State<ChatSettingsScreen> {
     }
   }
 
-  Future<void> _updatePush(String personal) async {
-    final future = widget.auth.updatePersonalPushMode(personal);
-    setState(() {});
-    widget.onChanged();
-    try {
-      await future;
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
-        setState(() {});
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
+    final auth = widget.auth;
     return Scaffold(
-      appBar: AppBar(title: const Text('Настройки')),
+      appBar: AppBar(title: const Text('Уведомления')),
       body: ListView(
         children: [
-          ListTile(
-            leading: const Icon(Icons.palette_outlined),
-            title: const Text('Оформление чата'),
-            subtitle: const Text('Перевод, цвета и тени сообщений'),
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => ChatAppearanceScreen(prefs: widget.prefs, db: widget.db),
-            )),
-          ),
-          const Divider(height: 1),
-          SwitchListTile(
-            secondary: const Icon(Icons.download_outlined),
-            title: const Text('Разрешить скачивание моих фото и файлов'),
-            subtitle: const Text('Кнопка "Сохранить" у ОТПРАВЛЕННЫХ мной вложений'),
-            value: widget.prefs.photoDownloadMode != 'off',
-            onChanged: (v) => setState(() => widget.prefs.photoDownloadMode = v ? 'all' : 'off'),
-          ),
-          if (widget.prefs.photoDownloadMode != 'off')
-            for (final (value, label) in const [('all', 'Во всех чатах'), ('personal', 'Только в личных')])
-              ListTile(
-                contentPadding: const EdgeInsets.only(left: 32, right: 16),
-                dense: true,
-                title: Text(label),
-                trailing: widget.prefs.photoDownloadMode == value ? const Icon(Icons.check) : null,
-                onTap: () => setState(() => widget.prefs.photoDownloadMode = value),
-              ),
-          const Divider(height: 1),
           SwitchListTile(
             secondary: const Icon(Icons.notifications_outlined),
-            title: const Text('Уведомления приложения'),
-            value: _pushEnabled,
-            onChanged: _setPushEnabled,
+            title: const Text('Сообщения'),
+            subtitle: const Text('Личные чаты и группы'),
+            value: auth.personalPushMode != 'none',
+            onChanged: (v) => _apply(() => auth.updatePersonalPushMode(v ? 'all' : 'none')),
           ),
-          const Divider(height: 1),
           SwitchListTile(
             secondary: const Icon(Icons.campaign_outlined),
-            title: const Text('Громкий сигнал "Позвать"'),
+            title: const Text('Громкий сигнал «Позвать тренера»'),
             subtitle: const Text('Рингтон устройства и усиленная вибрация вместо обычного уведомления'),
-            value: widget.auth.callAlertsEnabled,
-            onChanged: _setCallAlertsEnabled,
-          ),
-          const Divider(height: 1),
-          ListTile(
-            leading: const Icon(Icons.shield_outlined),
-            title: const Text('Приватность'),
-            subtitle: Text(widget.auth.privacyMode == 'friends_only' ? 'Только по заявке' : 'Все могут написать'),
-            onTap: () async {
-              await Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => ChatPrivacyScreen(
-                  auth: widget.auth,
-                  repo: widget.repo,
-                  sync: widget.sync,
-                  onChanged: widget.onChanged,
-                ),
-              ));
-              widget.onChanged();
-              if (mounted) setState(() {});
-            },
-          ),
-          const Divider(height: 1),
-          ListTile(
-            leading: Icon(Icons.delete_forever_outlined, color: Theme.of(context).colorScheme.error),
-            title: Text('Удалить аккаунт', style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            subtitle: const Text('Профиль, друзья, переписка на сервере — необратимо'),
-            onTap: _deleteAccount,
+            value: auth.callAlertsEnabled,
+            onChanged: (v) => _apply(() => auth.updateCallAlertsEnabled(v)),
           ),
         ],
       ),
     );
   }
+}
 
-  Future<void> _deleteAccount() async {
+/// Аккаунт мессенджера: выход и удаление.
+class ChatAccountSettingsScreen extends StatelessWidget {
+  final ChatAuthService auth;
+  final VoidCallback onChanged;
+  const ChatAccountSettingsScreen({super.key, required this.auth, required this.onChanged});
+
+  Future<void> _delete(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Удалить аккаунт чата?'),
+        title: const Text('Удалить аккаунт мессенджера?'),
         content: const Text(
-          'Никнейм, код контакта, список друзей и заявки будут удалены безвозвратно. '
-          'Переписка, уже сохранённая на этом устройстве, останется в контактах локально. '
-          'Отменить это действие нельзя.',
+          'Никнейм, код контакта, друзья, заявки и членство в группах будут удалены безвозвратно. '
+          'Переписка, уже сохранённая на этом устройстве, останется. Отменить нельзя.',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Отмена')),
@@ -166,13 +262,47 @@ class _ChatSettingsScreenState extends State<ChatSettingsScreen> {
         ],
       ),
     );
-    if (confirmed != true) return;
+    if (confirmed != true || !context.mounted) return;
     try {
-      await widget.auth.deleteAccount();
-      widget.onChanged();
-      if (mounted) Navigator.of(context).pop();
+      await auth.deleteAccount();
+      onChanged();
+      if (context.mounted) Navigator.of(context).popUntil((r) => r.isFirst);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final error = Theme.of(context).colorScheme.error;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Аккаунт')),
+      body: ListView(
+        children: [
+          ListTile(
+            leading: const Icon(Icons.badge_outlined),
+            title: Text(auth.nickname),
+            subtitle: Text('Код контакта: ${auth.chatCode}'),
+          ),
+          const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.logout),
+            title: const Text('Выйти из мессенджера'),
+            subtitle: const Text('Переписка на устройстве сохранится'),
+            onTap: () {
+              auth.signOutLocally();
+              onChanged();
+              Navigator.of(context).popUntil((r) => r.isFirst);
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.delete_forever_outlined, color: error),
+            title: Text('Удалить аккаунт', style: TextStyle(color: error)),
+            subtitle: const Text('Профиль, друзья, группы на сервере — необратимо'),
+            onTap: () => _delete(context),
+          ),
+        ],
+      ),
+    );
   }
 }

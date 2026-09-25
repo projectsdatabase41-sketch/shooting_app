@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../logic/chat_media_utils.dart';
 import '../models/chat_contact.dart';
 import '../models/chat_message.dart';
+import 'ai_service.dart';
 import 'chat_auth_service.dart';
 import 'chat_drive_service.dart';
 import 'chat_messages_repository.dart';
@@ -113,7 +114,9 @@ class ChatSyncService {
   /// ввода, пока идёт набор ответа).
   static String previewOf(ChatMessage m) {
     if (m.text != null && m.text!.isNotEmpty) {
-      return m.text!.length > 80 ? '${m.text!.substring(0, 80)}…' : m.text!;
+      final (caption, chart) = AiService.splitChart(m.text!);
+      if (caption.isEmpty && chart != null) return '📊 ${chart['title'] ?? 'График'}';
+      return caption.length > 80 ? '${caption.substring(0, 80)}…' : caption;
     }
     return switch (m.type) {
       ChatMessageType.image => '📷 Фото',

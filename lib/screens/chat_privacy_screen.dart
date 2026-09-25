@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/chat_contact.dart';
 import '../services/chat_auth_service.dart';
 import '../services/chat_messages_repository.dart';
+import '../services/chat_preferences.dart';
 import '../services/chat_sync_service.dart';
 import '../widgets/chat_avatar.dart';
 import '../widgets/empty_state.dart';
@@ -17,6 +18,7 @@ class ChatPrivacyScreen extends StatefulWidget {
   final ChatAuthService auth;
   final ChatMessagesRepository repo;
   final ChatSyncService sync;
+  final ChatPreferences? prefs;
   final VoidCallback onChanged;
 
   const ChatPrivacyScreen({
@@ -24,6 +26,7 @@ class ChatPrivacyScreen extends StatefulWidget {
     required this.auth,
     required this.repo,
     required this.sync,
+    this.prefs,
     required this.onChanged,
   });
 
@@ -130,6 +133,26 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
                         : 'Первое сообщение от кого угодно сразу добавляет его в контакты, как обычно.',
                     style: theme.textTheme.bodySmall,
                   ),
+                  if (widget.prefs case final prefs?) ...[
+                    const SizedBox(height: 24),
+                    Text('Мои фото и файлы', style: theme.textTheme.titleMedium),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Разрешить собеседникам сохранять'),
+                      subtitle: const Text('Кнопка «Сохранить» у отправленных мной вложений'),
+                      value: prefs.photoDownloadMode != 'off',
+                      onChanged: (v) => setState(() => prefs.photoDownloadMode = v ? 'all' : 'off'),
+                    ),
+                    if (prefs.photoDownloadMode != 'off')
+                      SegmentedButton<String>(
+                        segments: const [
+                          ButtonSegment(value: 'all', label: Text('Везде')),
+                          ButtonSegment(value: 'personal', label: Text('Только в личных')),
+                        ],
+                        selected: {prefs.photoDownloadMode},
+                        onSelectionChanged: (v) => setState(() => prefs.photoDownloadMode = v.first),
+                      ),
+                  ],
                   const SizedBox(height: 24),
                   Text('Заявки в друзья', style: theme.textTheme.titleMedium),
                   const SizedBox(height: 8),
