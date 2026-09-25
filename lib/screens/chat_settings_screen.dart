@@ -186,7 +186,7 @@ class ChatTranslationSettingsScreen extends StatelessWidget {
   }
 }
 
-/// Уведомления: push о сообщениях и громкий сигнал «Позвать тренера».
+/// Уведомления о сообщениях.
 class ChatNotificationSettingsScreen extends StatefulWidget {
   final ChatAuthService auth;
   const ChatNotificationSettingsScreen({super.key, required this.auth});
@@ -223,13 +223,6 @@ class _ChatNotificationSettingsScreenState extends State<ChatNotificationSetting
             subtitle: const Text('Личные чаты и группы'),
             value: auth.personalPushMode != 'none',
             onChanged: (v) => _apply(() => auth.updatePersonalPushMode(v ? 'all' : 'none')),
-          ),
-          SwitchListTile(
-            secondary: const Icon(Icons.campaign_outlined),
-            title: const Text('Громкий сигнал «Позвать тренера»'),
-            subtitle: const Text('Рингтон устройства и усиленная вибрация вместо обычного уведомления'),
-            value: auth.callAlertsEnabled,
-            onChanged: (v) => _apply(() => auth.updateCallAlertsEnabled(v)),
           ),
         ],
       ),
