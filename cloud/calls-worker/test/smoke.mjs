@@ -27,14 +27,17 @@ async function token(sub, { exp = Math.floor(Date.now() / 1000) + 600, kid = 'te
   return `${h}.${p}.${b64u(sig)}`;
 }
 
+// Чистое локальное хранилище на каждый запуск — счётчики не копятся между прогонами.
+(await import('node:fs')).rmSync('.wrangler/state', { recursive: true, force: true });
 const dev = spawn('npx', ['wrangler', 'dev', '--port', String(DEV_PORT), '--var', `JWKS_URL:http://127.0.0.1:${JWKS_PORT}/`, '--var', `METERED_ICE_URL:http://127.0.0.1:${JWKS_PORT}/metered?apiKey=x`], { shell: true, stdio: ['ignore', 'pipe', 'pipe'] });
 await new Promise((resolve, reject) => {
   const t = setTimeout(() => reject(new Error('wrangler dev не поднялся')), 90000);
-  const onData = (d) => { if (/Ready on/.test(`${d}`)) { clearTimeout(t); resolve(); } };
+  const onData = (d) => { process.env.SMOKE_DEBUG && process.stdout.write(`${d}`); if (/Ready on/.test(`${d}`)) { clearTimeout(t); resolve(); } };
   dev.stdout.on('data', onData);
   dev.stderr.on('data', onData);
 });
 
+console.log('dev ready');
 const base = `http://127.0.0.1:${DEV_PORT}`;
 const A = '11111111-1111-1111-1111-111111111111', B = '22222222-2222-2222-2222-222222222222';
 const callId = '33333333-3333-3333-3333-333333333333';
@@ -48,6 +51,16 @@ try {
   const ice = await (await fetch(`${base}/ice`, { headers: { authorization: `Bearer ${await token(A)}` } })).json();
   ok(Array.isArray(ice.iceServers) && JSON.stringify(ice).includes('stun:'), 'ICE-серверы выдаются (STUN)');
   ok(JSON.stringify(ice).includes('turn:global.relay.metered.ca') && !JSON.stringify(ice).includes('stun.relay.metered'), 'TURN от Metered добавлен (без их STUN)');
+  ok(ice.turnProvider === 'metered', 'сервер сообщает, чей ретранслятор выдан');
+  const auth = { authorization: `Bearer ${await token(A)}`, 'content-type': 'application/json' };
+  ok((await fetch(`${base}/usage`, { method: 'POST', headers: auth, body: JSON.stringify({ provider: 'metered', bytes: 5e9 }) })).status === 400, 'нереальный объём за раз — отклонён');
+  await fetch(`${base}/usage`, { method: 'POST', headers: auth, body: JSON.stringify({ provider: 'metered', bytes: 300e6 }) });
+  let u = await (await fetch(`${base}/usage`, { headers: auth })).json();
+  ok(u.metered.usedBytes === 300e6 && u.metered.limitBytes === 450e6, 'учёт: 300 из 450 МБ');
+  ok((await (await fetch(`${base}/ice`, { headers: auth })).json()).turnProvider === 'metered', 'до порога TURN выдаётся');
+  await fetch(`${base}/usage`, { method: 'POST', headers: auth, body: JSON.stringify({ provider: 'metered', bytes: 200e6 }) });
+  const after = await (await fetch(`${base}/ice`, { headers: auth })).json();
+  ok(after.turnProvider === null && !JSON.stringify(after).includes('turn:'), 'порог достигнут — TURN больше не выдаётся, только прямое соединение');
   const call = await (await fetch(`${base}/call`, {
     method: 'POST', headers: { authorization: `Bearer ${await token(A)}`, 'content-type': 'application/json' },
     body: JSON.stringify({ callId, to: B, name: 'Ваня' }),
@@ -81,7 +94,7 @@ try {
 } finally {
   dev.kill();
   jwksServer.close();
-  spawn('taskkill', ['/F', '/T', '/PID', String(dev.pid)], { shell: true });
+  (await import('node:child_process')).spawnSync('taskkill', ['/F', '/T', '/PID', String(dev.pid)], { shell: true });
 }
 console.log(failed ? `${failed} проверок не прошли` : 'Все проверки прошли');
 process.exit(failed ? 1 : 0);

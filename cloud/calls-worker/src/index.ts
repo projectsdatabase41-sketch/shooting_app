@@ -24,6 +24,10 @@ export interface Env {
   TURN_KEY_API_TOKEN: string;
   /** Metered TURN: https://<app>.metered.live/api/v1/turn/credentials?apiKey=… */
   METERED_ICE_URL: string;
+  USAGE: DurableObjectNamespace;
+  /** Порог трафика через ретранслятор в месяц, после которого TURN не выдаём. */
+  CF_TURN_LIMIT_GB: string;
+  METERED_LIMIT_MB: string;
 }
 
 const MAX_PEERS = 4; // напрямую (mesh) больше 4 не потянет
@@ -155,9 +159,21 @@ export default {
     const uid = await verifyUser(env, bearer(req));
     if (!uid) return json({ error: 'unauthorized' }, 401);
 
+    const usage = env.USAGE.get(env.USAGE.idFromName('global'));
+    const used = async () => (await (await usage.fetch('https://u/get')).json()) as Record<string, number>;
+    const limitBytes = (p: TurnProvider) =>
+      p === 'cloudflare'
+        ? Number(env.CF_TURN_LIMIT_GB || 800) * 1e9
+        : Number(env.METERED_LIMIT_MB || 450) * 1e6;
+
     if (url.pathname === '/ice' && req.method === 'GET') {
       const ice: RTCIceServerLike[] = [{ urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] }];
-      if (env.TURN_KEY_ID && env.TURN_KEY_API_TOKEN) {
+      // Один ретранслятор на звонок: сначала Cloudflare (больше бесплатный объём),
+      // потом Metered; кто упёрся в месячный порог — пропускаем. Ни одного —
+      // только прямое соединение: никогда не выходим в платный объём.
+      const month = await used();
+      let turnProvider: TurnProvider | null = null;
+      if (env.TURN_KEY_ID && env.TURN_KEY_API_TOKEN && (month.cloudflare ?? 0) < limitBytes('cloudflare')) {
         const res = await fetch(
           `https://rtc.live.cloudflare.com/v1/turn/keys/${env.TURN_KEY_ID}/credentials/generate-ice-servers`,
           {
@@ -165,20 +181,45 @@ export default {
             headers: { Authorization: `Bearer ${env.TURN_KEY_API_TOKEN}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ ttl: 3 * 3600 }),
           },
-        );
-        if (res.ok) ice.push(...((await res.json()) as { iceServers: RTCIceServerLike[] }).iceServers);
+        ).catch(() => null);
+        if (res?.ok) {
+          ice.push(...((await res.json()) as { iceServers: RTCIceServerLike[] }).iceServers);
+          turnProvider = 'cloudflare';
+        }
       }
-      if (env.METERED_ICE_URL) {
+      if (!turnProvider && env.METERED_ICE_URL && (month.metered ?? 0) < limitBytes('metered')) {
         try {
           const res = await fetch(env.METERED_ICE_URL);
           if (res.ok) {
             const list = (await res.json()) as RTCIceServerLike[];
             // только TURN — STUN у нас уже есть
-            ice.push(...list.filter((s) => JSON.stringify(s.urls).includes('turn')));
+            ice.push(...list.filter((srv) => JSON.stringify(srv.urls).includes('turn')));
+            turnProvider = 'metered';
           }
         } catch {}
       }
-      return json({ iceServers: ice });
+      return json({ iceServers: ice, turnProvider });
+    }
+
+    // Приложение сообщает, сколько прошло через ретранслятор (после звонка и
+    // раз в минуту разговора) — из этого считается месячный порог.
+    if (url.pathname === '/usage' && req.method === 'POST') {
+      const b = (await req.json().catch(() => ({}))) as { provider?: string; bytes?: number };
+      const provider = b.provider === 'cloudflare' || b.provider === 'metered' ? b.provider : null;
+      const bytes = Math.floor(Number(b.bytes));
+      // Больше 2 ГБ за одно сообщение — мусор (минута видео ~20 МБ).
+      if (!provider || !(bytes > 0) || bytes > 2e9) return json({ error: 'bad usage' }, 400);
+      await usage.fetch('https://u/add', { method: 'POST', body: JSON.stringify({ provider, bytes }) });
+      return json({ ok: true });
+    }
+
+    if (url.pathname === '/usage' && req.method === 'GET') {
+      const month = await used();
+      return json({
+        month: new Date().toISOString().slice(0, 7),
+        cloudflare: { usedBytes: month.cloudflare ?? 0, limitBytes: limitBytes('cloudflare') },
+        metered: { usedBytes: month.metered ?? 0, limitBytes: limitBytes('metered') },
+      });
     }
 
     const body = req.method === 'POST' ? ((await req.json().catch(() => ({}))) as Record<string, unknown>) : {};
@@ -206,6 +247,28 @@ export default {
 };
 
 type RTCIceServerLike = { urls: string | string[]; username?: string; credential?: string };
+type TurnProvider = 'cloudflare' | 'metered';
+
+// ---------- Учёт трафика через ретранслятор (по месяцам) ----------
+
+export class UsageDO {
+  constructor(private state: DurableObjectState, private env: Env) {}
+
+  async fetch(req: Request): Promise<Response> {
+    const month = new Date().toISOString().slice(0, 7); // «2026-09» — новый месяц = чистый счётчик
+    const key = (p: string) => `${month}:${p}`;
+    if (new URL(req.url).pathname === '/add') {
+      const { provider, bytes } = (await req.json()) as { provider: string; bytes: number };
+      const cur = (await this.state.storage.get<number>(key(provider))) ?? 0;
+      await this.state.storage.put(key(provider), cur + bytes);
+      return Response.json({ ok: true });
+    }
+    return Response.json({
+      cloudflare: (await this.state.storage.get<number>(key('cloudflare'))) ?? 0,
+      metered: (await this.state.storage.get<number>(key('metered'))) ?? 0,
+    });
+  }
+}
 
 // ---------- Пользователь: его FCM-токены ----------
 
