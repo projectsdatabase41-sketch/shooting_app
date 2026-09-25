@@ -124,6 +124,8 @@ CREATE TABLE IF NOT EXISTS chat_contacts (
   chat_code      TEXT NOT NULL,
   avatar_base64  TEXT,
   about          TEXT NOT NULL DEFAULT '',
+  kind           TEXT NOT NULL DEFAULT 'person',
+  group_json     TEXT,
   added_at       TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -179,6 +181,8 @@ CREATE TABLE IF NOT EXISTS chat_local_messages (
   -- своя копия, и копия у тренера помечаются одинаково через тот же
   -- сигнальный механизм, что у edit/delete (см. ChatSyncService).
   call_status         TEXT CHECK (call_status IN ('acknowledged','cancelled')),
+  -- Только входящие в группе: кто написал.
+  sender_id           TEXT,
   created_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

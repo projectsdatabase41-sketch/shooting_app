@@ -42,6 +42,18 @@ class ChatSyncService {
   /// собеседник в нём, текст уходит напрямую, иначе как обычно через базу.
   LiveChatSession? live;
 
+  /// Строка(и) для транзитной таблицы: личному собеседнику — одна, группе —
+  /// по строке на каждого участника, кроме себя (группа живёт в
+  /// `chat_contacts` как kind = 'group', см. `ChatContact`).
+  Object _fanOut(String contactId, Map<String, dynamic> row) {
+    final contact = repo.contactById(contactId);
+    if (contact == null || !contact.isGroup) return {...row, 'recipient_id': contactId};
+    return [
+      for (final m in contact.members)
+        if (m.id != auth.userId) {...row, 'recipient_id': m.id, 'group_id': contactId},
+    ];
+  }
+
   static const _uuid = Uuid();
   static const Duration _timeout = Duration(seconds: 60);
   static const _attachmentTypes = {
@@ -132,14 +144,13 @@ class ChatSyncService {
               'Content-Type': 'application/json',
               'Prefer': 'return=minimal',
             },
-            body: jsonEncode({
+            body: jsonEncode(_fanOut(original.contactId, {
               'client_message_id': _uuid.v4(),
               'sender_id': auth.userId,
-              'recipient_id': original.contactId,
               'text': newText,
               'msg_type': 'edit',
               'edit_of_client_message_id': original.clientMessageId,
-            }),
+            })),
           )
           .timeout(_timeout);
     } catch (_) {
@@ -169,13 +180,12 @@ class ChatSyncService {
               'Content-Type': 'application/json',
               'Prefer': 'return=minimal',
             },
-            body: jsonEncode({
+            body: jsonEncode(_fanOut(message.contactId, {
               'client_message_id': _uuid.v4(),
               'sender_id': auth.userId,
-              'recipient_id': message.contactId,
               'msg_type': 'delete',
               'delete_of_client_message_id': message.clientMessageId,
-            }),
+            })),
           )
           .timeout(_timeout);
     } catch (_) {
@@ -206,13 +216,12 @@ class ChatSyncService {
               'Content-Type': 'application/json',
               'Prefer': 'return=minimal',
             },
-            body: jsonEncode({
+            body: jsonEncode(_fanOut(original.contactId, {
               'client_message_id': _uuid.v4(),
               'sender_id': auth.userId,
-              'recipient_id': original.contactId,
               'msg_type': 'call_ack',
               'ack_of_client_message_id': original.clientMessageId,
-            }),
+            })),
           )
           .timeout(_timeout);
     } catch (_) {
@@ -242,13 +251,12 @@ class ChatSyncService {
               'Content-Type': 'application/json',
               'Prefer': 'return=minimal',
             },
-            body: jsonEncode({
+            body: jsonEncode(_fanOut(original.contactId, {
               'client_message_id': _uuid.v4(),
               'sender_id': auth.userId,
-              'recipient_id': original.contactId,
               'msg_type': 'call_cancel',
               'cancel_of_client_message_id': original.clientMessageId,
-            }),
+            })),
           )
           .timeout(_timeout);
     } catch (_) {
@@ -394,10 +402,9 @@ class ChatSyncService {
               // client_message_id не создаёт дубль на сервере.
               'Prefer': 'return=minimal,resolution=ignore-duplicates',
             },
-            body: jsonEncode({
+            body: jsonEncode(_fanOut(message.contactId, {
               'client_message_id': message.clientMessageId,
               'sender_id': auth.userId,
-              'recipient_id': message.contactId,
               'text': message.text,
               'msg_type': message.type.name,
               if (attachmentPath != null) 'attachment_path': attachmentPath,
@@ -407,7 +414,7 @@ class ChatSyncService {
               if (message.replyToClientMessageId != null) 'reply_to_client_message_id': message.replyToClientMessageId,
               if (message.replyToPreview != null) 'reply_to_preview': message.replyToPreview,
               'download_allowed': message.downloadAllowed,
-            }),
+            })),
           )
           .timeout(_timeout);
       if (res.statusCode >= 300) {
@@ -459,10 +466,9 @@ class ChatSyncService {
                 'Content-Type': 'application/json',
                 'Prefer': 'return=minimal,resolution=ignore-duplicates',
               },
-              body: jsonEncode({
+              body: jsonEncode(_fanOut(message.contactId, {
                 'client_message_id': message.clientMessageId,
                 'sender_id': auth.userId,
-                'recipient_id': message.contactId,
                 'text': message.text,
                 'msg_type': message.type.name,
                 'drive_file_id': driveFileId,
@@ -472,7 +478,7 @@ class ChatSyncService {
                 if (message.replyToClientMessageId != null) 'reply_to_client_message_id': message.replyToClientMessageId,
                 if (message.replyToPreview != null) 'reply_to_preview': message.replyToPreview,
                 'download_allowed': message.downloadAllowed,
-              }),
+              })),
             )
             .timeout(_timeout);
         if (res.statusCode >= 300) {
@@ -538,14 +544,25 @@ class ChatSyncService {
       // статуса заявки на каждый цикл опроса.
       final notYetFriends = <String>{};
       final friendsOnly = auth.privacyMode == 'friends_only';
+      var groupsSynced = false;
       for (final row in decoded) {
         if (row is! Map) continue;
         final senderId = '${row['sender_id']}';
         final rawType = '${row['msg_type']}';
+        // Сообщение группы живёт в диалоге группы, а не в личке с автором.
+        final groupId = row['group_id'] as String?;
+        final threadId = groupId ?? senderId;
 
-        if (notYetFriends.contains(senderId)) continue;
-
-        if (!knownContacts.contains(senderId)) {
+        if (groupId != null) {
+          if (!knownContacts.contains(groupId) && !groupsSynced) {
+            groupsSynced = true;
+            await syncGroups();
+            knownContacts.addAll(repo.listContacts().map((c) => c.id));
+          }
+          if (!knownContacts.contains(groupId)) continue; // группа ещё не видна — в следующий раз
+        } else if (notYetFriends.contains(senderId)) {
+          continue;
+        } else if (!knownContacts.contains(senderId)) {
           if (friendsOnly && await auth.friendStatusWith(senderId) != 'accepted') {
             notYetFriends.add(senderId);
             continue;
@@ -566,25 +583,25 @@ class ChatSyncService {
         // сообщения: применяем и чистим транзитную строку, минуя
         // обычную дедупликацию по client_message_id (у сигнала он свой).
         if (rawType == 'edit') {
-          final target = repo.byClientId(senderId, '${row['edit_of_client_message_id']}');
+          final target = repo.byClientId(threadId, '${row['edit_of_client_message_id']}');
           if (target != null) repo.updateText(target.id, '${row['text'] ?? ''}');
           doneIds.add('${row['id']}');
           continue;
         }
         if (rawType == 'delete') {
-          final target = repo.byClientId(senderId, '${row['delete_of_client_message_id']}');
+          final target = repo.byClientId(threadId, '${row['delete_of_client_message_id']}');
           if (target != null) repo.deleteMessage(target.id);
           doneIds.add('${row['id']}');
           continue;
         }
         if (rawType == 'call_ack') {
-          final target = repo.byClientId(senderId, '${row['ack_of_client_message_id']}');
+          final target = repo.byClientId(threadId, '${row['ack_of_client_message_id']}');
           if (target != null) repo.updateCallStatus(target.id, 'acknowledged');
           doneIds.add('${row['id']}');
           continue;
         }
         if (rawType == 'call_cancel') {
-          final target = repo.byClientId(senderId, '${row['cancel_of_client_message_id']}');
+          final target = repo.byClientId(threadId, '${row['cancel_of_client_message_id']}');
           if (target != null) repo.updateCallStatus(target.id, 'cancelled');
           doneIds.add('${row['id']}');
           continue;
@@ -611,13 +628,16 @@ class ChatSyncService {
           final bytes = await _downloadAttachment(path, token, client);
           if (bytes == null) continue; // не скачалось — попробуем в следующий опрос, строку не трогаем
           attachmentBase64 = base64Encode(bytes);
-          await _deleteAttachment(path, token, client);
+          // ponytail: файл группы нужен всем участникам — не удаляем его после
+          // первого получателя; чистка хранилища по сроку — когда начнёт копиться.
+          if (groupId == null) await _deleteAttachment(path, token, client);
         }
 
         repo.addMessage(ChatMessage(
           id: _uuid.v4(),
           clientMessageId: clientId,
-          contactId: senderId,
+          contactId: threadId,
+          senderId: groupId == null ? null : senderId,
           direction: ChatMessageDirection.incoming,
           text: row['text'] as String?,
           status: ChatMessageStatus.delivered,
@@ -641,6 +661,27 @@ class ChatSyncService {
       return 0;
     } finally {
       client.close();
+    }
+  }
+
+  /// Мои группы с сервера → строки `chat_contacts` (kind = 'group'). Группы,
+  /// из которых меня убрали, остаются локально с историей, но писать туда
+  /// уже нельзя (сервер отклонит).
+  Future<void> syncGroups() async {
+    final groups = await auth.myGroups();
+    for (final g in groups) {
+      final existing = repo.contactById(g.id);
+      repo.addContact(ChatContact(
+        id: g.id,
+        nickname: g.nickname,
+        chatCode: '',
+        avatarBase64: g.avatarBase64,
+        about: g.about,
+        addedAt: existing?.addedAt ?? DateTime.now(),
+        isGroup: true,
+        members: g.members,
+        color: g.color,
+      ));
     }
   }
 

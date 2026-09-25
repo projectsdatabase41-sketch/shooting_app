@@ -212,6 +212,78 @@ class ChatPreferences extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Автоперевод конкретного диалога (меню ⋮ в переписке). Явный выбор
+  /// диалога важнее общей настройки [autoTranslate].
+  bool autoTranslateFor(String contactId) {
+    final v = _translateOverrides[contactId];
+    return v ?? autoTranslate;
+  }
+
+  void setAutoTranslateFor(String contactId, bool on) {
+    final map = _translateOverrides..[contactId] = on;
+    _write('chat_auto_translate_ids', [for (final e in map.entries) '${e.key}:${e.value ? 1 : 0}'].join(','));
+    notifyListeners();
+  }
+
+  Map<String, bool> get _translateOverrides {
+    final raw = _read('chat_auto_translate_ids');
+    return {
+      for (final part in raw.split(','))
+        if (part.contains(':')) part.substring(0, part.lastIndexOf(':')): part.endsWith(':1'),
+    };
+  }
+
+  /// Размер текста в переписке (множитель 0.85–1.3).
+  double get fontScale => (double.tryParse(_read('chat_font_scale')) ?? 1.0).clamp(0.85, 1.3);
+  set fontScale(double v) {
+    _write('chat_font_scale', v.clamp(0.85, 1.3).toStringAsFixed(2));
+    notifyListeners();
+  }
+
+  /// Скругление пузырей, px (4–28).
+  double get bubbleRadius => (double.tryParse(_read('chat_bubble_radius')) ?? 16).clamp(4, 28);
+  set bubbleRadius(double v) {
+    _write('chat_bubble_radius', v.clamp(4, 28).toStringAsFixed(0));
+    notifyListeners();
+  }
+
+  /// Фон переписки: '' — как у приложения, id из [chatWallpapers] или '#RRGGBB'.
+  String get wallpaper => _read('chat_wallpaper');
+  set wallpaper(String v) {
+    _write('chat_wallpaper', v);
+    notifyListeners();
+  }
+
+  /// Готовые фоны (градиенты) — id: (название, цвета).
+  static const Map<String, (String, List<Color>)> chatWallpapers = {
+    'dusk': ('Закат', [Color(0xFF2B1B3D), Color(0xFF6B3A5B)]),
+    'ocean': ('Океан', [Color(0xFF0F2A44), Color(0xFF1F5E7A)]),
+    'forest': ('Лес', [Color(0xFF16291E), Color(0xFF2F5238)]),
+    'sand': ('Песок', [Color(0xFFF3E7D3), Color(0xFFE2C9A6)]),
+    'mint': ('Мята', [Color(0xFFE3F4EE), Color(0xFFBFE3D6)]),
+    'graphite': ('Графит', [Color(0xFF1E2126), Color(0xFF34383F)]),
+  };
+
+  /// Декорация фона переписки; null — фон приложения.
+  BoxDecoration? get wallpaperDecoration {
+    final w = wallpaper;
+    if (w.isEmpty) return null;
+    final preset = chatWallpapers[w];
+    if (preset != null) {
+      return BoxDecoration(
+        gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: preset.$2),
+      );
+    }
+    return TargetColorScheme.isValidHex(w) ? BoxDecoration(color: TargetColorScheme.hexToColor(w)) : null;
+  }
+
+  /// Контакт-тренер для кнопки «Позвать тренера» на экране тренировки.
+  String get coachContactId => _read('chat_coach_contact_id');
+  set coachContactId(String id) {
+    _write('chat_coach_contact_id', id);
+    notifyListeners();
+  }
+
   /// Быстро заполняет все 4 цвета сразу — то, что раньше называлось
   /// "выбрать пресет".
   void applyPreset(ChatBubblePreset preset) {

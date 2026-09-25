@@ -85,6 +85,9 @@ class ChatMessage {
   /// `'acknowledged'` (тренер нажал "Иду") или `'cancelled'` (сам
   /// спортсмен отменил вызов, помощь больше не нужна). См. класс-докстринг.
   final String? callStatus;
+
+  /// Только входящие в ГРУППЕ: кто написал (в личном чате это и так [contactId]).
+  final String? senderId;
   final DateTime createdAt;
 
   const ChatMessage({
@@ -107,6 +110,7 @@ class ChatMessage {
     this.seen = false,
     this.downloadAllowed = true,
     this.callStatus,
+    this.senderId,
     required this.createdAt,
   });
 
@@ -136,6 +140,7 @@ class ChatMessage {
         seen: seen ?? this.seen,
         downloadAllowed: downloadAllowed,
         callStatus: callStatus,
+        senderId: senderId,
         createdAt: createdAt,
       );
 
@@ -162,6 +167,7 @@ class ChatMessage {
         seen: row['seen'] == 1 || row['seen'] == true,
         downloadAllowed: row['download_allowed'] == null || row['download_allowed'] == 1 || row['download_allowed'] == true,
         callStatus: row['call_status'] as String?,
+        senderId: row['sender_id'] as String?,
         createdAt: DateTime.parse(row['created_at'] as String),
       );
 }

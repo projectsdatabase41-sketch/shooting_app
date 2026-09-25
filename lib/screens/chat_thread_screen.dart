@@ -295,24 +295,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     }
   }
 
-  /// "Позвать" — отдельная кнопка в шапке, не текстовое сообщение:
-  /// собеседник получает push с усиленным звуком/вибрацией (см.
-  /// `push_service.dart`), а не просто прочитает сообщение когда-нибудь.
-  /// Была убрана из личного чата, пользователь попросил вернуть именно
-  /// сюда (а не в отдельный режим тренировки).
-  Future<void> _call() async {
-    setState(() => _sending = true);
-    try {
-      await widget.sync.sendCall(widget.contact.id);
-      _reload();
-      _scrollToEnd();
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось позвать: $e')));
-    } finally {
-      if (mounted) setState(() => _sending = false);
-    }
-  }
-
   /// Собеседник (обычно тренер) жмёт "Иду" на входящем вызове.
   Future<void> _ackCall(ChatMessage m) async {
     await widget.sync.acknowledgeCall(m);
@@ -581,11 +563,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
           // держать настройки конкретного контакта здесь, тут же со
           // временем появятся остальные).
           actions: [
-            IconButton(
-              onPressed: _sending ? null : _call,
-              icon: const Icon(Icons.campaign_outlined),
-              tooltip: 'Позвать',
-            ),
             PopupMenuButton<String>(
               onSelected: (v) {
                 if (v == 'remove') _removeContact();

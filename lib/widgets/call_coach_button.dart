@@ -1,0 +1,126 @@
+import 'package:flutter/material.dart';
+
+import '../models/chat_contact.dart';
+import '../services/chat_auth_service.dart';
+import '../services/chat_messages_repository.dart';
+import '../services/chat_preferences.dart';
+import '../services/chat_sync_service.dart';
+import '../services/local_db_service.dart';
+import '../services/supabase_auth_service.dart';
+import 'chat_avatar.dart';
+
+/// «Позвать тренера» — на экране тренировки. Тренер — тот, кому спортсмен
+/// выдал токен доступа: подключившись, тренер связывает с токеном свой
+/// чат-аккаунт (sql/coach-chat-link.sql, `CoachAccessService.linkChat`).
+/// Тренеров несколько — выбор запоминается, долгое нажатие меняет его.
+class CallCoachButton extends StatefulWidget {
+  final LocalDbService db;
+  const CallCoachButton({super.key, required this.db});
+
+  @override
+  State<CallCoachButton> createState() => _CallCoachButtonState();
+}
+
+class _CallCoachButtonState extends State<CallCoachButton> {
+  late final ChatAuthService _auth = ChatAuthService(widget.db);
+  late final SupabaseAuthService _main = SupabaseAuthService(widget.db);
+  late final ChatMessagesRepository _repo = ChatMessagesRepository(widget.db);
+  late final ChatPreferences _prefs = ChatPreferences(widget.db);
+  bool _busy = false;
+
+  /// Тренеры из токенов; заодно заводит их в контакты мессенджера.
+  Future<List<ChatContact>> _coaches() async {
+    final linked = await _main.fetchLinkedCoaches();
+    final profiles = await _auth.resolveProfiles([for (final c in linked) c.chatUserId]);
+    final result = <ChatContact>[];
+    for (final c in linked) {
+      final existing = _repo.contactById(c.chatUserId);
+      final p = profiles[c.chatUserId];
+      final contact = ChatContact(
+        id: c.chatUserId,
+        nickname: p?.nickname ?? (c.nickname.isNotEmpty ? c.nickname : c.label),
+        chatCode: existing?.chatCode ?? '',
+        avatarBase64: p?.avatarBase64 ?? existing?.avatarBase64,
+        about: p?.about ?? existing?.about ?? '',
+        addedAt: existing?.addedAt ?? DateTime.now(),
+      );
+      _repo.addContact(contact);
+      result.add(contact);
+    }
+    return result;
+  }
+
+  Future<String?> _pick(List<ChatContact> coaches) async {
+    final id = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const ListTile(title: Text('Кого позвать?')),
+            for (final c in coaches)
+              ListTile(
+                leading: ChatAvatar(base64: c.avatarBase64, nickname: c.nickname),
+                title: Text(c.nickname),
+                subtitle: c.about.isEmpty ? null : Text(c.about),
+                trailing: c.id == _prefs.coachContactId ? const Icon(Icons.check) : null,
+                onTap: () => Navigator.of(ctx).pop(c.id),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (id != null) _prefs.coachContactId = id;
+    return id;
+  }
+
+  Future<void> _call({bool choose = false}) async {
+    final messenger = ScaffoldMessenger.of(context);
+    if (!_main.isSignedIn) {
+      messenger.showSnackBar(const SnackBar(
+        content: Text('Войдите в свою базу (Настройки → Данные и синхронизация) — там выданы токены тренерам'),
+      ));
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final coaches = await _coaches();
+      if (coaches.isEmpty) {
+        messenger.showSnackBar(const SnackBar(
+          content: Text('Тренер ещё не подключён: выдайте ему токен — он вводит его и открывает мессенджер'),
+        ));
+        return;
+      }
+      var id = _prefs.coachContactId;
+      if (coaches.length == 1) {
+        id = coaches.single.id;
+      } else if (choose || !coaches.any((c) => c.id == id)) {
+        if (!mounted) return;
+        id = await _pick(coaches) ?? '';
+      }
+      if (id.isEmpty) return;
+      await ChatSyncService(_auth, _repo).sendCall(id);
+      messenger.showSnackBar(SnackBar(content: Text('${_repo.contactById(id)?.nickname ?? 'Тренер'} получит вызов')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Не удалось позвать: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_auth.isSignedIn) return const SizedBox.shrink();
+    return GestureDetector(
+      onLongPress: _busy ? null : () => _call(choose: true),
+      child: IconButton(
+        icon: _busy
+            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+            : const Icon(Icons.campaign_outlined),
+        tooltip: 'Позвать тренера',
+        onPressed: _busy ? null : _call,
+      ),
+    );
+  }
+}

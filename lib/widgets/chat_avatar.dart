@@ -9,7 +9,10 @@ class ChatAvatar extends StatelessWidget {
   final String nickname;
   final double radius;
 
-  const ChatAvatar({super.key, required this.base64, required this.nickname, this.radius = 20});
+  /// Цвет фона без фото (у групп — выбранный цвет группы).
+  final Color? background;
+
+  const ChatAvatar({super.key, required this.base64, required this.nickname, this.radius = 20, this.background});
 
   @override
   Widget build(BuildContext context) {
@@ -28,8 +31,21 @@ class ChatAvatar extends StatelessWidget {
     final hue = (nickname.codeUnits.fold<int>(7, (h, c) => (h * 31 + c) & 0xFFFF) % 360).toDouble();
     return CircleAvatar(
       radius: radius,
-      backgroundColor: HSLColor.fromAHSL(1, hue, 0.45, 0.42).toColor(),
+      backgroundColor: background ?? HSLColor.fromAHSL(1, hue, 0.45, 0.42).toColor(),
       child: Text(initials, style: TextStyle(color: Colors.white, fontSize: radius * 0.75)),
     );
   }
 }
+
+/// Цвет группы из hex ('#RRGGBB'); пусто или мусор — null.
+Color? chatGroupColor(String hex) {
+  final h = hex.replaceFirst('#', '');
+  if (h.length != 6) return null;
+  final v = int.tryParse(h, radix: 16);
+  return v == null ? null : Color(0xFF000000 | v);
+}
+
+/// Цвет подписи автора в группе — стабильный по id, как у инициалов.
+Color chatSenderColor(String id) =>
+    HSLColor.fromAHSL(1, (id.codeUnits.fold<int>(7, (h, c) => (h * 31 + c) & 0xFFFF) % 360).toDouble(), 0.6, 0.62)
+        .toColor();

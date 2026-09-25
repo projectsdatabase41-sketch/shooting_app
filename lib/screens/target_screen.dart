@@ -11,6 +11,7 @@ import '../state/app_data_store.dart';
 import '../state/target_view_model.dart';
 import '../state/workspace_view_model.dart';
 import '../widgets/analytics_panel.dart';
+import '../widgets/call_coach_button.dart';
 import '../widgets/comments_thread.dart';
 import '../widgets/finished_edit_exit_dialog.dart';
 import '../widgets/raised_3d_button.dart';
@@ -164,6 +165,8 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
                 tooltip: vm.isEditing ? 'Просмотр' : 'Правка',
                 onPressed: () => _toggleEditMode(vm),
               ),
+            if (vm.session.status == SessionStatus.running || vm.session.status == SessionStatus.paused)
+              CallCoachButton(db: context.read<AppDataStore>().db),
             IconButton(
               icon: const Icon(Icons.grid_view),
               tooltip: 'Страницы',

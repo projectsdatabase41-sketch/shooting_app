@@ -231,6 +231,25 @@ class CoachAccessService {
     }
   }
 
+  /// Тренер сообщает базе спортсмена свой чат-аккаунт (по токену) и
+  /// получает чат-аккаунт спортсмена. null — токен недействителен или у
+  /// спортсмена ещё нет мессенджера / не выполнен sql/coach-chat-link.sql.
+  Future<({String chatUserId, String nickname})?> linkChat(CoachAthlete athlete,
+      {required String chatUserId, required String nickname}) async {
+    try {
+      final rows = await _rpc(
+        'link_coach_chat',
+        {'p_token': athlete.token, 'p_chat_user_id': chatUserId, 'p_nickname': nickname},
+        athlete: athlete,
+      );
+      if (rows.isEmpty) return null;
+      final id = '${rows.first['athlete_chat_user_id'] ?? ''}';
+      return id.isEmpty ? null : (chatUserId: id, nickname: '${rows.first['athlete_nickname'] ?? ''}');
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<List<Map<String, dynamic>>> _rpc(String fn, Map<String, dynamic> args, {CoachAthlete? athlete}) async {
     final effectiveUrl = athlete?.url ?? url;
     final effectiveKey = athlete?.anonKey ?? anonKey;

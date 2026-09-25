@@ -24,10 +24,12 @@ class ChatMessagesRepository {
 
   void addContact(ChatContact c) {
     db.db.execute(
-      'INSERT INTO chat_contacts (id, nickname, chat_code, avatar_base64, about) VALUES (?, ?, ?, ?, ?) '
+      'INSERT INTO chat_contacts (id, nickname, chat_code, avatar_base64, about, kind, group_json) '
+      'VALUES (?, ?, ?, ?, ?, ?, ?) '
       'ON CONFLICT(id) DO UPDATE SET nickname = excluded.nickname, chat_code = excluded.chat_code, '
-      'avatar_base64 = excluded.avatar_base64, about = excluded.about',
-      [c.id, c.nickname, c.chatCode, c.avatarBase64, c.about],
+      'avatar_base64 = excluded.avatar_base64, about = excluded.about, kind = excluded.kind, '
+      'group_json = excluded.group_json',
+      [c.id, c.nickname, c.chatCode, c.avatarBase64, c.about, c.isGroup ? 'group' : 'person', c.isGroup ? c.groupJson : null],
     );
   }
 
@@ -58,8 +60,8 @@ class ChatMessagesRepository {
       '(id, client_message_id, contact_id, direction, text, status, msg_type, '
       'attachment_base64, attachment_name, attachment_mime, attachment_size, '
       'drive_file_id, attachment_local_path, '
-      'reply_to_client_message_id, reply_to_preview, download_allowed, created_at) '
-      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'reply_to_client_message_id, reply_to_preview, download_allowed, sender_id, created_at) '
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         m.id,
         m.clientMessageId,
@@ -77,6 +79,7 @@ class ChatMessagesRepository {
         m.replyToClientMessageId,
         m.replyToPreview,
         m.downloadAllowed ? 1 : 0,
+        m.senderId,
         m.createdAt.toIso8601String(),
       ],
     );

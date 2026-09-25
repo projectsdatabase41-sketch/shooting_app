@@ -10,11 +10,13 @@ import 'package:provider/provider.dart';
 import '../logic/avatar_utils.dart';
 import '../logic/adaptive_poller.dart';
 import '../models/chat_contact.dart';
+import '../models/chat_message.dart';
 import '../services/chat_auth_service.dart';
 import '../services/chat_messages_repository.dart';
 import '../services/chat_preferences.dart';
 import '../services/chat_settings.dart';
 import '../services/chat_sync_service.dart';
+import '../services/coach_access_service.dart';
 import '../services/local_db_service.dart';
 import '../services/push_service.dart';
 import '../services/remote_config.dart';
@@ -22,6 +24,8 @@ import '../services/supabase_auth_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/chat_avatar.dart';
 import '../widgets/empty_state.dart';
+import 'chat_group_screen.dart';
+import 'chat_people_screen.dart';
 import 'chat_settings_screen.dart';
 import 'chat_thread_screen.dart';
 
@@ -83,6 +87,9 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
   /// после переустановки или на новом телефоне их ещё нет только в
   /// локальном `chat_contacts`, здесь пробел восполняется при входе.
   Future<void> _syncFriends() async {
+    await _sync.syncGroups();
+    if (mounted) _reload();
+    await _linkCoachesAndAthletes();
     final friends = await _auth.listFriends();
     if (friends.isEmpty) return;
     for (final f in friends) {
@@ -92,6 +99,26 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
         chatCode: '',
         avatarBase64: f.avatarBase64,
         about: f.about,
+        addedAt: DateTime.now(),
+      ));
+    }
+    if (mounted) _reload();
+  }
+
+  /// Связь через токены доступа (sql/coach-chat-link.sql): спортсмен
+  /// публикует свой чат-аккаунт в личной базе; тренер по каждому
+  /// подключённому спортсмену сообщает свой и получает его — оба сразу в
+  /// контактах друг у друга, без поиска и кодов.
+  Future<void> _linkCoachesAndAthletes() async {
+    if (_mainAuth.isSignedIn) await _mainAuth.saveChatIdentity(_auth.userId, _auth.nickname);
+    final access = CoachAccessService(_db);
+    for (final a in access.listAthletes()) {
+      final link = await access.linkChat(a, chatUserId: _auth.userId, nickname: _auth.nickname);
+      if (link == null || _repo.contactById(link.chatUserId) != null) continue;
+      _repo.addContact(ChatContact(
+        id: link.chatUserId,
+        nickname: link.nickname.isNotEmpty ? link.nickname : a.name,
+        chatCode: '',
         addedAt: DateTime.now(),
       ));
     }
@@ -255,78 +282,20 @@ class _ChatContactsView extends StatelessWidget {
     onContactsChanged();
   }
 
-  Future<void> _addContact(BuildContext context) async {
-    final codeCtrl = TextEditingController();
-    final code = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Добавить контакт'),
-        content: TextField(
-          controller: codeCtrl,
-          autofocus: true,
-          textCapitalization: TextCapitalization.characters,
-          decoration: const InputDecoration(labelText: 'Код контакта', hintText: 'XXXX-XXXX'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(codeCtrl.text.trim()), child: const Text('Найти')),
-        ],
-      ),
-    );
-    if (code == null || code.isEmpty) return;
-    if (!context.mounted) return;
-    try {
-      final found = await auth.resolveChatCode(code);
-      if (found == null) {
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Контакт с таким кодом не найден')));
-        return;
-      }
-      final contact = ChatContact(
-        id: found.userId,
-        nickname: found.nickname,
-        chatCode: code,
-        avatarBase64: found.avatarBase64,
-        about: found.about,
-        addedAt: DateTime.now(),
-      );
-      repo.addContact(contact);
-      onContactsChanged();
-      onOpenThread(contact);
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
-    }
-  }
+  void _openContacts(BuildContext context) => Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => ChatContactsScreen(auth: auth, repo: repo, onOpenThread: onOpenThread),
+      ));
 
-  /// Все контакты по алфавиту (и те, с кем ещё не переписывались).
-  void _openContacts(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: SizedBox(
-          height: MediaQuery.sizeOf(ctx).height * 0.7,
-          child: contacts.isEmpty
-              ? const EmptyState(icon: Icons.people_outline, text: 'Контактов пока нет — добавьте по коду')
-              : ListView(
-                  children: [
-                    for (final c in contacts)
-                      ListTile(
-                        leading: ChatAvatar(base64: c.avatarBase64, nickname: c.nickname),
-                        title: Text(c.nickname, overflow: TextOverflow.ellipsis),
-                        subtitle: c.about.isEmpty ? null : Text(c.about, overflow: TextOverflow.ellipsis),
-                        onTap: () {
-                          Navigator.of(ctx).pop();
-                          onOpenThread(c);
-                        },
-                      ),
-                  ],
-                ),
-        ),
-      ),
-    );
+  void _openDirectory(BuildContext context) => Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => ChatDirectoryScreen(auth: auth, repo: repo, onOpenThread: onOpenThread),
+      ));
+
+  Future<void> _newGroup(BuildContext context) async {
+    final group = await Navigator.of(context).push<ChatContact>(MaterialPageRoute(
+      builder: (_) => ChatGroupEditScreen(auth: auth, repo: repo, sync: sync),
+    ));
+    onContactsChanged();
+    if (group != null) onOpenThread(group);
   }
 
   static String _time(DateTime t) {
@@ -342,7 +311,8 @@ class _ChatContactsView extends StatelessWidget {
     // Диалоги с историей — по времени последнего сообщения, без истории —
     // в конце по алфавиту (порядок из repo.listContacts).
     final last = {for (final c in contacts) c.id: repo.lastForContact(c.id)};
-    final sorted = [...contacts]..sort((a, b) {
+    // Здесь — только переписки (и группы); все контакты — в «Контактах».
+    final sorted = contacts.where((c) => c.isGroup || last[c.id] != null).toList()..sort((a, b) {
         final ta = last[a.id]?.createdAt, tb = last[b.id]?.createdAt;
         if (ta == null && tb == null) return 0;
         if (ta == null) return 1;
@@ -391,18 +361,27 @@ class _ChatContactsView extends StatelessWidget {
               ListTile(
                 leading: const Icon(Icons.people_outline),
                 title: const Text('Контакты'),
-                trailing: Text('${contacts.length}'),
+                trailing: Text('${contacts.where((c) => !c.isGroup).length}'),
                 onTap: () {
                   Navigator.of(context).pop();
                   _openContacts(context);
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.person_add_alt_outlined),
-                title: const Text('Добавить по коду'),
+                leading: const Icon(Icons.travel_explore_outlined),
+                title: const Text('Все участники'),
+                subtitle: const Text('Поиск по имени и коду'),
                 onTap: () {
                   Navigator.of(context).pop();
-                  _addContact(context);
+                  _openDirectory(context);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.group_add_outlined),
+                title: const Text('Новая группа'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _newGroup(context);
                 },
               ),
               ListTile(
@@ -427,18 +406,13 @@ class _ChatContactsView extends StatelessWidget {
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        tooltip: 'Добавить по коду',
-        onPressed: () => _addContact(context),
-        child: const Icon(Icons.edit_outlined),
-      ),
       body: Column(
         children: [
           Expanded(
             child: sorted.isEmpty
                 ? const EmptyState(
                     icon: Icons.forum_outlined,
-                    text: 'Пока нет собеседников — нажмите кнопку и введите код контакта',
+                    text: 'Переписок пока нет — откройте шторку слева: «Контакты» или «Все участники»',
                   )
                 : ListView.builder(
                     itemCount: sorted.length,
@@ -446,14 +420,33 @@ class _ChatContactsView extends StatelessWidget {
                       final c = sorted[i];
                       final m = last[c.id];
                       final unread = repo.unreadCount(c.id);
-                      final sub = m != null ? ChatSyncService.previewOf(m) : c.about;
+                      var sub = m != null ? ChatSyncService.previewOf(m) : c.about;
+                      // В группе — кто написал последним.
+                      if (c.isGroup && m != null) {
+                        final who = m.direction == ChatMessageDirection.outgoing
+                            ? 'Вы'
+                            : (c.member(m.senderId ?? '')?.nickname ?? '');
+                        if (who.isNotEmpty) sub = '$who: $sub';
+                      }
                       return ListTile(
-                        leading: ChatAvatar(base64: c.avatarBase64, nickname: c.nickname),
-                        title: Text(c.nickname, overflow: TextOverflow.ellipsis),
+                        leading: ChatAvatar(
+                          base64: c.avatarBase64,
+                          nickname: c.nickname,
+                          background: c.isGroup ? chatGroupColor(c.color) : null,
+                        ),
+                        title: Row(
+                          children: [
+                            if (c.isGroup) ...[
+                              Icon(Icons.groups_outlined, size: 16, color: theme.hintColor),
+                              const SizedBox(width: 4),
+                            ],
+                            Expanded(child: Text(c.nickname, overflow: TextOverflow.ellipsis)),
+                          ],
+                        ),
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (m != null && c.about.isNotEmpty)
+                            if (m != null && c.about.isNotEmpty && !c.isGroup)
                               Text(c.about,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,

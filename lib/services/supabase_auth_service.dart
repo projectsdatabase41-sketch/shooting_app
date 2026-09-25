@@ -223,6 +223,64 @@ class SupabaseAuthService {
     }
   }
 
+  /// Свой чат-аккаунт — в личную базу, чтобы тренер, подключившийся по
+  /// токену, получил его и мог переписываться (см. sql/coach-chat-link.sql).
+  Future<void> saveChatIdentity(String chatUserId, String nickname) async {
+    final token = await ensureFreshToken();
+    if (token == null) return;
+    final client = clientFactory();
+    try {
+      await client
+          .patch(
+            Uri.parse('$url/rest/v1/project_settings?owner_user_id=eq.$userId'),
+            headers: {
+              'apikey': anonKey,
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal',
+            },
+            body: jsonEncode({'chat_user_id': chatUserId, 'chat_nickname': nickname}),
+          )
+          .timeout(const Duration(seconds: 20));
+    } catch (_) {
+      // колонок ещё нет (SQL не выполнен) — просто без связи с тренером
+    } finally {
+      client.close();
+    }
+  }
+
+  /// Тренеры, которым выданы ДЕЙСТВУЮЩИЕ токены и которые уже связали с
+  /// ними свой чат-аккаунт.
+  Future<List<({String chatUserId, String nickname, String label})>> fetchLinkedCoaches() async {
+    final token = await ensureFreshToken();
+    if (token == null) return const [];
+    final client = clientFactory();
+    try {
+      final res = await client.get(
+        Uri.parse('$url/rest/v1/share_grants?select=coach_chat_user_id,coach_chat_nickname,label'
+            '&revoked_at=is.null&coach_chat_user_id=not.is.null'),
+        headers: {'apikey': anonKey, 'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 20));
+      if (res.statusCode >= 400) return const [];
+      final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+      if (decoded is! List) return const [];
+      final seen = <String>{};
+      return [
+        for (final r in decoded.cast<Map<String, dynamic>>())
+          if (seen.add('${r['coach_chat_user_id']}'))
+            (
+              chatUserId: '${r['coach_chat_user_id']}',
+              nickname: '${r['coach_chat_nickname'] ?? ''}',
+              label: '${r['label'] ?? ''}',
+            ),
+      ];
+    } catch (_) {
+      return const [];
+    } finally {
+      client.close();
+    }
+  }
+
   /// Выход: токены стираются с устройства. Локальные тренировки
   /// остаются на месте — база на телефоне живёт своей жизнью и без
   /// облака.

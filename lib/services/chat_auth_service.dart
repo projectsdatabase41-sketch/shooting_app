@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:http/http.dart' as http;
 
+import '../models/chat_contact.dart';
 import 'chat_settings.dart';
 import 'local_db_service.dart';
 import 'supabase_auth_service.dart' show AuthException;
@@ -562,6 +563,102 @@ class ChatAuthService {
       client.close();
     }
   }
+
+  /// Вызов RPC чат-базы; ошибка сервера — [AuthException] с его текстом.
+  Future<dynamic> _rpc(String name, Map<String, dynamic> body) async {
+    final token = await ensureFreshToken();
+    if (token == null) throw const AuthException('Сначала войдите в чат');
+    final client = clientFactory();
+    try {
+      final res = await client
+          .post(
+            Uri.parse('$url/rest/v1/rpc/$name'),
+            headers: {'apikey': anonKey, 'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 20));
+      if (res.statusCode >= 400) throw AuthException(_message(res.body));
+      return res.body.isEmpty ? null : jsonDecode(utf8.decode(res.bodyBytes));
+    } finally {
+      client.close();
+    }
+  }
+
+  /// Все участники мессенджера (кроме себя) — по имени, «о себе» или точному
+  /// коду контакта; пустой запрос — все по алфавиту. Постранично по [limit].
+  Future<List<({String userId, String nickname, String? avatarBase64, String about})>> searchProfiles(
+    String query, {
+    int offset = 0,
+    int limit = 30,
+  }) async {
+    final rows = await _rpc('search_profiles', {'p_query': query.trim(), 'p_limit': limit, 'p_offset': offset});
+    if (rows is! List) return const [];
+    return [
+      for (final r in rows.cast<Map<String, dynamic>>())
+        (
+          userId: '${r['user_id']}',
+          nickname: '${r['nickname']}',
+          avatarBase64: r['avatar_base64'] as String?,
+          about: '${r['about'] ?? ''}',
+        ),
+    ];
+  }
+
+  /// Мои группы с участниками (для локального списка диалогов).
+  Future<List<ChatContact>> myGroups() async {
+    try {
+      final rows = await _rpc('my_groups', {});
+      if (rows is! List) return const [];
+      return [
+        for (final r in rows.cast<Map<String, dynamic>>())
+          ChatContact(
+            id: '${r['id']}',
+            nickname: '${r['name']}',
+            chatCode: '',
+            avatarBase64: r['avatar_base64'] as String?,
+            about: '${r['about'] ?? ''}',
+            addedAt: DateTime.now(),
+            isGroup: true,
+            color: '${r['color'] ?? ''}',
+            members: [
+              for (final m in (r['members'] as List? ?? const []))
+                ChatGroupMember.fromJson(Map<String, dynamic>.from(m as Map)),
+            ],
+          ),
+      ];
+    } catch (_) {
+      return const []; // групп ещё нет на сервере (sql/chat-groups.sql не выполнен) или нет сети
+    }
+  }
+
+  Future<String> createGroup({
+    required String name,
+    String about = '',
+    String color = '',
+    String? avatarBase64,
+    required List<String> memberIds,
+  }) async =>
+      '${await _rpc('create_group', {
+            'p_name': name,
+            'p_about': about,
+            'p_color': color,
+            'p_avatar': avatarBase64,
+            'p_member_ids': memberIds,
+          })}';
+
+  Future<void> updateGroup(String groupId,
+          {required String name, String about = '', String color = '', String? avatarBase64}) =>
+      _rpc('update_group', {'p_group': groupId, 'p_name': name, 'p_about': about, 'p_color': color, 'p_avatar': avatarBase64});
+
+  Future<void> addGroupMembers(String groupId, List<String> ids) =>
+      _rpc('add_group_members', {'p_group': groupId, 'p_member_ids': ids});
+
+  /// Убрать участника; свой id — выйти из группы.
+  Future<void> removeGroupMember(String groupId, String userId) =>
+      _rpc('remove_group_member', {'p_group': groupId, 'p_user': userId});
+
+  Future<void> setGroupRole(String groupId, String userId, String role) =>
+      _rpc('set_group_role', {'p_group': groupId, 'p_user': userId, 'p_role': role});
 
   void signOutLocally() {
     _write('chat_user_id', '');
