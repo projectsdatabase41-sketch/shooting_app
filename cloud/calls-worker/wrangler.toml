@@ -1,0 +1,20 @@
+name = "pusl-calls"
+main = "src/index.ts"
+compatibility_date = "2025-09-01"
+
+[vars]
+# Открытые ключи подписи токенов чат-базы — ими проверяется пользователь.
+JWKS_URL = "https://frbptucrvmyikencyspu.supabase.co/auth/v1/.well-known/jwks.json"
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "RoomDO"
+
+[[durable_objects.bindings]]
+name = "USERS"
+class_name = "UserDO"
+
+# Бесплатный тариф — только Durable Objects на SQLite.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RoomDO", "UserDO"]
