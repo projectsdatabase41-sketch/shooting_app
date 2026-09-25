@@ -530,7 +530,7 @@ security definer
 set search_path = public
 as $$
 declare
-  service_key text;
+  push_secret text;
   gid uuid;
 begin
   begin
@@ -553,16 +553,18 @@ begin
       return NEW;
     end if;
 
-    select decrypted_secret into service_key
+    -- Вызов подписан общим секретом (vault 'push_secret' = секрет функции
+    -- PUSH_SECRET), а не ключом service_role: его не нужно никуда копировать.
+    select decrypted_secret into push_secret
     from vault.decrypted_secrets
-    where name = 'service_role_key';
+    where name = 'push_secret';
 
-    if service_key is not null then
+    if push_secret is not null then
       perform net.http_post(
         url := 'https://yirvomezybprdlntxyas.supabase.co/functions/v1/send-chat-push',
         headers := jsonb_build_object(
           'Content-Type', 'application/json',
-          'Authorization', 'Bearer ' || service_key
+          'x-push-secret', push_secret
         ),
         body := jsonb_build_object('table', TG_TABLE_NAME, 'record', row_to_json(NEW))
       );
