@@ -146,8 +146,14 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
         try {
           await _auth.signIn(email: email, password: stored);
         } on AuthException {
-          // Сохранённый пароль больше не подходит (аккаунт пересоздан
-          // вручную и т.п.) — падаем в обычную форму, чем гадать дальше.
+          // Аккаунта с этой почтой нет — сервер мессенджера переехал:
+          // заводим его заново с тем же сохранённым паролем. Не вышло —
+          // обычная форма входа.
+          try {
+            await _auth.signUp(nickname: email.split('@').first, email: email, password: stored);
+          } on AuthException {
+            // остаётся форма
+          }
         }
       } else {
         final generated = _generatePassword();

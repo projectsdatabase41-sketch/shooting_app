@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shooting_app/services/chat_auth_service.dart';
+import 'package:shooting_app/services/local_db_service.dart';
 import 'package:shooting_app/services/chat_settings.dart';
 import 'package:shooting_app/services/remote_config.dart';
 
@@ -45,5 +47,17 @@ void main() {
     expect(RemoteConfig.pollScale, 1.0);
     RemoteConfig.setForTest({'poll': {'scale': 3}});
     expect(RemoteConfig.pollScale, 3.0);
+  });
+
+  test('сервер мессенджера переехал — старый вход недействителен, новый вход действителен', () async {
+    final db = LocalDbService();
+    await db.open(overridePath: ':memory:');
+    final auth = ChatAuthService(db);
+    // вход до переезда: отметки сервера нет → считается прежним сервером
+    db.db.execute("INSERT INTO project_settings (id, chat_access_token) VALUES (1, 'old') "
+        "ON CONFLICT(id) DO UPDATE SET chat_access_token = 'old'");
+    expect(auth.isSignedIn, ChatSettings.url == 'https://frbptucrvmyikencyspu.supabase.co');
+    db.db.execute('UPDATE project_settings SET chat_server_url = ? WHERE id = 1', [ChatSettings.url]);
+    expect(auth.isSignedIn, isTrue);
   });
 }

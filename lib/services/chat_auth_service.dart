@@ -40,7 +40,17 @@ class ChatAuthService {
     return raw.isEmpty ? null : DateTime.tryParse(raw);
   }
 
-  bool get isSignedIn => ChatSettings.isConfigured && accessToken.isNotEmpty;
+  bool get isSignedIn => ChatSettings.isConfigured && accessToken.isNotEmpty && !_serverChanged;
+
+  /// Вход сделан на ДРУГОМ сервере мессенджера (сервер переехал, см.
+  /// RemoteConfig chat.url) — старый токен тут не действует, нужен новый
+  /// вход. Пустая отметка — вход сделан до её появления, то есть на прежнем
+  /// сервере frbptucrvmyikencyspu.
+  bool get _serverChanged {
+    final at = _read('chat_server_url');
+    final effective = at.isEmpty ? 'https://frbptucrvmyikencyspu.supabase.co' : at;
+    return effective != ChatSettings.url;
+  }
 
   Future<String?> ensureFreshToken() async {
     if (!isSignedIn) return null;
@@ -873,6 +883,7 @@ class ChatAuthService {
 
   void _saveSession(Map<String, dynamic> res) {
     final user = res['user'];
+    _write('chat_server_url', ChatSettings.url);
     _write('chat_access_token', '${res['access_token'] ?? ''}');
     _write('chat_refresh_token', '${res['refresh_token'] ?? ''}');
     if (user is Map && user['id'] != null) _write('chat_user_id', '${user['id']}');

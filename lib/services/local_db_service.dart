@@ -130,6 +130,8 @@ class LocalDbService {
         'chat_global_hidden_ids': 'TEXT',
         // Кому уходит «Позвать тренера» с экрана тренировки.
         'chat_coach_contact_id': 'TEXT',
+        // На каком сервере мессенджера сделан вход (переезд сервера — войти заново).
+        'chat_server_url': 'TEXT',
         // Оформление переписки: размер текста, скругление, фон.
         'chat_font_scale': 'TEXT',
         'chat_bubble_radius': 'TEXT',

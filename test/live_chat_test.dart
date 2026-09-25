@@ -13,6 +13,7 @@ import 'package:shooting_app/models/chat_message.dart';
 import 'package:shooting_app/services/chat_auth_service.dart';
 import 'package:shooting_app/services/chat_messages_repository.dart';
 import 'package:shooting_app/services/live_chat_session.dart';
+import 'package:shooting_app/services/chat_settings.dart';
 import 'package:shooting_app/services/local_db_service.dart';
 import 'package:shooting_app/services/peer_link.dart';
 import 'package:shooting_app/services/realtime_client.dart';
@@ -95,10 +96,10 @@ Future<(ChatAuthService, ChatMessagesRepository)> _user(String id, String peer) 
   final db = LocalDbService();
   await db.open(overridePath: ':memory:');
   db.db.execute(
-    'INSERT INTO project_settings (id, chat_user_id, chat_access_token, chat_expires_at) VALUES (1, ?, ?, ?) '
+    'INSERT INTO project_settings (id, chat_user_id, chat_access_token, chat_expires_at, chat_server_url) VALUES (1, ?, ?, ?, ?) '
     'ON CONFLICT(id) DO UPDATE SET chat_user_id = excluded.chat_user_id, '
-    'chat_access_token = excluded.chat_access_token, chat_expires_at = excluded.chat_expires_at',
-    [id, 'token-$id', DateTime.now().add(const Duration(hours: 1)).toIso8601String()],
+    'chat_access_token = excluded.chat_access_token, chat_expires_at = excluded.chat_expires_at, chat_server_url = excluded.chat_server_url',
+    [id, 'token-$id', DateTime.now().add(const Duration(hours: 1)).toIso8601String(), ChatSettings.url],
   );
   final repo = ChatMessagesRepository(db);
   repo.addContact(ChatContact(id: peer, nickname: peer, chatCode: '', addedAt: DateTime.now())); // FK на chat_contacts

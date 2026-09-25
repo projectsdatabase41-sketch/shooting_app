@@ -8,6 +8,7 @@ import 'package:shooting_app/models/chat_contact.dart';
 import 'package:shooting_app/models/chat_message.dart';
 import 'package:shooting_app/screens/chat_home_screen.dart';
 import 'package:shooting_app/services/chat_messages_repository.dart';
+import 'package:shooting_app/services/chat_settings.dart';
 import 'package:shooting_app/services/local_db_service.dart';
 import 'package:shooting_app/state/app_data_store.dart';
 
@@ -16,8 +17,8 @@ void main() {
     final db = LocalDbService();
     await db.open(overridePath: ':memory:');
     db.db.execute(
-      "INSERT INTO project_settings (id, chat_user_id, chat_access_token, chat_expires_at, chat_nickname, chat_code) "
-      "VALUES (1, 'me', 'tok', ?, 'Я', 'AAAA-BBBB') ON CONFLICT(id) DO UPDATE SET chat_user_id='me', "
+      "INSERT INTO project_settings (id, chat_user_id, chat_access_token, chat_expires_at, chat_nickname, chat_code, chat_server_url) "
+      "VALUES (1, 'me', 'tok', ?, 'Я', 'AAAA-BBBB', '${ChatSettings.url}') ON CONFLICT(id) DO UPDATE SET chat_user_id='me', chat_server_url=excluded.chat_server_url, "
       "chat_access_token='tok', chat_expires_at=excluded.chat_expires_at",
       [DateTime.now().add(const Duration(hours: 1)).toIso8601String()],
     );
