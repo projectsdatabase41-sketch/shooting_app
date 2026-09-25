@@ -379,6 +379,7 @@ class _AiThemeAssistantSheetState extends State<_AiThemeAssistantSheet> {
         'shadow_intensity': prefs.shadowIntensity,
       });
       final reply = await ai.ask(
+        task: 'chat_colors', accept: (t) => t.contains('```chat_theme'),
         systemPrompt: 'Ты помогаешь настроить ВНЕШНИЙ ВИД чата в приложении для стрелкового спорта: '
             'только цвет "своих" и "чужих" пузырей сообщений, цвет текста в них, и тень под ними '
             '(включена ли и насколько сильная, от 0 до 1). У тебя НЕТ доступа ни к чему другому — '

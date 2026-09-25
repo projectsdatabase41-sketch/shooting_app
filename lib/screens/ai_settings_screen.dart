@@ -1,3 +1,5 @@
+import '../local_ai/local_ai_screen.dart';
+import '../state/personalization_view_model.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -293,6 +295,29 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.error,
                   ),
+            ),
+          ],
+          // Третий вариант — ИИ на самом устройстве (пока только в режиме
+          // разработчика, см. lib/local_ai/).
+          if (context.watch<PersonalizationViewModel>().devMode) ...[
+            const SizedBox(height: 12),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.offline_bolt_outlined),
+                title: const Text('Локальная модель (без интернета)'),
+                subtitle: Text(switch (_settings.localMode) {
+                  'tasks' => 'Служебные задачи · ${_settings.localModelId.isEmpty ? 'модель не выбрана' : _settings.localModelId}',
+                  'all' => 'Всё локально · ${_settings.localModelId.isEmpty ? 'модель не выбрана' : _settings.localModelId}',
+                  _ => 'Выключена',
+                }),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => LocalAiScreen(settings: _settings)),
+                  );
+                  if (mounted) setState(() {});
+                },
+              ),
             ),
           ],
           const SizedBox(height: 24),

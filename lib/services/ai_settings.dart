@@ -56,6 +56,8 @@ class AiSettings {
   static const String keyTables = 'ai_tables';
   static const String keyCustomInstructions = 'ai_custom_instructions';
   static const String keyApiBaseUrl = 'ai_api_base_url';
+  static const String keyLocalMode = 'ai_local_mode';
+  static const String keyLocalModel = 'ai_local_model';
 
   /// Все ключи ИИ — чтобы «сбросить все цвета» их не снесло.
   static const List<String> allKeys = [
@@ -74,6 +76,14 @@ class AiSettings {
   /// ради единственного случая: openrouter.ai заблокирован в регионе
   /// пользователя (403 без VPN, мгновенно работает с ним) — код это не
   /// чинит, но свой прокси/зеркало с тем же API подключить можно.
+  /// Локальная модель (lib/local_ai/): 'off' | 'tasks' | 'all'.
+  String get localMode => _read(keyLocalMode, fallback: 'off');
+  set localMode(String v) => _write(keyLocalMode, v);
+
+  /// id из `localModelCatalog`.
+  String get localModelId => _read(keyLocalModel);
+  set localModelId(String v) => _write(keyLocalModel, v);
+
   String get apiBaseUrl => _read(keyApiBaseUrl, fallback: defaultApiBaseUrl);
   set apiBaseUrl(String v) => _write(keyApiBaseUrl, v.trim().replaceAll(RegExp(r'/+$'), ''));
 

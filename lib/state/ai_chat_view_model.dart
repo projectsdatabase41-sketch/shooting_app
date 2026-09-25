@@ -186,6 +186,7 @@ class AiChatViewModel extends ChangeNotifier {
       ];
       final askedAt = DateTime.now();
       final reply = await service.ask(
+        task: 'chat',
         systemPrompt: AiContext.systemPrompt(
           customInstructions: service.settings.customInstructions,
           coachMode: rawCtx.coachMode,

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../local_ai/local_ai.dart';
 import 'ai_settings.dart';
 
 /// Ответ модели: текст плюс, если был, разобранный блок графика или
@@ -160,15 +161,13 @@ class AiService {
     required String contextBlock,
     required List<({String role, String text})> history,
     String? booksExcerpt,
+    String? task,
+    bool json = false,
+    bool Function(String text)? accept,
   }) async {
     // Со своим ключом — он один; на встроенном — целый список (пользователь
     // принёс несколько ключей именно на случай, если один упрётся в лимит:
     // "если отвалится один, запуститься другой и так до последнего").
-    final keys = settings.hasOwnKey ? [settings.apiKey] : AiSettings.testApiKeys;
-    if (keys.isEmpty) {
-      throw const AiException('Не задан ключ OpenRouter — укажите его в настройках');
-    }
-
     final system = StringBuffer(systemPrompt)..writeln()..writeln(contextBlock);
     if (booksExcerpt != null && booksExcerpt.isNotEmpty) {
       system
@@ -177,8 +176,54 @@ class AiService {
         ..writeln(booksExcerpt);
     }
 
+    // Сначала локальная модель (если включена для этой задачи); её ответ
+    // проверяется так же, как его потом разберёт вызывающий код, — не
+    // прошёл проверку, идём в облако.
+    final check = accept ?? (json ? _looksLikeJson : (String t) => t.trim().isNotEmpty);
+    final local = LocalAi.instance;
+    if (local.wants(settings, task)) {
+      final text = await local.tryRun(
+        settings,
+        task: task!,
+        system: system.toString(),
+        history: history,
+        json: json,
+        accept: check,
+      );
+      if (text != null) {
+        try {
+          return _parse(text, null, 'локальная: ${settings.localModelId}');
+        } on AiException {
+          // разобрать не вышло — пусть ответит облако
+        }
+      }
+    }
+
+    final reply = await _askCloud(system.toString(), history);
+    if (task != null && check(reply.text)) local.learn(settings, task, history, reply.text);
+    return reply;
+  }
+
+  static bool _looksLikeJson(String text) {
+    var t = text.trim();
+    final fence = RegExp(r'^```\w*\s*([\s\S]*?)```$').firstMatch(t);
+    if (fence != null) t = fence.group(1)!.trim();
+    try {
+      jsonDecode(t);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<AiReply> _askCloud(String system, List<({String role, String text})> history) async {
+    final keys = settings.hasOwnKey ? [settings.apiKey] : AiSettings.testApiKeys;
+    if (keys.isEmpty) {
+      throw const AiException('Не задан ключ OpenRouter — укажите его в настройках');
+    }
+
     final messages = [
-      {'role': 'system', 'content': system.toString()},
+      {'role': 'system', 'content': system},
       for (final m in history) {'role': m.role, 'content': m.text},
     ];
 
@@ -265,10 +310,14 @@ class AiService {
       throw const AiException('пустой ответ');
     }
 
+    return _parse(content, message?['reasoning'], model);
+  }
+
+  /// Разбор текста ответа — общий для облака и локальной модели.
+  AiReply _parse(String content, Object? fieldReasoning, String model) {
     // Часть моделей кладёт рассуждения в отдельное поле, часть — прямо
     // в content, а некоторые — в оба места сразу. Склеиваем, но без
     // дублей: иначе один и тот же текст показывался дважды.
-    final fieldReasoning = message?['reasoning'];
     final split = splitReasoning(content.trim());
     final parts = <String>[];
     if (fieldReasoning is String && fieldReasoning.trim().isNotEmpty) {

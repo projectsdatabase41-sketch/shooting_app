@@ -93,6 +93,7 @@ class ServiceDisplayAi {
     final columns = <String>{for (final r in rows) ...r.keys}.toList();
     final samples = rows.take(2).map((r) => {for (final c in columns) c: truncate(cell(r[c]), 60)}).toList();
     final reply = await AiService(settings).ask(
+      task: 'service_display', json: true,
       systemPrompt: 'Ты раскладываешь поля записей стороннего API по ролям отображения в карточке списка. '
           'Тебе дан только список названий полей и по паре обрезанных примеров значений — не вся таблица. '
           'Ответь ТОЛЬКО JSON-объектом без пояснений, без markdown, без ```: '
@@ -170,6 +171,7 @@ class ServiceDisplayAi {
     }
     final preview = truncate(const JsonEncoder().convert(root), 3000);
     final reply = await AiService(settings).ask(
+      task: 'service_discover', json: true,
       systemPrompt: 'Тебе дан обрезанный пример ответа стороннего API (JSON), в котором обычная эвристика не '
           'нашла список записей по стандартным ключам (records/items/data/results/rows). '
           'Найди сама путь к списку записей и разложи поля по ролям отображения в карточке списка. '
@@ -236,6 +238,7 @@ class ServiceDisplayAi {
       if (values.isNotEmpty) valuesByField[c] = values.toList();
     }
     final reply = await AiService(settings).ask(
+      task: 'service_filter', json: true,
       systemPrompt: 'Ты помогаешь отобрать нужные записи из таблицы стороннего сервиса по свободному запросу '
           'пользователя. Тебе НЕ дана сама таблица — только список полей и уникальные значения по каждому '
           '(могут быть обрезаны). Выбери РОВНО ОДНО поле для фильтра и подходящие значения СТРОГО из данного '

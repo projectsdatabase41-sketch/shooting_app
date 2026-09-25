@@ -151,6 +151,7 @@ class _AddNoteDialogState extends State<_AddNoteDialog> {
     });
     try {
       final reply = await AiService(widget.aiSettings).ask(
+        task: 'note_create', json: true,
         systemPrompt: 'Ты помогаешь тренеру по стрельбе вести дневник в приложении. '
             'По заданию тренера придумай короткую тему заметки (3-6 слов) и напиши сам текст. '
             'Используй ТОЛЬКО то, что написал тренер в задании ниже — никаких данных о '
@@ -299,6 +300,7 @@ class _NoteScreenState extends State<_NoteScreen> {
     });
     try {
       final reply = await AiService(widget.aiSettings).ask(
+        task: 'note_edit',
         systemPrompt: 'Ты помогаешь тренеру по стрельбе редактировать заметку дневника в приложении. '
             'Тебе дан текущий текст заметки и задание, что в нём изменить или дописать. '
             'Используй ТОЛЬКО текст заметки и само задание — никаких данных о тренировках, '

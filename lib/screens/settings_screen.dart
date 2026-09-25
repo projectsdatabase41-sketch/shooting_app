@@ -397,6 +397,7 @@ class _AccountSheetState extends State<_AccountSheet> {
       final firstRow = rows.first;
       if (firstRow is! Map) return null;
       final reply = await aiService.ask(
+        task: 'table_describe',
         systemPrompt: 'Ты помогаешь приложению для стрельбы понять смысл ЧУЖОЙ таблицы базы данных, '
             'которую подключил пользователь. Дан список колонок и примеры строк. Опиши ОДНИМ коротким '
             'предложением, что это за таблица и как её содержимое использовать при ответах пользователю. '

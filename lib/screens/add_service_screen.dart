@@ -204,6 +204,7 @@ class _AddServiceScreenState extends State<AddServiceScreen> with SingleTickerPr
     try {
       final aiSettings = AiSettings(context.read<AppDataStore>().db);
       final reply = await AiService(aiSettings).ask(
+        task: 'service_parse', json: true,
         systemPrompt: 'Ты помогаешь разобрать описание стороннего сервиса/API на структурированные поля. '
             'Тебе дан произвольный текст — обычно вперемешку название, ссылка и ключ доступа. '
             'Ответь ТОЛЬКО JSON-объектом без пояснений, без markdown, без ```: '
