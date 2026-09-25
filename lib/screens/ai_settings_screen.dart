@@ -51,7 +51,9 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     _personalAuth = SupabaseAuthService(_db);
     _ownKey = _settings.hasOwnKey;
     _key = TextEditingController(text: _ownKey ? _settings.apiKey : '');
-    _apiBaseUrl = TextEditingController(text: _settings.apiBaseUrl);
+    // Адрес по умолчанию не показываем — пустое поле = встроенный сервис.
+    _apiBaseUrl = TextEditingController(
+        text: _settings.apiBaseUrl == AiSettings.defaultApiBaseUrl ? '' : _settings.apiBaseUrl);
     // Со своим ключом поле цепочки стартует ПУСТЫМ, если пользователь
     // ещё ничего не вводил — не подставляем модели, подобранные под
     // встроенный бесплатный ключ, это разные наборы задач/ограничений.
@@ -233,10 +235,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         children: [
-          const SectionHeader(
-            title: 'Доступ',
-            subtitle: 'Ключ OpenRouter. Хранится только на этом устройстве.',
-          ),
+          const SectionHeader(title: 'Доступ', subtitle: 'Бесплатный облачный ИИ'),
           const SizedBox(height: 12),
           // Переключатель вместо прежнего предупреждения: поле ключа
           // показывается, только когда пользователь выбрал свой ключ.
@@ -244,8 +243,8 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
           // экраном всегда и ничего не меняла.
           SegmentedButton<bool>(
             segments: const [
-              ButtonSegment(value: false, label: Text('Ключ из сборки')),
-              ButtonSegment(value: true, label: Text('Свой ключ')),
+              ButtonSegment(value: false, label: Text('Встроенный')),
+              ButtonSegment(value: true, label: Text('Свой API Key')),
             ],
             selected: {_ownKey},
             showSelectedIcon: false,
@@ -267,18 +266,15 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             const SizedBox(height: 12),
             TextField(
               controller: _key,
-              decoration: const InputDecoration(
-                labelText: 'Ключ OpenRouter',
-                hintText: 'sk-or-v1-…',
-              ),
+              decoration: const InputDecoration(labelText: 'API Key'),
               obscureText: true,
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _apiBaseUrl,
               decoration: const InputDecoration(
-                labelText: 'Адрес API (обычно не нужно менять)',
-                hintText: 'https://openrouter.ai/api/v1',
+                labelText: 'URL',
+                helperText: 'Адрес API вашего сервиса (совместимого с OpenAI)',
               ),
               keyboardType: TextInputType.url,
               autocorrect: false,
@@ -291,7 +287,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             const SizedBox(height: 12),
             Text(
               'В этой сборке ключа нет — ассистент не ответит. '
-              'Переключитесь на «Свой ключ» и вставьте свой.',
+              'Переключитесь на «Свой API Key» и вставьте свой.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.error,
                   ),
@@ -338,7 +334,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
           if (_ownKey) ...[
             SectionHeader(
               title: 'Модели',
-              subtitle: 'По одной в строке, сверху вниз. Не ответила первая — берётся следующая.',
+              subtitle: 'Список используемых ИИ моделей',
               trailing: _loading
                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                   : TextButton(onPressed: _loadModels, child: const Text('Обновить')),
@@ -348,7 +344,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
               controller: _models,
               minLines: 3,
               maxLines: 8,
-              decoration: const InputDecoration(labelText: 'Цепочка моделей'),
+              decoration: const InputDecoration(labelText: 'ИИ модели (по одной в строке)'),
             ),
             const SizedBox(height: 10),
             Row(
@@ -362,12 +358,12 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.check_circle_outline, size: 18),
-                  label: const Text('Проверить'),
+                  label: const Text('Тест ИИ'),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Не ответившие модели уйдут в конец списка, рабочие останутся в вашем порядке',
+                    'Проверка ИИ моделей',
                     style: theme.textTheme.bodySmall,
                   ),
                 ),
@@ -461,6 +457,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
               style: theme.textTheme.bodySmall,
             ),
           ],
+          if (context.watch<PersonalizationViewModel>().devMode) ...[
           const SizedBox(height: 24),
           const SectionHeader(
             title: 'Справочные материалы',
@@ -491,6 +488,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                 ),
             ],
           ),
+          ],
           if (_message != null) ...[
             const SizedBox(height: 20),
             Text(_message!, style: theme.textTheme.bodySmall),

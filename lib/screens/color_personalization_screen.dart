@@ -1,10 +1,17 @@
+import 'dart:convert';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:provider/provider.dart';
 import '../models/app_color_presets.dart';
 import '../models/color_presets.dart';
+import '../models/target_color_scheme.dart';
 import '../models/target_face.dart';
 import '../painters/target_painter.dart';
+import '../services/ai_service.dart';
+import '../services/ai_settings.dart';
+import '../state/app_data_store.dart';
 import '../state/personalization_view_model.dart';
 import '../widgets/color_picker_dialog.dart';
 
@@ -180,6 +187,7 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
 
   Widget _buildElementsTab(BuildContext context, bool wide) {
     final vm = context.watch<PersonalizationViewModel>();
+    final brightness = Theme.of(context).brightness;
     return ListView(
       children: [
         if (!wide) SizedBox(height: 160, child: _buildMiniPreview(context)),
@@ -214,29 +222,37 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
                 ),
           ),
         ),
+        // Набор текущей темы: при «Системе» — той, что сейчас у телефона.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+          child: Text(
+            brightness == Brightness.dark ? 'Для тёмной темы' : 'Для светлой темы',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
         const _AppColorPresetsRow(),
         _AppColorRow(
           title: 'Фон приложения',
-          color: vm.appBackgroundColor,
-          onChanged: vm.setAppBackgroundColor,
+          color: vm.appBackgroundFor(brightness),
+          onChanged: (c) => vm.setAppBackgroundColor(c, brightness),
         ),
         _AppColorRow(
           title: 'Кнопки',
-          color: vm.appButtonColor,
-          onChanged: vm.setAppButtonColor,
+          color: vm.appButtonFor(brightness),
+          onChanged: (c) => vm.setAppButtonColor(c, brightness),
         ),
         _AppColorRow(
           title: 'Текст на кнопках',
-          color: vm.appButtonTextColor,
-          onChanged: vm.setAppButtonTextColor,
+          color: vm.appButtonTextFor(brightness),
+          onChanged: (c) => vm.setAppButtonTextColor(c, brightness),
         ),
-        if (vm.hasCustomAppColors)
+        if (vm.hasCustomAppColors(brightness))
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
             child: Align(
               alignment: Alignment.centerLeft,
               child: TextButton(
-                onPressed: vm.resetAppColors,
+                onPressed: () => vm.resetAppColors(brightness),
                 child: const Text('Сбросить цвета приложения'),
               ),
             ),
@@ -566,47 +582,274 @@ class _AppColorPresetsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<PersonalizationViewModel>();
+    final brightness = Theme.of(context).brightness;
+    final dark = brightness == Brightness.dark;
+    // Только пресеты текущей темы — тёмных на светлой нет и наоборот.
+    final presets = [...appColorPresets, ...vm.customPresets].where((p) => p.dark == dark).toList();
     return SizedBox(
       height: 72,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        itemCount: appColorPresets.length,
+        itemCount: presets.length + 1,
         separatorBuilder: (_, __) => const SizedBox(width: 10),
         itemBuilder: (context, i) {
-          final preset = appColorPresets[i];
-          final active = vm.appBackgroundColor == preset.background &&
-              vm.appButtonColor == preset.button &&
-              vm.appButtonTextColor == preset.buttonText;
-          return GestureDetector(
-            onTap: () => vm.applyAppColorPreset(preset),
-            child: Container(
-              width: 64,
-              decoration: BoxDecoration(
-                color: preset.background,
+          if (i == presets.length) {
+            return Tooltip(
+              message: 'Создать пресет',
+              child: InkWell(
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: active ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.outlineVariant,
-                  width: active ? 2 : 1,
+                onTap: () => showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  showDragHandle: true,
+                  builder: (_) => ChangeNotifierProvider.value(
+                    value: vm,
+                    child: _CreatePresetSheet(brightness: brightness),
+                  ),
+                ),
+                child: Container(
+                  width: 64,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+                  ),
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [Icon(Icons.add), SizedBox(height: 4), Text('Создать', style: TextStyle(fontSize: 10))],
+                  ),
                 ),
               ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 28,
-                    height: 18,
-                    decoration: BoxDecoration(color: preset.button, borderRadius: BorderRadius.circular(4)),
-                    alignment: Alignment.center,
-                    child: Container(width: 14, height: 3, color: preset.buttonText),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(preset.label, style: const TextStyle(fontSize: 10), overflow: TextOverflow.ellipsis),
-                ],
-              ),
-            ),
+            );
+          }
+          final preset = presets[i];
+          final active = vm.appBackgroundFor(brightness) == preset.background &&
+              vm.appButtonFor(brightness) == preset.button &&
+              vm.appButtonTextFor(brightness) == preset.buttonText;
+          return GestureDetector(
+            onTap: () => vm.applyAppColorPreset(preset),
+            onLongPress: preset.custom
+                ? () async {
+                    final del = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: Text('Удалить пресет «${preset.label}»?'),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Отмена')),
+                          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Удалить')),
+                        ],
+                      ),
+                    );
+                    if (del == true) vm.deleteCustomPreset(preset);
+                  }
+                : null,
+            child: _PresetSwatch(preset: preset, active: active),
           );
         },
+      ),
+    );
+  }
+}
+
+class _PresetSwatch extends StatelessWidget {
+  final AppColorPreset preset;
+  final bool active;
+  const _PresetSwatch({required this.preset, this.active = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 64,
+      decoration: BoxDecoration(
+        color: preset.background,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: active ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.outlineVariant,
+          width: active ? 2 : 1,
+        ),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 28,
+            height: 18,
+            decoration: BoxDecoration(color: preset.button, borderRadius: BorderRadius.circular(4)),
+            alignment: Alignment.center,
+            child: Container(width: 14, height: 3, color: preset.buttonText),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            preset.label,
+            style: TextStyle(fontSize: 10, color: preset.background.computeLuminance() > 0.5 ? Colors.black87 : Colors.white70),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// «Создать пресет»: сохранить текущие цвета темы или описать словами — ИИ
+/// подберёт фон, кнопки и текст (с проверкой читаемости).
+class _CreatePresetSheet extends StatefulWidget {
+  final Brightness brightness;
+  const _CreatePresetSheet({required this.brightness});
+
+  @override
+  State<_CreatePresetSheet> createState() => _CreatePresetSheetState();
+}
+
+class _CreatePresetSheetState extends State<_CreatePresetSheet> {
+  final _name = TextEditingController();
+  final _prompt = TextEditingController();
+  AppColorPreset? _draft;
+  bool _busy = false;
+  String? _error;
+
+  bool get _dark => widget.brightness == Brightness.dark;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _prompt.dispose();
+    super.dispose();
+  }
+
+  void _fromCurrent() {
+    final vm = context.read<PersonalizationViewModel>();
+    final b = widget.brightness;
+    final theme = Theme.of(context);
+    setState(() => _draft = AppColorPreset(
+          label: _name.text.trim().isEmpty ? 'Мой' : _name.text.trim(),
+          background: vm.appBackgroundFor(b) ?? theme.scaffoldBackgroundColor,
+          button: vm.appButtonFor(b) ?? theme.colorScheme.primary,
+          buttonText: vm.appButtonTextFor(b) ?? theme.colorScheme.onPrimary,
+          dark: _dark,
+          custom: true,
+        ));
+  }
+
+  static double _contrast(Color a, Color b) {
+    final la = a.computeLuminance(), lb = b.computeLuminance();
+    return (math.max(la, lb) + 0.05) / (math.min(la, lb) + 0.05);
+  }
+
+  Future<void> _withAi() async {
+    final text = _prompt.text.trim();
+    if (text.isEmpty) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final db = context.read<AppDataStore>().db;
+      final reply = await AiService(AiSettings(db)).ask(
+        task: 'app_preset',
+        json: true,
+        systemPrompt: 'Ты подбираешь цвета интерфейса приложения для ${_dark ? 'ТЁМНОЙ' : 'СВЕТЛОЙ'} темы по описанию. '
+            'Ответь ТОЛЬКО JSON: {"label":"название 1-2 слова","background":"#RRGGBB","button":"#RRGGBB","buttonText":"#RRGGBB"}. '
+            'Фон ${_dark ? 'тёмный (яркость ниже 25%)' : 'светлый (яркость выше 85%)'}, текст на кнопке хорошо читается на кнопке, '
+            'кнопка заметна на фоне. Название — на языке описания.',
+        contextBlock: '',
+        history: [(role: 'user', text: text)],
+      );
+      var raw = reply.text.trim();
+      final fence = RegExp(r'```\w*\s*([\s\S]*?)```').firstMatch(raw);
+      if (fence != null) raw = fence.group(1)!.trim();
+      final j = jsonDecode(raw) as Map<String, dynamic>;
+      final bg = TargetColorScheme.hexToColor('${j['background']}');
+      final button = TargetColorScheme.hexToColor('${j['button']}');
+      var buttonText = TargetColorScheme.hexToColor('${j['buttonText']}');
+      // Страховка от нечитаемого сочетания и «чужой» темы.
+      if (_contrast(button, buttonText) < 3) {
+        buttonText = button.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+      }
+      if ((bg.computeLuminance() > 0.5) == _dark) {
+        throw Exception('ИИ подобрал фон не для той темы — попробуйте переформулировать');
+      }
+      setState(() => _draft = AppColorPreset(
+            label: '${j['label'] ?? 'ИИ'}'.trim(),
+            background: bg,
+            button: button,
+            buttonText: buttonText,
+            dark: _dark,
+            custom: true,
+          ));
+    } catch (e) {
+      setState(() => _error = '$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _save() {
+    final d = _draft;
+    if (d == null) return;
+    final name = _name.text.trim();
+    final preset = AppColorPreset(
+      label: name.isEmpty ? d.label : name,
+      background: d.background,
+      button: d.button,
+      buttonText: d.buttonText,
+      dark: d.dark,
+      custom: true,
+    );
+    final vm = context.read<PersonalizationViewModel>();
+    vm.addCustomPreset(preset);
+    vm.applyAppColorPreset(preset);
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(16, 0, 16, 16 + MediaQuery.viewInsetsOf(context).bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Новый пресет — ${_dark ? 'тёмная' : 'светлая'} тема', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 12),
+          TextField(controller: _name, decoration: const InputDecoration(labelText: 'Название (необязательно)')),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _fromCurrent,
+            icon: const Icon(Icons.save_outlined),
+            label: const Text('Из текущих цветов'),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _prompt,
+            minLines: 1,
+            maxLines: 3,
+            decoration: InputDecoration(
+              labelText: 'Или опишите — подберёт ИИ',
+              hintText: 'например: «спокойный морской, акцент бирюзовый»',
+              suffixIcon: _busy
+                  ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)))
+                  : IconButton(icon: const Icon(Icons.auto_awesome_outlined), onPressed: _withAi),
+            ),
+            onSubmitted: (_) => _withAi(),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 8),
+            Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
+          ],
+          if (_draft != null) ...[
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                _PresetSwatch(preset: _draft!),
+                const SizedBox(width: 12),
+                Expanded(child: Text('Так будет выглядеть «${_name.text.trim().isEmpty ? _draft!.label : _name.text.trim()}»')),
+              ],
+            ),
+            const SizedBox(height: 12),
+            FilledButton(onPressed: _save, child: const Text('Сохранить и применить')),
+          ],
+        ],
       ),
     );
   }

@@ -177,11 +177,12 @@ class _CoachAthletesScreenState extends State<CoachAthletesScreen> {
                 );
               },
             ),
+      // Справа внизу — как «новая запись» в дневнике (единообразие).
       floatingActionButton: FloatingActionButton(
+        tooltip: 'Добавить спортсмена',
         onPressed: () => _openAthleteDialog(),
         child: const Icon(Icons.add),
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
     );
   }
 }

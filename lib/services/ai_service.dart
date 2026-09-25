@@ -219,7 +219,7 @@ class AiService {
   Future<AiReply> _askCloud(String system, List<({String role, String text})> history) async {
     final keys = settings.hasOwnKey ? [settings.apiKey] : AiSettings.testApiKeys;
     if (keys.isEmpty) {
-      throw const AiException('Не задан ключ OpenRouter — укажите его в настройках');
+      throw const AiException('Не задан API Key — укажите его в настройках ассистента');
     }
 
     final messages = [
@@ -253,7 +253,7 @@ class AiService {
 
     if (anyRateLimited) {
       throw RateLimitedException(
-        'Исчерпан дневной/минутный лимит бесплатных моделей OpenRouter на всех доступных ключах. '
+        'Исчерпан дневной/минутный лимит бесплатных моделей на всех доступных ключах. '
         'Подождите немного и попробуйте снова — это не поломка приложения.\n${errors.join('\n')}',
       );
     }

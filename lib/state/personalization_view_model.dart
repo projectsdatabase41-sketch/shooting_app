@@ -1,6 +1,8 @@
 import 'dart:ui' show Color, Locale;
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' show ThemeMode;
+import 'dart:convert';
+
+import 'package:flutter/material.dart' show Brightness, Color, ThemeMode;
 import '../models/app_color_presets.dart';
 import '../models/color_presets.dart';
 import '../models/target_color_scheme.dart';
@@ -120,24 +122,38 @@ class PersonalizationViewModel extends ChangeNotifier {
   // цвет темы по умолчанию (`AppTheme`), не тронут пользователем.
   // Намеренно НЕ часть `TargetColorScheme` — см. комментарий в
   // `AppTheme` о том, почему цвета мишени и цвета интерфейса не связаны.
+  // Цвета приложения — ОТДЕЛЬНО для тёмной и светлой темы (решение
+  // пользователя): тёмный пресет не должен ломать светлую тему, а режим
+  // «Система» сам берёт нужный набор. Старые ключи — тёмный набор.
   static const String appBackgroundKey = 'app_bg_color';
   static const String appButtonKey = 'app_button_color';
   static const String appButtonTextKey = 'app_button_text_color';
-  static const List<String> appColorKeys = [appBackgroundKey, appButtonKey, appButtonTextKey];
+  static const String _lightSuffix = '_light';
+  static const String customPresetsKey = 'app_custom_presets';
+  static const List<String> appColorKeys = [
+    appBackgroundKey,
+    appButtonKey,
+    appButtonTextKey,
+    '$appBackgroundKey$_lightSuffix',
+    '$appButtonKey$_lightSuffix',
+    '$appButtonTextKey$_lightSuffix',
+    customPresetsKey,
+  ];
 
-  Color? _appBackgroundColor;
-  Color? _appButtonColor;
-  Color? _appButtonTextColor;
-  Color? get appBackgroundColor => _appBackgroundColor;
-  Color? get appButtonColor => _appButtonColor;
-  Color? get appButtonTextColor => _appButtonTextColor;
+  static String _key(String base, Brightness b) => b == Brightness.light ? '$base$_lightSuffix' : base;
 
-  void setAppBackgroundColor(Color? c) => _setAppColor(appBackgroundKey, c, (v) => _appBackgroundColor = v);
-  void setAppButtonColor(Color? c) => _setAppColor(appButtonKey, c, (v) => _appButtonColor = v);
-  void setAppButtonTextColor(Color? c) => _setAppColor(appButtonTextKey, c, (v) => _appButtonTextColor = v);
+  final Map<String, Color?> _appColors = {};
 
-  void _setAppColor(String key, Color? c, void Function(Color?) assign) {
-    assign(c);
+  Color? appBackgroundFor(Brightness b) => _appColors[_key(appBackgroundKey, b)];
+  Color? appButtonFor(Brightness b) => _appColors[_key(appButtonKey, b)];
+  Color? appButtonTextFor(Brightness b) => _appColors[_key(appButtonTextKey, b)];
+
+  void setAppBackgroundColor(Color? c, Brightness b) => _setAppColor(_key(appBackgroundKey, b), c);
+  void setAppButtonColor(Color? c, Brightness b) => _setAppColor(_key(appButtonKey, b), c);
+  void setAppButtonTextColor(Color? c, Brightness b) => _setAppColor(_key(appButtonTextKey, b), c);
+
+  void _setAppColor(String key, Color? c) {
+    _appColors[key] = c;
     if (c == null) {
       db.db.execute('DELETE FROM color_prefs WHERE key = ?', [key]);
     } else {
@@ -147,27 +163,76 @@ class PersonalizationViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Готовый набор из трёх цветов приложения разом — "пресеты для меню"
-  /// (решение пользователя), тот же приём, что `applyPreset` у мишени.
+  /// Пресет применяется к набору СВОЕЙ темы.
   void applyAppColorPreset(AppColorPreset preset) {
-    _appBackgroundColor = preset.background;
-    _appButtonColor = preset.button;
-    _appButtonTextColor = preset.buttonText;
-    _persistKey(appBackgroundKey, preset.background);
-    _persistKey(appButtonKey, preset.button);
-    _persistKey(appButtonTextKey, preset.buttonText);
+    final b = preset.dark ? Brightness.dark : Brightness.light;
+    for (final (base, c) in [
+      (appBackgroundKey, preset.background),
+      (appButtonKey, preset.button),
+      (appButtonTextKey, preset.buttonText),
+    ]) {
+      _appColors[_key(base, b)] = c;
+      _persistKey(_key(base, b), c);
+    }
     notifyListeners();
   }
 
-  bool get hasCustomAppColors => _appBackgroundColor != null || _appButtonColor != null || _appButtonTextColor != null;
+  bool hasCustomAppColors(Brightness b) =>
+      appBackgroundFor(b) != null || appButtonFor(b) != null || appButtonTextFor(b) != null;
 
-  void resetAppColors() {
-    _appBackgroundColor = null;
-    _appButtonColor = null;
-    _appButtonTextColor = null;
-    db.db.execute('DELETE FROM color_prefs WHERE key IN (?, ?, ?)', appColorKeys);
+  void resetAppColors(Brightness b) {
+    for (final base in [appBackgroundKey, appButtonKey, appButtonTextKey]) {
+      _appColors.remove(_key(base, b));
+      db.db.execute('DELETE FROM color_prefs WHERE key = ?', [_key(base, b)]);
+    }
     notifyListeners();
   }
+
+  /// Свои пресеты (сохранённые или созданные с ИИ).
+  List<AppColorPreset> get customPresets {
+    final rows = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [customPresetsKey]);
+    if (rows.isEmpty) return const [];
+    try {
+      return [
+        for (final j in (jsonDecode(rows.first['hex'] as String) as List).cast<Map<String, dynamic>>())
+          AppColorPreset(
+            label: '${j['label']}',
+            background: TargetColorScheme.hexToColor('${j['bg']}'),
+            button: TargetColorScheme.hexToColor('${j['button']}'),
+            buttonText: TargetColorScheme.hexToColor('${j['text']}'),
+            dark: j['dark'] == true,
+            custom: true,
+          ),
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  void _saveCustomPresets(List<AppColorPreset> list) {
+    db.db.execute(
+      'INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex',
+      [
+        customPresetsKey,
+        jsonEncode([
+          for (final p in list)
+            {
+              'label': p.label,
+              'bg': TargetColorScheme.colorToHex(p.background),
+              'button': TargetColorScheme.colorToHex(p.button),
+              'text': TargetColorScheme.colorToHex(p.buttonText),
+              'dark': p.dark,
+            },
+        ]),
+      ],
+    );
+    notifyListeners();
+  }
+
+  void addCustomPreset(AppColorPreset p) => _saveCustomPresets([...customPresets, p]);
+
+  void deleteCustomPreset(AppColorPreset p) =>
+      _saveCustomPresets(customPresets.where((e) => e.label != p.label || e.dark != p.dark).toList());
 
   static ThemeMode _themeModeFromString(String? value) {
     switch (value) {
@@ -213,9 +278,24 @@ class PersonalizationViewModel extends ChangeNotifier {
       return (hex == null || !TargetColorScheme.isValidHex(hex)) ? null : TargetColorScheme.hexToColor(hex);
     }
 
-    _appBackgroundColor = readAppColor(appBackgroundKey);
-    _appButtonColor = readAppColor(appButtonKey);
-    _appButtonTextColor = readAppColor(appButtonTextKey);
+    _appColors.clear();
+    for (final key in appColorKeys) {
+      if (key == customPresetsKey) continue;
+      _appColors[key] = readAppColor(key);
+    }
+    // Старые версии хранили один набор на обе темы: светлый фон уезжает
+    // в светлый набор, чтобы не портить тёмную тему.
+    final oldBg = _appColors[appBackgroundKey];
+    if (oldBg != null && oldBg.computeLuminance() > 0.5 && appBackgroundFor(Brightness.light) == null) {
+      for (final base in [appBackgroundKey, appButtonKey, appButtonTextKey]) {
+        final c = _appColors.remove(base);
+        db.db.execute('DELETE FROM color_prefs WHERE key = ?', [base]);
+        if (c != null) {
+          _appColors[_key(base, Brightness.light)] = c;
+          _persistKey(_key(base, Brightness.light), c);
+        }
+      }
+    }
 
     final devModeRow = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [devModeKey]);
     _devMode = devModeRow.isNotEmpty && devModeRow.first['hex'] == '1';

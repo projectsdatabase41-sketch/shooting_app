@@ -38,6 +38,7 @@ class LocalAi {
   /// Задачи, где маленькой модели хватает (короткий проверяемый ответ).
   static const Set<String> lightTasks = {
     'chat_colors',
+    'app_preset',
     'table_describe',
     'knowledge_columns',
     'service_display',

@@ -64,7 +64,7 @@ class SettingsScreen extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.auto_awesome_outlined),
             title: const Text('ИИ Ассистент'),
-            subtitle: const Text('Ключ OpenRouter, модели, справочные материалы'),
+            subtitle: const Text('Облачный ИИ, свой API Key, модели'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const AiSettingsScreen()),

@@ -10,11 +10,19 @@ class AppColorPreset {
   final Color button;
   final Color buttonText;
 
+  /// Для тёмной темы (иначе — для светлой). Пресеты чужой темы не показываются.
+  final bool dark;
+
+  /// Создан пользователем (можно удалить).
+  final bool custom;
+
   const AppColorPreset({
     required this.label,
     required this.background,
     required this.button,
     required this.buttonText,
+    this.dark = true,
+    this.custom = false,
   });
 }
 
@@ -48,16 +56,54 @@ const List<AppColorPreset> appColorPresets = [
     button: Color(0xFF6F4E37),
     buttonText: Color(0xFFF3E5D8),
   ),
-  AppColorPreset(
-    label: 'Светлый',
-    background: Color(0xFFF6F8FA),
-    button: Color(0xFF2C4A63),
-    buttonText: Color(0xFFFFFFFF),
-  ),
+
   AppColorPreset(
     label: 'Мята',
     background: Color(0xFF11201C),
     button: Color(0xFF3E8E7E),
     buttonText: Color(0xFFEAFBF6),
+  ),
+  // --- Светлая тема ---
+  AppColorPreset(
+    label: 'Светлый',
+    background: Color(0xFFF6F8FA),
+    button: Color(0xFF2C4A63),
+    buttonText: Color(0xFFFFFFFF),
+    dark: false,
+  ),
+  AppColorPreset(
+    label: 'Песок',
+    background: Color(0xFFF7F1E6),
+    button: Color(0xFF8A5A2B),
+    buttonText: Color(0xFFFFFFFF),
+    dark: false,
+  ),
+  AppColorPreset(
+    label: 'Небо',
+    background: Color(0xFFEFF5FB),
+    button: Color(0xFF1F6FB2),
+    buttonText: Color(0xFFFFFFFF),
+    dark: false,
+  ),
+  AppColorPreset(
+    label: 'Шалфей',
+    background: Color(0xFFF1F5F0),
+    button: Color(0xFF4F7A5A),
+    buttonText: Color(0xFFFFFFFF),
+    dark: false,
+  ),
+  AppColorPreset(
+    label: 'Лаванда',
+    background: Color(0xFFF5F3FA),
+    button: Color(0xFF6A55A3),
+    buttonText: Color(0xFFFFFFFF),
+    dark: false,
+  ),
+  AppColorPreset(
+    label: 'Мишень',
+    background: Color(0xFFFAFAF7),
+    button: Color(0xFFC62828),
+    buttonText: Color(0xFFFFFFFF),
+    dark: false,
   ),
 ];

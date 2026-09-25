@@ -221,16 +221,20 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
       // светлой/тёмной темы и цвета ПРИЛОЖЕНИЯ (фон/кнопки, отдельные от
       // цветов мишени — см. `AppTheme`), которые пользователь тоже может
       // поменять.
-      child: Selector<PersonalizationViewModel, (ThemeMode, Color?, Color?, Color?)>(
-        selector: (_, vm) => (vm.themeMode, vm.appBackgroundColor, vm.appButtonColor, vm.appButtonTextColor),
+      child: Selector<PersonalizationViewModel, (ThemeMode, (Color?, Color?, Color?), (Color?, Color?, Color?))>(
+        selector: (_, vm) => (
+          vm.themeMode,
+          (vm.appBackgroundFor(Brightness.light), vm.appButtonFor(Brightness.light), vm.appButtonTextFor(Brightness.light)),
+          (vm.appBackgroundFor(Brightness.dark), vm.appButtonFor(Brightness.dark), vm.appButtonTextFor(Brightness.dark)),
+        ),
         builder: (context, data, _) {
-          final (themeMode, background, buttonColor, buttonTextColor) = data;
+          final (themeMode, (lightBg, lightButton, lightText), (darkBg, darkButton, darkText)) = data;
           return MaterialApp(
           navigatorKey: navigatorKey,
           title: 'Pusl',
           debugShowCheckedModeBanner: false,
-          theme: AppTheme.light(background: background, buttonColor: buttonColor, buttonTextColor: buttonTextColor),
-          darkTheme: AppTheme.dark(background: background, buttonColor: buttonColor, buttonTextColor: buttonTextColor),
+          theme: AppTheme.light(background: lightBg, buttonColor: lightButton, buttonTextColor: lightText),
+          darkTheme: AppTheme.dark(background: darkBg, buttonColor: darkButton, buttonTextColor: darkText),
           themeMode: themeMode,
           // null — системный язык устройства (по умолчанию). Сам текст
           // экранов при этом не переводится — см. комментарий у

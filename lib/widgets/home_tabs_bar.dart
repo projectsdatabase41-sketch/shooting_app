@@ -107,7 +107,7 @@ class _HomeTabsBarState extends State<HomeTabsBar> {
     // Тот же фон приложения, что и у AppBar (AppTheme) — иначе нижняя
     // панель осталась бы старого цвета при выбранном пользователем фоне,
     // как уже было с верхней шапкой.
-    final background = context.watch<PersonalizationViewModel>().appBackgroundColor;
+    final background = context.watch<PersonalizationViewModel>().appBackgroundFor(Theme.of(context).brightness);
 
     return Material(
       color: background ?? theme.colorScheme.surfaceContainer,
@@ -344,8 +344,8 @@ class _HomeTileGridState extends State<HomeTileGrid> {
     // на цвета приложения из настроек (решение пользователя), а не
     // только обычные Filled/ElevatedButton.
     final personalization = context.watch<PersonalizationViewModel>();
-    final bg = personalization.appButtonColor ?? cs.surfaceContainerHigh;
-    final fg = personalization.appButtonTextColor ?? cs.primary;
+    final bg = personalization.appButtonFor(cs.brightness) ?? cs.surfaceContainerHigh;
+    final fg = personalization.appButtonTextFor(cs.brightness) ?? cs.primary;
     // Вдавливание — только у "живой" плитки на месте, не у теней
     // перетаскивания (elevated — палец уже держит её приподнятой).
     final pressed = !elevated && _pressedId == id;
