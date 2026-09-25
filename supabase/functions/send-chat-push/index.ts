@@ -106,6 +106,27 @@ async function sendCallPush(token: string, title: string, body: string, contactI
   });
 }
 
+// Обычное сообщение: на Android — ДАННЫМИ (приложение само рисует
+// уведомление с фото отправителя и значком приложения, см.
+// showMessageNotification в push_service.dart); на iOS/вебе — обычное
+// уведомление, как раньше.
+async function sendMessagePush(token: string, title: string, body: string, contactId: string) {
+  const accessToken = await getAccessToken();
+  await fetch(`https://fcm.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/messages:send`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message: {
+        token,
+        data: { type: 'msg', title, body: body.slice(0, 500), contact_id: contactId },
+        android: { priority: 'high' },
+        apns: { payload: { aps: { alert: { title, body } } } },
+        webpush: { notification: { title, body } },
+      },
+    }),
+  });
+}
+
 // ---- Обработчик webhook'а ----
 
 Deno.serve(async (req: Request) => {
@@ -224,11 +245,8 @@ Deno.serve(async (req: Request) => {
 
   const title = senderNickname ?? 'Личное сообщение';
   const body = preview(row);
-  // type/contact_id — чтобы тап по уведомлению открывал именно этот чат
-  // (см. PushService._handleTap), а не просто главный экран приложения.
-  const data = { type: 'chat', contact_id: senderId };
 
-  await Promise.all(tokens.map((t) => sendPush(t, title, body, data).catch(() => {})));
+  await Promise.all(tokens.map((t) => sendMessagePush(t, title, body, senderId).catch(() => {})));
 
   return new Response('ok');
 });

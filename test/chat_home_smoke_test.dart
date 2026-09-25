@@ -40,6 +40,15 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Иван Петров'), findsOneWidget);
     expect(find.text('Без истории'), findsOneWidget);
+    // шторка слева → Контакты
+    await tester.tap(find.byTooltip('Open navigation menu'));
+    await tester.pumpAndSettle();
+    expect(find.text('Код: AAAA-BBBB'), findsOneWidget);
+    await tester.tap(find.text('Контакты'));
+    await tester.pumpAndSettle();
+    expect(find.text('Клуб Динамо'), findsWidgets);
+    await tester.tapAt(const Offset(10, 10)); // закрыть лист
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Иван Петров'));
     await tester.pumpAndSettle(const Duration(milliseconds: 100), EnginePhase.sendSemanticsUpdate, const Duration(seconds: 2));
     expect(tester.takeException(), isNull);

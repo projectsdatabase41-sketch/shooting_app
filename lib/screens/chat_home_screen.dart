@@ -299,6 +299,36 @@ class _ChatContactsView extends StatelessWidget {
     }
   }
 
+  /// Все контакты по алфавиту (и те, с кем ещё не переписывались).
+  void _openContacts(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.sizeOf(ctx).height * 0.7,
+          child: contacts.isEmpty
+              ? const EmptyState(icon: Icons.people_outline, text: 'Контактов пока нет — добавьте по коду')
+              : ListView(
+                  children: [
+                    for (final c in contacts)
+                      ListTile(
+                        leading: ChatAvatar(base64: c.avatarBase64, nickname: c.nickname),
+                        title: Text(c.nickname, overflow: TextOverflow.ellipsis),
+                        subtitle: c.about.isEmpty ? null : Text(c.about, overflow: TextOverflow.ellipsis),
+                        onTap: () {
+                          Navigator.of(ctx).pop();
+                          onOpenThread(c);
+                        },
+                      ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
   static String _time(DateTime t) {
     final now = DateTime.now();
     if (t.year == now.year && t.month == now.month && t.day == now.day) return DateFormat.Hm().format(t);
@@ -319,44 +349,91 @@ class _ChatContactsView extends StatelessWidget {
         if (tb == null) return -1;
         return tb.compareTo(ta);
       });
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Мессенджер'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            tooltip: 'Настройки',
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => ChatSettingsScreen(
-                auth: auth,
-                repo: repo,
-                sync: sync,
-                prefs: prefs,
-                db: db,
-                onChanged: onContactsChanged,
-              ),
-            )),
+    void openSettings() => Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => ChatSettingsScreen(
+            auth: auth,
+            repo: repo,
+            sync: sync,
+            prefs: prefs,
+            db: db,
+            onChanged: onContactsChanged,
           ),
-        ],
+        ));
+    return Scaffold(
+      appBar: AppBar(title: const Text('Мессенджер')),
+      // Шторка слева, как в Telegram: профиль, контакты, настройки.
+      drawer: Drawer(
+        child: SafeArea(
+          child: ListView(
+            padding: EdgeInsets.zero,
+            children: [
+              InkWell(
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _editProfile(context);
+                },
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ChatAvatar(base64: auth.avatarBase64, nickname: auth.nickname, radius: 32),
+                      const SizedBox(height: 12),
+                      Text(auth.nickname, style: theme.textTheme.titleMedium, overflow: TextOverflow.ellipsis),
+                      if (auth.about.isNotEmpty)
+                        Text(auth.about, style: theme.textTheme.bodySmall, overflow: TextOverflow.ellipsis),
+                      Text('Код: ${auth.chatCode}', style: theme.textTheme.bodySmall),
+                    ],
+                  ),
+                ),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.people_outline),
+                title: const Text('Контакты'),
+                trailing: Text('${contacts.length}'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _openContacts(context);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.person_add_alt_outlined),
+                title: const Text('Добавить по коду'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _addContact(context);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.settings_outlined),
+                title: const Text('Настройки'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  openSettings();
+                },
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.logout),
+                title: const Text('Выйти из чата'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  auth.signOutLocally();
+                  onContactsChanged();
+                },
+              ),
+            ],
+          ),
+        ),
       ),
       floatingActionButton: FloatingActionButton(
         tooltip: 'Добавить по коду',
         onPressed: () => _addContact(context),
-        child: const Icon(Icons.person_add_alt_outlined),
+        child: const Icon(Icons.edit_outlined),
       ),
       body: Column(
         children: [
-          ListTile(
-            leading: ChatAvatar(base64: auth.avatarBase64, nickname: auth.nickname, radius: 24),
-            title: Text(auth.nickname, overflow: TextOverflow.ellipsis),
-            subtitle: Text(
-              auth.about.isNotEmpty ? auth.about : 'Код: ${auth.chatCode}',
-              overflow: TextOverflow.ellipsis,
-            ),
-            trailing: const Icon(Icons.edit_outlined, size: 18),
-            onTap: () => _editProfile(context),
-          ),
-          const Divider(height: 1),
           Expanded(
             child: sorted.isEmpty
                 ? const EmptyState(

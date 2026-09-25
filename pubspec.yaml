@@ -81,6 +81,7 @@ flutter:
   assets:
     - lib/db/local_schema.sql
     - lib/db/puls_install.sql
+    - assets/icon/badge.png
 
 flutter_launcher_icons:
   android: true

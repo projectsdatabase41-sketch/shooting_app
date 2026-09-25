@@ -4,11 +4,14 @@ import 'dart:typed_data';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
 
 import 'chat_auth_service.dart';
+import '../logic/notification_avatar.dart';
 import 'chat_settings.dart';
+import 'db_opener.dart';
 import 'firebase_settings.dart';
 
 /// Куда открыть чат по тапу на уведомление — общий чат или переписка с
@@ -53,6 +56,7 @@ class PushService {
   const PushService(this.auth);
 
   static const String callChannelId = 'coach_call';
+  static const String messageChannelId = 'chat_messages';
 
   /// ponytail: один слот на "текущий вызов" — если позвонят двое подряд,
   /// второе уведомление заменит первое, а не встанет в очередь. Для
@@ -117,6 +121,13 @@ class PushService {
     _tapHandlingRegistered = true;
     final initial = await messaging.getInitialMessage();
     if (initial != null) _handleTap(initial);
+    // Приложение запущено тапом по НАШЕМУ уведомлению (сообщение с фото
+    // или «Позвать») — открыть нужный чат.
+    if (_isAndroid) {
+      final launch = await _localNotifications.getNotificationAppLaunchDetails();
+      final resp = launch?.notificationResponse;
+      if (launch?.didNotificationLaunchApp == true && resp != null) _onNotificationAction(resp);
+    }
     FirebaseMessaging.onMessageOpenedApp.listen(_handleTap);
   }
 
@@ -194,6 +205,14 @@ Future<void> _initLocalNotifications() async {
     const InitializationSettings(android: AndroidInitializationSettings('@mipmap/ic_launcher')),
     onDidReceiveNotificationResponse: _onNotificationAction,
   );
+  await _localNotifications
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(const AndroidNotificationChannel(
+        PushService.messageChannelId,
+        'Сообщения',
+        description: 'Новые сообщения в личных чатах',
+        importance: Importance.high,
+      ));
   final channel = AndroidNotificationChannel(
     PushService.callChannelId,
     'Позвать',
@@ -255,6 +274,48 @@ Future<void> showCallNotification(Map<String, dynamic> data) async {
   );
 }
 
+/// Обычное сообщение (Android): приходит ДАННЫМИ (`type: 'msg'`, см.
+/// send-chat-push), чтобы вместо значка приложения показать фото
+/// отправителя с маленьким значком приложения в углу. Фото берём из
+/// локальных контактов — в push оно не влезает (лимит 4 КБ).
+Future<void> showMessageNotification(Map<String, dynamic> data) async {
+  final contactId = '${data['contact_id'] ?? ''}';
+  Uint8List? icon;
+  try {
+    final badge = (await rootBundle.load('assets/icon/badge.png')).buffer.asUint8List();
+    icon = composeNotificationAvatar(await _contactAvatar(contactId), badge);
+  } catch (_) {}
+  await _localNotifications.show(
+    contactId.hashCode & 0x3fffffff, // одно уведомление на собеседника, новые его обновляют
+    '${data['title'] ?? 'Сообщение'}',
+    '${data['body'] ?? ''}',
+    NotificationDetails(
+      android: AndroidNotificationDetails(
+        PushService.messageChannelId,
+        'Сообщения',
+        importance: Importance.high,
+        priority: Priority.high,
+        category: AndroidNotificationCategory.message,
+        largeIcon: icon == null ? null : ByteArrayAndroidBitmap(icon),
+      ),
+    ),
+    payload: contactId,
+  );
+}
+
+/// Фото собеседника из локальной базы — отдельным коротким подключением
+/// только на чтение: фоновый изолят не должен запускать миграции.
+Future<String?> _contactAvatar(String contactId) async {
+  if (contactId.isEmpty) return null;
+  final db = await openAppDatabase();
+  try {
+    final rows = db.select('SELECT avatar_base64 FROM chat_contacts WHERE id = ?', [contactId]);
+    return rows.isEmpty ? null : rows.first['avatar_base64'] as String?;
+  } finally {
+    db.close();
+  }
+}
+
 /// Обработчик push, пока приложение полностью закрыто/в фоне.
 ///
 /// Обычные сообщения Android показывает сам по `notification`-полю —
@@ -267,8 +328,13 @@ Future<void> showCallNotification(Map<String, dynamic> data) async {
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   if (!FirebaseSettings.isConfigured) return;
   await Firebase.initializeApp(options: PushService._options);
-  if (PushService._isAndroid && message.data['type'] == 'call') {
+  if (!PushService._isAndroid) return;
+  final type = message.data['type'];
+  if (type == 'call') {
     await _initLocalNotifications();
     await showCallNotification(message.data);
+  } else if (type == 'msg') {
+    await _initLocalNotifications();
+    await showMessageNotification(message.data);
   }
 }
