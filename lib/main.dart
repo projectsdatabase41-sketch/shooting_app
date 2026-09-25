@@ -15,6 +15,7 @@ import 'services/knowledge_service.dart';
 import 'services/local_db_service.dart';
 import 'services/push_service.dart';
 import 'services/remote_config.dart';
+import 'local_ai/local_ai_platform.dart';
 import 'services/supabase_auth_service.dart';
 import 'state/ai_chat_view_model.dart';
 import 'state/app_data_store.dart';
@@ -53,6 +54,8 @@ Future<void> main() async {
   }
   RemoteConfig.loadCached(db);
   RemoteConfig.refresh(db); // в фоне, без ожидания
+  // Фоновая загрузка модели ИИ, прерванная закрытием приложения, продолжится сама.
+  if (localAiSupported) initModelDownloads().catchError((_) {});
   runApp(ShootingApp(db: db));
 }
 

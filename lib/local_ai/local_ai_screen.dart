@@ -10,7 +10,6 @@ import 'local_ai_platform.dart';
 /// Идущие загрузки живут дольше экрана: закрыли настройки — качается дальше.
 class _Downloads {
   static final Map<String, ValueNotifier<double>> progress = {};
-  static final Set<String> cancelled = {};
 }
 
 /// Настройки локальной модели (режим разработчика): режим работы, выбор и
@@ -43,6 +42,11 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
     final free = await freeDiskBytes(await modelsDir());
     for (final m in localModelCatalog) {
       _installed[m.id] = await LocalAi.installedPath(m) != null;
+      // Загрузка шла, пока экран был закрыт (или приложение перезапускали)
+      // — подключаемся к ней, чтобы снова показать прогресс.
+      if (_installed[m.id] != true && !_Downloads.progress.containsKey(m.id) && await modelDownloadActive(m.id)) {
+        _resume(m);
+      }
     }
     if (mounted) {
       setState(() {
@@ -77,7 +81,7 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
           'Размер ${_gb(m.sizeBytes)} с huggingface.co. Лучше по Wi-Fi — мобильный трафик может стоить денег.'
           '${free != null && free < m.sizeBytes * 1.1 ? '\n\nСвободного места мало: ${_gb(free)}.' : ''}'
           '${_ramGb != null && _ramGb! + 0.5 < m.minRamGb ? '\n\nНужно от ${m.minRamGb} ГБ ОЗУ, у устройства ${_ramGb!.toStringAsFixed(1)} — может работать медленно или закрываться.' : ''}'
-          '\n\nЗагрузку можно прервать: потом она продолжится с того же места.',
+          '\n\nКачается в фоне с уведомлением — приложение можно закрыть. Пауза продолжится с того же места.',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Отмена')),
@@ -86,17 +90,24 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
       ),
     );
     if (ok != true || !mounted) return;
+    await _startDownload(m);
+  }
+
+  Future<void> _startDownload(LocalModelInfo m) async {
+    if (!mounted) return;
     final note = _Downloads.progress[m.id] = ValueNotifier(0);
-    _Downloads.cancelled.remove(m.id);
     setState(() {});
     final messenger = ScaffoldMessenger.of(context);
     try {
       final path = p.join(await modelsDir(), m.fileName);
-      await downloadResumable(
-        Uri.parse(m.url),
-        path,
-        onProgress: (got, total) => note.value = got / (total > 0 ? total : m.sizeBytes),
-        cancelled: () => _Downloads.cancelled.contains(m.id),
+      // Системный фоновый загрузчик: качает и при закрытом приложении,
+      // с уведомлением; обрыв сети — продолжит сам.
+      await downloadModel(
+        id: m.id,
+        url: m.url,
+        fileName: m.fileName,
+        displayName: m.name,
+        onProgress: (v) => note.value = v,
       );
       note.value = -1; // проверка целостности
       if (await sha256OfFile(path) != m.sha256) {
@@ -114,6 +125,8 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
       await _refresh();
     }
   }
+
+  void _resume(LocalModelInfo m) => _startDownload(m);
 
   Future<void> _delete(LocalModelInfo m) async {
     await LocalAi.instance.unload();
@@ -260,7 +273,7 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
                   IconButton(
                     tooltip: 'Приостановить',
                     icon: const Icon(Icons.pause_outlined),
-                    onPressed: () => _Downloads.cancelled.add(m.id),
+                    onPressed: () => pauseModelDownload(m.id),
                   ),
                 if (installed) ...[
                   IconButton(

@@ -12,10 +12,14 @@ Future<int?> freeDiskBytes(String dir) async => null;
 int fileLength(String path) => 0;
 Future<void> deleteFile(String path) async {}
 Future<String> sha256OfFile(String path) async => throw UnsupportedError('web');
-Future<void> downloadResumable(
-  Uri url,
-  String path, {
-  required void Function(int got, int total) onProgress,
-  required bool Function() cancelled,
+Future<void> initModelDownloads() async {}
+Future<void> downloadModel({
+  required String id,
+  required String url,
+  required String fileName,
+  required String displayName,
+  required void Function(double progress) onProgress,
 }) async =>
     throw UnsupportedError('web');
+Future<void> pauseModelDownload(String id) async {}
+Future<bool> modelDownloadActive(String id) async => false;

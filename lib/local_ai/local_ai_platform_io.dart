@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:isolate';
 
+import 'package:background_downloader/background_downloader.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -66,43 +67,92 @@ Future<void> deleteFile(String path) async {
 Future<String> sha256OfFile(String path) =>
     Isolate.run(() async => (await sha256.bind(File(path).openRead()).first).toString());
 
-/// Скачивание с докачкой: недокачанное лежит в `<path>.part`, обрыв сети
-/// или закрытие приложения не теряют уже скачанное.
-Future<void> downloadResumable(
-  Uri url,
-  String path, {
-  required void Function(int got, int total) onProgress,
-  required bool Function() cancelled,
+/// Системный фоновый загрузчик: уведомление с прогрессом, продолжает
+/// качать после закрытия приложения, сам возобновляется после обрыва сети
+/// или лимита Android (allowPause). Вызвать один раз при запуске.
+bool _downloadsReady = false;
+
+Future<void> initModelDownloads() async {
+  if (_downloadsReady) return;
+  _downloadsReady = true;
+  FileDownloader().configureNotification(
+    running: const TaskNotification('Загрузка модели ИИ', '{displayName} — {progress}'),
+    complete: const TaskNotification('Модель ИИ загружена', '{displayName}'),
+    error: const TaskNotification('Загрузка модели не удалась', '{displayName}'),
+    paused: const TaskNotification('Загрузка модели на паузе', '{displayName}'),
+    progressBar: true,
+  );
+  // trackTasks — чтобы состояние загрузки пережило перезапуск приложения.
+  await FileDownloader().trackTasks();
+  await FileDownloader().start();
+}
+
+DownloadTask _task(String id, String url, String fileName, String displayName) => DownloadTask(
+      taskId: 'model-$id',
+      url: url,
+      filename: fileName,
+      baseDirectory: BaseDirectory.applicationSupport,
+      directory: 'models',
+      displayName: displayName,
+      updates: Updates.statusAndProgress,
+      allowPause: true,
+      retries: 10,
+    );
+
+/// Скачивает модель в папку [modelsDir]. Если загрузка уже идёт в фоне
+/// (например, начата до перезапуска приложения) — подключается к ней.
+/// Бросает [DownloadCancelled] при паузе/отмене, исключение — при ошибке.
+Future<void> downloadModel({
+  required String id,
+  required String url,
+  required String fileName,
+  required String displayName,
+  required void Function(double progress) onProgress,
 }) async {
-  final part = File('$path.part');
-  var have = await part.exists() ? await part.length() : 0;
-  final client = HttpClient();
-  try {
-    final req = await client.getUrl(url);
-    if (have > 0) req.headers.set(HttpHeaders.rangeHeader, 'bytes=$have-');
-    final res = await req.close();
-    if (res.statusCode != 416) {
-      // 416 — «диапазон за концом файла»: всё уже скачано.
-      if (res.statusCode == 200) {
-        have = 0; // сервер не умеет докачку — начинаем заново
-      } else if (res.statusCode != 206) {
-        throw HttpException('Сервер ответил ${res.statusCode}');
-      }
-      final total = have + (res.contentLength > 0 ? res.contentLength : 0);
-      final sink = part.openWrite(mode: have == 0 ? FileMode.write : FileMode.append);
-      try {
-        await for (final chunk in res) {
-          if (cancelled()) throw const DownloadCancelled();
-          sink.add(chunk);
-          have += chunk.length;
-          onProgress(have, total);
-        }
-      } finally {
-        await sink.close();
-      }
-    }
-  } finally {
-    client.close(force: true);
+  await initModelDownloads();
+  final task = _task(id, url, fileName, displayName);
+  final existing = await FileDownloader().database.recordForId(task.taskId);
+  final TaskStatusUpdate result;
+  if (existing != null && existing.status == TaskStatus.paused) {
+    await FileDownloader().resume(existing.task as DownloadTask);
+    result = await _waitFor(task.taskId, onProgress);
+  } else if (existing != null && (existing.status == TaskStatus.running || existing.status == TaskStatus.enqueued)) {
+    result = await _waitFor(task.taskId, onProgress);
+  } else {
+    result = await FileDownloader().download(task, onProgress: (p) => onProgress(p < 0 ? 0 : p));
   }
-  await part.rename(path);
+  switch (result.status) {
+    case TaskStatus.complete:
+      return;
+    case TaskStatus.paused:
+    case TaskStatus.canceled:
+      throw const DownloadCancelled();
+    default:
+      throw HttpException(result.exception?.description ?? 'загрузка не удалась (${result.status.name})');
+  }
+}
+
+/// Ждёт окончания уже идущей фоновой загрузки, опрашивая её запись.
+Future<TaskStatusUpdate> _waitFor(String taskId, void Function(double) onProgress) async {
+  while (true) {
+    await Future<void>.delayed(const Duration(seconds: 1));
+    final r = await FileDownloader().database.recordForId(taskId);
+    if (r == null) return TaskStatusUpdate(_task('x', '', '', ''), TaskStatus.failed);
+    if (r.progress >= 0) onProgress(r.progress);
+    if (r.status.isFinalState || r.status == TaskStatus.paused) return TaskStatusUpdate(r.task, r.status);
+  }
+}
+
+/// Пауза фоновой загрузки (продолжится с того же места).
+Future<void> pauseModelDownload(String id) async {
+  await initModelDownloads();
+  final r = await FileDownloader().database.recordForId('model-$id');
+  if (r != null) await FileDownloader().pause(r.task as DownloadTask);
+}
+
+/// Идёт ли сейчас загрузка этой модели (в том числе начатая до перезапуска).
+Future<bool> modelDownloadActive(String id) async {
+  await initModelDownloads();
+  final r = await FileDownloader().database.recordForId('model-$id');
+  return r != null && (r.status == TaskStatus.running || r.status == TaskStatus.enqueued);
 }
