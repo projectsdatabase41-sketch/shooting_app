@@ -11,6 +11,15 @@
          CameraController, поэтому RECORD_AUDIO не запрашивается. -->
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
+    <!-- Аудио- и видеозвонки в мессенджере (WebRTC). Разрешения на микрофон
+         и камеру спрашиваются в момент первого звонка. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+    <!-- Входящий звонок на весь экран, даже при заблокированном телефоне. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-feature android:name="android.hardware.microphone" android:required="false"/>
 
     <application
         android:label="Pusl"

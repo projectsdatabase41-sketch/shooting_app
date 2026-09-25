@@ -8,6 +8,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
 
+import 'call_service.dart';
 import 'chat_auth_service.dart';
 import '../logic/notification_avatar.dart';
 import 'chat_settings.dart';
@@ -31,6 +32,21 @@ class PushChatTarget {
 /// открыть" одна и та же, и владеет ей корневой виджет (`main.dart`),
 /// у которого есть доступ к `Navigator`.
 void Function(PushChatTarget target)? pushChatTapHandler;
+
+/// Звонящий отменил вызов до ответа — погасить экран входящего.
+void Function(String callId)? incomingCallEndHandler;
+
+/// Убрать уведомление входящего звонка (приняли/отклонили на экране).
+Future<void> cancelIncomingCallNotification() async {
+  if (!PushService._isAndroid) return;
+  try {
+    await _localNotifications.cancel(PushService._incomingCallNotificationId);
+  } catch (_) {}
+}
+
+/// Входящий звонок: открыть экран звонка ([accepted] — уже нажали «Принять»
+/// в уведомлении). Задаёт корень приложения (`main.dart`).
+void Function(Map<String, dynamic> data, {required bool accepted})? incomingCallHandler;
 
 bool _tapHandlingRegistered = false;
 
@@ -57,6 +73,7 @@ class PushService {
 
   static const String callChannelId = 'coach_call';
   static const String messageChannelId = 'chat_messages';
+  static const int _incomingCallNotificationId = 9002;
 
   /// ponytail: один слот на "текущий вызов" — если позвонят двое подряд,
   /// второе уведомление заменит первое, а не встанет в очередь. Для
@@ -110,6 +127,16 @@ class PushService {
     // пока приложение открыто, новое "Позвать" и так почти сразу
     // покажет опрос (10-20с), отдельно тут его не дублируем.
     if (_isAndroid && message.data['type'] == 'call') showCallNotification(message.data);
+    // Приложение открыто — сразу экран входящего звонка, плюс рингтон
+    // уведомлением (иначе звонок был бы беззвучным).
+    if (message.data['type'] == 'call_in') {
+      if (_isAndroid) showIncomingCallNotification(message.data);
+      incomingCallHandler?.call(message.data, accepted: false);
+    }
+    if (message.data['type'] == 'call_end') {
+      cancelIncomingCallNotification();
+      incomingCallEndHandler?.call('${message.data['call_id']}');
+    }
   }
 
   /// Тап на уведомление должен открыть ИМЕННО тот чат, откуда сообщение,
@@ -166,6 +193,8 @@ class PushService {
   Future<void> _saveToken(String token) async {
     final freshToken = await auth.ensureFreshToken();
     if (freshToken == null) return;
+    // Тот же токен — серверу звонков (Cloudflare), чтобы дозвониться до закрытого приложения.
+    CallService(auth).registerDevice(token).catchError((_) {});
     final client = http.Client();
     try {
       await client
@@ -236,6 +265,17 @@ final Int64List _callVibrationPattern = Int64List.fromList([0, 800, 400, 800, 40
 void _onNotificationAction(NotificationResponse response) {
   if (response.actionId == 'decline') {
     _localNotifications.cancel(PushService._callNotificationId);
+    return;
+  }
+  // Входящий звонок: payload — JSON с данными звонка.
+  final payload = response.payload ?? '';
+  if (payload.startsWith('{')) {
+    _localNotifications.cancel(PushService._incomingCallNotificationId);
+    if (response.actionId == 'call_decline') return; // звонящий увидит «не отвечает»
+    try {
+      final data = Map<String, dynamic>.from(jsonDecode(payload) as Map);
+      incomingCallHandler?.call(data, accepted: response.actionId == 'call_accept');
+    } catch (_) {}
     return;
   }
   // Тап по телу уведомления (не по кнопке "Сбросить") — открыть чат со
@@ -316,6 +356,34 @@ Future<String?> _contactAvatar(String contactId) async {
   }
 }
 
+/// Входящий звонок, когда приложение свёрнуто или закрыто: уведомление на
+/// весь экран (как у обычной звонилки) с кнопками «Принять»/«Отклонить».
+Future<void> showIncomingCallNotification(Map<String, dynamic> data) async {
+  final video = data['video'] == '1';
+  await _localNotifications.show(
+    PushService._incomingCallNotificationId,
+    '${data['name'] ?? 'Звонок'}',
+    video ? 'Входящий видеозвонок' : 'Входящий звонок',
+    const NotificationDetails(
+      android: AndroidNotificationDetails(
+        PushService.callChannelId,
+        'Позвать',
+        importance: Importance.max,
+        priority: Priority.max,
+        category: AndroidNotificationCategory.call,
+        fullScreenIntent: true,
+        ongoing: true,
+        timeoutAfter: 45000,
+        actions: [
+          AndroidNotificationAction('call_decline', 'Отклонить', cancelNotification: true),
+          AndroidNotificationAction('call_accept', 'Принять', showsUserInterface: true, cancelNotification: true),
+        ],
+      ),
+    ),
+    payload: jsonEncode(data),
+  );
+}
+
 /// Обработчик push, пока приложение полностью закрыто/в фоне.
 ///
 /// Обычные сообщения Android показывает сам по `notification`-полю —
@@ -336,5 +404,22 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   } else if (type == 'msg') {
     await _initLocalNotifications();
     await showMessageNotification(message.data);
+  } else if (type == 'call_in') {
+    await _initLocalNotifications();
+    await showIncomingCallNotification(message.data);
+  } else if (type == 'call_end') {
+    // Звонящий сдался, а трубку так и не взяли — «пропущенный».
+    await _initLocalNotifications();
+    await _localNotifications.cancel(PushService._incomingCallNotificationId);
+    await _localNotifications.show(
+      '${message.data['from']}'.hashCode & 0x3fffffff,
+      'Пропущенный звонок',
+      'Нажмите, чтобы открыть переписку',
+      const NotificationDetails(
+        android: AndroidNotificationDetails(PushService.messageChannelId, 'Сообщения',
+            importance: Importance.high, category: AndroidNotificationCategory.missedCall),
+      ),
+      payload: '${message.data['from']}',
+    );
   }
 }

@@ -15,6 +15,7 @@ import '../logic/chat_media_utils.dart';
 import '../models/chat_contact.dart';
 import '../models/chat_message.dart';
 import '../services/ai_service.dart';
+import '../services/call_session.dart';
 import '../services/ai_settings.dart';
 import '../services/chat_auth_service.dart';
 import '../services/chat_messages_repository.dart';
@@ -31,6 +32,7 @@ import '../widgets/chat_quick_menu.dart';
 import '../widgets/chat_reply_bar.dart';
 import '../widgets/empty_state.dart';
 import 'attachment_compose_screen.dart';
+import 'call_screen.dart';
 import 'chat_group_screen.dart';
 import 'photo_viewer_screen.dart';
 
@@ -369,6 +371,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     }
   }
 
+  /// Аудио- или видеозвонок собеседнику (сервер звонков — Cloudflare).
+  void _call(bool video) {
+    if (CallSession.current != null) return;
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => CallScreen(
+        session: CallSession.outgoing(widget.auth, peerId: _contact.id, peerName: _contact.nickname, video: video),
+        avatarBase64: _contact.avatarBase64,
+        repo: widget.repo,
+      ),
+    )).then((_) => _reload()); // запись о звонке в переписке
+  }
+
   Future<void> _openGroupInfo() async {
     final result = await Navigator.of(context).push<String>(MaterialPageRoute(
       builder: (_) => ChatGroupInfoScreen(auth: widget.auth, repo: widget.repo, sync: widget.sync, group: _contact),
@@ -669,6 +683,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
           // держать настройки конкретного контакта здесь, тут же со
           // временем появятся остальные).
           actions: [
+            if (!_contact.isGroup) ...[
+              IconButton(icon: const Icon(Icons.call_outlined), tooltip: 'Звонок', onPressed: () => _call(false)),
+              IconButton(icon: const Icon(Icons.videocam_outlined), tooltip: 'Видеозвонок', onPressed: () => _call(true)),
+            ],
             PopupMenuButton<String>(
               onSelected: (v) {
                 switch (v) {

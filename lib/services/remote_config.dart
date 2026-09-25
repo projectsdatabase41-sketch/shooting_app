@@ -56,6 +56,15 @@ class RemoteConfig {
     return 'https://${u.host}';
   }
 
+  /// Адрес сервера звонков — только https на *.workers.dev.
+  static String? get callsUrl {
+    final v = _get('calls', 'url');
+    if (v is! String) return null;
+    final u = Uri.tryParse(v);
+    if (u == null || u.scheme != 'https' || !u.host.endsWith('.workers.dev') || u.path.length > 1) return null;
+    return 'https://${u.host}';
+  }
+
   static String? get chatAnonKey {
     final v = _get('chat', 'anonKey');
     return v is String && (v.startsWith('sb_publishable_') || v.startsWith('eyJ')) ? v : null;

@@ -6,6 +6,7 @@ import 'logic/ai_context.dart';
 import 'services/ai_memory_service.dart';
 import 'services/ai_service.dart';
 import 'services/ai_settings.dart';
+import 'services/call_session.dart';
 import 'services/chat_auth_service.dart';
 import 'services/chat_messages_repository.dart';
 import 'services/chat_preferences.dart';
@@ -21,6 +22,7 @@ import 'state/ai_chat_view_model.dart';
 import 'state/app_data_store.dart';
 import 'state/personalization_view_model.dart';
 import 'screens/chat_home_screen.dart';
+import 'screens/call_screen.dart';
 import 'screens/chat_thread_screen.dart';
 import 'screens/home_shell.dart';
 import 'theme/app_theme.dart';
@@ -132,6 +134,11 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
     // и getInitialMessage() внутри PushService.init() тоже. Если чат ещё
     // не настроен или пользователь не входил — init() сам ничего не делает.
     pushChatTapHandler = _openChatFromPush;
+    incomingCallHandler = _openIncomingCall;
+    incomingCallEndHandler = (callId) {
+      final c = CallSession.current;
+      if (c != null && c.callId == callId) c.cancelledByCaller();
+    };
     final chatAuth = ChatAuthService(widget.db);
     if (chatAuth.isSignedIn) PushService(chatAuth).init();
 
@@ -168,6 +175,38 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
   /// первое сообщение от ещё незнакомого контакта успело завести его
   /// локально (см. `ChatSyncService.pollIncoming`), иначе для чужого
   /// открылся бы список контактов вместо самой переписки.
+  /// Входящий звонок (push или кнопка «Принять» в уведомлении).
+  void _openIncomingCall(Map<String, dynamic> data, {required bool accepted}) {
+    final nav = navigatorKey.currentState;
+    final auth = ChatAuthService(widget.db);
+    if (nav == null || !auth.isSignedIn) return;
+    final busy = CallSession.current;
+    if (busy != null) {
+      if (busy.callId == data['call_id']) return; // тот же звонок (push + уведомление)
+      // Уже разговариваем — второму звонящему «занято».
+      CallSession.incoming(auth, callId: '${data['call_id']}', peerId: '${data['from']}', peerName: '', video: false)
+          .rejectBusy();
+      return;
+    }
+    final from = '${data['from'] ?? ''}';
+    final contact = ChatMessagesRepository(widget.db).contactById(from);
+    final session = CallSession.incoming(
+      auth,
+      callId: '${data['call_id']}',
+      peerId: from,
+      peerName: contact?.nickname ?? '${data['name'] ?? 'Собеседник'}',
+      video: data['video'] == '1',
+    );
+    nav.push(MaterialPageRoute(
+      builder: (_) => CallScreen(
+        session: session,
+        avatarBase64: contact?.avatarBase64,
+        autoAccept: accepted,
+        repo: ChatMessagesRepository(widget.db),
+      ),
+    ));
+  }
+
   Future<void> _openChatFromPush(PushChatTarget target) async {
     final nav = navigatorKey.currentState;
     if (nav == null) return;
