@@ -85,6 +85,8 @@ flutter:
     - lib/db/local_schema.sql
     - lib/db/puls_install.sql
     - assets/icon/badge.png
+    # Встроенные словари интерфейса (en/de/zh), см. lib/i18n/i18n.dart.
+    - assets/i18n/
 
 flutter_launcher_icons:
   android: true

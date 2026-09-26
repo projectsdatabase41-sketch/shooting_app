@@ -12,6 +12,7 @@ import '../services/ai_settings.dart';
 import '../services/custom_services_repository.dart';
 import '../services/knowledge_column_discovery.dart';
 import '../services/supabase_auth_service.dart';
+import '../i18n/i18n.dart';
 import '../state/app_data_store.dart';
 import '../state/home_tabs_view_model.dart';
 import '../state/personalization_view_model.dart';
@@ -54,8 +55,8 @@ class SettingsScreen extends StatelessWidget {
         children: [
           ListTile(
             leading: const Icon(Icons.palette_outlined),
-            title: const Text('Внешний вид'),
-            subtitle: const Text('Язык, цвета и тема интерфейса'),
+            title: Text(tr('Внешний вид')),
+            subtitle: Text(tr('Язык, цвета и тема интерфейса')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const SettingsAppearanceScreen()),
@@ -63,8 +64,8 @@ class SettingsScreen extends StatelessWidget {
           ),
           ListTile(
             leading: const Icon(Icons.auto_awesome_outlined),
-            title: const Text('ИИ Ассистент'),
-            subtitle: const Text('Облачный ИИ, свой API Key, модели'),
+            title: Text(tr('ИИ Ассистент')),
+            subtitle: Text(tr('Облачный ИИ, свой API Key, модели')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const AiSettingsScreen()),
@@ -72,8 +73,8 @@ class SettingsScreen extends StatelessWidget {
           ),
           ListTile(
             leading: const Icon(Icons.storage_outlined),
-            title: const Text('Данные и синхронизация'),
-            subtitle: const Text('Импорт, экспорт, облако, доступ тренерам'),
+            title: Text(tr('Данные и синхронизация')),
+            subtitle: Text(tr('Импорт, экспорт, облако, доступ тренерам')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const SettingsDataScreen()),
@@ -81,8 +82,8 @@ class SettingsScreen extends StatelessWidget {
           ),
           ListTile(
             leading: const Icon(Icons.dashboard_customize_outlined),
-            title: const Text('Рабочие пространства'),
-            subtitle: const Text('Какие вкладки показывать на главном экране и в каком порядке'),
+            title: Text(tr('Рабочие пространства')),
+            subtitle: Text(tr('Какие вкладки показывать на главном экране и в каком порядке')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => SettingsHomeTabsScreen(specs: specs, tabs: homeTabs)),
@@ -90,8 +91,8 @@ class SettingsScreen extends StatelessWidget {
           ),
           ListTile(
             leading: const Icon(Icons.extension_outlined),
-            title: const Text('Сервисы'),
-            subtitle: const Text('Google Диск, Supabase, заметки и другие свои плитки'),
+            title: Text(tr('Сервисы')),
+            subtitle: Text(tr('Google Диск, Supabase, заметки и другие свои плитки')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => SettingsServicesScreen(repo: services)),
@@ -105,11 +106,11 @@ class SettingsScreen extends StatelessWidget {
           // По умолчанию — всегда спортсмен; включили — стали тренером,
           // это единственная и исключающая пара, не два флага сразу.
           SwitchListTile(
-            title: const Text('Режим тренера'),
+            title: Text(tr('Режим тренера')),
             subtitle: Text(
               store.workMode == WorkMode.coach
-                  ? 'Тренер — свои тренировки не ведёте, только дневники подключённых спортсменов'
-                  : 'Спортсмен — обычный режим',
+                  ? tr('Тренер — свои тренировки не ведёте, только дневники подключённых спортсменов')
+                  : tr('Спортсмен — обычный режим'),
             ),
             value: store.workMode == WorkMode.coach,
             onChanged: (v) {
@@ -153,13 +154,13 @@ class _AccountTile extends StatelessWidget {
 
     return ListTile(
       leading: Icon(signedIn ? Icons.cloud_done_outlined : Icons.cloud_off_outlined),
-      title: const Text('Учётная запись'),
+      title: Text(tr('Учётная запись')),
       subtitle: Text(
         signedIn
             ? auth.email
             : auth.hasBase
-                ? 'База указана, вход не выполнен'
-                : 'Своя база Supabase не подключена',
+                ? tr('База указана, вход не выполнен')
+                : tr('Своя база Supabase не подключена'),
       ),
       trailing: const Icon(Icons.chevron_right),
       onTap: () => showModalBottomSheet<void>(
@@ -726,7 +727,7 @@ class _HiddenDevModeToggleState extends State<_HiddenDevModeToggle> {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: _onTap,
-      child: const Text('Настройки'),
+      child: Text(tr('Настройки')),
     );
   }
 }

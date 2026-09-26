@@ -24,6 +24,7 @@ import 'state/personalization_view_model.dart';
 import 'screens/chat_home_screen.dart';
 import 'screens/call_screen.dart';
 import 'screens/chat_thread_screen.dart';
+import 'i18n/i18n.dart';
 import 'screens/home_shell.dart';
 import 'theme/app_theme.dart';
 
@@ -122,12 +123,28 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
   late final AiChatViewModel _aiChat;
 
 
+  String? _appliedLocale;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _store = AppDataStore(widget.db)..loadAll();
     _personalization = PersonalizationViewModel(widget.db)..loadFromDb();
+    // Язык интерфейса: словарь подгружается при старте и при смене языка,
+    // после чего всё приложение пересобирается (ключ MaterialApp).
+    _appliedLocale = _personalization.localeCode;
+    I18n.apply(widget.db, _appliedLocale).then((_) {
+      if (mounted) setState(() {});
+    });
+    _personalization.addListener(() {
+      final code = _personalization.localeCode;
+      if (code == _appliedLocale) return;
+      _appliedLocale = code;
+      I18n.apply(widget.db, code).then((_) {
+        if (mounted) setState(() {});
+      });
+    });
 
     // Холодный старт по тапу на push (уже вошедшего в чат пользователя) —
     // ChatHomeScreen мог ещё ни разу не открыться в этой сессии, значит
@@ -269,6 +286,7 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
         builder: (context, data, _) {
           final (themeMode, (lightBg, lightButton, lightText), (darkBg, darkButton, darkText)) = data;
           return MaterialApp(
+          key: ValueKey(I18n.code),
           navigatorKey: navigatorKey,
           title: 'Pusl',
           debugShowCheckedModeBanner: false,
