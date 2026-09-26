@@ -114,7 +114,9 @@ class _HomeShellState extends State<HomeShell> {
     _lastMode = store.workMode;
 
     return AnimatedBuilder(
-      animation: tabs,
+      // И сервисы тоже: переименование не меняет набор вкладок (id те же),
+      // а подпись плитки должна обновиться сразу.
+      animation: Listenable.merge([tabs, _services]),
       builder: (context, _) {
         // Режим "плитки" (решение пользователя) — один рабочий стол,
         // вкладки открываются отдельным экраном по тапу, а не в этом же
