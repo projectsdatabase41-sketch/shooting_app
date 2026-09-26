@@ -768,12 +768,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         if (_replyingTo != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: ChatReplyBar(
-                preview: ChatSyncService.previewOf(_replyingTo!),
-                onCancel: () => setState(() => _replyingTo = null),
-              ),
+            child: ChatReplyBar(
+              title: _replyingTo!.direction == ChatMessageDirection.outgoing
+                  ? 'Ответ себе'
+                  : 'Ответ ${_contact.isGroup ? (_contact.member(_replyingTo!.senderId ?? '')?.nickname ?? '') : _contact.nickname}',
+              preview: ChatSyncService.previewOf(_replyingTo!),
+              onCancel: () => setState(() => _replyingTo = null),
             ),
           ),
         SafeArea(
@@ -786,6 +786,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
               children: [
                 Expanded(
                   child: GlassPill(
+                    radius: 25, // постоянное — многострочный текст не раздувает скругление
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
@@ -917,7 +918,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                                 reverse: true,
                                 padding: EdgeInsets.fromLTRB(12, _selecting ? 12 : topInset, 12, _barHeight + 8),
                                 itemCount: _messages.length,
-                                itemBuilder: (context, i) => _item(_messages[_messages.length - 1 - i]),
+                                itemBuilder: (context, i) {
+                                  final idx = _messages.length - 1 - i;
+                                  final m = _messages[idx];
+                                  final item = _item(m);
+                                  // Первое сообщение дня — плашка с датой над ним (как в Telegram).
+                                  if (idx > 0 && _sameDay(_messages[idx - 1].createdAt, m.createdAt)) return item;
+                                  return Column(children: [_dayChip(m.createdAt), item]);
+                                },
                               ),
                         Positioned(
                           right: 12,
@@ -966,6 +974,48 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       ),
     );
   }
+
+  static bool _sameDay(DateTime a, DateTime b) {
+    final x = a.toLocal(), y = b.toLocal();
+    return x.year == y.year && x.month == y.month && x.day == y.day;
+  }
+
+  static const _months = [
+    'января',
+    'февраля',
+    'марта',
+    'апреля',
+    'мая',
+    'июня',
+    'июля',
+    'августа',
+    'сентября',
+    'октября',
+    'ноября',
+    'декабря',
+  ];
+
+  /// «Сегодня» / «Вчера» / «26 сентября» (другой год — «26 сентября 2025»).
+  static String dayLabel(DateTime t, DateTime now) {
+    final d = DateTime(t.year, t.month, t.day);
+    final today = DateTime(now.year, now.month, now.day);
+    final diff = today.difference(d).inDays;
+    if (diff == 0) return 'Сегодня';
+    if (diff == 1) return 'Вчера';
+    final base = '${t.day} ${_months[t.month - 1]}';
+    return t.year == now.year ? base : '$base ${t.year}';
+  }
+
+  Widget _dayChip(DateTime t) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Center(
+          child: GlassPill(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+            child: Text(dayLabel(t.toLocal(), DateTime.now()),
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600)),
+          ),
+        ),
+      );
 
   Widget _item(ChatMessage m) {
     final selected = _selected.contains(m.id);

@@ -367,6 +367,7 @@ class _AiChatBodyState extends State<_AiChatBody> {
           children: [
             Expanded(
               child: GlassPill(
+                radius: 25,
                 padding: const EdgeInsets.symmetric(horizontal: 18),
                 child: TextField(
                   controller: _input,

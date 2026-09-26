@@ -500,7 +500,8 @@ class _ChatContactsView extends StatelessWidget {
                 : ValueListenableBuilder(
                     valueListenable: ChatPresence.seen,
                     builder: (context, _, __) => ListView.builder(
-                      padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + GlassHeader.height),
+                      // Контекст здесь внутри тела Scaffold — высота шапки уже в padding.top.
+                      padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top),
                       itemCount: sorted.length,
                       itemBuilder: (context, i) {
                         final c = sorted[i];
