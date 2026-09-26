@@ -16,6 +16,7 @@ import '../services/ai_settings.dart';
 import '../services/shot_photo_service.dart';
 import '../state/app_data_store.dart';
 import 'camera_scan_screen.dart';
+import 'shot_review_screen.dart';
 
 /// Функции для `compute()` — обязаны быть верхнеуровневыми: изолят видит
 /// только сам код функции и переданный ей аргумент, никаких замыканий.
@@ -358,6 +359,19 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
         _error = 'ИИ не нашёл пробоин. Можно подровнять круг или добавить точку вручную кнопкой ниже.';
       }
     });
+    if (_candidates.isNotEmpty) await _reviewOnTarget();
+  }
+
+  /// Выстрелы от ИИ — сразу на схеме мишени, без подгонки круга: круг уже
+  /// найден автоматически. «ОК» — в тренировку; «Отмена» — остаёмся на
+  /// фото с кругом и точками, как в обычном режиме (поправить вручную).
+  Future<void> _reviewOnTarget() async {
+    final result = await Navigator.of(context).push<List<PixelPoint>>(MaterialPageRoute(
+      builder: (_) => ShotReviewScreen(face: widget.face, shotsMm: _candidatesToConfirm.map(_toMm).toList()),
+    ));
+    if (result == null || !mounted) return;
+    _confirmedMm.addAll(result);
+    _finish();
   }
 
   PixelPoint _toMm(Offset px) => pixelToMmEllipse(
