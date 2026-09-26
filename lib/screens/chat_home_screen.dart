@@ -427,6 +427,12 @@ class _ChatContactsView extends StatelessWidget {
         ),
         title: Text('Мессенджер', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
+          // Поиск по нику (и коду) среди всех участников мессенджера.
+          GlassCircleButton(
+            icon: const Icon(Icons.search),
+            tooltip: 'Найти по нику',
+            onTap: () => _openDirectory(context),
+          ),
           GlassCircleButton(
             icon: const BoldIcon(Icons.close),
             tooltip: 'Свернуть мессенджер',

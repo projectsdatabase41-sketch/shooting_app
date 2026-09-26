@@ -1,5 +1,4 @@
 import '../local_ai/local_ai_screen.dart';
-import '../state/personalization_view_model.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -456,7 +455,8 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
               style: theme.textTheme.bodySmall,
             ),
           ],
-          if (context.watch<PersonalizationViewModel>().devMode) ...[
+          // Справочные материалы — для всех (решение пользователя).
+          ...[
             const SizedBox(height: 24),
             const SectionHeader(
               title: 'Справочные материалы',

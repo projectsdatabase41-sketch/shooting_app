@@ -313,7 +313,7 @@ class _ChatDirectoryScreenState extends State<ChatDirectoryScreen> {
             child: SearchBar(
               controller: _search,
               autoFocus: true,
-              hintText: 'Имя или код контакта',
+              hintText: 'Ник или код контакта',
               leading: const Icon(Icons.search),
               onChanged: (_) {
                 _debounce?.cancel();
