@@ -92,13 +92,18 @@ void main() {
     localReply = '{"ok": true}';
   });
 
-  test('без режима разработчика или с выключенным режимом — только облако', () async {
-    for (final s in [await _settings(dev: false), await _settings(mode: 'off')]) {
-      final (ai, cloud) = _service(s, 'облако');
-      await ask(ai, task: 'note_create', json: true);
-      expect(cloud[0], 1);
-    }
+  test('выключенный режим — только облако; режим разработчика больше не нужен', () async {
+    final off = await _settings(mode: 'off');
+    final (ai, cloud) = _service(off, 'облако');
+    await ask(ai, task: 'note_create', json: true);
+    expect(cloud[0], 1);
     expect(localCalls, 0);
+
+    final noDev = await _settings(dev: false);
+    final (ai2, cloud2) = _service(noDev, 'облако');
+    await ask(ai2, task: 'note_create', json: true);
+    expect(localCalls, 1);
+    expect(cloud2[0], 0);
   });
 
   test('сбой движка → облако', () async {
