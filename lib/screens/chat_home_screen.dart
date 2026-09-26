@@ -515,6 +515,9 @@ class _ChatContactsView extends StatelessWidget {
                           if (who.isNotEmpty) sub = '$who: $sub';
                         }
                         return ListTile(
+                          // Ниже стандартной строки на ~15% (решение пользователя).
+                          visualDensity: const VisualDensity(vertical: -1),
+                          minVerticalPadding: 2,
                           leading: ChatAvatar(
                             base64: c.avatarBase64,
                             nickname: c.nickname,
