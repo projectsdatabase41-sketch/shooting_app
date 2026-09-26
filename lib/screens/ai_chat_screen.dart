@@ -20,6 +20,7 @@ import '../widgets/ai_chart_view.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/glass_pill.dart';
 import '../widgets/raised_3d_button.dart';
+import '../i18n/i18n.dart';
 
 /// Чат с ассистентом по результатам стрельбы.
 ///
@@ -84,7 +85,7 @@ class AiChatScreen extends StatelessWidget {
           // Код в подпись обязательно: пользователь спрашивает
           // «а по упражнению 234», и это именно код, а не название.
           // Без него модель просто не находит, о чём речь.
-          exerciseNameOf: exerciseNameOfOverride ?? (s) => store.exerciseFor(s)?.label ?? 'без упражнения',
+          exerciseNameOf: exerciseNameOfOverride ?? (s) => store.exerciseFor(s)?.label ?? tr('без упражнения'),
           coachMode: coachMode,
         ));
     return _AiChatBody(embedded: embedded, coachMode: coachMode);
@@ -165,11 +166,11 @@ class _AiChatBodyState extends State<_AiChatBody> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
-        title: Text('Ассистент', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        title: Text(tr('Ассистент'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
           GlassCircleButton(
             icon: const Icon(Icons.delete_sweep_outlined),
-            tooltip: 'Очистить разговор',
+            tooltip: tr('Очистить разговор'),
             onTap: vm.messages.isEmpty ? null : vm.clear,
           ),
         ],
@@ -191,9 +192,9 @@ class _AiChatBodyState extends State<_AiChatBody> {
 
   Widget _buildChat(AiChatViewModel vm) {
     if (vm.messages.isEmpty) {
-      return const EmptyState(
+      return EmptyState(
         icon: Icons.forum_outlined,
-        text: 'ИИ ассистент',
+        text: tr('ИИ ассистент'),
       );
     }
     return ListView.builder(
@@ -288,7 +289,7 @@ class _AiChatBodyState extends State<_AiChatBody> {
     vm.markExerciseCreated(index);
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text('Упражнение «${ex.name}» создано')));
+      ..showSnackBar(SnackBar(content: Text(tr('Упражнение «{name}» создано', {'name': ex.name}))));
   }
 
   /// Сохраняет заметку, которую предложил ассистент, в дневник тренера —
@@ -306,7 +307,7 @@ class _AiChatBodyState extends State<_AiChatBody> {
     vm.markNoteCreated(index);
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(content: Text('Заметка сохранена в дневник')));
+      ..showSnackBar(SnackBar(content: Text(tr('Заметка сохранена в дневник'))));
   }
 
   /// Правка своего вопроса перед повторной отправкой (пункт 6 списка
@@ -317,13 +318,13 @@ class _AiChatBodyState extends State<_AiChatBody> {
     final text = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Изменить вопрос'),
+        title: Text(tr('Изменить вопрос')),
         content: TextField(controller: controller, autofocus: true, minLines: 1, maxLines: 6),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr('Отмена'))),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
-            child: const Text('Спросить заново'),
+            child: Text(tr('Спросить заново')),
           ),
         ],
       ),
@@ -344,7 +345,7 @@ class _AiChatBodyState extends State<_AiChatBody> {
       vm.markFeedbackSent(index);
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(const SnackBar(content: Text('Отзыв отправлен, спасибо')));
+        ..showSnackBar(SnackBar(content: Text(tr('Отзыв отправлен, спасибо'))));
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context)
@@ -379,13 +380,13 @@ class _AiChatBodyState extends State<_AiChatBody> {
                   // Enter — перевод строки, а не отправка (решение
                   // пользователя): сообщение уходит только по кнопке.
                   textInputAction: TextInputAction.newline,
-                  decoration: const InputDecoration(
-                    hintText: 'Вопрос по стрельбе',
+                  decoration: InputDecoration(
+                    hintText: tr('Вопрос по стрельбе'),
                     border: InputBorder.none,
                     enabledBorder: InputBorder.none,
                     focusedBorder: InputBorder.none,
                     filled: false,
-                    contentPadding: EdgeInsets.symmetric(vertical: 14),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                 ),
               ),
@@ -518,7 +519,7 @@ class _Bubble extends StatelessWidget {
               if (message.sources.isNotEmpty) ...[
                 const SizedBox(height: 6),
                 Text(
-                  'Источники: ${message.sources.join(', ')}',
+                  tr('Источники: {p}', {'p': message.sources.join(', ')}),
                   style: theme.textTheme.labelSmall?.copyWith(color: fg.withValues(alpha: 0.75)),
                 ),
               ],
@@ -541,14 +542,14 @@ class _Bubble extends StatelessWidget {
                       TextButton.icon(
                         onPressed: onRetry,
                         icon: const Icon(Icons.refresh, size: 16),
-                        label: const Text('Повторить'),
+                        label: Text(tr('Повторить')),
                         style: TextButton.styleFrom(foregroundColor: fg, visualDensity: VisualDensity.compact),
                       ),
                     if (onDelete != null)
                       TextButton.icon(
                         onPressed: onDelete,
                         icon: const Icon(Icons.delete_outline, size: 16),
-                        label: const Text('Удалить'),
+                        label: Text(tr('Удалить')),
                         style: TextButton.styleFrom(foregroundColor: fg, visualDensity: VisualDensity.compact),
                       ),
                   ],
@@ -571,8 +572,8 @@ class _Bubble extends StatelessWidget {
             if (onRetry != null)
               ListTile(
                 leading: const Icon(Icons.refresh),
-                title: const Text('Спросить заново'),
-                subtitle: const Text('Ассистент забудет прежний вопрос и ответ'),
+                title: Text(tr('Спросить заново')),
+                subtitle: Text(tr('Ассистент забудет прежний вопрос и ответ')),
                 onTap: () {
                   Navigator.of(ctx).pop();
                   onRetry!();
@@ -581,7 +582,7 @@ class _Bubble extends StatelessWidget {
             if (onEdit != null)
               ListTile(
                 leading: const Icon(Icons.edit_outlined),
-                title: const Text('Изменить'),
+                title: Text(tr('Изменить')),
                 onTap: () {
                   Navigator.of(ctx).pop();
                   onEdit!();
@@ -590,7 +591,7 @@ class _Bubble extends StatelessWidget {
             if (onDelete != null)
               ListTile(
                 leading: const Icon(Icons.delete_outline),
-                title: const Text('Удалить'),
+                title: Text(tr('Удалить')),
                 onTap: () {
                   Navigator.of(ctx).pop();
                   onDelete!();
@@ -659,7 +660,7 @@ class _ExerciseProposalCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 2),
               child: Text(
-                '${spec['total_shots']} выстрелов по ${spec['series_size']}',
+                tr('{p} выстрелов по {p2}', {'p': spec['total_shots'], 'p2': spec['series_size']}),
                 style: theme.textTheme.bodySmall,
               ),
             ),
@@ -669,14 +670,14 @@ class _ExerciseProposalCard extends StatelessWidget {
               children: [
                 Icon(Icons.check_circle, size: 18, color: cs.primary),
                 const SizedBox(width: 6),
-                Text('Создано', style: theme.textTheme.bodySmall?.copyWith(color: cs.primary)),
+                Text(tr('Создано'), style: theme.textTheme.bodySmall?.copyWith(color: cs.primary)),
               ],
             )
           else
             Raised3DButton(
               dense: true,
               icon: Icons.add,
-              label: 'Создать упражнение',
+              label: tr('Создать упражнение'),
               baseColor: cs.primary,
               onTap: onCreate,
             ),
@@ -726,14 +727,14 @@ class _NoteProposalCard extends StatelessWidget {
               children: [
                 Icon(Icons.check_circle, size: 18, color: cs.primary),
                 const SizedBox(width: 6),
-                Text('Сохранено', style: theme.textTheme.bodySmall?.copyWith(color: cs.primary)),
+                Text(tr('Сохранено'), style: theme.textTheme.bodySmall?.copyWith(color: cs.primary)),
               ],
             )
           else
             Raised3DButton(
               dense: true,
               icon: Icons.add,
-              label: 'Сохранить в дневник',
+              label: tr('Сохранить в дневник'),
               baseColor: cs.primary,
               onTap: onSave,
             ),
@@ -772,7 +773,7 @@ class _FeedbackProposalCard extends StatelessWidget {
             children: [
               Icon(Icons.rate_review_outlined, size: 18, color: cs.primary),
               const SizedBox(width: 6),
-              const Text('Отзыв о приложении', style: TextStyle(fontWeight: FontWeight.w600)),
+              Text(tr('Отзыв о приложении'), style: const TextStyle(fontWeight: FontWeight.w600)),
             ],
           ),
           const SizedBox(height: 4),
@@ -783,14 +784,14 @@ class _FeedbackProposalCard extends StatelessWidget {
               children: [
                 Icon(Icons.check_circle, size: 18, color: cs.primary),
                 const SizedBox(width: 6),
-                Text('Отправлено', style: theme.textTheme.bodySmall?.copyWith(color: cs.primary)),
+                Text(tr('Отправлено'), style: theme.textTheme.bodySmall?.copyWith(color: cs.primary)),
               ],
             )
           else
             Raised3DButton(
               dense: true,
               icon: Icons.send,
-              label: 'Отправить отзыв',
+              label: tr('Отправить отзыв'),
               baseColor: cs.primary,
               onTap: onSend,
             ),
@@ -864,7 +865,7 @@ class _ReasoningBlockState extends State<_ReasoningBlock> {
                 Icon(Icons.lightbulb_outline, size: 15, color: muted),
                 const SizedBox(width: 6),
                 Text(
-                  'Завершено размышление',
+                  tr('Завершено размышление'),
                   style: theme.textTheme.labelMedium?.copyWith(color: muted),
                 ),
                 Icon(_open ? Icons.expand_more : Icons.chevron_right, size: 18, color: muted),

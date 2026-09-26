@@ -13,7 +13,7 @@ class SettingsAppearanceScreen extends StatelessWidget {
 
   static String _label(String? code) => switch (code) {
         null => tr('Системный'),
-        'ru' => 'Русский',
+        'ru' => tr('Русский'),
         _ => I18n.builtIn[code] ?? I18n.downloadable[code] ?? code,
       };
 

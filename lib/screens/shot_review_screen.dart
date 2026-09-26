@@ -9,6 +9,7 @@ import '../models/shot.dart';
 import '../models/target_face.dart';
 import '../painters/target_painter.dart';
 import '../state/personalization_view_model.dart';
+import '../i18n/i18n.dart';
 
 /// Проверка выстрелов, найденных ИИ на фото, — сразу на схеме мишени, без
 /// подгонки круга. Перетащить — поправить; выбранный — удалить. «ОК» возвращает точки (мм от центра), «Отмена» — null.
@@ -65,14 +66,13 @@ class _ShotReviewScreenState extends State<ShotReviewScreen> {
     ];
     final total = _mm.fold<double>(0, (a, mm) => a + _score(mm));
     return Scaffold(
-      appBar: AppBar(title: Text('Найдено выстрелов: ${_mm.length}')),
+      appBar: AppBar(title: Text(tr('Найдено выстрелов: {length}', {'length': _mm.length}))),
       body: Column(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: Text(
-              'Проверьте: перетащите выстрел, если стоит не там; лишний — выберите и удалите. '
-              'Сумма: ${total.toStringAsFixed(1)}',
+              tr('Проверьте: перетащите выстрел, если стоит не там; лишний — выберите и удалите. Сумма: {p}', {'p': total.toStringAsFixed(1)}),
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
@@ -116,7 +116,7 @@ class _ShotReviewScreenState extends State<ShotReviewScreen> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
               child: Row(
                 children: [
-                  OutlinedButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Отмена')),
+                  OutlinedButton(onPressed: () => Navigator.of(context).pop(), child: Text(tr('Отмена'))),
                   const SizedBox(width: 8),
                   if (_selected != null)
                     OutlinedButton.icon(
@@ -125,14 +125,14 @@ class _ShotReviewScreenState extends State<ShotReviewScreen> {
                         _selected = null;
                       }),
                       icon: const Icon(Icons.delete_outline),
-                      label: Text('Удалить ${_score(_mm[_selected!]).toStringAsFixed(1)}'),
+                      label: Text(tr('Удалить {p}', {'p': _score(_mm[_selected!]).toStringAsFixed(1)})),
                     ),
                   const Spacer(),
                   FilledButton(
                     onPressed: _mm.isEmpty
                         ? null
                         : () => Navigator.of(context).pop([for (final mm in _mm) PixelPoint(mm.dx, mm.dy)]),
-                    child: const Text('ОК'),
+                    child: Text(tr('ОК')),
                   ),
                 ],
               ),

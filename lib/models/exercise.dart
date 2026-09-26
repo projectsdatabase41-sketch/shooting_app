@@ -1,4 +1,5 @@
 import 'series_spec.dart';
+import '../i18n/i18n.dart';
 
 enum ExerciseGender { male, female, mixed }
 
@@ -31,7 +32,7 @@ class Exercise {
   ///
   /// Кода у упражнения больше нет: он дублировал название, и в списках
   /// выходило «234 234» либо голое «234» без смысла.
-  String get label => isDeleted ? '$name (удалено)' : name;
+  String get label => isDeleted ? tr('{name} (удалено)', {'name': name}) : name;
 
   /// Описание серии по её номеру (нумерация с единицы). За пределами
   /// списка — `null`: серия обычная, идёт в зачёт.

@@ -8,6 +8,7 @@ import 'add_shot_dialog.dart';
 import 'favorites_sheet.dart';
 import 'shot_actions_sheet.dart';
 import 'trash_sheet.dart';
+import '../i18n/i18n.dart';
 
 /// Шторка списка выстрелов (раздел 5 ТЗ) — 85% высоты экрана. Наверху:
 /// корзина/избранное (бейджи, открывают отдельные списки — решение
@@ -82,10 +83,10 @@ class _ShotListSheetState extends State<ShotListSheet> {
                         // явно — иначе непонятно, почему её сумма не
                         // сходится с итогом тренировки.
                         [
-                          vm.exercise.specFor(seriesNo)?.name ?? 'Серия $seriesNo',
-                          '${seriesShots.length} выстр.',
+                          vm.exercise.specFor(seriesNo)?.name ?? tr('Серия {seriesNo}', {'seriesNo': seriesNo}),
+                          tr('{length} выстр.', {'length': seriesShots.length}),
                           'Σ ${sum.toStringAsFixed(1)}',
-                          if (!vm.exercise.countsSeries(seriesNo)) 'без зачёта',
+                          if (!vm.exercise.countsSeries(seriesNo)) tr('без зачёта'),
                         ].join(' · '),
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
@@ -189,7 +190,7 @@ class _Header extends StatelessWidget {
               isLabelVisible: vm.session.trash.isNotEmpty,
               child: IconButton(
                 icon: const Icon(Icons.delete_sweep_outlined),
-                tooltip: 'Корзина',
+                tooltip: tr('Корзина'),
                 onPressed: () => TrashSheet.show(context),
               ),
             ),
@@ -198,14 +199,14 @@ class _Header extends StatelessWidget {
             isLabelVisible: favoritesCount > 0,
             child: IconButton(
               icon: const Icon(Icons.star_border),
-              tooltip: 'Избранное',
+              tooltip: tr('Избранное'),
               onPressed: () => FavoritesSheet.show(context),
             ),
           ),
           if (vm.canEditShots)
             IconButton(
               icon: const Icon(Icons.add),
-              tooltip: 'Добавить выстрел',
+              tooltip: tr('Добавить выстрел'),
               onPressed: () => AddShotDialog.show(context),
             ),
           const Spacer(),

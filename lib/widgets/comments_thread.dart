@@ -11,6 +11,7 @@ import '../state/app_data_store.dart';
 import '../state/target_view_model.dart';
 import 'glass_pill.dart';
 import 'messenger_bubble.dart';
+import '../i18n/i18n.dart';
 
 /// Лента комментариев — НЕ перезаписываемое поле, а лента записей с
 /// автором и временем (раздел 7 ТЗ, часть C.3 логики-спека). Доступна на
@@ -123,7 +124,7 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
             child: comments.isEmpty
                 ? Center(
                     child: Text(
-                        widget.level == CommentLevel.coach ? 'Переписки с тренером пока нет' : 'Комментариев пока нет'),
+                        widget.level == CommentLevel.coach ? tr('Переписки с тренером пока нет') : tr('Комментариев пока нет')),
                   )
                 // Как в мессенджере: свои справа, собеседника слева, новые
                 // внизу (лента перевёрнута и прижата к полю ввода).
@@ -163,7 +164,7 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
                       minLines: 1,
                       maxLines: 4,
                       decoration: InputDecoration(
-                        hintText: widget.level == CommentLevel.coach ? 'Сообщение тренеру…' : 'Написать комментарий…',
+                        hintText: widget.level == CommentLevel.coach ? tr('Сообщение тренеру…') : tr('Написать комментарий…'),
                         border: InputBorder.none,
                         enabledBorder: InputBorder.none,
                         focusedBorder: InputBorder.none,
@@ -176,7 +177,7 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
                 const SizedBox(width: 8),
                 GlassCircleButton(
                   size: 50,
-                  tooltip: 'Отправить',
+                  tooltip: tr('Отправить'),
                   color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.85),
                   icon: Icon(Icons.send, color: Theme.of(context).colorScheme.onPrimary),
                   onTap: () {
@@ -216,7 +217,7 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
           children: [
             ListTile(
               leading: const Icon(Icons.copy_outlined),
-              title: const Text('Копировать'),
+              title: Text(tr('Копировать')),
               onTap: () {
                 Navigator.of(ctx).pop();
                 Clipboard.setData(ClipboardData(text: c.text));
@@ -225,7 +226,7 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
             if (mine)
               ListTile(
                 leading: const Icon(Icons.edit_outlined),
-                title: const Text('Изменить'),
+                title: Text(tr('Изменить')),
                 onTap: () {
                   Navigator.of(ctx).pop();
                   _editComment(context, repo, c);
@@ -233,16 +234,16 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
               ),
             ListTile(
               leading: Icon(Icons.delete_outline, color: Theme.of(ctx).colorScheme.error),
-              title: Text('Удалить', style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
+              title: Text(tr('Удалить'), style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
               onTap: () async {
                 Navigator.of(ctx).pop();
                 final ok = await showDialog<bool>(
                   context: context,
                   builder: (d) => AlertDialog(
-                    title: const Text('Удалить сообщение?'),
+                    title: Text(tr('Удалить сообщение?')),
                     actions: [
-                      TextButton(onPressed: () => Navigator.of(d).pop(false), child: const Text('Отмена')),
-                      FilledButton(onPressed: () => Navigator.of(d).pop(true), child: const Text('Удалить')),
+                      TextButton(onPressed: () => Navigator.of(d).pop(false), child: Text(tr('Отмена'))),
+                      FilledButton(onPressed: () => Navigator.of(d).pop(true), child: Text(tr('Удалить'))),
                     ],
                   ),
                 );
@@ -262,13 +263,13 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
     final text = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Изменить сообщение'),
+        title: Text(tr('Изменить сообщение')),
         content: TextField(controller: controller, autofocus: true, minLines: 1, maxLines: 6),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr('Отмена'))),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
-            child: const Text('Сохранить'),
+            child: Text(tr('Сохранить')),
           ),
         ],
       ),
@@ -279,9 +280,9 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
   }
 
   String _titleFor(CommentLevel level) => switch (level) {
-        CommentLevel.shot => 'Комментарии к выстрелу',
-        CommentLevel.series => 'Комментарии к серии',
-        CommentLevel.session => 'Комментарии к тренировке',
-        CommentLevel.coach => 'Чат с тренером',
+        CommentLevel.shot => tr('Комментарии к выстрелу'),
+        CommentLevel.series => tr('Комментарии к серии'),
+        CommentLevel.session => tr('Комментарии к тренировке'),
+        CommentLevel.coach => tr('Чат с тренером'),
       };
 }

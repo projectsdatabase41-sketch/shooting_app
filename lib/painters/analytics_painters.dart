@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../logic/shot_analytics.dart';
 import '../models/shot.dart';
 import '../models/target_face.dart';
+import '../i18n/i18n.dart';
 
 /// Три графика разбора стрельбы. Все — свои `CustomPainter` без внешних
 /// библиотек (раздел 5 ТЗ), в одном файле, потому что они всегда
@@ -373,7 +374,7 @@ class SeriesBarsPainter extends CustomPainter {
     }
 
     if (series.isEmpty) {
-      _drawText(canvas, 'Нет серий', Offset(size.width / 2, plotHeight / 2), axisColor, 12,
+      _drawText(canvas, tr('Нет серий'), Offset(size.width / 2, plotHeight / 2), axisColor, 12,
           align: TextAlign.center, centerY: true);
       return;
     }

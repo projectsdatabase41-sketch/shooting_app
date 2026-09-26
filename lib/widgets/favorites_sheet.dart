@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../state/target_view_model.dart';
+import '../i18n/i18n.dart';
 
 /// Список избранных выстрелов текущей тренировки — открывается кнопкой
 /// со звёздочкой в шапке `ShotListSheet` (решение пользователя, пункт 8
@@ -27,16 +28,16 @@ class FavoritesSheet extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Padding(
-            padding: EdgeInsets.all(12),
+          Padding(
+            padding: const EdgeInsets.all(12),
             child: Row(
               children: [
-                Text('Избранное', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                Text(tr('Избранное'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               ],
             ),
           ),
           if (favorites.isEmpty)
-            const Padding(padding: EdgeInsets.all(24), child: Text('Пусто'))
+            Padding(padding: const EdgeInsets.all(24), child: Text(tr('Пусто')))
           else
             ...favorites.map((shot) => ListTile(
                   leading: const Icon(Icons.star, color: Colors.amber),
@@ -44,7 +45,7 @@ class FavoritesSheet extends StatelessWidget {
                   subtitle: Text('X:${shot.xMm.toStringAsFixed(1)} Y:${shot.yMm.toStringAsFixed(1)}'),
                   trailing: IconButton(
                     icon: const Icon(Icons.star_border),
-                    tooltip: 'Убрать из избранного',
+                    tooltip: tr('Убрать из избранного'),
                     onPressed: () => vm.toggleFavorite(shot.id),
                   ),
                   onTap: () {

@@ -1,6 +1,7 @@
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
+import '../i18n/i18n.dart';
 
 /// Полупрозрачная «таблетка» с размытием того, что под ней (шапка и поле
 /// ввода переписки). Скругление — половина высоты.
@@ -136,7 +137,7 @@ class GlassHeader extends StatelessWidget implements PreferredSizeWidget {
               leading ??
                   GlassCircleButton(
                     icon: const BoldIcon(Icons.arrow_back),
-                    tooltip: 'Назад',
+                    tooltip: tr('Назад'),
                     onTap: () => Navigator.of(context).maybePop(),
                   ),
               const SizedBox(width: 8),

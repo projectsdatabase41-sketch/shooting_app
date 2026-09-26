@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/series_spec.dart';
 import '../models/target_face.dart';
 import '../state/app_data_store.dart';
+import '../i18n/i18n.dart';
 
 /// Создание упражнения со свободной структурой серий.
 ///
@@ -34,8 +35,8 @@ class _ExerciseEditorScreenState extends State<ExerciseEditorScreen> {
   final _seriesSize = TextEditingController(text: '10');
 
   final List<SeriesSpec> _series = [
-    const SeriesSpec(name: 'Пристрелка', timeLimit: Duration(minutes: 15), counts: false),
-    const SeriesSpec(name: 'Лёжа', shotCount: 10),
+    SeriesSpec(name: tr('Пристрелка'), timeLimit: const Duration(minutes: 15), counts: false),
+    SeriesSpec(name: tr('Лёжа'), shotCount: 10),
   ];
 
   @override
@@ -96,11 +97,11 @@ class _ExerciseEditorScreenState extends State<ExerciseEditorScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Новое упражнение'),
+        title: Text(tr('Новое упражнение')),
         actions: [
           TextButton(
             onPressed: _canSave ? _save : null,
-            child: const Text('СОЗДАТЬ'),
+            child: Text(tr('СОЗДАТЬ')),
           ),
         ],
       ),
@@ -109,14 +110,14 @@ class _ExerciseEditorScreenState extends State<ExerciseEditorScreen> {
         children: [
           TextField(
             controller: _name,
-            decoration: const InputDecoration(labelText: 'Название'),
+            decoration: InputDecoration(labelText: tr('Название')),
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             initialValue: _faceCode,
             isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Мишень'),
+            decoration: InputDecoration(labelText: tr('Мишень')),
             items: [
               for (final f in TargetFace.all)
                 DropdownMenuItem(
@@ -128,9 +129,9 @@ class _ExerciseEditorScreenState extends State<ExerciseEditorScreen> {
           ),
           const SizedBox(height: 20),
           SegmentedButton<bool>(
-            segments: const [
-              ButtonSegment(value: true, label: Text('Одинаковые серии')),
-              ButtonSegment(value: false, label: Text('Своя структура')),
+            segments: [
+              ButtonSegment(value: true, label: Text(tr('Одинаковые серии'))),
+              ButtonSegment(value: false, label: Text(tr('Своя структура'))),
             ],
             selected: {_simple},
             showSelectedIcon: false,
@@ -140,20 +141,18 @@ class _ExerciseEditorScreenState extends State<ExerciseEditorScreen> {
           if (_simple) ...[
             TextField(
               controller: _totalShots,
-              decoration: const InputDecoration(labelText: 'Всего выстрелов'),
+              decoration: InputDecoration(labelText: tr('Всего выстрелов')),
               keyboardType: TextInputType.number,
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _seriesSize,
-              decoration: const InputDecoration(labelText: 'Выстрелов в серии'),
+              decoration: InputDecoration(labelText: tr('Выстрелов в серии')),
               keyboardType: TextInputType.number,
             ),
           ] else ...[
             Text(
-              'Серии идут сверху вниз. Каждая заканчивается либо по числу '
-              'выстрелов, либо по времени. Снятый зачёт означает, что серия '
-              'записывается и видна на мишени, но в сумму и статистику не идёт.',
+              tr('Серии идут сверху вниз. Каждая заканчивается либо по числу выстрелов, либо по времени. Снятый зачёт означает, что серия записывается и видна на мишени, но в сумму и статистику не идёт.'),
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
@@ -169,14 +168,14 @@ class _ExerciseEditorScreenState extends State<ExerciseEditorScreen> {
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: () => setState(() {
-                _series.add(const SeriesSpec(name: 'Стоя', shotCount: 10));
+                _series.add(SeriesSpec(name: tr('Стоя'), shotCount: 10));
               }),
               icon: const Icon(Icons.add),
-              label: const Text('Добавить серию'),
+              label: Text(tr('Добавить серию')),
             ),
             const SizedBox(height: 12),
             Text(
-              'Всего в зачёт: ${_countingShots()} из $_plannedShots выстрелов',
+              tr('Всего в зачёт: {p} из {plannedShots} выстрелов', {'p': _countingShots(), 'plannedShots': _plannedShots}),
               style: theme.textTheme.bodyMedium,
             ),
           ],
@@ -226,8 +225,8 @@ class _SeriesCard extends StatelessWidget {
                 Expanded(
                   child: TextFormField(
                     initialValue: spec.name,
-                    decoration: const InputDecoration(
-                      labelText: 'Название',
+                    decoration: InputDecoration(
+                      labelText: tr('Название'),
                       isDense: true,
                     ),
                     onChanged: (v) => onChanged(spec.copyWith(name: v)),
@@ -236,7 +235,7 @@ class _SeriesCard extends StatelessWidget {
                 if (onRemove != null)
                   IconButton(
                     icon: const Icon(Icons.close),
-                    tooltip: 'Убрать серию',
+                    tooltip: tr('Убрать серию'),
                     onPressed: onRemove,
                   ),
               ],
@@ -246,9 +245,9 @@ class _SeriesCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: SegmentedButton<bool>(
-                    segments: const [
-                      ButtonSegment(value: false, label: Text('Выстрелы')),
-                      ButtonSegment(value: true, label: Text('Время')),
+                    segments: [
+                      ButtonSegment(value: false, label: Text(tr('Выстрелы'))),
+                      ButtonSegment(value: true, label: Text(tr('Время'))),
                     ],
                     selected: {byTime},
                     showSelectedIcon: false,
@@ -275,7 +274,7 @@ class _SeriesCard extends StatelessWidget {
                   : '${spec.shotCount ?? 10}',
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
-                labelText: byTime ? 'Минут' : 'Выстрелов',
+                labelText: byTime ? tr('Минут') : tr('Выстрелов'),
                 isDense: true,
               ),
               onChanged: (v) {
@@ -288,7 +287,7 @@ class _SeriesCard extends StatelessWidget {
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Идёт в зачёт'),
+              title: Text(tr('Идёт в зачёт')),
               value: spec.counts,
               onChanged: (v) => onChanged(spec.copyWith(counts: v)),
             ),

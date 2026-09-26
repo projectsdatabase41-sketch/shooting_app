@@ -9,6 +9,7 @@ import '../widgets/raised_3d_button.dart';
 import '../widgets/swipe_to_delete.dart';
 import 'exercise_editor_screen.dart';
 import 'trainings_history_screen.dart';
+import '../i18n/i18n.dart';
 
 /// Список упражнений-шаблонов (решение пользователя: "Упражнения" и
 /// "Тренировки" объединены визуально в одну плитку) — тап по упражнению
@@ -26,7 +27,7 @@ class ExercisesScreen extends StatelessWidget {
     // а itemBuilder вызывается на каждую строку.
     final list = store.activeExercises;
     return Scaffold(
-      appBar: AppBar(title: const Text('Упражнения')),
+      appBar: AppBar(title: Text(tr('Упражнения'))),
       // На пустом списке кнопка создания уже есть в самом EmptyState —
       // вторая, плавающая, с тем же действием рядом только дублировала
       // её и спорила за внимание. FAB нужен, когда список уже не пуст:
@@ -35,17 +36,17 @@ class ExercisesScreen extends StatelessWidget {
           ? null
           : Raised3DButton(
               icon: Icons.add,
-              label: 'Упражнение',
+              label: tr('Упражнение'),
               baseColor: Theme.of(context).colorScheme.primary,
               onTap: () => _showCreateExerciseDialog(context),
             ),
       body: list.isEmpty
           ? EmptyState(
               icon: Icons.fitness_center,
-              text: 'Упражнений пока нет — приложение стартует полностью пустым.',
+              text: tr('Упражнений пока нет — приложение стартует полностью пустым.'),
               action: Raised3DButton(
                 icon: Icons.add,
-                label: 'Создать первое',
+                label: tr('Создать первое'),
                 baseColor: Theme.of(context).colorScheme.primary,
                 onTap: () => _showCreateExerciseDialog(context),
               ),
@@ -60,11 +61,10 @@ class ExercisesScreen extends StatelessWidget {
                 final used = store.sessions.where((s) => s.exerciseId == ex.id).length;
                 return SwipeToDelete(
                   itemKey: ex.id,
-                  title: 'Удалить упражнение?',
+                  title: tr('Удалить упражнение?'),
                   message: used == 0
-                      ? '«${ex.name}» пропадёт из списка. Тренировок по нему пока нет.'
-                      : '«${ex.name}» пропадёт из списка, но $used ${_sessionsWord(used)} '
-                          'останутся в истории — вместе с названием упражнения.',
+                      ? tr('«{name}» пропадёт из списка. Тренировок по нему пока нет.', {'name': ex.name})
+                      : tr('«{name}» пропадёт из списка, но {used} {p} останутся в истории — вместе с названием упражнения.', {'name': ex.name, 'used': used, 'p': _sessionsWord(used)}),
                   onConfirmed: () => _deleteExercise(context, ex),
                   child: _ExerciseCard(
                     name: ex.name,
@@ -85,11 +85,11 @@ class ExercisesScreen extends StatelessWidget {
   /// Склонение для «3 тренировки останутся».
   static String _sessionsWord(int n) {
     final n100 = n % 100;
-    if (n100 >= 11 && n100 <= 14) return 'тренировок';
+    if (n100 >= 11 && n100 <= 14) return tr('тренировок');
     return switch (n % 10) {
-      1 => 'тренировка',
-      2 || 3 || 4 => 'тренировки',
-      _ => 'тренировок',
+      1 => tr('тренировка'),
+      2 || 3 || 4 => tr('тренировки'),
+      _ => tr('тренировок'),
     };
   }
 
@@ -100,9 +100,9 @@ class ExercisesScreen extends StatelessWidget {
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
       SnackBar(
-        content: Text('Упражнение «${ex.name}» удалено'),
+        content: Text(tr('Упражнение «{name}» удалено', {'name': ex.name})),
         action: SnackBarAction(
-          label: 'Отменить',
+          label: tr('Отменить'),
           onPressed: () => store.restoreExercise(ex.id),
         ),
       ),
@@ -184,8 +184,8 @@ class _ExerciseCard extends StatelessWidget {
                       children: series.isEmpty
                           // Старое упражнение описывается парой чисел.
                           ? [
-                              _MiniChip(text: '$totalShots выстр.'),
-                              _MiniChip(text: 'серия $seriesSize'),
+                              _MiniChip(text: tr('{totalShots} выстр.', {'totalShots': totalShots})),
+                              _MiniChip(text: tr('серия {seriesSize}', {'seriesSize': seriesSize})),
                             ]
                           // У свободной структуры важны сами серии, а не
                           // сумма: «Пристрелка 15 мин · Лёжа 10 · Стоя
@@ -196,7 +196,7 @@ class _ExerciseCard extends StatelessWidget {
                                   text: spec.shotCount != null
                                       ? '${spec.name} ${spec.shotCount}'
                                       : spec.timeLimit != null
-                                          ? '${spec.name} ${spec.timeLimit!.inMinutes} мин'
+                                          ? tr('{name} {p} мин', {'name': spec.name, 'p': spec.timeLimit!.inMinutes})
                                           : spec.name,
                                   muted: !spec.counts,
                                 ),

@@ -21,6 +21,7 @@ import '../widgets/shot_wheel.dart';
 import '../widgets/target_canvas.dart';
 import 'ai_chat_screen.dart';
 import 'photo_scan_screen.dart';
+import '../i18n/i18n.dart';
 
 /// Рабочий стол тренировки.
 ///
@@ -151,26 +152,26 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
             if (vm.zoom != 1.0 || vm.panX != 0 || vm.panY != 0)
               IconButton(
                 icon: const Icon(Icons.zoom_out_map),
-                tooltip: 'Сбросить зум',
+                tooltip: tr('Сбросить зум'),
                 onPressed: vm.resetZoom,
               ),
             if (vm.isFinishedAndLocked)
               IconButton(
                 icon: const Icon(Icons.lock_outline),
-                tooltip: 'Разблокировать правку завершённой тренировки',
+                tooltip: tr('Разблокировать правку завершённой тренировки'),
                 onPressed: () => _confirmUnlockFinished(context, vm),
               ),
             if (vm.canEditShots)
               IconButton(
                 icon: Icon(vm.isEditing ? Icons.remove_red_eye_outlined : Icons.edit_outlined),
-                tooltip: vm.isEditing ? 'Просмотр' : 'Правка',
+                tooltip: vm.isEditing ? tr('Просмотр') : tr('Правка'),
                 onPressed: () => _toggleEditMode(vm),
               ),
             if (vm.session.status == SessionStatus.running || vm.session.status == SessionStatus.paused)
               CallCoachButton(db: context.read<AppDataStore>().db),
             IconButton(
               icon: const Icon(Icons.grid_view),
-              tooltip: 'Страницы',
+              tooltip: tr('Страницы'),
               onPressed: () => _openOverview(context),
             ),
           ],
@@ -263,15 +264,13 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
     final sure = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Разблокировать правку?'),
-        content: const Text(
-          'Тренировка уже завершена. Можно поправить выстрелы задним '
-          'числом — при выходе с экрана будет ещё раз спрошено, '
-          'применить изменения или вернуть как было.',
+        title: Text(tr('Разблокировать правку?')),
+        content: Text(
+          tr('Тренировка уже завершена. Можно поправить выстрелы задним числом — при выходе с экрана будет ещё раз спрошено, применить изменения или вернуть как было.'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Отмена')),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Разблокировать')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr('Отмена'))),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(tr('Разблокировать'))),
         ],
       ),
     );
@@ -374,14 +373,12 @@ class _WorkspaceOverview extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text('Страницы', style: theme.textTheme.titleMedium),
+            child: Text(tr('Страницы'), style: theme.textTheme.titleMedium),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: Text(
-              'Удержать и перетащить — поменять порядок. '
-              'Переключателем справа страница убирается с рабочего стола, '
-              'но не удаляется.',
+              tr('Удержать и перетащить — поменять порядок. Переключателем справа страница убирается с рабочего стола, но не удаляется.'),
               style: theme.textTheme.bodySmall,
             ),
           ),
@@ -396,7 +393,7 @@ class _WorkspaceOverview extends StatelessWidget {
                     child: ListTile(
                       leading: Icon(_iconFor(page)),
                       title: Text(page.title),
-                      subtitle: workspace.isHidden(page) ? const Text('скрыта') : null,
+                      subtitle: workspace.isHidden(page) ? Text(tr('скрыта')) : null,
                       onTap: workspace.isHidden(page)
                           ? null
                           : () {
@@ -499,10 +496,10 @@ class _StatisticsPageState extends State<_StatisticsPage> {
               padding: const EdgeInsets.only(bottom: 12),
               child: DropdownButtonFormField<int>(
                 initialValue: seriesNos.contains(_seriesNo) ? _seriesNo : null,
-                decoration: const InputDecoration(labelText: 'Серия'),
+                decoration: InputDecoration(labelText: tr('Серия')),
                 items: [
-                  const DropdownMenuItem<int>(value: null, child: Text('Все серии')),
-                  for (final n in seriesNos) DropdownMenuItem(value: n, child: Text('Серия $n')),
+                  DropdownMenuItem<int>(value: null, child: Text(tr('Все серии'))),
+                  for (final n in seriesNos) DropdownMenuItem(value: n, child: Text(tr('Серия {n}', {'n': n}))),
                 ],
                 onChanged: (v) => setState(() => _seriesNo = v),
               ),
@@ -515,7 +512,7 @@ class _StatisticsPageState extends State<_StatisticsPage> {
                 ? null
                 : [
                     AnalyticsDynamics(
-                      title: _seriesNo == null ? 'Динамика выстрелов' : 'Динамика серии $_seriesNo',
+                      title: _seriesNo == null ? tr('Динамика выстрелов') : tr('Динамика серии {seriesNo}', {'seriesNo': _seriesNo}),
                       subtitle: '',
                       points: shots,
                       maxY: 10.9,
@@ -548,9 +545,9 @@ class _TrainingControlsBar extends StatelessWidget {
               children: [
                 _buildActionButton(context, vm, status),
                 const SizedBox(width: 12),
-                Text('Общее: ${_fmt(vm.elapsed)}', style: const TextStyle(fontSize: 12)),
+                Text(tr('Общее: {p}', {'p': _fmt(vm.elapsed)}), style: const TextStyle(fontSize: 12)),
                 const SizedBox(width: 12),
-                Text('С посл. выстрела: ${vm.sinceLastShot == null ? '—' : _fmt(vm.sinceLastShot!)}', style: const TextStyle(fontSize: 12)),
+                Text(tr('С посл. выстрела: {p}', {'p': vm.sinceLastShot == null ? '—' : _fmt(vm.sinceLastShot!)}), style: const TextStyle(fontSize: 12)),
               ],
             ),
             const _CurrentSeriesLine(),
@@ -564,21 +561,21 @@ class _TrainingControlsBar extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     switch (status) {
       case SessionStatus.notStarted:
-        return Raised3DButton(dense: true, label: 'Начать', baseColor: cs.primary, onTap: vm.start);
+        return Raised3DButton(dense: true, label: tr('Начать'), baseColor: cs.primary, onTap: vm.start);
       case SessionStatus.running:
         return Row(mainAxisSize: MainAxisSize.min, children: [
-          Raised3DButton(dense: true, label: 'Пауза', baseColor: cs.secondary, onTap: vm.pause),
+          Raised3DButton(dense: true, label: tr('Пауза'), baseColor: cs.secondary, onTap: vm.pause),
           const SizedBox(width: 8),
-          Raised3DButton(dense: true, label: 'Завершить', baseColor: cs.error, onTap: vm.finish),
+          Raised3DButton(dense: true, label: tr('Завершить'), baseColor: cs.error, onTap: vm.finish),
         ]);
       case SessionStatus.paused:
         return Row(mainAxisSize: MainAxisSize.min, children: [
-          Raised3DButton(dense: true, label: 'Продолжить', baseColor: cs.secondary, onTap: vm.resume),
+          Raised3DButton(dense: true, label: tr('Продолжить'), baseColor: cs.secondary, onTap: vm.resume),
           const SizedBox(width: 8),
-          Raised3DButton(dense: true, label: 'Завершить', baseColor: cs.error, onTap: vm.finish),
+          Raised3DButton(dense: true, label: tr('Завершить'), baseColor: cs.error, onTap: vm.finish),
         ]);
       case SessionStatus.finished:
-        return const Text('Завершена', style: TextStyle(fontWeight: FontWeight.bold));
+        return Text(tr('Завершена'), style: const TextStyle(fontWeight: FontWeight.bold));
     }
   }
 
@@ -616,16 +613,16 @@ class _CurrentSeriesLine extends StatelessWidget {
     if (left != null) {
       if (left.isNegative) {
         expired = true;
-        parts.add('время вышло');
+        parts.add(tr('время вышло'));
       } else {
         final m = left.inMinutes.remainder(60).toString().padLeft(2, '0');
         final s = left.inSeconds.remainder(60).toString().padLeft(2, '0');
-        parts.add('осталось ${left.inHours > 0 ? '${left.inHours}:' : ''}$m:$s');
+        parts.add(tr('осталось {p}{m}:{s}', {'p': left.inHours > 0 ? '${left.inHours}:' : '', 'm': m, 's': s}));
       }
     } else if (spec.shotCount != null) {
-      parts.add('выстрел ${vm.shotsInCurrentSeries + 1} из ${spec.shotCount}');
+      parts.add(tr('выстрел {p} из {shotCount}', {'p': vm.shotsInCurrentSeries + 1, 'shotCount': spec.shotCount}));
     }
-    if (!spec.counts) parts.add('без зачёта');
+    if (!spec.counts) parts.add(tr('без зачёта'));
 
     return Padding(
       padding: const EdgeInsets.only(top: 4),
@@ -691,7 +688,7 @@ class _EditActionBar extends StatelessWidget {
                 Raised3DButton(
                   dense: true,
                   icon: Icons.check,
-                  label: 'Сохранить',
+                  label: tr('Сохранить'),
                   baseColor: cs.primary,
                   onTap: vm.confirmEdit,
                 ),
@@ -700,7 +697,7 @@ class _EditActionBar extends StatelessWidget {
                   Raised3DButton(
                     dense: true,
                     icon: Icons.comment_outlined,
-                    label: 'Заметка',
+                    label: tr('Заметка'),
                     baseColor: cs.secondary,
                     onTap: () => CommentsThreadSheet.showForShot(context, existingShot.id),
                   ),
@@ -708,7 +705,7 @@ class _EditActionBar extends StatelessWidget {
                   Raised3DButton(
                     dense: true,
                     icon: Icons.delete_outline,
-                    label: 'Удалить',
+                    label: tr('Удалить'),
                     baseColor: cs.error,
                     onTap: vm.deleteSelected,
                   ),
@@ -717,7 +714,7 @@ class _EditActionBar extends StatelessWidget {
                 Raised3DButton(
                   dense: true,
                   icon: Icons.close,
-                  label: 'Отменить',
+                  label: tr('Отменить'),
                   // Не error: эта кнопка ничего не удаляет и не портит,
                   // просто отбрасывает несохранённую правку — сильный
                   // красный здесь спорил бы с настоящим "Удалить" рядом.
@@ -802,7 +799,7 @@ class _ShotActionBarState extends State<_ShotActionBar> {
             children: [
               Raised3DButton(
                 icon: Icons.add_circle_outline,
-                label: 'Выстрел',
+                label: tr('Выстрел'),
                 baseColor: Theme.of(context).colorScheme.primary,
                 onTap: () {
                   // На паузе позже минутного окна выстрел не добавляется.
@@ -818,7 +815,7 @@ class _ShotActionBarState extends State<_ShotActionBar> {
               const SizedBox(width: 16),
               Raised3DButton(
                 icon: Icons.edit_location_alt_outlined,
-                label: 'Править',
+                label: tr('Править'),
                 baseColor: Theme.of(context).colorScheme.secondary,
                 // Правит ВЫБРАННЫЙ выстрел (см. selectedShot) — не всегда
                 // последний: выбор мог прийти со свайпа по мишени или из
@@ -828,7 +825,7 @@ class _ShotActionBarState extends State<_ShotActionBar> {
               const SizedBox(width: 16),
               Raised3DButton(
                 icon: Icons.photo_camera_outlined,
-                label: 'Фото',
+                label: tr('Фото'),
                 baseColor: Theme.of(context).colorScheme.tertiary,
                 onTap: _scanning ? null : () => _scanPhoto(context, vm),
               ),

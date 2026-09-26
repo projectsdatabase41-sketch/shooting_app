@@ -10,6 +10,7 @@ import '../models/training_session.dart';
 import '../services/session_import.dart';
 import '../state/app_data_store.dart';
 import '../widgets/empty_state.dart';
+import '../i18n/i18n.dart';
 
 enum _Scope { all, exercise, session }
 
@@ -47,10 +48,10 @@ class _ExportScreenState extends State<ExportScreen> {
 
     if (sessions.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Экспорт тренировок')),
-        body: const EmptyState(
+        appBar: AppBar(title: Text(tr('Экспорт тренировок'))),
+        body: EmptyState(
           icon: Icons.ios_share_outlined,
-          text: 'Экспортировать пока нечего — нет ни одной записанной тренировки.',
+          text: tr('Экспортировать пока нечего — нет ни одной записанной тренировки.'),
         ),
       );
     }
@@ -59,23 +60,22 @@ class _ExportScreenState extends State<ExportScreen> {
     final shotCount = selected.fold<int>(0, (a, s) => a + s.shots.length);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Экспорт тренировок')),
+      appBar: AppBar(title: Text(tr('Экспорт тренировок'))),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         children: [
           Text(
-            'Файл в формате приложения — тот же, что понимает импорт: '
-            'подходит для резервной копии и переноса на другое устройство.',
+            tr('Файл в формате приложения — тот же, что понимает импорт: подходит для резервной копии и переноса на другое устройство.'),
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
             child: SegmentedButton<_Scope>(
-              segments: const [
-                ButtonSegment(value: _Scope.all, label: Text('Всё')),
-                ButtonSegment(value: _Scope.exercise, label: Text('Упражнение')),
-                ButtonSegment(value: _Scope.session, label: Text('Тренировка')),
+              segments: [
+                ButtonSegment(value: _Scope.all, label: Text(tr('Всё'))),
+                ButtonSegment(value: _Scope.exercise, label: Text(tr('Упражнение'))),
+                ButtonSegment(value: _Scope.session, label: Text(tr('Тренировка'))),
               ],
               selected: {_scope},
               showSelectedIcon: false,
@@ -88,9 +88,8 @@ class _ExportScreenState extends State<ExportScreen> {
           const SizedBox(height: 16),
           Text(
             selected.isEmpty
-                ? 'Под условия ничего не подходит'
-                : 'К экспорту: ${selected.length} ${_sessionsWord(selected.length)}, '
-                    '$shotCount ${_shotsWord(shotCount)}',
+                ? tr('Под условия ничего не подходит')
+                : tr('К экспорту: {length} {p}, {shotCount} {p2}', {'length': selected.length, 'p': _sessionsWord(selected.length), 'shotCount': shotCount, 'p2': _shotsWord(shotCount)}),
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
@@ -99,7 +98,7 @@ class _ExportScreenState extends State<ExportScreen> {
             icon: _busy
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.ios_share),
-            label: const Text('Экспортировать'),
+            label: Text(tr('Экспортировать')),
           ),
           if (_message != null) ...[
             const SizedBox(height: 12),
@@ -123,7 +122,7 @@ class _ExportScreenState extends State<ExportScreen> {
           DropdownButtonFormField<String>(
             initialValue: current,
             isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Упражнение'),
+            decoration: InputDecoration(labelText: tr('Упражнение')),
             items: [
               for (final e in exercises) DropdownMenuItem(value: e.id, child: Text(e.label, overflow: TextOverflow.ellipsis)),
             ],
@@ -137,7 +136,7 @@ class _ExportScreenState extends State<ExportScreen> {
           DropdownButtonFormField<String>(
             initialValue: current,
             isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Тренировка'),
+            decoration: InputDecoration(labelText: tr('Тренировка')),
             items: [
               for (final s in sessions)
                 DropdownMenuItem(
@@ -161,13 +160,13 @@ class _ExportScreenState extends State<ExportScreen> {
       runSpacing: 8,
       children: [
         ChoiceChip(
-          label: const Text('Всё время'),
+          label: Text(tr('Всё время')),
           selected: _periodDays == null,
           onSelected: (_) => setState(() => _periodDays = null),
         ),
         for (final d in _periods)
           ChoiceChip(
-            label: Text('$d дн.'),
+            label: Text(tr('{d} дн.', {'d': d})),
             selected: _periodDays == d,
             onSelected: (_) => setState(() => _periodDays = d),
           ),
@@ -216,7 +215,7 @@ class _ExportScreenState extends State<ExportScreen> {
       await SharePlus.instance.share(
         ShareParams(
           files: [XFile.fromData(bytes, mimeType: 'application/json', name: name)],
-          subject: 'Экспорт тренировок',
+          subject: tr('Экспорт тренировок'),
         ),
       );
     } catch (e) {
@@ -231,7 +230,7 @@ class _ExportScreenState extends State<ExportScreen> {
     return {
       'exercise': {
         'target_face_code': s.targetFaceCode,
-        'name': exercise?.name ?? 'Без названия',
+        'name': exercise?.name ?? tr('Без названия'),
         'total_shots': exercise?.totalShots ?? s.shots.length,
         'series_size': exercise?.seriesSize ?? s.shots.length,
       },
@@ -256,21 +255,21 @@ class _ExportScreenState extends State<ExportScreen> {
 
   static String _sessionsWord(int n) {
     final n100 = n % 100;
-    if (n100 >= 11 && n100 <= 14) return 'тренировок';
+    if (n100 >= 11 && n100 <= 14) return tr('тренировок');
     return switch (n % 10) {
-      1 => 'тренировка',
-      2 || 3 || 4 => 'тренировки',
-      _ => 'тренировок',
+      1 => tr('тренировка'),
+      2 || 3 || 4 => tr('тренировки'),
+      _ => tr('тренировок'),
     };
   }
 
   static String _shotsWord(int n) {
     final n100 = n % 100;
-    if (n100 >= 11 && n100 <= 14) return 'выстрелов';
+    if (n100 >= 11 && n100 <= 14) return tr('выстрелов');
     return switch (n % 10) {
-      1 => 'выстрел',
-      2 || 3 || 4 => 'выстрела',
-      _ => 'выстрелов',
+      1 => tr('выстрел'),
+      2 || 3 || 4 => tr('выстрела'),
+      _ => tr('выстрелов'),
     };
   }
 }

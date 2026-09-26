@@ -10,6 +10,7 @@ import '../services/chat_preferences.dart';
 import '../state/app_data_store.dart';
 import 'glass_pill.dart';
 import 'messenger_bubble.dart';
+import '../i18n/i18n.dart';
 
 /// Переписка «спортсмен ↔ тренер» (sql/coach-chat.sql) — одна и та же
 /// лента у обеих сторон, различаются только функции загрузки/отправки.
@@ -81,7 +82,7 @@ class _CoachChatViewState extends State<CoachChatView> {
       _input.clear();
       await _reload();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не отправлено: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Не отправлено: {e}', {'e': e}))));
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -96,7 +97,7 @@ class _CoachChatViewState extends State<CoachChatView> {
           children: [
             ListTile(
               leading: const Icon(Icons.copy_outlined),
-              title: const Text('Копировать'),
+              title: Text(tr('Копировать')),
               onTap: () {
                 Navigator.of(ctx).pop();
                 Clipboard.setData(ClipboardData(text: m.text));
@@ -105,17 +106,17 @@ class _CoachChatViewState extends State<CoachChatView> {
             if (mine)
               ListTile(
                 leading: Icon(Icons.delete_outline, color: Theme.of(ctx).colorScheme.error),
-                title: Text('Удалить', style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
+                title: Text(tr('Удалить'), style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
                 onTap: () async {
                   Navigator.of(ctx).pop();
                   final ok = await showDialog<bool>(
                     context: context,
                     builder: (d) => AlertDialog(
-                      title: const Text('Удалить сообщение?'),
-                      content: const Text('Удалится и у собеседника.'),
+                      title: Text(tr('Удалить сообщение?')),
+                      content: Text(tr('Удалится и у собеседника.')),
                       actions: [
-                        TextButton(onPressed: () => Navigator.of(d).pop(false), child: const Text('Отмена')),
-                        FilledButton(onPressed: () => Navigator.of(d).pop(true), child: const Text('Удалить')),
+                        TextButton(onPressed: () => Navigator.of(d).pop(false), child: Text(tr('Отмена'))),
+                        FilledButton(onPressed: () => Navigator.of(d).pop(true), child: Text(tr('Удалить'))),
                       ],
                     ),
                   );
@@ -150,7 +151,7 @@ class _CoachChatViewState extends State<CoachChatView> {
                       : Padding(padding: const EdgeInsets.all(24), child: Text(_error!, textAlign: TextAlign.center)),
                 )
               : messages.isEmpty
-                  ? const Center(child: Text('Сообщений пока нет'))
+                  ? Center(child: Text(tr('Сообщений пока нет')))
                   : ListView.builder(
                       reverse: true,
                       padding: const EdgeInsets.all(12),
@@ -182,13 +183,13 @@ class _CoachChatViewState extends State<CoachChatView> {
                     controller: _input,
                     minLines: 1,
                     maxLines: 4,
-                    decoration: const InputDecoration(
-                      hintText: 'Сообщение…',
+                    decoration: InputDecoration(
+                      hintText: tr('Сообщение…'),
                       border: InputBorder.none,
                       enabledBorder: InputBorder.none,
                       focusedBorder: InputBorder.none,
                       filled: false,
-                      contentPadding: EdgeInsets.symmetric(vertical: 14),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                   ),
                 ),
@@ -196,7 +197,7 @@ class _CoachChatViewState extends State<CoachChatView> {
               const SizedBox(width: 8),
               GlassCircleButton(
                 size: 50,
-                tooltip: 'Отправить',
+                tooltip: tr('Отправить'),
                 color: cs.primary.withValues(alpha: 0.85),
                 onTap: _sending ? null : _send,
                 icon: _sending

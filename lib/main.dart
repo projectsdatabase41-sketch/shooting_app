@@ -83,12 +83,12 @@ class _DbOpenFailedApp extends StatelessWidget {
                 children: [
                   const Icon(Icons.error_outline, size: 48),
                   const SizedBox(height: 16),
-                  const Text('Не удалось открыть базу данных', textAlign: TextAlign.center),
+                  Text(tr('Не удалось открыть базу данных'), textAlign: TextAlign.center),
                   const SizedBox(height: 8),
                   Text('$error', textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall),
                   const SizedBox(height: 16),
-                  const Text(
-                    'Попробуйте перезагрузить страницу. Если не поможет — очистите данные сайта в настройках браузера.',
+                  Text(
+                    tr('Попробуйте перезагрузить страницу. Если не поможет — очистите данные сайта в настройках браузера.'),
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -174,7 +174,7 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
       contextBuilder: () => AiContext(
         scope: AiScope.general,
         allSessions: _store.sessions,
-        exerciseNameOf: (s) => _store.exerciseFor(s)?.label ?? 'без упражнения',
+        exerciseNameOf: (s) => _store.exerciseFor(s)?.label ?? tr('без упражнения'),
       ),
     );
   }

@@ -31,6 +31,7 @@ import 'chat_group_screen.dart';
 import 'chat_people_screen.dart';
 import 'chat_settings_screen.dart';
 import 'chat_thread_screen.dart';
+import '../i18n/i18n.dart';
 
 /// Мессенджер — отдельная учётная запись от личной базы тренировок (см.
 /// `ChatAuthService`). Главный экран — список собеседников; переписка с
@@ -269,10 +270,10 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
   @override
   Widget build(BuildContext context) {
     if (!ChatSettings.isConfigured) {
-      return const Scaffold(
+      return Scaffold(
         body: EmptyState(
           icon: Icons.forum_outlined,
-          text: 'Публичный чат скоро появится — сервер для него ещё не подключён',
+          text: tr('Публичный чат скоро появится — сервер для него ещё не подключён'),
         ),
       );
     }
@@ -359,7 +360,7 @@ class _ChatContactsView extends StatelessWidget {
       } catch (e) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Профиль не сохранён: ${'$e'.replaceFirst('AuthException: ', '')}')));
+              SnackBar(content: Text(tr('Профиль не сохранён: {p}', {'p': '$e'.replaceFirst('AuthException: ', '')}))));
         }
       }
     }
@@ -421,21 +422,21 @@ class _ChatContactsView extends StatelessWidget {
         leading: Builder(
           builder: (ctx) => GlassCircleButton(
             icon: const Icon(Icons.menu),
-            tooltip: 'Меню',
+            tooltip: tr('Меню'),
             onTap: () => Scaffold.of(ctx).openDrawer(),
           ),
         ),
-        title: Text('Мессенджер', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        title: Text(tr('Мессенджер'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
           // Поиск по нику (и коду) среди всех участников мессенджера.
           GlassCircleButton(
             icon: const Icon(Icons.search),
-            tooltip: 'Найти по нику',
+            tooltip: tr('Найти по нику'),
             onTap: () => _openDirectory(context),
           ),
           GlassCircleButton(
             icon: const BoldIcon(Icons.close),
-            tooltip: 'Свернуть мессенджер',
+            tooltip: tr('Свернуть мессенджер'),
             onTap: () => ChatHomeScreen.close(context),
           ),
         ],
@@ -461,7 +462,7 @@ class _ChatContactsView extends StatelessWidget {
                       Text(auth.nickname, style: theme.textTheme.titleMedium, overflow: TextOverflow.ellipsis),
                       if (auth.about.isNotEmpty)
                         Text(auth.about, style: theme.textTheme.bodySmall, overflow: TextOverflow.ellipsis),
-                      Text('Код: ${auth.chatCode}', style: theme.textTheme.bodySmall),
+                      Text(tr('Код: {chatCode}', {'chatCode': auth.chatCode}), style: theme.textTheme.bodySmall),
                     ],
                   ),
                 ),
@@ -469,7 +470,7 @@ class _ChatContactsView extends StatelessWidget {
               const Divider(height: 1),
               ListTile(
                 leading: const Icon(Icons.people_outline),
-                title: const Text('Контакты'),
+                title: Text(tr('Контакты')),
                 trailing: Text('${contacts.where((c) => !c.isGroup).length}'),
                 onTap: () {
                   Navigator.of(context).pop();
@@ -478,8 +479,8 @@ class _ChatContactsView extends StatelessWidget {
               ),
               ListTile(
                 leading: const Icon(Icons.travel_explore_outlined),
-                title: const Text('Все участники'),
-                subtitle: const Text('Поиск по имени и коду'),
+                title: Text(tr('Все участники')),
+                subtitle: Text(tr('Поиск по имени и коду')),
                 onTap: () {
                   Navigator.of(context).pop();
                   _openDirectory(context);
@@ -487,7 +488,7 @@ class _ChatContactsView extends StatelessWidget {
               ),
               ListTile(
                 leading: const Icon(Icons.group_add_outlined),
-                title: const Text('Новая группа'),
+                title: Text(tr('Новая группа')),
                 onTap: () {
                   Navigator.of(context).pop();
                   _newGroup(context);
@@ -495,7 +496,7 @@ class _ChatContactsView extends StatelessWidget {
               ),
               ListTile(
                 leading: const Icon(Icons.settings_outlined),
-                title: const Text('Настройки'),
+                title: Text(tr('Настройки')),
                 onTap: () {
                   Navigator.of(context).pop();
                   openSettings();
@@ -504,7 +505,7 @@ class _ChatContactsView extends StatelessWidget {
               const Divider(height: 1),
               ListTile(
                 leading: const Icon(Icons.logout),
-                title: const Text('Выйти из чата'),
+                title: Text(tr('Выйти из чата')),
                 onTap: () {
                   Navigator.of(context).pop();
                   auth.signOutLocally();
@@ -523,9 +524,9 @@ class _ChatContactsView extends StatelessWidget {
                 const EmojiWarmup(),
                 Expanded(
                   child: sorted.isEmpty
-                      ? const EmptyState(
+                      ? EmptyState(
                           icon: Icons.forum_outlined,
-                          text: 'Переписок пока нет — откройте шторку слева: «Контакты» или «Все участники»',
+                          text: tr('Переписок пока нет — откройте шторку слева: «Контакты» или «Все участники»'),
                         )
                       : ValueListenableBuilder(
                           valueListenable: ChatPresence.seen,
@@ -541,7 +542,7 @@ class _ChatContactsView extends StatelessWidget {
                               // В группе — кто написал последним.
                               if (c.isGroup && m != null) {
                                 final who = m.direction == ChatMessageDirection.outgoing
-                                    ? 'Вы'
+                                    ? tr('Вы')
                                     : (c.member(m.senderId ?? '')?.nickname ?? '');
                                 if (who.isNotEmpty) sub = '$who: $sub';
                               }
@@ -645,16 +646,16 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
     final email = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Восстановление пароля'),
+        title: Text(tr('Восстановление пароля')),
         content: TextField(
           controller: emailCtrl,
           autofocus: true,
           keyboardType: TextInputType.emailAddress,
-          decoration: const InputDecoration(labelText: 'Почта'),
+          decoration: InputDecoration(labelText: tr('Почта')),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(emailCtrl.text.trim()), child: const Text('Отправить')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr('Отмена'))),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(emailCtrl.text.trim()), child: Text(tr('Отправить'))),
         ],
       ),
     );
@@ -663,7 +664,7 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
       await widget.auth.requestPasswordReset(email);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Если такая почта зарегистрирована — письмо со ссылкой уже отправлено')),
+        SnackBar(content: Text(tr('Если такая почта зарегистрирована — письмо со ссылкой уже отправлено'))),
       );
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
@@ -701,7 +702,7 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
         );
         if (!ok) {
           setState(() => _error =
-              'Аккаунт создан. Если почта требует подтверждения — перейдите по ссылке из письма, затем войдите через "Вход" (код контакта появится автоматически).');
+              tr('Аккаунт создан. Если почта требует подтверждения — перейдите по ссылке из письма, затем войдите через "Вход" (код контакта появится автоматически).'));
           return;
         }
       } else {
@@ -721,14 +722,14 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Мессенджер')),
+      appBar: AppBar(title: Text(tr('Мессенджер'))),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           SegmentedButton<bool>(
-            segments: const [
-              ButtonSegment(value: true, label: Text('Регистрация')),
-              ButtonSegment(value: false, label: Text('Вход')),
+            segments: [
+              ButtonSegment(value: true, label: Text(tr('Регистрация'))),
+              ButtonSegment(value: false, label: Text(tr('Вход'))),
             ],
             selected: {_register},
             showSelectedIcon: false,
@@ -752,25 +753,25 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            TextField(controller: _nickname, decoration: const InputDecoration(labelText: 'Никнейм')),
+            TextField(controller: _nickname, decoration: InputDecoration(labelText: tr('Никнейм'))),
             const SizedBox(height: 10),
           ],
           TextField(
             controller: _email,
-            decoration: const InputDecoration(labelText: 'Почта'),
+            decoration: InputDecoration(labelText: tr('Почта')),
             keyboardType: TextInputType.emailAddress,
             autocorrect: false,
           ),
           const SizedBox(height: 10),
           TextField(
             controller: _password,
-            decoration: const InputDecoration(labelText: 'Пароль'),
+            decoration: InputDecoration(labelText: tr('Пароль')),
             obscureText: true,
           ),
           if (!_register) ...[
             Align(
               alignment: Alignment.centerRight,
-              child: TextButton(onPressed: _forgotPassword, child: const Text('Забыли пароль?')),
+              child: TextButton(onPressed: _forgotPassword, child: Text(tr('Забыли пароль?'))),
             ),
           ],
           const SizedBox(height: 16),
@@ -778,7 +779,7 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
             onPressed: _busy ? null : _submit,
             child: _busy
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : Text(_register ? 'Зарегистрироваться' : 'Войти'),
+                : Text(_register ? tr('Зарегистрироваться') : tr('Войти')),
           ),
           if (_error != null) ...[
             const SizedBox(height: 16),
@@ -832,7 +833,7 @@ class _ProfileSheetState extends State<_ProfileSheet> {
   Future<void> _changeAvatar() async {
     final b64 = await AvatarUtils.pickAndProcess();
     if (b64 == null) return;
-    await _run(() => widget.auth.updateAvatar(b64), 'Фото обновлено');
+    await _run(() => widget.auth.updateAvatar(b64), tr('Фото обновлено'));
   }
 
   @override
@@ -852,19 +853,19 @@ class _ProfileSheetState extends State<_ProfileSheet> {
             const SizedBox(height: 16),
             TextField(
               controller: _nickname,
-              decoration: const InputDecoration(labelText: 'Никнейм'),
+              decoration: InputDecoration(labelText: tr('Никнейм')),
               textInputAction: TextInputAction.next,
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _about,
               maxLength: 120,
-              decoration: const InputDecoration(
-                labelText: 'О себе',
-                hintText: 'Клуб, город, дисциплина — чтобы вас узнавали',
+              decoration: InputDecoration(
+                labelText: tr('О себе'),
+                hintText: tr('Клуб, город, дисциплина — чтобы вас узнавали'),
               ),
             ),
-            Text('Сохранится само, когда закроете шторку',
+            Text(tr('Сохранится само, когда закроете шторку'),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor)),
             if (_status != null) ...[
               const SizedBox(height: 8),
@@ -875,12 +876,12 @@ class _ProfileSheetState extends State<_ProfileSheet> {
               ),
             ],
             const SizedBox(height: 16),
-            const Text('Ваш код контакта — дайте его собеседнику, чтобы он вас добавил'),
+            Text(tr('Ваш код контакта — дайте его собеседнику, чтобы он вас добавил')),
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: () {
                 Clipboard.setData(ClipboardData(text: auth.chatCode));
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Код скопирован')));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Код скопирован'))));
               },
               icon: const Icon(Icons.copy),
               label: Text(auth.chatCode.isEmpty ? '—' : auth.chatCode),
@@ -892,7 +893,7 @@ class _ProfileSheetState extends State<_ProfileSheet> {
                 Navigator.of(context).pop();
               },
               icon: const Icon(Icons.logout),
-              label: const Text('Выйти из чата'),
+              label: Text(tr('Выйти из чата')),
             ),
           ],
         ),

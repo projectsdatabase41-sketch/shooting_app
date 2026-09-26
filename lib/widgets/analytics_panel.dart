@@ -10,6 +10,7 @@ import '../theme/app_theme.dart';
 import 'empty_state.dart';
 import 'section_header.dart';
 import 'stat_tile.dart';
+import '../i18n/i18n.dart';
 
 /// Единый блок разбора стрельбы по ЛЮБОМУ набору выстрелов.
 ///
@@ -81,11 +82,11 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
     final accent = AppTheme.accentFor(cs);
 
     if (shots.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 32),
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 32),
         child: EmptyState(
           icon: Icons.query_stats,
-          text: 'В этом срезе пока нет выстрелов',
+          text: tr('В этом срезе пока нет выстрелов'),
         ),
       );
     }
@@ -106,7 +107,7 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
           SectionHeader(
             title: modes[mode].title,
             subtitle: modes.length > 1
-                ? '${modes[mode].subtitle} · нажмите, чтобы сменить'
+                ? tr('{p} · нажмите, чтобы сменить', {'p': modes[mode].subtitle})
                 : modes[mode].subtitle,
           ),
           const SizedBox(height: 12),
@@ -132,7 +133,7 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
         ],
         const SizedBox(height: 24),
         SectionHeader(
-          title: a.allInTen ? 'Распределение внутри десятки' : 'Распределение по габаритам',
+          title: a.allInTen ? tr('Распределение внутри десятки') : tr('Распределение по габаритам'),
           // У разбивки по десятым подписи нет намеренно: заголовок
           // «Распределение внутри десятки» и сами подписи 10.9…10.0
           // говорят всё сами.
@@ -157,7 +158,7 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
         ] else ...[
           const SizedBox(height: 24),
           SectionHeader(
-            title: 'СТП и кучность',
+            title: tr('СТП и кучность'),
             subtitle: _groupSubtitle(a),
           ),
           const SizedBox(height: 12),
@@ -194,9 +195,9 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
         ],
         if (showSeries && series.length > 1) ...[
           const SizedBox(height: 24),
-          const SectionHeader(
-            title: 'Средний результат по сериям',
-            subtitle: 'Видно, где результат садится к концу',
+          SectionHeader(
+            title: tr('Средний результат по сериям'),
+            subtitle: tr('Видно, где результат садится к концу'),
           ),
           const SizedBox(height: 12),
           _chartCard(
@@ -220,14 +221,14 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
       children: [
         Row(
           children: [
-            Expanded(child: StatTile(icon: Icons.adjust, label: 'Выстрелов', value: '${a.count}')),
+            Expanded(child: StatTile(icon: Icons.adjust, label: tr('Выстрелов'), value: '${a.count}')),
             const SizedBox(width: 12),
             Expanded(
               child: StatTile(
                 icon: Icons.functions,
-                label: 'Сумма',
+                label: tr('Сумма'),
                 value: '${a.total.toStringAsFixed(1)} / ${a.totalWhole}',
-                hint: 'с десятыми / целыми',
+                hint: tr('с десятыми / целыми'),
               ),
             ),
           ],
@@ -238,9 +239,9 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
             Expanded(
               child: StatTile(
                 icon: Icons.speed_outlined,
-                label: 'Средний',
+                label: tr('Средний'),
                 value: a.average.toStringAsFixed(2),
-                hint: 'мин ${a.worst.toStringAsFixed(1)} · макс ${a.best.toStringAsFixed(1)}',
+                hint: tr('мин {p} · макс {p2}', {'p': a.worst.toStringAsFixed(1), 'p2': a.best.toStringAsFixed(1)}),
                 accent: true,
               ),
             ),
@@ -252,12 +253,12 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
               // это прямо поправка, которую надо ввести прицелом.
               child: StatTile(
                 icon: Icons.control_camera_outlined,
-                label: 'Отклонение СТП',
+                label: tr('Отклонение СТП'),
                 value: mixedFacesNote != null ? '—' : _meanXyText(a),
                 // Под цифрами — «X / Y», а не словами: порядок величин
                 // важнее их пересказа, а сторону показывает стрелка
                 // рядом с числами.
-                hint: mixedFacesNote != null ? 'мишени разные' : 'X / Y',
+                hint: mixedFacesNote != null ? tr('мишени разные') : 'X / Y',
                 accent: true,
               ),
             ),
@@ -325,17 +326,17 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        row('Смещение СТП', _offsetText(a), color: accent),
+        row(tr('Смещение СТП'), _offsetText(a), color: accent),
         // «Средний разброс» был размытым термином: под разбросом
         // понимают и это, и поперечник. Радиус СТП (Mean Radius) —
         // общепринятое название именно этой величины.
-        row('Радиус СТП', '${a.meanRadiusMm.toStringAsFixed(1)} мм'),
-        if (cep50 != null) row('Половина в', '${cep50.toStringAsFixed(1)} мм'),
+        row(tr('Радиус СТП'), tr('{p} мм', {'p': a.meanRadiusMm.toStringAsFixed(1)})),
+        if (cep50 != null) row(tr('Половина в'), tr('{p} мм', {'p': cep50.toStringAsFixed(1)})),
         row(
-          'Поперечник',
+          tr('Поперечник'),
           spread == null
-              ? '— (>${ShotAnalytics.extremeSpreadLimit} выстр.)'
-              : '${spread.toStringAsFixed(1)} мм',
+              ? tr('— (>{extremeSpreadLimit} выстр.)', {'extremeSpreadLimit': ShotAnalytics.extremeSpreadLimit})
+              : tr('{p} мм', {'p': spread.toStringAsFixed(1)}),
         ),
       ],
     );
@@ -344,16 +345,16 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
   String _offsetText(ShotAnalytics a) {
     final mm = a.meanOffsetMm.toStringAsFixed(1);
     final dir = directionName(a.meanPoint);
-    return dir == null ? '$mm мм' : '$mm мм $dir';
+    return dir == null ? tr('{mm} мм', {'mm': mm}) : tr('{mm} мм {dir}', {'mm': mm, 'dir': dir});
   }
 
   String _groupSubtitle(ShotAnalytics a) {
     final spread = a.extremeSpreadMm;
     final base = spread == null
-        ? 'Кольца: радиус СТП и половина попаданий'
-        : 'Пунктир — поперечник ${spread.toStringAsFixed(1)} мм';
+        ? tr('Кольца: радиус СТП и половина попаданий')
+        : tr('Пунктир — поперечник {p} мм', {'p': spread.toStringAsFixed(1)});
     final dir = directionName(a.meanPoint);
-    return dir == null ? base : '$base · снос $dir';
+    return dir == null ? base : tr('{base} · снос {dir}', {'base': base, 'dir': dir});
   }
 
   /// Нижняя граница гистограммы: показываем до самого низкого габарита,

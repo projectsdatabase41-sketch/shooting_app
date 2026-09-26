@@ -14,6 +14,7 @@ import '../logic/notification_avatar.dart';
 import 'chat_settings.dart';
 import 'db_opener.dart';
 import 'firebase_settings.dart';
+import '../i18n/i18n.dart';
 
 /// Куда открыть чат по тапу на уведомление — общий чат или переписка с
 /// конкретным контактом (см. `PushService._handleTap`, обработчик
@@ -239,16 +240,16 @@ Future<void> _initLocalNotifications() async {
   );
   await _localNotifications
       .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-      ?.createNotificationChannel(const AndroidNotificationChannel(
+      ?.createNotificationChannel(AndroidNotificationChannel(
         PushService.messageChannelId,
-        'Сообщения',
-        description: 'Новые сообщения в личных чатах',
+        tr('Сообщения'),
+        description: tr('Новые сообщения в личных чатах'),
         importance: Importance.high,
       ));
   final channel = AndroidNotificationChannel(
     PushService.callChannelId,
-    'Позвать',
-    description: 'Вызов от собеседника в чате — длиннее и громче обычного уведомления',
+    tr('Позвать'),
+    description: tr('Вызов от собеседника в чате — длиннее и громче обычного уведомления'),
     importance: Importance.max,
     playSound: true,
     sound: const UriAndroidNotificationSound('content://settings/system/ringtone'),
@@ -302,15 +303,15 @@ Future<void> showCallNotification(Map<String, dynamic> data) async {
     PushService._callNotificationId,
     '${data['title'] ?? 'Звонок'}',
     '${data['body'] ?? 'Вас вызывают'}',
-    const NotificationDetails(
+    NotificationDetails(
       android: AndroidNotificationDetails(
         PushService.callChannelId,
-        'Позвать',
-        channelDescription: 'Вызов от собеседника в чате',
+        tr('Позвать'),
+        channelDescription: tr('Вызов от собеседника в чате'),
         importance: Importance.max,
         priority: Priority.max,
         category: AndroidNotificationCategory.call,
-        actions: [AndroidNotificationAction('decline', 'Сбросить', cancelNotification: true)],
+        actions: [AndroidNotificationAction('decline', tr('Сбросить'), cancelNotification: true)],
       ),
     ),
     payload: data['contact_id'] as String?,
@@ -336,7 +337,7 @@ Future<void> showMessageNotification(Map<String, dynamic> data) async {
     NotificationDetails(
       android: AndroidNotificationDetails(
         PushService.messageChannelId,
-        'Сообщения',
+        tr('Сообщения'),
         importance: Importance.high,
         priority: Priority.high,
         category: AndroidNotificationCategory.message,
@@ -383,11 +384,11 @@ Future<void> showIncomingCallNotification(Map<String, dynamic> data) async {
   await _localNotifications.show(
     PushService._incomingCallNotificationId,
     '${data['name'] ?? 'Звонок'}',
-    video ? 'Входящий видеозвонок' : 'Входящий звонок',
-    const NotificationDetails(
+    video ? tr('Входящий видеозвонок') : tr('Входящий звонок'),
+    NotificationDetails(
       android: AndroidNotificationDetails(
         PushService.callChannelId,
-        'Позвать',
+        tr('Позвать'),
         importance: Importance.max,
         priority: Priority.max,
         category: AndroidNotificationCategory.call,
@@ -395,8 +396,8 @@ Future<void> showIncomingCallNotification(Map<String, dynamic> data) async {
         ongoing: true,
         timeoutAfter: 45000,
         actions: [
-          AndroidNotificationAction('call_decline', 'Отклонить', cancelNotification: true),
-          AndroidNotificationAction('call_accept', 'Принять', showsUserInterface: true, cancelNotification: true),
+          AndroidNotificationAction('call_decline', tr('Отклонить'), cancelNotification: true),
+          AndroidNotificationAction('call_accept', tr('Принять'), showsUserInterface: true, cancelNotification: true),
         ],
       ),
     ),
@@ -437,10 +438,10 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     await _localNotifications.cancel(PushService._incomingCallNotificationId);
     await _localNotifications.show(
       '${message.data['from']}'.hashCode & 0x3fffffff,
-      'Пропущенный звонок',
-      'Нажмите, чтобы открыть переписку',
-      const NotificationDetails(
-        android: AndroidNotificationDetails(PushService.messageChannelId, 'Сообщения',
+      tr('Пропущенный звонок'),
+      tr('Нажмите, чтобы открыть переписку'),
+      NotificationDetails(
+        android: AndroidNotificationDetails(PushService.messageChannelId, tr('Сообщения'),
             importance: Importance.high, category: AndroidNotificationCategory.missedCall),
       ),
       payload: '${message.data['from']}',

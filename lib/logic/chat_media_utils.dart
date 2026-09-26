@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
+import '../i18n/i18n.dart';
 
 /// Результат выбора вложения — байты плюс исходное имя файла.
 class ChatAttachmentPick {
@@ -121,17 +122,17 @@ class ChatMediaUtils {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           ListTile(
             leading: const Icon(Icons.camera_alt),
-            title: const Text('Камера'),
+            title: Text(tr('Камера')),
             onTap: () => Navigator.pop(ctx, 0),
           ),
           ListTile(
             leading: const Icon(Icons.photo_library),
-            title: const Text('Галерея'),
+            title: Text(tr('Галерея')),
             onTap: () => Navigator.pop(ctx, 1),
           ),
           ListTile(
             leading: const Icon(Icons.insert_drive_file),
-            title: const Text('Файл'),
+            title: Text(tr('Файл')),
             onTap: () => Navigator.pop(ctx, 2),
           ),
         ]),
@@ -185,8 +186,8 @@ class ChatMediaUtils {
   /// Читаемый размер — "2.4 МБ" вместо голого числа байт.
   static String formatSize(int? bytes) {
     if (bytes == null) return '';
-    if (bytes < 1024) return '$bytes Б';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(0)} КБ';
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} МБ';
+    if (bytes < 1024) return tr('{bytes} Б', {'bytes': bytes});
+    if (bytes < 1024 * 1024) return tr('{p} КБ', {'p': (bytes / 1024).toStringAsFixed(0)});
+    return tr('{p} МБ', {'p': (bytes / (1024 * 1024)).toStringAsFixed(1)});
   }
 }

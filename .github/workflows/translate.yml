@@ -1,0 +1,57 @@
+# Автоперевод словарей интерфейса (lib/i18n/i18n.dart, tool/i18n.dart).
+#
+# После каждого пуша в main с изменениями в lib/ скрипт находит новые
+# строки tr('…') и переводит их через OpenRouter (ключ — тот же секрет,
+# что у сборок) на все языки: встроенные (assets/i18n) и скачиваемые
+# (i18n). Изменённые словари коммитятся обратно с [skip ci] — это не
+# запускает сборки веба и APK заново; новые переводы попадут в следующую.
+#
+# Модели — бесплатные из lib/services/ai_settings.dart; свой список можно
+# задать переменной репозитория I18N_MODELS (через запятую).
+name: Переводы интерфейса
+
+on:
+  push:
+    branches: [main]
+    paths: ['lib/**', 'tool/i18n.dart']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: translate
+  cancel-in-progress: false
+
+jobs:
+  translate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.9'
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Перевести недостающее
+        env:
+          OPENROUTER_KEY: ${{ secrets.OPENROUTER_KEY }}
+          I18N_MODELS: ${{ vars.I18N_MODELS }}
+        run: dart run tool/i18n.dart --translate
+
+      - name: Сохранить словари
+        run: |
+          git add assets/i18n i18n
+          if git diff --cached --quiet; then
+            echo "Словари не изменились"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Переводы: автообновление словарей [no-apk] [skip ci]"
+          git pull --rebase
+          git push

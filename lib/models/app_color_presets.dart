@@ -28,13 +28,13 @@ class AppColorPreset {
 
 const List<AppColorPreset> appColorPresets = [
   AppColorPreset(
-    label: 'Графит',
+    label: /*tr*/ 'Графит',
     background: Color(0xFF11161B),
     button: Color(0xFF2C4A63),
     buttonText: Color(0xFFFFFFFF),
   ),
   AppColorPreset(
-    label: 'Хаки',
+    label: /*tr*/ 'Хаки',
     background: Color(0xFF1B1D16),
     button: Color(0xFF4B5320),
     buttonText: Color(0xFFEDEAE0),
@@ -45,62 +45,62 @@ const List<AppColorPreset> appColorPresets = [
     // карточки", а не техничный тёмный интерфейс. Заменено на
     // серо-графитовый нейтральный тон (тот же принцип, что и фон), тёплый
     // золотой акцент — оставлен, он и был единственной сильной стороной.
-    label: 'Ночь',
+    label: /*tr*/ 'Ночь',
     background: Color(0xFF0B0F13),
     button: Color(0xFF34302B),
     buttonText: Color(0xFFD9A855),
   ),
   AppColorPreset(
-    label: 'Кофе',
+    label: /*tr*/ 'Кофе',
     background: Color(0xFF1B140F),
     button: Color(0xFF6F4E37),
     buttonText: Color(0xFFF3E5D8),
   ),
 
   AppColorPreset(
-    label: 'Мята',
+    label: /*tr*/ 'Мята',
     background: Color(0xFF11201C),
     button: Color(0xFF3E8E7E),
     buttonText: Color(0xFFEAFBF6),
   ),
   // --- Светлая тема ---
   AppColorPreset(
-    label: 'Светлый',
+    label: /*tr*/ 'Светлый',
     background: Color(0xFFF6F8FA),
     button: Color(0xFF2C4A63),
     buttonText: Color(0xFFFFFFFF),
     dark: false,
   ),
   AppColorPreset(
-    label: 'Песок',
+    label: /*tr*/ 'Песок',
     background: Color(0xFFF7F1E6),
     button: Color(0xFF8A5A2B),
     buttonText: Color(0xFFFFFFFF),
     dark: false,
   ),
   AppColorPreset(
-    label: 'Небо',
+    label: /*tr*/ 'Небо',
     background: Color(0xFFEFF5FB),
     button: Color(0xFF1F6FB2),
     buttonText: Color(0xFFFFFFFF),
     dark: false,
   ),
   AppColorPreset(
-    label: 'Шалфей',
+    label: /*tr*/ 'Шалфей',
     background: Color(0xFFF1F5F0),
     button: Color(0xFF4F7A5A),
     buttonText: Color(0xFFFFFFFF),
     dark: false,
   ),
   AppColorPreset(
-    label: 'Лаванда',
+    label: /*tr*/ 'Лаванда',
     background: Color(0xFFF5F3FA),
     button: Color(0xFF6A55A3),
     buttonText: Color(0xFFFFFFFF),
     dark: false,
   ),
   AppColorPreset(
-    label: 'Мишень',
+    label: /*tr*/ 'Мишень',
     background: Color(0xFFFAFAF7),
     button: Color(0xFFC62828),
     buttonText: Color(0xFFFFFFFF),

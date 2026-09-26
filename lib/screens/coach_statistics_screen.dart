@@ -11,6 +11,7 @@ import '../services/coach_data_mapper.dart';
 import '../state/app_data_store.dart';
 import '../widgets/analytics_panel.dart';
 import '../widgets/empty_state.dart';
+import '../i18n/i18n.dart';
 
 /// Вкладка "Статистика" тренера (раздел 8 ТЗ): то же самое, что у
 /// спортсмена (`StatisticsScreen`), только с выбором спортсмена сверху
@@ -34,7 +35,7 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
   bool _loading = false;
   String? _error;
   List<TrainingSession> _sessions = [];
-  String Function(TrainingSession) _nameOf = (_) => 'Упражнение';
+  String Function(TrainingSession) _nameOf = (_) => tr('Упражнение');
 
   _Scope _scope = _Scope.all;
   String? _exerciseName;
@@ -89,9 +90,9 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Статистика')),
+      appBar: AppBar(title: Text(tr('Статистика'))),
       body: _athletes.isEmpty
-          ? const EmptyState(icon: Icons.groups_outlined, text: 'Сначала добавьте спортсмена')
+          ? EmptyState(icon: Icons.groups_outlined, text: tr('Сначала добавьте спортсмена'))
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
               children: [
@@ -109,7 +110,7 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
     return DropdownButtonFormField<String>(
       initialValue: _athlete?.id,
       isExpanded: true,
-      decoration: const InputDecoration(labelText: 'Спортсмен'),
+      decoration: InputDecoration(labelText: tr('Спортсмен')),
       items: [for (final a in _athletes) DropdownMenuItem(value: a.id, child: Text(a.name))],
       onChanged: (v) {
         setState(() => _athlete = _athletes.firstWhere((a) => a.id == v));
@@ -120,7 +121,7 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
 
   List<Widget> _body() {
     if (_sessions.isEmpty) {
-      return const [EmptyState(icon: Icons.insights_outlined, text: 'У спортсмена пока нет тренировок с выстрелами')];
+      return [EmptyState(icon: Icons.insights_outlined, text: tr('У спортсмена пока нет тренировок с выстрелами'))];
     }
 
     final selection = _resolveSelection();
@@ -128,10 +129,10 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
       SizedBox(
         width: double.infinity,
         child: SegmentedButton<_Scope>(
-          segments: const [
-            ButtonSegment(value: _Scope.all, label: Text('Всё')),
-            ButtonSegment(value: _Scope.exercise, label: Text('Упражнение')),
-            ButtonSegment(value: _Scope.session, label: Text('Тренировка')),
+          segments: [
+            ButtonSegment(value: _Scope.all, label: Text(tr('Всё'))),
+            ButtonSegment(value: _Scope.exercise, label: Text(tr('Упражнение'))),
+            ButtonSegment(value: _Scope.session, label: Text(tr('Тренировка'))),
           ],
           selected: {_scope},
           showSelectedIcon: false,
@@ -161,7 +162,7 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
       DropdownButtonFormField<String>(
         initialValue: _currentExerciseName(names),
         isExpanded: true,
-        decoration: const InputDecoration(labelText: 'Упражнение'),
+        decoration: InputDecoration(labelText: tr('Упражнение')),
         items: [for (final n in names) DropdownMenuItem(value: n, child: Text(n, overflow: TextOverflow.ellipsis))],
         onChanged: (v) => setState(() => _exerciseName = v),
       ),
@@ -185,7 +186,7 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
       DropdownButtonFormField<String>(
         initialValue: currentId,
         isExpanded: true,
-        decoration: const InputDecoration(labelText: 'Тренировка'),
+        decoration: InputDecoration(labelText: tr('Тренировка')),
         items: [
           for (final s in _sessions)
             DropdownMenuItem(
@@ -205,10 +206,10 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
       if (seriesNos.length > 1) ...[
         DropdownButtonFormField<int>(
           initialValue: seriesNos.contains(_seriesNo) ? _seriesNo : null,
-          decoration: const InputDecoration(labelText: 'Серия'),
+          decoration: InputDecoration(labelText: tr('Серия')),
           items: [
-            const DropdownMenuItem<int>(value: null, child: Text('Все серии')),
-            for (final n in seriesNos) DropdownMenuItem(value: n, child: Text('Серия $n')),
+            DropdownMenuItem<int>(value: null, child: Text(tr('Все серии'))),
+            for (final n in seriesNos) DropdownMenuItem(value: n, child: Text(tr('Серия {n}', {'n': n}))),
           ],
           onChanged: (v) => setState(() => _seriesNo = v),
         ),
@@ -226,7 +227,7 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
   _Selection _resolveSelection() {
     switch (_scope) {
       case _Scope.all:
-        return _sessionsSelection(_sessions, title: 'Динамика тренировок', subtitle: 'Сумма очков за тренировку');
+        return _sessionsSelection(_sessions, title: tr('Динамика тренировок'), subtitle: tr('Сумма очков за тренировку'));
 
       case _Scope.exercise:
         final names = _sessions.map(_nameOf).toSet().toList()..sort();
@@ -234,8 +235,8 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
         final filtered = name == null ? _sessions : _sessions.where((s) => _nameOf(s) == name).toList();
         return _sessionsSelection(
           filtered.isEmpty ? _sessions : filtered,
-          title: 'Динамика по упражнению',
-          subtitle: 'Сумма очков за тренировку',
+          title: tr('Динамика по упражнению'),
+          subtitle: tr('Сумма очков за тренировку'),
         );
 
       case _Scope.session:
@@ -251,7 +252,7 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
               ? null
               : [
                   AnalyticsDynamics(
-                    title: _seriesNo == null ? 'Динамика выстрелов' : 'Динамика серии $_seriesNo',
+                    title: _seriesNo == null ? tr('Динамика выстрелов') : tr('Динамика серии {seriesNo}', {'seriesNo': _seriesNo}),
                     subtitle: '',
                     points: shots,
                     maxY: 10.9,
@@ -296,7 +297,7 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
       face: face,
       showSeries: false,
       mixedFacesNote: faceCodes.length > 1
-          ? 'В срез попали разные мишени (${faceCodes.length}), поэтому СТП, кучность и разброс не показаны.'
+          ? tr('В срез попали разные мишени ({length}), поэтому СТП, кучность и разброс не показаны.', {'length': faceCodes.length})
           : null,
       dynamics: totals.isEmpty
           ? null
@@ -354,8 +355,8 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
     return [
       if (averages.isNotEmpty)
         AnalyticsDynamics(
-          title: 'Средний выстрел',
-          subtitle: 'Средний результат за тренировку',
+          title: tr('Средний выстрел'),
+          subtitle: tr('Средний результат за тренировку'),
           points: averages,
           maxY: 10.9,
           xLabels: labelsFor(averages),
@@ -363,8 +364,8 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
         ),
       if (worstSeries.isNotEmpty)
         AnalyticsDynamics(
-          title: 'Худшая серия',
-          subtitle: 'Средний выстрел в самой слабой серии тренировки',
+          title: tr('Худшая серия'),
+          subtitle: tr('Средний выстрел в самой слабой серии тренировки'),
           points: worstSeries,
           maxY: 10.9,
           xLabels: labelsFor(worstSeries),
@@ -372,8 +373,8 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
         ),
       if (bestSeries.isNotEmpty)
         AnalyticsDynamics(
-          title: 'Лучшая серия',
-          subtitle: 'Средний выстрел в лучшей серии тренировки',
+          title: tr('Лучшая серия'),
+          subtitle: tr('Средний выстрел в лучшей серии тренировки'),
           points: bestSeries,
           maxY: 10.9,
           xLabels: labelsFor(bestSeries),

@@ -9,6 +9,7 @@ import '../services/call_session.dart';
 import '../services/chat_messages_repository.dart';
 import '../services/push_service.dart';
 import '../widgets/chat_avatar.dart';
+import '../i18n/i18n.dart';
 
 /// Экран звонка: входящий (принять/отклонить), исходящий, разговор и итог.
 ///
@@ -83,14 +84,14 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     if (repo == null || repo.contactById(c.peerId) == null || c.outcome == 'busy' && !c.outgoing) return;
     final d = c.talked;
     final dur = '${d.inMinutes.toString().padLeft(2, '0')}:${d.inSeconds.remainder(60).toString().padLeft(2, '0')}';
-    final kind = c.video ? 'Видеозвонок' : 'Звонок';
+    final kind = c.video ? tr('Видеозвонок') : tr('Звонок');
     final text = switch (c.outcome) {
       'answered' => '${c.video ? '🎥' : '📞'} ${c.outgoing ? 'Исходящий' : 'Входящий'} ${kind.toLowerCase()} · $dur',
-      'missed' => c.outgoing ? '📞 $kind — нет ответа' : '📵 Пропущенный ${kind.toLowerCase()}',
-      'declined' => c.outgoing ? '📞 $kind отклонён' : '📵 Вы отклонили ${kind.toLowerCase()}',
-      'busy' => '📞 $kind — линия занята',
-      'cancelled' => '📞 $kind отменён',
-      _ => '📞 $kind не состоялся',
+      'missed' => c.outgoing ? tr('📞 {kind} — нет ответа', {'kind': kind}) : tr('📵 Пропущенный {p}', {'p': kind.toLowerCase()}),
+      'declined' => c.outgoing ? tr('📞 {kind} отклонён', {'kind': kind}) : tr('📵 Вы отклонили {p}', {'p': kind.toLowerCase()}),
+      'busy' => tr('📞 {kind} — линия занята', {'kind': kind}),
+      'cancelled' => tr('📞 {kind} отменён', {'kind': kind}),
+      _ => tr('📞 {kind} не состоялся', {'kind': kind}),
     };
     repo.addMessage(ChatMessage(
       id: const Uuid().v4(),
@@ -128,12 +129,12 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
   }
 
   String get _status => switch (s.state) {
-        CallState.preparing => 'Подготовка…',
-        CallState.calling => s.video ? 'Видеовызов…' : 'Вызов…',
-        CallState.ringing => s.video ? 'Входящий видеозвонок' : 'Входящий звонок',
-        CallState.connecting => 'Соединение…',
+        CallState.preparing => tr('Подготовка…'),
+        CallState.calling => s.video ? tr('Видеовызов…') : tr('Вызов…'),
+        CallState.ringing => s.video ? tr('Входящий видеозвонок') : tr('Входящий звонок'),
+        CallState.connecting => tr('Соединение…'),
         CallState.active => _fmt(s.talked),
-        CallState.ended => s.answered ? '${s.endReason ?? 'Звонок завершён'} · ${_fmt(s.talked)}' : (s.endReason ?? 'Звонок завершён'),
+        CallState.ended => s.answered ? '${s.endReason ?? 'Звонок завершён'} · ${_fmt(s.talked)}' : (s.endReason ?? tr('Звонок завершён')),
       };
 
   static String _fmt(Duration d) {
@@ -215,8 +216,8 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
       return Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _button(Icons.call_end, 'Отклонить', s.decline, color: const Color(0xFFE53935), size: 72),
-          _button(s.video ? Icons.videocam : Icons.call, 'Принять', _accept, color: const Color(0xFF43A047), size: 72),
+          _button(Icons.call_end, tr('Отклонить'), s.decline, color: const Color(0xFFE53935), size: 72),
+          _button(s.video ? Icons.videocam : Icons.call, tr('Принять'), _accept, color: const Color(0xFF43A047), size: 72),
         ],
       );
     }
@@ -224,8 +225,8 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
       return Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _button(Icons.close, 'Закрыть', () => Navigator.of(context).maybePop()),
-          if (s.outgoing && !s.answered) _button(Icons.call, 'Перезвонить', _redial, color: const Color(0xFF43A047)),
+          _button(Icons.close, tr('Закрыть'), () => Navigator.of(context).maybePop()),
+          if (s.outgoing && !s.answered) _button(Icons.call, tr('Перезвонить'), _redial, color: const Color(0xFF43A047)),
         ],
       );
     }
@@ -234,13 +235,13 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
       spacing: 8,
       runSpacing: 16,
       children: [
-        _button(s.muted ? Icons.mic_off : Icons.mic_none, s.muted ? 'Звук выкл.' : 'Микрофон', s.toggleMute, on: s.muted),
-        _button(s.speaker ? Icons.volume_up : Icons.volume_down, 'Динамик', () => s.setSpeaker(!s.speaker), on: s.speaker),
+        _button(s.muted ? Icons.mic_off : Icons.mic_none, s.muted ? tr('Звук выкл.') : tr('Микрофон'), s.toggleMute, on: s.muted),
+        _button(s.speaker ? Icons.volume_up : Icons.volume_down, tr('Динамик'), () => s.setSpeaker(!s.speaker), on: s.speaker),
         if (s.video) ...[
-          _button(s.cameraOff ? Icons.videocam_off : Icons.videocam_outlined, 'Камера', s.toggleCamera, on: s.cameraOff),
-          _button(Icons.cameraswitch_outlined, 'Сменить', s.switchCamera),
+          _button(s.cameraOff ? Icons.videocam_off : Icons.videocam_outlined, tr('Камера'), s.toggleCamera, on: s.cameraOff),
+          _button(Icons.cameraswitch_outlined, tr('Сменить'), s.switchCamera),
         ],
-        _button(Icons.call_end, 'Завершить', s.hangUp, color: const Color(0xFFE53935)),
+        _button(Icons.call_end, tr('Завершить'), s.hangUp, color: const Color(0xFFE53935)),
       ],
     );
   }

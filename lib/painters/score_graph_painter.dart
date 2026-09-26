@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/shot.dart';
+import '../i18n/i18n.dart';
 
 /// График "номер выстрела → оценка" (0–10.9 по Y), без внешних
 /// библиотек, свой `CustomPainter` (раздел 5 ТЗ).
@@ -100,7 +101,7 @@ class ScoreGraphPainter extends CustomPainter {
     canvas.drawLine(const Offset(plotLeft, plotTop), Offset(plotLeft, plotBottom), axisPaint);
 
     if (shots.isEmpty) {
-      _drawText(canvas, 'Нет выстрелов', Offset((plotLeft + plotRight) / 2, (plotTop + plotBottom) / 2),
+      _drawText(canvas, tr('Нет выстрелов'), Offset((plotLeft + plotRight) / 2, (plotTop + plotBottom) / 2),
           axisColor, 12, align: TextAlign.center);
       return;
     }

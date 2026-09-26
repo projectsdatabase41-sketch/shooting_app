@@ -9,6 +9,7 @@ import '../models/target_face.dart';
 import '../services/comments_repository.dart';
 import '../state/app_data_store.dart';
 import '../state/target_view_model.dart';
+import '../i18n/i18n.dart';
 
 /// Диалог ручного добавления выстрела прямо из списка (решение
 /// пользователя, пункт 7 списка правок) — без захода на мишень и без
@@ -183,7 +184,7 @@ class _AddShotDialogState extends State<AddShotDialog> {
     final face = vm.face;
 
     return AlertDialog(
-      title: const Text('Добавить выстрел'),
+      title: Text(tr('Добавить выстрел')),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -196,7 +197,7 @@ class _AddShotDialogState extends State<AddShotDialog> {
                   child: TextField(
                     controller: _score,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(labelText: 'Результат'),
+                    decoration: InputDecoration(labelText: tr('Результат')),
                     onChanged: (_) {
                       if (!_applying) _applyScore(face);
                     },
@@ -208,7 +209,7 @@ class _AddShotDialogState extends State<AddShotDialog> {
                       ? TextField(
                           controller: _hour,
                           keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(labelText: 'Часы (1–12)'),
+                          decoration: InputDecoration(labelText: tr('Часы (1–12)')),
                           onChanged: (_) {
                             if (!_applying) _applyHour(face);
                           },
@@ -221,9 +222,9 @@ class _AddShotDialogState extends State<AddShotDialog> {
             Align(
               alignment: Alignment.centerLeft,
               child: SegmentedButton<_DirMode>(
-                segments: const [
-                  ButtonSegment(value: _DirMode.hours, label: Text('Часы')),
-                  ButtonSegment(value: _DirMode.coords, label: Text('X / Y')),
+                segments: [
+                  ButtonSegment(value: _DirMode.hours, label: Text(tr('Часы'))),
+                  const ButtonSegment(value: _DirMode.coords, label: Text('X / Y')),
                 ],
                 selected: {_mode},
                 showSelectedIcon: false,
@@ -238,7 +239,7 @@ class _AddShotDialogState extends State<AddShotDialog> {
                     child: TextField(
                       controller: _x,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                      decoration: const InputDecoration(labelText: 'X, мм'),
+                      decoration: InputDecoration(labelText: tr('X, мм')),
                       onChanged: (_) {
                         if (!_applying) _applyCoords(face);
                       },
@@ -249,7 +250,7 @@ class _AddShotDialogState extends State<AddShotDialog> {
                     child: TextField(
                       controller: _y,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                      decoration: const InputDecoration(labelText: 'Y, мм'),
+                      decoration: InputDecoration(labelText: tr('Y, мм')),
                       onChanged: (_) {
                         if (!_applying) _applyCoords(face);
                       },
@@ -263,14 +264,14 @@ class _AddShotDialogState extends State<AddShotDialog> {
               controller: _note,
               minLines: 2,
               maxLines: 5,
-              decoration: const InputDecoration(labelText: 'Заметка', alignLabelWithHint: true),
+              decoration: InputDecoration(labelText: tr('Заметка'), alignLabelWithHint: true),
             ),
           ],
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Отмена')),
-        FilledButton(onPressed: () => _save(context), child: const Text('Сохранить')),
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(tr('Отмена'))),
+        FilledButton(onPressed: () => _save(context), child: Text(tr('Сохранить'))),
       ],
     );
   }

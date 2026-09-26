@@ -11,6 +11,7 @@ import '../services/ai_settings.dart';
 import '../services/custom_services_repository.dart';
 import '../state/app_data_store.dart';
 import '../widgets/service_icon_picker.dart';
+import '../i18n/i18n.dart';
 
 /// Добавление/изменение плитки стороннего сервиса — три способа описать
 /// подключение (решение пользователя): просто ссылка (+ необязательный
@@ -82,7 +83,7 @@ class _AddServiceScreenState extends State<AddServiceScreen> with SingleTickerPr
 
   Future<void> _save() async {
     if (_name.text.trim().isEmpty) {
-      setState(() => _error = 'Введите название');
+      setState(() => _error = tr('Введите название'));
       return;
     }
     ParsedConnection parsed;
@@ -176,21 +177,21 @@ class _AddServiceScreenState extends State<AddServiceScreen> with SingleTickerPr
     final pasted = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Заполнить с ИИ'),
+        title: Text(tr('Заполнить с ИИ')),
         content: TextField(
           controller: controller,
           autofocus: true,
           minLines: 3,
           maxLines: 8,
-          decoration: const InputDecoration(
-            hintText: 'Вставьте как есть: название сервиса, ссылку, ключ API — что есть',
+          decoration: InputDecoration(
+            hintText: tr('Вставьте как есть: название сервиса, ссылку, ключ API — что есть'),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr('Отмена'))),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
-            child: const Text('Заполнить'),
+            child: Text(tr('Заполнить')),
           ),
         ],
       ),
@@ -221,7 +222,7 @@ class _AddServiceScreenState extends State<AddServiceScreen> with SingleTickerPr
         history: [(role: 'user', text: pasted)],
       );
       final decoded = jsonDecode(_stripCodeFence(reply.text));
-      if (decoded is! Map) throw const FormatException('Ассистент ответил не JSON-объектом');
+      if (decoded is! Map) throw FormatException(tr('Ассистент ответил не JSON-объектом'));
       setState(() {
         if (decoded['name'] != null) _name.text = '${decoded['name']}';
         _tab.index = 2;
@@ -232,7 +233,7 @@ class _AddServiceScreenState extends State<AddServiceScreen> with SingleTickerPr
         });
       });
     } catch (e) {
-      if (mounted) setState(() => _error = 'Не удалось разобрать: $e');
+      if (mounted) setState(() => _error = tr('Не удалось разобрать: {e}', {'e': e}));
     } finally {
       if (mounted) setState(() => _aiBusy = false);
     }
@@ -251,20 +252,20 @@ class _AddServiceScreenState extends State<AddServiceScreen> with SingleTickerPr
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_editing ? 'Изменить сервис' : 'Новый сервис'),
+        title: Text(_editing ? tr('Изменить сервис') : tr('Новый сервис')),
         actions: [
           IconButton(
             icon: _aiBusy
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.auto_awesome_outlined),
-            tooltip: 'Заполнить с ИИ',
+            tooltip: tr('Заполнить с ИИ'),
             onPressed: _aiBusy ? null : _fillWithAi,
           ),
           TextButton(
             onPressed: _aiBusy ? null : _save,
             child: _aiBusy
                 ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                : Text(_editing ? 'СОХРАНИТЬ' : 'СОЗДАТЬ'),
+                : Text(_editing ? tr('СОХРАНИТЬ') : tr('СОЗДАТЬ')),
           ),
         ],
       ),
@@ -273,16 +274,16 @@ class _AddServiceScreenState extends State<AddServiceScreen> with SingleTickerPr
         children: [
           TextField(
             controller: _name,
-            decoration: const InputDecoration(labelText: 'Название'),
+            decoration: InputDecoration(labelText: tr('Название')),
           ),
           const SizedBox(height: 16),
-          const Text('Значок'),
+          Text(tr('Значок')),
           const SizedBox(height: 8),
           ServiceIconPicker(selected: _icon, onChanged: (v) => setState(() => _icon = v)),
           const SizedBox(height: 20),
           TabBar(
             controller: _tab,
-            tabs: const [Tab(text: 'Ссылка'), Tab(text: 'cURL'), Tab(text: 'JSON')],
+            tabs: [Tab(text: tr('Ссылка')), const Tab(text: 'cURL'), const Tab(text: 'JSON')],
             onTap: (_) => setState(() => _error = null),
           ),
           const SizedBox(height: 12),
@@ -295,8 +296,8 @@ class _AddServiceScreenState extends State<AddServiceScreen> with SingleTickerPr
                   children: [
                     TextField(
                       controller: _url,
-                      decoration: const InputDecoration(
-                        labelText: 'Ссылка',
+                      decoration: InputDecoration(
+                        labelText: tr('Ссылка'),
                         hintText: 'https://drive.google.com/...',
                       ),
                       keyboardType: TextInputType.url,
@@ -306,8 +307,8 @@ class _AddServiceScreenState extends State<AddServiceScreen> with SingleTickerPr
                     TextField(
                       controller: _apiKey,
                       decoration: InputDecoration(
-                        labelText: 'Ключ API (необязательно)',
-                        hintText: 'Если сервис требует авторизацию',
+                        labelText: tr('Ключ API (необязательно)'),
+                        hintText: tr('Если сервис требует авторизацию'),
                         // Маска по умолчанию, но с переключателем — иначе
                         // не видно, вставился ли скопированный токен и
                         // целиком ли (жалоба пользователя: "не могу
@@ -327,8 +328,8 @@ class _AddServiceScreenState extends State<AddServiceScreen> with SingleTickerPr
                   controller: _curl,
                   minLines: 3,
                   maxLines: 8,
-                  decoration: const InputDecoration(
-                    labelText: 'Команда curl',
+                  decoration: InputDecoration(
+                    labelText: tr('Команда curl'),
                     hintText: "curl -H 'Authorization: Bearer ...' https://...",
                     alignLabelWithHint: true,
                   ),
@@ -354,15 +355,12 @@ class _AddServiceScreenState extends State<AddServiceScreen> with SingleTickerPr
           ],
           const SizedBox(height: 16),
           Text(
-            'Простая ссылка (без ключа и заголовков) открывается как обычный сайт. '
-            'Если задан ключ API, заголовки или тело запроса — плитка выполняет запрос '
-            'внутри приложения и показывает ответ, а не открывает страницу с ошибкой авторизации.',
+            tr('Простая ссылка (без ключа и заголовков) открывается как обычный сайт. Если задан ключ API, заголовки или тело запроса — плитка выполняет запрос внутри приложения и показывает ответ, а не открывает страницу с ошибкой авторизации.'),
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 8),
           Text(
-            'Данные (в том числе ключи доступа) хранятся только на этом устройстве — '
-            'так же, как остальные настройки приложения.',
+            tr('Данные (в том числе ключи доступа) хранятся только на этом устройстве — так же, как остальные настройки приложения.'),
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],

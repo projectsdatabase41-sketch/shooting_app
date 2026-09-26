@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../services/supabase_auth_service.dart';
 import '../state/app_data_store.dart';
 import 'coach_chat_view.dart';
+import '../i18n/i18n.dart';
 
 /// «Чат с тренером» у спортсмена: переписка с тем, кому выдан токен
 /// доступа (sql/coach-chat.sql). Тренеров несколько — выбор сверху.
@@ -48,14 +49,14 @@ class _AthleteCoachChatState extends State<AthleteCoachChat> {
   @override
   Widget build(BuildContext context) {
     if (!_auth.isSignedIn) {
-      return _hint('Чтобы переписываться с тренером, войдите в свою базу: Настройки → Учётная запись.');
+      return _hint(tr('Чтобы переписываться с тренером, войдите в свою базу: Настройки → Учётная запись.'));
     }
     final coaches = _coaches;
     if (coaches == null) {
       return _error == null ? const Center(child: CircularProgressIndicator()) : _hint(_error!);
     }
     if (coaches.isEmpty) {
-      return _hint('Тренер ещё не подключён — выдайте ему токен доступа: Настройки → Данные и синхронизация.');
+      return _hint(tr('Тренер ещё не подключён — выдайте ему токен доступа: Настройки → Данные и синхронизация.'));
     }
     final current = coaches.firstWhere((c) => c.grantId == _selected, orElse: () => coaches.first);
     return Column(

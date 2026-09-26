@@ -21,6 +21,7 @@ import '../widgets/empty_state.dart';
 import '../widgets/shot_wheel.dart';
 import '../widgets/target_canvas.dart';
 import 'ai_chat_screen.dart';
+import '../i18n/i18n.dart';
 
 /// Просмотр ОДНОЙ тренировки спортсмена тренером — те же перестраиваемые
 /// блоки, что и у спортсмена (`ExerciseHistoryDetailScreen`): шапка,
@@ -70,7 +71,7 @@ class _CoachExerciseDetailScreenState extends State<CoachExerciseDetailScreen> {
       if (!mounted) return;
       if (session == null) {
         setState(() {
-          _error = 'Не удалось разобрать тренировку';
+          _error = tr('Не удалось разобрать тренировку');
           _loading = false;
         });
         return;
@@ -158,13 +159,13 @@ class _DetailBody extends StatelessWidget {
           preferredSize: const Size.fromHeight(24),
           child: Padding(
             padding: const EdgeInsets.only(bottom: 6),
-            child: Text('${total.toStringAsFixed(1)} очка (${total.round()})'),
+            child: Text(tr('{p} очка ({p2})', {'p': total.toStringAsFixed(1), 'p2': total.round()})),
           ),
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.tune),
-            tooltip: 'Порядок блоков',
+            tooltip: tr('Порядок блоков'),
             onPressed: () => _openBlockSettings(context),
           ),
         ],
@@ -230,9 +231,9 @@ class _BlockSettingsSheet extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: Text('Удержать и перетащить — поменять порядок блоков. Переключателем справа блок скрывается.'),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Text(tr('Удержать и перетащить — поменять порядок блоков. Переключателем справа блок скрывается.')),
           ),
           Expanded(
             child: ReorderableListView(
@@ -244,7 +245,7 @@ class _BlockSettingsSheet extends StatelessWidget {
                     key: ValueKey(b),
                     child: ListTile(
                       title: Text(b.title),
-                      subtitle: blocks.isHidden(b) ? const Text('скрыт') : null,
+                      subtitle: blocks.isHidden(b) ? Text(tr('скрыт')) : null,
                       trailing: Switch(
                         value: !blocks.isHidden(b),
                         onChanged: b.canHide ? (v) => blocks.setHidden(b, !v) : null,
@@ -315,17 +316,17 @@ class _SeriesBlock extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 4, 16, 4),
-              child: Text('Серии', style: TextStyle(fontWeight: FontWeight.bold)),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+              child: Text(tr('Серии'), style: const TextStyle(fontWeight: FontWeight.bold)),
             ),
             if (stats.isEmpty)
-              const Padding(padding: EdgeInsets.all(16), child: Text('Серий нет'))
+              Padding(padding: const EdgeInsets.all(16), child: Text(tr('Серий нет')))
             else
               for (final s in stats)
                 ListTile(
-                  title: Text('Серия ${s.seriesNo}'),
-                  subtitle: Text('Сумма ${s.total.toStringAsFixed(1)} · среднее ${s.average.toStringAsFixed(1)}'),
+                  title: Text(tr('Серия {seriesNo}', {'seriesNo': s.seriesNo})),
+                  subtitle: Text(tr('Сумма {p} · среднее {p2}', {'p': s.total.toStringAsFixed(1), 'p2': s.average.toStringAsFixed(1)})),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(
                     builder: (_) => _SeriesShotsScreen(
@@ -360,16 +361,16 @@ class _SeriesShotsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final shots = session.shots.where((s) => s.seriesNo == seriesNo).toList();
     return Scaffold(
-      appBar: AppBar(title: Text('Серия $seriesNo')),
+      appBar: AppBar(title: Text(tr('Серия {seriesNo}', {'seriesNo': seriesNo}))),
       body: shots.isEmpty
-          ? const EmptyState(icon: Icons.list_alt, text: 'В серии нет выстрелов')
+          ? EmptyState(icon: Icons.list_alt, text: tr('В серии нет выстрелов'))
           : ListView.builder(
               itemCount: shots.length,
               itemBuilder: (context, i) {
                 final shot = shots[i];
                 return ListTile(
                   title: Text('№${shot.shotNumber} — ${shot.score.toStringAsFixed(1)}'),
-                  subtitle: Text('X: ${shot.xMm.toStringAsFixed(1)} мм · Y: ${shot.yMm.toStringAsFixed(1)} мм'),
+                  subtitle: Text(tr('X: {p} мм · Y: {p2} мм', {'p': shot.xMm.toStringAsFixed(1), 'p2': shot.yMm.toStringAsFixed(1)})),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(
                     builder: (_) => _SingleShotScreen(shot: shot, face: face, comments: comments),
@@ -398,7 +399,7 @@ class _SingleShotScreen extends StatelessWidget {
     final notes = comments.where((c) => c['level'] == 'shot' && '${c['shot_id']}' == shot.id).toList()
       ..sort((a, b) => '${a['created_at']}'.compareTo('${b['created_at']}'));
     return Scaffold(
-      appBar: AppBar(title: Text('Выстрел №${shot.shotNumber}')),
+      appBar: AppBar(title: Text(tr('Выстрел №{shotNumber}', {'shotNumber': shot.shotNumber}))),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -415,12 +416,12 @@ class _SingleShotScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          Text('Результат: ${shot.score.toStringAsFixed(1)}', style: Theme.of(context).textTheme.titleMedium),
+          Text(tr('Результат: {p}', {'p': shot.score.toStringAsFixed(1)}), style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 12),
-          Text('Заметки', style: Theme.of(context).textTheme.titleSmall),
+          Text(tr('Заметки'), style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 6),
           if (notes.isEmpty)
-            const Text('Заметок к этому выстрелу нет')
+            Text(tr('Заметок к этому выстрелу нет'))
           else
             for (final n in notes)
               Padding(
@@ -457,7 +458,7 @@ class _StatisticsBlock extends StatelessWidget {
           ? null
           : [
               AnalyticsDynamics(
-                title: 'Динамика выстрелов',
+                title: tr('Динамика выстрелов'),
                 subtitle: '',
                 points: session.countingShots,
                 maxY: 10.9,

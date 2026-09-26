@@ -8,6 +8,7 @@ import '../models/target_color_scheme.dart';
 import '../painters/target_painter.dart';
 import '../state/personalization_view_model.dart';
 import '../state/target_view_model.dart';
+import '../i18n/i18n.dart';
 
 /// Подсказка при попытке записать выстрел на паузе.
 ///
@@ -18,9 +19,9 @@ void showPauseAddHint(BuildContext context) {
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
     ..showSnackBar(
-      const SnackBar(
-        content: Text('Нажмите «Продолжить тренировку»'),
-        duration: Duration(seconds: 2),
+      SnackBar(
+        content: Text(tr('Нажмите «Продолжить тренировку»')),
+        duration: const Duration(seconds: 2),
       ),
     );
 }
@@ -419,7 +420,7 @@ class _TargetCanvasState extends State<TargetCanvas> {
         left: left,
         bottom: bottom,
         child: _CornerText(
-          text: 'X ${x.toStringAsFixed(1)}   Y ${y.toStringAsFixed(1)} мм',
+          text: tr('X {p}   Y {p2} мм', {'p': x.toStringAsFixed(1), 'p2': y.toStringAsFixed(1)}),
           color: bottomLeft,
         ),
       ),
@@ -515,7 +516,7 @@ class _DirectionValue extends StatelessWidget {
           Icon(Icons.adjust, size: 20, color: color),
           const SizedBox(width: 6),
           Text(
-            'центр',
+            tr('центр'),
             style: theme.textTheme.titleMedium?.copyWith(color: color),
           ),
         ],

@@ -6,6 +6,7 @@ import 'local_ai.dart';
 import 'local_ai_catalog.dart';
 import 'local_ai_memory.dart';
 import 'local_ai_platform.dart';
+import '../i18n/i18n.dart';
 
 /// Идущие загрузки живут дольше экрана: закрыли настройки — качается дальше.
 class _Downloads {
@@ -75,23 +76,20 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
     return best ?? localModelCatalog.first.id;
   }
 
-  static String _gb(int bytes) => '${(bytes / 1e9).toStringAsFixed(bytes < 1e9 ? 2 : 1)} ГБ';
+  static String _gb(int bytes) => tr('{p} ГБ', {'p': (bytes / 1e9).toStringAsFixed(bytes < 1e9 ? 2 : 1)});
 
   Future<void> _download(LocalModelInfo m) async {
     final free = _freeBytes;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Скачать ${m.name}?'),
+        title: Text(tr('Скачать {name}?', {'name': m.name})),
         content: Text(
-          'Размер ${_gb(m.totalBytes)} с huggingface.co. Лучше по Wi-Fi — мобильный трафик может стоить денег.'
-          '${free != null && free < m.totalBytes * 1.1 ? '\n\nСвободного места мало: ${_gb(free)}.' : ''}'
-          '${_ramGb != null && _ramGb! + 0.5 < m.minRamGb ? '\n\nНужно от ${m.minRamGb} ГБ ОЗУ, у устройства ${_ramGb!.toStringAsFixed(1)} — может работать медленно или закрываться.' : ''}'
-          '\n\nКачается в фоне с уведомлением — приложение можно закрыть. Пауза продолжится с того же места.',
+          tr('Размер {p} с huggingface.co. Лучше по Wi-Fi — мобильный трафик может стоить денег.{p2}{p3}\n\nКачается в фоне — приложение можно свернуть. Если загрузка прервётся, она продолжится с того же места.', {'p': _gb(m.totalBytes), 'p2': free != null && free < m.totalBytes * 1.1 ? tr('\n\nСвободного места мало: {p}.', {'p': _gb(free)}) : '', 'p3': _ramGb != null && _ramGb! + 0.5 < m.minRamGb ? tr('\n\nНужно от {minRamGb} ГБ ОЗУ, у устройства {p} — может работать медленно или закрываться.', {'minRamGb': m.minRamGb, 'p': _ramGb!.toStringAsFixed(1)}) : ''}),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Отмена')),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Скачать')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr('Отмена'))),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(tr('Скачать'))),
         ],
       ),
     );
@@ -113,13 +111,13 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
         final path = p.join(await modelsDir(), f.fileName);
         if (fileLength(path) != f.sizeBytes) {
           _Downloads.stage[m.id] =
-              files.length == 1 ? '' : 'Файл ${i + 1} из ${files.length} (${f == m ? 'модель' : 'зрение'}): ';
+              files.length == 1 ? '' : tr('Файл {p} из {length} ({p2}): ', {'p': i + 1, 'length': files.length, 'p2': f == m ? tr('модель') : tr('зрение')});
           note.value = 0;
           await downloadModel(
             id: f.id,
             url: f.url,
             fileName: f.fileName,
-            displayName: f == m ? m.name : '${m.name} (зрение)',
+            displayName: f == m ? m.name : tr('{name} (зрение)', {'name': m.name}),
             // Не назад: после системной паузы загрузчик иногда присылает
             // чуть меньший процент, и полоса дёргалась 85→72→80.
             onProgress: (v) {
@@ -129,16 +127,16 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
           note.value = -1; // проверка целостности
           if (await sha256OfFile(path) != f.sha256) {
             await deleteFile(path);
-            throw Exception('файл повреждён при загрузке, скачайте ещё раз');
+            throw Exception(tr('файл повреждён при загрузке, скачайте ещё раз'));
           }
         }
       }
       if (s.localModelId.isEmpty) s.localModelId = m.id;
-      messenger.showSnackBar(SnackBar(content: Text('${m.name} установлена')));
+      messenger.showSnackBar(SnackBar(content: Text(tr('{name} установлена', {'name': m.name}))));
     } on DownloadCancelled {
-      messenger.showSnackBar(const SnackBar(content: Text('Загрузка приостановлена')));
+      messenger.showSnackBar(SnackBar(content: Text(tr('Загрузка приостановлена'))));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Не удалось скачать: $e')));
+      messenger.showSnackBar(SnackBar(content: Text(tr('Не удалось скачать: {e}', {'e': e}))));
     } finally {
       _Downloads.progress.remove(m.id);
       _Downloads.stage.remove(m.id);
@@ -164,9 +162,9 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
     });
     try {
       final r = await LocalAi.instance.probe(m);
-      _probe = '${r.text}\n\n(${(r.took.inMilliseconds / 1000).toStringAsFixed(1)} с)';
+      _probe = tr('{text}\n\n({p} с)', {'text': r.text, 'p': (r.took.inMilliseconds / 1000).toStringAsFixed(1)});
     } catch (e) {
-      _probe = 'Ошибка: $e';
+      _probe = tr('Ошибка: {e}', {'e': e});
     } finally {
       if (mounted) setState(() => _probing = false);
     }
@@ -177,31 +175,30 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
     final theme = Theme.of(context);
     if (!localAiSupported) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Локальная модель')),
-        body: const Padding(
-          padding: EdgeInsets.all(24),
-          child: Text('В браузере локальная модель пока не работает — только в приложении для Android и Windows.'),
+        appBar: AppBar(title: Text(tr('Локальная модель'))),
+        body: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(tr('В браузере локальная модель пока не работает — только в приложении для Android и Windows.')),
         ),
       );
     }
     final memory = LocalAiMemory(s.db);
     final recommended = _recommendedId;
     return Scaffold(
-      appBar: AppBar(title: const Text('Локальная модель')),
+      appBar: AppBar(title: Text(tr('Локальная модель'))),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         children: [
           Text(
-            'ИИ прямо на устройстве, без интернета и ключей. Слабее облачного: '
-            'лучше всего подходит для служебных задач.',
+            tr('ИИ прямо на устройстве, без интернета и ключей. Слабее облачного: лучше всего подходит для служебных задач.'),
             style: theme.textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
           SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'off', label: Text('Выкл')),
-              ButtonSegment(value: 'tasks', label: Text('Служебные')),
-              ButtonSegment(value: 'all', label: Text('Всё')),
+            segments: [
+              ButtonSegment(value: 'off', label: Text(tr('Выкл'))),
+              ButtonSegment(value: 'tasks', label: Text(tr('Служебные'))),
+              ButtonSegment(value: 'all', label: Text(tr('Всё'))),
             ],
             selected: {s.localMode},
             showSelectedIcon: false,
@@ -210,18 +207,15 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
           const SizedBox(height: 8),
           Text(
             switch (s.localMode) {
-              'tasks' => 'Заметки, цвета, описания таблиц, отбор записей — локально. '
-                  'Не справилась — отвечает облако. Чат ассистента — в облаке.',
-              'all' => 'Всё, включая чат ассистента, — локально (работает без интернета). '
-                  'Облако — только если локальная не ответила.',
-              _ => 'Только облачный ИИ, как раньше.',
+              'tasks' => tr('Заметки, цвета, описания таблиц, отбор записей — локально. Не справилась — отвечает облако. Чат ассистента — в облаке.'),
+              'all' => tr('Всё, включая чат ассистента, — локально (работает без интернета). Облако — только если локальная не ответила.'),
+              _ => tr('Только облачный ИИ, как раньше.'),
             },
             style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: 16),
           Text(
-            'Память устройства: ${_ramGb == null ? 'неизвестно' : '${_ramGb!.toStringAsFixed(1)} ГБ'}'
-            '${_freeBytes == null ? '' : ' · свободно на диске ${_gb(_freeBytes!)}'}',
+            tr('Память устройства: {p}{p2}', {'p': _ramGb == null ? tr('неизвестно') : tr('{p} ГБ', {'p': _ramGb!.toStringAsFixed(1)}), 'p2': _freeBytes == null ? '' : tr(' · свободно на диске {p}', {'p': _gb(_freeBytes!)})}),
             style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: 8),
@@ -233,15 +227,13 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.memory_outlined),
-            title: const Text('Память локальной модели'),
+            title: Text(tr('Память локальной модели')),
             subtitle: Text(
-              '${memory.count} записей, ${(memory.usedChars / 1000).toStringAsFixed(0)} из '
-              '${(memory.maxChars / 1000).toStringAsFixed(0)} тыс. символов. Готовые ответы и удачные '
-              'примеры облака — старое вытесняется само.',
+              tr('{count} записей, {p} из {p2} тыс. символов. Готовые ответы и удачные примеры облака — старое вытесняется само.', {'count': memory.count, 'p': (memory.usedChars / 1000).toStringAsFixed(0), 'p2': (memory.maxChars / 1000).toStringAsFixed(0)}),
             ),
             trailing: TextButton(
               onPressed: () => setState(memory.clear),
-              child: const Text('Очистить'),
+              child: Text(tr('Очистить')),
             ),
           ),
         ],
@@ -265,7 +257,7 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
               children: [
                 if (installed)
                   IconButton(
-                    tooltip: 'Использовать эту модель',
+                    tooltip: tr('Использовать эту модель'),
                     icon: Icon(selected ? Icons.radio_button_checked : Icons.radio_button_unchecked),
                     onPressed: () => setState(() => s.localModelId = m.id),
                   ),
@@ -273,30 +265,30 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('${m.name} · ${m.tier}', style: theme.textTheme.titleSmall),
-                      Text('${_gb(m.totalBytes)} · от ${m.minRamGb} ГБ ОЗУ', style: theme.textTheme.bodySmall),
+                      Text('${m.name} · ${tr(m.tier)}', style: theme.textTheme.titleSmall),
+                      Text(tr('{p} · от {minRamGb} ГБ ОЗУ', {'p': _gb(m.totalBytes), 'minRamGb': m.minRamGb}), style: theme.textTheme.bodySmall),
                       if (m.sees)
-                        Text('Видит фото — ищет пробоины на «Фото мишени»',
+                        Text(tr('Видит фото — ищет пробоины на «Фото мишени»'),
                             style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary)),
-                      Text(m.note, style: theme.textTheme.bodySmall),
+                      Text(tr(m.note), style: theme.textTheme.bodySmall),
                       if (m.id == recommended)
-                        Text('Рекомендуется для этого устройства',
+                        Text(tr('Рекомендуется для этого устройства'),
                             style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary)),
                       if (tooHeavy)
-                        Text('Может не потянуть: мало памяти',
+                        Text(tr('Может не потянуть: мало памяти'),
                             style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error)),
                     ],
                   ),
                 ),
                 if (progress == null && !installed)
                   IconButton(
-                    tooltip: 'Скачать',
+                    tooltip: tr('Скачать'),
                     icon: const Icon(Icons.download_outlined),
                     onPressed: () => _download(m),
                   ),
                 if (progress != null)
                   IconButton(
-                    tooltip: 'Приостановить',
+                    tooltip: tr('Приостановить'),
                     icon: const Icon(Icons.pause_outlined),
                     onPressed: () async {
                       await pauseModelDownload(m.id);
@@ -305,12 +297,12 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
                   ),
                 if (installed) ...[
                   IconButton(
-                    tooltip: 'Проверить',
+                    tooltip: tr('Проверить'),
                     icon: const Icon(Icons.play_arrow_outlined),
                     onPressed: _probing ? null : () => _runProbe(m),
                   ),
                   IconButton(
-                    tooltip: 'Удалить',
+                    tooltip: tr('Удалить'),
                     icon: const Icon(Icons.delete_outline),
                     onPressed: () => _delete(m),
                   ),
@@ -332,7 +324,7 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
                 ),
               ),
             if (installed && selected && s.localMode == 'off')
-              Text('Выбрана, но режим «Выкл» — включите «Служебные» или «Всё».',
+              Text(tr('Выбрана, но режим «Выкл» — включите «Служебные» или «Всё».'),
                   style: theme.textTheme.bodySmall),
           ],
         ),

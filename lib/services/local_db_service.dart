@@ -2,6 +2,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:sqlite3/common.dart';
 
 import 'db_opener.dart';
+import '../i18n/i18n.dart';
 
 /// Обёртка над sqlite3 (без кодогенерации — раздел 0.1 dev-task-spec.md,
 /// Dart SDK/build_runner недоступны в среде первичной разработки).
@@ -18,7 +19,7 @@ class LocalDbService {
   CommonDatabase get db {
     final d = _db;
     if (d == null) {
-      throw StateError('LocalDbService.open() ещё не вызван');
+      throw StateError(tr('LocalDbService.open() ещё не вызван'));
     }
     return d;
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../i18n/i18n.dart';
 import '../state/home_tabs_view_model.dart';
 import '../state/personalization_view_model.dart';
 
@@ -158,7 +159,7 @@ class _HomeTabsBarState extends State<HomeTabsBar> {
             // экране с подписью у каждой не помещаются.
             if (isSelected) ...[
               const SizedBox(height: 2),
-              Text(spec.label, style: theme.textTheme.labelSmall?.copyWith(color: color)),
+              Text(tr(spec.label), style: theme.textTheme.labelSmall?.copyWith(color: color)),
             ],
           ],
         ),
@@ -388,7 +389,7 @@ class _HomeTileGridState extends State<HomeTileGrid> {
                   Icon(spec.icon, size: 40, color: fg),
                   const SizedBox(height: 8),
                   Text(
-                    spec.label,
+                    tr(spec.label),
                     textAlign: TextAlign.center,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,

@@ -1,3 +1,4 @@
+import '../i18n/i18n.dart';
 enum CommentLevel { shot, series, session, coach }
 
 enum AuthorRole { athlete, coach }
@@ -82,5 +83,5 @@ class Comment {
 
   /// Подпись строки в ленте — "Спортсмен:" / "Тренер:" (раздел 7 ТЗ).
   String get authorLabel =>
-      authorRole == AuthorRole.athlete ? 'Спортсмен' : 'Тренер';
+      authorRole == AuthorRole.athlete ? tr('Спортсмен') : tr('Тренер');
 }

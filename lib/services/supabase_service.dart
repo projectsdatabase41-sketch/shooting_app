@@ -13,6 +13,7 @@ import '../models/training_session.dart';
 import '../state/app_data_store.dart';
 import 'comments_repository.dart';
 import 'supabase_auth_service.dart';
+import '../i18n/i18n.dart';
 
 class SupabaseSyncException implements Exception {
   final String message;
@@ -78,7 +79,7 @@ class SupabaseSyncService {
   Future<String> _requireToken() async {
     final token = await auth.ensureFreshToken();
     if (token == null) {
-      throw const SupabaseSyncException('Сначала войдите в базу — Настройки → Учётная запись');
+      throw SupabaseSyncException(tr('Сначала войдите в базу — Настройки → Учётная запись'));
     }
     return token;
   }
@@ -205,7 +206,7 @@ class SupabaseSyncService {
             body: jsonEncode([
               {
                 'code': face.code,
-                'name': face.name,
+                'name': face.nameKey,
                 'distance_m': face.distanceM,
                 'default_caliber_mm': face.caliberMm,
                 'scoring_type': 'decimal',
@@ -484,7 +485,7 @@ class SupabaseSyncService {
     final expectedShots = (child['expected_shots'] as num?)?.toInt() ?? 1;
     return store
         .createExercise(
-          name: name.isEmpty ? 'Без названия' : name,
+          name: name.isEmpty ? tr('Без названия') : name,
           targetFaceCode: faceCode,
           totalShots: expectedShots,
           seriesSize: expectedShots,

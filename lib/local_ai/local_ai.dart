@@ -8,6 +8,7 @@ import '../services/ai_settings.dart';
 import 'local_ai_catalog.dart';
 import 'local_ai_memory.dart';
 import 'local_ai_platform.dart';
+import '../i18n/i18n.dart';
 
 /// Один запрос к локальной модели — то же, что уходит в облако.
 typedef LocalRequest = ({
@@ -115,9 +116,9 @@ class LocalAi {
     final examples = task == 'chat' ? const <({String input, String output})>[] : memory.examples(task, lastUser);
     final sys = StringBuffer(system);
     if (examples.isNotEmpty) {
-      sys.writeln('\n\nПРИМЕРЫ УДАЧНЫХ ОТВЕТОВ НА ПОХОЖИЕ ЗАПРОСЫ:');
+      sys.writeln(tr('\n\nПРИМЕРЫ УДАЧНЫХ ОТВЕТОВ НА ПОХОЖИЕ ЗАПРОСЫ:'));
       for (final e in examples) {
-        sys.writeln('Запрос: ${e.input}\nОтвет: ${e.output}\n');
+        sys.writeln(tr('Запрос: {input}\nОтвет: {output}\n', {'input': e.input, 'output': e.output}));
       }
     }
     final trimmedHistory = [
@@ -156,7 +157,7 @@ class LocalAi {
   /// Короткая проверка из настроек: ответ и скорость.
   Future<({String text, Duration took})> probe(LocalModelInfo model) async {
     final path = await installedPath(model);
-    if (path == null) throw StateError('Модель не скачана');
+    if (path == null) throw StateError(tr('Модель не скачана'));
     final sw = Stopwatch()..start();
     final text = await _generate((
       modelPath: path,
@@ -232,7 +233,7 @@ class LocalAi {
   /// Вопрос по картинке к выбранной модели «со зрением» (поиск пробоин).
   Future<String> see(LocalModelInfo model, Uint8List image, String prompt) async {
     final path = await installedPath(model);
-    if (path == null || !model.sees) throw StateError('Модель со зрением не скачана');
+    if (path == null || !model.sees) throw StateError(tr('Модель со зрением не скачана'));
     _cancel = false;
     return _generate((
       modelPath: path,
@@ -260,5 +261,5 @@ class LocalAi {
 class LocalAiCancelled implements Exception {
   const LocalAiCancelled();
   @override
-  String toString() => 'Распознавание прервано';
+  String toString() => tr('Распознавание прервано');
 }

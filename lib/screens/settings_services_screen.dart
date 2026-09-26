@@ -4,6 +4,7 @@ import '../services/custom_services_repository.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/service_icon_picker.dart';
 import 'add_service_screen.dart';
+import '../i18n/i18n.dart';
 
 /// "Сервисы" (решение пользователя) — сторонние сервисы (Google Диск,
 /// Supabase, заметки и др.), которые пользователь сам подключает и
@@ -20,19 +21,18 @@ class SettingsServicesScreen extends StatelessWidget {
       builder: (context, _) {
         final services = repo.list();
         return Scaffold(
-          appBar: AppBar(title: const Text('Сервисы')),
+          appBar: AppBar(title: Text(tr('Сервисы'))),
           floatingActionButton: FloatingActionButton.extended(
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => AddServiceScreen(repo: repo)),
             ),
             icon: const Icon(Icons.add),
-            label: const Text('Сервис'),
+            label: Text(tr('Сервис')),
           ),
           body: services.isEmpty
-              ? const EmptyState(
+              ? EmptyState(
                   icon: Icons.dashboard_customize_outlined,
-                  text: 'Сервисов пока нет — подключите Google Диск, Supabase, заметки '
-                      'или что-то ещё, и на главном экране появится своя плитка.',
+                  text: tr('Сервисов пока нет — подключите Google Диск, Supabase, заметки или что-то ещё, и на главном экране появится своя плитка.'),
                 )
               : ListView.separated(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
@@ -65,16 +65,16 @@ class SettingsServicesScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Удалить сервис?'),
-        content: Text('«$name» пропадёт из настроек и с главного экрана.'),
+        title: Text(tr('Удалить сервис?')),
+        content: Text(tr('«{name}» пропадёт из настроек и с главного экрана.', {'name': name})),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr('Отмена'))),
           FilledButton(
             onPressed: () {
               repo.delete(id);
               Navigator.of(ctx).pop();
             },
-            child: const Text('Удалить'),
+            child: Text(tr('Удалить')),
           ),
         ],
       ),

@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import 'chat_auth_service.dart';
 import 'chat_settings.dart';
+import '../i18n/i18n.dart';
 
 /// Большие вложения чата (свыше `ChatMediaUtils.maxAttachmentBytes`) —
 /// идут не через Supabase Storage (там лимит 50 МБ), а напрямую в
@@ -30,7 +31,7 @@ class ChatDriveService {
 
   Future<Map<String, dynamic>> _callFunction(Map<String, dynamic> body) async {
     final token = await auth.ensureFreshToken();
-    if (token == null) throw Exception('Сначала войдите в чат');
+    if (token == null) throw Exception(tr('Сначала войдите в чат'));
     final client = clientFactory();
     try {
       final res = await client
@@ -61,7 +62,7 @@ class ChatDriveService {
     final json = await _callFunction({'action': 'getUploadToken'});
     final token = json['token'] as String?;
     final folderId = json['folderId'] as String?;
-    if (token == null || folderId == null) throw Exception('Диск не выдал токен: $json');
+    if (token == null || folderId == null) throw Exception(tr('Диск не выдал токен: {json}', {'json': json}));
     return (token, folderId);
   }
 
@@ -109,7 +110,7 @@ class ChatDriveService {
           .timeout(_timeout);
       final sessionUri = initRes.headers['location'];
       if (initRes.statusCode >= 300 || sessionUri == null) {
-        throw Exception('Не удалось начать загрузку на Диск (${initRes.statusCode}): ${initRes.body}');
+        throw Exception(tr('Не удалось начать загрузку на Диск ({statusCode}): {body}', {'statusCode': initRes.statusCode, 'body': initRes.body}));
       }
 
       final request = http.StreamedRequest('PUT', Uri.parse(sessionUri))
@@ -120,10 +121,10 @@ class ChatDriveService {
       final streamedRes = await client.send(request).timeout(_transferTimeout);
       final body = await streamedRes.stream.bytesToString();
       if (streamedRes.statusCode >= 300) {
-        throw Exception('Не удалось загрузить файл на Диск (${streamedRes.statusCode}): $body');
+        throw Exception(tr('Не удалось загрузить файл на Диск ({statusCode}): {body}', {'statusCode': streamedRes.statusCode, 'body': body}));
       }
       final fileId = (jsonDecode(body) as Map<String, dynamic>)['id'] as String?;
-      if (fileId == null) throw Exception('Диск не вернул id файла: $body');
+      if (fileId == null) throw Exception(tr('Диск не вернул id файла: {body}', {'body': body}));
       return fileId;
     } finally {
       client.close();
@@ -146,7 +147,7 @@ class ChatDriveService {
       final streamedRes = await client.send(request).timeout(_transferTimeout);
       if (streamedRes.statusCode >= 300) {
         final body = await streamedRes.stream.bytesToString();
-        throw Exception('Не удалось скачать файл (${streamedRes.statusCode}): $body');
+        throw Exception(tr('Не удалось скачать файл ({statusCode}): {body}', {'statusCode': streamedRes.statusCode, 'body': body}));
       }
       final sink = File(destPath).openWrite();
       var received = 0;

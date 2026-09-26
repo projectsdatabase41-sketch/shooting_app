@@ -7,6 +7,7 @@ import '../models/ai_memory_summary.dart';
 import '../services/ai_memory_service.dart';
 import '../services/ai_service.dart';
 import '../services/knowledge_service.dart';
+import '../i18n/i18n.dart';
 
 class AiMessage {
   final bool fromUser;
@@ -214,7 +215,7 @@ class AiChatViewModel extends ChangeNotifier {
       unawaited(memory.append(AiMemorySummary(
         periodStart: askedAt,
         periodEnd: DateTime.now(),
-        summary: 'В: $trimmed\nО: ${_gist(reply.text)}',
+        summary: tr('В: {trimmed}\nО: {p}', {'trimmed': trimmed, 'p': _gist(reply.text)}),
         trainingPackageIds: rawCtx.session != null ? [rawCtx.session!.id] : const [],
       )));
     } catch (e) {

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../i18n/i18n.dart';
 
 /// Рендер графика/таблицы по описанию от модели.
 ///
@@ -46,7 +47,7 @@ class AiChartView extends StatelessWidget {
       body = _buildChart(context, bar: type == 'bar');
     } else {
       body = Text(
-        'Не понял тип графика: «$type»',
+        tr('Не понял тип графика: «{type}»', {'type': type}),
         style: theme.textTheme.bodySmall,
       );
     }
@@ -90,7 +91,7 @@ class AiChartView extends StatelessWidget {
     final labels = _parseLabels(spec);
     final series = _parseSeries(spec);
     if (series.isEmpty) {
-      return Text('Нет данных для графика', style: Theme.of(context).textTheme.bodySmall);
+      return Text(tr('Нет данных для графика'), style: Theme.of(context).textTheme.bodySmall);
     }
 
     final palette = [cs.primary, AppTheme.accentFor(cs), cs.tertiary];
@@ -145,7 +146,7 @@ class AiChartView extends StatelessWidget {
     final theme = Theme.of(context);
     final (columns, rows) = _parseTable(spec);
     if (columns.isEmpty && rows.isEmpty) {
-      return Text('Пустая таблица', style: theme.textTheme.bodySmall);
+      return Text(tr('Пустая таблица'), style: theme.textTheme.bodySmall);
     }
     // Широкие таблицы прокручиваются вбок, а не ломают вёрстку экрана.
     // Ячейки переносятся по словам (ConstrainedBox + softWrap) — иначе
@@ -240,7 +241,7 @@ class _ChartGalleryScreenState extends State<ChartGalleryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('${_current + 1} из ${widget.specs.length}'),
+        title: Text(tr('{p} из {length}', {'p': _current + 1, 'length': widget.specs.length})),
       ),
       body: PageView.builder(
         controller: _pages,
@@ -273,7 +274,7 @@ class _GalleryPage extends StatelessWidget {
     final labels = _parseLabels(spec);
     final series = _parseSeries(spec);
     if (series.isEmpty) {
-      return Center(child: Text('Нет данных для графика', style: Theme.of(context).textTheme.bodyMedium));
+      return Center(child: Text(tr('Нет данных для графика'), style: Theme.of(context).textTheme.bodyMedium));
     }
     final palette = [cs.primary, AppTheme.accentFor(cs), cs.tertiary];
 
@@ -339,7 +340,7 @@ class _GalleryPage extends StatelessWidget {
     final theme = Theme.of(context);
     final (columns, rows) = _parseTable(spec);
     if (columns.isEmpty && rows.isEmpty) {
-      return Center(child: Text('Пустая таблица', style: theme.textTheme.bodyMedium));
+      return Center(child: Text(tr('Пустая таблица'), style: theme.textTheme.bodyMedium));
     }
     // constrained: false — таблица занимает свой естественный размер
     // (часто шире экрана), а панорамирование и зум даёт сам

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
+import '../i18n/i18n.dart';
 import 'package:http/http.dart' as http;
 
 /// Перевод сообщений чата (пункт 4 списка правок) — намеренно БЕЗ
@@ -36,7 +37,7 @@ class ChatTranslationService {
       'langpair': 'autodetect|$target',
     });
     final res = await _client.get(uri).timeout(_timeout);
-    if (res.statusCode != 200) throw Exception('Переводчик ответил ${res.statusCode}');
+    if (res.statusCode != 200) throw Exception(tr('Переводчик ответил {statusCode}', {'statusCode': res.statusCode}));
     final decoded = jsonDecode(utf8.decode(res.bodyBytes));
     if (decoded is! Map) return null;
 

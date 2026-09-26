@@ -1,13 +1,17 @@
 import 'dart:convert';
 import 'dart:ui' show Color;
 import 'target_color_scheme.dart';
+import '../i18n/i18n.dart';
 
 /// Именованный цветовой пресет (часть A.2.1 логики-спека).
 class ColorPreset {
-  final String name;
+  /// Название по-русски — ключ перевода; [name] — на языке интерфейса.
+  final String nameKey;
   final TargetColorScheme scheme;
 
-  const ColorPreset(this.name, this.scheme);
+  const ColorPreset(this.nameKey, this.scheme);
+
+  String get name => tr(nameKey);
 }
 
 /// 7 пресетов по макетам (A.2.1).
@@ -36,10 +40,10 @@ class ColorPreset {
 class ColorPresets {
   ColorPresets._();
 
-  static const classic = ColorPreset('Классическая', TargetColorScheme.classic);
+  static const classic = ColorPreset(/*tr*/ 'Классическая', TargetColorScheme.classic);
 
   static const dark = ColorPreset(
-    'Тёмная',
+    /*tr*/ 'Тёмная',
     TargetColorScheme(
       targetPaper: Color(0xFF37474F),
       targetBullseye: Color(0xFF000000),
@@ -60,7 +64,7 @@ class ColorPresets {
   );
 
   static const highContrast = ColorPreset(
-    'Высокий контраст',
+    /*tr*/ 'Высокий контраст',
     TargetColorScheme(
       targetPaper: Color(0xFFFFFFFF),
       targetBullseye: Color(0xFF000000),
@@ -81,7 +85,7 @@ class ColorPresets {
   );
 
   static const warm = ColorPreset(
-    'Тёплая',
+    /*tr*/ 'Тёплая',
     TargetColorScheme(
       targetPaper: Color(0xFFD7CCC8),
       targetBullseye: Color(0xFF3E2723),
@@ -102,7 +106,7 @@ class ColorPresets {
   );
 
   static const cold = ColorPreset(
-    'Холодная',
+    /*tr*/ 'Холодная',
     TargetColorScheme(
       targetPaper: Color(0xFFCFD8DC),
       targetBullseye: Color(0xFF102A43),
@@ -123,7 +127,7 @@ class ColorPresets {
   );
 
   static const olive = ColorPreset(
-    'Оливковая',
+    /*tr*/ 'Оливковая',
     TargetColorScheme(
       targetPaper: Color(0xFFC5CAA0),
       targetBullseye: Color(0xFF33361B),
@@ -144,7 +148,7 @@ class ColorPresets {
   );
 
   static const pastel = ColorPreset(
-    'Пастельная',
+    /*tr*/ 'Пастельная',
     TargetColorScheme(
       targetPaper: Color(0xFFE1E6EA),
       targetBullseye: Color(0xFF4A4A58),
@@ -209,7 +213,7 @@ class ColorSchemeIo {
       if (!TargetColorScheme.allKeys.contains(entry.key)) continue;
       final hex = entry.value;
       if (hex is! String || !TargetColorScheme.isValidHex(hex)) {
-        throw FormatException('Битое значение HEX для ключа ${entry.key}: $hex');
+        throw FormatException(tr(/*tr*/ 'Битое значение HEX для ключа {key}: {hex}', {'key': entry.key, 'hex': hex}));
       }
       result = result.copyWithKey(entry.key, TargetColorScheme.hexToColor(hex));
     }

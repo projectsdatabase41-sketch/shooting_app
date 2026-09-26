@@ -21,6 +21,7 @@ import 'service_tile_screen.dart';
 import 'settings_screen.dart';
 import 'statistics_screen.dart';
 import 'target_screen.dart';
+import '../i18n/i18n.dart';
 
 /// Домашняя оболочка с нижней навигацией. Состав вкладок зависит от
 /// `workMode` (часть C.1 логики-спека). Порядок и видимость каждой
@@ -272,13 +273,12 @@ class _ActiveTargetTab extends StatelessWidget {
     );
     if (active.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Мишень')),
-        body: const Center(
+        appBar: AppBar(title: Text(tr('Мишень'))),
+        body: Center(
           child: Padding(
-            padding: EdgeInsets.all(24),
+            padding: const EdgeInsets.all(24),
             child: Text(
-              'Нет активной тренировки. Выберите упражнение на вкладке '
-              '"Тренировка", чтобы начать.',
+              tr('Нет активной тренировки. Выберите упражнение на вкладке "Тренировка", чтобы начать.'),
               textAlign: TextAlign.center,
             ),
           ),
@@ -288,7 +288,7 @@ class _ActiveTargetTab extends StatelessWidget {
     final session = active.first;
     final exercise = store.exerciseFor(session);
     if (exercise == null) {
-      return const Scaffold(body: Center(child: Text('Упражнение не найдено')));
+      return Scaffold(body: Center(child: Text(tr('Упражнение не найдено'))));
     }
     return TargetScreen(session: session, exercise: exercise, embedded: true);
   }
@@ -318,7 +318,7 @@ class _SyncBanner extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Синхронизация с облаком… не выключайте телефон',
+                  tr('Синхронизация с облаком… не выключайте телефон'),
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),

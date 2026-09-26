@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../i18n/i18n.dart';
 
 /// Диалог "применить или откатить" при выходе с экрана мишени, когда
 /// завершённая тренировка была разблокирована и в ней что-то поменяли
@@ -13,19 +14,18 @@ Future<bool?> confirmFinishedEditExit(BuildContext context) {
   return showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: const Text('Хотите применить изменения?'),
-      content: const Text(
-        'Вы поправили уже завершённую тренировку. Применить изменения '
-        'или вернуть её к тому виду, что был до разблокировки?',
+      title: Text(tr('Хотите применить изменения?')),
+      content: Text(
+        tr('Вы поправили уже завершённую тренировку. Применить изменения или вернуть её к тому виду, что был до разблокировки?'),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(ctx).pop(false),
-          child: const Text('Вернуть как было'),
+          child: Text(tr('Вернуть как было')),
         ),
         FilledButton(
           onPressed: () => Navigator.of(ctx).pop(true),
-          child: const Text('Применить'),
+          child: Text(tr('Применить')),
         ),
       ],
     ),

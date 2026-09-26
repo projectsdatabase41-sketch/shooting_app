@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../state/target_view_model.dart';
+import '../i18n/i18n.dart';
 
 /// Корзина удалённых выстрелов текущей тренировки (раздел 5 ТЗ, часть
 /// B.5). "Вернуть" на каждый выстрел, "Очистить" для ручной окончательной
@@ -29,23 +30,23 @@ class TrashSheet extends StatelessWidget {
             padding: const EdgeInsets.all(12),
             child: Row(
               children: [
-                const Text('Корзина', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                Text(tr('Корзина'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 const Spacer(),
                 TextButton(
                   onPressed: vm.session.trash.isEmpty ? null : vm.clearTrash,
-                  child: const Text('Очистить'),
+                  child: Text(tr('Очистить')),
                 ),
               ],
             ),
           ),
           if (vm.session.trash.isEmpty)
-            const Padding(padding: EdgeInsets.all(24), child: Text('Пусто')),
+            Padding(padding: const EdgeInsets.all(24), child: Text(tr('Пусто'))),
           ...vm.session.trash.map((shot) => ListTile(
-                title: Text('Выстрел ${shot.shotNumber} · ${shot.score.toStringAsFixed(1)}'),
+                title: Text(tr('Выстрел {shotNumber} · {p}', {'shotNumber': shot.shotNumber, 'p': shot.score.toStringAsFixed(1)})),
                 subtitle: Text('X:${shot.xMm.toStringAsFixed(1)} Y:${shot.yMm.toStringAsFixed(1)}'),
                 trailing: TextButton(
                   onPressed: () => vm.restoreFromTrash(shot.id),
-                  child: const Text('Вернуть'),
+                  child: Text(tr('Вернуть')),
                 ),
               )),
         ],

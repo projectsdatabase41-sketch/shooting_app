@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../logic/chat_media_utils.dart';
+import '../i18n/i18n.dart';
 
 /// Предпросмотр фото/файла перед отправкой — подпись пишется здесь, а не
 /// добавляется отдельным сообщением потом (решение пользователя: фото
@@ -31,7 +32,7 @@ class _AttachmentComposeScreenState extends State<AttachmentComposeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.isImage ? 'Фото' : 'Файл')),
+      appBar: AppBar(title: Text(widget.isImage ? tr('Фото') : tr('Файл'))),
       body: Column(
         children: [
           Expanded(
@@ -65,7 +66,7 @@ class _AttachmentComposeScreenState extends State<AttachmentComposeScreen> {
                       minLines: 1,
                       maxLines: 4,
                       autofocus: widget.isImage,
-                      decoration: const InputDecoration(hintText: 'Подпись (необязательно)', isDense: true),
+                      decoration: InputDecoration(hintText: tr('Подпись (необязательно)'), isDense: true),
                     ),
                   ),
                   const SizedBox(width: 8),

@@ -16,6 +16,7 @@ import '../services/chat_sync_service.dart';
 import '../widgets/chat_avatar.dart';
 import 'chat_group_screen.dart';
 import 'photo_viewer_screen.dart';
+import '../i18n/i18n.dart';
 
 /// Панель собеседника — открывается тапом по нику в шапке переписки
 /// (как в Telegram): звонки, колокольчик, код, «о себе», дружба и всё,
@@ -87,11 +88,11 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Удалить из контактов?'),
-        content: Text('Переписка с ${_contact.nickname} останется на устройстве, но сам контакт пропадёт из списка.'),
+        title: Text(tr('Удалить из контактов?')),
+        content: Text(tr('Переписка с {nickname} останется на устройстве, но сам контакт пропадёт из списка.', {'nickname': _contact.nickname})),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Отмена')),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Удалить')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr('Отмена'))),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(tr('Удалить'))),
         ],
       ),
     );
@@ -128,19 +129,19 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
     final translate = prefs.autoTranslateFor(_contact.id);
     final tiles = <Widget>[
       if (!_contact.isGroup) ...[
-        _Tile3D(icon: Icons.call, label: 'Звонок', onTap: () => Navigator.of(context).pop('call')),
-        _Tile3D(icon: Icons.videocam, label: 'Видео', onTap: () => Navigator.of(context).pop('video')),
+        _Tile3D(icon: Icons.call, label: tr('Звонок'), onTap: () => Navigator.of(context).pop('call')),
+        _Tile3D(icon: Icons.videocam, label: tr('Видео'), onTap: () => Navigator.of(context).pop('video')),
       ] else
-        _Tile3D(icon: Icons.groups, label: 'О группе', onTap: _openGroupInfo),
+        _Tile3D(icon: Icons.groups, label: tr('О группе'), onTap: _openGroupInfo),
       _Tile3D(
         icon: muted ? Icons.notifications_off : Icons.notifications_active,
-        label: muted ? 'Без звука' : 'Звук',
+        label: muted ? tr('Без звука') : tr('Звук'),
         active: !muted,
         onTap: () => setState(() => prefs.setMutedFor(_contact.id, !muted)),
       ),
       _Tile3D(
         icon: Icons.translate,
-        label: 'Перевод',
+        label: tr('Перевод'),
         active: translate,
         onTap: () => setState(() => prefs.setAutoTranslateFor(_contact.id, !translate)),
       ),
@@ -164,7 +165,7 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
         const SizedBox(height: 12),
         Text(_contact.nickname, style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
         if (_contact.isGroup)
-          Text('Участников: ${_contact.members.length}', style: theme.textTheme.bodySmall),
+          Text(tr('Участников: {length}', {'length': _contact.members.length}), style: theme.textTheme.bodySmall),
         const SizedBox(height: 16),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -175,27 +176,27 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
           ListTile(
             leading: const Icon(Icons.tag),
             title: Text(_code.isEmpty ? '—' : _code),
-            subtitle: const Text('Код для поиска — нажмите, чтобы скопировать'),
+            subtitle: Text(tr('Код для поиска — нажмите, чтобы скопировать')),
             onTap: _code.isEmpty
                 ? null
                 : () {
                     Clipboard.setData(ClipboardData(text: _code));
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Код скопирован')));
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Код скопирован'))));
                   },
           ),
         if (_contact.about.isNotEmpty)
           ListTile(
             leading: const Icon(Icons.info_outline),
             title: Text(_contact.about),
-            subtitle: Text(_contact.isGroup ? 'О группе' : 'О себе'),
+            subtitle: Text(_contact.isGroup ? tr('О группе') : tr('О себе')),
           ),
         if (!_contact.isGroup)
           ListTile(
             leading: Icon(_friend == 'accepted' ? Icons.how_to_reg : Icons.person_add_alt_1),
             title: Text(switch (_friend) {
-              'accepted' => 'В друзьях',
-              'pending' => 'Заявка в друзья отправлена',
-              _ => _friendLoaded ? 'Добавить в друзья' : '…',
+              'accepted' => tr('В друзьях'),
+              'pending' => tr('Заявка в друзья отправлена'),
+              _ => _friendLoaded ? tr('Добавить в друзья') : '…',
             }),
             onTap: _friendLoaded && _friend == null ? _addFriend : null,
           ),
@@ -208,7 +209,7 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
           if (!_contact.isGroup)
             PopupMenuButton<String>(
               onSelected: (_) => _removeContact(),
-              itemBuilder: (_) => const [PopupMenuItem(value: 'remove', child: Text('Удалить из контактов'))],
+              itemBuilder: (_) => [PopupMenuItem(value: 'remove', child: Text(tr('Удалить из контактов')))],
             ),
         ],
       ),
@@ -217,7 +218,7 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
         child: NestedScrollView(
           headerSliverBuilder: (context, _) => [
             SliverToBoxAdapter(child: header),
-            const SliverAppBar(
+            SliverAppBar(
               pinned: true,
               primary: false,
               automaticallyImplyLeading: false,
@@ -225,17 +226,17 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
               bottom: TabBar(
                 isScrollable: true,
                 tabAlignment: TabAlignment.start,
-                tabs: [Tab(text: 'Фото'), Tab(text: 'Файлы'), Tab(text: 'Музыка'), Tab(text: 'Ссылки'), Tab(text: 'Голосовые')],
+                tabs: [Tab(text: tr('Фото')), Tab(text: tr('Файлы')), Tab(text: tr('Музыка')), Tab(text: tr('Ссылки')), Tab(text: tr('Голосовые'))],
               ),
             ),
           ],
           body: TabBarView(
             children: [
               _PhotoGrid(photos: _photos, prefs: prefs),
-              _fileList(_files, Icons.insert_drive_file_outlined, 'Файлов пока нет'),
-              _fileList(_music, Icons.music_note_outlined, 'Музыки пока нет'),
+              _fileList(_files, Icons.insert_drive_file_outlined, tr('Файлов пока нет')),
+              _fileList(_music, Icons.music_note_outlined, tr('Музыки пока нет')),
               _linkList(),
-              _fileList(_voice, Icons.mic_none, 'Голосовых пока нет'),
+              _fileList(_voice, Icons.mic_none, tr('Голосовых пока нет')),
             ],
           ),
         ),
@@ -256,7 +257,7 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
         final m = items[i];
         return ListTile(
           leading: Icon(icon),
-          title: Text(m.attachmentName ?? 'Файл', maxLines: 1, overflow: TextOverflow.ellipsis),
+          title: Text(m.attachmentName ?? tr('Файл'), maxLines: 1, overflow: TextOverflow.ellipsis),
           subtitle: Text('${ChatMediaUtils.formatSize(m.attachmentSize)} · ${_date(m)}'),
           onTap: () => _share(m),
         );
@@ -266,7 +267,7 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
 
   Widget _linkList() {
     final links = _links;
-    if (links.isEmpty) return _empty('Ссылок пока нет');
+    if (links.isEmpty) return _empty(tr('Ссылок пока нет'));
     return ListView.builder(
       padding: EdgeInsets.zero,
       itemCount: links.length,
@@ -279,7 +280,7 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
           onTap: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
           onLongPress: () {
             Clipboard.setData(ClipboardData(text: url));
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ссылка скопирована')));
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Ссылка скопирована'))));
           },
         );
       },
@@ -403,7 +404,7 @@ class _PhotoGridState extends State<_PhotoGrid> {
   @override
   Widget build(BuildContext context) {
     if (widget.photos.isEmpty) {
-      return Center(child: Text('Фото пока нет', style: TextStyle(color: Theme.of(context).hintColor)));
+      return Center(child: Text(tr('Фото пока нет'), style: TextStyle(color: Theme.of(context).hintColor)));
     }
     final physics = _startDist != null ? const NeverScrollableScrollPhysics() : null;
     final dpr = MediaQuery.devicePixelRatioOf(context);

@@ -4,6 +4,7 @@ import '../logic/scoring.dart';
 import '../models/shot.dart';
 import '../state/target_view_model.dart';
 import 'comments_thread.dart';
+import '../i18n/i18n.dart';
 
 /// Меню действий над ОДНИМ выстрелом — открывается долгим нажатием на
 /// строку в `ShotListSheet` (решение пользователя, пункт 8 списка
@@ -40,14 +41,14 @@ class ShotActionsSheet extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Text(
-              'Выстрел №${current.shotNumber} · ${current.score.toStringAsFixed(1)} · $hour ч',
+              tr('Выстрел №{shotNumber} · {p} · {hour} ч', {'shotNumber': current.shotNumber, 'p': current.score.toStringAsFixed(1), 'hour': hour}),
               style: Theme.of(context).textTheme.titleMedium,
             ),
           ),
           const Divider(height: 1),
           ListTile(
             leading: const Icon(Icons.remove_red_eye_outlined),
-            title: const Text('Посмотреть выстрел на мишени'),
+            title: Text(tr('Посмотреть выстрел на мишени')),
             onTap: () {
               Navigator.of(context).pop();
               vm.selectAndJumpToTarget(vm.session.shots.indexWhere((s) => s.id == current.id));
@@ -55,7 +56,7 @@ class ShotActionsSheet extends StatelessWidget {
           ),
           ListTile(
             leading: const Icon(Icons.notes_outlined),
-            title: const Text('Заметка'),
+            title: Text(tr('Заметка')),
             onTap: () {
               Navigator.of(context).pop();
               CommentsThreadSheet.showForShot(context, current.id);
@@ -63,7 +64,7 @@ class ShotActionsSheet extends StatelessWidget {
           ),
           ListTile(
             leading: Icon(current.isFavorite ? Icons.star : Icons.star_border),
-            title: Text(current.isFavorite ? 'Убрать из избранного' : 'Избранное'),
+            title: Text(current.isFavorite ? tr('Убрать из избранного') : tr('Избранное')),
             onTap: () {
               vm.toggleFavorite(current.id);
               Navigator.of(context).pop();
@@ -72,7 +73,7 @@ class ShotActionsSheet extends StatelessWidget {
           if (vm.canEditShots)
             ListTile(
               leading: const Icon(Icons.delete_outline),
-              title: const Text('Удалить'),
+              title: Text(tr('Удалить')),
               onTap: () {
                 vm.deleteShot(current.id);
                 Navigator.of(context).pop();

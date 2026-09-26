@@ -8,6 +8,7 @@ import 'ai_settings.dart';
 import 'knowledge_column_discovery.dart';
 import 'local_db_service.dart';
 import 'supabase_auth_service.dart';
+import '../i18n/i18n.dart';
 
 /// Кусок текста из базы знаний.
 class KnowledgeChunk {
@@ -168,15 +169,15 @@ class KnowledgeService {
         }).timeout(_timeout);
 
         if (res.statusCode >= 400) {
-          out[table.label] = 'ошибка ${res.statusCode}';
+          out[table.label] = tr('ошибка {statusCode}', {'statusCode': res.statusCode});
           continue;
         }
         // content-range приходит в виде «0-0/128» или «*/0».
         final range = res.headers['content-range'] ?? '';
         final total = range.contains('/') ? range.split('/').last : '?';
-        out[table.label] = total == '0' ? 'пусто' : '$total строк';
+        out[table.label] = total == '0' ? tr('пусто') : tr('{total} строк', {'total': total});
       } catch (e) {
-        out[table.label] = 'недоступна';
+        out[table.label] = tr('недоступна');
       }
     }
     return out;
@@ -306,7 +307,7 @@ class KnowledgeService {
         final parts = <String>[
           for (final c in {'summary', 'description', table.contentColumn})
             if (row[c] is String && (row[c] as String).trim().isNotEmpty) row[c] as String,
-          if (row['tags'] is List && (row['tags'] as List).isNotEmpty) 'теги: ${(row['tags'] as List).join(', ')}',
+          if (row['tags'] is List && (row['tags'] as List).isNotEmpty) tr('теги: {p}', {'p': (row['tags'] as List).join(', ')}),
         ];
         final text = parts.isEmpty ? heading : parts.join('\n');
         if (text.trim().isEmpty) continue;
@@ -363,15 +364,15 @@ class KnowledgeService {
     // куске: модель должна знать "сейчас", чтобы отличать "давно" от
     // "недавно" у дат самих записей (пункт: "какое сейчас время и дату
     // записи, чтобы лучше понимать пользователя").
-    final buf = StringBuffer('Текущие дата и время: ${DateTime.now().toIso8601String()}\n\n');
+    final buf = StringBuffer(tr('Текущие дата и время: {p}\n\n', {'p': DateTime.now().toIso8601String()}));
     // Какие свои таблицы подключил пользователь — ИИ должен знать о них,
     // даже если в этот раз ничего из них не нашлось.
     if (tables.isNotEmpty) {
-      buf.writeln('Подключённые таблицы пользователя (его личные данные, их можно и нужно использовать):');
+      buf.writeln(tr('Подключённые таблицы пользователя (его личные данные, их можно и нужно использовать):'));
       for (final t in tables) {
         buf.writeln('- ${t.label}${t.description.isEmpty ? '' : ': ${t.description}'}');
       }
-      buf.writeln(chunks.isEmpty ? '(по этому вопросу записей из них не найдено)' : '');
+      buf.writeln(chunks.isEmpty ? tr('(по этому вопросу записей из них не найдено)') : '');
     }
     for (final c in chunks) {
       // Название/описание таблицы — чтобы модель понимала, ЧТО за
@@ -379,7 +380,7 @@ class KnowledgeService {
       // официальные правила ISSF, даже если оба совпали по слову),
       // а не только откуда файл (пункт 12 списка правок).
       final tableTag = c.tableDescription.isEmpty ? c.tableLabel : '${c.tableLabel}: ${c.tableDescription}';
-      final dateTag = c.recordDate == null ? '' : ', запись от ${c.recordDate}';
+      final dateTag = c.recordDate == null ? '' : tr(', запись от {recordDate}', {'recordDate': c.recordDate});
       final piece = '[$tableTag — ${c.source}${c.heading.isEmpty ? '' : ', ${c.heading}'}$dateTag]\n${c.text}\n\n';
       if (buf.length + piece.length > totalCharLimit) break;
       buf.write(piece);

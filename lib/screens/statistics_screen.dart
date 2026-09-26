@@ -9,6 +9,7 @@ import '../models/training_session.dart';
 import '../state/app_data_store.dart';
 import '../widgets/analytics_panel.dart';
 import '../widgets/empty_state.dart';
+import '../i18n/i18n.dart';
 
 /// Вкладка "Статистика" — разбор стрельбы на четырёх срезах
 /// (по запросу пользователя: «мало данных, лучше вывести по нескольким
@@ -66,10 +67,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
     if (sessions.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Статистика')),
-        body: const EmptyState(
+        appBar: AppBar(title: Text(tr('Статистика'))),
+        body: EmptyState(
           icon: Icons.insights_outlined,
-          text: 'Статистика появится после первых записанных выстрелов',
+          text: tr('Статистика появится после первых записанных выстрелов'),
         ),
       );
     }
@@ -77,7 +78,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     final selection = _resolveSelection(store, sessions);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Статистика')),
+      appBar: AppBar(title: Text(tr('Статистика'))),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
         children: [
@@ -101,10 +102,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     return SizedBox(
       width: double.infinity,
       child: SegmentedButton<_Scope>(
-        segments: const [
-          ButtonSegment(value: _Scope.all, label: Text('Всё')),
-          ButtonSegment(value: _Scope.exercise, label: Text('Упражнение')),
-          ButtonSegment(value: _Scope.session, label: Text('Тренировка')),
+        segments: [
+          ButtonSegment(value: _Scope.all, label: Text(tr('Всё'))),
+          ButtonSegment(value: _Scope.exercise, label: Text(tr('Упражнение'))),
+          ButtonSegment(value: _Scope.session, label: Text(tr('Тренировка'))),
         ],
         selected: {_scope},
         showSelectedIcon: false,
@@ -134,7 +135,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             // укладывается в ширину поля и Flutter рисует полосатую
             // плашку переполнения поверх макета.
             isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Упражнение'),
+            decoration: InputDecoration(labelText: tr('Упражнение')),
             items: [
               for (final e in exercises)
                 DropdownMenuItem(value: e.id, child: Text(e.label, overflow: TextOverflow.ellipsis)),
@@ -160,9 +161,9 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             DropdownButtonFormField<String?>(
               initialValue: _sessionExerciseFilterId,
               isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Упражнение (фильтр)'),
+              decoration: InputDecoration(labelText: tr('Упражнение (фильтр)')),
               items: [
-                const DropdownMenuItem<String?>(value: null, child: Text('Все упражнения')),
+                DropdownMenuItem<String?>(value: null, child: Text(tr('Все упражнения'))),
                 for (final e in exercisesForFilter)
                   DropdownMenuItem(value: e.id, child: Text(e.label, overflow: TextOverflow.ellipsis)),
               ],
@@ -177,13 +178,13 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           DropdownButtonFormField<String>(
             initialValue: currentId,
             isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Тренировка'),
+            decoration: InputDecoration(labelText: tr('Тренировка')),
             items: [
               for (final s in sessionsFiltered)
                 DropdownMenuItem(
                   value: s.id,
                   child: Text(
-                    '${store.exerciseFor(s)?.label ?? 'Без упражнения'} · '
+                    '${store.exerciseFor(s)?.label ?? tr('Без упражнения')} · '
                     '${s.startedAt == null ? '—' : df.format(s.startedAt!)}',
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -198,10 +199,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           if (seriesNos.length > 1) ...[
             DropdownButtonFormField<int>(
               initialValue: seriesNos.contains(_seriesNo) ? _seriesNo : null,
-              decoration: const InputDecoration(labelText: 'Серия'),
+              decoration: InputDecoration(labelText: tr('Серия')),
               items: [
-                const DropdownMenuItem<int>(value: null, child: Text('Все серии')),
-                for (final n in seriesNos) DropdownMenuItem(value: n, child: Text('Серия $n')),
+                DropdownMenuItem<int>(value: null, child: Text(tr('Все серии'))),
+                for (final n in seriesNos) DropdownMenuItem(value: n, child: Text(tr('Серия {n}', {'n': n}))),
               ],
               onChanged: (v) => setState(() => _seriesNo = v),
             ),
@@ -217,13 +218,13 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       spacing: 8,
       children: [
         ChoiceChip(
-          label: const Text('Всё время'),
+          label: Text(tr('Всё время')),
           selected: _periodDays == null,
           onSelected: (_) => setState(() => _periodDays = null),
         ),
         for (final d in _periods)
           ChoiceChip(
-            label: Text('$d дн.'),
+            label: Text(tr('{d} дн.', {'d': d})),
             selected: _periodDays == d,
             onSelected: (_) => setState(() => _periodDays = d),
           ),
@@ -274,8 +275,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       case _Scope.all:
         return _sessionsSelection(
           _inPeriod(sessions),
-          title: 'Динамика тренировок',
-          subtitle: 'Сумма очков за тренировку',
+          title: tr('Динамика тренировок'),
+          subtitle: tr('Сумма очков за тренировку'),
         );
 
       case _Scope.exercise:
@@ -285,8 +286,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         final filtered = sessions.where((s) => s.exerciseId == exId).toList();
         return _sessionsSelection(
           _inPeriod(filtered.isEmpty ? sessions : filtered),
-          title: 'Динамика по упражнению',
-          subtitle: 'Сумма очков за тренировку',
+          title: tr('Динамика по упражнению'),
+          subtitle: tr('Сумма очков за тренировку'),
         );
 
       case _Scope.session:
@@ -303,7 +304,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               ? null
               : [
                   AnalyticsDynamics(
-                    title: _seriesNo == null ? 'Динамика выстрелов' : 'Динамика серии $_seriesNo',
+                    title: _seriesNo == null ? tr('Динамика выстрелов') : tr('Динамика серии {seriesNo}', {'seriesNo': _seriesNo}),
                     subtitle: '',
                     points: shots,
                     maxY: 10.9,
@@ -365,10 +366,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       face: face,
       showSeries: false,
       mixedFacesNote: faceCodes.length > 1
-          ? 'В срез попали разные мишени (${faceCodes.length}), поэтому СТП, '
-              'кучность и разброс по часам не показаны: миллиметры на мишени '
-              '10 м и 50 м несопоставимы. Выберите одно упражнение или одну '
-              'тренировку — там эти графики будут.'
+          ? tr('В срез попали разные мишени ({length}), поэтому СТП, кучность и разброс по часам не показаны: миллиметры на мишени 10 м и 50 м несопоставимы. Выберите одно упражнение или одну тренировку — там эти графики будут.', {'length': faceCodes.length})
           : null,
       dynamics: totals.isEmpty
           ? null
@@ -441,8 +439,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     return [
       if (averages.isNotEmpty)
         AnalyticsDynamics(
-          title: 'Средний выстрел',
-          subtitle: 'Средний результат за тренировку',
+          title: tr('Средний выстрел'),
+          subtitle: tr('Средний результат за тренировку'),
           points: averages,
           maxY: 10.9,
           xLabels: labelsFor(averages),
@@ -450,8 +448,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         ),
       if (worstSeries.isNotEmpty)
         AnalyticsDynamics(
-          title: 'Худшая серия',
-          subtitle: 'Средний выстрел в самой слабой серии тренировки',
+          title: tr('Худшая серия'),
+          subtitle: tr('Средний выстрел в самой слабой серии тренировки'),
           points: worstSeries,
           maxY: 10.9,
           xLabels: labelsFor(worstSeries),
@@ -459,8 +457,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         ),
       if (bestSeries.isNotEmpty)
         AnalyticsDynamics(
-          title: 'Лучшая серия',
-          subtitle: 'Средний выстрел в лучшей серии тренировки',
+          title: tr('Лучшая серия'),
+          subtitle: tr('Средний выстрел в лучшей серии тренировки'),
           points: bestSeries,
           maxY: 10.9,
           xLabels: labelsFor(bestSeries),
@@ -502,8 +500,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       ));
     }
     return AnalyticsDynamics(
-      title: 'Средний по последним $_window',
-      subtitle: 'Скользящее среднее — провал виден сразу',
+      title: tr('Средний по последним {window}', {'window': _window}),
+      subtitle: tr('Скользящее среднее — провал виден сразу'),
       points: points,
       maxY: 10.9,
     );

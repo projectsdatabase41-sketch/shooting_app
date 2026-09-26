@@ -7,6 +7,7 @@ import '../state/app_data_store.dart';
 import '../widgets/empty_state.dart';
 import 'coach_athletes_chat_screen.dart';
 import 'coach_diary_screen.dart';
+import '../i18n/i18n.dart';
 
 /// Список подключённых спортсменов у тренера (мульти-спортсменский
 /// режим — решение пользователя: "как список создания упражнений, так
@@ -52,7 +53,7 @@ class _CoachAthletesScreenState extends State<CoachAthletesScreen> {
     final result = await showDialog<_AthleteDialogResult>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(existing == null ? 'Новый спортсмен' : 'Спортсмен'),
+        title: Text(existing == null ? tr('Новый спортсмен') : tr('Спортсмен')),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -60,13 +61,13 @@ class _CoachAthletesScreenState extends State<CoachAthletesScreen> {
               TextField(
                 controller: nameCtrl,
                 autofocus: true,
-                decoration: const InputDecoration(labelText: 'Имя спортсмена'),
+                decoration: InputDecoration(labelText: tr('Имя спортсмена')),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: urlCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Адрес базы',
+                decoration: InputDecoration(
+                  labelText: tr('Адрес базы'),
                   hintText: 'https://xxxx.supabase.co',
                 ),
                 keyboardType: TextInputType.url,
@@ -75,14 +76,14 @@ class _CoachAthletesScreenState extends State<CoachAthletesScreen> {
               const SizedBox(height: 10),
               TextField(
                 controller: keyCtrl,
-                decoration: const InputDecoration(labelText: 'Публичный ключ (anon)'),
+                decoration: InputDecoration(labelText: tr('Публичный ключ (anon)')),
                 obscureText: true,
                 autocorrect: false,
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: tokenCtrl,
-                decoration: const InputDecoration(labelText: 'Токен доступа'),
+                decoration: InputDecoration(labelText: tr('Токен доступа')),
                 obscureText: true,
                 autocorrect: false,
               ),
@@ -93,9 +94,9 @@ class _CoachAthletesScreenState extends State<CoachAthletesScreen> {
           if (existing != null)
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(const _AthleteDialogResult.delete()),
-              child: Text('Удалить', style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
+              child: Text(tr('Удалить'), style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
             ),
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr('Отмена'))),
           FilledButton(
             onPressed: () {
               if (nameCtrl.text.trim().isEmpty ||
@@ -112,7 +113,7 @@ class _CoachAthletesScreenState extends State<CoachAthletesScreen> {
                 token: tokenCtrl.text,
               )));
             },
-            child: const Text('Сохранить'),
+            child: Text(tr('Сохранить')),
           ),
         ],
       ),
@@ -152,11 +153,11 @@ class _CoachAthletesScreenState extends State<CoachAthletesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Спортсмены')),
+      appBar: AppBar(title: Text(tr('Спортсмены'))),
       body: _athletes.isEmpty
-          ? const EmptyState(
+          ? EmptyState(
               icon: Icons.groups_outlined,
-              text: 'Пока никого не подключили — нажмите "+", чтобы добавить спортсмена.',
+              text: tr('Пока никого не подключили — нажмите "+", чтобы добавить спортсмена.'),
             )
           : GridView.builder(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 80),
@@ -181,7 +182,7 @@ class _CoachAthletesScreenState extends State<CoachAthletesScreen> {
                         children: [
                           Icon(Icons.forum_outlined, size: 28, color: Theme.of(context).colorScheme.primary),
                           const SizedBox(height: 8),
-                          Text('Чат', style: Theme.of(context).textTheme.titleSmall),
+                          Text(tr('Чат'), style: Theme.of(context).textTheme.titleSmall),
                         ],
                       ),
                     ),
@@ -199,7 +200,7 @@ class _CoachAthletesScreenState extends State<CoachAthletesScreen> {
             ),
       // Справа внизу — как «новая запись» в дневнике (единообразие).
       floatingActionButton: FloatingActionButton(
-        tooltip: 'Добавить спортсмена',
+        tooltip: tr('Добавить спортсмена'),
         onPressed: () => _openAthleteDialog(),
         child: const Icon(Icons.add),
       ),

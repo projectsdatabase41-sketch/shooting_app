@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../i18n/i18n.dart';
 
 /// Одна серия в описании упражнения.
 ///
@@ -47,18 +48,18 @@ class SeriesSpec {
     final limit = shotCount != null
         ? '$shotCount ${_shotsWord(shotCount!)}'
         : timeLimit != null
-            ? '${timeLimit!.inMinutes} мин'
-            : 'без границы';
-    return counts ? '$name · $limit' : '$name · $limit · без зачёта';
+            ? tr('{p} мин', {'p': timeLimit!.inMinutes})
+            : tr('без границы');
+    return counts ? '$name · $limit' : tr('{name} · {limit} · без зачёта', {'name': name, 'limit': limit});
   }
 
   static String _shotsWord(int n) {
     final n100 = n % 100;
-    if (n100 >= 11 && n100 <= 14) return 'выстрелов';
+    if (n100 >= 11 && n100 <= 14) return tr('выстрелов');
     return switch (n % 10) {
-      1 => 'выстрел',
-      2 || 3 || 4 => 'выстрела',
-      _ => 'выстрелов',
+      1 => tr('выстрел'),
+      2 || 3 || 4 => tr('выстрела'),
+      _ => tr('выстрелов'),
     };
   }
 

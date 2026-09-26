@@ -11,6 +11,7 @@ import '../widgets/raised_3d_button.dart';
 import '../widgets/swipe_to_delete.dart';
 import 'exercise_history_detail_screen.dart';
 import 'target_screen.dart';
+import '../i18n/i18n.dart';
 
 /// Список тренировок. Без `exercise` — вся история разом (раньше это
 /// была отдельная вкладка); с `exercise` — только тренировки ПО ЭТОМУ
@@ -38,12 +39,12 @@ class TrainingsHistoryScreen extends StatelessWidget {
     final df = DateFormat('dd.MM.yyyy · HH:mm');
 
     return Scaffold(
-      appBar: AppBar(title: Text(ex?.label ?? 'Тренировки')),
+      appBar: AppBar(title: Text(ex?.label ?? tr('Тренировки'))),
       floatingActionButton: ex == null
           ? null
           : Raised3DButton(
               icon: Icons.add,
-              label: 'Тренировка',
+              label: tr('Тренировка'),
               baseColor: Theme.of(context).colorScheme.primary,
               onTap: () => _startTraining(context, ex),
             ),
@@ -51,13 +52,13 @@ class TrainingsHistoryScreen extends StatelessWidget {
           ? EmptyState(
               icon: Icons.history,
               text: ex == null
-                  ? 'Тренировок пока нет. Начните первую на вкладке «Упражнения».'
-                  : 'У «${ex.label}» пока нет тренировок.',
+                  ? tr('Тренировок пока нет. Начните первую на вкладке «Упражнения».')
+                  : tr('У «{label}» пока нет тренировок.', {'label': ex.label}),
               action: ex == null
                   ? null
                   : Raised3DButton(
                       icon: Icons.add,
-                      label: 'Создать первую',
+                      label: tr('Создать первую'),
                       baseColor: Theme.of(context).colorScheme.primary,
                       onTap: () => _startTraining(context, ex),
                     ),
@@ -69,27 +70,26 @@ class TrainingsHistoryScreen extends StatelessWidget {
               itemBuilder: (context, i) {
                 final s = sessions[i];
                 final exercise = store.exerciseFor(s);
-                final when = s.startedAt == null ? '' : ' от ${df.format(s.startedAt!)}';
+                final when = s.startedAt == null ? '' : tr(' от {p}', {'p': df.format(s.startedAt!)});
                 final empty = s.shots.isEmpty;
                 return SwipeToDelete(
                   itemKey: s.id,
                   // Пустую тренировку удалять не жалко, и длинное
                   // предупреждение здесь только раздражает.
-                  title: empty ? 'Зря создал?' : 'Удалить тренировку?',
+                  title: empty ? tr('Зря создал?') : tr('Удалить тренировку?'),
                   // Про необратимость — прямым текстом: тренировка
                   // стирается из базы вместе с выстрелами, вернуть её
                   // будет неоткуда.
                   message: empty
-                      ? 'В этой тренировке нет ни одного выстрела.'
-                      : 'Тренировка$when и все ${s.shots.length} выстрелов '
-                          'будут удалены из базы без возможности восстановить.',
-                  confirmLabel: empty ? 'Да' : 'Удалить навсегда',
-                  cancelLabel: empty ? 'Нет' : 'Отмена',
+                      ? tr('В этой тренировке нет ни одного выстрела.')
+                      : tr('Тренировка{when} и все {length} выстрелов будут удалены из базы без возможности восстановить.', {'when': when, 'length': s.shots.length}),
+                  confirmLabel: empty ? tr('Да') : tr('Удалить навсегда'),
+                  cancelLabel: empty ? tr('Нет') : tr('Отмена'),
                   onConfirmed: () => store.deleteSession(s.id),
                   onConfirmedLocalOnly: empty ? null : () => store.deleteSessionLocalOnly(s.id),
                   child: _SessionCard(
                     title: exercise?.label ?? s.exerciseId,
-                    subtitle: s.startedAt == null ? 'Не начата' : df.format(s.startedAt!),
+                    subtitle: s.startedAt == null ? tr('Не начата') : df.format(s.startedAt!),
                     shots: s.shots.length,
                     totalScore: s.totalScore,
                     totalWhole: _wholeScore(s),
@@ -187,7 +187,7 @@ class _SessionCard extends StatelessWidget {
                       style: theme.textTheme.titleSmall,
                     ),
                     const SizedBox(height: 4),
-                    Text('$subtitle · $shots выстр.', style: theme.textTheme.bodySmall),
+                    Text(tr('{subtitle} · {shots} выстр.', {'subtitle': subtitle, 'shots': shots}), style: theme.textTheme.bodySmall),
                     const SizedBox(height: 8),
                     _StatusChip(status: status),
                   ],
@@ -207,7 +207,7 @@ class _SessionCard extends StatelessWidget {
                     style: theme.textTheme.titleLarge?.copyWith(color: AppTheme.accentFor(cs)),
                   ),
                   Text(
-                    'с десятыми / целыми',
+                    tr('с десятыми / целыми'),
                     style: theme.textTheme.labelSmall?.copyWith(color: cs.onSurfaceVariant),
                   ),
                 ],
@@ -235,10 +235,10 @@ class _StatusChip extends StatelessWidget {
     final cs = theme.colorScheme;
 
     final (String label, Color bg, Color fg) = switch (status) {
-      SessionStatus.notStarted => ('Не начата', cs.surfaceContainerHigh, cs.onSurfaceVariant),
-      SessionStatus.running => ('Идёт', cs.secondaryContainer, cs.onSecondaryContainer),
-      SessionStatus.paused => ('Пауза', cs.surfaceContainerHighest, cs.onSurfaceVariant),
-      SessionStatus.finished => ('Завершена', cs.primaryContainer, cs.onPrimaryContainer),
+      SessionStatus.notStarted => (tr('Не начата'), cs.surfaceContainerHigh, cs.onSurfaceVariant),
+      SessionStatus.running => (tr('Идёт'), cs.secondaryContainer, cs.onSecondaryContainer),
+      SessionStatus.paused => (tr('Пауза'), cs.surfaceContainerHighest, cs.onSurfaceVariant),
+      SessionStatus.finished => (tr('Завершена'), cs.primaryContainer, cs.onPrimaryContainer),
     };
 
     return Container(

@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import 'chat_auth_service.dart';
 import 'remote_config.dart';
+import '../i18n/i18n.dart';
 
 /// Обращения к серверу звонков (cloud/calls-worker, Cloudflare). Supabase
 /// тут не участвует: сервер сам проверяет подпись токена входа в мессенджер.
@@ -20,7 +21,7 @@ class CallService {
 
   Future<dynamic> _send(String method, String path, [Map<String, dynamic>? body]) async {
     final token = await auth.ensureFreshToken();
-    if (token == null) throw Exception('Сначала войдите в мессенджер');
+    if (token == null) throw Exception(tr('Сначала войдите в мессенджер'));
     final c = _client();
     try {
       final headers = {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'};
@@ -29,7 +30,7 @@ class CallService {
               ? c.get(uri, headers: headers)
               : c.post(uri, headers: headers, body: jsonEncode(body ?? {})))
           .timeout(const Duration(seconds: 15));
-      if (res.statusCode >= 400) throw Exception('Сервер звонков: ${res.statusCode}');
+      if (res.statusCode >= 400) throw Exception(tr('Сервер звонков: {statusCode}', {'statusCode': res.statusCode}));
       return jsonDecode(utf8.decode(res.bodyBytes));
     } finally {
       c.close();

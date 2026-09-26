@@ -18,6 +18,7 @@ import '../services/shot_photo_service.dart';
 import '../state/app_data_store.dart';
 import 'camera_scan_screen.dart';
 import 'shot_review_screen.dart';
+import '../i18n/i18n.dart';
 
 /// Функции для `compute()` — обязаны быть верхнеуровневыми: изолят видит
 /// только сам код функции и переданный ей аргумент, никаких замыканий.
@@ -219,7 +220,7 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
         return;
       }
       final bytes = result.files.first.bytes;
-      if (bytes == null) throw const ShotPhotoException('Не удалось прочитать файл');
+      if (bytes == null) throw ShotPhotoException(tr('Не удалось прочитать файл'));
       await _loadPhoto(bytes);
     } catch (e) {
       setState(() => _error = '$e');
@@ -305,14 +306,14 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
         if (mounted) {
           setState(() {
             _busy = false;
-            _error = 'Распознавание прервано. Можно поставить точки вручную или снять новое фото.';
+            _error = tr('Распознавание прервано. Можно поставить точки вручную или снять новое фото.');
           });
         }
         return;
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text('ИИ-зрение не сработало ($e) — ищет обычный алгоритм')));
+              .showSnackBar(SnackBar(content: Text(tr('ИИ-зрение не сработало ({e}) — ищет обычный алгоритм', {'e': e}))));
         }
       } finally {
         if (mounted) setState(() => _visionRunning = false);
@@ -356,8 +357,7 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
         _busy = false;
         _candidates = [for (final c in candidates) Offset(c.center.x / s, c.center.y / s)];
         if (_candidates.isEmpty) {
-          _error = 'Пробоин не нашли — либо на фото их не видно, либо круг откалиброван неточно. '
-              'Можно подровнять круг или добавить точку вручную кнопкой ниже.';
+          _error = tr('Пробоин не нашли — либо на фото их не видно, либо круг откалиброван неточно. Можно подровнять круг или добавить точку вручную кнопкой ниже.');
         }
       });
     } catch (e) {
@@ -392,7 +392,7 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
             Offset(x0 + p.dx * sx, y0 + p.dy * sy),
       ];
       if (_candidates.isEmpty) {
-        _error = 'ИИ не нашёл пробоин. Можно подровнять круг или добавить точку вручную кнопкой ниже.';
+        _error = tr('ИИ не нашёл пробоин. Можно подровнять круг или добавить точку вручную кнопкой ниже.');
       }
     });
     if (_candidates.isNotEmpty) await _reviewOnTarget();
@@ -461,12 +461,12 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(_visionRunning ? 'ИИ смотрит… (назад — прервать)' : 'Фото мишени'),
+          title: Text(_visionRunning ? tr('ИИ смотрит… (назад — прервать)') : tr('Фото мишени')),
           actions: [
             if (_confirmedMm.isNotEmpty)
               TextButton(
                 onPressed: _finish,
-                child: Text('Готово (${_confirmedMm.length})', style: const TextStyle(color: Colors.white)),
+                child: Text(tr('Готово ({length})', {'length': _confirmedMm.length}), style: const TextStyle(color: Colors.white)),
               ),
           ],
         ),
@@ -491,7 +491,7 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Уже добавлено', style: Theme.of(context).textTheme.labelMedium),
+            Text(tr('Уже добавлено'), style: Theme.of(context).textTheme.labelMedium),
             const SizedBox(height: 4),
             Text(labels.join(', '), style: Theme.of(context).textTheme.bodyMedium),
           ],
@@ -512,11 +512,9 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
             Text(
               _confirmedMm.isEmpty
                   ? (_cameraAvailable
-                      ? 'Наведите камеру на мишень — приложение само найдёт пробоину и снимет '
-                          'кадр. Файл нигде не сохраняется и после разбора не хранится.'
-                      : 'Сфотографируйте мишень и выберите снимок здесь — приложение само в '
-                          'галерею не пишет и файл после разбора не хранит.')
-                  : 'Можно снять ещё одно фото — или нажать «Готово» в шапке, если снимков достаточно.',
+                      ? tr('Наведите камеру на мишень — приложение само найдёт пробоину и снимет кадр. Файл нигде не сохраняется и после разбора не хранится.')
+                      : tr('Сфотографируйте мишень и выберите снимок здесь — приложение само в галерею не пишет и файл после разбора не хранит.'))
+                  : tr('Можно снять ещё одно фото — или нажать «Готово» в шапке, если снимков достаточно.'),
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium,
             ),
@@ -532,13 +530,13 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
                 icon: _busy
                     ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.camera_alt_outlined),
-                label: const Text('Через камеру'),
+                label: Text(tr('Через камеру')),
               ),
               const SizedBox(height: 8),
               OutlinedButton.icon(
                 onPressed: _busy ? null : _pick,
                 icon: const Icon(Icons.image_outlined),
-                label: const Text('Выбрать фото'),
+                label: Text(tr('Выбрать фото')),
               ),
             ] else
               FilledButton.icon(
@@ -546,7 +544,7 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
                 icon: _busy
                     ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.image_outlined),
-                label: const Text('Выбрать фото'),
+                label: Text(tr('Выбрать фото')),
               ),
             if (_error != null) ...[
               const SizedBox(height: 12),
@@ -616,11 +614,7 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           child: Text(
-            'Контур подогнан автоматически — сдвиньте центр, потяните за один из '
-            'двух маркеров на краю, чтобы растянуть контур в овал под углом '
-            'съёмки, если фото снято не строго анфас. Точки — найденные '
-            'пробоины: перетащите, чтобы совместить с фактическим отверстием, '
-            'или снимите лишнюю.',
+            tr('Контур подогнан автоматически — сдвиньте центр, потяните за один из двух маркеров на краю, чтобы растянуть контур в овал под углом съёмки, если фото снято не строго анфас. Точки — найденные пробоины: перетащите, чтобы совместить с фактическим отверстием, или снимите лишнюю.'),
             style: Theme.of(context).textTheme.bodySmall,
             textAlign: TextAlign.center,
           ),
@@ -638,14 +632,14 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
                 child: OutlinedButton.icon(
                   onPressed: _busy ? null : () => setState(() => _addMode = !_addMode),
                   icon: Icon(_addMode ? Icons.close : Icons.add_location_alt_outlined),
-                  label: Text(_addMode ? 'Отмена' : 'Точка'),
+                  label: Text(_addMode ? tr('Отмена') : tr('Точка')),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton(
                   onPressed: _busy ? null : _retakePhoto,
-                  child: const Text('Новое фото'),
+                  child: Text(tr('Новое фото')),
                 ),
               ),
               const SizedBox(width: 8),
@@ -655,7 +649,7 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
                   onPressed: _busy || _candidates.isEmpty ? null : _confirmPhoto,
                   child: _busy
                       ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                      : Text('Подтвердить (${_candidatesToConfirm.length})'),
+                      : Text(tr('Подтвердить ({length})', {'length': _candidatesToConfirm.length})),
                 ),
               ),
             ],
@@ -676,7 +670,7 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       child: Row(
         children: [
-          Text('Выстрелов:', style: Theme.of(context).textTheme.labelMedium),
+          Text(tr('Выстрелов:'), style: Theme.of(context).textTheme.labelMedium),
           const SizedBox(width: 8),
           Expanded(
             child: SingleChildScrollView(
@@ -684,7 +678,7 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
               child: Row(
                 children: [
                   ChoiceChip(
-                    label: const Text('Авто'),
+                    label: Text(tr('Авто')),
                     selected: _expectedCount == null,
                     onSelected: (_) => setState(() => _expectedCount = null),
                   ),

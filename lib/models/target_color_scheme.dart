@@ -1,3 +1,4 @@
+import '../i18n/i18n.dart';
 import 'dart:ui' show Color;
 
 /// 15 персонализируемых ключей цвета (часть A.1 логики-спека). Класс с
@@ -162,7 +163,7 @@ class TargetColorScheme {
       case 'crosshair':
         return crosshair;
       default:
-        throw ArgumentError('Неизвестный ключ цвета: $key');
+        throw ArgumentError(tr('Неизвестный ключ цвета: {key}', {'key': key}));
     }
   }
 
@@ -248,7 +249,7 @@ class TargetColorScheme {
     var h = hex.trim().replaceFirst('#', '');
     if (h.length == 6) h = 'FF$h';
     if (h.length != 8) {
-      throw FormatException('Некорректный HEX-цвет: $hex');
+      throw FormatException(tr('Некорректный HEX-цвет: {hex}', {'hex': hex}));
     }
     final value = int.parse(h, radix: 16);
     return Color(value);

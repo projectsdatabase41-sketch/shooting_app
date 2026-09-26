@@ -10,6 +10,7 @@ import '../models/custom_service.dart';
 import '../services/ai_settings.dart';
 import '../services/custom_services_repository.dart';
 import '../state/app_data_store.dart';
+import '../i18n/i18n.dart';
 
 /// Экран одной плитки сервиса — простую ссылку (без заголовков) сразу
 /// открывает во внешнем браузере/приложении и не задерживает на себе
@@ -101,19 +102,19 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
     final proceed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Настроить вид с ИИ'),
+        title: Text(tr('Настроить вид с ИИ')),
         content: TextField(
           controller: noteCtrl,
           autofocus: true,
           minLines: 2,
           maxLines: 5,
-          decoration: const InputDecoration(
-            hintText: 'Необязательно: что показать заголовком, что подробностями и т.п.',
+          decoration: InputDecoration(
+            hintText: tr('Необязательно: что показать заголовком, что подробностями и т.п.'),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Отмена')),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Настроить')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr('Отмена'))),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(tr('Настроить'))),
         ],
       ),
     );
@@ -139,7 +140,7 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
         _service = _withDisplaySpec(specJson);
       });
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось настроить вид: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Не удалось настроить вид: {e}', {'e': e}))));
     } finally {
       if (mounted) setState(() => _aiBusy = false);
     }
@@ -163,19 +164,19 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
     final query = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Спросить ИИ'),
+        title: Text(tr('Спросить ИИ')),
         content: TextField(
           controller: queryCtrl,
           autofocus: true,
           minLines: 1,
           maxLines: 3,
-          decoration: const InputDecoration(hintText: 'Например: покажи все записи про долги'),
+          decoration: InputDecoration(hintText: tr('Например: покажи все записи про долги')),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr('Отмена'))),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(queryCtrl.text.trim()),
-            child: const Text('Спросить'),
+            child: Text(tr('Спросить')),
           ),
         ],
       ),
@@ -192,10 +193,10 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
         _filteredRows = filtered;
         _filterReply = result.reply.isNotEmpty
             ? result.reply
-            : (result.field.isEmpty ? 'Не нашлось поле для фильтра по этому запросу' : 'Показаны подходящие записи');
+            : (result.field.isEmpty ? tr('Не нашлось поле для фильтра по этому запросу') : tr('Показаны подходящие записи'));
       });
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось отфильтровать: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Не удалось отфильтровать: {e}', {'e': e}))));
     } finally {
       if (mounted) setState(() => _aiBusy = false);
     }
@@ -229,9 +230,9 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
               Clipboard.setData(ClipboardData(text: value));
               Navigator.of(ctx).pop();
             },
-            child: const Text('Копировать'),
+            child: Text(tr('Копировать')),
           ),
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Закрыть')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr('Закрыть'))),
         ],
       ),
     );
@@ -255,20 +256,20 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
           if (_rows != null && !_aiBusy)
             IconButton(
               icon: const Icon(Icons.search),
-              tooltip: 'Спросить ИИ',
+              tooltip: tr('Спросить ИИ'),
               onPressed: _askAiFilter,
             ),
           if (_response != null && !_aiBusy)
             PopupMenuButton<String>(
               icon: const Icon(Icons.auto_awesome_outlined),
-              tooltip: 'Вид записей',
+              tooltip: tr('Вид записей'),
               onSelected: (v) {
                 if (v == 'configure') _configureDisplay();
                 if (v == 'reset') _resetDisplay();
               },
               itemBuilder: (context) => [
-                const PopupMenuItem(value: 'configure', child: Text('Настроить вид с ИИ')),
-                if (spec != null) const PopupMenuItem(value: 'reset', child: Text('Сбросить вид')),
+                PopupMenuItem(value: 'configure', child: Text(tr('Настроить вид с ИИ'))),
+                if (spec != null) PopupMenuItem(value: 'reset', child: Text(tr('Сбросить вид'))),
               ],
             ),
           if (_aiBusy)
@@ -279,12 +280,12 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
           if (_rows != null)
             IconButton(
               icon: Icon(_showRaw ? Icons.table_chart_outlined : Icons.code),
-              tooltip: _showRaw ? 'Показать таблицей' : 'Показать как есть',
+              tooltip: _showRaw ? tr('Показать таблицей') : tr('Показать как есть'),
               onPressed: () => setState(() => _showRaw = !_showRaw),
             ),
           IconButton(
             icon: const Icon(Icons.open_in_new),
-            tooltip: 'Открыть ссылку в браузере',
+            tooltip: tr('Открыть ссылку в браузере'),
             onPressed: () => launchUrl(Uri.parse(widget.service.url), mode: LaunchMode.externalApplication),
           ),
           IconButton(
@@ -304,11 +305,11 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
                   children: [
                     Expanded(
                       child: Text(
-                        '${_filterReply ?? ''} · показано ${_filteredRows!.length} из ${_rows?.length ?? 0}',
+                        tr('{p} · показано {p2} из {p3}', {'p': _filterReply ?? '', 'p2': _filteredRows!.length, 'p3': _rows?.length ?? 0}),
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ),
-                    TextButton(onPressed: _clearFilter, child: const Text('Сбросить')),
+                    TextButton(onPressed: _clearFilter, child: Text(tr('Сбросить'))),
                   ],
                 ),
               ),
@@ -321,7 +322,7 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
           : FloatingActionButton.small(
               onPressed: () {
                 Clipboard.setData(ClipboardData(text: _response!));
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ответ скопирован')));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Ответ скопирован'))));
               },
               child: const Icon(Icons.copy),
             ),

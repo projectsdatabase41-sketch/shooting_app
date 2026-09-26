@@ -1,3 +1,4 @@
+import '../i18n/i18n.dart';
 /// Справочник мишеней ISSF (раздел 3 tech-spec-v2.md).
 ///
 /// Калибр пробоины берётся из конкретной мишени, не общий на всё
@@ -62,7 +63,9 @@ enum GaugingMethod {
 
 class TargetFace {
   final String code;
-  final String name;
+  /// Название по-русски — ключ перевода; [name] — на языке интерфейса.
+  final String nameKey;
+  String get name => tr(nameKey);
   final double distanceM;
   final double caliberMm;
   final double bullseyeDiameterMm; // диаметр чёрного яблока (визуальный, для отрисовки)
@@ -131,7 +134,7 @@ class TargetFace {
 
   const TargetFace({
     required this.code,
-    required this.name,
+    required String name,
     required this.distanceM,
     required this.caliberMm,
     required this.bullseyeDiameterMm,
@@ -139,7 +142,7 @@ class TargetFace {
     this.blankSizeMm,
     this.innerTenDiameterMm,
     this.gauging = GaugingMethod.inward,
-  });
+  }) : nameKey = name;
 
   double get caliberRadiusMm => caliberMm / 2;
   double get bullseyeRadiusMm => bullseyeDiameterMm / 2;
@@ -184,13 +187,13 @@ class TargetFace {
   /// не всегда это вытаскивал и путал, из чего стреляет пользователь.
   /// Выведено из кода, а не хранится отдельным полем: типов ровно два, и
   /// дублировать константу под каждую мишень незачем.
-  String get weaponRu => code.startsWith('rifle') ? 'винтовка' : 'пистолет';
+  String get weaponRu => code.startsWith('rifle') ? tr('винтовка') : tr('пистолет');
 
   /// Боеприпас — тем же способом и по той же причине, что `weaponRu`.
   /// Выведено из калибра: 4.5 мм — пневматика, 5.6 мм — малокалиберный
   /// патрон .22 LR (других калибров в справочнике нет).
   String get ammoRu =>
-      caliberMm <= 4.5 ? 'пневматическое оружие (воздух/CO₂), пульки' : 'малокалиберное оружие, патрон .22 LR';
+      caliberMm <= 4.5 ? tr('пневматическое оружие (воздух/CO₂), пульки') : tr('малокалиберное оружие, патрон .22 LR');
 
   factory TargetFace.fromJson(Map<String, dynamic> json) => TargetFace(
         code: json['code'] as String,
@@ -229,7 +232,7 @@ class TargetFace {
   // мишенях учитывается на этапе отрисовки/калибровки, не в константах.
   static const TargetFace rifle10m = TargetFace(
     code: 'rifle_10m',
-    name: '№ 8, пневматическая винтовка 10 м',
+    name: /*tr*/ '№ 8, пневматическая винтовка 10 м',
     distanceM: 10,
     caliberMm: 4.5,
     bullseyeDiameterMm: 30.5,
@@ -243,7 +246,7 @@ class TargetFace {
 
   static const TargetFace pistol10m = TargetFace(
     code: 'pistol_10m',
-    name: '№ 9, пневматический пистолет 10 м',
+    name: /*tr*/ '№ 9, пневматический пистолет 10 м',
     distanceM: 10,
     caliberMm: 4.5,
     // Диаметр яблока 59.5мм (было ошибочно 26.5мм — см. комментарий к
@@ -262,7 +265,7 @@ class TargetFace {
     // к классу). Код 'rifle_50m' не меняю — внутренний идентификатор,
     // от него зависит exercise.targetFaceCode в БД.
     code: 'rifle_50m',
-    name: '№ 7, малокалиберная винтовка 50 м',
+    name: /*tr*/ '№ 7, малокалиберная винтовка 50 м',
     distanceM: 50,
     caliberMm: 5.6,
     bullseyeDiameterMm: 112.4,
@@ -273,7 +276,7 @@ class TargetFace {
 
   static const TargetFace pistol25m = TargetFace(
     code: 'pistol_25m',
-    name: '№ 4, пистолет 25 м',
+    name: /*tr*/ '№ 4, пистолет 25 м',
     distanceM: 25,
     caliberMm: 5.6,
     bullseyeDiameterMm: 200,

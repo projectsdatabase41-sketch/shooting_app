@@ -11,6 +11,7 @@ import 'package:sensors_plus/sensors_plus.dart';
 import '../logic/shot_photo_detection.dart';
 import '../models/target_face.dart';
 import '../services/shot_photo_service.dart';
+import '../i18n/i18n.dart';
 
 /// Живая камера: наводим на мишень, приложение само делает снимок.
 ///
@@ -414,14 +415,14 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
 
   String get _statusText {
     if (kIsWeb) {
-      if (_capturing) return 'Снимаю…';
-      return _webStable ? 'Держите ровно…' : 'Не двигайте телефон';
+      if (_capturing) return tr('Снимаю…');
+      return _webStable ? tr('Держите ровно…') : tr('Не двигайте телефон');
     }
     return switch (_status) {
-      _Status.searchingTarget => 'Наведите камеру на мишень',
-      _Status.searchingHole => 'Мишень найдена — ищу пробоину',
-      _Status.holding => 'Пробоина найдена — держите ровно…',
-      _Status.capturing => 'Снимаю…',
+      _Status.searchingTarget => tr('Наведите камеру на мишень'),
+      _Status.searchingHole => tr('Мишень найдена — ищу пробоину'),
+      _Status.holding => tr('Пробоина найдена — держите ровно…'),
+      _Status.capturing => tr('Снимаю…'),
     };
   }
 
@@ -433,7 +434,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
-        title: const Text('Наведите на мишень'),
+        title: Text(tr('Наведите на мишень')),
       ),
       body: _error != null
           ? Center(
@@ -620,9 +621,9 @@ class _TiltLevelIndicator extends StatelessWidget {
               color: Colors.black.withValues(alpha: 0.55),
               borderRadius: BorderRadius.circular(6),
             ),
-            child: const Text(
-              'Датчик недоступен',
-              style: TextStyle(color: Colors.white70, fontSize: 10),
+            child: Text(
+              tr('Датчик недоступен'),
+              style: const TextStyle(color: Colors.white70, fontSize: 10),
             ),
           ),
         ],

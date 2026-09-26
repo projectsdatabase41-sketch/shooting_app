@@ -39,6 +39,7 @@ import 'call_screen.dart';
 import 'chat_contact_panel_screen.dart';
 import 'chat_home_screen.dart';
 import 'photo_viewer_screen.dart';
+import '../i18n/i18n.dart';
 
 /// Переписка с одним контактом. Открытие ветки сразу отмечает входящие
 /// прочитанными локально (сервер их к этому моменту уже не хранит — см.
@@ -279,7 +280,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         _translationErrors[m.id] = '$e';
       });
       if (!silent) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось перевести: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Не удалось перевести: {e}', {'e': e}))));
       }
     }
   }
@@ -316,7 +317,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       // навсегда оставался true (кнопка отправки переставала работать),
       // без единого следа для пользователя. Теперь ошибка видна и не
       // блокирует дальнейшую отправку.
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не отправлено: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Не отправлено: {e}', {'e': e}))));
     } finally {
       // Всегда, а не только при успехе — иначе сообщение с красным
       // статусом "ошибка" просто не появлялось бы в списке до ручного
@@ -337,19 +338,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     final instruction = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Написать с ИИ'),
+        title: Text(tr('Написать с ИИ')),
         content: TextField(
           controller: ctrl,
           autofocus: true,
           minLines: 2,
           maxLines: 6,
-          decoration: const InputDecoration(
-            hintText: 'Например: «расскажи тренеру, как прошла последняя тренировка, с графиком по сериям»',
+          decoration: InputDecoration(
+            hintText: tr('Например: «расскажи тренеру, как прошла последняя тренировка, с графиком по сериям»'),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()), child: const Text('Составить')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr('Отмена'))),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()), child: Text(tr('Составить'))),
         ],
       ),
     );
@@ -360,9 +361,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       final ctx = AiContext(
         scope: AiScope.general,
         allSessions: store.sessions,
-        exerciseNameOf: (s) => store.exerciseFor(s)?.label ?? 'без упражнения',
+        exerciseNameOf: (s) => store.exerciseFor(s)?.label ?? tr('без упражнения'),
       );
-      final who = _contact.isGroup ? 'в группу «${_contact.nickname}»' : 'собеседнику ${_contact.nickname}';
+      final who = _contact.isGroup ? tr('в группу «{nickname}»', {'nickname': _contact.nickname}) : tr('собеседнику {nickname}', {'nickname': _contact.nickname});
       final reply = await AiService(AiSettings(store.db)).ask(
         systemPrompt: 'Ты помогаешь спортсмену-стрелку написать сообщение $who в мессенджере приложения. '
             'Тебе дан КОНТЕКСТ с его тренировками и задание. Ответь ТОЛЬКО готовым текстом сообщения — '
@@ -388,7 +389,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         _pendingChart = chart;
       });
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('ИИ не ответил: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('ИИ не ответил: {e}', {'e': e}))));
     } finally {
       if (mounted) setState(() => _aiBusy = false);
     }
@@ -439,7 +440,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     try {
       await widget.sync.retry(m);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не отправлено: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Не отправлено: {e}', {'e': e}))));
     } finally {
       _reload();
     }
@@ -470,7 +471,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       await widget.sync.downloadLargeAttachment(m, destPath: destPath);
       _reload();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось скачать: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Не удалось скачать: {e}', {'e': e}))));
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -484,7 +485,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     setState(() => _selected.clear());
     if (text.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: text));
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Скопировано')));
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Скопировано'))));
   }
 
   /// Переводит и сразу показывает перевод ВМЕСТО оригинала (та же
@@ -542,16 +543,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     final choice = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(chosen.length == 1 ? 'Удалить сообщение?' : 'Удалить ${chosen.length} сообщ.?'),
+        title: Text(chosen.length == 1 ? tr('Удалить сообщение?') : tr('Удалить {length} сообщ.?', {'length': chosen.length})),
         content: canForAll == 0
-            ? Text(read > 0 ? 'Собеседник уже прочитал — удалить можно только у себя.' : 'Удалится только у вас.')
+            ? Text(read > 0 ? tr('Собеседник уже прочитал — удалить можно только у себя.') : tr('Удалится только у вас.'))
             : Text(read > 0
-                ? 'Уже прочитанные ($read) удалятся только у вас.'
-                : 'Можно удалить и у собеседника — он ещё не прочитал.'),
+                ? tr('Уже прочитанные ({read}) удалятся только у вас.', {'read': read})
+                : tr('Можно удалить и у собеседника — он ещё не прочитал.')),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
-          TextButton(onPressed: () => Navigator.of(ctx).pop('me'), child: const Text('У меня')),
-          if (canForAll > 0) FilledButton(onPressed: () => Navigator.of(ctx).pop('all'), child: const Text('У всех')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr('Отмена'))),
+          TextButton(onPressed: () => Navigator.of(ctx).pop('me'), child: Text(tr('У меня'))),
+          if (canForAll > 0) FilledButton(onPressed: () => Navigator.of(ctx).pop('all'), child: Text(tr('У всех'))),
         ],
       ),
     );
@@ -567,11 +568,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     final newText = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Изменить сообщение'),
+        title: Text(tr('Изменить сообщение')),
         content: TextField(controller: ctrl, autofocus: true, maxLines: 4),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()), child: const Text('Сохранить')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr('Отмена'))),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()), child: Text(tr('Сохранить'))),
         ],
       ),
     );
@@ -601,7 +602,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     if (bytes.length > ChatMediaUtils.maxAttachmentBytes) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Слишком большой файл — до ${ChatMediaUtils.formatSize(ChatMediaUtils.maxAttachmentBytes)}'),
+          content: Text(tr('Слишком большой файл — до {p}', {'p': ChatMediaUtils.formatSize(ChatMediaUtils.maxAttachmentBytes)})),
         ));
       }
       return;
@@ -631,7 +632,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       );
       _scrollToEnd();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не отправлено: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Не отправлено: {e}', {'e': e}))));
     } finally {
       if (mounted) {
         _reload();
@@ -664,7 +665,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       );
       _scrollToEnd();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не отправлено: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Не отправлено: {e}', {'e': e}))));
     } finally {
       if (mounted) {
         _reload();
@@ -690,7 +691,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       actions: [
         GlassCircleButton(
           icon: const BoldIcon(Icons.close),
-          tooltip: 'Свернуть мессенджер',
+          tooltip: tr('Свернуть мессенджер'),
           onTap: () => ChatHomeScreen.close(context),
         ),
       ],
@@ -699,7 +700,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         valueListenable: ChatPresence.seen,
         builder: (context, _, __) {
           final online = !_contact.isGroup && (_live?.peerOnline == true || ChatPresence.online(_contact.id));
-          final seen = _contact.isGroup ? null : (online ? 'в сети' : ChatPresence.label(_contact.id));
+          final seen = _contact.isGroup ? null : (online ? tr('в сети') : ChatPresence.label(_contact.id));
           return Row(
             children: [
               ChatAvatar(
@@ -720,7 +721,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
                     if (_contact.isGroup)
-                      Text('Участников: ${_contact.members.length}', style: theme.textTheme.bodySmall)
+                      Text(tr('Участников: {length}', {'length': _contact.members.length}), style: theme.textTheme.bodySmall)
                     else if (seen != null)
                       Text(seen,
                           style: theme.textTheme.bodySmall?.copyWith(color: online ? const Color(0xFF3DDC84) : null))
@@ -759,7 +760,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                 Expanded(child: SingleChildScrollView(child: AiChartView(spec: _pendingChart!))),
                 IconButton(
                   icon: const Icon(Icons.close),
-                  tooltip: 'Убрать график',
+                  tooltip: tr('Убрать график'),
                   onPressed: () => setState(() => _pendingChart = null),
                 ),
               ],
@@ -770,8 +771,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
             padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
             child: ChatReplyBar(
               title: _replyingTo!.direction == ChatMessageDirection.outgoing
-                  ? 'Ответ себе'
-                  : 'Ответ ${_contact.isGroup ? (_contact.member(_replyingTo!.senderId ?? '')?.nickname ?? '') : _contact.nickname}',
+                  ? tr('Ответ себе')
+                  : tr('Ответ {p}', {'p': _contact.isGroup ? (_contact.member(_replyingTo!.senderId ?? '')?.nickname ?? '') : _contact.nickname}),
               preview: ChatSyncService.previewOf(_replyingTo!),
               onCancel: () => setState(() => _replyingTo = null),
             ),
@@ -793,7 +794,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                       children: [
                         IconButton(
                           onPressed: _toggleEmoji,
-                          tooltip: _emojiOpen ? 'Клавиатура' : 'Смайлики',
+                          tooltip: _emojiOpen ? tr('Клавиатура') : tr('Смайлики'),
                           icon: Icon(_emojiOpen ? Icons.keyboard_outlined : Icons.emoji_emotions_outlined),
                         ),
                         Expanded(
@@ -803,19 +804,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                             minLines: 1,
                             maxLines: 5,
                             textInputAction: TextInputAction.newline,
-                            decoration: const InputDecoration(
-                              hintText: 'Сообщение',
+                            decoration: InputDecoration(
+                              hintText: tr('Сообщение'),
                               border: InputBorder.none,
                               enabledBorder: InputBorder.none,
                               focusedBorder: InputBorder.none,
                               filled: false,
-                              contentPadding: EdgeInsets.symmetric(vertical: 14),
+                              contentPadding: const EdgeInsets.symmetric(vertical: 14),
                             ),
                           ),
                         ),
                         IconButton(
                           onPressed: _sending || _aiBusy ? null : _composeWithAi,
-                          tooltip: 'Написать с ИИ',
+                          tooltip: tr('Написать с ИИ'),
                           icon: _aiBusy
                               ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                               : const Icon(Icons.auto_awesome_outlined),
@@ -827,7 +828,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                           child: IconButton(
                             onPressed: _sending ? null : _attach,
                             icon: const Icon(Icons.attach_file),
-                            tooltip: 'Прикрепить фото или файл (долгое нажатие — большой файл)',
+                            tooltip: tr('Прикрепить фото или файл (долгое нажатие — большой файл)'),
                           ),
                         ),
                       ],
@@ -873,22 +874,22 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                       IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _selected.clear())),
                   title: Text('${_selected.length}'),
                   actions: [
-                    IconButton(icon: const Icon(Icons.copy_outlined), tooltip: 'Копировать', onPressed: _copySelected),
+                    IconButton(icon: const Icon(Icons.copy_outlined), tooltip: tr('Копировать'), onPressed: _copySelected),
                     IconButton(
                         icon: const Icon(Icons.translate_outlined),
-                        tooltip: 'Перевести',
+                        tooltip: tr('Перевести'),
                         onPressed: _translateSelected),
                     if (_singleSelectedMessage() case final single?) ...[
                       IconButton(
-                          icon: const Icon(Icons.reply_outlined), tooltip: 'Ответить', onPressed: _replySelected),
+                          icon: const Icon(Icons.reply_outlined), tooltip: tr('Ответить'), onPressed: _replySelected),
                       if (single.direction == ChatMessageDirection.outgoing && single.type == ChatMessageType.text)
                         IconButton(
-                            icon: const Icon(Icons.edit_outlined), tooltip: 'Редактировать', onPressed: _editSelected),
+                            icon: const Icon(Icons.edit_outlined), tooltip: tr('Редактировать'), onPressed: _editSelected),
                       if (single.direction == ChatMessageDirection.outgoing && single.status == ChatMessageStatus.error)
                         IconButton(
-                            icon: const Icon(Icons.refresh), tooltip: 'Отправить ещё раз', onPressed: _retrySelected),
+                            icon: const Icon(Icons.refresh), tooltip: tr('Отправить ещё раз'), onPressed: _retrySelected),
                     ],
-                    IconButton(icon: const Icon(Icons.delete_outline), tooltip: 'Удалить', onPressed: _deleteSelected),
+                    IconButton(icon: const Icon(Icons.delete_outline), tooltip: tr('Удалить'), onPressed: _deleteSelected),
                   ],
                 )
               : _glassHeader(context),
@@ -909,7 +910,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                     child: Stack(
                       children: [
                         _messages.isEmpty
-                            ? const EmptyState(icon: Icons.forum_outlined, text: 'Переписки пока нет')
+                            ? EmptyState(icon: Icons.forum_outlined, text: tr('Переписки пока нет'))
                             // Перевёрнутая лента: низ (новые) закреплён — при
                             // открытии клавиатуры последние сообщения остаются
                             // видны, а подгрузка картинок выше не сдвигает экран.
@@ -967,7 +968,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                       bottomActionBarConfig: const BottomActionBarConfig(enabled: false),
                       searchViewConfig: SearchViewConfig(
                         backgroundColor: Theme.of(context).colorScheme.surface,
-                        hintText: 'Поиск',
+                        hintText: tr('Поиск'),
                       ),
                     ),
                   ),
@@ -1004,8 +1005,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     final d = DateTime(t.year, t.month, t.day);
     final today = DateTime(now.year, now.month, now.day);
     final diff = today.difference(d).inDays;
-    if (diff == 0) return 'Сегодня';
-    if (diff == 1) return 'Вчера';
+    if (diff == 0) return tr('Сегодня');
+    if (diff == 1) return tr('Вчера');
     final base = '${t.day} ${_months[t.month - 1]}';
     return t.year == now.year ? base : '$base ${t.year}';
   }
@@ -1104,9 +1105,9 @@ class _Bubble extends StatelessWidget {
 
   /// [mine] — это МОЙ исходный вызов (я звонил) или чужой (звонили мне).
   static String _callLabel(bool mine, String? status) => switch (status) {
-        'acknowledged' => mine ? 'Тренер идёт' : 'Вы согласились идти',
-        'cancelled' => mine ? 'Вызов отменён' : 'Пропущенный — помощь не нужна',
-        _ => mine ? 'Вы позвали' : 'Вас позвали',
+        'acknowledged' => mine ? tr('Тренер идёт') : tr('Вы согласились идти'),
+        'cancelled' => mine ? tr('Вызов отменён') : tr('Пропущенный — помощь не нужна'),
+        _ => mine ? tr('Вы позвали') : tr('Вас позвали'),
       };
 
   @override
@@ -1253,11 +1254,11 @@ class _Bubble extends StatelessWidget {
                   ? TextButton(
                       style: TextButton.styleFrom(foregroundColor: fg, padding: EdgeInsets.zero),
                       onPressed: onCancelCall,
-                      child: const Text('Отменить'),
+                      child: Text(tr('Отменить')),
                     )
                   : FilledButton(
                       onPressed: onAckCall,
-                      child: const Text('Иду'),
+                      child: Text(tr('Иду')),
                     ),
             ),
           ],
@@ -1402,7 +1403,7 @@ class _Bubble extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (message.edited) ...[
-                  Text('изменено', style: theme.textTheme.labelSmall?.copyWith(color: theme.hintColor)),
+                  Text(tr('изменено'), style: theme.textTheme.labelSmall?.copyWith(color: theme.hintColor)),
                   const SizedBox(width: 6),
                 ],
                 Text(
@@ -1433,7 +1434,7 @@ class _Bubble extends StatelessWidget {
             TextButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh, size: 14),
-              label: const Text('Отправить ещё раз'),
+              label: Text(tr('Отправить ещё раз')),
               style: TextButton.styleFrom(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero),
             ),
           ],

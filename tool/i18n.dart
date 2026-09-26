@@ -33,8 +33,9 @@ const languageNames = {
 };
 
 /// tr('…') с одинарными кавычками; строка может быть склеена из соседних
-/// литералов: tr('а ' 'б').
-final _call = RegExp(r"""\btr\(\s*((?:'(?:[^'\\]|\\.)*'\s*)+)""");
+/// литералов: tr('а ' 'б'). Строки в константах, которые переводятся при
+/// показе, помечены так: label: /*tr*/ 'Мишень'.
+final _call = RegExp(r"""(?:\btr\(|/\*tr\*/)\s*((?:'(?:[^'\\]|\\.)*'\s*)+)""");
 final _literal = RegExp(r"""'((?:[^'\\]|\\.)*)'""");
 
 String _unescape(String s) => s.replaceAllMapped(RegExp(r'\\(.)'), (m) => switch (m[1]) {
@@ -68,9 +69,9 @@ Future<void> main(List<String> args) async {
         print('Нет OPENROUTER_KEY — перевести нечем');
         exit(1);
       }
-      for (var i = 0; i < missing.length; i += 60) {
-        final batch = missing.sublist(i, i + 60 > missing.length ? missing.length : i + 60);
-        dict.addAll(await _translate(apiKey, code, batch));
+      for (var i = 0; i < missing.length; i += 40) {
+        final batch = missing.sublist(i, i + 40 > missing.length ? missing.length : i + 40);
+        dict.addAll(await _translateAny(apiKey, code, batch));
       }
     }
     final left = keys.where((k) => !dict.containsKey(k)).length;
@@ -82,14 +83,39 @@ Future<void> main(List<String> args) async {
   }
 }
 
+/// Модели для перевода: I18N_MODELS (через запятую) или бесплатные модели
+/// из того же списка, что и у приложения (lib/services/ai_settings.dart) —
+/// бесплатные на OpenRouter меняются, а этот список и так поддерживается.
+List<String> _models() {
+  final env = Platform.environment['I18N_MODELS'] ?? '';
+  if (env.trim().isNotEmpty) return env.split(',').map((m) => m.trim()).where((m) => m.isNotEmpty).toList();
+  final src = File('lib/services/ai_settings.dart').readAsStringSync();
+  return RegExp(r"'([\w.\-]+/[\w.\-]+:free)'").allMatches(src).map((m) => m[1]!).toSet().toList();
+}
+
+/// Пробует модели по очереди, пока одна не переведёт пачку. Не вышло ни у
+/// одной — пачка останется русской до следующего запуска.
+Future<Map<String, String>> _translateAny(String apiKey, String code, List<String> batch) async {
+  for (final model in _models()) {
+    try {
+      final out = await _translate(apiKey, model, code, batch);
+      if (out.length >= batch.length * 0.8) return out;
+      print('  $model: переведено мало (${out.length}/${batch.length}), пробую следующую');
+    } catch (e) {
+      print('  $model: $e');
+    }
+  }
+  return const {};
+}
+
 /// Пачка строк → JSON {русский: перевод}. Ответ без нужных ключей или с
 /// потерянными {подстановками} отбрасывается — строка останется русской.
-Future<Map<String, String>> _translate(String apiKey, String code, List<String> batch) async {
+Future<Map<String, String>> _translate(String apiKey, String model, String code, List<String> batch) async {
   final res = await http.post(
     Uri.parse('https://openrouter.ai/api/v1/chat/completions'),
     headers: {'Authorization': 'Bearer $apiKey', 'Content-Type': 'application/json'},
     body: jsonEncode({
-      'model': 'google/gemini-2.5-flash',
+      'model': model,
       'response_format': {'type': 'json_object'},
       'messages': [
         {
@@ -103,7 +129,7 @@ Future<Map<String, String>> _translate(String apiKey, String code, List<String> 
         {'role': 'user', 'content': jsonEncode(batch)},
       ],
     }),
-  );
+  ).timeout(const Duration(minutes: 3));
   if (res.statusCode != 200) throw Exception('OpenRouter ${res.statusCode}: ${res.body}');
   final content = (jsonDecode(utf8.decode(res.bodyBytes))['choices'][0]['message']['content'] as String).trim();
   final decoded = jsonDecode(content.substring(content.indexOf('{'), content.lastIndexOf('}') + 1)) as Map;
@@ -111,7 +137,8 @@ Future<Map<String, String>> _translate(String apiKey, String code, List<String> 
   final placeholder = RegExp(r'\{\w+\}');
   for (final k in batch) {
     final v = decoded[k];
-    if (v is! String || v.trim().isEmpty) continue;
+    // Пустой перевод допустим только у окончаний вроде «ь» в «модел{p}».
+    if (v is! String || (v.trim().isEmpty && k.length > 2)) continue;
     final need = placeholder.allMatches(k).map((m) => m[0]!).toSet();
     if (!need.every((p) => v.contains(p))) continue;
     out[k] = v;

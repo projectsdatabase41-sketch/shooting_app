@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../state/home_tabs_view_model.dart';
 import '../widgets/home_tabs_bar.dart';
+import '../i18n/i18n.dart';
 
 /// "Рабочие пространства" — тот же список вкладок, что и в нижней
 /// навигации, только не всплывающим крестиком, а обычным переключателем:
@@ -43,7 +44,7 @@ class SettingsHomeTabsScreen extends StatelessWidget {
           child: ListTile(
             leading: Icon(specs[id]?.icon ?? Icons.circle_outlined),
             title: Text(specs[id]?.label ?? id),
-            subtitle: isVisible ? null : const Text('скрыта'),
+            subtitle: isVisible ? null : Text(tr('скрыта')),
             trailing: Switch(
               value: isVisible,
               onChanged: isVisible
@@ -54,16 +55,16 @@ class SettingsHomeTabsScreen extends StatelessWidget {
         );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Рабочие пространства')),
+      appBar: AppBar(title: Text(tr('Рабочие пространства'))),
       body: CustomScrollView(
         slivers: [
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             sliver: SliverToBoxAdapter(
               child: SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: 'pages', icon: Icon(Icons.view_agenda_outlined), label: Text('Страницы')),
-                  ButtonSegment(value: 'tiles', icon: Icon(Icons.grid_view_outlined), label: Text('Плитки')),
+                segments: [
+                  ButtonSegment(value: 'pages', icon: const Icon(Icons.view_agenda_outlined), label: Text(tr('Страницы'))),
+                  ButtonSegment(value: 'tiles', icon: const Icon(Icons.grid_view_outlined), label: Text(tr('Плитки'))),
                 ],
                 selected: {tabs.layout},
                 showSelectedIcon: false,
@@ -75,8 +76,7 @@ class SettingsHomeTabsScreen extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             sliver: SliverToBoxAdapter(
               child: Text(
-                'Удержать и перетащить — поменять порядок на главном экране. '
-                'То же самое можно и прямо там: удержать значок, отпустить — появится крестик.',
+                tr('Удержать и перетащить — поменять порядок на главном экране. То же самое можно и прямо там: удержать значок, отпустить — появится крестик.'),
                 style: theme.textTheme.bodySmall,
               ),
             ),
@@ -101,7 +101,7 @@ class SettingsHomeTabsScreen extends StatelessWidget {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: Text('Скрытые', style: theme.textTheme.labelLarge),
+                child: Text(tr('Скрытые'), style: theme.textTheme.labelLarge),
               ),
             ),
             SliverList.list(children: [for (final id in hidden) tile(id, isVisible: false)]),

@@ -7,6 +7,7 @@ import '../services/ai_service.dart';
 import '../services/ai_settings.dart';
 import '../services/chat_preferences.dart';
 import '../services/local_db_service.dart';
+import '../i18n/i18n.dart';
 
 /// Настройки чата (пункты 4, 6, 7 списка правок) — открывается из левой
 /// панели чата, а не из общих настроек приложения: это оформление
@@ -43,7 +44,7 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
     final prefs = widget.prefs;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Персонализация'),
+        title: Text(tr('Персонализация')),
         actions: [
           IconButton(
             onPressed: () => showModalBottomSheet(
@@ -53,7 +54,7 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
               builder: (_) => _AiThemeAssistantSheet(prefs: prefs, db: widget.db),
             ),
             icon: const Icon(Icons.auto_awesome_outlined),
-            tooltip: 'Настроить с ИИ',
+            tooltip: tr('Настроить с ИИ'),
           ),
         ],
       ),
@@ -62,9 +63,9 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
         children: [
           _preview(),
           const SizedBox(height: 24),
-          Text('Оформление сообщений', style: theme.textTheme.titleMedium),
+          Text(tr('Оформление сообщений'), style: theme.textTheme.titleMedium),
           const SizedBox(height: 4),
-          Text('Готовые сочетания цветов — заполняют поля ниже сразу.', style: theme.textTheme.bodySmall),
+          Text(tr('Готовые сочетания цветов — заполняют поля ниже сразу.'), style: theme.textTheme.bodySmall),
           const SizedBox(height: 12),
           Wrap(
             spacing: 12,
@@ -72,38 +73,38 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
             children: [for (final preset in ChatPreferences.presets) _presetCard(preset)],
           ),
           const SizedBox(height: 20),
-          Text('Цвета вручную', style: theme.textTheme.titleMedium),
+          Text(tr('Цвета вручную'), style: theme.textTheme.titleMedium),
           const SizedBox(height: 8),
-          _colorTile('Фон моего сообщения', prefs.mineBubbleColor, (c) => prefs.mineBubbleColor = c),
-          _colorTile('Фон сообщений собеседника', prefs.otherBubbleColor, (c) => prefs.otherBubbleColor = c),
-          _colorTile('Мой текст', prefs.mineTextColor, (c) => prefs.mineTextColor = c),
-          _colorTile('Текст собеседника', prefs.otherTextColor, (c) => prefs.otherTextColor = c),
+          _colorTile(tr('Фон моего сообщения'), prefs.mineBubbleColor, (c) => prefs.mineBubbleColor = c),
+          _colorTile(tr('Фон сообщений собеседника'), prefs.otherBubbleColor, (c) => prefs.otherBubbleColor = c),
+          _colorTile(tr('Мой текст'), prefs.mineTextColor, (c) => prefs.mineTextColor = c),
+          _colorTile(tr('Текст собеседника'), prefs.otherTextColor, (c) => prefs.otherTextColor = c),
           const SizedBox(height: 20),
-          Text('Тень', style: theme.textTheme.titleMedium),
+          Text(tr('Тень'), style: theme.textTheme.titleMedium),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Тень под сообщениями'),
+            title: Text(tr('Тень под сообщениями')),
             value: prefs.shadowEnabled,
             onChanged: (v) => setState(() => prefs.shadowEnabled = v),
           ),
           if (prefs.shadowEnabled)
             Row(
               children: [
-                const Text('Слабее'),
+                Text(tr('Слабее')),
                 Expanded(
                   child: Slider(
                     value: prefs.shadowIntensity,
                     onChanged: (v) => setState(() => prefs.shadowIntensity = v),
                   ),
                 ),
-                const Text('Сильнее'),
+                Text(tr('Сильнее')),
               ],
             ),
           const SizedBox(height: 20),
-          Text('Текст и форма', style: theme.textTheme.titleMedium),
+          Text(tr('Текст и форма'), style: theme.textTheme.titleMedium),
           Row(
             children: [
-              const SizedBox(width: 110, child: Text('Размер текста')),
+              SizedBox(width: 110, child: Text(tr('Размер текста'))),
               Expanded(
                 child: Slider(
                   value: prefs.fontScale,
@@ -118,7 +119,7 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
           ),
           Row(
             children: [
-              const SizedBox(width: 110, child: Text('Скругление')),
+              SizedBox(width: 110, child: Text(tr('Скругление'))),
               Expanded(
                 child: Slider(
                   value: prefs.bubbleRadius,
@@ -132,13 +133,13 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
             ],
           ),
           const SizedBox(height: 20),
-          Text('Фон переписки', style: theme.textTheme.titleMedium),
+          Text(tr('Фон переписки'), style: theme.textTheme.titleMedium),
           const SizedBox(height: 12),
           Wrap(
             spacing: 12,
             runSpacing: 12,
             children: [
-              _wallpaperTile('', 'Как в приложении', null),
+              _wallpaperTile('', tr('Как в приложении'), null),
               for (final e in ChatPreferences.chatWallpapers.entries)
                 _wallpaperTile(
                   e.key,
@@ -149,7 +150,7 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
                 ),
               _wallpaperTile(
                 prefs.wallpaper.startsWith('#') ? prefs.wallpaper : '#custom',
-                'Свой цвет',
+                tr('Свой цвет'),
                 prefs.wallpaper.startsWith('#') ? prefs.wallpaperDecoration : null,
               ),
             ],
@@ -200,8 +201,8 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
             BoxDecoration(color: theme.colorScheme.surfaceContainerLow, border: Border.all(color: theme.dividerColor)),
         child: Column(
           children: [
-            bubble('Как прошла тренировка?', false),
-            bubble('Отлично: 98 из 100, хват держал 👍', true),
+            bubble(tr('Как прошла тренировка?'), false),
+            bubble(tr('Отлично: 98 из 100, хват держал 👍'), true),
           ],
         ),
       ),
@@ -218,7 +219,7 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
           final current = prefs.wallpaper.startsWith('#')
               ? TargetColorScheme.hexToColor(prefs.wallpaper)
               : theme.colorScheme.surface;
-          await _pickColor('Цвет фона', current, (c) {
+          await _pickColor(tr('Цвет фона'), current, (c) {
             prefs.wallpaper = TargetColorScheme.colorToHex(c, withAlpha: false);
           });
         } else {
@@ -287,7 +288,7 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
               children: [_swatch(preset.mine), const SizedBox(width: 6), _swatch(preset.other)],
             ),
             const SizedBox(height: 8),
-            Text(preset.label, style: theme.textTheme.bodyMedium),
+            Text(tr(preset.label), style: theme.textTheme.bodyMedium),
           ],
         ),
       ),
@@ -354,14 +355,14 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> with SingleTicke
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TabBar(controller: _tab, tabs: const [Tab(text: 'Палитра'), Tab(text: 'HEX')]),
+            TabBar(controller: _tab, tabs: [Tab(text: tr('Палитра')), const Tab(text: 'HEX')]),
             SizedBox(height: 220, child: TabBarView(controller: _tab, children: [_paletteTab(), _hexTab()])),
           ],
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Отмена')),
-        FilledButton(onPressed: () => Navigator.of(context).pop(_color), child: const Text('Применить')),
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(tr('Отмена'))),
+        FilledButton(onPressed: () => Navigator.of(context).pop(_color), child: Text(tr('Применить'))),
       ],
     );
   }
@@ -389,7 +390,7 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> with SingleTicke
         ),
         Row(
           children: [
-            const Text('Яркость'),
+            Text(tr('Яркость')),
             Expanded(child: Slider(value: hsv.value, onChanged: (v) => _apply(hsv.withValue(v).toColor()))),
           ],
         ),
@@ -528,10 +529,10 @@ class _AiThemeAssistantSheetState extends State<_AiThemeAssistantSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Настроить с ИИ', style: Theme.of(context).textTheme.titleMedium),
+          Text(tr('Настроить с ИИ'), style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 4),
           Text(
-            'Например: "сделай мои сообщения зелёными" или "убери тень".',
+            tr('Например: "сделай мои сообщения зелёными" или "убери тень".'),
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 12),
@@ -539,7 +540,7 @@ class _AiThemeAssistantSheetState extends State<_AiThemeAssistantSheet> {
             controller: _input,
             minLines: 1,
             maxLines: 3,
-            decoration: const InputDecoration(hintText: 'Что изменить?'),
+            decoration: InputDecoration(hintText: tr('Что изменить?')),
             onSubmitted: (_) => _ask(),
           ),
           const SizedBox(height: 8),
@@ -549,7 +550,7 @@ class _AiThemeAssistantSheetState extends State<_AiThemeAssistantSheet> {
               onPressed: _busy ? null : _ask,
               child: _busy
                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('Отправить'),
+                  : Text(tr('Отправить')),
             ),
           ),
           if (_reply != null) ...[

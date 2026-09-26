@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 
 import 'glass_pill.dart';
+import '../i18n/i18n.dart';
 
 /// Карточка над полем ввода, пока выбран "ответ на сообщение": кому
 /// отвечаем, цитата и крестик — стеклянная, как поле ввода. Сюда приходит
 /// уже готовый текст цитаты, а не само сообщение.
 class ChatReplyBar extends StatelessWidget {
   final String preview;
-  final String title;
+  final String? title;
   final VoidCallback onCancel;
-  const ChatReplyBar({super.key, required this.preview, this.title = 'Ответ', required this.onCancel});
+  const ChatReplyBar({super.key, required this.preview, this.title, required this.onCancel});
 
   @override
   Widget build(BuildContext context) {
@@ -33,7 +34,7 @@ class ChatReplyBar extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(title,
+                Text(title ?? tr('Ответ'),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.labelLarge?.copyWith(color: accent, fontWeight: FontWeight.w700)),

@@ -64,15 +64,15 @@ class ChatPreferences extends ChangeNotifier {
   ChatPreferences(this.db);
 
   static const List<ChatBubblePreset> presets = [
-    ChatBubblePreset(id: 'classic', label: 'Классика', mine: Color(0xFF3D6BF2), other: Color(0xFF3A3F4B)),
-    ChatBubblePreset(id: 'forest', label: 'Лес', mine: Color(0xFF2F8F5B), other: Color(0xFF33403A)),
-    ChatBubblePreset(id: 'sunset', label: 'Закат', mine: Color(0xFFD9633B), other: Color(0xFF40393F)),
-    ChatBubblePreset(id: 'violet', label: 'Фиолет', mine: Color(0xFF8256D0), other: Color(0xFF3B3A45)),
+    ChatBubblePreset(id: 'classic', label: /*tr*/ 'Классика', mine: Color(0xFF3D6BF2), other: Color(0xFF3A3F4B)),
+    ChatBubblePreset(id: 'forest', label: /*tr*/ 'Лес', mine: Color(0xFF2F8F5B), other: Color(0xFF33403A)),
+    ChatBubblePreset(id: 'sunset', label: /*tr*/ 'Закат', mine: Color(0xFFD9633B), other: Color(0xFF40393F)),
+    ChatBubblePreset(id: 'violet', label: /*tr*/ 'Фиолет', mine: Color(0xFF8256D0), other: Color(0xFF3B3A45)),
     // Ночной — без синего и без чистого белого: меньше нагружает глаза
     // при чтении в темноте (перед стрельбой в помещении вечером и т.п.).
     ChatBubblePreset(
       id: 'night',
-      label: 'Ночной',
+      label: /*tr*/ 'Ночной',
       mine: Color(0xFF2B211B),
       other: Color(0xFF1E1E20),
       mineText: Color(0xFFE7B27A),
@@ -81,7 +81,7 @@ class ChatPreferences extends ChangeNotifier {
     // Хаки — тактическая тема, в тон самому приложению.
     ChatBubblePreset(
       id: 'khaki',
-      label: 'Хаки',
+      label: /*tr*/ 'Хаки',
       mine: Color(0xFF4B5320),
       other: Color(0xFF3B3B2E),
       mineText: Color(0xFFEDEAE0),
@@ -90,7 +90,7 @@ class ChatPreferences extends ChangeNotifier {
     // Графит — низкий контраст без ярких цветов вообще, самый спокойный.
     ChatBubblePreset(
       id: 'graphite',
-      label: 'Графит',
+      label: /*tr*/ 'Графит',
       mine: Color(0xFF565B66),
       other: Color(0xFF34383F),
       mineText: Color(0xFFF0F0F0),
@@ -99,7 +99,7 @@ class ChatPreferences extends ChangeNotifier {
     // Кофе — тёплая сепия вместо серого/синего.
     ChatBubblePreset(
       id: 'coffee',
-      label: 'Кофе',
+      label: /*tr*/ 'Кофе',
       mine: Color(0xFF6F4E37),
       other: Color(0xFF3E2F27),
       mineText: Color(0xFFF3E5D8),
@@ -108,7 +108,7 @@ class ChatPreferences extends ChangeNotifier {
     // Мята — приглушённый холодный цвет вместо насыщенного зелёного.
     ChatBubblePreset(
       id: 'mint',
-      label: 'Мята',
+      label: /*tr*/ 'Мята',
       mine: Color(0xFF3E8E7E),
       other: Color(0xFF33403D),
       mineText: Color(0xFFEAFBF6),

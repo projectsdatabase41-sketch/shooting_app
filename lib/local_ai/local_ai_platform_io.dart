@@ -5,6 +5,7 @@ import 'package:background_downloader/background_downloader.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import '../i18n/i18n.dart';
 
 final bool localAiSupported = Platform.isAndroid || Platform.isWindows || Platform.isLinux || Platform.isMacOS;
 
@@ -75,13 +76,9 @@ bool _downloadsReady = false;
 Future<void> initModelDownloads() async {
   if (_downloadsReady) return;
   _downloadsReady = true;
-  FileDownloader().configureNotification(
-    running: const TaskNotification('Загрузка модели ИИ', '{displayName} — {progress}'),
-    complete: const TaskNotification('Модель ИИ загружена', '{displayName}'),
-    error: const TaskNotification('Загрузка модели не удалась', '{displayName}'),
-    paused: const TaskNotification('Загрузка модели на паузе', '{displayName}'),
-    progressBar: true,
-  );
+  // Без уведомлений в шторке (решение пользователя: две строки прыгали
+  // местами). Прогресс виден на экране «Локальная модель»; паузу
+  // Android по таймауту загрузчик снимает сам.
   // trackTasks — чтобы состояние загрузки пережило перезапуск приложения.
   await FileDownloader().trackTasks();
   await FileDownloader().start();
@@ -97,9 +94,6 @@ DownloadTask _task(String id, String url, String fileName, String displayName) =
       updates: Updates.statusAndProgress,
       allowPause: true,
       retries: 10,
-      // 0 + уведомление — на Android 14+ «загрузка, начатая пользователем»
-      // (UIDT) без 9-минутного лимита фоновой работы (см. AndroidManifest).
-      priority: 0,
     );
 
 /// Скачивает модель в папку [modelsDir]. Если загрузка уже идёт в фоне
@@ -145,7 +139,7 @@ Future<void> downloadModel({
     case TaskStatus.canceled:
       throw const DownloadCancelled();
     default:
-      throw HttpException(result.exception?.description ?? 'загрузка не удалась (${result.status.name})');
+      throw HttpException(result.exception?.description ?? tr('загрузка не удалась ({name})', {'name': result.status.name}));
   }
 }
 

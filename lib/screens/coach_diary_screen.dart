@@ -6,6 +6,7 @@ import '../services/coach_access_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/empty_state.dart';
 import 'coach_exercise_detail_screen.dart';
+import '../i18n/i18n.dart';
 
 /// Экран тренера — список УПРАЖНЕНИЙ подключённого спортсмена (раздел 8
 /// ТЗ), как папка с файлами: сначала выбираешь упражнение (сгруппировано
@@ -65,12 +66,11 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
         // build() провалится в _ConnectForm сразу после forget() —
         // сообщение об отзыве иначе никто бы не увидел: показываем
         // его снэкбаром ДО того, как экран переключится.
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
-            'Доступ отозван спортсменом — токен больше не действует. '
-            'Подключение снято, локальных данных о нём не осталось.',
+            tr('Доступ отозван спортсменом — токен больше не действует. Подключение снято, локальных данных о нём не осталось.'),
           ),
-          duration: Duration(seconds: 6),
+          duration: const Duration(seconds: 6),
         ));
         return;
       }
@@ -95,7 +95,7 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
   /// связаны с тренировкой по `package_id`, а не по `id`: отдельного
   /// `exercise_id` на самой тренировке в реальной схеме нет.
   String _exerciseName(String packageId) => _exercises
-      .firstWhere((e) => e['package_id'] == packageId, orElse: () => const {'exercise_name': 'Упражнение'})['exercise_name'] as String? ?? 'Упражнение';
+      .firstWhere((e) => e['package_id'] == packageId, orElse: () => {'exercise_name': tr('Упражнение')})['exercise_name'] as String? ?? tr('Упражнение');
 
   /// Группировка тренировок по названию упражнения — сессии внутри
   /// каждой группы уже отсортированы по дате (новые сначала, см. `_load`),
@@ -121,9 +121,9 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
     if (!_access.hasConnection) {
       return Scaffold(
         appBar: AppBar(title: Text(widget.athleteName)),
-        body: const EmptyState(
+        body: EmptyState(
           icon: Icons.link_off,
-          text: 'Подключение снято — вернитесь к списку спортсменов.',
+          text: tr('Подключение снято — вернитесь к списку спортсменов.'),
         ),
       );
     }
@@ -139,7 +139,7 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
             icon: _loading
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.refresh),
-            tooltip: 'Обновить',
+            tooltip: tr('Обновить'),
             onPressed: _loading ? null : _load,
           ),
         ],
@@ -152,9 +152,9 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
               ),
             )
           : groups.isEmpty && !_loading
-              ? const EmptyState(
+              ? EmptyState(
                   icon: Icons.groups_outlined,
-                  text: 'У спортсмена пока нет отправленных тренировок',
+                  text: tr('У спортсмена пока нет отправленных тренировок'),
                 )
               : ListView.builder(
                   itemCount: groups.length,
@@ -167,8 +167,7 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
                         // Дата ВСЕГДА видна в строке упражнения — по ней
                         // видно, что тренировали последним (решение
                         // пользователя).
-                        'Последняя: ${last == null ? '—' : df.format(last.toLocal())} · '
-                        'тренировок: ${g.sessions.length}',
+                        tr('Последняя: {p} · тренировок: {length}', {'p': last == null ? '—' : df.format(last.toLocal()), 'length': g.sessions.length}),
                       ),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () => Navigator.of(context).push(MaterialPageRoute(

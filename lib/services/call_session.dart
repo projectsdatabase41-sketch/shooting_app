@@ -8,6 +8,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'call_service.dart';
 import 'chat_auth_service.dart';
+import '../i18n/i18n.dart';
 
 enum CallState { preparing, calling, ringing, connecting, active, ended }
 
@@ -121,9 +122,9 @@ class CallSession extends ChangeNotifier {
       // переживает сам — ждём 10 с, потом сдаёмся.
       if (s == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
         _disconnectTimer?.cancel();
-        _disconnectTimer = Timer(const Duration(seconds: 10), () => _end('Связь прервалась', outcome: 'failed'));
+        _disconnectTimer = Timer(const Duration(seconds: 10), () => _end(tr('Связь прервалась'), outcome: 'failed'));
       }
-      if (s == RTCPeerConnectionState.RTCPeerConnectionStateFailed) _end('Связь прервалась', outcome: 'failed');
+      if (s == RTCPeerConnectionState.RTCPeerConnectionStateFailed) _end(tr('Связь прервалась'), outcome: 'failed');
     };
     // Видео — на громкую связь, голос — к уху (как в обычных звонилках).
     await setSpeaker(video);
@@ -131,16 +132,16 @@ class CallSession extends ChangeNotifier {
 
   Future<void> _openRoom() async {
     final token = await auth.ensureFreshToken();
-    if (token == null) throw Exception('Сначала войдите в мессенджер');
+    if (token == null) throw Exception(tr('Сначала войдите в мессенджер'));
     final ws = WebSocketChannel.connect(CallService.roomUri(callId, token));
     await ws.ready;
     _ws = ws;
     _wsSub = ws.stream.listen(
       (raw) => _onSignal(jsonDecode(raw as String) as Map<String, dynamic>),
       onDone: () {
-        if (state != CallState.active) _end('Нет связи с сервером звонков');
+        if (state != CallState.active) _end(tr('Нет связи с сервером звонков'));
       },
-      onError: (_) => _end('Нет связи с сервером звонков'),
+      onError: (_) => _end(tr('Нет связи с сервером звонков')),
     );
   }
 
@@ -159,13 +160,13 @@ class CallSession extends ChangeNotifier {
       _set(CallState.calling);
       final delivered = await _service.ring(callId: callId, to: peerId, name: auth.nickname, video: video);
       if (delivered == 0) {
-        _end('$peerName сейчас недоступен — нет устройства с приложением', outcome: 'failed');
+        _end(tr('{peerName} сейчас недоступен — нет устройства с приложением', {'peerName': peerName}), outcome: 'failed');
         return;
       }
       _ringTimeout = Timer(ringTimeout, () {
         if (state == CallState.calling) {
           _service.cancel(callId: callId, to: peerId);
-          _end('Не отвечает', outcome: 'missed');
+          _end(tr('Не отвечает'), outcome: 'missed');
         }
       });
     } catch (e) {
@@ -191,7 +192,7 @@ class CallSession extends ChangeNotifier {
       await _openRoom();
       _send({'type': 'decline'});
     } catch (_) {}
-    _end('Вы отклонили звонок', outcome: 'declined');
+    _end(tr('Вы отклонили звонок'), outcome: 'declined');
   }
 
   /// Уже идёт другой разговор — сразу отвечаем звонящему «занято».
@@ -200,19 +201,19 @@ class CallSession extends ChangeNotifier {
       await _openRoom();
       _send({'type': 'busy'});
     } catch (_) {}
-    _end('Линия занята', outcome: 'busy');
+    _end(tr('Линия занята'), outcome: 'busy');
   }
 
   /// Звонящий передумал до ответа (push call_end).
   void cancelledByCaller() {
-    if (state == CallState.ringing) _end('Звонок отменён', outcome: 'missed');
+    if (state == CallState.ringing) _end(tr('Звонок отменён'), outcome: 'missed');
   }
 
   Future<void> hangUp() async {
     final beforeAnswer = !answered;
     if (outgoing && beforeAnswer) _service.cancel(callId: callId, to: peerId);
     _send({'type': 'hangup'});
-    _end(answered ? 'Звонок завершён' : 'Звонок отменён', outcome: beforeAnswer ? 'cancelled' : 'answered');
+    _end(answered ? tr('Звонок завершён') : tr('Звонок отменён'), outcome: beforeAnswer ? 'cancelled' : 'answered');
   }
 
   Future<void> _onSignal(Map<String, dynamic> m) async {
@@ -221,7 +222,7 @@ class CallSession extends ChangeNotifier {
       case 'peers':
         if (state == CallState.ringing) return; // отклоняем — ответ не нужен
         // Входящий: звонящего в комнате уже нет — он передумал.
-        if (!outgoing && !(m['peers'] as List).contains(peerId)) _end('Звонок отменён', outcome: 'missed');
+        if (!outgoing && !(m['peers'] as List).contains(peerId)) _end(tr('Звонок отменён'), outcome: 'missed');
         // Исходящий: собеседник уже там (переподключение) — предлагаем соединение.
         if (outgoing && (m['peers'] as List).contains(peerId)) await _makeOffer();
       case 'join':
@@ -247,13 +248,13 @@ class CallSession extends ChangeNotifier {
           _pendingIce.add(c); // кандидаты могут прийти раньше offer/answer
         }
       case 'decline':
-        _end('$peerName отклонил звонок', outcome: 'declined');
+        _end(tr('{peerName} отклонил звонок', {'peerName': peerName}), outcome: 'declined');
       case 'busy':
-        _end('$peerName сейчас разговаривает — линия занята', outcome: 'busy');
+        _end(tr('{peerName} сейчас разговаривает — линия занята', {'peerName': peerName}), outcome: 'busy');
       case 'hangup':
       case 'leave':
         if (m['from'] == peerId) {
-          _end(answered ? 'Звонок завершён' : 'Звонок отменён', outcome: answered ? 'answered' : (outgoing ? 'missed' : 'missed'));
+          _end(answered ? tr('Звонок завершён') : tr('Звонок отменён'), outcome: answered ? 'answered' : (outgoing ? 'missed' : 'missed'));
         }
     }
   }
@@ -328,8 +329,8 @@ class CallSession extends ChangeNotifier {
 
   static String _humanError(Object e) {
     final s = '$e';
-    if (s.contains('Permission') || s.contains('NotAllowed')) return 'Нет доступа к микрофону или камере';
-    return 'Не удалось начать звонок: $s';
+    if (s.contains('Permission') || s.contains('NotAllowed')) return tr('Нет доступа к микрофону или камере');
+    return tr('Не удалось начать звонок: {s}', {'s': s});
   }
 
   @override

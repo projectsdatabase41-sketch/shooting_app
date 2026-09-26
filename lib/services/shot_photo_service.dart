@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:image/image.dart' as img;
 
 import '../logic/shot_photo_detection.dart';
+import '../i18n/i18n.dart';
 
 class ShotPhotoException implements Exception {
   final String message;
@@ -31,7 +32,7 @@ class ShotPhotoService {
   static img.Image decode(Uint8List bytes) {
     final decoded = img.decodeImage(bytes);
     if (decoded == null) {
-      throw const ShotPhotoException('Не удалось распознать файл как изображение');
+      throw ShotPhotoException(tr('Не удалось распознать файл как изображение'));
     }
     return decoded;
   }

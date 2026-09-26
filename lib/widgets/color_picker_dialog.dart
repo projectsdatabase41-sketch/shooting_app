@@ -3,6 +3,7 @@ import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:provider/provider.dart';
 import '../models/target_color_scheme.dart';
 import '../state/personalization_view_model.dart';
+import '../i18n/i18n.dart';
 
 /// Диалог выбора цвета (часть A.3.1 логики-спека). Два таба: "Палитра"
 /// (круг+слайдер яркости — упрощено до HSV picker) и "HEX" (ручной ввод +
@@ -109,7 +110,7 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> with SingleTicker
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TabBar(controller: _tab, tabs: const [Tab(text: 'Палитра'), Tab(text: 'HEX')]),
+            TabBar(controller: _tab, tabs: [Tab(text: tr('Палитра')), const Tab(text: 'HEX')]),
             // ClipRect — у ColorPicker (flutter_colorpicker) внутренний
             // Stack иногда рисует чуть шире отведённой ему полосы
             // TabBarView и "протекает" на соседнюю вкладку без обрезки
@@ -138,13 +139,13 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> with SingleTicker
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Отмена')),
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(tr('Отмена'))),
         FilledButton(
           onPressed: () {
             widget.onApply(_color);
             Navigator.of(context).pop();
           },
-          child: const Text('Применить'),
+          child: Text(tr('Применить')),
         ),
       ],
     );
@@ -174,7 +175,7 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> with SingleTicker
       children: [
         TextField(
           controller: _hexController,
-          decoration: const InputDecoration(labelText: 'HEX (#RRGGBB или #AARRGGBB)'),
+          decoration: InputDecoration(labelText: tr('HEX (#RRGGBB или #AARRGGBB)')),
           onChanged: (value) {
             if (TargetColorScheme.isValidHex(value)) {
               setState(() => _color = TargetColorScheme.hexToColor(value));
@@ -185,7 +186,7 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> with SingleTicker
           Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Text(
-              'Некорректный HEX',
+              tr('Некорректный HEX'),
               style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12),
             ),
           ),
@@ -222,7 +223,7 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> with SingleTicker
       padding: const EdgeInsets.only(top: 8),
       child: Row(
         children: [
-          const Text('Недавние: ', style: TextStyle(fontSize: 12)),
+          Text(tr('Недавние: '), style: const TextStyle(fontSize: 12)),
           ...widget.recentColors.map((c) => GestureDetector(
                 onTap: () => _apply(c),
                 child: Container(
@@ -244,9 +245,9 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> with SingleTicker
   Widget _buildAutoContrastToggle() {
     return SwitchListTile(
       dense: true,
-      title: const Text('Автоконтраст текста', style: TextStyle(fontSize: 13)),
-      subtitle: const Text('Текст внутри пробоин будет выбран автоматически для максимальной читаемости',
-          style: TextStyle(fontSize: 11)),
+      title: Text(tr('Автоконтраст текста'), style: const TextStyle(fontSize: 13)),
+      subtitle: Text(tr('Текст внутри пробоин будет выбран автоматически для максимальной читаемости'),
+          style: const TextStyle(fontSize: 11)),
       value: widget.autoContrastValue,
       onChanged: widget.onAutoContrastChanged,
     );

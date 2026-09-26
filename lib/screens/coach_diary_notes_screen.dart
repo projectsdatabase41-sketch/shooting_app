@@ -14,6 +14,7 @@ import '../widgets/ai_chart_view.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/glass_pill.dart';
 import '../widgets/swipe_to_delete.dart';
+import '../i18n/i18n.dart';
 
 /// "Дневник" тренера (раздел 8 ТЗ) — темы и заметки, не привязан ни к
 /// одному спортсмену. Заметки создаются вручную здесь ИЛИ ассистентом
@@ -50,10 +51,10 @@ class _CoachDiaryNotesScreenState extends State<CoachDiaryNotesScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
-        title: Text('Дневник', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        title: Text(tr('Дневник'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
       ),
       body: _notes.isEmpty
-          ? const EmptyState(icon: Icons.menu_book_outlined, text: 'Заметок пока нет')
+          ? EmptyState(icon: Icons.menu_book_outlined, text: tr('Заметок пока нет'))
           : Stack(
               children: [
                 Positioned.fill(
@@ -64,8 +65,8 @@ class _CoachDiaryNotesScreenState extends State<CoachDiaryNotesScreen> {
                     final n = _notes[i];
                     return SwipeToDelete(
                       itemKey: n.id,
-                      title: 'Удалить заметку?',
-                      message: '«${n.topic}» будет удалена без возможности восстановить.',
+                      title: tr('Удалить заметку?'),
+                      message: tr('«{topic}» будет удалена без возможности восстановить.', {'topic': n.topic}),
                       onConfirmed: () {
                         _repo.delete(n.id);
                         _reload();
@@ -195,7 +196,7 @@ class _AddNoteDialogState extends State<_AddNoteDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Новая заметка'),
+      title: Text(tr('Новая заметка')),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -207,12 +208,12 @@ class _AddNoteDialogState extends State<_AddNoteDialog> {
                   child: TextField(
                     controller: _topicCtrl,
                     enabled: !_aiMode,
-                    decoration: InputDecoration(labelText: _aiMode ? 'Я сам заполню' : 'Тема'),
+                    decoration: InputDecoration(labelText: _aiMode ? tr('Я сам заполню') : tr('Тема')),
                   ),
                 ),
                 const SizedBox(width: 8),
                 IconButton.filledTonal(
-                  tooltip: _aiMode ? 'Заполнить вручную' : 'Придумает ИИ',
+                  tooltip: _aiMode ? tr('Заполнить вручную') : tr('Придумает ИИ'),
                   icon: const Icon(Icons.auto_awesome, size: 18),
                   isSelected: _aiMode,
                   onPressed: () => setState(() => _aiMode = !_aiMode),
@@ -224,7 +225,7 @@ class _AddNoteDialogState extends State<_AddNoteDialog> {
               controller: _contentCtrl,
               minLines: 3,
               maxLines: 8,
-              decoration: InputDecoration(labelText: _aiMode ? 'Что требуется?' : 'Текст'),
+              decoration: InputDecoration(labelText: _aiMode ? tr('Что требуется?') : tr('Текст')),
             ),
             if (_error != null) ...[
               const SizedBox(height: 8),
@@ -234,12 +235,12 @@ class _AddNoteDialogState extends State<_AddNoteDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Отмена')),
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(tr('Отмена'))),
         FilledButton(
           onPressed: _busy ? null : _submit,
           child: _busy
               ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-              : const Text('Сохранить'),
+              : Text(tr('Сохранить')),
         ),
       ],
     );
@@ -287,19 +288,19 @@ class _NoteScreenState extends State<_NoteScreen> {
       builder: (ctx) {
         final ctrl = TextEditingController();
         return AlertDialog(
-          title: const Text('Задание для ИИ'),
+          title: Text(tr('Задание для ИИ')),
           content: TextField(
             controller: ctrl,
             autofocus: true,
             minLines: 2,
             maxLines: 6,
-            decoration: const InputDecoration(hintText: 'Что изменить или дописать в заметке'),
+            decoration: InputDecoration(hintText: tr('Что изменить или дописать в заметке')),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
+            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr('Отмена'))),
             FilledButton(
               onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()),
-              child: const Text('Отправить'),
+              child: Text(tr('Отправить')),
             ),
           ],
         );
@@ -349,14 +350,14 @@ class _NoteScreenState extends State<_NoteScreen> {
               style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
           actions: [
             GlassCircleButton(
-              tooltip: 'Помощь ИИ',
+              tooltip: tr('Помощь ИИ'),
               icon: _aiBusy
                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.auto_awesome),
               onTap: _aiBusy ? null : _editWithAi,
             ),
             GlassCircleButton(
-              tooltip: 'Удалить',
+              tooltip: tr('Удалить'),
               icon: const Icon(Icons.delete_outline),
               onTap: () {
                 widget.repo.delete(widget.note.id);

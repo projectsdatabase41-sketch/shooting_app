@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/coach_chat_message.dart';
 import 'local_db_service.dart';
+import '../i18n/i18n.dart';
 
 /// Один сохранённый спортсмен у тренера — мульти-спортсменский режим
 /// (решение пользователя: "как список создания упражнений, так же
@@ -265,7 +266,7 @@ class CoachAccessService {
     final effectiveUrl = athlete?.url ?? url;
     final effectiveKey = athlete?.anonKey ?? anonKey;
     if (effectiveUrl.isEmpty || effectiveKey.isEmpty || (args['p_token'] as String? ?? '').isEmpty) {
-      throw const CoachAccessException('Не указаны адрес базы, ключ или токен спортсмена');
+      throw CoachAccessException(tr('Не указаны адрес базы, ключ или токен спортсмена'));
     }
     final client = clientFactory();
     try {

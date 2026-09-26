@@ -6,6 +6,7 @@ import '../services/chat_auth_service.dart';
 import '../services/chat_messages_repository.dart';
 import '../services/chat_sync_service.dart';
 import '../widgets/chat_avatar.dart';
+import '../i18n/i18n.dart';
 
 /// Цвета оформления группы (аватар без фото, шапка переписки).
 const List<String> chatGroupColors = [
@@ -22,8 +23,8 @@ const List<String> chatGroupColors = [
 ];
 
 String _roleLabel(String role) => switch (role) {
-      'owner' => 'владелец',
-      'admin' => 'админ',
+      'owner' => tr('владелец'),
+      'admin' => tr('админ'),
       _ => '',
     };
 
@@ -72,11 +73,11 @@ class _ChatGroupEditScreenState extends State<ChatGroupEditScreen> {
   Future<void> _save() async {
     final name = _name.text.trim();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Введите название')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Введите название'))));
       return;
     }
     if (_creating && _members.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Выберите хотя бы одного участника')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Выберите хотя бы одного участника'))));
       return;
     }
     setState(() => _busy = true);
@@ -99,7 +100,7 @@ class _ChatGroupEditScreenState extends State<ChatGroupEditScreen> {
     } catch (e) {
       if (mounted) {
         final msg = '$e'.contains('create_group') || '$e'.contains('update_group')
-            ? 'Группы ещё не включены на сервере — нужно выполнить sql/chat-groups.sql'
+            ? tr('Группы ещё не включены на сервере — нужно выполнить sql/chat-groups.sql')
             : '$e';
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
       }
@@ -114,9 +115,9 @@ class _ChatGroupEditScreenState extends State<ChatGroupEditScreen> {
     final contacts = widget.repo.listContacts().where((c) => !c.isGroup).toList();
     return Scaffold(
       appBar: AppBar(
-        title: Text(_creating ? 'Новая группа' : 'Изменить группу'),
+        title: Text(_creating ? tr('Новая группа') : tr('Изменить группу')),
         actions: [
-          TextButton(onPressed: _busy ? null : _save, child: Text(_creating ? 'СОЗДАТЬ' : 'СОХРАНИТЬ')),
+          TextButton(onPressed: _busy ? null : _save, child: Text(_creating ? tr('СОЗДАТЬ') : tr('СОХРАНИТЬ'))),
         ],
       ),
       body: ListView(
@@ -144,12 +145,12 @@ class _ChatGroupEditScreenState extends State<ChatGroupEditScreen> {
           ),
           if (_avatar != null)
             Center(
-                child: TextButton(onPressed: () => setState(() => _avatar = null), child: const Text('Убрать фото'))),
+                child: TextButton(onPressed: () => setState(() => _avatar = null), child: Text(tr('Убрать фото')))),
           const SizedBox(height: 12),
           TextField(
             controller: _name,
             maxLength: 60,
-            decoration: const InputDecoration(labelText: 'Название'),
+            decoration: InputDecoration(labelText: tr('Название')),
             onChanged: (_) => setState(() {}),
           ),
           TextField(
@@ -157,10 +158,10 @@ class _ChatGroupEditScreenState extends State<ChatGroupEditScreen> {
             maxLength: 200,
             minLines: 1,
             maxLines: 3,
-            decoration: const InputDecoration(labelText: 'Описание (необязательно)'),
+            decoration: InputDecoration(labelText: tr('Описание (необязательно)')),
           ),
           const SizedBox(height: 8),
-          Text('Цвет', style: theme.textTheme.titleSmall),
+          Text(tr('Цвет'), style: theme.textTheme.titleSmall),
           const SizedBox(height: 8),
           Wrap(
             spacing: 10,
@@ -181,11 +182,11 @@ class _ChatGroupEditScreenState extends State<ChatGroupEditScreen> {
           ),
           if (_creating) ...[
             const SizedBox(height: 20),
-            Text('Участники (${_members.length})', style: theme.textTheme.titleSmall),
+            Text(tr('Участники ({length})', {'length': _members.length}), style: theme.textTheme.titleSmall),
             if (contacts.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: Text('Сначала добавьте людей в контакты: Контакты → «+»'),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text(tr('Сначала добавьте людей в контакты: Контакты → «+»')),
               ),
             for (final c in contacts)
               CheckboxListTile(
@@ -242,7 +243,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
     final inGroup = _group.members.map((m) => m.id).toSet();
     final candidates = widget.repo.listContacts().where((c) => !c.isGroup && !inGroup.contains(c.id)).toList();
     if (candidates.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Все ваши контакты уже в группе')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Все ваши контакты уже в группе'))));
       return;
     }
     final picked = <String>{};
@@ -250,7 +251,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocal) => AlertDialog(
-          title: const Text('Добавить участников'),
+          title: Text(tr('Добавить участников')),
           content: SizedBox(
             width: double.maxFinite,
             child: ListView(
@@ -266,8 +267,8 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Отмена')),
-            FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Добавить')),
+            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr('Отмена'))),
+            FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(tr('Добавить'))),
           ],
         ),
       ),
@@ -288,12 +289,12 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
             if (_myRole == 'owner')
               ListTile(
                 leading: const Icon(Icons.admin_panel_settings_outlined),
-                title: Text(m.role == 'admin' ? 'Снять права админа' : 'Сделать админом'),
+                title: Text(m.role == 'admin' ? tr('Снять права админа') : tr('Сделать админом')),
                 onTap: () => Navigator.of(ctx).pop('role'),
               ),
             ListTile(
               leading: const Icon(Icons.person_remove_outlined),
-              title: const Text('Убрать из группы'),
+              title: Text(tr('Убрать из группы')),
               onTap: () => Navigator.of(ctx).pop('remove'),
             ),
           ],
@@ -311,11 +312,11 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Выйти из группы?'),
-        content: const Text('Переписка останется на этом устройстве, но новых сообщений не будет.'),
+        title: Text(tr('Выйти из группы?')),
+        content: Text(tr('Переписка останется на этом устройстве, но новых сообщений не будет.')),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Отмена')),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Выйти')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr('Отмена'))),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(tr('Выйти'))),
         ],
       ),
     );
@@ -339,12 +340,12 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
         (a, b) => ['owner', 'admin', 'member'].indexOf(a.role).compareTo(['owner', 'admin', 'member'].indexOf(b.role)));
     return Scaffold(
       appBar: AppBar(
-        title: const Text('О группе'),
+        title: Text(tr('О группе')),
         actions: [
           if (_isAdmin)
             IconButton(
               icon: const Icon(Icons.edit_outlined),
-              tooltip: 'Изменить',
+              tooltip: tr('Изменить'),
               onPressed: () async {
                 final updated = await Navigator.of(context).push<ChatContact>(MaterialPageRoute(
                   builder: (_) =>
@@ -376,23 +377,23 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
             ),
           const SizedBox(height: 16),
           ListTile(
-            title: Text('Участники: ${members.length}', style: theme.textTheme.titleSmall),
+            title: Text(tr('Участники: {length}', {'length': members.length}), style: theme.textTheme.titleSmall),
             trailing: _isAdmin
                 ? IconButton(
-                    icon: const Icon(Icons.person_add_alt_outlined), tooltip: 'Добавить', onPressed: _addMembers)
+                    icon: const Icon(Icons.person_add_alt_outlined), tooltip: tr('Добавить'), onPressed: _addMembers)
                 : null,
           ),
           for (final m in members)
             ListTile(
               leading: ChatAvatar(base64: widget.repo.contactById(m.id)?.avatarBase64, nickname: m.nickname),
-              title: Text(m.id == widget.auth.userId ? '${m.nickname} (вы)' : m.nickname),
+              title: Text(m.id == widget.auth.userId ? tr('{nickname} (вы)', {'nickname': m.nickname}) : m.nickname),
               trailing: Text(_roleLabel(m.role), style: theme.textTheme.bodySmall),
               onTap: () => _memberActions(m),
             ),
           const Divider(),
           ListTile(
             leading: Icon(Icons.logout, color: theme.colorScheme.error),
-            title: Text('Выйти из группы', style: TextStyle(color: theme.colorScheme.error)),
+            title: Text(tr('Выйти из группы'), style: TextStyle(color: theme.colorScheme.error)),
             onTap: _busy ? null : _leave,
           ),
         ],

@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../models/chat_contact.dart';
 import 'chat_settings.dart';
 import 'local_db_service.dart';
+import '../i18n/i18n.dart';
 import 'supabase_auth_service.dart' show AuthException;
 
 /// Учётная запись в ОБЩЕМ чате — отдельная от `SupabaseAuthService`
@@ -132,7 +133,7 @@ class ChatAuthService {
     final token = await ensureFreshToken();
     if (token == null) {
       _write('chat_global_push_mode', previous);
-      throw const AuthException('Сначала войдите в чат');
+      throw AuthException(tr('Сначала войдите в чат'));
     }
     final client = clientFactory();
     try {
@@ -173,7 +174,7 @@ class ChatAuthService {
     final token = await ensureFreshToken();
     if (token == null) {
       _write('chat_personal_push_mode', previous);
-      throw const AuthException('Сначала войдите в чат');
+      throw AuthException(tr('Сначала войдите в чат'));
     }
     final client = clientFactory();
     try {
@@ -212,7 +213,7 @@ class ChatAuthService {
     final token = await ensureFreshToken();
     if (token == null) {
       _write('chat_call_alerts_enabled', previous ? '1' : '0');
-      throw const AuthException('Сначала войдите в чат');
+      throw AuthException(tr('Сначала войдите в чат'));
     }
     final client = clientFactory();
     try {
@@ -257,7 +258,7 @@ class ChatAuthService {
     final token = await ensureFreshToken();
     if (token == null) {
       _write('chat_privacy_mode', previous);
-      throw const AuthException('Сначала войдите в чат');
+      throw AuthException(tr('Сначала войдите в чат'));
     }
     final client = clientFactory();
     try {
@@ -386,7 +387,7 @@ class ChatAuthService {
 
   Future<void> acceptFriendRequest(String requesterId) async {
     final token = await ensureFreshToken();
-    if (token == null) throw const AuthException('Сначала войдите в чат');
+    if (token == null) throw AuthException(tr('Сначала войдите в чат'));
     final client = clientFactory();
     try {
       final res = await client
@@ -416,7 +417,7 @@ class ChatAuthService {
   /// нетронутыми) — иначе они молча копились бы там навсегда.
   Future<void> declineFriendRequest(String requesterId) async {
     final token = await ensureFreshToken();
-    if (token == null) throw const AuthException('Сначала войдите в чат');
+    if (token == null) throw AuthException(tr('Сначала войдите в чат'));
     final client = clientFactory();
     try {
       final res = await client
@@ -507,7 +508,7 @@ class ChatAuthService {
   /// раньше это проходило молча и ник «не сохранялся».
   Future<void> _patchProfile(Map<String, dynamic> body) async {
     final token = await ensureFreshToken();
-    if (token == null) throw const AuthException('Вход в чат устарел — выйдите из чата и войдите снова');
+    if (token == null) throw AuthException(tr('Вход в чат устарел — выйдите из чата и войдите снова'));
     final client = clientFactory();
     try {
       final res = await client
@@ -525,7 +526,7 @@ class ChatAuthService {
       if (res.statusCode >= 400) throw AuthException(_message(res.body));
       final rows = jsonDecode(utf8.decode(res.bodyBytes));
       if (rows is List && rows.isEmpty) {
-        throw const AuthException('Профиль на сервере не найден — выйдите из чата и войдите снова');
+        throw AuthException(tr('Профиль на сервере не найден — выйдите из чата и войдите снова'));
       }
     } finally {
       client.close();
@@ -569,7 +570,7 @@ class ChatAuthService {
   /// Вызов RPC чат-базы; ошибка сервера — [AuthException] с его текстом.
   Future<dynamic> _rpc(String name, Map<String, dynamic> body) async {
     final token = await ensureFreshToken();
-    if (token == null) throw const AuthException('Сначала войдите в чат');
+    if (token == null) throw AuthException(tr('Сначала войдите в чат'));
     final client = clientFactory();
     try {
       final res = await client
@@ -703,7 +704,7 @@ class ChatAuthService {
   /// локально. Необратимо — подтверждение спрашивает вызывающий экран.
   Future<void> deleteAccount() async {
     final token = await ensureFreshToken();
-    if (token == null) throw const AuthException('Сначала войдите в чат');
+    if (token == null) throw AuthException(tr('Сначала войдите в чат'));
     final client = clientFactory();
     try {
       final res = await client
@@ -729,7 +730,7 @@ class ChatAuthService {
   /// читать чужие профили целиком, только находить один по точному коду.
   Future<({String userId, String nickname, String? avatarBase64, String about})?> resolveChatCode(String code) async {
     final token = await ensureFreshToken();
-    if (token == null) throw const AuthException('Сначала войдите в чат');
+    if (token == null) throw AuthException(tr('Сначала войдите в чат'));
     final client = clientFactory();
     try {
       final res = await client
@@ -769,7 +770,7 @@ class ChatAuthService {
 
   void _requireConfigured() {
     if (!ChatSettings.isConfigured) {
-      throw const AuthException('Публичный чат ещё не подключён — попробуйте позже');
+      throw AuthException(tr('Публичный чат ещё не подключён — попробуйте позже'));
     }
   }
 
@@ -822,7 +823,7 @@ class ChatAuthService {
         client.close();
       }
     }
-    throw const AuthException('Не удалось создать код контакта, попробуйте ещё раз');
+    throw AuthException(tr('Не удалось создать код контакта, попробуйте ещё раз'));
   }
 
   Future<void> _loadOwnProfile() async {
@@ -852,7 +853,7 @@ class ChatAuthService {
 
   Future<void> _token({required String grant, required Map<String, String> body}) async {
     final res = await _post('/auth/v1/token?grant_type=$grant', body);
-    if (res['access_token'] == null) throw const AuthException('Сервер не выдал токен');
+    if (res['access_token'] == null) throw AuthException(tr('Сервер не выдал токен'));
     _saveSession(res);
   }
 
@@ -873,7 +874,7 @@ class ChatAuthService {
     } on AuthException {
       rethrow;
     } catch (e) {
-      throw AuthException('Сеть недоступна или чат временно недоступен ($e)');
+      throw AuthException(tr('Сеть недоступна или чат временно недоступен ({e})', {'e': e}));
     } finally {
       client.close();
     }

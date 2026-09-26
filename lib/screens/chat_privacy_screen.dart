@@ -7,6 +7,7 @@ import '../services/chat_preferences.dart';
 import '../services/chat_sync_service.dart';
 import '../widgets/chat_avatar.dart';
 import '../widgets/empty_state.dart';
+import '../i18n/i18n.dart';
 
 /// "Приватность" — режим "все могут написать" (как раньше) или "только
 /// по заявке" (первое сообщение от незнакомца видно только после
@@ -108,7 +109,7 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
     final theme = Theme.of(context);
     final mode = widget.auth.privacyMode;
     return Scaffold(
-      appBar: AppBar(title: const Text('Приватность')),
+      appBar: AppBar(title: Text(tr('Приватность'))),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
@@ -116,12 +117,12 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  Text('Кто может написать', style: theme.textTheme.titleMedium),
+                  Text(tr('Кто может написать'), style: theme.textTheme.titleMedium),
                   const SizedBox(height: 8),
                   SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(value: 'everyone', label: Text('Все')),
-                      ButtonSegment(value: 'friends_only', label: Text('Только по заявке')),
+                    segments: [
+                      ButtonSegment(value: 'everyone', label: Text(tr('Все'))),
+                      ButtonSegment(value: 'friends_only', label: Text(tr('Только по заявке'))),
                     ],
                     selected: {mode},
                     onSelectionChanged: (s) => _setMode(s.first),
@@ -129,35 +130,35 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
                   const SizedBox(height: 8),
                   Text(
                     mode == 'friends_only'
-                        ? 'Сообщение от незнакомого человека станет заявкой ниже — вы увидите переписку, только когда примете её.'
-                        : 'Первое сообщение от кого угодно сразу добавляет его в контакты, как обычно.',
+                        ? tr('Сообщение от незнакомого человека станет заявкой ниже — вы увидите переписку, только когда примете её.')
+                        : tr('Первое сообщение от кого угодно сразу добавляет его в контакты, как обычно.'),
                     style: theme.textTheme.bodySmall,
                   ),
                   if (widget.prefs case final prefs?) ...[
                     const SizedBox(height: 24),
-                    Text('Мои фото и файлы', style: theme.textTheme.titleMedium),
+                    Text(tr('Мои фото и файлы'), style: theme.textTheme.titleMedium),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('Разрешить собеседникам сохранять'),
-                      subtitle: const Text('Кнопка «Сохранить» у отправленных мной вложений'),
+                      title: Text(tr('Разрешить собеседникам сохранять')),
+                      subtitle: Text(tr('Кнопка «Сохранить» у отправленных мной вложений')),
                       value: prefs.photoDownloadMode != 'off',
                       onChanged: (v) => setState(() => prefs.photoDownloadMode = v ? 'all' : 'off'),
                     ),
                     if (prefs.photoDownloadMode != 'off')
                       SegmentedButton<String>(
-                        segments: const [
-                          ButtonSegment(value: 'all', label: Text('Везде')),
-                          ButtonSegment(value: 'personal', label: Text('Только в личных')),
+                        segments: [
+                          ButtonSegment(value: 'all', label: Text(tr('Везде'))),
+                          ButtonSegment(value: 'personal', label: Text(tr('Только в личных'))),
                         ],
                         selected: {prefs.photoDownloadMode},
                         onSelectionChanged: (v) => setState(() => prefs.photoDownloadMode = v.first),
                       ),
                   ],
                   const SizedBox(height: 24),
-                  Text('Заявки в друзья', style: theme.textTheme.titleMedium),
+                  Text(tr('Заявки в друзья'), style: theme.textTheme.titleMedium),
                   const SizedBox(height: 8),
                   if (_requests.isEmpty)
-                    Text('Заявок пока нет', style: theme.textTheme.bodySmall)
+                    Text(tr('Заявок пока нет'), style: theme.textTheme.bodySmall)
                   else
                     for (final r in _requests)
                       Card(
@@ -170,12 +171,12 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
                             children: [
                               IconButton(
                                 icon: const Icon(Icons.check_circle_outline),
-                                tooltip: 'Принять',
+                                tooltip: tr('Принять'),
                                 onPressed: () => _accept(r.userId, r.nickname, r.avatarBase64),
                               ),
                               IconButton(
                                 icon: const Icon(Icons.cancel_outlined),
-                                tooltip: 'Отклонить',
+                                tooltip: tr('Отклонить'),
                                 onPressed: () => _decline(r.userId),
                               ),
                             ],
@@ -183,17 +184,17 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
                         ),
                       ),
                   const SizedBox(height: 24),
-                  Text('Друзья', style: theme.textTheme.titleMedium),
+                  Text(tr('Друзья'), style: theme.textTheme.titleMedium),
                   const SizedBox(height: 4),
                   Text(
-                    'Хранится на сервере — не теряется при переустановке или смене телефона.',
+                    tr('Хранится на сервере — не теряется при переустановке или смене телефона.'),
                     style: theme.textTheme.bodySmall,
                   ),
                   const SizedBox(height: 8),
                   if (_friends.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      child: EmptyState(icon: Icons.people_outline, text: 'Пока никого'),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: EmptyState(icon: Icons.people_outline, text: tr('Пока никого')),
                     )
                   else
                     for (final f in _friends)

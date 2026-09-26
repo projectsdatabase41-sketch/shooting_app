@@ -10,6 +10,7 @@ import '../services/chat_sync_service.dart';
 import 'chat_group_screen.dart';
 import '../widgets/chat_avatar.dart';
 import '../widgets/empty_state.dart';
+import '../i18n/i18n.dart';
 
 /// Мои контакты (без групп) с поиском по списку. Кнопка «+» открывает всех
 /// участников мессенджера — там же поиск по имени и по коду контакта.
@@ -52,7 +53,7 @@ class _ChatContactsScreenState extends State<ChatContactsScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.group_add_outlined),
-              title: const Text('Новая группа'),
+              title: Text(tr('Новая группа')),
               onTap: () => Navigator.of(ctx).pop('new'),
             ),
             for (final g in groups)
@@ -83,9 +84,9 @@ class _ChatContactsScreenState extends State<ChatContactsScreen> {
       await widget.sync.syncGroups();
       if (!mounted) return;
       setState(() => _selected.clear());
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Добавлено в «${g.nickname}»')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Добавлено в «{nickname}»', {'nickname': g.nickname}))));
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не получилось: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Не получилось: {e}', {'e': e}))));
     }
   }
 
@@ -96,18 +97,18 @@ class _ChatContactsScreenState extends State<ChatContactsScreen> {
     }
     setState(() => _selected.clear());
     ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(allMuted ? 'Уведомления включены' : 'Уведомления выключены')));
+        .showSnackBar(SnackBar(content: Text(allMuted ? tr('Уведомления включены') : tr('Уведомления выключены'))));
   }
 
   Future<void> _delete() async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Удалить из контактов: ${_selected.length}?'),
-        content: const Text('Переписка останется на устройстве, пропадут только сами контакты.'),
+        title: Text(tr('Удалить из контактов: {length}?', {'length': _selected.length})),
+        content: Text(tr('Переписка останется на устройстве, пропадут только сами контакты.')),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Отмена')),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Удалить')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr('Отмена'))),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(tr('Удалить'))),
         ],
       ),
     );
@@ -151,22 +152,22 @@ class _ChatContactsScreenState extends State<ChatContactsScreen> {
                 leading: IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _selected.clear())),
                 title: Text('${_selected.length}'),
                 actions: [
-                  IconButton(icon: const Icon(Icons.group_add_outlined), tooltip: 'В группу', onPressed: _addToGroup),
+                  IconButton(icon: const Icon(Icons.group_add_outlined), tooltip: tr('В группу'), onPressed: _addToGroup),
                   IconButton(
                     icon: Icon(_selected.every(widget.prefs.mutedFor)
                         ? Icons.notifications_active_outlined
                         : Icons.notifications_off_outlined),
-                    tooltip: 'Уведомления',
+                    tooltip: tr('Уведомления'),
                     onPressed: _toggleMute,
                   ),
-                  IconButton(icon: const Icon(Icons.delete_outline), tooltip: 'Удалить', onPressed: _delete),
+                  IconButton(icon: const Icon(Icons.delete_outline), tooltip: tr('Удалить'), onPressed: _delete),
                 ],
               )
-            : AppBar(title: const Text('Контакты')),
+            : AppBar(title: Text(tr('Контакты'))),
         floatingActionButton: selecting
             ? null
             : FloatingActionButton(
-                tooltip: 'Найти участника',
+                tooltip: tr('Найти участника'),
                 onPressed: _openDirectory,
                 child: const Icon(Icons.add),
               ),
@@ -176,7 +177,7 @@ class _ChatContactsScreenState extends State<ChatContactsScreen> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
               child: SearchBar(
                 controller: _search,
-                hintText: 'Поиск в контактах',
+                hintText: tr('Поиск в контактах'),
                 leading: const Icon(Icons.search),
                 onChanged: (_) => setState(() {}),
               ),
@@ -185,7 +186,7 @@ class _ChatContactsScreenState extends State<ChatContactsScreen> {
               child: contacts.isEmpty
                   ? EmptyState(
                       icon: Icons.people_outline,
-                      text: q.isEmpty ? 'Контактов пока нет — нажмите «+», чтобы найти участника' : 'Никого не нашли',
+                      text: q.isEmpty ? tr('Контактов пока нет — нажмите «+», чтобы найти участника') : tr('Никого не нашли'),
                     )
                   : ListView(
                       padding: const EdgeInsets.only(bottom: 88),
@@ -305,7 +306,7 @@ class _ChatDirectoryScreenState extends State<ChatDirectoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Все участники')),
+      appBar: AppBar(title: Text(tr('Все участники'))),
       body: Column(
         children: [
           Padding(
@@ -313,7 +314,7 @@ class _ChatDirectoryScreenState extends State<ChatDirectoryScreen> {
             child: SearchBar(
               controller: _search,
               autoFocus: true,
-              hintText: 'Ник или код контакта',
+              hintText: tr('Ник или код контакта'),
               leading: const Icon(Icons.search),
               onChanged: (_) {
                 _debounce?.cancel();
@@ -326,14 +327,14 @@ class _ChatDirectoryScreenState extends State<ChatDirectoryScreen> {
               padding: const EdgeInsets.all(16),
               child: Text(
                 _error!.contains('search_profiles')
-                    ? 'Поиск ещё не включён на сервере — нужно выполнить sql/chat-groups.sql'
-                    : 'Не удалось загрузить: $_error',
+                    ? tr('Поиск ещё не включён на сервере — нужно выполнить sql/chat-groups.sql')
+                    : tr('Не удалось загрузить: {error}', {'error': _error}),
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ),
           Expanded(
             child: _people.isEmpty && !_loading && _error == null
-                ? const EmptyState(icon: Icons.person_search_outlined, text: 'Никого не нашли')
+                ? EmptyState(icon: Icons.person_search_outlined, text: tr('Никого не нашли'))
                 : ListView.builder(
                     controller: _scroll,
                     itemCount: _people.length + (_loading ? 1 : 0),

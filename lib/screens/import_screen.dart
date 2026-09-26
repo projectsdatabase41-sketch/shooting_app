@@ -9,6 +9,7 @@ import '../models/target_face.dart';
 import '../services/session_import.dart';
 import '../state/app_data_store.dart';
 import '../widgets/section_header.dart';
+import '../i18n/i18n.dart';
 
 /// Импорт тренировок из файла.
 ///
@@ -53,7 +54,7 @@ class _ImportScreenState extends State<ImportScreen> {
       final file = result.files.first;
       final bytes = file.bytes;
       if (bytes == null) {
-        throw const ImportException('Не удалось прочитать файл');
+        throw ImportException(tr('Не удалось прочитать файл'));
       }
       final raw = utf8.decode(bytes);
       final bundle = SessionImport.parse(raw);
@@ -96,13 +97,13 @@ class _ImportScreenState extends State<ImportScreen> {
     final df = DateFormat('dd.MM.yyyy HH:mm');
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Импорт тренировок')),
+      appBar: AppBar(title: Text(tr('Импорт тренировок'))),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         children: [
-          const SectionHeader(
-            title: 'Файл',
-            subtitle: 'JSON с тренировками. Записывается только после подтверждения.',
+          SectionHeader(
+            title: tr('Файл'),
+            subtitle: tr('JSON с тренировками. Записывается только после подтверждения.'),
           ),
           const SizedBox(height: 12),
           FilledButton.icon(
@@ -110,7 +111,7 @@ class _ImportScreenState extends State<ImportScreen> {
             icon: _busy
                 ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.folder_open),
-            label: Text(_fileName ?? 'Выбрать файл'),
+            label: Text(_fileName ?? tr('Выбрать файл')),
           ),
           if (_error != null) ...[
             const SizedBox(height: 16),
@@ -146,7 +147,7 @@ class _ImportScreenState extends State<ImportScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Добавлено тренировок: $_applied. Смотрите на вкладке «История».',
+                        tr('Добавлено тренировок: {applied}. Смотрите на вкладке «История».', {'applied': _applied}),
                         style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSecondaryContainer),
                       ),
                     ),
@@ -158,9 +159,8 @@ class _ImportScreenState extends State<ImportScreen> {
           if (bundle != null) ...[
             const SizedBox(height: 24),
             SectionHeader(
-              title: 'Что будет добавлено',
-              subtitle: 'Источник: ${bundle.source} · '
-                  'тренировок ${bundle.sessions.length}, выстрелов ${bundle.shotCount}',
+              title: tr('Что будет добавлено'),
+              subtitle: tr('Источник: {source} · тренировок {length}, выстрелов {shotCount}', {'source': bundle.source, 'length': bundle.sessions.length, 'shotCount': bundle.shotCount}),
             ),
             const SizedBox(height: 12),
             for (final s in bundle.sessions)
@@ -168,10 +168,7 @@ class _ImportScreenState extends State<ImportScreen> {
                 child: ListTile(
                   title: Text(s.label),
                   subtitle: Text(
-                    '${s.session.startedAt == null ? '—' : df.format(s.session.startedAt!)} · '
-                    '${TargetFace.byCode(s.targetFaceCode).name}\n'
-                    'выстрелов ${s.session.shots.length}, '
-                    'сумма ${s.session.totalScore.toStringAsFixed(1)}',
+                    tr('{p} · {p2}\nвыстрелов {length}, сумма {p3}', {'p': s.session.startedAt == null ? '—' : df.format(s.session.startedAt!), 'p2': TargetFace.byCode(s.targetFaceCode).name, 'length': s.session.shots.length, 'p3': s.session.totalScore.toStringAsFixed(1)}),
                   ),
                   isThreeLine: true,
                 ),
@@ -180,15 +177,12 @@ class _ImportScreenState extends State<ImportScreen> {
             FilledButton.icon(
               onPressed: _apply,
               icon: const Icon(Icons.download_done),
-              label: Text('Добавить ${bundle.sessions.length} в базу'),
+              label: Text(tr('Добавить {length} в базу', {'length': bundle.sessions.length})),
             ),
           ],
           const SizedBox(height: 24),
           Text(
-            'Импортированные выстрелы помечаются как правленые вручную: результат берётся '
-            'из отчёта прибора и не пересчитывается по координатам. Показатели, которым '
-            'нет места в таблицах (время прицеливания, удержание, скорость), сохраняются '
-            'рядом с выстрелом и доступны ассистенту.',
+            tr('Импортированные выстрелы помечаются как правленые вручную: результат берётся из отчёта прибора и не пересчитывается по координатам. Показатели, которым нет места в таблицах (время прицеливания, удержание, скорость), сохраняются рядом с выстрелом и доступны ассистенту.'),
             style: theme.textTheme.bodySmall,
           ),
         ],

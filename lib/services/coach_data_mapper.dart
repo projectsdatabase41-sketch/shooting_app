@@ -1,5 +1,6 @@
 import '../models/shot.dart';
 import '../models/training_session.dart';
+import '../i18n/i18n.dart';
 
 /// Сводит сырые RPC-строки `CoachAccessService` (реальная схема Supabase,
 /// см. docs/db-schema-actual.md) в те же модели (`TrainingSession`/`Shot`),
@@ -46,7 +47,7 @@ List<TrainingSession> mapCoachSessions(
 /// `store.exerciseFor(s)?.label` у спортсмена, только без каталога).
 String Function(TrainingSession) coachExerciseNameOf(List<Map<String, dynamic>> exerciseRows) {
   final nameByPackage = {for (final r in exerciseRows) '${r['package_id']}': '${r['exercise_name'] ?? ''}'};
-  return (s) => nameByPackage[s.id]?.isNotEmpty == true ? nameByPackage[s.id]! : 'Упражнение';
+  return (s) => nameByPackage[s.id]?.isNotEmpty == true ? nameByPackage[s.id]! : tr('Упражнение');
 }
 
 Shot shotFromCoachRow(Map<String, dynamic> r, DateTime? sessionStart) {

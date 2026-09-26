@@ -14,6 +14,7 @@ import '../services/ai_settings.dart';
 import '../state/app_data_store.dart';
 import '../state/personalization_view_model.dart';
 import '../widgets/color_picker_dialog.dart';
+import '../i18n/i18n.dart';
 
 /// Переключатель светлой/тёмной темы интерфейса.
 ///
@@ -32,21 +33,21 @@ class _ThemeModeSelector extends StatelessWidget {
       child: SizedBox(
         width: double.infinity,
         child: SegmentedButton<ThemeMode>(
-          segments: const [
+          segments: [
             ButtonSegment(
               value: ThemeMode.system,
-              icon: Icon(Icons.brightness_auto_outlined),
-              label: Text('Система'),
+              icon: const Icon(Icons.brightness_auto_outlined),
+              label: Text(tr('Система')),
             ),
             ButtonSegment(
               value: ThemeMode.light,
-              icon: Icon(Icons.light_mode_outlined),
-              label: Text('Светлая'),
+              icon: const Icon(Icons.light_mode_outlined),
+              label: Text(tr('Светлая')),
             ),
             ButtonSegment(
               value: ThemeMode.dark,
-              icon: Icon(Icons.dark_mode_outlined),
-              label: Text('Тёмная'),
+              icon: const Icon(Icons.dark_mode_outlined),
+              label: Text(tr('Тёмная')),
             ),
           ],
           selected: {vm.themeMode},
@@ -75,29 +76,29 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
   bool _showPreviewOnNarrow = false;
 
   static const _sections = <String, List<String>>{
-    'МИШЕНЬ': ['target_paper', 'target_bullseye', 'ring_lines', 'ring_labels_on_paper', 'ring_labels_on_bullseye'],
-    'ПРОБОИНЫ': ['shot_selected', 'shot_current_series', 'shot_past_series', 'shot_number_text'],
-    'ПРАВКА': ['compass_ring', 'edit_result_badge', 'edit_angle_badge'],
-    'ИНТЕРФЕЙС': ['bottom_panel_bg', 'bottom_panel_text'],
-    'ПРОЧЕЕ': ['crosshair'],
+    /*tr*/ 'МИШЕНЬ': ['target_paper', 'target_bullseye', 'ring_lines', 'ring_labels_on_paper', 'ring_labels_on_bullseye'],
+    /*tr*/ 'ПРОБОИНЫ': ['shot_selected', 'shot_current_series', 'shot_past_series', 'shot_number_text'],
+    /*tr*/ 'ПРАВКА': ['compass_ring', 'edit_result_badge', 'edit_angle_badge'],
+    /*tr*/ 'ИНТЕРФЕЙС': ['bottom_panel_bg', 'bottom_panel_text'],
+    /*tr*/ 'ПРОЧЕЕ': ['crosshair'],
   };
 
   static const _titles = <String, String>{
-    'target_paper': 'Фон мишени (бумага)',
-    'target_bullseye': 'Чёрное яблоко',
-    'ring_lines': 'Линии колец',
-    'ring_labels_on_paper': 'Цифры на бумаге',
-    'ring_labels_on_bullseye': 'Цифры на яблоке',
-    'shot_selected': 'Выбранный выстрел',
-    'shot_current_series': 'Выстрелы текущей серии',
-    'shot_past_series': 'Выстрелы прошлых серий',
-    'shot_number_text': 'Номер внутри пробоины',
-    'compass_ring': 'Компас (режим правки)',
-    'edit_result_badge': 'Индикатор результата',
-    'edit_angle_badge': 'Индикатор угла/часов',
-    'bottom_panel_bg': 'Фон панели правки',
-    'bottom_panel_text': 'Текст панели правки',
-    'crosshair': 'Перекрестие',
+    'target_paper': /*tr*/ 'Фон мишени (бумага)',
+    'target_bullseye': /*tr*/ 'Чёрное яблоко',
+    'ring_lines': /*tr*/ 'Линии колец',
+    'ring_labels_on_paper': /*tr*/ 'Цифры на бумаге',
+    'ring_labels_on_bullseye': /*tr*/ 'Цифры на яблоке',
+    'shot_selected': /*tr*/ 'Выбранный выстрел',
+    'shot_current_series': /*tr*/ 'Выстрелы текущей серии',
+    'shot_past_series': /*tr*/ 'Выстрелы прошлых серий',
+    'shot_number_text': /*tr*/ 'Номер внутри пробоины',
+    'compass_ring': /*tr*/ 'Компас (режим правки)',
+    'edit_result_badge': /*tr*/ 'Индикатор результата',
+    'edit_angle_badge': /*tr*/ 'Индикатор угла/часов',
+    'bottom_panel_bg': /*tr*/ 'Фон панели правки',
+    'bottom_panel_text': /*tr*/ 'Текст панели правки',
+    'crosshair': /*tr*/ 'Перекрестие',
   };
 
   @override
@@ -116,14 +117,14 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Цветовые настройки'),
-        bottom: TabBar(controller: _tab, tabs: const [Tab(text: 'ЭЛЕМЕНТЫ'), Tab(text: 'ПРЕСЕТЫ')]),
+        title: Text(tr('Цветовые настройки')),
+        bottom: TabBar(controller: _tab, tabs: [Tab(text: tr('ЭЛЕМЕНТЫ')), Tab(text: tr('ПРЕСЕТЫ'))]),
         actions: [
           PopupMenuButton<String>(
             onSelected: (v) => v == 'export' ? _export(context) : _import(context),
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'export', child: Text('Экспорт')),
-              PopupMenuItem(value: 'import', child: Text('Импорт')),
+            itemBuilder: (_) => [
+              PopupMenuItem(value: 'export', child: Text(tr('Экспорт'))),
+              PopupMenuItem(value: 'import', child: Text(tr('Импорт'))),
             ],
           ),
         ],
@@ -157,7 +158,7 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
                         SafeArea(
                           child: TextButton(
                             onPressed: () => setState(() => _showPreviewOnNarrow = false),
-                            child: const Text('Скрыть мишень', style: TextStyle(color: Colors.white)),
+                            child: Text(tr('Скрыть мишень'), style: const TextStyle(color: Colors.white)),
                           ),
                         ),
                       ],
@@ -176,7 +177,7 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
             padding: const EdgeInsets.all(8),
             child: OutlinedButton.icon(
               icon: const Icon(Icons.gps_fixed),
-              label: const Text('Показать мишень'),
+              label: Text(tr('Показать мишень')),
               onPressed: () => setState(() => _showPreviewOnNarrow = true),
             ),
           ),
@@ -198,7 +199,7 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
           child: Text(
-            'ТЕМА ИНТЕРФЕЙСА',
+            tr('ТЕМА ИНТЕРФЕЙСА'),
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                   letterSpacing: 0.6,
@@ -215,7 +216,7 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
           child: Text(
-            'ПРИЛОЖЕНИЕ',
+            tr('ПРИЛОЖЕНИЕ'),
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                   letterSpacing: 0.6,
@@ -226,23 +227,23 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
           child: Text(
-            brightness == Brightness.dark ? 'Для тёмной темы' : 'Для светлой темы',
+            brightness == Brightness.dark ? tr('Для тёмной темы') : tr('Для светлой темы'),
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ),
         const _AppColorPresetsRow(),
         _AppColorRow(
-          title: 'Фон приложения',
+          title: tr('Фон приложения'),
           color: vm.appBackgroundFor(brightness),
           onChanged: (c) => vm.setAppBackgroundColor(c, brightness),
         ),
         _AppColorRow(
-          title: 'Кнопки',
+          title: tr('Кнопки'),
           color: vm.appButtonFor(brightness),
           onChanged: (c) => vm.setAppButtonColor(c, brightness),
         ),
         _AppColorRow(
-          title: 'Текст на кнопках',
+          title: tr('Текст на кнопках'),
           color: vm.appButtonTextFor(brightness),
           onChanged: (c) => vm.setAppButtonTextColor(c, brightness),
         ),
@@ -253,7 +254,7 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
               alignment: Alignment.centerLeft,
               child: TextButton(
                 onPressed: () => vm.resetAppColors(brightness),
-                child: const Text('Сбросить цвета приложения'),
+                child: Text(tr('Сбросить цвета приложения')),
               ),
             ),
           ),
@@ -262,21 +263,21 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
             child: Text(
-              section.key,
+              tr(section.key),
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                     letterSpacing: 0.6,
                   ),
             ),
           ),
-          for (final key in section.value) _ColorRow(colorKey: key, title: _titles[key]!),
+          for (final key in section.value) _ColorRow(colorKey: key, title: tr(_titles[key]!)),
         ],
         const SizedBox(height: 16),
         Padding(
           padding: const EdgeInsets.all(16),
           child: OutlinedButton(
             onPressed: () => _confirmResetAll(context, vm),
-            child: const Text('Сбросить все'),
+            child: Text(tr('Сбросить все')),
           ),
         ),
       ],
@@ -382,16 +383,16 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Сбросить все цвета?'),
-        content: const Text('Все настройки цвета будут удалены и восстановлены значения по умолчанию.'),
+        title: Text(tr('Сбросить все цвета?')),
+        content: Text(tr('Все настройки цвета будут удалены и восстановлены значения по умолчанию.')),
         actions: [
-          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: Text(tr('Отмена'))),
           FilledButton(
             onPressed: () {
               vm.resetAll();
               Navigator.of(dialogContext).pop();
             },
-            child: const Text('Сбросить всё'),
+            child: Text(tr('Сбросить всё')),
           ),
         ],
       ),
@@ -404,7 +405,7 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Экспорт цветовой схемы'),
+        title: Text(tr('Экспорт цветовой схемы')),
         content: SingleChildScrollView(child: SelectableText(json)),
         actions: [
           // Выделять пятнадцать строк JSON пальцем на телефоне —
@@ -414,15 +415,15 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
               Clipboard.setData(ClipboardData(text: json));
               Navigator.of(dialogContext).pop();
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Схема скопирована')),
+                SnackBar(content: Text(tr('Схема скопирована'))),
               );
             },
             icon: const Icon(Icons.copy, size: 18),
-            label: const Text('Копировать'),
+            label: Text(tr('Копировать')),
           ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Закрыть'),
+            child: Text(tr('Закрыть')),
           ),
         ],
       ),
@@ -435,14 +436,14 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Импорт цветовой схемы'),
+        title: Text(tr('Импорт цветовой схемы')),
         content: TextField(
           controller: controller,
           maxLines: 10,
-          decoration: const InputDecoration(hintText: 'Вставьте JSON…'),
+          decoration: InputDecoration(hintText: tr('Вставьте JSON…')),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: Text(tr('Отмена'))),
           FilledButton(
             onPressed: () {
               try {
@@ -450,11 +451,11 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
                 Navigator.of(dialogContext).pop();
               } catch (e) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Файл повреждён — импорт отклонён целиком')),
+                  SnackBar(content: Text(tr('Файл повреждён — импорт отклонён целиком'))),
                 );
               }
             },
-            child: const Text('Импортировать'),
+            child: Text(tr('Импортировать')),
           ),
         ],
       ),
@@ -509,15 +510,15 @@ class _ColorRow extends StatelessWidget {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Сбросить к умолчанию?'),
+        title: Text(tr('Сбросить к умолчанию?')),
         actions: [
-          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: Text(tr('Отмена'))),
           FilledButton(
             onPressed: () {
               vm.resetKey(colorKey);
               Navigator.of(dialogContext).pop();
             },
-            child: const Text('Сбросить'),
+            child: Text(tr('Сбросить')),
           ),
         ],
       ),
@@ -551,7 +552,7 @@ class _AppColorRow extends StatelessWidget {
         ),
       ),
       title: Text(title),
-      subtitle: color == null ? const Text('По умолчанию') : null,
+      subtitle: color == null ? Text(tr('По умолчанию')) : null,
       trailing: IconButton(
         icon: Icon(
           Icons.replay,
@@ -596,7 +597,7 @@ class _AppColorPresetsRow extends StatelessWidget {
         itemBuilder: (context, i) {
           if (i == presets.length) {
             return Tooltip(
-              message: 'Создать пресет',
+              message: tr('Создать пресет'),
               child: InkWell(
                 borderRadius: BorderRadius.circular(12),
                 onTap: () => showModalBottomSheet(
@@ -614,9 +615,9 @@ class _AppColorPresetsRow extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
                   ),
-                  child: const Column(
+                  child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: [Icon(Icons.add), SizedBox(height: 4), Text('Создать', style: TextStyle(fontSize: 10))],
+                    children: [const Icon(Icons.add), const SizedBox(height: 4), Text(tr('Создать'), style: const TextStyle(fontSize: 10))],
                   ),
                 ),
               ),
@@ -633,10 +634,10 @@ class _AppColorPresetsRow extends StatelessWidget {
                     final del = await showDialog<bool>(
                       context: context,
                       builder: (ctx) => AlertDialog(
-                        title: Text('Удалить пресет «${preset.label}»?'),
+                        title: Text(tr('Удалить пресет «{label}»?', {'label': preset.label})),
                         actions: [
-                          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Отмена')),
-                          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Удалить')),
+                          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr('Отмена'))),
+                          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(tr('Удалить'))),
                         ],
                       ),
                     );
@@ -680,7 +681,7 @@ class _PresetSwatch extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            preset.label,
+            tr(preset.label),
             style: TextStyle(fontSize: 10, color: preset.background.computeLuminance() > 0.5 ? Colors.black87 : Colors.white70),
             overflow: TextOverflow.ellipsis,
           ),
@@ -721,7 +722,7 @@ class _CreatePresetSheetState extends State<_CreatePresetSheet> {
     final b = widget.brightness;
     final theme = Theme.of(context);
     setState(() => _draft = AppColorPreset(
-          label: _name.text.trim().isEmpty ? 'Мой' : _name.text.trim(),
+          label: _name.text.trim().isEmpty ? tr('Мой') : _name.text.trim(),
           background: vm.appBackgroundFor(b) ?? theme.scaffoldBackgroundColor,
           button: vm.appButtonFor(b) ?? theme.colorScheme.primary,
           buttonText: vm.appButtonTextFor(b) ?? theme.colorScheme.onPrimary,
@@ -766,7 +767,7 @@ class _CreatePresetSheetState extends State<_CreatePresetSheet> {
         buttonText = button.computeLuminance() > 0.5 ? Colors.black : Colors.white;
       }
       if ((bg.computeLuminance() > 0.5) == _dark) {
-        throw Exception('ИИ подобрал фон не для той темы — попробуйте переформулировать');
+        throw Exception(tr('ИИ подобрал фон не для той темы — попробуйте переформулировать'));
       }
       setState(() => _draft = AppColorPreset(
             label: '${j['label'] ?? 'ИИ'}'.trim(),
@@ -810,14 +811,14 @@ class _CreatePresetSheetState extends State<_CreatePresetSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Новый пресет — ${_dark ? 'тёмная' : 'светлая'} тема', style: theme.textTheme.titleMedium),
+          Text(tr('Новый пресет — {p} тема', {'p': _dark ? tr('тёмная') : tr('светлая')}), style: theme.textTheme.titleMedium),
           const SizedBox(height: 12),
-          TextField(controller: _name, decoration: const InputDecoration(labelText: 'Название (необязательно)')),
+          TextField(controller: _name, decoration: InputDecoration(labelText: tr('Название (необязательно)'))),
           const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: _fromCurrent,
             icon: const Icon(Icons.save_outlined),
-            label: const Text('Из текущих цветов'),
+            label: Text(tr('Из текущих цветов')),
           ),
           const SizedBox(height: 16),
           TextField(
@@ -825,8 +826,8 @@ class _CreatePresetSheetState extends State<_CreatePresetSheet> {
             minLines: 1,
             maxLines: 3,
             decoration: InputDecoration(
-              labelText: 'Или опишите — подберёт ИИ',
-              hintText: 'например: «спокойный морской, акцент бирюзовый»',
+              labelText: tr('Или опишите — подберёт ИИ'),
+              hintText: tr('например: «спокойный морской, акцент бирюзовый»'),
               suffixIcon: _busy
                   ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)))
                   : IconButton(icon: const Icon(Icons.auto_awesome_outlined), onPressed: _withAi),
@@ -843,11 +844,11 @@ class _CreatePresetSheetState extends State<_CreatePresetSheet> {
               children: [
                 _PresetSwatch(preset: _draft!),
                 const SizedBox(width: 12),
-                Expanded(child: Text('Так будет выглядеть «${_name.text.trim().isEmpty ? _draft!.label : _name.text.trim()}»')),
+                Expanded(child: Text(tr('Так будет выглядеть «{p}»', {'p': _name.text.trim().isEmpty ? _draft!.label : _name.text.trim()}))),
               ],
             ),
             const SizedBox(height: 12),
-            FilledButton(onPressed: _save, child: const Text('Сохранить и применить')),
+            FilledButton(onPressed: _save, child: Text(tr('Сохранить и применить'))),
           ],
         ],
       ),

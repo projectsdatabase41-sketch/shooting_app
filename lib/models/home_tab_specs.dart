@@ -26,15 +26,15 @@ const coachUnhidable = {'settings'};
 const serviceTabPrefix = 'service_';
 
 const Map<String, HomeTabSpec> homeTabSpecs = {
-  'exercises': HomeTabSpec(icon: Icons.fitness_center, label: 'Упражнения'),
-  'target': HomeTabSpec(icon: Icons.gps_fixed, label: 'Мишень'),
-  'statistics': HomeTabSpec(icon: Icons.bar_chart, label: 'Статистика'),
-  'assistant': HomeTabSpec(icon: Icons.auto_awesome_outlined, label: 'Ассистент'),
-  'messenger': HomeTabSpec(icon: Icons.forum_outlined, label: 'Мессенджер'),
-  'settings': HomeTabSpec(icon: Icons.settings_outlined, label: 'Настройки'),
-  'diary': HomeTabSpec(icon: Icons.menu_book_outlined, label: 'Дневник'),
-  'athletes': HomeTabSpec(icon: Icons.groups_outlined, label: 'Спортсмены'),
-  'statistics_coach': HomeTabSpec(icon: Icons.bar_chart, label: 'Статистика'),
-  'assistant_coach': HomeTabSpec(icon: Icons.auto_awesome_outlined, label: 'Ассистент'),
-  'tasks': HomeTabSpec(icon: Icons.assignment_outlined, label: 'Задания'),
+  'exercises': HomeTabSpec(icon: Icons.fitness_center, label: /*tr*/ 'Упражнения'),
+  'target': HomeTabSpec(icon: Icons.gps_fixed, label: /*tr*/ 'Мишень'),
+  'statistics': HomeTabSpec(icon: Icons.bar_chart, label: /*tr*/ 'Статистика'),
+  'assistant': HomeTabSpec(icon: Icons.auto_awesome_outlined, label: /*tr*/ 'Ассистент'),
+  'messenger': HomeTabSpec(icon: Icons.forum_outlined, label: /*tr*/ 'Мессенджер'),
+  'settings': HomeTabSpec(icon: Icons.settings_outlined, label: /*tr*/ 'Настройки'),
+  'diary': HomeTabSpec(icon: Icons.menu_book_outlined, label: /*tr*/ 'Дневник'),
+  'athletes': HomeTabSpec(icon: Icons.groups_outlined, label: /*tr*/ 'Спортсмены'),
+  'statistics_coach': HomeTabSpec(icon: Icons.bar_chart, label: /*tr*/ 'Статистика'),
+  'assistant_coach': HomeTabSpec(icon: Icons.auto_awesome_outlined, label: /*tr*/ 'Ассистент'),
+  'tasks': HomeTabSpec(icon: Icons.assignment_outlined, label: /*tr*/ 'Задания'),
 };

@@ -7,6 +7,7 @@ import '../services/supabase_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/section_header.dart';
 import 'export_screen.dart';
+import '../i18n/i18n.dart';
 
 /// "Данные и синхронизация" — импорт/экспорт, ручная синхронизация с
 /// облаком и токены доступа тренерам, вынесены из общего списка настроек
@@ -28,30 +29,30 @@ class _SettingsDataScreenState extends State<SettingsDataScreen> {
     final store = context.watch<AppDataStore>();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Данные и синхронизация')),
+      appBar: AppBar(title: Text(tr('Данные и синхронизация'))),
       body: ListView(
         padding: const EdgeInsets.only(bottom: 32),
         children: [
           ListTile(
             leading: const Icon(Icons.file_download_outlined),
-            title: const Text('Импорт тренировок'),
-            subtitle: const Text('Через чат с ИИ-ассистентом'),
+            title: Text(tr('Импорт тренировок')),
+            subtitle: Text(tr('Через чат с ИИ-ассистентом')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => _showImportDialog(context),
           ),
           ListTile(
             leading: const Icon(Icons.ios_share_outlined),
-            title: const Text('Экспорт тренировок'),
-            subtitle: const Text('В файл: для резервной копии или переноса на другое устройство'),
+            title: Text(tr('Экспорт тренировок')),
+            subtitle: Text(tr('В файл: для резервной копии или переноса на другое устройство')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const ExportScreen()),
             ),
           ),
           const Divider(height: 24),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: SectionHeader(title: 'Синхронизация'),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: SectionHeader(title: tr('Синхронизация')),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -71,14 +72,14 @@ class _SettingsDataScreenState extends State<SettingsDataScreen> {
                       icon: _syncing
                           ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                           : const Icon(Icons.cloud_download_outlined),
-                      label: const Text('Загрузить из облака'),
+                      label: Text(tr('Загрузить из облака')),
                     ),
                     FilledButton.icon(
                       onPressed: _syncing ? null : () => _pushNow(context),
                       icon: _syncing
                           ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                           : const Icon(Icons.cloud_upload_outlined),
-                      label: const Text('Отправить в облако'),
+                      label: Text(tr('Отправить в облако')),
                     ),
                   ],
                 ),
@@ -110,10 +111,10 @@ class _SettingsDataScreenState extends State<SettingsDataScreen> {
     try {
       final result = await sync.pull(store);
       final parts = <String>[];
-      if (result.pulledSessions > 0) parts.add('получено тренировок: ${result.pulledSessions}');
-      if (result.pulledExercises > 0) parts.add('упражнений: ${result.pulledExercises}');
-      if (result.pulledComments > 0) parts.add('комментариев: ${result.pulledComments}');
-      setState(() => _syncMessage = parts.isEmpty ? 'Готово, новых данных не было' : 'Готово — ${parts.join(', ')}');
+      if (result.pulledSessions > 0) parts.add(tr('получено тренировок: {pulledSessions}', {'pulledSessions': result.pulledSessions}));
+      if (result.pulledExercises > 0) parts.add(tr('упражнений: {pulledExercises}', {'pulledExercises': result.pulledExercises}));
+      if (result.pulledComments > 0) parts.add(tr('комментариев: {pulledComments}', {'pulledComments': result.pulledComments}));
+      setState(() => _syncMessage = parts.isEmpty ? tr('Готово, новых данных не было') : tr('Готово — {p}', {'p': parts.join(', ')}));
     } catch (e) {
       setState(() => _syncMessage = '$e');
     } finally {
@@ -132,9 +133,9 @@ class _SettingsDataScreenState extends State<SettingsDataScreen> {
       final deleted = await sync.pushDeletions(store);
       final pushed = await sync.push(store);
       final parts = <String>[];
-      if (deleted > 0) parts.add('удалено: $deleted');
-      if (pushed > 0) parts.add('отправлено: $pushed');
-      setState(() => _syncMessage = parts.isEmpty ? 'Готово, новых данных не было' : 'Готово — ${parts.join(', ')}');
+      if (deleted > 0) parts.add(tr('удалено: {deleted}', {'deleted': deleted}));
+      if (pushed > 0) parts.add(tr('отправлено: {pushed}', {'pushed': pushed}));
+      setState(() => _syncMessage = parts.isEmpty ? tr('Готово, новых данных не было') : tr('Готово — {p}', {'p': parts.join(', ')}));
     } catch (e) {
       setState(() => _syncMessage = '$e');
     } finally {
@@ -158,7 +159,7 @@ void _showImportDialog(BuildContext context) {
   showDialog(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: const Text('Импорт через ИИ-ассистента'),
+      title: Text(tr('Импорт через ИИ-ассистента')),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -172,13 +173,13 @@ void _showImportDialog(BuildContext context) {
           ],
           const SizedBox(height: 8),
           Text(
-            'Импорт внутри самого приложения пока в разработке.',
+            tr('Импорт внутри самого приложения пока в разработке.'),
             style: Theme.of(ctx).textTheme.bodySmall,
           ),
         ],
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Закрыть')),
+        TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr('Закрыть'))),
       ],
     ),
   );
@@ -230,20 +231,20 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
     return showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Название токена'),
+        title: Text(tr('Название токена')),
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'Имя, кому предназначен',
-            hintText: 'например «Тренер Иванов»',
+          decoration: InputDecoration(
+            labelText: tr('Имя, кому предназначен'),
+            hintText: tr('например «Тренер Иванов»'),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr('Отмена'))),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
-            child: const Text('Создать'),
+            child: Text(tr('Создать')),
           ),
         ],
       ),
@@ -293,11 +294,11 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           child: SectionHeader(
-            title: 'Доступ тренерам',
-            subtitle: 'Токены на просмотр вашего дневника',
+            title: tr('Доступ тренерам'),
+            subtitle: tr('Токены на просмотр вашего дневника'),
           ),
         ),
         if (!signedIn)
@@ -307,8 +308,7 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
               // Токен без базы работать не может — тренеру попросту
               // некуда его подставить, поэтому честнее не предлагать
               // создать его локально "про запас".
-              'Сначала войдите в базу Supabase — токен проверяется на сервере, '
-              'без неё выдавать его некому.',
+              tr('Сначала войдите в базу Supabase — токен проверяется на сервере, без неё выдавать его некому.'),
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
@@ -337,7 +337,7 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            'Токен показывается только один раз',
+                            tr('Токен показывается только один раз'),
                             style: Theme.of(context).textTheme.labelMedium?.copyWith(
                                   color: Theme.of(context).colorScheme.onSecondaryContainer,
                                 ),
@@ -355,10 +355,10 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
                         Clipboard.setData(ClipboardData(text: _lastCreatedToken!));
                         ScaffoldMessenger.of(context)
                           ..hideCurrentSnackBar()
-                          ..showSnackBar(const SnackBar(content: Text('Токен скопирован')));
+                          ..showSnackBar(SnackBar(content: Text(tr('Токен скопирован'))));
                       },
                       icon: const Icon(Icons.copy, size: 16),
-                      label: const Text('Скопировать токен'),
+                      label: Text(tr('Скопировать токен')),
                     ),
                   ],
                 ),
@@ -366,11 +366,11 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
             ),
           ),
         ...store.shareGrants.map((g) => ListTile(
-              title: Text(g.athleteLabel.isEmpty ? 'Токен ${g.id.substring(0, 6)}' : g.athleteLabel),
-              subtitle: Text('Создан ${g.createdAt.toLocal()}'),
+              title: Text(g.athleteLabel.isEmpty ? tr('Токен {p}', {'p': g.id.substring(0, 6)}) : g.athleteLabel),
+              subtitle: Text(tr('Создан {p}', {'p': g.createdAt.toLocal()})),
               trailing: TextButton(
                 onPressed: _busy ? null : () => _revoke(g.id),
-                child: const Text('Отозвать'),
+                child: Text(tr('Отозвать')),
               ),
             )),
         Padding(
@@ -379,7 +379,7 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
             icon: _busy
                 ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.add),
-            label: const Text('Создать токен'),
+            label: Text(tr('Создать токен')),
             onPressed: (!signedIn || _busy) ? null : _create,
           ),
         ),

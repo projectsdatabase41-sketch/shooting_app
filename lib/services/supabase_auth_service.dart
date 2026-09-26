@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/coach_chat_message.dart';
 import 'local_db_service.dart';
+import '../i18n/i18n.dart';
 
 /// Учётная запись в ЛИЧНОЙ базе Supabase.
 ///
@@ -158,7 +159,7 @@ class SupabaseAuthService {
             },
             body: jsonEncode({
               'owner_user_id': uid,
-              'project_name': 'Стрельба',
+              'project_name': tr('Стрельба'),
               'status': 'active',
               'is_athlete': true,
               'is_coach': false,
@@ -293,7 +294,7 @@ class SupabaseAuthService {
           grantId: '${r['id']}',
           name: [r['coach_chat_nickname'], r['label']]
               .map((v) => '${v ?? ''}'.trim())
-              .firstWhere((v) => v.isNotEmpty, orElse: () => 'Тренер'),
+              .firstWhere((v) => v.isNotEmpty, orElse: () => tr('Тренер')),
         ),
     ];
   }
@@ -311,7 +312,7 @@ class SupabaseAuthService {
   /// Запрос к своей базе от имени владельца; ошибка — исключение с текстом сервера.
   Future<List<Map<String, dynamic>>> _rest(String method, String path, {Object? body}) async {
     final token = await ensureFreshToken();
-    if (token == null) throw Exception('Войдите в свою базу (Настройки → Учётная запись)');
+    if (token == null) throw Exception(tr('Войдите в свою базу (Настройки → Учётная запись)'));
     final client = clientFactory();
     try {
       final req = http.Request(method, Uri.parse('$url/rest/v1/$path'))
@@ -323,7 +324,7 @@ class SupabaseAuthService {
         });
       if (body != null) req.body = jsonEncode(body);
       final res = await http.Response.fromStream(await client.send(req).timeout(const Duration(seconds: 20)));
-      if (res.statusCode >= 400) throw Exception('Сервер ответил ${res.statusCode}: ${res.body}');
+      if (res.statusCode >= 400) throw Exception(tr('Сервер ответил {statusCode}: {body}', {'statusCode': res.statusCode, 'body': res.body}));
       if (res.bodyBytes.isEmpty) return const [];
       final decoded = jsonDecode(utf8.decode(res.bodyBytes));
       return decoded is List ? decoded.cast<Map<String, dynamic>>() : const [];
@@ -359,7 +360,7 @@ class SupabaseAuthService {
   Future<String> checkSchema() async {
     _requireBase();
     final token = await ensureFreshToken();
-    if (token == null) return 'Сначала войдите в базу';
+    if (token == null) return tr('Сначала войдите в базу');
     final client = clientFactory();
     try {
       final res = await client.get(
@@ -369,13 +370,13 @@ class SupabaseAuthService {
           'Authorization': 'Bearer $token',
         },
       ).timeout(const Duration(seconds: 20));
-      if (res.statusCode == 200) return 'База на месте, таблицы созданы';
+      if (res.statusCode == 200) return tr('База на месте, таблицы созданы');
       if (res.statusCode == 404 || res.body.contains('PGRST205')) {
-        return 'База отвечает, но таблиц нет — примените схему (sql/schema.sql)';
+        return tr('База отвечает, но таблиц нет — примените схему (sql/schema.sql)');
       }
-      return 'База ответила ${res.statusCode}: ${_message(res.body)}';
+      return tr('База ответила {statusCode}: {p}', {'statusCode': res.statusCode, 'p': _message(res.body)});
     } catch (e) {
-      return 'Не удалось достучаться до базы: $e';
+      return tr('Не удалось достучаться до базы: {e}', {'e': e});
     } finally {
       client.close();
     }
@@ -409,8 +410,8 @@ class SupabaseAuthService {
           .timeout(const Duration(seconds: 20));
       if (res.statusCode >= 400) {
         if (res.statusCode == 404 || res.body.contains('PGRST202') || res.body.contains('PGRST205')) {
-          throw const AuthException(
-              'Функция list_public_tables не найдена — примените свежий sql/schema.sql к своей базе');
+          throw AuthException(
+              tr('Функция list_public_tables не найдена — примените свежий sql/schema.sql к своей базе'));
         }
         throw AuthException(_message(res.body));
       }
@@ -424,7 +425,7 @@ class SupabaseAuthService {
     } on AuthException {
       rethrow;
     } catch (e) {
-      throw AuthException('Не удалось разобрать список таблиц: $e');
+      throw AuthException(tr('Не удалось разобрать список таблиц: {e}', {'e': e}));
     } finally {
       client.close();
     }
@@ -434,7 +435,7 @@ class SupabaseAuthService {
 
   void _requireBase() {
     if (!hasBase) {
-      throw const AuthException('Сначала укажите адрес базы и ключ');
+      throw AuthException(tr('Сначала укажите адрес базы и ключ'));
     }
   }
 
@@ -445,7 +446,7 @@ class SupabaseAuthService {
   }) async {
     final res = await _post('/auth/v1/token?grant_type=$grant', body);
     if (res['access_token'] == null) {
-      throw const AuthException('Сервер не выдал токен');
+      throw AuthException(tr('Сервер не выдал токен'));
     }
     _saveSession(res, email: email);
   }
@@ -472,7 +473,7 @@ class SupabaseAuthService {
     } on AuthException {
       rethrow;
     } catch (e) {
-      throw AuthException('Сеть недоступна или адрес базы неверен ($e)');
+      throw AuthException(tr('Сеть недоступна или адрес базы неверен ({e})', {'e': e}));
     } finally {
       client.close();
     }
@@ -516,11 +517,11 @@ class SupabaseAuthService {
   /// оригинала.
   static String _translate(String raw) {
     final low = raw.toLowerCase();
-    if (low.contains('invalid login credentials')) return 'Неверная почта или пароль';
-    if (low.contains('email not confirmed')) return 'Почта не подтверждена — проверьте письмо';
-    if (low.contains('user already registered')) return 'Такой пользователь уже есть — войдите';
-    if (low.contains('password should be')) return 'Пароль слишком короткий (нужно не меньше 6 символов)';
-    if (low.contains('signups not allowed')) return 'В этой базе регистрация выключена';
+    if (low.contains('invalid login credentials')) return tr('Неверная почта или пароль');
+    if (low.contains('email not confirmed')) return tr('Почта не подтверждена — проверьте письмо');
+    if (low.contains('user already registered')) return tr('Такой пользователь уже есть — войдите');
+    if (low.contains('password should be')) return tr('Пароль слишком короткий (нужно не меньше 6 символов)');
+    if (low.contains('signups not allowed')) return tr('В этой базе регистрация выключена');
     return raw;
   }
 

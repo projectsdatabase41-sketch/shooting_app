@@ -13,6 +13,7 @@ import 'chat_drive_service.dart';
 import 'chat_messages_repository.dart';
 import 'chat_settings.dart';
 import 'live_chat_session.dart';
+import '../i18n/i18n.dart';
 
 /// Сетевой обмен публичного чата — общий проект как ВРЕМЕННЫЙ транзит:
 /// сообщение (и вложение, если есть) попадает на сервер при отправке и
@@ -119,11 +120,11 @@ class ChatSyncService {
       return caption.length > 80 ? '${caption.substring(0, 80)}…' : caption;
     }
     return switch (m.type) {
-      ChatMessageType.image => '📷 Фото',
-      ChatMessageType.video => '🎥 Видео',
-      ChatMessageType.audio => '🎤 Голосовое',
+      ChatMessageType.image => tr('📷 Фото'),
+      ChatMessageType.video => tr('🎥 Видео'),
+      ChatMessageType.audio => tr('🎤 Голосовое'),
       ChatMessageType.file => '📎 ${m.attachmentName ?? 'Файл'}',
-      _ => 'Сообщение',
+      _ => tr('Сообщение'),
     };
   }
 
@@ -360,19 +361,19 @@ class ChatSyncService {
     if (l != null && l.contactId == message.contactId && await l.trySend(message)) return;
     if (!ChatSettings.isConfigured) {
       repo.updateStatus(message.id, ChatMessageStatus.error);
-      throw Exception('Чат не настроен');
+      throw Exception(tr('Чат не настроен'));
     }
     final token = await auth.ensureFreshToken();
     if (token == null) {
       repo.updateStatus(message.id, ChatMessageStatus.error);
-      throw Exception('Сначала войдите в чат');
+      throw Exception(tr('Сначала войдите в чат'));
     }
     final client = clientFactory();
     try {
       String? attachmentPath;
       if (_attachmentTypes.contains(message.type)) {
         final b64 = message.attachmentBase64;
-        if (b64 == null) throw Exception('Файл повреждён');
+        if (b64 == null) throw Exception(tr('Файл повреждён'));
         attachmentPath =
             '${auth.userId}/${message.clientMessageId}/${ChatMediaUtils.safePathSegment(message.attachmentName ?? 'file')}';
         final uploadRes = await client
@@ -393,7 +394,7 @@ class ChatSyncService {
         // месте, дальше просто записываем сообщение.
         final duplicate = uploadRes.statusCode == 409 || uploadRes.body.contains('Duplicate') || uploadRes.body.contains('already exists');
         if (uploadRes.statusCode >= 300 && !duplicate) {
-          throw Exception('Не удалось загрузить файл (${uploadRes.statusCode}): ${uploadRes.body}');
+          throw Exception(tr('Не удалось загрузить файл ({statusCode}): {body}', {'statusCode': uploadRes.statusCode, 'body': uploadRes.body}));
         }
       }
 
@@ -443,12 +444,12 @@ class ChatSyncService {
   Future<void> _retryLargeAttachment(ChatMessage message) async {
     if (!ChatSettings.isConfigured) {
       repo.updateStatus(message.id, ChatMessageStatus.error);
-      throw Exception('Чат не настроен');
+      throw Exception(tr('Чат не настроен'));
     }
     final token = await auth.ensureFreshToken();
     if (token == null) {
       repo.updateStatus(message.id, ChatMessageStatus.error);
-      throw Exception('Сначала войдите в чат');
+      throw Exception(tr('Сначала войдите в чат'));
     }
     try {
       var driveFileId = message.driveFileId;
@@ -507,7 +508,7 @@ class ChatSyncService {
   /// увидеть уже скачанный файл.
   Future<void> downloadLargeAttachment(ChatMessage message, {required String destPath, void Function(int, int?)? onProgress}) async {
     final fileId = message.driveFileId;
-    if (fileId == null) throw Exception('Нечего скачивать');
+    if (fileId == null) throw Exception(tr('Нечего скачивать'));
     await drive.download(fileId: fileId, destPath: destPath, onProgress: onProgress);
     repo.updateAttachmentLocalPath(message.id, destPath);
     unawaited(drive.deleteFile(fileId));
@@ -779,7 +780,7 @@ class ChatSyncService {
   /// 23503 — получателя нет на сервере: контакт остался со старого сервера
   /// мессенджера, а собеседник ещё не открывал обновлённое приложение.
   static String _sendError(int status, String body) => body.contains('23503')
-      ? 'Собеседник ещё не заходил в обновлённый мессенджер. Как только он откроет приложение, контакт обновится сам.'
-      : 'Сервер ответил $status: $body';
+      ? tr('Собеседник ещё не заходил в обновлённый мессенджер. Как только он откроет приложение, контакт обновится сам.')
+      : tr('Сервер ответил {status}: {body}', {'status': status, 'body': body});
 
 }

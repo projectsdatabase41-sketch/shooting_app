@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/coach_access_service.dart';
 import '../widgets/coach_chat_view.dart';
 import '../widgets/glass_pill.dart';
+import '../i18n/i18n.dart';
 
 /// «Чат со спортсменами» у тренера (плитка в «Спортсменах»): тап —
 /// переписка с одним, долгое нажатие — выделить нескольких и написать
@@ -26,11 +27,11 @@ class _CoachAthletesChatScreenState extends State<CoachAthletesChatScreen> {
     final text = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Сообщение: ${_selected.length} спортсм.'),
+        title: Text(tr('Сообщение: {length} спортсм.', {'length': _selected.length})),
         content: TextField(controller: ctrl, autofocus: true, minLines: 2, maxLines: 6),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()), child: const Text('Отправить')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr('Отмена'))),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()), child: Text(tr('Отправить'))),
         ],
       ),
     );
@@ -48,8 +49,8 @@ class _CoachAthletesChatScreenState extends State<CoachAthletesChatScreen> {
     setState(() => _selected.clear());
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(failed.isEmpty
-          ? 'Отправлено: ${targets.length}'
-          : 'Не отправлено: ${failed.join(', ')} (нет связи или в базе спортсмена не выполнен sql/coach-chat.sql)'),
+          ? tr('Отправлено: {length}', {'length': targets.length})
+          : tr('Не отправлено: {p} (нет связи или в базе спортсмена не выполнен sql/coach-chat.sql)', {'p': failed.join(', ')})),
     ));
   }
 
@@ -68,15 +69,15 @@ class _CoachAthletesChatScreenState extends State<CoachAthletesChatScreen> {
                 leading: IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _selected.clear())),
                 title: Text('${_selected.length}'),
                 actions: [
-                  IconButton(icon: const Icon(Icons.send), tooltip: 'Написать выбранным', onPressed: _writeToSelected),
+                  IconButton(icon: const Icon(Icons.send), tooltip: tr('Написать выбранным'), onPressed: _writeToSelected),
                 ],
               )
             : GlassHeader(
-                title: Text('Чат со спортсменами',
+                title: Text(tr('Чат со спортсменами'),
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
               ),
         body: _athletes.isEmpty
-            ? const Center(child: Text('Спортсменов пока нет'))
+            ? Center(child: Text(tr('Спортсменов пока нет')))
             : ListView(
                 children: [
                   for (final a in _athletes)

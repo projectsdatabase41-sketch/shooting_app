@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../i18n/i18n.dart';
 
 /// Разобранное подключение — общий результат для всех трёх способов
 /// ввода на экране "Добавить сервис".
@@ -33,9 +34,9 @@ class ServiceConnectionParser {
   /// ссылка, без заголовков и метода.
   static ParsedConnection fromUrl(String input) {
     final url = input.trim();
-    if (url.isEmpty) throw const FormatException('Пустая ссылка');
+    if (url.isEmpty) throw FormatException(tr('Пустая ссылка'));
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      throw const FormatException('Ссылка должна начинаться с http:// или https://');
+      throw FormatException(tr('Ссылка должна начинаться с http:// или https://'));
     }
     return ParsedConnection(url: _normalizeUrl(url));
   }
@@ -48,11 +49,11 @@ class ServiceConnectionParser {
     try {
       decoded = jsonDecode(input);
     } catch (_) {
-      throw const FormatException('Не похоже на JSON');
+      throw FormatException(tr('Не похоже на JSON'));
     }
-    if (decoded is! Map) throw const FormatException('JSON должен быть объектом {...}');
+    if (decoded is! Map) throw FormatException(tr('JSON должен быть объектом {...}'));
     final url = decoded['url'];
-    if (url is! String || url.isEmpty) throw const FormatException('В JSON нет поля "url"');
+    if (url is! String || url.isEmpty) throw FormatException(tr('В JSON нет поля "url"'));
     final headersRaw = decoded['headers'];
     final headers = <String, String>{
       if (headersRaw is Map) for (final e in headersRaw.entries) '${e.key}': '${e.value}',
@@ -75,7 +76,7 @@ class ServiceConnectionParser {
   static ParsedConnection fromCurl(String input) {
     final tokens = _tokenize(input.trim());
     if (tokens.isEmpty || tokens.first.toLowerCase() != 'curl') {
-      throw const FormatException('Команда должна начинаться с "curl"');
+      throw FormatException(tr('Команда должна начинаться с "curl"'));
     }
 
     String? url;
@@ -107,7 +108,7 @@ class ServiceConnectionParser {
       }
     }
 
-    if (url == null || url.isEmpty) throw const FormatException('Не нашёл ссылку в команде curl');
+    if (url == null || url.isEmpty) throw FormatException(tr('Не нашёл ссылку в команде curl'));
     return ParsedConnection(
       url: _normalizeUrl(url),
       method: method ?? (body != null ? 'POST' : 'GET'),

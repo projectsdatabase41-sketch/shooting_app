@@ -238,11 +238,11 @@ class _AccountSheetState extends State<_AccountSheet> {
     try {
       final sql = await rootBundle.loadString('lib/db/puls_install.sql');
       await Clipboard.setData(ClipboardData(text: sql));
-      message = 'SQL скопирован — вставьте в SQL Editor Supabase и нажмите Run';
+      message = tr('SQL скопирован — вставьте в SQL Editor Supabase и нажмите Run');
     } catch (e) {
       // Браузер иногда отказывает в доступе к буферу обмена (нет разрешения,
       // окно не в фокусе) — тогда честно сказать об этом, а не падать молча.
-      message = 'Не удалось скопировать: $e';
+      message = tr('Не удалось скопировать: {e}', {'e': e});
     }
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
@@ -306,11 +306,11 @@ class _AccountSheetState extends State<_AccountSheet> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('Таблицы для ИИ'),
+          title: Text(tr('Таблицы для ИИ')),
           content: SizedBox(
             width: double.maxFinite,
             child: names.isEmpty
-                ? const Text('В базе не нашлось таблиц, кроме тех, что уже использует само приложение.')
+                ? Text(tr('В базе не нашлось таблиц, кроме тех, что уже использует само приложение.'))
                 : SingleChildScrollView(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -326,8 +326,8 @@ class _AccountSheetState extends State<_AccountSheet> {
                   ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Отмена')),
-            FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Сохранить')),
+            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr('Отмена'))),
+            FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(tr('Сохранить'))),
           ],
         ),
       ),
@@ -352,7 +352,7 @@ class _AccountSheetState extends State<_AccountSheet> {
     Navigator.of(context).pop();
     final chosen = settings.tables.map((t) => t.label).join(', ');
     messenger.showSnackBar(SnackBar(
-      content: Text(chosen.isEmpty ? 'Таблицы для ИИ отключены' : 'ИИ теперь видит: $chosen'),
+      content: Text(chosen.isEmpty ? tr('Таблицы для ИИ отключены') : tr('ИИ теперь видит: {chosen}', {'chosen': chosen})),
     ));
 
     // Понять, что за таблицу подключили: без описания ИИ видит только
@@ -381,7 +381,7 @@ class _AccountSheetState extends State<_AccountSheet> {
       }
     }
     settings.tables = updated.values.toList();
-    return 'Таблицы для ИИ обновлены';
+    return tr('Таблицы для ИИ обновлены');
   }
 
   Future<String?> _describeOneTable(
@@ -443,9 +443,9 @@ class _AccountSheetState extends State<_AccountSheet> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           children: [
-            Text('Учётная запись', style: theme.textTheme.titleMedium),
+            Text(tr('Учётная запись'), style: theme.textTheme.titleMedium),
             const SizedBox(height: 4),
-            Text('Подключение к Supabase', style: theme.textTheme.bodySmall),
+            Text(tr('Подключение к Supabase'), style: theme.textTheme.bodySmall),
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: () => launchUrl(
@@ -453,7 +453,7 @@ class _AccountSheetState extends State<_AccountSheet> {
                 mode: LaunchMode.externalApplication,
               ),
               icon: const Icon(Icons.open_in_new),
-              label: const Text('Регистрация в Supabase'),
+              label: Text(tr('Регистрация в Supabase')),
             ),
             const SizedBox(height: 16),
 
@@ -461,14 +461,14 @@ class _AccountSheetState extends State<_AccountSheet> {
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.person_outline),
-                title: Text(_auth.email.isEmpty ? 'Вход выполнен' : _auth.email),
+                title: Text(_auth.email.isEmpty ? tr('Вход выполнен') : _auth.email),
                 subtitle: Text(_auth.url, maxLines: 1, overflow: TextOverflow.ellipsis),
               ),
               const SizedBox(height: 8),
               OutlinedButton.icon(
                 onPressed: _busy ? null : () => _run(_auth.checkSchema),
                 icon: const Icon(Icons.fact_check_outlined),
-                label: const Text('Проверить базу'),
+                label: Text(tr('Проверить базу')),
               ),
               const SizedBox(height: 8),
               // Пункт 3/8 списка правок: список таблиц читается из САМОЙ
@@ -479,7 +479,7 @@ class _AccountSheetState extends State<_AccountSheet> {
               OutlinedButton.icon(
                 onPressed: _busy ? null : () => _openTablesPicker(context),
                 icon: const Icon(Icons.table_chart_outlined),
-                label: const Text('Таблицы для ИИ'),
+                label: Text(tr('Таблицы для ИИ')),
               ),
               const SizedBox(height: 8),
               OutlinedButton.icon(
@@ -488,10 +488,10 @@ class _AccountSheetState extends State<_AccountSheet> {
                     : () {
                         _auth.signOutLocally();
                         context.read<AppDataStore>().refreshView();
-                        setState(() => _message = 'Вы вышли. Тренировки на устройстве остались на месте.');
+                        setState(() => _message = tr('Вы вышли. Тренировки на устройстве остались на месте.'));
                       },
                 icon: const Icon(Icons.logout),
-                label: const Text('Выйти'),
+                label: Text(tr('Выйти')),
               ),
               const SizedBox(height: 8),
               TextButton.icon(
@@ -504,11 +504,11 @@ class _AccountSheetState extends State<_AccountSheet> {
                           _url.text = '';
                           _key.text = '';
                           _showBaseFields = true;
-                          _message = 'База отключена';
+                          _message = tr('База отключена');
                         });
                       },
                 icon: Icon(Icons.link_off, color: cs.error),
-                label: Text('Отключить базу', style: TextStyle(color: cs.error)),
+                label: Text(tr('Отключить базу'), style: TextStyle(color: cs.error)),
               ),
             ] else ...[
               if (_showBaseFields) ...[
@@ -523,35 +523,32 @@ class _AccountSheetState extends State<_AccountSheet> {
                       mode: LaunchMode.externalApplication,
                     ),
                     icon: const Icon(Icons.open_in_new),
-                    label: const Text('1. Создать проект на Supabase'),
+                    label: Text(tr('1. Создать проект на Supabase')),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Откроется сайт Supabase — зарегистрируйтесь и создайте новый '
-                    'проект (пустой, без своих таблиц).',
+                    tr('Откроется сайт Supabase — зарегистрируйтесь и создайте новый проект (пустой, без своих таблиц).'),
                     style: theme.textTheme.bodySmall,
                   ),
                   const SizedBox(height: 14),
                   OutlinedButton.icon(
                     onPressed: () => _copyInstallSql(context),
                     icon: const Icon(Icons.copy_outlined),
-                    label: const Text('2. Скопировать SQL для настройки базы'),
+                    label: Text(tr('2. Скопировать SQL для настройки базы')),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'В проекте Supabase откройте SQL Editor → New query, вставьте '
-                    '(уже в буфере обмена) и нажмите Run. Один раз, весь текст сразу — '
-                    'создаст все таблицы и покажет строку проверки.',
+                    tr('В проекте Supabase откройте SQL Editor → New query, вставьте (уже в буфере обмена) и нажмите Run. Один раз, весь текст сразу — создаст все таблицы и покажет строку проверки.'),
                     style: theme.textTheme.bodySmall,
                   ),
                   const SizedBox(height: 14),
-                  Text('3. Вставить адрес и ключ', style: theme.textTheme.labelLarge),
+                  Text(tr('3. Вставить адрес и ключ'), style: theme.textTheme.labelLarge),
                   const SizedBox(height: 10),
                 ],
                 TextField(
                   controller: _url,
-                  decoration: const InputDecoration(
-                    labelText: 'Адрес базы',
+                  decoration: InputDecoration(
+                    labelText: tr('Адрес базы'),
                     hintText: 'https://xxxx.supabase.co',
                   ),
                   keyboardType: TextInputType.url,
@@ -560,36 +557,35 @@ class _AccountSheetState extends State<_AccountSheet> {
                 const SizedBox(height: 10),
                 TextField(
                   controller: _key,
-                  decoration: const InputDecoration(
-                    labelText: 'Публичный ключ (anon / publishable)',
-                    hintText: 'sb_publishable_… или eyJhbGci…',
+                  decoration: InputDecoration(
+                    labelText: tr('Публичный ключ (anon / publishable)'),
+                    hintText: tr('sb_publishable_… или eyJhbGci…'),
                   ),
                   autocorrect: false,
                   obscureText: true,
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Оба значения — в вашем проекте Supabase: Settings → API. '
-                  'Секретный ключ (service_role) сюда вводить не нужно и нельзя.',
+                  tr('Оба значения — в вашем проекте Supabase: Settings → API. Секретный ключ (service_role) сюда вводить не нужно и нельзя.'),
                   style: theme.textTheme.bodySmall,
                 ),
               ] else
                 TextButton.icon(
                   onPressed: () => setState(() => _showBaseFields = true),
                   icon: const Icon(Icons.edit_outlined),
-                  label: Text('База: ${_auth.url}', overflow: TextOverflow.ellipsis),
+                  label: Text(tr('База: {url}', {'url': _auth.url}), overflow: TextOverflow.ellipsis),
                 ),
               const SizedBox(height: 14),
               TextField(
                 controller: _email,
-                decoration: const InputDecoration(labelText: 'Почта'),
+                decoration: InputDecoration(labelText: tr('Почта')),
                 keyboardType: TextInputType.emailAddress,
                 autocorrect: false,
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: _password,
-                decoration: const InputDecoration(labelText: 'Пароль'),
+                decoration: InputDecoration(labelText: tr('Пароль')),
                 obscureText: true,
               ),
               const SizedBox(height: 16),
@@ -605,9 +601,9 @@ class _AccountSheetState extends State<_AccountSheet> {
                                   email: _email.text,
                                   password: _password.text,
                                 );
-                                return 'Вход выполнен';
+                                return tr('Вход выполнен');
                               }),
-                      child: const Text('Войти'),
+                      child: Text(tr('Войти')),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -628,12 +624,10 @@ class _AccountSheetState extends State<_AccountSheet> {
                                 // не произойдёт, и виноватым будет
                                 // приложение.
                                 return immediate
-                                    ? 'Готово, вы вошли'
-                                    : 'Аккаунт создан. Подтвердите адрес письмом '
-                                        'и войдите — либо отключите подтверждение '
-                                        'почты в настройках своего проекта Supabase.';
+                                    ? tr('Готово, вы вошли')
+                                    : tr('Аккаунт создан. Подтвердите адрес письмом и войдите — либо отключите подтверждение почты в настройках своего проекта Supabase.');
                               }),
-                      child: const Text('Зарегистрироваться'),
+                      child: Text(tr('Зарегистрироваться')),
                     ),
                   ),
                 ],
@@ -684,11 +678,11 @@ class _HiddenDevModeToggleState extends State<_HiddenDevModeToggle> {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Режим разработчика'),
-          content: const Text('Выключить? Недоделанные вкладки (Мессенджер, Задания) снова скроются.'),
+          title: Text(tr('Режим разработчика')),
+          content: Text(tr('Выключить? Недоделанные вкладки (Мессенджер, Задания) снова скроются.')),
           actions: [
-            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Отмена')),
-            FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Выключить')),
+            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr('Отмена'))),
+            FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(tr('Выключить'))),
           ],
         ),
       );
@@ -700,17 +694,17 @@ class _HiddenDevModeToggleState extends State<_HiddenDevModeToggle> {
     final password = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Режим разработчика'),
+        title: Text(tr('Режим разработчика')),
         content: TextField(
           controller: ctrl,
           autofocus: true,
           obscureText: true,
           onSubmitted: (v) => Navigator.of(ctx).pop(v),
-          decoration: const InputDecoration(labelText: 'Пароль'),
+          decoration: InputDecoration(labelText: tr('Пароль')),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(ctrl.text), child: const Text('Включить')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr('Отмена'))),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(ctrl.text), child: Text(tr('Включить'))),
         ],
       ),
     );
@@ -718,7 +712,7 @@ class _HiddenDevModeToggleState extends State<_HiddenDevModeToggle> {
     final ok = personalization.tryEnableDevMode(password);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(ok ? 'Режим разработчика включён' : 'Неверный пароль')),
+      SnackBar(content: Text(ok ? tr('Режим разработчика включён') : tr('Неверный пароль'))),
     );
   }
 

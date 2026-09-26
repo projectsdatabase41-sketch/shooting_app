@@ -8,6 +8,7 @@ import '../services/chat_translation_service.dart';
 import '../services/local_db_service.dart';
 import 'chat_appearance_screen.dart';
 import 'chat_privacy_screen.dart';
+import '../i18n/i18n.dart';
 
 /// Настройки мессенджера — разделами-папками (решение пользователя):
 /// язык и перевод, оформление, уведомления, приватность, аккаунт.
@@ -53,37 +54,37 @@ class _ChatSettingsScreenState extends State<ChatSettingsScreen> {
           onTap: () => _open(page),
         );
     return Scaffold(
-      appBar: AppBar(title: const Text('Настройки')),
+      appBar: AppBar(title: Text(tr('Настройки'))),
       body: ListView(
         children: [
           folder(
             Icons.translate_outlined,
-            'Язык и перевод',
-            '$lang · автоперевод ${prefs.autoTranslate ? 'во всех чатах' : 'по выбору в чате'}',
+            tr('Язык и перевод'),
+            tr('{lang} · автоперевод {p}', {'lang': lang, 'p': prefs.autoTranslate ? tr('во всех чатах') : tr('по выбору в чате')}),
             ChatTranslationSettingsScreen(prefs: prefs),
           ),
           folder(
             Icons.palette_outlined,
-            'Персонализация',
-            'Цвета, шрифт, форма сообщений, фон',
+            tr('Персонализация'),
+            tr('Цвета, шрифт, форма сообщений, фон'),
             ChatAppearanceScreen(prefs: prefs, db: widget.db),
           ),
           folder(
             Icons.notifications_outlined,
-            'Уведомления',
-            auth.personalPushMode == 'none' ? 'Выключены' : 'Включены',
+            tr('Уведомления'),
+            auth.personalPushMode == 'none' ? tr('Выключены') : tr('Включены'),
             ChatNotificationSettingsScreen(auth: auth),
           ),
           folder(
             Icons.shield_outlined,
-            'Приватность',
-            '${auth.privacyMode == 'friends_only' ? 'Только по заявке' : 'Все могут написать'} · скачивание файлов',
+            tr('Приватность'),
+            tr('{p} · скачивание файлов', {'p': auth.privacyMode == 'friends_only' ? tr('Только по заявке') : tr('Все могут написать')}),
             ChatPrivacyScreen(auth: auth, repo: widget.repo, sync: widget.sync, prefs: prefs, onChanged: widget.onChanged),
           ),
           folder(
             Icons.manage_accounts_outlined,
-            'Аккаунт',
-            'Выход, удаление аккаунта',
+            tr('Аккаунт'),
+            tr('Выход, удаление аккаунта'),
             ChatAccountSettingsScreen(auth: auth, onChanged: widget.onChanged),
           ),
         ],
@@ -131,7 +132,7 @@ class ChatTranslationSettingsScreen extends StatelessWidget {
               for (final lang in languages)
                 ListTile(
                   title: Text(lang.label),
-                  subtitle: lang.code == ChatTranslationService.systemLanguageCode() ? const Text('Язык системы') : null,
+                  subtitle: lang.code == ChatTranslationService.systemLanguageCode() ? Text(tr('Язык системы')) : null,
                   trailing: lang.code == current ? const Icon(Icons.check) : null,
                   onTap: () => Navigator.of(ctx).pop(lang.code),
                 ),
@@ -150,17 +151,17 @@ class ChatTranslationSettingsScreen extends StatelessWidget {
     return AnimatedBuilder(
       animation: prefs,
       builder: (context, _) => Scaffold(
-        appBar: AppBar(title: const Text('Язык и перевод')),
+        appBar: AppBar(title: Text(tr('Язык и перевод'))),
         body: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Text('Переводить на', style: theme.textTheme.titleMedium),
+            Text(tr('Переводить на'), style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
             Card(
               margin: EdgeInsets.zero,
               child: ListTile(
                 title: Text(chatLanguageLabel(prefs.translationLanguage)),
-                subtitle: prefs.translationLanguage.isEmpty ? const Text('Язык системы') : null,
+                subtitle: prefs.translationLanguage.isEmpty ? Text(tr('Язык системы')) : null,
                 trailing: const Icon(Icons.expand_more),
                 onTap: () => _pickLanguage(context),
               ),
@@ -168,15 +169,14 @@ class ChatTranslationSettingsScreen extends StatelessWidget {
             const SizedBox(height: 16),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Автоперевод во всех чатах'),
-              subtitle: const Text('Входящие переводятся сразу. В отдельном чате можно включить или выключить в меню ⋮'),
+              title: Text(tr('Автоперевод во всех чатах')),
+              subtitle: Text(tr('Входящие переводятся сразу. В отдельном чате можно включить или выключить в меню ⋮')),
               value: prefs.autoTranslate,
               onChanged: (v) => prefs.autoTranslate = v,
             ),
             const SizedBox(height: 8),
             Text(
-              'Переводятся последние 15 сообщений; листаете выше — ещё 20, дальше по 30. '
-              'Одно сообщение можно перевести вручную: долгое нажатие → «Перевести».',
+              tr('Переводятся последние 15 сообщений; листаете выше — ещё 20, дальше по 30. Одно сообщение можно перевести вручную: долгое нажатие → «Перевести».'),
               style: theme.textTheme.bodySmall,
             ),
           ],
@@ -214,13 +214,13 @@ class _ChatNotificationSettingsScreenState extends State<ChatNotificationSetting
   Widget build(BuildContext context) {
     final auth = widget.auth;
     return Scaffold(
-      appBar: AppBar(title: const Text('Уведомления')),
+      appBar: AppBar(title: Text(tr('Уведомления'))),
       body: ListView(
         children: [
           SwitchListTile(
             secondary: const Icon(Icons.notifications_outlined),
-            title: const Text('Сообщения'),
-            subtitle: const Text('Личные чаты и группы'),
+            title: Text(tr('Сообщения')),
+            subtitle: Text(tr('Личные чаты и группы')),
             value: auth.personalPushMode != 'none',
             onChanged: (v) => _apply(() => auth.updatePersonalPushMode(v ? 'all' : 'none')),
           ),
@@ -240,17 +240,16 @@ class ChatAccountSettingsScreen extends StatelessWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Удалить аккаунт мессенджера?'),
-        content: const Text(
-          'Никнейм, код контакта, друзья, заявки и членство в группах будут удалены безвозвратно. '
-          'Переписка, уже сохранённая на этом устройстве, останется. Отменить нельзя.',
+        title: Text(tr('Удалить аккаунт мессенджера?')),
+        content: Text(
+          tr('Никнейм, код контакта, друзья, заявки и членство в группах будут удалены безвозвратно. Переписка, уже сохранённая на этом устройстве, останется. Отменить нельзя.'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr('Отмена'))),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.error),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Удалить'),
+            child: Text(tr('Удалить')),
           ),
         ],
       ),
@@ -269,19 +268,19 @@ class ChatAccountSettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final error = Theme.of(context).colorScheme.error;
     return Scaffold(
-      appBar: AppBar(title: const Text('Аккаунт')),
+      appBar: AppBar(title: Text(tr('Аккаунт'))),
       body: ListView(
         children: [
           ListTile(
             leading: const Icon(Icons.badge_outlined),
             title: Text(auth.nickname),
-            subtitle: Text('Код контакта: ${auth.chatCode}'),
+            subtitle: Text(tr('Код контакта: {chatCode}', {'chatCode': auth.chatCode})),
           ),
           const Divider(height: 1),
           ListTile(
             leading: const Icon(Icons.logout),
-            title: const Text('Выйти из мессенджера'),
-            subtitle: const Text('Переписка на устройстве сохранится'),
+            title: Text(tr('Выйти из мессенджера')),
+            subtitle: Text(tr('Переписка на устройстве сохранится')),
             onTap: () {
               auth.signOutLocally();
               onChanged();
@@ -290,8 +289,8 @@ class ChatAccountSettingsScreen extends StatelessWidget {
           ),
           ListTile(
             leading: Icon(Icons.delete_forever_outlined, color: error),
-            title: Text('Удалить аккаунт', style: TextStyle(color: error)),
-            subtitle: const Text('Профиль, друзья, группы на сервере — необратимо'),
+            title: Text(tr('Удалить аккаунт'), style: TextStyle(color: error)),
+            subtitle: Text(tr('Профиль, друзья, группы на сервере — необратимо')),
             onTap: () => _delete(context),
           ),
         ],

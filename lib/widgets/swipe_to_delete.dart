@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../i18n/i18n.dart';
 
 /// Удаление свайпом справа налево — с подтверждением.
 ///
@@ -21,11 +22,11 @@ class SwipeToDelete extends StatelessWidget {
   final String message;
 
   /// Подпись кнопки подтверждения. По умолчанию «Удалить».
-  final String confirmLabel;
+  final String? confirmLabel;
 
   /// Подпись кнопки отказа. По умолчанию «Отмена» — но у шуточного
   /// вопроса «Зря создал?» уместнее «Нет».
-  final String cancelLabel;
+  final String? cancelLabel;
 
   /// Вызывается после подтверждения "удалить везде" (или единственного
   /// варианта удаления, если `onConfirmedLocalOnly` не задан).
@@ -46,8 +47,8 @@ class SwipeToDelete extends StatelessWidget {
     required this.onConfirmed,
     required this.child,
     this.onConfirmedLocalOnly,
-    this.confirmLabel = 'Удалить',
-    this.cancelLabel = 'Отмена',
+    this.confirmLabel,
+    this.cancelLabel,
   });
 
   /// Насколько далеко надо провести, чтобы жест засчитался.
@@ -81,7 +82,7 @@ class SwipeToDelete extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'Удалить',
+                tr('Удалить'),
                 style: TextStyle(color: cs.onErrorContainer, fontWeight: FontWeight.w600),
               ),
               const SizedBox(width: 8),
@@ -100,17 +101,17 @@ class SwipeToDelete extends StatelessWidget {
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(0),
-                child: Text(cancelLabel),
+                child: Text(cancelLabel ?? tr('Отмена')),
               ),
               if (onConfirmedLocalOnly != null)
                 TextButton(
                   onPressed: () => Navigator.of(ctx).pop(1),
-                  child: const Text('Только с телефона'),
+                  child: Text(tr('Только с телефона')),
                 ),
               FilledButton(
                 style: FilledButton.styleFrom(backgroundColor: cs.error),
                 onPressed: () => Navigator.of(ctx).pop(2),
-                child: Text(onConfirmedLocalOnly != null ? 'И из облака' : confirmLabel),
+                child: Text(onConfirmedLocalOnly != null ? tr('И из облака') : confirmLabel ?? tr('Удалить')),
               ),
             ],
           ),
