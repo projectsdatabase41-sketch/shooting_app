@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+
+import '../models/shot.dart';
 import 'package:provider/provider.dart';
 import '../models/target_color_scheme.dart';
 import '../painters/target_painter.dart';
@@ -36,8 +38,26 @@ void showPauseAddHint(BuildContext context) {
 /// только за первым пальцем), со свайпом страницы, с прокруткой.
 /// Новый выстрел создаётся ИСКЛЮЧИТЕЛЬНО кнопкой под мишенью
 /// (`_ShotActionBar` в target_screen.dart).
+/// Индекс выстрела, ближайшего к точке (мм); -1 — выстрелов нет.
+int nearestShotIndex(List<Shot> shots, double xMm, double yMm) {
+  var best = -1;
+  var bestD = double.infinity;
+  for (var i = 0; i < shots.length; i++) {
+    final dx = shots[i].xMm - xMm, dy = shots[i].yMm - yMm;
+    final d = dx * dx + dy * dy;
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  }
+  return best;
+}
+
 class TargetCanvas extends StatefulWidget {
-  const TargetCanvas({super.key});
+  /// Просмотр законченной тренировки: касание выбирает ближайший к нему
+  /// выстрел. На рабочем столе выключено — там касание ничего не делает.
+  final bool tapToSelect;
+  const TargetCanvas({super.key, this.tapToSelect = false});
 
   @override
   State<TargetCanvas> createState() => _TargetCanvasState();
@@ -126,6 +146,18 @@ class _TargetCanvasState extends State<TargetCanvas> {
           },
           child: RawGestureDetector(
           gestures: <Type, GestureRecognizerFactory>{
+            if (widget.tapToSelect)
+              TapGestureRecognizer: GestureRecognizerFactoryWithHandlers<TapGestureRecognizer>(
+                () => TapGestureRecognizer(),
+                (TapGestureRecognizer instance) {
+                  instance.onTapUp = (details) {
+                    if (vm.isEditing) return;
+                    final mm = _screenToMm(vm, details.localPosition);
+                    final i = nearestShotIndex(vm.session.shots, mm.dx, mm.dy);
+                    if (i >= 0) vm.selectIndex(i);
+                  };
+                },
+              ),
             // Ни удержания, ни тапа здесь больше нет — оба когда-то
             // ставили пробоину и конфликтовали со всем подряд: с пинчем
             // (распознаватель следит только за первым пальцем), со

@@ -870,6 +870,7 @@ class _ShotWheelBar extends StatelessWidget {
         maxValue: vm.maxDraftSteps,
         enabled: vm.maxDraftSteps > 0,
         onChanged: vm.setDraftInwardSteps,
+        height: 42, // ниже на 20% (решение пользователя)
       );
     } else {
       final index = vm.selectedIndex;
@@ -879,6 +880,7 @@ class _ShotWheelBar extends StatelessWidget {
         maxValue: total == 0 ? 0 : total - 1,
         enabled: total > 1,
         onChanged: vm.selectIndex,
+        height: 42, // ниже на 20% (решение пользователя)
       );
     }
 

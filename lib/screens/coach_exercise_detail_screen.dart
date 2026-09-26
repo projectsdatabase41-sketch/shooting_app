@@ -276,7 +276,7 @@ class _TargetBlock extends StatelessWidget {
     return Column(
       children: [
         Center(
-          child: SizedBox(width: side, height: side, child: const ClipRect(child: TargetCanvas())),
+          child: SizedBox(width: side, height: side, child: const ClipRect(child: TargetCanvas(tapToSelect: true))),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),

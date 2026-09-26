@@ -215,7 +215,7 @@ class _TargetBlock extends StatelessWidget {
       children: [
         SizedBox(
           height: faceRadiusHeight,
-          child: const ClipRect(child: TargetCanvas()),
+          child: const ClipRect(child: TargetCanvas(tapToSelect: true)),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
