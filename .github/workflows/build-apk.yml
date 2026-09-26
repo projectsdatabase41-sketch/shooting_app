@@ -38,7 +38,22 @@ jobs:
       - run: flutter analyze --no-fatal-infos
       - run: flutter test
 
+      # Постоянный ключ подписи (секреты ANDROID_KEYSTORE_BASE64 и
+      # ANDROID_KEYSTORE_PASSWORD) — чтобы новый APK ставился поверх старого.
+      - name: Ключ подписи
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/pusl-release.jks"
+            echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/pusl-release.jks" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Нет секрета ANDROID_KEYSTORE_BASE64 — APK подписан временным ключом и не встанет поверх прежнего"
+          fi
+
       - name: Сборка APK
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
           flutter build apk --release \
             --dart-define=OPENROUTER_KEY="${{ secrets.OPENROUTER_KEY }}" \

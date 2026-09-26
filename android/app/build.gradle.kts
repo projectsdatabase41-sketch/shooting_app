@@ -37,11 +37,25 @@ android {
         versionName = flutter.versionName
     }
 
+    // Постоянный ключ подписи из секретов GitHub (ANDROID_KEYSTORE_*, см.
+    // build-apk.yml). Без него каждая сборка на CI подписывалась новым
+    // случайным debug-ключом, и APK не ставился поверх прежнего
+    // («конфликтует с другим пакетом»). Локально ключа нет — debug, как раньше.
+    val releaseKeystore = System.getenv("ANDROID_KEYSTORE_PATH")
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = "pusl"
+                keyPassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (releaseKeystore != null) "release" else "debug")
         }
     }
 }
