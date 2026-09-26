@@ -21,6 +21,7 @@ import '../services/ai_settings.dart';
 import '../services/chat_auth_service.dart';
 import '../services/chat_messages_repository.dart';
 import '../services/chat_preferences.dart';
+import '../services/chat_presence.dart';
 import '../services/chat_sync_service.dart';
 import '../services/chat_translation_service.dart';
 import '../services/live_chat_session.dart';
@@ -36,6 +37,7 @@ import '../widgets/glass_pill.dart';
 import 'attachment_compose_screen.dart';
 import 'call_screen.dart';
 import 'chat_contact_panel_screen.dart';
+import 'chat_home_screen.dart';
 import 'photo_viewer_screen.dart';
 
 /// Переписка с одним контактом. Открытие ветки сразу отмечает входящие
@@ -133,9 +135,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   bool _isMasked(ChatMessage m) {
     final override = _maskOverride[m.id];
     if (override != null) return override;
-    return _autoOn &&
-        m.direction == ChatMessageDirection.incoming &&
-        _translations.containsKey(m.id);
+    return _autoOn && m.direction == ChatMessageDirection.incoming && _translations.containsKey(m.id);
   }
 
   @override
@@ -152,33 +152,35 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     });
     // Живой канал (WebSocket) — включается удалённо, по умолчанию выключен.
     if (!_contact.isGroup) {
-    _live = LiveChatSession(
-      auth: widget.auth,
-      repo: widget.repo,
-      contactId: _contact.id,
-      linkFactory: WebRtcPeerLink.new,
-      onIncoming: () {
-        if (!mounted) return;
-        widget.repo.markThreadSeen(_contact.id);
-    widget.sync.reportRead(_contact.id);
-        _reload();
-        _scrollToEnd();
-      },
-    );
-    widget.sync.live = _live;
-    _live!.open();
+      _live = LiveChatSession(
+        auth: widget.auth,
+        repo: widget.repo,
+        contactId: _contact.id,
+        linkFactory: WebRtcPeerLink.new,
+        onIncoming: () {
+          if (!mounted) return;
+          widget.repo.markThreadSeen(_contact.id);
+          widget.sync.reportRead(_contact.id);
+          _reload();
+          _scrollToEnd();
+        },
+      );
+      widget.sync.live = _live;
+      _live!.open();
     }
     // Адаптивный опрос: пока собеседник пишет — каждые 5 секунд, в тишине
     // растёт до 30 (см. AdaptivePoller). Отправка своего сообщения возвращает
     // частый режим — ответ обычно приходит скоро.
     _pollLoop = PollLoop(
       poller: AdaptivePoller(
-          min: const Duration(seconds: 5), max: const Duration(seconds: 30), scale: () => RemoteConfig.pollScale * (_live?.peerOnline == true ? 4 : 1)),
+          min: const Duration(seconds: 5),
+          max: const Duration(seconds: 30),
+          scale: () => RemoteConfig.pollScale * (_live?.peerOnline == true ? 4 : 1)),
       tick: () async {
         final added = await widget.sync.pollIncoming();
         if (added > 0 && mounted) {
           widget.repo.markThreadSeen(_contact.id);
-    widget.sync.reportRead(_contact.id);
+          widget.sync.reportRead(_contact.id);
           _reload();
           _scrollToEnd();
         }
@@ -285,8 +287,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   void _scrollToEnd() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) {
-        _scroll.animateTo(0,
-            duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+        _scroll.animateTo(0, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
       }
     });
   }
@@ -396,13 +397,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   /// Аудио- или видеозвонок собеседнику (сервер звонков — Cloudflare).
   void _call(bool video) {
     if (CallSession.current != null) return;
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => CallScreen(
-        session: CallSession.outgoing(widget.auth, peerId: _contact.id, peerName: _contact.nickname, video: video),
-        avatarBase64: _contact.avatarBase64,
-        repo: widget.repo,
-      ),
-    )).then((_) => _reload()); // запись о звонке в переписке
+    Navigator.of(context)
+        .push(MaterialPageRoute(
+          builder: (_) => CallScreen(
+            session: CallSession.outgoing(widget.auth, peerId: _contact.id, peerName: _contact.nickname, video: video),
+            avatarBase64: _contact.avatarBase64,
+            repo: widget.repo,
+          ),
+        ))
+        .then((_) => _reload()); // запись о звонке в переписке
   }
 
   /// Тап по нику — панель собеседника (звонки, колокольчик, медиа).
@@ -542,12 +545,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         title: Text(chosen.length == 1 ? 'Удалить сообщение?' : 'Удалить ${chosen.length} сообщ.?'),
         content: canForAll == 0
             ? Text(read > 0 ? 'Собеседник уже прочитал — удалить можно только у себя.' : 'Удалится только у вас.')
-            : Text(read > 0 ? 'Уже прочитанные ($read) удалятся только у вас.' : 'Можно удалить и у собеседника — он ещё не прочитал.'),
+            : Text(read > 0
+                ? 'Уже прочитанные ($read) удалятся только у вас.'
+                : 'Можно удалить и у собеседника — он ещё не прочитал.'),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
           TextButton(onPressed: () => Navigator.of(ctx).pop('me'), child: const Text('У меня')),
-          if (canForAll > 0)
-            FilledButton(onPressed: () => Navigator.of(ctx).pop('all'), child: const Text('У всех')),
+          if (canForAll > 0) FilledButton(onPressed: () => Navigator.of(ctx).pop('all'), child: const Text('У всех')),
         ],
       ),
     );
@@ -618,7 +622,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         fileName: picked.name,
         // Сжатие всегда перекодирует в JPEG (см. ChatMediaUtils.compressImage)
         // — mime должен это отражать, а не оставаться от исходного .png/.webp.
-        mime: isImage ? (compressed != null ? 'image/jpeg' : ChatMediaUtils.mimeFor(picked.name)) : 'application/octet-stream',
+        mime: isImage
+            ? (compressed != null ? 'image/jpeg' : ChatMediaUtils.mimeFor(picked.name))
+            : 'application/octet-stream',
         type: isImage ? ChatMessageType.image : ChatMessageType.file,
         caption: caption.isEmpty ? null : caption,
         downloadAllowed: widget.prefs.downloadAllowedFor(isPersonal: !_contact.isGroup),
@@ -649,7 +655,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         contactId: _contact.id,
         filePath: picked.path,
         fileName: picked.name,
-        mime: ChatMediaUtils.looksLikeImage(picked.name) ? ChatMediaUtils.mimeFor(picked.name) : 'application/octet-stream',
+        mime: ChatMediaUtils.looksLikeImage(picked.name)
+            ? ChatMediaUtils.mimeFor(picked.name)
+            : 'application/octet-stream',
         type: ChatMessageType.file,
         fileSize: picked.size,
         downloadAllowed: widget.prefs.downloadAllowedFor(isPersonal: !_contact.isGroup),
@@ -675,64 +683,58 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   }
 
   /// Шапка — отдельные стеклянные плитки поверх ленты, а не полоса.
-  Widget _glassHeader(BuildContext context) {
+  PreferredSizeWidget _glassHeader(BuildContext context) {
     final theme = Theme.of(context);
-    return SafeArea(
-      bottom: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 48,
-              height: 48,
-              child: GlassPill(
-                onTap: () => Navigator.of(context).maybePop(),
-                child: const Center(child: Icon(Icons.arrow_back)),
+    return GlassHeader(
+      onTitleTap: _openPanel,
+      actions: [
+        GlassCircleButton(
+          icon: const BoldIcon(Icons.close),
+          tooltip: 'Свернуть мессенджер',
+          onTap: () => ChatHomeScreen.close(context),
+        ),
+      ],
+      titlePadding: const EdgeInsets.fromLTRB(4, 4, 18, 4),
+      title: ValueListenableBuilder(
+        valueListenable: ChatPresence.seen,
+        builder: (context, _, __) {
+          final online = !_contact.isGroup && (_live?.peerOnline == true || ChatPresence.online(_contact.id));
+          final seen = _contact.isGroup ? null : (online ? 'в сети' : ChatPresence.label(_contact.id));
+          return Row(
+            children: [
+              ChatAvatar(
+                base64: _contact.avatarBase64,
+                nickname: _contact.nickname,
+                radius: 20,
+                background: _contact.isGroup ? chatGroupColor(_contact.color) : null,
+                online: online,
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: SizedBox(
-                height: 48,
-                child: GlassPill(
-                  onTap: _openPanel,
-                  padding: const EdgeInsets.fromLTRB(4, 4, 18, 4),
-                  child: Row(
-                    children: [
-                      ChatAvatar(
-                        base64: _contact.avatarBase64,
-                        nickname: _contact.nickname,
-                        radius: 20,
-                        background: _contact.isGroup ? chatGroupColor(_contact.color) : null,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(_contact.nickname,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-                            if (_contact.isGroup)
-                              Text('Участников: ${_contact.members.length}', style: theme.textTheme.bodySmall)
-                            else if (_contact.about.isNotEmpty)
-                              Text(_contact.about,
-                                  maxLines: 1, overflow: TextOverflow.ellipsis, style: theme.textTheme.bodySmall),
-                          ],
-                        ),
-                      ),
-                      if (widget.prefs.mutedFor(_contact.id))
-                        Icon(Icons.notifications_off_outlined, size: 18, color: theme.hintColor),
-                    ],
-                  ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(_contact.nickname,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                    if (_contact.isGroup)
+                      Text('Участников: ${_contact.members.length}', style: theme.textTheme.bodySmall)
+                    else if (seen != null)
+                      Text(seen,
+                          style: theme.textTheme.bodySmall?.copyWith(color: online ? const Color(0xFF3DDC84) : null))
+                    else if (_contact.about.isNotEmpty)
+                      Text(_contact.about,
+                          maxLines: 1, overflow: TextOverflow.ellipsis, style: theme.textTheme.bodySmall),
+                  ],
                 ),
               ),
-            ),
-          ],
-        ),
+              if (widget.prefs.mutedFor(_contact.id))
+                Icon(Icons.notifications_off_outlined, size: 18, color: theme.hintColor),
+            ],
+          );
+        },
       ),
     );
   }
@@ -749,7 +751,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
             constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.35),
             margin: const EdgeInsets.fromLTRB(8, 0, 8, 6),
             padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
-            decoration: BoxDecoration(color: cs.surface.withValues(alpha: 0.85), borderRadius: BorderRadius.circular(20)),
+            decoration:
+                BoxDecoration(color: cs.surface.withValues(alpha: 0.85), borderRadius: BorderRadius.circular(20)),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -831,14 +834,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                SizedBox(
-                  width: 50,
-                  height: 50,
-                  child: GlassPill(
-                    color: cs.primary.withValues(alpha: 0.85),
-                    onTap: _sending ? null : _send,
-                    child: Center(child: Icon(Icons.send, color: cs.onPrimary)),
-                  ),
+                GlassCircleButton(
+                  size: 50,
+                  color: cs.primary.withValues(alpha: 0.85),
+                  onTap: _sending ? null : _send,
+                  icon: Icon(Icons.send, color: cs.onPrimary),
                 ),
               ],
             ),
@@ -865,101 +865,104 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
           if (!didPop) setState(() => _emojiOpen = false);
         },
         child: Scaffold(
-        extendBodyBehindAppBar: true,
-        appBar: _selecting
-            ? AppBar(
-                leading: IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _selected.clear())),
-                title: Text('${_selected.length}'),
-                actions: [
-                  IconButton(icon: const Icon(Icons.copy_outlined), tooltip: 'Копировать', onPressed: _copySelected),
-                  IconButton(
-                      icon: const Icon(Icons.translate_outlined), tooltip: 'Перевести', onPressed: _translateSelected),
-                  if (_singleSelectedMessage() case final single?) ...[
-                    IconButton(icon: const Icon(Icons.reply_outlined), tooltip: 'Ответить', onPressed: _replySelected),
-                    if (single.direction == ChatMessageDirection.outgoing && single.type == ChatMessageType.text)
-                      IconButton(icon: const Icon(Icons.edit_outlined), tooltip: 'Редактировать', onPressed: _editSelected),
-                    if (single.direction == ChatMessageDirection.outgoing && single.status == ChatMessageStatus.error)
-                      IconButton(icon: const Icon(Icons.refresh), tooltip: 'Отправить ещё раз', onPressed: _retrySelected),
-                  ],
-                  IconButton(icon: const Icon(Icons.delete_outline), tooltip: 'Удалить', onPressed: _deleteSelected),
-                ],
-              )
-            : PreferredSize(preferredSize: const Size.fromHeight(60), child: _glassHeader(context)),
-        // resizeToAvoidBottomInset выключен намеренно — Scaffold сам иногда
-        // не отыгрывает обратное схлопывание после закрытия клавиатуры
-        // системным жестом "назад" (а не тапом), оставляя пустой отступ.
-        // AnimatedPadding реагирует на MediaQuery сам, на каждой перестройке,
-        // и не завязан на то, как именно клавиатуру закрыли.
-        resizeToAvoidBottomInset: false,
-        body: AnimatedPadding(
-          padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-          duration: const Duration(milliseconds: 100),
-          child: Column(
-            children: [
-              Expanded(
-                child: Container(
-                  decoration: widget.prefs.wallpaperDecoration,
-                  child: Stack(
-                    children: [
-                      _messages.isEmpty
-                          ? const EmptyState(icon: Icons.forum_outlined, text: 'Переписки пока нет')
-                          // Перевёрнутая лента: низ (новые) закреплён — при
-                          // открытии клавиатуры последние сообщения остаются
-                          // видны, а подгрузка картинок выше не сдвигает экран.
-                          : ListView.builder(
-                              controller: _scroll,
-                              reverse: true,
-                              padding: EdgeInsets.fromLTRB(12, _selecting ? 12 : topInset, 12, _barHeight + 8),
-                              itemCount: _messages.length,
-                              itemBuilder: (context, i) => _item(_messages[_messages.length - 1 - i]),
-                            ),
-                      Positioned(
-                        right: 12,
-                        bottom: _barHeight + 12,
-                        child: ValueListenableBuilder<bool>(
-                          valueListenable: _showJumpToEnd,
-                          builder: (_, show, __) => show
-                              ? SizedBox(
-                                  width: 44,
-                                  height: 44,
-                                  child: GlassPill(onTap: _scrollToEnd, child: const Center(child: Icon(Icons.arrow_downward))),
-                                )
-                              : const SizedBox.shrink(),
-                        ),
-                      ),
-                      Positioned(left: 0, right: 0, bottom: 0, child: _glassComposer(context)),
+          extendBodyBehindAppBar: true,
+          appBar: _selecting
+              ? AppBar(
+                  leading:
+                      IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _selected.clear())),
+                  title: Text('${_selected.length}'),
+                  actions: [
+                    IconButton(icon: const Icon(Icons.copy_outlined), tooltip: 'Копировать', onPressed: _copySelected),
+                    IconButton(
+                        icon: const Icon(Icons.translate_outlined),
+                        tooltip: 'Перевести',
+                        onPressed: _translateSelected),
+                    if (_singleSelectedMessage() case final single?) ...[
+                      IconButton(
+                          icon: const Icon(Icons.reply_outlined), tooltip: 'Ответить', onPressed: _replySelected),
+                      if (single.direction == ChatMessageDirection.outgoing && single.type == ChatMessageType.text)
+                        IconButton(
+                            icon: const Icon(Icons.edit_outlined), tooltip: 'Редактировать', onPressed: _editSelected),
+                      if (single.direction == ChatMessageDirection.outgoing && single.status == ChatMessageStatus.error)
+                        IconButton(
+                            icon: const Icon(Icons.refresh), tooltip: 'Отправить ещё раз', onPressed: _retrySelected),
                     ],
+                    IconButton(icon: const Icon(Icons.delete_outline), tooltip: 'Удалить', onPressed: _deleteSelected),
+                  ],
+                )
+              : _glassHeader(context),
+          // resizeToAvoidBottomInset выключен намеренно — Scaffold сам иногда
+          // не отыгрывает обратное схлопывание после закрытия клавиатуры
+          // системным жестом "назад" (а не тапом), оставляя пустой отступ.
+          // AnimatedPadding реагирует на MediaQuery сам, на каждой перестройке,
+          // и не завязан на то, как именно клавиатуру закрыли.
+          resizeToAvoidBottomInset: false,
+          body: AnimatedPadding(
+            padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+            duration: const Duration(milliseconds: 100),
+            child: Column(
+              children: [
+                Expanded(
+                  child: Container(
+                    decoration: widget.prefs.wallpaperDecoration,
+                    child: Stack(
+                      children: [
+                        _messages.isEmpty
+                            ? const EmptyState(icon: Icons.forum_outlined, text: 'Переписки пока нет')
+                            // Перевёрнутая лента: низ (новые) закреплён — при
+                            // открытии клавиатуры последние сообщения остаются
+                            // видны, а подгрузка картинок выше не сдвигает экран.
+                            : ListView.builder(
+                                controller: _scroll,
+                                reverse: true,
+                                padding: EdgeInsets.fromLTRB(12, _selecting ? 12 : topInset, 12, _barHeight + 8),
+                                itemCount: _messages.length,
+                                itemBuilder: (context, i) => _item(_messages[_messages.length - 1 - i]),
+                              ),
+                        Positioned(
+                          right: 12,
+                          bottom: _barHeight + 12,
+                          child: ValueListenableBuilder<bool>(
+                            valueListenable: _showJumpToEnd,
+                            builder: (_, show, __) => show
+                                ? GlassCircleButton(
+                                    size: 44, onTap: _scrollToEnd, icon: const Icon(Icons.arrow_downward))
+                                : const SizedBox.shrink(),
+                          ),
+                        ),
+                        Positioned(left: 0, right: 0, bottom: 0, child: _glassComposer(context)),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              if (_emojiOpen)
-                EmojiPicker(
-                  textEditingController: _input,
-                  config: Config(
-                    height: 280,
-                    locale: const Locale('ru'),
-                    emojiViewConfig: EmojiViewConfig(
-                      backgroundColor: Theme.of(context).colorScheme.surface,
-                      emojiSizeMax: 30,
-                      columns: 8,
-                    ),
-                    categoryViewConfig: CategoryViewConfig(
-                      backgroundColor: Theme.of(context).colorScheme.surface,
-                      indicatorColor: Theme.of(context).colorScheme.primary,
-                      iconColorSelected: Theme.of(context).colorScheme.primary,
-                      backspaceColor: Theme.of(context).colorScheme.primary,
-                    ),
-                    bottomActionBarConfig: const BottomActionBarConfig(enabled: false),
-                    searchViewConfig: SearchViewConfig(
-                      backgroundColor: Theme.of(context).colorScheme.surface,
-                      hintText: 'Поиск',
+                if (_emojiOpen)
+                  EmojiPicker(
+                    textEditingController: _input,
+                    config: Config(
+                      height: 280,
+                      locale: const Locale('ru'),
+                      emojiViewConfig: EmojiViewConfig(
+                        backgroundColor: Theme.of(context).colorScheme.surface,
+                        emojiSizeMax: 30,
+                        columns: 8,
+                      ),
+                      categoryViewConfig: CategoryViewConfig(
+                        backgroundColor: Theme.of(context).colorScheme.surface,
+                        indicatorColor: Theme.of(context).colorScheme.primary,
+                        iconColorSelected: Theme.of(context).colorScheme.primary,
+                        backspaceColor: Theme.of(context).colorScheme.primary,
+                      ),
+                      bottomActionBarConfig: const BottomActionBarConfig(enabled: false),
+                      searchViewConfig: SearchViewConfig(
+                        backgroundColor: Theme.of(context).colorScheme.surface,
+                        hintText: 'Поиск',
+                      ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -1083,7 +1086,12 @@ class _Bubble extends StatelessWidget {
         colors: [Color.lerp(base, Colors.white, 0.08)!, Color.lerp(base, Colors.black, 0.10)!],
       ),
       boxShadow: prefs.shadowEnabled
-          ? [BoxShadow(color: Colors.black.withValues(alpha: prefs.shadowIntensity), blurRadius: 10, offset: const Offset(0, 4))]
+          ? [
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: prefs.shadowIntensity),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4))
+            ]
           : null,
     );
 
@@ -1274,7 +1282,10 @@ class _Bubble extends StatelessWidget {
           onTap: openFullscreen,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: _imageMaxWidth),
-            child: Image(image: ChatMediaUtils.imageOf(message.id, message.attachmentBase64!), fit: BoxFit.contain, gaplessPlayback: true),
+            child: Image(
+                image: ChatMediaUtils.imageOf(message.id, message.attachmentBase64!),
+                fit: BoxFit.contain,
+                gaplessPlayback: true),
           ),
         )),
       );
@@ -1292,7 +1303,10 @@ class _Bubble extends StatelessWidget {
                 onTap: openFullscreen,
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: _imageMaxWidth),
-                  child: Image(image: ChatMediaUtils.imageOf(message.id, message.attachmentBase64!), fit: BoxFit.cover, gaplessPlayback: true),
+                  child: Image(
+                      image: ChatMediaUtils.imageOf(message.id, message.attachmentBase64!),
+                      fit: BoxFit.cover,
+                      gaplessPlayback: true),
                 ),
               )),
             ),

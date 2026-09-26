@@ -12,14 +12,48 @@ class ChatAvatar extends StatelessWidget {
   /// Цвет фона без фото (у групп — выбранный цвет группы).
   final Color? background;
 
-  const ChatAvatar({super.key, required this.base64, required this.nickname, this.radius = 20, this.background});
+  /// Зелёная точка «в сети» (друзья, см. ChatPresence).
+  final bool online;
+
+  const ChatAvatar(
+      {super.key, required this.base64, required this.nickname, this.radius = 20, this.background, this.online = false});
+
+  /// Декодированные фото — чтобы аватар не перегружался (и не мигал) на каждой перестройке.
+  static final Map<String, MemoryImage> _cache = {};
 
   @override
   Widget build(BuildContext context) {
+    final avatar = _avatar();
+    if (!online) return avatar;
+    final d = (radius * 0.55).clamp(9.0, 16.0);
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        avatar,
+        Positioned(
+          right: -1,
+          bottom: -1,
+          child: Container(
+            width: d,
+            height: d,
+            decoration: BoxDecoration(
+              color: const Color(0xFF3DDC84),
+              shape: BoxShape.circle,
+              border: Border.all(color: Theme.of(context).colorScheme.surface, width: 2),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _avatar() {
     final b64 = base64;
     if (b64 != null && b64.isNotEmpty) {
       try {
-        return CircleAvatar(radius: radius, backgroundImage: MemoryImage(base64Decode(b64)));
+        if (_cache.length > 200) _cache.clear();
+        final img = _cache[b64] ??= MemoryImage(base64Decode(b64));
+        return CircleAvatar(radius: radius, backgroundImage: img);
       } catch (_) {
         // битые данные — падаем на плейсхолдер ниже
       }

@@ -33,6 +33,15 @@ class ChatMessagesRepository {
     );
   }
 
+  /// Собеседник получил новый id (переезд сервера мессенджера) — переносим
+  /// контакт и всю переписку на него.
+  void moveContact(String oldId, String newId) {
+    db.db.execute('INSERT OR IGNORE INTO chat_contacts (id, nickname, chat_code, avatar_base64, about, kind, group_json, added_at) '
+        'SELECT ?, nickname, chat_code, avatar_base64, about, kind, group_json, added_at FROM chat_contacts WHERE id = ?', [newId, oldId]);
+    db.db.execute('UPDATE chat_local_messages SET contact_id = ? WHERE contact_id = ?', [newId, oldId]);
+    db.db.execute('DELETE FROM chat_contacts WHERE id = ?', [oldId]);
+  }
+
   void deleteContact(String id) {
     db.db.execute('DELETE FROM chat_contacts WHERE id = ?', [id]);
   }

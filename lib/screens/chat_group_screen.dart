@@ -9,7 +9,16 @@ import '../widgets/chat_avatar.dart';
 
 /// Цвета оформления группы (аватар без фото, шапка переписки).
 const List<String> chatGroupColors = [
-  '', '#E53935', '#FB8C00', '#FDD835', '#43A047', '#00897B', '#1E88E5', '#5E35B1', '#D81B60', '#6D4C41',
+  '',
+  '#E53935',
+  '#FB8C00',
+  '#FDD835',
+  '#43A047',
+  '#00897B',
+  '#1E88E5',
+  '#5E35B1',
+  '#D81B60',
+  '#6D4C41',
 ];
 
 String _roleLabel(String role) => switch (role) {
@@ -28,7 +37,16 @@ class ChatGroupEditScreen extends StatefulWidget {
   /// null — новая группа.
   final ChatContact? group;
 
-  const ChatGroupEditScreen({super.key, required this.auth, required this.repo, required this.sync, this.group});
+  /// Уже отмеченные участники новой группы (выделение в «Контактах»).
+  final Set<String> initialMembers;
+
+  const ChatGroupEditScreen(
+      {super.key,
+      required this.auth,
+      required this.repo,
+      required this.sync,
+      this.group,
+      this.initialMembers = const {}});
 
   @override
   State<ChatGroupEditScreen> createState() => _ChatGroupEditScreenState();
@@ -39,7 +57,7 @@ class _ChatGroupEditScreenState extends State<ChatGroupEditScreen> {
   late final _about = TextEditingController(text: widget.group?.about ?? '');
   late String _color = widget.group?.color ?? '';
   late String? _avatar = widget.group?.avatarBase64;
-  final Set<String> _members = {};
+  late final Set<String> _members = {...widget.initialMembers};
   bool _busy = false;
 
   bool get _creating => widget.group == null;
@@ -118,13 +136,15 @@ class _ChatGroupEditScreenState extends State<ChatGroupEditScreen> {
                     radius: 44,
                     background: chatGroupColor(_color),
                   ),
-                  const Positioned(right: 0, bottom: 0, child: CircleAvatar(radius: 14, child: Icon(Icons.photo_camera, size: 16))),
+                  const Positioned(
+                      right: 0, bottom: 0, child: CircleAvatar(radius: 14, child: Icon(Icons.photo_camera, size: 16))),
                 ],
               ),
             ),
           ),
           if (_avatar != null)
-            Center(child: TextButton(onPressed: () => setState(() => _avatar = null), child: const Text('Убрать фото'))),
+            Center(
+                child: TextButton(onPressed: () => setState(() => _avatar = null), child: const Text('Убрать фото'))),
           const SizedBox(height: 12),
           TextField(
             controller: _name,
@@ -190,7 +210,8 @@ class ChatGroupInfoScreen extends StatefulWidget {
   final ChatSyncService sync;
   final ChatContact group;
 
-  const ChatGroupInfoScreen({super.key, required this.auth, required this.repo, required this.sync, required this.group});
+  const ChatGroupInfoScreen(
+      {super.key, required this.auth, required this.repo, required this.sync, required this.group});
 
   @override
   State<ChatGroupInfoScreen> createState() => _ChatGroupInfoScreenState();
@@ -314,8 +335,8 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final members = [..._group.members]
-      ..sort((a, b) => ['owner', 'admin', 'member'].indexOf(a.role).compareTo(['owner', 'admin', 'member'].indexOf(b.role)));
+    final members = [..._group.members]..sort(
+        (a, b) => ['owner', 'admin', 'member'].indexOf(a.role).compareTo(['owner', 'admin', 'member'].indexOf(b.role)));
     return Scaffold(
       appBar: AppBar(
         title: const Text('О группе'),
@@ -326,7 +347,8 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
               tooltip: 'Изменить',
               onPressed: () async {
                 final updated = await Navigator.of(context).push<ChatContact>(MaterialPageRoute(
-                  builder: (_) => ChatGroupEditScreen(auth: widget.auth, repo: widget.repo, sync: widget.sync, group: _group),
+                  builder: (_) =>
+                      ChatGroupEditScreen(auth: widget.auth, repo: widget.repo, sync: widget.sync, group: _group),
                 ));
                 if (updated != null && mounted) setState(() => _group = updated);
               },
@@ -356,7 +378,8 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
           ListTile(
             title: Text('Участники: ${members.length}', style: theme.textTheme.titleSmall),
             trailing: _isAdmin
-                ? IconButton(icon: const Icon(Icons.person_add_alt_outlined), tooltip: 'Добавить', onPressed: _addMembers)
+                ? IconButton(
+                    icon: const Icon(Icons.person_add_alt_outlined), tooltip: 'Добавить', onPressed: _addMembers)
                 : null,
           ),
           for (final m in members)

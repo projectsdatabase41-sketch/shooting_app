@@ -17,6 +17,7 @@ import '../state/ai_chat_view_model.dart';
 import '../state/app_data_store.dart';
 import '../widgets/ai_chart_view.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/glass_pill.dart';
 import '../widgets/raised_3d_button.dart';
 
 /// Чат с ассистентом по результатам стрельбы.
@@ -151,13 +152,15 @@ class _AiChatBodyState extends State<_AiChatBody> {
     if (widget.embedded) return body;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Ассистент'),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text('Ассистент',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
-          IconButton(
+          GlassCircleButton(
             icon: const Icon(Icons.delete_sweep_outlined),
             tooltip: 'Очистить разговор',
-            onPressed: vm.messages.isEmpty ? null : vm.clear,
+            onTap: vm.messages.isEmpty ? null : vm.clear,
           ),
         ],
       ),
@@ -185,7 +188,8 @@ class _AiChatBodyState extends State<_AiChatBody> {
     }
     return ListView.builder(
       controller: _scroll,
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      padding: EdgeInsets.fromLTRB(
+          12, widget.embedded ? 12 : MediaQuery.paddingOf(context).top + GlassHeader.height, 12, 12),
       itemCount: vm.messages.length + (vm.busy ? 1 : 0),
       itemBuilder: (context, i) {
         if (i >= vm.messages.length) return const _TypingBubble();
@@ -362,20 +366,32 @@ class _AiChatBodyState extends State<_AiChatBody> {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Expanded(
-              child: TextField(
-                controller: _input,
-                minLines: 1,
-                maxLines: 4,
-                // Enter — перевод строки, а не отправка (решение
-                // пользователя): сообщение уходит только по кнопке.
-                textInputAction: TextInputAction.newline,
-                decoration: const InputDecoration(hintText: 'Вопрос по стрельбе'),
+              child: GlassPill(
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                child: TextField(
+                  controller: _input,
+                  minLines: 1,
+                  maxLines: 4,
+                  // Enter — перевод строки, а не отправка (решение
+                  // пользователя): сообщение уходит только по кнопке.
+                  textInputAction: TextInputAction.newline,
+                  decoration: const InputDecoration(
+                    hintText: 'Вопрос по стрельбе',
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    filled: false,
+                    contentPadding: EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
               ),
             ),
             const SizedBox(width: 8),
-            IconButton.filled(
-              onPressed: vm.busy ? null : () => _send(vm),
-              icon: const Icon(Icons.send),
+            GlassCircleButton(
+              size: 50,
+              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.85),
+              onTap: vm.busy ? null : () => _send(vm),
+              icon: Icon(Icons.send, color: Theme.of(context).colorScheme.onPrimary),
             ),
           ],
         ),

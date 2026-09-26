@@ -24,6 +24,9 @@ import '../services/supabase_auth_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/chat_avatar.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/glass_pill.dart';
+import '../widgets/emoji_warmup.dart';
+import '../services/chat_presence.dart';
 import 'chat_group_screen.dart';
 import 'chat_people_screen.dart';
 import 'chat_settings_screen.dart';
@@ -33,7 +36,23 @@ import 'chat_thread_screen.dart';
 /// `ChatAuthService`). Главный экран — список собеседников; переписка с
 /// одним контактом открывается отдельным экраном (`ChatThreadScreen`).
 class ChatHomeScreen extends StatefulWidget {
-  const ChatHomeScreen({super.key});
+  /// Мессенджер открыт вкладкой (а не отдельным экраном) — как с неё уйти
+  /// на ту вкладку, что была до него. `null` — просто закрыть свой экран.
+  final VoidCallback? onClose;
+  const ChatHomeScreen({super.key, this.onClose});
+
+  static VoidCallback? _closeActive;
+
+  /// Кнопка «свернуть мессенджер» (в списке чатов и в переписке): закрыть
+  /// все его экраны и вернуться туда, откуда его открыли.
+  static void close(BuildContext context) {
+    final close = _closeActive;
+    if (close != null) {
+      close();
+    } else {
+      Navigator.of(context).popUntil((r) => r.isFirst);
+    }
+  }
 
   @override
   State<ChatHomeScreen> createState() => _ChatHomeScreenState();
@@ -76,7 +95,24 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    ChatHomeScreen._closeActive = () {
+      if (!mounted) return;
+      final nav = Navigator.of(context);
+      nav.popUntil((r) => r == route || r.isFirst);
+      if (widget.onClose != null) {
+        widget.onClose!();
+      } else if (route != null && !route.isFirst) {
+        nav.pop();
+      }
+    };
+  }
+
+  @override
   void dispose() {
+    ChatHomeScreen._closeActive = null;
     _pollLoop?.stop();
     super.dispose();
   }
@@ -90,6 +126,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
     await _sync.syncGroups();
     if (mounted) _reload();
     await _linkCoachesAndAthletes();
+    await _remapStaleContacts();
     final friends = await _auth.listFriends();
     if (friends.isEmpty) return;
     for (final f in friends) {
@@ -101,6 +138,26 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
         about: f.about,
         addedAt: DateTime.now(),
       ));
+    }
+    if (mounted) _reload();
+  }
+
+  /// После переезда сервера мессенджера у всех новые id — контакт, которого
+  /// нет на сервере, ищем по точному нику и, если он один, переносим туда
+  /// переписку. Не нашёлся (ещё не заходил) — попробуем в следующий раз.
+  Future<void> _remapStaleContacts() async {
+    final stale = _repo.listContacts().where((c) => !c.isGroup).toList();
+    if (stale.isEmpty) return;
+    try {
+      final known = await _auth.resolveProfiles([for (final c in stale) c.id]);
+      for (final c in stale.where((c) => !known.containsKey(c.id))) {
+        final found = (await _auth.searchProfiles(c.nickname))
+            .where((p) => p.nickname.toLowerCase() == c.nickname.toLowerCase())
+            .toList();
+        if (found.length == 1 && found.single.userId != c.id) _repo.moveContact(c.id, found.single.userId);
+      }
+    } catch (_) {
+      // сеть — попробуем при следующей синхронизации
     }
     if (mounted) _reload();
   }
@@ -197,6 +254,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
       poller: AdaptivePoller(
           min: const Duration(seconds: 10), max: const Duration(seconds: 60), scale: () => RemoteConfig.pollScale),
       tick: () async {
+        ChatPresence.tick(_auth);
         final added = await _sync.pollIncoming();
         // _reload(), а не голый setState — новое входящее от ещё не
         // добавленного отправителя заводит контакт автоматически (см.
@@ -289,7 +347,7 @@ class _ChatContactsView extends StatelessWidget {
   }
 
   void _openContacts(BuildContext context) => Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => ChatContactsScreen(auth: auth, repo: repo, onOpenThread: onOpenThread),
+        builder: (_) => ChatContactsScreen(auth: auth, repo: repo, sync: sync, prefs: prefs, onOpenThread: onOpenThread),
       ));
 
   void _openDirectory(BuildContext context) => Navigator.of(context).push(MaterialPageRoute(
@@ -318,7 +376,8 @@ class _ChatContactsView extends StatelessWidget {
     // в конце по алфавиту (порядок из repo.listContacts).
     final last = {for (final c in contacts) c.id: repo.lastForContact(c.id)};
     // Здесь — только переписки (и группы); все контакты — в «Контактах».
-    final sorted = contacts.where((c) => c.isGroup || last[c.id] != null).toList()..sort((a, b) {
+    final sorted = contacts.where((c) => c.isGroup || last[c.id] != null).toList()
+      ..sort((a, b) {
         final ta = last[a.id]?.createdAt, tb = last[b.id]?.createdAt;
         if (ta == null && tb == null) return 0;
         if (ta == null) return 1;
@@ -336,7 +395,24 @@ class _ChatContactsView extends StatelessWidget {
           ),
         ));
     return Scaffold(
-      appBar: AppBar(title: const Text('Мессенджер')),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        leading: Builder(
+          builder: (ctx) => GlassCircleButton(
+            icon: const Icon(Icons.menu),
+            tooltip: 'Меню',
+            onTap: () => Scaffold.of(ctx).openDrawer(),
+          ),
+        ),
+        title: Text('Мессенджер', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        actions: [
+          GlassCircleButton(
+            icon: const BoldIcon(Icons.close),
+            tooltip: 'Свернуть мессенджер',
+            onTap: () => ChatHomeScreen.close(context),
+          ),
+        ],
+      ),
       // Шторка слева, как в Telegram: профиль, контакты, настройки.
       drawer: Drawer(
         child: SafeArea(
@@ -414,67 +490,74 @@ class _ChatContactsView extends StatelessWidget {
       ),
       body: Column(
         children: [
+          const EmojiWarmup(),
           Expanded(
             child: sorted.isEmpty
                 ? const EmptyState(
                     icon: Icons.forum_outlined,
                     text: 'Переписок пока нет — откройте шторку слева: «Контакты» или «Все участники»',
                   )
-                : ListView.builder(
-                    itemCount: sorted.length,
-                    itemBuilder: (context, i) {
-                      final c = sorted[i];
-                      final m = last[c.id];
-                      final unread = repo.unreadCount(c.id);
-                      var sub = m != null ? ChatSyncService.previewOf(m) : c.about;
-                      // В группе — кто написал последним.
-                      if (c.isGroup && m != null) {
-                        final who = m.direction == ChatMessageDirection.outgoing
-                            ? 'Вы'
-                            : (c.member(m.senderId ?? '')?.nickname ?? '');
-                        if (who.isNotEmpty) sub = '$who: $sub';
-                      }
-                      return ListTile(
-                        leading: ChatAvatar(
-                          base64: c.avatarBase64,
-                          nickname: c.nickname,
-                          background: c.isGroup ? chatGroupColor(c.color) : null,
-                        ),
-                        title: Row(
-                          children: [
-                            if (c.isGroup) ...[
-                              Icon(Icons.groups_outlined, size: 16, color: theme.hintColor),
-                              const SizedBox(width: 4),
+                : ValueListenableBuilder(
+                    valueListenable: ChatPresence.seen,
+                    builder: (context, _, __) => ListView.builder(
+                      padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + GlassHeader.height),
+                      itemCount: sorted.length,
+                      itemBuilder: (context, i) {
+                        final c = sorted[i];
+                        final m = last[c.id];
+                        final unread = repo.unreadCount(c.id);
+                        var sub = m != null ? ChatSyncService.previewOf(m) : c.about;
+                        // В группе — кто написал последним.
+                        if (c.isGroup && m != null) {
+                          final who = m.direction == ChatMessageDirection.outgoing
+                              ? 'Вы'
+                              : (c.member(m.senderId ?? '')?.nickname ?? '');
+                          if (who.isNotEmpty) sub = '$who: $sub';
+                        }
+                        return ListTile(
+                          leading: ChatAvatar(
+                            base64: c.avatarBase64,
+                            nickname: c.nickname,
+                            background: c.isGroup ? chatGroupColor(c.color) : null,
+                            online: !c.isGroup && ChatPresence.online(c.id),
+                          ),
+                          title: Row(
+                            children: [
+                              if (c.isGroup) ...[
+                                Icon(Icons.groups_outlined, size: 16, color: theme.hintColor),
+                                const SizedBox(width: 4),
+                              ],
+                              Expanded(child: Text(c.nickname, overflow: TextOverflow.ellipsis)),
                             ],
-                            Expanded(child: Text(c.nickname, overflow: TextOverflow.ellipsis)),
-                          ],
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (m != null && c.about.isNotEmpty && !c.isGroup)
-                              Text(c.about,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary)),
-                            if (sub.isNotEmpty) Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis),
-                          ],
-                        ),
-                        trailing: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            if (m != null) Text(_time(m.createdAt), style: theme.textTheme.bodySmall),
-                            if (unread > 0)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: CircleAvatar(radius: 11, child: Text('$unread', style: const TextStyle(fontSize: 11))),
-                              ),
-                          ],
-                        ),
-                        onTap: () => onOpenThread(c),
-                      );
-                    },
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (m != null && c.about.isNotEmpty && !c.isGroup)
+                                Text(c.about,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary)),
+                              if (sub.isNotEmpty) Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis),
+                            ],
+                          ),
+                          trailing: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              if (m != null) Text(_time(m.createdAt), style: theme.textTheme.bodySmall),
+                              if (unread > 0)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: CircleAvatar(
+                                      radius: 11, child: Text('$unread', style: const TextStyle(fontSize: 11))),
+                                ),
+                            ],
+                          ),
+                          onTap: () => onOpenThread(c),
+                        );
+                      },
+                    ),
                   ),
           ),
         ],

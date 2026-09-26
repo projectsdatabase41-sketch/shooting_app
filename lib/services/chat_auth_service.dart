@@ -594,6 +594,20 @@ class ChatAuthService {
     }
   }
 
+  /// Отметиться «в сети» и получить время появления друзей; null — сбой сети.
+  Future<Map<String, DateTime>?> presence() async {
+    try {
+      final rows = await _rpc('chat_presence', {});
+      if (rows is! List) return null;
+      return {
+        for (final r in rows)
+          if (DateTime.tryParse('${r['last_seen']}') case final t?) '${r['user_id']}': t,
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Код контакта собеседника — сервер отдаёт его только другу или
   /// участнику общей группы (sql/chat-contact-code.sql); иначе пусто.
   Future<String> codeOf(String userId) async {

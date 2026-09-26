@@ -37,6 +37,10 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   String _athleteTab = 'target';
   String _coachTab = 'diary';
+
+  /// Вкладка, открытая до мессенджера, — туда его «сворачивает» кнопка
+  /// закрытия (см. ChatHomeScreen.close).
+  String? _beforeMessenger;
   WorkMode? _lastMode;
 
   late final HomeTabsViewModel _athleteTabs;
@@ -197,7 +201,7 @@ class _HomeShellState extends State<HomeShell> {
         'statistics_coach' => const CoachStatisticsScreen(),
         'assistant_coach' => const CoachAiChatScreen(),
         'tasks' => const CoachTasksScreen(),
-        'messenger' => const ChatHomeScreen(),
+        'messenger' => ChatHomeScreen(onClose: tabs.layout == 'tiles' ? null : () => _leaveMessenger(store, isCoach)),
         _ => SettingsScreen(homeTabs: tabs, services: _services),
       };
     }
@@ -210,9 +214,14 @@ class _HomeShellState extends State<HomeShell> {
       // экран»). Тот же экран открывается и из шапки мишени, но там —
       // с контекстом конкретной тренировки.
       'assistant' => const AiChatScreen(),
-      'messenger' => const ChatHomeScreen(),
+      'messenger' => ChatHomeScreen(onClose: tabs.layout == 'tiles' ? null : () => _leaveMessenger(store, isCoach)),
       _ => SettingsScreen(homeTabs: tabs, services: _services),
     };
+  }
+
+  void _leaveMessenger(AppDataStore store, bool isCoach) {
+    final back = _beforeMessenger ?? (isCoach ? 'diary' : 'target');
+    _onDestinationSelected(context, store, isCoach, back == 'messenger' ? (isCoach ? 'diary' : 'target') : back);
   }
 
   /// Переключение нижней вкладки — не Navigator.pop, поэтому PopScope
@@ -230,6 +239,7 @@ class _HomeShellState extends State<HomeShell> {
       if (keep == null) return; // остаёмся на текущей вкладке
       store.resolvePendingFinishedEdit?.call(keep: keep);
     }
+    if (id == 'messenger' && current != 'messenger') _beforeMessenger = current;
     setState(() {
       if (isCoach) {
         _coachTab = id;

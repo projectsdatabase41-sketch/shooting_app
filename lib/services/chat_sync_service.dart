@@ -424,7 +424,7 @@ class ChatSyncService {
           )
           .timeout(_timeout);
       if (res.statusCode >= 300) {
-        throw Exception('Сервер ответил ${res.statusCode}: ${res.body}');
+        throw Exception(_sendError(res.statusCode, res.body));
       }
       repo.updateStatus(message.id, ChatMessageStatus.sent);
     } catch (e) {
@@ -488,7 +488,7 @@ class ChatSyncService {
             )
             .timeout(_timeout);
         if (res.statusCode >= 300) {
-          throw Exception('Сервер ответил ${res.statusCode}: ${res.body}');
+          throw Exception(_sendError(res.statusCode, res.body));
         }
         repo.updateStatus(message.id, ChatMessageStatus.sent);
       } finally {
@@ -775,4 +775,11 @@ class ChatSyncService {
         )
         .timeout(_timeout);
   }
+
+  /// 23503 — получателя нет на сервере: контакт остался со старого сервера
+  /// мессенджера, а собеседник ещё не открывал обновлённое приложение.
+  static String _sendError(int status, String body) => body.contains('23503')
+      ? 'Собеседник ещё не заходил в обновлённый мессенджер. Как только он откроет приложение, контакт обновится сам.'
+      : 'Сервер ответил $status: $body';
+
 }

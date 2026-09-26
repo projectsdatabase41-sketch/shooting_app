@@ -446,7 +446,11 @@ class _PhotoGridState extends State<_PhotoGrid> {
                   crossAxisSpacing: 1,
                 ),
                 itemCount: widget.photos.length,
-                itemBuilder: (_, i) => image(widget.photos[i], BoxFit.cover),
+                // Фото целиком, без обрезки по квадрату (решение пользователя).
+                itemBuilder: (_, i) => ColoredBox(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  child: image(widget.photos[i], BoxFit.contain),
+                ),
               ),
       ),
     );

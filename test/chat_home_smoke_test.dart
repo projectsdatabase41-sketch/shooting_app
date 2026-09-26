@@ -42,7 +42,7 @@ void main() {
     expect(find.text('Иван Петров'), findsOneWidget);
     expect(find.text('Без истории'), findsNothing); // на главном — только переписки
     // шторка слева → Контакты
-    await tester.tap(find.byTooltip('Open navigation menu'));
+    await tester.tap(find.byTooltip('Меню'));
     await tester.pumpAndSettle();
     expect(find.text('Код: AAAA-BBBB'), findsOneWidget);
     await tester.tap(find.text('Контакты'));
