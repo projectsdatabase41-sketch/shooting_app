@@ -58,6 +58,7 @@ class AiSettings {
   static const String keyApiBaseUrl = 'ai_api_base_url';
   static const String keyLocalMode = 'ai_local_mode';
   static const String keyLocalModel = 'ai_local_model';
+  static const String keyVisionModel = 'ai_vision_model';
 
   /// Все ключи ИИ — чтобы «сбросить все цвета» их не снесло.
   static const List<String> allKeys = [
@@ -83,6 +84,11 @@ class AiSettings {
   /// id из `localModelCatalog`.
   String get localModelId => _read(keyLocalModel);
   set localModelId(String v) => _write(keyLocalModel, v);
+
+  /// id из `visionModelCatalog` — распознавание пробоин по фото (отдельно
+  /// от текстовой локальной модели).
+  String get visionModelId => _read(keyVisionModel);
+  set visionModelId(String v) => _write(keyVisionModel, v);
 
   String get apiBaseUrl => _read(keyApiBaseUrl, fallback: defaultApiBaseUrl);
   set apiBaseUrl(String v) => _write(keyApiBaseUrl, v.trim().replaceAll(RegExp(r'/+$'), ''));

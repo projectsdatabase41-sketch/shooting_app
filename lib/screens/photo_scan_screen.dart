@@ -5,11 +5,15 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show compute, defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
+import 'package:provider/provider.dart';
 
+import '../local_ai/local_vision.dart';
 import '../logic/scoring.dart';
 import '../logic/shot_photo_detection.dart';
 import '../models/target_face.dart';
+import '../services/ai_settings.dart';
 import '../services/shot_photo_service.dart';
+import '../state/app_data_store.dart';
 import 'camera_scan_screen.dart';
 
 /// Функции для `compute()` — обязаны быть верхнеуровневыми: изолят видит
@@ -262,6 +266,20 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
       _busy = true;
       _error = null;
     });
+    // Режим разработчика + скачанная модель «со зрением» — пробоины ищет она
+    // (обычный алгоритм путает цифры колец с пробоинами). Сбой — алгоритм.
+    final vision = await LocalVision.active(AiSettings(context.read<AppDataStore>().db));
+    if (vision != null) {
+      try {
+        await _runVision(vision, decoded, center);
+        return;
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text('ИИ-зрение не сработало ($e) — ищет обычный алгоритм')));
+        }
+      }
+    }
     try {
       final analyzed = ShotPhotoService.analyze(decoded);
       final s = analyzed.scale;
@@ -311,6 +329,34 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
         _error = '$e';
       });
     }
+  }
+
+  /// Квадрат вокруг откалиброванного круга → модель → точки обратно в
+  /// пиксели исходного фото. Вне круга мишени (с запасом 5%) — отбрасываем.
+  Future<void> _runVision(VisionModelInfo m, img.Image decoded, Offset center) async {
+    final half = math.max(_calibRx, _calibRy) * 1.1;
+    final x0 = (center.dx - half).clamp(0, decoded.width - 1).floor();
+    final y0 = (center.dy - half).clamp(0, decoded.height - 1).floor();
+    final x1 = (center.dx + half).clamp(1, decoded.width).ceil();
+    final y1 = (center.dy + half).clamp(1, decoded.height).ceil();
+    final crop = img.copyCrop(decoded, x: x0, y: y0, width: x1 - x0, height: y1 - y0);
+    final square = img.copyResize(crop, width: LocalVision.side, height: LocalVision.side);
+    final jpeg = Uint8List.fromList(img.encodeJpg(square, quality: 90));
+    final points = await LocalVision.instance.findHoles(m, jpeg);
+    final sx = (x1 - x0) / LocalVision.side, sy = (y1 - y0) / LocalVision.side;
+    final maxR = math.max(_calibRx, _calibRy) * 1.05;
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _candidates = [
+        for (final p in points)
+          if ((Offset(x0 + p.dx * sx, y0 + p.dy * sy) - center).distance <= maxR)
+            Offset(x0 + p.dx * sx, y0 + p.dy * sy),
+      ];
+      if (_candidates.isEmpty) {
+        _error = 'ИИ не нашёл пробоин. Можно подровнять круг или добавить точку вручную кнопкой ниже.';
+      }
+    });
   }
 
   PixelPoint _toMm(Offset px) => pixelToMmEllipse(
@@ -379,8 +425,7 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
 
   Widget _buildRunningList() {
     final labels = [
-      for (final p in _confirmedMm)
-        scoreForRadius(math.sqrt(p.x * p.x + p.y * p.y), widget.face).toStringAsFixed(1),
+      for (final p in _confirmedMm) scoreForRadius(math.sqrt(p.x * p.x + p.y * p.y), widget.face).toStringAsFixed(1),
     ];
     return SafeArea(
       top: false,
@@ -567,8 +612,7 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
   /// открывается заново, как в первый раз (решение пользователя: кнопка
   /// повторного поиска на том же снимке была почти бесполезна, если
   /// сам снимок неудачный).
-  Future<void> _retakePhoto() =>
-      _cameraAvailable ? _openCamera() : _pick();
+  Future<void> _retakePhoto() => _cameraAvailable ? _openCamera() : _pick();
 
   Widget _buildCountSelector() {
     return Padding(
@@ -679,83 +723,100 @@ class _ReviewOverlay extends StatelessWidget {
         if (details.pointerCount >= 2) onPinchStart();
       },
       child: Stack(
-      fit: StackFit.expand,
-      children: [
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapUp: addMode ? (details) => onCandidateAdded(details.localPosition / displayScale) : null,
-          onPanUpdate: addMode
-              ? null
-              : (details) {
-                  final local = details.localPosition;
-                  final distA = (local - handleA).distance;
-                  final distB = (local - handleB).distance;
-                  if (distA <= _handleHitRadius && distA <= distB) {
-                    final v = (local - displayCenter) / displayScale;
-                    final newRx = v.distance.clamp(10, 5000).toDouble();
-                    onCalibrationChanged(center, newRx, radiusY, math.atan2(v.dy, v.dx));
-                  } else if (distB <= _handleHitRadius) {
-                    final v = (local - displayCenter) / displayScale;
-                    final projected = v.dx * perp.dx + v.dy * perp.dy;
-                    final newRy = projected.abs().clamp(10, 5000).toDouble();
-                    onCalibrationChanged(center, radiusX, newRy, angle);
-                  } else {
-                    onCalibrationChanged(center + details.delta / displayScale, radiusX, radiusY, angle);
-                  }
-                },
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // Чёрно-белое — только для показа: контур калибровки и
-              // найденные точки читаются на контрасте заметно лучше,
-              // чем на цветном снимке (блики, оттенок бумаги), а сам
-              // разбор и так всегда шёл по градациям серого.
-              ColorFiltered(
-                colorFilter: const ColorFilter.matrix(<double>[
-                  0.2126, 0.7152, 0.0722, 0, 0,
-                  0.2126, 0.7152, 0.0722, 0, 0,
-                  0.2126, 0.7152, 0.0722, 0, 0,
-                  0, 0, 0, 1, 0,
-                ]),
-                child: Image.memory(bytes, fit: BoxFit.fill),
-              ),
-              CustomPaint(
-                painter: _CalibrationPainter(center: displayCenter, radiusX: displayRx, radiusY: displayRy, angle: angle),
-              ),
-            ],
-          ),
-        ),
-        for (var i = 0; i < candidates.length; i++)
-          Builder(builder: (context) {
-            final dotRadius = holeRadiusPx * displayScale;
-            final hitRadius = math.max(dotRadius, _minTapRadius);
-            return Positioned(
-              left: candidates[i].dx * displayScale - hitRadius,
-              top: candidates[i].dy * displayScale - hitRadius,
-              width: hitRadius * 2,
-              height: hitRadius * 2,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => onCandidateRemoved(i),
-                onPanUpdate: (details) => onCandidateMoved(
-                  i,
-                  candidates[i] + details.delta / displayScale,
+        fit: StackFit.expand,
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapUp: addMode ? (details) => onCandidateAdded(details.localPosition / displayScale) : null,
+            onPanUpdate: addMode
+                ? null
+                : (details) {
+                    final local = details.localPosition;
+                    final distA = (local - handleA).distance;
+                    final distB = (local - handleB).distance;
+                    if (distA <= _handleHitRadius && distA <= distB) {
+                      final v = (local - displayCenter) / displayScale;
+                      final newRx = v.distance.clamp(10, 5000).toDouble();
+                      onCalibrationChanged(center, newRx, radiusY, math.atan2(v.dy, v.dx));
+                    } else if (distB <= _handleHitRadius) {
+                      final v = (local - displayCenter) / displayScale;
+                      final projected = v.dx * perp.dx + v.dy * perp.dy;
+                      final newRy = projected.abs().clamp(10, 5000).toDouble();
+                      onCalibrationChanged(center, radiusX, newRy, angle);
+                    } else {
+                      onCalibrationChanged(center + details.delta / displayScale, radiusX, radiusY, angle);
+                    }
+                  },
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Чёрно-белое — только для показа: контур калибровки и
+                // найденные точки читаются на контрасте заметно лучше,
+                // чем на цветном снимке (блики, оттенок бумаги), а сам
+                // разбор и так всегда шёл по градациям серого.
+                ColorFiltered(
+                  colorFilter: const ColorFilter.matrix(<double>[
+                    0.2126,
+                    0.7152,
+                    0.0722,
+                    0,
+                    0,
+                    0.2126,
+                    0.7152,
+                    0.0722,
+                    0,
+                    0,
+                    0.2126,
+                    0.7152,
+                    0.0722,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    1,
+                    0,
+                  ]),
+                  child: Image.memory(bytes, fit: BoxFit.fill),
                 ),
-                child: Center(
-                  child: Container(
-                    width: dotRadius * 2,
-                    height: dotRadius * 2,
-                    decoration: BoxDecoration(
-                      color: Colors.redAccent.withValues(alpha: 0.85),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
+                CustomPaint(
+                  painter:
+                      _CalibrationPainter(center: displayCenter, radiusX: displayRx, radiusY: displayRy, angle: angle),
+                ),
+              ],
+            ),
+          ),
+          for (var i = 0; i < candidates.length; i++)
+            Builder(builder: (context) {
+              final dotRadius = holeRadiusPx * displayScale;
+              final hitRadius = math.max(dotRadius, _minTapRadius);
+              return Positioned(
+                left: candidates[i].dx * displayScale - hitRadius,
+                top: candidates[i].dy * displayScale - hitRadius,
+                width: hitRadius * 2,
+                height: hitRadius * 2,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onCandidateRemoved(i),
+                  onPanUpdate: (details) => onCandidateMoved(
+                    i,
+                    candidates[i] + details.delta / displayScale,
+                  ),
+                  child: Center(
+                    child: Container(
+                      width: dotRadius * 2,
+                      height: dotRadius * 2,
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent.withValues(alpha: 0.85),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            );
-          }),
-      ],
+              );
+            }),
+        ],
       ),
     );
   }

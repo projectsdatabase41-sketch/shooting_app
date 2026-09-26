@@ -1,4 +1,5 @@
 import '../local_ai/local_ai_screen.dart';
+import '../local_ai/vision_ai_screen.dart';
 import '../state/personalization_view_model.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -52,8 +53,8 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     _ownKey = _settings.hasOwnKey;
     _key = TextEditingController(text: _ownKey ? _settings.apiKey : '');
     // Адрес по умолчанию не показываем — пустое поле = встроенный сервис.
-    _apiBaseUrl = TextEditingController(
-        text: _settings.apiBaseUrl == AiSettings.defaultApiBaseUrl ? '' : _settings.apiBaseUrl);
+    _apiBaseUrl =
+        TextEditingController(text: _settings.apiBaseUrl == AiSettings.defaultApiBaseUrl ? '' : _settings.apiBaseUrl);
     // Со своим ключом поле цепочки стартует ПУСТЫМ, если пользователь
     // ещё ничего не вводил — не подставляем модели, подобранные под
     // встроенный бесплатный ключ, это разные наборы задач/ограничений.
@@ -73,9 +74,8 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
   /// Со встроенным ключом предел заметно уже — экран использует ЭТОТ
   /// геттер (не `_settings.customInstructionsLimit`), чтобы предел в UI
   /// менялся сразу при переключении сегмента, не дожидаясь "Сохранить".
-  int get _customInstructionsLimit => _ownKey
-      ? AiSettings.customInstructionsLimitOwnKey
-      : AiSettings.customInstructionsLimitBuiltIn;
+  int get _customInstructionsLimit =>
+      _ownKey ? AiSettings.customInstructionsLimitOwnKey : AiSettings.customInstructionsLimitBuiltIn;
 
   void _save() {
     _settings.apiKey = _ownKey ? _key.text : '';
@@ -113,11 +113,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     // Проверяем то, что сейчас в поле, даже если пользователь ещё не
     // нажал «Сохранить» — иначе проверка идёт не по тому списку,
     // который человек видит перед собой.
-    final list = _models.text
-        .split('\n')
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
+    final list = _models.text.split('\n').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
     if (list.isEmpty) return;
 
     setState(() {
@@ -142,8 +138,14 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     // неответившие уходят в конец списка (решение пользователя, пункт 3
     // списка правок) — так цепочка сама чинится по итогам проверки, а не
     // только показывает, что где-то что-то не отвечает.
-    final working = [for (final m in list) if (_probeOk(_probe[m] ?? '')) m];
-    final failing = [for (final m in list) if (!_probeOk(_probe[m] ?? '')) m];
+    final working = [
+      for (final m in list)
+        if (_probeOk(_probe[m] ?? '')) m
+    ];
+    final failing = [
+      for (final m in list)
+        if (!_probeOk(_probe[m] ?? '')) m
+    ];
     setState(() {
       _models.text = [...working, ...failing].join('\n');
       _probing = false;
@@ -180,11 +182,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
           ),
         ],
       );
-      final ranked = reply.text
-          .split('\n')
-          .map((l) => l.trim())
-          .where(free.contains)
-          .toList();
+      final ranked = reply.text.split('\n').map((l) => l.trim()).where(free.contains).toList();
       if (ranked.isEmpty) throw const AiException('Не удалось разобрать ответ моделей — попробуйте ещё раз');
       _settings.models = ranked;
       setState(() {
@@ -302,14 +300,34 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                 leading: const Icon(Icons.offline_bolt_outlined),
                 title: const Text('Локальная модель (без интернета)'),
                 subtitle: Text(switch (_settings.localMode) {
-                  'tasks' => 'Служебные задачи · ${_settings.localModelId.isEmpty ? 'модель не выбрана' : _settings.localModelId}',
-                  'all' => 'Всё локально · ${_settings.localModelId.isEmpty ? 'модель не выбрана' : _settings.localModelId}',
+                  'tasks' =>
+                    'Служебные задачи · ${_settings.localModelId.isEmpty ? 'модель не выбрана' : _settings.localModelId}',
+                  'all' =>
+                    'Всё локально · ${_settings.localModelId.isEmpty ? 'модель не выбрана' : _settings.localModelId}',
                   _ => 'Выключена',
                 }),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () async {
                   await Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => LocalAiScreen(settings: _settings)),
+                  );
+                  if (mounted) setState(() {});
+                },
+              ),
+            ),
+            // Зрение — отдельно от текстовой локальной модели (решение пользователя).
+            const SizedBox(height: 12),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.visibility_outlined),
+                title: const Text('Распознавание фото (зрение)'),
+                subtitle: Text(_settings.visionModelId.isEmpty
+                    ? 'Выключено — пробоины ищет обычный алгоритм'
+                    : 'Пробоины на фото ищет ${_settings.visionModelId}'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => VisionAiScreen(settings: _settings)),
                   );
                   if (mounted) setState(() {});
                 },
@@ -458,36 +476,36 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             ),
           ],
           if (context.watch<PersonalizationViewModel>().devMode) ...[
-          const SizedBox(height: 24),
-          const SectionHeader(
-            title: 'Справочные материалы',
-            subtitle: 'Книги и правила стрельбы встроены в приложение — подключать вручную не нужно. '
-                'Свои таблицы добавляются в настройках учётной записи.',
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              OutlinedButton.icon(
-                onPressed: _checkingBooks ? null : _checkBooks,
-                icon: _checkingBooks
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.storage_outlined, size: 18),
-                label: const Text('Проверить базу'),
-              ),
-              const SizedBox(width: 10),
-              if (_books != null)
-                Expanded(
-                  child: Text(
-                    _books!.entries.map((e) => '${e.key}: ${e.value}').join(' · '),
-                    style: theme.textTheme.bodySmall,
-                  ),
+            const SizedBox(height: 24),
+            const SectionHeader(
+              title: 'Справочные материалы',
+              subtitle: 'Книги и правила стрельбы встроены в приложение — подключать вручную не нужно. '
+                  'Свои таблицы добавляются в настройках учётной записи.',
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _checkingBooks ? null : _checkBooks,
+                  icon: _checkingBooks
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.storage_outlined, size: 18),
+                  label: const Text('Проверить базу'),
                 ),
-            ],
-          ),
+                const SizedBox(width: 10),
+                if (_books != null)
+                  Expanded(
+                    child: Text(
+                      _books!.entries.map((e) => '${e.key}: ${e.value}').join(' · '),
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+              ],
+            ),
           ],
           if (_message != null) ...[
             const SizedBox(height: 20),
