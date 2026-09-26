@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import 'package:provider/provider.dart';
 
+import '../local_ai/local_ai.dart';
 import '../local_ai/local_ai_catalog.dart';
 import '../local_ai/local_vision.dart';
 import '../logic/scoring.dart';
@@ -117,7 +118,30 @@ class PhotoScanScreen extends StatefulWidget {
   State<PhotoScanScreen> createState() => _PhotoScanScreenState();
 }
 
-class _PhotoScanScreenState extends State<PhotoScanScreen> {
+class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingObserver {
+  /// ИИ смотрит на фото — «назад» и сворачивание прерывают, а не уходят.
+  bool _visionRunning = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    if (_visionRunning) LocalAi.instance.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_visionRunning && (state == AppLifecycleState.paused || state == AppLifecycleState.hidden)) {
+      LocalAi.instance.cancel();
+    }
+  }
+
   Uint8List? _bytes;
   img.Image? _decoded;
   String? _error;
@@ -272,14 +296,26 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
     // (обычный алгоритм путает цифры колец с пробоинами). Сбой — алгоритм.
     final vision = await LocalVision.active(AiSettings(context.read<AppDataStore>().db));
     if (vision != null) {
+      setState(() => _visionRunning = true);
       try {
         await _runVision(vision, decoded, center);
+        return;
+      } on LocalAiCancelled {
+        // Прервали — остаёмся на фото с кругом, дальше вручную.
+        if (mounted) {
+          setState(() {
+            _busy = false;
+            _error = 'Распознавание прервано. Можно поставить точки вручную или снять новое фото.';
+          });
+        }
         return;
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context)
               .showSnackBar(SnackBar(content: Text('ИИ-зрение не сработало ($e) — ищет обычный алгоритм')));
         }
+      } finally {
+        if (mounted) setState(() => _visionRunning = false);
       }
     }
     try {
@@ -418,22 +454,28 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
   @override
   Widget build(BuildContext context) {
     final decoded = _decoded;
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Фото мишени'),
-        actions: [
-          if (_confirmedMm.isNotEmpty)
-            TextButton(
-              onPressed: _finish,
-              child: Text('Готово (${_confirmedMm.length})', style: const TextStyle(color: Colors.white)),
-            ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(child: decoded == null ? _buildPickPrompt() : _buildReview(decoded)),
-          if (_confirmedMm.isNotEmpty) _buildRunningList(),
-        ],
+    return PopScope(
+      canPop: !_visionRunning,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) LocalAi.instance.cancel();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(_visionRunning ? 'ИИ смотрит… (назад — прервать)' : 'Фото мишени'),
+          actions: [
+            if (_confirmedMm.isNotEmpty)
+              TextButton(
+                onPressed: _finish,
+                child: Text('Готово (${_confirmedMm.length})', style: const TextStyle(color: Colors.white)),
+              ),
+          ],
+        ),
+        body: Column(
+          children: [
+            Expanded(child: decoded == null ? _buildPickPrompt() : _buildReview(decoded)),
+            if (_confirmedMm.isNotEmpty) _buildRunningList(),
+          ],
+        ),
       ),
     );
   }

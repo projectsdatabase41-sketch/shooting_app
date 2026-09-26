@@ -58,6 +58,17 @@ class LocalAi {
   LlamaEngine? _engine;
   String? _loadedPath;
   bool _projectorLoaded = false;
+
+  /// Просьба прервать текущую работу со снимком (назад / свернули приложение).
+  bool _cancel = false;
+
+  /// Прервать распознавание: загрузку модели оборвать нельзя, но
+  /// генерация остановится, а ответ придёт ошибкой [LocalAiCancelled].
+  void cancel() {
+    _cancel = true;
+    _engine?.cancelGeneration();
+  }
+
   Future<void> _lock = Future.value();
   Timer? _idle;
 
@@ -177,6 +188,7 @@ class LocalAi {
           _engine = e;
           _loadedPath = r.modelPath;
         }
+        if (r.image != null && _cancel) throw const LocalAiCancelled();
         // Зрение подгружается только когда пришла картинка — для текста не нужно.
         if (r.image != null && !_projectorLoaded) {
           await _engine!.loadMultimodalProjector(p.join(await modelsDir(), r.model.projector!.fileName));
@@ -201,10 +213,12 @@ class LocalAi {
           enableThinking: false,
           responseFormat: r.json ? const {'type': 'json_object'} : null,
         )) {
+          if (r.image != null && _cancel) break;
           if (chunk.choices.isEmpty) continue;
           final t = chunk.choices.first.delta.content;
           if (t != null) out.write(t);
         }
+        if (r.image != null && _cancel) throw const LocalAiCancelled();
         done.complete(out.toString());
       } catch (e, st) {
         done.completeError(e, st);
@@ -219,6 +233,7 @@ class LocalAi {
   Future<String> see(LocalModelInfo model, Uint8List image, String prompt) async {
     final path = await installedPath(model);
     if (path == null || !model.sees) throw StateError('Модель со зрением не скачана');
+    _cancel = false;
     return _generate((
       modelPath: path,
       model: model,
@@ -239,4 +254,11 @@ class LocalAi {
   }
 
   static String _clip(String s, int max) => s.length <= max ? s : '${s.substring(0, max)}…';
+}
+
+/// Распознавание прервали (назад / свернули приложение).
+class LocalAiCancelled implements Exception {
+  const LocalAiCancelled();
+  @override
+  String toString() => 'Распознавание прервано';
 }
