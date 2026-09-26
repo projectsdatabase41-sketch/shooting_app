@@ -16,7 +16,7 @@ class _Downloads {
   static final Map<String, String> stage = {};
 }
 
-/// Настройки локальной модели (режим разработчика): режим работы, выбор и
+/// Настройки локальной модели: режим работы, выбор и
 /// скачивание модели под мощность устройства, проверка, память.
 class LocalAiScreen extends StatefulWidget {
   final AiSettings settings;

@@ -290,9 +290,9 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                   ),
             ),
           ],
-          // Третий вариант — ИИ на самом устройстве (пока только в режиме
-          // разработчика, см. lib/local_ai/).
-          if (context.watch<PersonalizationViewModel>().devMode) ...[
+          // Третий вариант — ИИ на самом устройстве (см. lib/local_ai/);
+          // доступен всем, не только в режиме разработчика (решение пользователя).
+          ...[
             const SizedBox(height: 12),
             Card(
               child: ListTile(

@@ -20,9 +20,8 @@ typedef LocalRequest = ({
 });
 
 /// Локальная модель ИИ (llama.cpp через `llamadart`) — третий вариант
-/// рядом со встроенным и своим ключом. Работает только в режиме
-/// разработчика (решение пользователя: недоделанное прячем, и если не
-/// получится — удаляется папкой `lib/local_ai/`).
+/// рядом со встроенным и своим ключом. Доступна всем (сначала была только
+/// в режиме разработчика); удаляется папкой `lib/local_ai/`.
 ///
 /// Режимы (`AiSettings.localMode`):
 /// * `off` — как раньше, только облако;
@@ -62,11 +61,6 @@ class LocalAi {
   Future<void> _lock = Future.value();
   Timer? _idle;
 
-  static bool _devMode(AiSettings s) {
-    final rows = s.db.db.select("SELECT hex FROM color_prefs WHERE key = 'dev_mode_enabled'");
-    return rows.isNotEmpty && rows.first['hex'] == '1';
-  }
-
   /// Установлен ли файл выбранной модели целиком.
   static Future<String?> installedPath(LocalModelInfo m) async {
     if (!localAiSupported) return null;
@@ -78,7 +72,7 @@ class LocalAi {
   }
 
   bool wants(AiSettings s, String? task) {
-    if (task == null || !localAiSupported || !_devMode(s)) return false;
+    if (task == null || !localAiSupported) return false;
     return switch (s.localMode) {
       'all' => true,
       'tasks' => lightTasks.contains(task),
@@ -140,7 +134,7 @@ class LocalAi {
   /// Облако справилось с лёгкой задачей — запоминаем как пример для
   /// локальной модели.
   void learn(AiSettings s, String task, List<({String role, String text})> history, String output) {
-    if (!lightTasks.contains(task) || !_devMode(s)) return;
+    if (!lightTasks.contains(task)) return;
     final lastUser = history.lastWhere((m) => m.role == 'user', orElse: () => (role: 'user', text: '')).text;
     if (lastUser.isEmpty) return;
     try {

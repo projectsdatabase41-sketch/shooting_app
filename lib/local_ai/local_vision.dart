@@ -9,7 +9,7 @@ import 'local_ai_catalog.dart';
 import 'local_ai_platform.dart';
 
 /// Поиск пробоин на фото мишени выбранной локальной моделью «со зрением»
-/// (режим разработчика). Отдельной модели нет: та же, что отвечает в
+/// Отдельной модели нет: та же, что отвечает в
 /// диалогах, если у неё есть проектор изображений (`LocalModelInfo.sees`).
 class LocalVision {
   LocalVision._();
@@ -19,14 +19,9 @@ class LocalVision {
   /// из ответа остаются в этой же сетке.
   static const int side = 896;
 
-  static bool _devMode(AiSettings s) {
-    final rows = s.db.db.select("SELECT hex FROM color_prefs WHERE key = 'dev_mode_enabled'");
-    return rows.isNotEmpty && rows.first['hex'] == '1';
-  }
-
   /// Выбранная локальная модель, если она видит фото и скачана; иначе null.
   static Future<LocalModelInfo?> active(AiSettings s) async {
-    if (!localAiSupported || !_devMode(s)) return null;
+    if (!localAiSupported) return null;
     final m = localModelById(s.localModelId);
     if (m == null || !m.sees || await LocalAi.installedPath(m) == null) return null;
     return m;
