@@ -927,6 +927,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                                   return Column(children: [_dayChip(m.createdAt), item]);
                                 },
                               ),
+                        // Лента уходит под шапку и поле ввода с мягким затемнением.
+                        Positioned.fill(
+                          child: EdgeShade(top: _selecting ? 0 : topInset + 16, bottom: _barHeight + 24),
+                        ),
                         Positioned(
                           right: 12,
                           bottom: _barHeight + 12,

@@ -347,7 +347,8 @@ class _ChatContactsView extends StatelessWidget {
   }
 
   void _openContacts(BuildContext context) => Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => ChatContactsScreen(auth: auth, repo: repo, sync: sync, prefs: prefs, onOpenThread: onOpenThread),
+        builder: (_) =>
+            ChatContactsScreen(auth: auth, repo: repo, sync: sync, prefs: prefs, onOpenThread: onOpenThread),
       ));
 
   void _openDirectory(BuildContext context) => Navigator.of(context).push(MaterialPageRoute(
@@ -488,81 +489,90 @@ class _ChatContactsView extends StatelessWidget {
           ),
         ),
       ),
-      body: Column(
+      body: Stack(
         children: [
-          const EmojiWarmup(),
-          Expanded(
-            child: sorted.isEmpty
-                ? const EmptyState(
-                    icon: Icons.forum_outlined,
-                    text: 'Переписок пока нет — откройте шторку слева: «Контакты» или «Все участники»',
-                  )
-                : ValueListenableBuilder(
-                    valueListenable: ChatPresence.seen,
-                    builder: (context, _, __) => ListView.builder(
-                      // Контекст здесь внутри тела Scaffold — высота шапки уже в padding.top.
-                      padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top),
-                      itemCount: sorted.length,
-                      itemBuilder: (context, i) {
-                        final c = sorted[i];
-                        final m = last[c.id];
-                        final unread = repo.unreadCount(c.id);
-                        var sub = m != null ? ChatSyncService.previewOf(m) : c.about;
-                        // В группе — кто написал последним.
-                        if (c.isGroup && m != null) {
-                          final who = m.direction == ChatMessageDirection.outgoing
-                              ? 'Вы'
-                              : (c.member(m.senderId ?? '')?.nickname ?? '');
-                          if (who.isNotEmpty) sub = '$who: $sub';
-                        }
-                        return ListTile(
-                          // Ниже стандартной строки на ~15% (решение пользователя).
-                          visualDensity: const VisualDensity(vertical: -1),
-                          minVerticalPadding: 2,
-                          leading: ChatAvatar(
-                            base64: c.avatarBase64,
-                            nickname: c.nickname,
-                            background: c.isGroup ? chatGroupColor(c.color) : null,
-                            online: !c.isGroup && ChatPresence.online(c.id),
-                          ),
-                          title: Row(
-                            children: [
-                              if (c.isGroup) ...[
-                                Icon(Icons.groups_outlined, size: 16, color: theme.hintColor),
-                                const SizedBox(width: 4),
-                              ],
-                              Expanded(child: Text(c.nickname, overflow: TextOverflow.ellipsis)),
-                            ],
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (m != null && c.about.isNotEmpty && !c.isGroup)
-                                Text(c.about,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary)),
-                              if (sub.isNotEmpty) Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis),
-                            ],
-                          ),
-                          trailing: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              if (m != null) Text(_time(m.createdAt), style: theme.textTheme.bodySmall),
-                              if (unread > 0)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 4),
-                                  child: CircleAvatar(
-                                      radius: 11, child: Text('$unread', style: const TextStyle(fontSize: 11))),
+          Positioned.fill(
+            child: Column(
+              children: [
+                const EmojiWarmup(),
+                Expanded(
+                  child: sorted.isEmpty
+                      ? const EmptyState(
+                          icon: Icons.forum_outlined,
+                          text: 'Переписок пока нет — откройте шторку слева: «Контакты» или «Все участники»',
+                        )
+                      : ValueListenableBuilder(
+                          valueListenable: ChatPresence.seen,
+                          builder: (context, _, __) => ListView.builder(
+                            // Контекст здесь внутри тела Scaffold — высота шапки уже в padding.top.
+                            padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top),
+                            itemCount: sorted.length,
+                            itemBuilder: (context, i) {
+                              final c = sorted[i];
+                              final m = last[c.id];
+                              final unread = repo.unreadCount(c.id);
+                              var sub = m != null ? ChatSyncService.previewOf(m) : c.about;
+                              // В группе — кто написал последним.
+                              if (c.isGroup && m != null) {
+                                final who = m.direction == ChatMessageDirection.outgoing
+                                    ? 'Вы'
+                                    : (c.member(m.senderId ?? '')?.nickname ?? '');
+                                if (who.isNotEmpty) sub = '$who: $sub';
+                              }
+                              return ListTile(
+                                // Ниже стандартной строки на ~15% (решение пользователя).
+                                visualDensity: const VisualDensity(vertical: -1),
+                                minVerticalPadding: 2,
+                                leading: ChatAvatar(
+                                  base64: c.avatarBase64,
+                                  nickname: c.nickname,
+                                  background: c.isGroup ? chatGroupColor(c.color) : null,
+                                  online: !c.isGroup && ChatPresence.online(c.id),
                                 ),
-                            ],
+                                title: Row(
+                                  children: [
+                                    if (c.isGroup) ...[
+                                      Icon(Icons.groups_outlined, size: 16, color: theme.hintColor),
+                                      const SizedBox(width: 4),
+                                    ],
+                                    Expanded(child: Text(c.nickname, overflow: TextOverflow.ellipsis)),
+                                  ],
+                                ),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (m != null && c.about.isNotEmpty && !c.isGroup)
+                                      Text(c.about,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary)),
+                                    if (sub.isNotEmpty) Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  ],
+                                ),
+                                trailing: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    if (m != null) Text(_time(m.createdAt), style: theme.textTheme.bodySmall),
+                                    if (unread > 0)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 4),
+                                        child: CircleAvatar(
+                                            radius: 11, child: Text('$unread', style: const TextStyle(fontSize: 11))),
+                                      ),
+                                  ],
+                                ),
+                                onTap: () => onOpenThread(c),
+                              );
+                            },
                           ),
-                          onTap: () => onOpenThread(c),
-                        );
-                      },
-                    ),
-                  ),
+                        ),
+                ),
+              ],
+            ),
+          ),
+          Positioned.fill(
+            child: EdgeShade(top: MediaQuery.paddingOf(context).top + GlassHeader.height + 16),
           ),
         ],
       ),

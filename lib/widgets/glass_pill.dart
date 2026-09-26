@@ -158,3 +158,37 @@ class GlassHeader extends StatelessWidget implements PreferredSizeWidget {
     );
   }
 }
+
+/// Мягкое затемнение краёв ленты под стеклянной шапкой и полем ввода —
+/// содержимое уходит под них плавно, а не обрывается. Класть в Stack
+/// поверх ленты (Positioned.fill), касаний не перехватывает.
+class EdgeShade extends StatelessWidget {
+  final double top;
+  final double bottom;
+  const EdgeShade({super.key, this.top = 0, this.bottom = 0});
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final shade = Colors.black.withValues(alpha: dark ? 0.55 : 0.28);
+    Widget band(double h, Alignment from) => Container(
+          height: h,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: from,
+              end: -from,
+              colors: [shade, shade.withValues(alpha: 0)],
+            ),
+          ),
+        );
+    return IgnorePointer(
+      child: Column(
+        children: [
+          if (top > 0) band(top, Alignment.topCenter),
+          const Spacer(),
+          if (bottom > 0) band(bottom, Alignment.bottomCenter),
+        ],
+      ),
+    );
+  }
+}

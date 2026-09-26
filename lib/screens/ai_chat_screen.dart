@@ -83,8 +83,7 @@ class AiChatScreen extends StatelessWidget {
           // Код в подпись обязательно: пользователь спрашивает
           // «а по упражнению 234», и это именно код, а не название.
           // Без него модель просто не находит, о чём речь.
-          exerciseNameOf: exerciseNameOfOverride ??
-              (s) => store.exerciseFor(s)?.label ?? 'без упражнения',
+          exerciseNameOf: exerciseNameOfOverride ?? (s) => store.exerciseFor(s)?.label ?? 'без упражнения',
           coachMode: coachMode,
         ));
     return _AiChatBody(embedded: embedded, coachMode: coachMode);
@@ -144,7 +143,18 @@ class _AiChatBodyState extends State<_AiChatBody> {
     // сообщениях, так что вторая страница только дублировала их.
     final body = Column(
       children: [
-        Expanded(child: _buildChat(vm)),
+        Expanded(
+          child: widget.embedded
+              ? _buildChat(vm)
+              : Stack(
+                  children: [
+                    Positioned.fill(child: _buildChat(vm)),
+                    Positioned.fill(
+                      child: EdgeShade(top: MediaQuery.paddingOf(context).top + GlassHeader.height + 16),
+                    ),
+                  ],
+                ),
+        ),
         _buildInput(vm),
       ],
     );
@@ -154,8 +164,7 @@ class _AiChatBodyState extends State<_AiChatBody> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
-        title: Text('Ассистент',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        title: Text('Ассистент', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
           GlassCircleButton(
             icon: const Icon(Icons.delete_sweep_outlined),
@@ -220,15 +229,11 @@ class _AiChatBodyState extends State<_AiChatBody> {
           onDelete: vm.busy
               ? null
               : () => vm.removeFrom(!message.fromUser && i > 0 && vm.messages[i - 1].fromUser ? i - 1 : i),
-          onCreateExercise: (message.exercise != null && !message.exerciseCreated)
-              ? () => _createExercise(context, vm, i)
-              : null,
-          onSaveNote: (message.note != null && !message.noteCreated)
-              ? () => _saveNote(context, vm, i)
-              : null,
-          onSendFeedback: (message.feedback != null && !message.feedbackSent)
-              ? () => _sendFeedback(context, vm, i)
-              : null,
+          onCreateExercise:
+              (message.exercise != null && !message.exerciseCreated) ? () => _createExercise(context, vm, i) : null,
+          onSaveNote: (message.note != null && !message.noteCreated) ? () => _saveNote(context, vm, i) : null,
+          onSendFeedback:
+              (message.feedback != null && !message.feedbackSent) ? () => _sendFeedback(context, vm, i) : null,
           chartGallery: message.chart == null ? null : [for (final m in charts) m.chart!],
           chartGalleryIndex: message.chart == null ? 0 : charts.indexOf(message),
         );
@@ -254,9 +259,7 @@ class _AiChatBodyState extends State<_AiChatBody> {
               SeriesSpec(
                 name: '${s['name']}',
                 shotCount: (s['shot_count'] as num?)?.toInt(),
-                timeLimit: s['time_limit_min'] == null
-                    ? null
-                    : Duration(minutes: (s['time_limit_min'] as num).toInt()),
+                timeLimit: s['time_limit_min'] == null ? null : Duration(minutes: (s['time_limit_min'] as num).toInt()),
                 counts: s['counts'] != false,
               ),
           ]
@@ -356,8 +359,7 @@ class _AiChatBodyState extends State<_AiChatBody> {
     // об этом заботится AnimatedPadding вокруг всего тела в build() —
     // дублировать отступ здесь не нужно (и на вебе `viewInsets` к тому
     // же не всегда возвращается ровно к нулю после закрытия клавиатуры).
-    final keyboardInset =
-        widget.embedded && !kIsWeb ? MediaQuery.of(context).viewInsets.bottom : 0.0;
+    final keyboardInset = widget.embedded && !kIsWeb ? MediaQuery.of(context).viewInsets.bottom : 0.0;
     return SafeArea(
       top: false,
       child: Padding(
@@ -442,106 +444,100 @@ class _Bubble extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final mine = message.fromUser;
-    final bg = message.isError
-        ? cs.errorContainer
-        : (mine ? cs.primaryContainer : cs.surfaceContainerHigh);
-    final fg = message.isError
-        ? cs.onErrorContainer
-        : (mine ? cs.onPrimaryContainer : cs.onSurface);
+    final bg = message.isError ? cs.errorContainer : (mine ? cs.primaryContainer : cs.surfaceContainerHigh);
+    final fg = message.isError ? cs.onErrorContainer : (mine ? cs.onPrimaryContainer : cs.onSurface);
 
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
-        onLongPress: (onRetry == null && onEdit == null && onDelete == null)
-            ? null
-            : () => _showActions(context),
+        onLongPress: (onRetry == null && onEdit == null && onDelete == null) ? null : () => _showActions(context),
         child: Container(
-        constraints: const BoxConstraints(maxWidth: 560),
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (message.reasoning != null) ...[
-              _ReasoningBlock(text: message.reasoning!, color: fg),
-              const SizedBox(height: 8),
+          constraints: const BoxConstraints(maxWidth: 560),
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (message.reasoning != null) ...[
+                _ReasoningBlock(text: message.reasoning!, color: fg),
+                const SizedBox(height: 8),
+              ],
+              SelectableText(message.text, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
+              if (message.chart != null) ...[
+                const SizedBox(height: 8),
+                AiChartView(
+                  spec: message.chart!,
+                  gallery: chartGallery,
+                  galleryIndex: chartGalleryIndex,
+                ),
+              ],
+              if (message.exercise != null) ...[
+                const SizedBox(height: 8),
+                _ExerciseProposalCard(
+                  spec: message.exercise!,
+                  created: message.exerciseCreated,
+                  onCreate: onCreateExercise,
+                ),
+              ],
+              if (message.note != null) ...[
+                const SizedBox(height: 8),
+                _NoteProposalCard(
+                  spec: message.note!,
+                  created: message.noteCreated,
+                  onSave: onSaveNote,
+                ),
+              ],
+              if (message.feedback != null) ...[
+                const SizedBox(height: 8),
+                _FeedbackProposalCard(
+                  spec: message.feedback!,
+                  sent: message.feedbackSent,
+                  onSend: onSendFeedback,
+                ),
+              ],
+              if (message.sources.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  'Источники: ${message.sources.join(', ')}',
+                  style: theme.textTheme.labelSmall?.copyWith(color: fg.withValues(alpha: 0.75)),
+                ),
+              ],
+              if (message.model != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  message.model!,
+                  style: theme.textTheme.labelSmall?.copyWith(color: fg.withValues(alpha: 0.6)),
+                ),
+              ],
+              // Маленькие кнопки прямо под сообщением об ошибке (решение
+              // пользователя) — не прятать за долгим нажатием то, что
+              // нужно сразу после сбоя ответа.
+              if (message.isError && (onDelete != null || onRetry != null)) ...[
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (onRetry != null)
+                      TextButton.icon(
+                        onPressed: onRetry,
+                        icon: const Icon(Icons.refresh, size: 16),
+                        label: const Text('Повторить'),
+                        style: TextButton.styleFrom(foregroundColor: fg, visualDensity: VisualDensity.compact),
+                      ),
+                    if (onDelete != null)
+                      TextButton.icon(
+                        onPressed: onDelete,
+                        icon: const Icon(Icons.delete_outline, size: 16),
+                        label: const Text('Удалить'),
+                        style: TextButton.styleFrom(foregroundColor: fg, visualDensity: VisualDensity.compact),
+                      ),
+                  ],
+                ),
+              ],
             ],
-            SelectableText(message.text, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
-            if (message.chart != null) ...[
-              const SizedBox(height: 8),
-              AiChartView(
-                spec: message.chart!,
-                gallery: chartGallery,
-                galleryIndex: chartGalleryIndex,
-              ),
-            ],
-            if (message.exercise != null) ...[
-              const SizedBox(height: 8),
-              _ExerciseProposalCard(
-                spec: message.exercise!,
-                created: message.exerciseCreated,
-                onCreate: onCreateExercise,
-              ),
-            ],
-            if (message.note != null) ...[
-              const SizedBox(height: 8),
-              _NoteProposalCard(
-                spec: message.note!,
-                created: message.noteCreated,
-                onSave: onSaveNote,
-              ),
-            ],
-            if (message.feedback != null) ...[
-              const SizedBox(height: 8),
-              _FeedbackProposalCard(
-                spec: message.feedback!,
-                sent: message.feedbackSent,
-                onSend: onSendFeedback,
-              ),
-            ],
-            if (message.sources.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(
-                'Источники: ${message.sources.join(', ')}',
-                style: theme.textTheme.labelSmall?.copyWith(color: fg.withValues(alpha: 0.75)),
-              ),
-            ],
-            if (message.model != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                message.model!,
-                style: theme.textTheme.labelSmall?.copyWith(color: fg.withValues(alpha: 0.6)),
-              ),
-            ],
-            // Маленькие кнопки прямо под сообщением об ошибке (решение
-            // пользователя) — не прятать за долгим нажатием то, что
-            // нужно сразу после сбоя ответа.
-            if (message.isError && (onDelete != null || onRetry != null)) ...[
-              const SizedBox(height: 4),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (onRetry != null)
-                    TextButton.icon(
-                      onPressed: onRetry,
-                      icon: const Icon(Icons.refresh, size: 16),
-                      label: const Text('Повторить'),
-                      style: TextButton.styleFrom(foregroundColor: fg, visualDensity: VisualDensity.compact),
-                    ),
-                  if (onDelete != null)
-                    TextButton.icon(
-                      onPressed: onDelete,
-                      icon: const Icon(Icons.delete_outline, size: 16),
-                      label: const Text('Удалить'),
-                      style: TextButton.styleFrom(foregroundColor: fg, visualDensity: VisualDensity.compact),
-                    ),
-                ],
-              ),
-            ],
-          ],
-        ),
+          ),
         ),
       ),
     );
