@@ -336,13 +336,33 @@ class _ChatContactsView extends StatelessWidget {
     required this.onOpenThread,
   });
 
+  /// Ник и «о себе» сохраняются сами при закрытии шторки (решение
+  /// пользователя — кнопки «Сохранить» нет). Отправляются всегда, без
+  /// сравнения с сохранённым на телефоне: тот мог разойтись с сервером.
   Future<void> _editProfile(BuildContext context) async {
+    final nickname = TextEditingController(text: auth.nickname);
+    final about = TextEditingController(text: auth.about);
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _ProfileSheet(auth: auth),
+      builder: (_) => _ProfileSheet(auth: auth, nickname: nickname, about: about),
     );
+    final nick = nickname.text.trim();
+    final aboutText = about.text;
+    nickname.dispose();
+    about.dispose();
+    if (auth.isSignedIn && nick.isNotEmpty) {
+      try {
+        await auth.updateNickname(nick);
+        await auth.updateAbout(aboutText);
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Профиль не сохранён: ${'$e'.replaceFirst('AuthException: ', '')}')));
+        }
+      }
+    }
     onContactsChanged();
   }
 
@@ -768,7 +788,9 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
 /// пользователя, "настройки профиля" в том же месте, что контакты).
 class _ProfileSheet extends StatefulWidget {
   final ChatAuthService auth;
-  const _ProfileSheet({required this.auth});
+  final TextEditingController nickname;
+  final TextEditingController about;
+  const _ProfileSheet({required this.auth, required this.nickname, required this.about});
 
   @override
   State<_ProfileSheet> createState() => _ProfileSheetState();
@@ -776,53 +798,35 @@ class _ProfileSheet extends StatefulWidget {
 
 class _ProfileSheetState extends State<_ProfileSheet> {
   bool _busy = false;
-  late final TextEditingController _nickname = TextEditingController(text: widget.auth.nickname);
-  late final TextEditingController _about = TextEditingController(text: widget.auth.about);
+  TextEditingController get _nickname => widget.nickname;
+  TextEditingController get _about => widget.about;
 
-  @override
-  void dispose() {
-    _nickname.dispose();
-    _about.dispose();
-    super.dispose();
+  /// Результат последнего сохранения — показывается прямо в шторке:
+  /// снэкбар уходил ПОД неё, и ошибку не было видно («не сохраняется»).
+  String? _status;
+  bool _failed = false;
+
+  Future<void> _run(Future<void> Function() action, String done) async {
+    setState(() {
+      _busy = true;
+      _status = null;
+    });
+    try {
+      await action();
+      _failed = false;
+      _status = done;
+    } catch (e) {
+      _failed = true;
+      _status = '$e'.replaceFirst('AuthException: ', '');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _changeAvatar() async {
     final b64 = await AvatarUtils.pickAndProcess();
     if (b64 == null) return;
-    setState(() => _busy = true);
-    try {
-      await widget.auth.updateAvatar(b64);
-    } catch (_) {
-      // молча — профиль всё равно перечитается при следующем входе
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _saveNickname() async {
-    final value = _nickname.text.trim();
-    if (value.isEmpty || value == widget.auth.nickname) return;
-    setState(() => _busy = true);
-    try {
-      await widget.auth.updateNickname(value);
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _saveAbout() async {
-    final value = _about.text.trim();
-    if (value == widget.auth.about) return;
-    setState(() => _busy = true);
-    try {
-      await widget.auth.updateAbout(value);
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+    await _run(() => widget.auth.updateAvatar(b64), 'Фото обновлено');
   }
 
   @override
@@ -842,23 +846,28 @@ class _ProfileSheetState extends State<_ProfileSheet> {
             const SizedBox(height: 16),
             TextField(
               controller: _nickname,
-              decoration: InputDecoration(
-                labelText: 'Никнейм',
-                suffixIcon: IconButton(icon: const Icon(Icons.check), onPressed: _busy ? null : _saveNickname),
-              ),
-              onSubmitted: (_) => _saveNickname(),
+              decoration: const InputDecoration(labelText: 'Никнейм'),
+              textInputAction: TextInputAction.next,
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _about,
               maxLength: 120,
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 labelText: 'О себе',
                 hintText: 'Клуб, город, дисциплина — чтобы вас узнавали',
-                suffixIcon: IconButton(icon: const Icon(Icons.check), onPressed: _busy ? null : _saveAbout),
               ),
-              onSubmitted: (_) => _saveAbout(),
             ),
+            Text('Сохранится само, когда закроете шторку',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor)),
+            if (_status != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _status!,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: _failed ? Theme.of(context).colorScheme.error : const Color(0xFF3DDC84)),
+              ),
+            ],
             const SizedBox(height: 16),
             const Text('Ваш код контакта — дайте его собеседнику, чтобы он вас добавил'),
             const SizedBox(height: 8),

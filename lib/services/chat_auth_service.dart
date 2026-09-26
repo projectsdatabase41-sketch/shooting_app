@@ -489,36 +489,25 @@ class ChatAuthService {
   /// Меняет никнейм — например, если он достался по умолчанию из почты
   /// (см. комментарий в `signIn`) и пользователь хочет вписать свой.
   Future<void> updateNickname(String value) async {
-    final token = await ensureFreshToken();
-    if (token == null) throw const AuthException('Сначала войдите в чат');
     final trimmed = value.trim();
     if (trimmed.isEmpty) return;
-    final client = clientFactory();
-    try {
-      final res = await client
-          .patch(
-            Uri.parse('$url/rest/v1/chat_profiles?user_id=eq.$userId'),
-            headers: {
-              'apikey': anonKey,
-              'Authorization': 'Bearer $token',
-              'Content-Type': 'application/json',
-              'Prefer': 'return=minimal',
-            },
-            body: jsonEncode({'nickname': trimmed}),
-          )
-          .timeout(const Duration(seconds: 20));
-      if (res.statusCode >= 400) throw AuthException(_message(res.body));
-      _write('chat_nickname', trimmed);
-    } finally {
-      client.close();
-    }
+    await _patchProfile({'nickname': trimmed});
+    _write('chat_nickname', trimmed);
   }
 
   /// Короткая строка о себе (клуб, город, дисциплина) — видна контактам.
   Future<void> updateAbout(String value) async {
-    final token = await ensureFreshToken();
-    if (token == null) throw const AuthException('Сначала войдите в чат');
     final trimmed = value.trim();
+    await _patchProfile({'about': trimmed});
+    _write('chat_about', trimmed);
+  }
+
+  /// Изменение своего профиля. Сервер возвращает изменённую строку: пусто —
+  /// значит профиль не нашёлся (сохранённый вход от другого сервера/аккаунта),
+  /// раньше это проходило молча и ник «не сохранялся».
+  Future<void> _patchProfile(Map<String, dynamic> body) async {
+    final token = await ensureFreshToken();
+    if (token == null) throw const AuthException('Вход в чат устарел — выйдите из чата и войдите снова');
     final client = clientFactory();
     try {
       final res = await client
@@ -528,13 +517,16 @@ class ChatAuthService {
               'apikey': anonKey,
               'Authorization': 'Bearer $token',
               'Content-Type': 'application/json',
-              'Prefer': 'return=minimal',
+              'Prefer': 'return=representation',
             },
-            body: jsonEncode({'about': trimmed}),
+            body: jsonEncode(body),
           )
           .timeout(const Duration(seconds: 20));
       if (res.statusCode >= 400) throw AuthException(_message(res.body));
-      _write('chat_about', trimmed);
+      final rows = jsonDecode(utf8.decode(res.bodyBytes));
+      if (rows is List && rows.isEmpty) {
+        throw const AuthException('Профиль на сервере не найден — выйдите из чата и войдите снова');
+      }
     } finally {
       client.close();
     }
@@ -768,28 +760,10 @@ class ChatAuthService {
 
   /// Обновляет аватар в профиле — не меняет никнейм/код.
   Future<void> updateAvatar(String? base64) async {
-    final token = await ensureFreshToken();
-    if (token == null) throw const AuthException('Сначала войдите в чат');
-    final client = clientFactory();
-    try {
-      final res = await client
-          .patch(
-            Uri.parse('$url/rest/v1/chat_profiles?user_id=eq.$userId'),
-            headers: {
-              'apikey': anonKey,
-              'Authorization': 'Bearer $token',
-              'Content-Type': 'application/json',
-              'Prefer': 'return=minimal',
-            },
-            body: jsonEncode({'avatar_base64': base64}),
-          )
-          .timeout(const Duration(seconds: 20));
-      if (res.statusCode >= 400) throw AuthException(_message(res.body));
-      _write('chat_avatar_base64', base64 ?? '');
-    } finally {
-      client.close();
-    }
+    await _patchProfile({'avatar_base64': base64});
+    _write('chat_avatar_base64', base64 ?? '');
   }
+
 
   // ---- Внутреннее ----
 
