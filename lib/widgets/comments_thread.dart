@@ -7,6 +7,7 @@ import '../models/comment.dart';
 import '../services/comments_repository.dart';
 import '../state/app_data_store.dart';
 import '../state/target_view_model.dart';
+import 'glass_pill.dart';
 
 /// Лента комментариев — НЕ перезаписываемое поле, а лента записей с
 /// автором и временем (раздел 7 ТЗ, часть C.3 логики-спека). Доступна на
@@ -92,6 +93,12 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
   static const _uuid = Uuid();
 
   @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final vm = context.watch<TargetViewModel>();
     final store = context.watch<AppDataStore>();
@@ -147,50 +154,57 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
                     },
                   ),
           ),
-          const Divider(height: 1),
+          // Поле ввода с кнопкой отправки, без «Сохранить»/«Отмена» (решение
+          // пользователя): лента живёт прямо на экране тренировки, и закрытие
+          // по «Сохранить» выкидывало из неё. Отправил — поле очистилось,
+          // остаёмся в переписке.
           Padding(
-            padding: const EdgeInsets.all(8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                TextField(
-                  controller: _controller,
-                  minLines: 1,
-                  maxLines: 4,
-                  decoration: const InputDecoration(hintText: 'Написать комментарий…'),
+                Expanded(
+                  child: GlassPill(
+                    radius: 25,
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    child: TextField(
+                      controller: _controller,
+                      minLines: 1,
+                      maxLines: 4,
+                      decoration: InputDecoration(
+                        hintText: widget.level == CommentLevel.coach ? 'Сообщение тренеру…' : 'Написать комментарий…',
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        filled: false,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 8),
-                // Явные "Сохранить"/"Отмена" вместо одной кнопки-отправки
-                // (решение пользователя) — Отмена просто стирает
-                // черновик, ничего не отправляя.
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Отмена'),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton(
-                      onPressed: () {
-                        if (_controller.text.trim().isEmpty) return;
-                        final comment = Comment(
-                          id: _uuid.v4(),
-                          sessionId: vm.session.id,
-                          level: widget.level,
-                          shotId: widget.level == CommentLevel.shot ? widget.shotId : null,
-                          seriesNo: widget.level == CommentLevel.series ? widget.seriesNo : null,
-                          authorRole: store.workMode == WorkMode.coach ? AuthorRole.coach : AuthorRole.athlete,
-                          text: _controller.text.trim(),
-                          createdAt: DateTime.now(),
-                        );
-                        repo.add(comment);
-                        vm.noteExternalEdit();
-                        Navigator.of(context).pop();
-                      },
-                      child: const Text('Сохранить'),
-                    ),
-                  ],
+                const SizedBox(width: 8),
+                GlassCircleButton(
+                  size: 50,
+                  tooltip: 'Отправить',
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.85),
+                  icon: Icon(Icons.send, color: Theme.of(context).colorScheme.onPrimary),
+                  onTap: () {
+                    final text = _controller.text.trim();
+                    if (text.isEmpty) return;
+                    repo.add(Comment(
+                      id: _uuid.v4(),
+                      sessionId: vm.session.id,
+                      level: widget.level,
+                      shotId: widget.level == CommentLevel.shot ? widget.shotId : null,
+                      seriesNo: widget.level == CommentLevel.series ? widget.seriesNo : null,
+                      authorRole: store.workMode == WorkMode.coach ? AuthorRole.coach : AuthorRole.athlete,
+                      text: text,
+                      createdAt: DateTime.now(),
+                    ));
+                    _controller.clear();
+                    vm.noteExternalEdit();
+                    setState(() {});
+                  },
                 ),
               ],
             ),
