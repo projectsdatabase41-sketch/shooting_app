@@ -14,13 +14,7 @@ class CoachAiChatScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Ассистент')),
-      body: const AiChatScreen(
-        scope: AiScope.general,
-        embedded: true,
-        coachMode: true,
-      ),
-    );
+    // Свой Scaffold чата (стеклянная шапка, «Очистить»), как у спортсмена.
+    return const AiChatScreen(scope: AiScope.general, coachMode: true);
   }
 }

@@ -12,6 +12,7 @@ import '../services/coach_notes_repository.dart';
 import '../state/app_data_store.dart';
 import '../widgets/ai_chart_view.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/glass_pill.dart';
 import '../widgets/swipe_to_delete.dart';
 
 /// "Дневник" тренера (раздел 8 ТЗ) — темы и заметки, не привязан ни к
@@ -45,46 +46,57 @@ class _CoachDiaryNotesScreenState extends State<CoachDiaryNotesScreen> {
   @override
   Widget build(BuildContext context) {
     final df = DateFormat('dd.MM.yy HH:mm');
+    final top = MediaQuery.paddingOf(context).top + GlassHeader.height;
     return Scaffold(
-      appBar: AppBar(title: const Text('Дневник')),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text('Дневник', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+      ),
       body: _notes.isEmpty
           ? const EmptyState(icon: Icons.menu_book_outlined, text: 'Заметок пока нет')
-          : ListView.builder(
-              itemCount: _notes.length,
-              itemBuilder: (context, i) {
-                final n = _notes[i];
-                return SwipeToDelete(
-                  itemKey: n.id,
-                  title: 'Удалить заметку?',
-                  message: '«${n.topic}» будет удалена без возможности восстановить.',
-                  onConfirmed: () {
-                    _repo.delete(n.id);
-                    _reload();
-                  },
-                  child: ListTile(
-                    // Дата/время — слева, мелким, вместо подписи снизу
-                    // (решение пользователя): тема важнее и читается
-                    // крупным шрифтом.
-                    leading: SizedBox(
-                      width: 52,
-                      child: Text(
-                        df.format(n.createdAt.toLocal()),
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
+          : Stack(
+              children: [
+                Positioned.fill(
+                    child: ListView.builder(
+                  padding: EdgeInsets.only(top: top, bottom: 88),
+                  itemCount: _notes.length,
+                  itemBuilder: (context, i) {
+                    final n = _notes[i];
+                    return SwipeToDelete(
+                      itemKey: n.id,
+                      title: 'Удалить заметку?',
+                      message: '«${n.topic}» будет удалена без возможности восстановить.',
+                      onConfirmed: () {
+                        _repo.delete(n.id);
+                        _reload();
+                      },
+                      child: ListTile(
+                        // Дата/время — слева, мелким, вместо подписи снизу
+                        // (решение пользователя): тема важнее и читается
+                        // крупным шрифтом.
+                        leading: SizedBox(
+                          width: 52,
+                          child: Text(
+                            df.format(n.createdAt.toLocal()),
+                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                          ),
+                        ),
+                        title: Text(n.topic, style: Theme.of(context).textTheme.titleMedium),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () async {
+                          await Navigator.of(context).push(MaterialPageRoute(
+                            builder: (_) => _NoteScreen(note: n, repo: _repo, aiSettings: _aiSettings),
+                          ));
+                          _reload();
+                        },
                       ),
-                    ),
-                    title: Text(n.topic, style: Theme.of(context).textTheme.titleMedium),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () async {
-                      await Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => _NoteScreen(note: n, repo: _repo, aiSettings: _aiSettings),
-                      ));
-                      _reload();
-                    },
-                  ),
-                );
-              },
+                    );
+                  },
+                )),
+                Positioned.fill(child: EdgeShade(top: top + 16)),
+              ],
             ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _openAddDialog(context),
@@ -151,7 +163,8 @@ class _AddNoteDialogState extends State<_AddNoteDialog> {
     });
     try {
       final reply = await AiService(widget.aiSettings).ask(
-        task: 'note_create', json: true,
+        task: 'note_create',
+        json: true,
         systemPrompt: 'Ты помогаешь тренеру по стрельбе вести дневник в приложении. '
             'По заданию тренера придумай короткую тему заметки (3-6 слов) и напиши сам текст. '
             'Используй ТОЛЬКО то, что написал тренер в задании ниже — никаких данных о '
@@ -329,19 +342,23 @@ class _NoteScreenState extends State<_NoteScreen> {
         if (didPop) _save();
       },
       child: Scaffold(
-        appBar: AppBar(
-          title: Text(widget.note.topic),
+        appBar: GlassHeader(
+          title: Text(widget.note.topic,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
           actions: [
-            IconButton(
+            GlassCircleButton(
               tooltip: 'Помощь ИИ',
               icon: _aiBusy
                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.auto_awesome),
-              onPressed: _aiBusy ? null : _editWithAi,
+              onTap: _aiBusy ? null : _editWithAi,
             ),
-            IconButton(
+            GlassCircleButton(
+              tooltip: 'Удалить',
               icon: const Icon(Icons.delete_outline),
-              onPressed: () {
+              onTap: () {
                 widget.repo.delete(widget.note.id);
                 Navigator.of(context).pop();
               },
