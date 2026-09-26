@@ -10,6 +10,10 @@ import 'local_ai_platform.dart';
 /// Идущие загрузки живут дольше экрана: закрыли настройки — качается дальше.
 class _Downloads {
   static final Map<String, ValueNotifier<double>> progress = {};
+
+  /// Какой файл сейчас качается: «Файл 1 из 2 (модель)» — у моделей со зрением
+  /// их два, и общий процент прыгал (после первого файла начинался с 70%).
+  static final Map<String, String> stage = {};
 }
 
 /// Настройки локальной модели (режим разработчика): режим работы, выбор и
@@ -104,16 +108,23 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
       // Системный фоновый загрузчик: качает и при закрытом приложении,
       // с уведомлением; обрыв сети — продолжит сам. У модели «со зрением»
       // два файла — сама модель и проектор; прогресс общий по байтам.
-      var doneBytes = 0;
-      for (final f in [m, if (m.projector != null) m.projector!]) {
+      final files = [m, if (m.projector != null) m.projector!];
+      for (final (i, f) in files.indexed) {
         final path = p.join(await modelsDir(), f.fileName);
         if (fileLength(path) != f.sizeBytes) {
+          _Downloads.stage[m.id] =
+              files.length == 1 ? '' : 'Файл ${i + 1} из ${files.length} (${f == m ? 'модель' : 'зрение'}): ';
+          note.value = 0;
           await downloadModel(
             id: f.id,
             url: f.url,
             fileName: f.fileName,
             displayName: f == m ? m.name : '${m.name} (зрение)',
-            onProgress: (v) => note.value = (doneBytes + v * f.sizeBytes) / m.totalBytes,
+            // Не назад: после системной паузы загрузчик иногда присылает
+            // чуть меньший процент, и полоса дёргалась 85→72→80.
+            onProgress: (v) {
+              if (v > note.value) note.value = v;
+            },
           );
           note.value = -1; // проверка целостности
           if (await sha256OfFile(path) != f.sha256) {
@@ -121,7 +132,6 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
             throw Exception('файл повреждён при загрузке, скачайте ещё раз');
           }
         }
-        doneBytes += f.sizeBytes;
       }
       if (s.localModelId.isEmpty) s.localModelId = m.id;
       messenger.showSnackBar(SnackBar(content: Text('${m.name} установлена')));
@@ -131,6 +141,7 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
       messenger.showSnackBar(SnackBar(content: Text('Не удалось скачать: $e')));
     } finally {
       _Downloads.progress.remove(m.id);
+      _Downloads.stage.remove(m.id);
       await _refresh();
     }
   }
@@ -313,7 +324,9 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     LinearProgressIndicator(value: v < 0 ? null : v),
-                    Text(v < 0 ? 'Проверка файла…' : '${(v * 100).toStringAsFixed(0)}%',
+                    Text(
+                        '${_Downloads.stage[m.id] ?? ''}'
+                        '${v < 0 ? 'проверка файла…' : '${(v * 100).toStringAsFixed(0)}%'}',
                         style: theme.textTheme.bodySmall),
                   ],
                 ),
