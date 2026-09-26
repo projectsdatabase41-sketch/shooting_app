@@ -19,6 +19,8 @@
     <!-- Входящий звонок на весь экран, даже при заблокированном телефоне. -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <!-- Долгие загрузки моделей ИИ без 9-минутного лимита (Android 14+, background_downloader UIDT). -->
+    <uses-permission android:name="android.permission.RUN_USER_INITIATED_JOBS"/>
     <uses-feature android:name="android.hardware.microphone" android:required="false"/>
 
     <application
@@ -26,6 +28,11 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:enableOnBackInvokedCallback="false">
+        <service
+            android:name="com.bbflight.background_downloader.UIDTJobService"
+            android:permission="android.permission.BIND_JOB_SERVICE"
+            android:exported="true"
+            android:foregroundServiceType="dataSync" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

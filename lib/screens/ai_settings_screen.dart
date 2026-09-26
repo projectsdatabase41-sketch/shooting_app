@@ -1,5 +1,4 @@
 import '../local_ai/local_ai_screen.dart';
-import '../local_ai/vision_ai_screen.dart';
 import '../state/personalization_view_model.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -310,24 +309,6 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                 onTap: () async {
                   await Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => LocalAiScreen(settings: _settings)),
-                  );
-                  if (mounted) setState(() {});
-                },
-              ),
-            ),
-            // Зрение — отдельно от текстовой локальной модели (решение пользователя).
-            const SizedBox(height: 12),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.visibility_outlined),
-                title: const Text('Распознавание фото (зрение)'),
-                subtitle: Text(_settings.visionModelId.isEmpty
-                    ? 'Выключено — пробоины ищет обычный алгоритм'
-                    : 'Пробоины на фото ищет ${_settings.visionModelId}'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () async {
-                  await Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => VisionAiScreen(settings: _settings)),
                   );
                   if (mounted) setState(() {});
                 },

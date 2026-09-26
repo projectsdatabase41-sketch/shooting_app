@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:llamadart/llamadart.dart';
 import 'package:path/path.dart' as p;
@@ -15,6 +16,7 @@ typedef LocalRequest = ({
   String system,
   List<({String role, String text})> history,
   bool json,
+  Uint8List? image,
 });
 
 /// Локальная модель ИИ (llama.cpp через `llamadart`) — третий вариант
@@ -56,6 +58,7 @@ class LocalAi {
 
   LlamaEngine? _engine;
   String? _loadedPath;
+  bool _projectorLoaded = false;
   Future<void> _lock = Future.value();
   Timer? _idle;
 
@@ -68,7 +71,10 @@ class LocalAi {
   static Future<String?> installedPath(LocalModelInfo m) async {
     if (!localAiSupported) return null;
     final path = p.join(await modelsDir(), m.fileName);
-    return fileLength(path) == m.sizeBytes ? path : null;
+    if (fileLength(path) != m.sizeBytes) return null;
+    // У модели «со зрением» нужен и файл проектора.
+    if (m.projector != null && await installedPath(m.projector!) == null) return null;
+    return path;
   }
 
   bool wants(AiSettings s, String? task) {
@@ -119,6 +125,7 @@ class LocalAi {
       system: _clip(sys.toString(), _maxSystemChars),
       history: trimmedHistory,
       json: json,
+      image: null,
     );
     try {
       final text = (await (debugGenerate ?? _generate)(req)).trim();
@@ -152,6 +159,7 @@ class LocalAi {
       system: 'Отвечай кратко, по-русски.',
       history: const [(role: 'user', text: 'Назови три упражнения для тренировки стрелка.')],
       json: false,
+      image: null,
     ));
     return (text: text.trim(), took: sw.elapsed);
   }
@@ -166,6 +174,7 @@ class LocalAi {
         if (_engine == null || _loadedPath != r.modelPath) {
           await _engine?.dispose();
           _engine = null;
+          _projectorLoaded = false;
           final e = LlamaEngine(LlamaBackend());
           // Процессор, не видеокарта: на встроенной графике (проверено на
           // Intel N95 + UHD) Vulkan в 2–5 раз медленнее.
@@ -174,15 +183,25 @@ class LocalAi {
           _engine = e;
           _loadedPath = r.modelPath;
         }
+        // Зрение подгружается только когда пришла картинка — для текста не нужно.
+        if (r.image != null && !_projectorLoaded) {
+          await _engine!.loadMultimodalProjector(p.join(await modelsDir(), r.model.projector!.fileName));
+          _projectorLoaded = true;
+        }
         final out = StringBuffer();
         await for (final chunk in _engine!.create(
           [
-            LlamaChatMessage.fromText(role: LlamaChatRole.system, text: r.system),
-            for (final m in r.history)
-              LlamaChatMessage.fromText(
-                role: m.role == 'assistant' ? LlamaChatRole.assistant : LlamaChatRole.user,
-                text: m.text,
-              ),
+            if (r.system.isNotEmpty) LlamaChatMessage.fromText(role: LlamaChatRole.system, text: r.system),
+            for (final (i, m) in r.history.indexed)
+              r.image != null && i == r.history.length - 1
+                  ? LlamaChatMessage.withContent(role: LlamaChatRole.user, content: [
+                      LlamaImageContent(bytes: r.image),
+                      LlamaTextContent(m.text),
+                    ])
+                  : LlamaChatMessage.fromText(
+                      role: m.role == 'assistant' ? LlamaChatRole.assistant : LlamaChatRole.user,
+                      text: m.text,
+                    ),
           ],
           params: const GenerationParams(maxTokens: 1024, temp: 0.2),
           enableThinking: false,
@@ -202,11 +221,26 @@ class LocalAi {
     return done.future;
   }
 
+  /// Вопрос по картинке к выбранной модели «со зрением» (поиск пробоин).
+  Future<String> see(LocalModelInfo model, Uint8List image, String prompt) async {
+    final path = await installedPath(model);
+    if (path == null || !model.sees) throw StateError('Модель со зрением не скачана');
+    return _generate((
+      modelPath: path,
+      model: model,
+      system: '',
+      history: [(role: 'user', text: prompt)],
+      json: false,
+      image: image,
+    ));
+  }
+
   Future<void> unload() async {
     _idle?.cancel();
     final e = _engine;
     _engine = null;
     _loadedPath = null;
+    _projectorLoaded = false;
     await e?.dispose();
   }
 

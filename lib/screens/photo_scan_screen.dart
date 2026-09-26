@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import 'package:provider/provider.dart';
 
+import '../local_ai/local_ai_catalog.dart';
 import '../local_ai/local_vision.dart';
 import '../logic/scoring.dart';
 import '../logic/shot_photo_detection.dart';
@@ -333,7 +334,7 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
 
   /// Квадрат вокруг откалиброванного круга → модель → точки обратно в
   /// пиксели исходного фото. Вне круга мишени (с запасом 5%) — отбрасываем.
-  Future<void> _runVision(VisionModelInfo m, img.Image decoded, Offset center) async {
+  Future<void> _runVision(LocalModelInfo m, img.Image decoded, Offset center) async {
     final half = math.max(_calibRx, _calibRy) * 1.1;
     final x0 = (center.dx - half).clamp(0, decoded.width - 1).floor();
     final y0 = (center.dy - half).clamp(0, decoded.height - 1).floor();
@@ -342,7 +343,7 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> {
     final crop = img.copyCrop(decoded, x: x0, y: y0, width: x1 - x0, height: y1 - y0);
     final square = img.copyResize(crop, width: LocalVision.side, height: LocalVision.side);
     final jpeg = Uint8List.fromList(img.encodeJpg(square, quality: 90));
-    final points = await LocalVision.instance.findHoles(m, jpeg);
+    final points = await LocalVision.findHoles(m, jpeg);
     final sx = (x1 - x0) / LocalVision.side, sy = (y1 - y0) / LocalVision.side;
     final maxR = math.max(_calibRx, _calibRy) * 1.05;
     if (!mounted) return;

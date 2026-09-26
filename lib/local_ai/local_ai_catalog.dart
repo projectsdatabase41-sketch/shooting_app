@@ -14,6 +14,11 @@ class LocalModelInfo {
   /// Qwen3 умеет «думать вслух» — для коротких ответов это выключаем.
   final bool hasThinking;
 
+  /// Проектор изображений — у моделей «со зрением»: та же модель и пишет
+  /// текст, и ищет пробоины на фото (одна модель вместо двух).
+  final LocalModelInfo? projector;
+  bool get sees => projector != null;
+
   const LocalModelInfo({
     required this.id,
     required this.name,
@@ -24,7 +29,11 @@ class LocalModelInfo {
     required this.sha256,
     required this.minRamGb,
     this.hasThinking = false,
+    this.projector,
   });
+
+  /// Оба файла вместе — для подсказок о размере.
+  int get totalBytes => sizeBytes + (projector?.sizeBytes ?? 0);
 
   String get fileName => '$id.gguf';
 }
@@ -84,6 +93,47 @@ const List<LocalModelInfo> localModelCatalog = [
     sizeBytes: 4683074240,
     sha256: '65b8fcd92af6b4fefa935c625d1ac27ea29dcb6ee14589c55a8f115ceaaa1423',
     minRamGb: 12,
+  ),
+  // Со зрением: текст + поиск пробоин на фото мишени.
+  LocalModelInfo(
+    id: 'qwen2.5-vl-3b',
+    name: 'Qwen2.5-VL 3B',
+    tier: 'Видит фото',
+    note: 'Хороший телефон. Текст на уровне Qwen2.5 3B + находит пробоины на фото мишени',
+    url: 'https://huggingface.co/ggml-org/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf',
+    sizeBytes: 1929901056,
+    sha256: 'd02fe9b69ad8cadbbd228e387667af66612c44bed29ffc8eb1e7caf9ac486c12',
+    minRamGb: 6,
+    projector: LocalModelInfo(
+      id: 'qwen2.5-vl-3b-mmproj',
+      name: 'зрение',
+      tier: '',
+      note: '',
+      url: 'https://huggingface.co/ggml-org/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf',
+      sizeBytes: 844757728,
+      sha256: '980c9b2f78c04e6cff93d277ada09e768394f112d75db3b4e9dea8a69f9fb904',
+      minRamGb: 0,
+    ),
+  ),
+  LocalModelInfo(
+    id: 'smolvlm-500m',
+    name: 'SmolVLM 500M',
+    tier: 'Видит фото (лёгкая)',
+    note: 'Любой телефон. Пробоины находит грубо, текст по-русски слабый',
+    url: 'https://huggingface.co/ggml-org/SmolVLM-500M-Instruct-GGUF/resolve/main/SmolVLM-500M-Instruct-Q8_0.gguf',
+    sizeBytes: 436806912,
+    sha256: '9d4612de6a42214499e301494a3ecc2be0abdd9de44e663bda63f1152fad1bf4',
+    minRamGb: 3,
+    projector: LocalModelInfo(
+      id: 'smolvlm-500m-mmproj',
+      name: 'зрение',
+      tier: '',
+      note: '',
+      url: 'https://huggingface.co/ggml-org/SmolVLM-500M-Instruct-GGUF/resolve/main/mmproj-SmolVLM-500M-Instruct-Q8_0.gguf',
+      sizeBytes: 108783360,
+      sha256: 'd1eb8b6b23979205fdf63703ed10f788131a3f812c7b1f72e0119d5d81295150',
+      minRamGb: 0,
+    ),
   ),
 ];
 

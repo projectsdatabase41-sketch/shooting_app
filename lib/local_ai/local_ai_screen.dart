@@ -44,7 +44,9 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
       _installed[m.id] = await LocalAi.installedPath(m) != null;
       // Загрузка шла, пока экран был закрыт (или приложение перезапускали)
       // — подключаемся к ней, чтобы снова показать прогресс.
-      if (_installed[m.id] != true && !_Downloads.progress.containsKey(m.id) && await modelDownloadActive(m.id)) {
+      if (_installed[m.id] != true &&
+          !_Downloads.progress.containsKey(m.id) &&
+          (await modelDownloadActive(m.id) || (m.projector != null && await modelDownloadActive(m.projector!.id)))) {
         _resume(m);
       }
     }
@@ -64,7 +66,7 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
     if (ram == null) return null;
     String? best;
     for (final m in localModelCatalog) {
-      if (m.minRamGb <= ram + 0.5) best = m.id;
+      if (!m.sees && m.minRamGb <= ram + 0.5) best = m.id;
     }
     return best ?? localModelCatalog.first.id;
   }
@@ -78,8 +80,8 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
       builder: (ctx) => AlertDialog(
         title: Text('Скачать ${m.name}?'),
         content: Text(
-          'Размер ${_gb(m.sizeBytes)} с huggingface.co. Лучше по Wi-Fi — мобильный трафик может стоить денег.'
-          '${free != null && free < m.sizeBytes * 1.1 ? '\n\nСвободного места мало: ${_gb(free)}.' : ''}'
+          'Размер ${_gb(m.totalBytes)} с huggingface.co. Лучше по Wi-Fi — мобильный трафик может стоить денег.'
+          '${free != null && free < m.totalBytes * 1.1 ? '\n\nСвободного места мало: ${_gb(free)}.' : ''}'
           '${_ramGb != null && _ramGb! + 0.5 < m.minRamGb ? '\n\nНужно от ${m.minRamGb} ГБ ОЗУ, у устройства ${_ramGb!.toStringAsFixed(1)} — может работать медленно или закрываться.' : ''}'
           '\n\nКачается в фоне с уведомлением — приложение можно закрыть. Пауза продолжится с того же места.',
         ),
@@ -99,20 +101,27 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
     setState(() {});
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final path = p.join(await modelsDir(), m.fileName);
       // Системный фоновый загрузчик: качает и при закрытом приложении,
-      // с уведомлением; обрыв сети — продолжит сам.
-      await downloadModel(
-        id: m.id,
-        url: m.url,
-        fileName: m.fileName,
-        displayName: m.name,
-        onProgress: (v) => note.value = v,
-      );
-      note.value = -1; // проверка целостности
-      if (await sha256OfFile(path) != m.sha256) {
-        await deleteFile(path);
-        throw Exception('файл повреждён при загрузке, скачайте ещё раз');
+      // с уведомлением; обрыв сети — продолжит сам. У модели «со зрением»
+      // два файла — сама модель и проектор; прогресс общий по байтам.
+      var doneBytes = 0;
+      for (final f in [m, if (m.projector != null) m.projector!]) {
+        final path = p.join(await modelsDir(), f.fileName);
+        if (fileLength(path) != f.sizeBytes) {
+          await downloadModel(
+            id: f.id,
+            url: f.url,
+            fileName: f.fileName,
+            displayName: f == m ? m.name : '${m.name} (зрение)',
+            onProgress: (v) => note.value = (doneBytes + v * f.sizeBytes) / m.totalBytes,
+          );
+          note.value = -1; // проверка целостности
+          if (await sha256OfFile(path) != f.sha256) {
+            await deleteFile(path);
+            throw Exception('файл повреждён при загрузке, скачайте ещё раз');
+          }
+        }
+        doneBytes += f.sizeBytes;
       }
       if (s.localModelId.isEmpty) s.localModelId = m.id;
       messenger.showSnackBar(SnackBar(content: Text('${m.name} установлена')));
@@ -130,7 +139,9 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
 
   Future<void> _delete(LocalModelInfo m) async {
     await LocalAi.instance.unload();
-    await deleteFile(p.join(await modelsDir(), m.fileName));
+    for (final f in [m, if (m.projector != null) m.projector!]) {
+      await deleteFile(p.join(await modelsDir(), f.fileName));
+    }
     if (s.localModelId == m.id) s.localModelId = '';
     await _refresh();
   }
@@ -252,7 +263,10 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('${m.name} · ${m.tier}', style: theme.textTheme.titleSmall),
-                      Text('${_gb(m.sizeBytes)} · от ${m.minRamGb} ГБ ОЗУ', style: theme.textTheme.bodySmall),
+                      Text('${_gb(m.totalBytes)} · от ${m.minRamGb} ГБ ОЗУ', style: theme.textTheme.bodySmall),
+                      if (m.sees)
+                        Text('Видит фото — ищет пробоины на «Фото мишени»',
+                            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary)),
                       Text(m.note, style: theme.textTheme.bodySmall),
                       if (m.id == recommended)
                         Text('Рекомендуется для этого устройства',
@@ -273,7 +287,10 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
                   IconButton(
                     tooltip: 'Приостановить',
                     icon: const Icon(Icons.pause_outlined),
-                    onPressed: () => pauseModelDownload(m.id),
+                    onPressed: () async {
+                      await pauseModelDownload(m.id);
+                      if (m.projector != null) await pauseModelDownload(m.projector!.id);
+                    },
                   ),
                 if (installed) ...[
                   IconButton(

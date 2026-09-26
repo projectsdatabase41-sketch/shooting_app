@@ -97,6 +97,9 @@ DownloadTask _task(String id, String url, String fileName, String displayName) =
       updates: Updates.statusAndProgress,
       allowPause: true,
       retries: 10,
+      // 0 + уведомление — на Android 14+ «загрузка, начатая пользователем»
+      // (UIDT) без 9-минутного лимита фоновой работы (см. AndroidManifest).
+      priority: 0,
     );
 
 /// Скачивает модель в папку [modelsDir]. Если загрузка уже идёт в фоне
@@ -112,7 +115,7 @@ Future<void> downloadModel({
   await initModelDownloads();
   final task = _task(id, url, fileName, displayName);
   final existing = await FileDownloader().database.recordForId(task.taskId);
-  final TaskStatusUpdate result;
+  TaskStatusUpdate result;
   if (existing != null && existing.status == TaskStatus.paused) {
     await FileDownloader().resume(existing.task as DownloadTask);
     result = await _waitFor(task.taskId, onProgress);
@@ -120,6 +123,20 @@ Future<void> downloadModel({
     result = await _waitFor(task.taskId, onProgress);
   } else {
     result = await FileDownloader().download(task, onProgress: (p) => onProgress(p < 0 ? 0 : p));
+  }
+  // Пауза не от пользователя — это Android оборвал долгую фоновую загрузку
+  // (лимит ~9 минут); загрузчик продолжает её сам. Раньше это сразу
+  // показывалось как «Загрузка приостановлена», хотя файл качался дальше.
+  var pausedSince = DateTime.now();
+  _userPaused.remove(task.taskId);
+  while (result.status == TaskStatus.paused && !_userPaused.contains(task.taskId)) {
+    if (DateTime.now().difference(pausedSince) > const Duration(minutes: 1)) {
+      final r = await FileDownloader().database.recordForId(task.taskId);
+      if (r != null && r.status == TaskStatus.paused) await FileDownloader().resume(r.task as DownloadTask);
+      pausedSince = DateTime.now();
+    }
+    result = await _waitFor(task.taskId, onProgress);
+    if (result.status != TaskStatus.paused) pausedSince = DateTime.now();
   }
   switch (result.status) {
     case TaskStatus.complete:
@@ -143,8 +160,12 @@ Future<TaskStatusUpdate> _waitFor(String taskId, void Function(double) onProgres
   }
 }
 
+/// Паузы, которые поставил сам пользователь (кнопкой), — их не продолжаем сами.
+final Set<String> _userPaused = {};
+
 /// Пауза фоновой загрузки (продолжится с того же места).
 Future<void> pauseModelDownload(String id) async {
+  _userPaused.add('model-$id');
   await initModelDownloads();
   final r = await FileDownloader().database.recordForId('model-$id');
   if (r != null) await FileDownloader().pause(r.task as DownloadTask);
