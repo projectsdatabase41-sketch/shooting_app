@@ -16,6 +16,7 @@ import '../widgets/comments_thread.dart';
 import '../widgets/finished_edit_exit_dialog.dart';
 import '../widgets/raised_3d_button.dart';
 import '../widgets/shot_list_sheet.dart';
+import '../widgets/athlete_coach_chat.dart';
 import '../widgets/shot_wheel.dart';
 import '../widgets/target_canvas.dart';
 import 'ai_chat_screen.dart';
@@ -241,7 +242,8 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
                 child: CallCoachButton(db: context.read<AppDataStore>().db, large: true),
               ),
-            const Expanded(child: CommentsThreadSheet(level: CommentLevel.coach)),
+            // Отдельный канал с тренером (не мессенджер и не комментарии к тренировке).
+            const Expanded(child: AthleteCoachChat()),
           ],
         );
     }

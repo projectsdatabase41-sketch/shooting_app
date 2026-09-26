@@ -10,6 +10,7 @@ import '../services/comments_repository.dart';
 import '../state/app_data_store.dart';
 import '../state/target_view_model.dart';
 import 'glass_pill.dart';
+import 'messenger_bubble.dart';
 
 /// Лента комментариев — НЕ перезаписываемое поле, а лента записей с
 /// автором и временем (раздел 7 ТЗ, часть C.3 логики-спека). Доступна на
@@ -51,14 +52,6 @@ class CommentsThreadSheet extends StatefulWidget {
   static Future<void> showForSession(BuildContext context) => _show(
         context,
         const CommentsThreadSheet(level: CommentLevel.session),
-      );
-
-  /// Отдельный чат с тренером — не фильтр по автору поверх `session`
-  /// (тем самым и от «Заметок» отделён по-настоящему: сообщение
-  /// спортсмена отсюда видно здесь же, а не только тренеру).
-  static Future<void> showForCoach(BuildContext context) => _show(
-        context,
-        const CommentsThreadSheet(level: CommentLevel.coach),
       );
 
   static Future<void> _show(BuildContext context, Widget child, {double heightFactor = 0.7}) {
@@ -141,8 +134,9 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
                     itemBuilder: (context, i) {
                       final c = comments[comments.length - 1 - i];
                       final mine = c.authorRole == myRole;
-                      return _CommentBubble(
-                        comment: c,
+                      return MessengerBubble(
+                        text: c.text,
+                        author: mine ? null : c.authorLabel,
                         mine: mine,
                         prefs: prefs,
                         time: df.format(c.createdAt),
@@ -290,76 +284,4 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
         CommentLevel.session => 'Комментарии к тренировке',
         CommentLevel.coach => 'Чат с тренером',
       };
-}
-
-/// Пузырь комментария в стиле мессенджера: цвета и скругление — из
-/// настроек оформления чата, время снаружи под пузырём.
-class _CommentBubble extends StatelessWidget {
-  final Comment comment;
-  final bool mine;
-  final ChatPreferences prefs;
-  final String time;
-  final VoidCallback onLongPress;
-  const _CommentBubble(
-      {required this.comment, required this.mine, required this.prefs, required this.time, required this.onLongPress});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final base = mine ? prefs.mineBubbleColor : prefs.otherBubbleColor;
-    final fg = mine ? prefs.mineTextColor : prefs.otherTextColor;
-    return Align(
-      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-      child: GestureDetector(
-        onLongPress: onLongPress,
-        child: Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Column(
-            crossAxisAlignment: mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-            children: [
-              Container(
-                constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.78),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(prefs.bubbleRadius),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color.lerp(base, Colors.white, 0.08)!, Color.lerp(base, Colors.black, 0.10)!],
-                  ),
-                  boxShadow: prefs.shadowEnabled
-                      ? [
-                          BoxShadow(
-                              color: Colors.black.withValues(alpha: prefs.shadowIntensity),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4))
-                        ]
-                      : null,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (!mine)
-                      Text(comment.authorLabel,
-                          style: theme.textTheme.labelMedium?.copyWith(color: fg, fontWeight: FontWeight.w700)),
-                    Text(comment.text,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: fg,
-                          fontSize: (theme.textTheme.bodyMedium?.fontSize ?? 14) * prefs.fontScale,
-                        )),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 3),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Text(time, style: theme.textTheme.labelSmall?.copyWith(color: theme.hintColor)),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }

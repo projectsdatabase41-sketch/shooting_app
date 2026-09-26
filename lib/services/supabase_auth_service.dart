@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../models/coach_chat_message.dart';
 import 'local_db_service.dart';
 
 /// Учётная запись в ЛИЧНОЙ базе Supabase.
@@ -276,6 +277,56 @@ class SupabaseAuthService {
       ];
     } catch (_) {
       return const [];
+    } finally {
+      client.close();
+    }
+  }
+
+  /// Тренеры, которым выдан действующий токен, — для «Чата с тренером»
+  /// (одна переписка на токен, sql/coach-chat.sql).
+  Future<List<({String grantId, String name})>> fetchChatCoaches() async {
+    final rows =
+        await _rest('GET', 'share_grants?select=id,label,coach_chat_nickname&revoked_at=is.null&order=created_at');
+    return [
+      for (final r in rows)
+        (
+          grantId: '${r['id']}',
+          name: [r['coach_chat_nickname'], r['label']]
+              .map((v) => '${v ?? ''}'.trim())
+              .firstWhere((v) => v.isNotEmpty, orElse: () => 'Тренер'),
+        ),
+    ];
+  }
+
+  Future<List<CoachChatMessage>> fetchCoachChat(String grantId) async => [
+        for (final r in await _rest('GET', 'coach_chat?grant_id=eq.$grantId&order=created_at.desc&limit=500'))
+          coachChatFromRow(r),
+      ].reversed.toList();
+
+  Future<void> sendCoachChat(String grantId, String text) =>
+      _rest('POST', 'coach_chat', body: {'grant_id': grantId, 'author_role': 'athlete', 'text': text});
+
+  Future<void> deleteCoachChat(String id) => _rest('DELETE', 'coach_chat?id=eq.$id');
+
+  /// Запрос к своей базе от имени владельца; ошибка — исключение с текстом сервера.
+  Future<List<Map<String, dynamic>>> _rest(String method, String path, {Object? body}) async {
+    final token = await ensureFreshToken();
+    if (token == null) throw Exception('Войдите в свою базу (Настройки → Учётная запись)');
+    final client = clientFactory();
+    try {
+      final req = http.Request(method, Uri.parse('$url/rest/v1/$path'))
+        ..headers.addAll({
+          'apikey': anonKey,
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        });
+      if (body != null) req.body = jsonEncode(body);
+      final res = await http.Response.fromStream(await client.send(req).timeout(const Duration(seconds: 20)));
+      if (res.statusCode >= 400) throw Exception('Сервер ответил ${res.statusCode}: ${res.body}');
+      if (res.bodyBytes.isEmpty) return const [];
+      final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+      return decoded is List ? decoded.cast<Map<String, dynamic>>() : const [];
     } finally {
       client.close();
     }

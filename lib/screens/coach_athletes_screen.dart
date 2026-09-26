@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 import '../services/coach_access_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/empty_state.dart';
+import 'coach_athletes_chat_screen.dart';
 import 'coach_diary_screen.dart';
 
 /// Список подключённых спортсменов у тренера (мульти-спортсменский
@@ -165,9 +166,28 @@ class _CoachAthletesScreenState extends State<CoachAthletesScreen> {
                 crossAxisSpacing: 12,
                 childAspectRatio: 1,
               ),
-              itemCount: _athletes.length,
+              // Первая плитка — «Чат» со спортсменами, дальше сами спортсмены.
+              itemCount: _athletes.length + 1,
               itemBuilder: (context, i) {
-                final athlete = _athletes[i];
+                if (i == 0) {
+                  return Card(
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => CoachAthletesChatScreen(access: _access),
+                      )),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.forum_outlined, size: 28, color: Theme.of(context).colorScheme.primary),
+                          const SizedBox(height: 8),
+                          Text('Чат', style: Theme.of(context).textTheme.titleSmall),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+                final athlete = _athletes[i - 1];
                 return _AthleteCell(
                   key: ValueKey(athlete.id),
                   athlete: athlete,

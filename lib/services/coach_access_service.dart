@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../models/coach_chat_message.dart';
 import 'local_db_service.dart';
 
 /// Один сохранённый спортсмен у тренера — мульти-спортсменский режим
@@ -177,9 +178,8 @@ class CoachAccessService {
   /// id её единственного снимка-упражнения (`exercises.id`): один на
   /// тренировку, отдельным id не заводится — то же самое значение,
   /// которое `shots.exercise_id` и ждёт.
-  Future<List<Map<String, dynamic>>> fetchShots(String sessionId, {CoachAthlete? athlete}) => _rpc(
-      'get_shared_shots', {'p_token': athlete?.token ?? token, 'p_exercise_id': sessionId},
-      athlete: athlete);
+  Future<List<Map<String, dynamic>>> fetchShots(String sessionId, {CoachAthlete? athlete}) =>
+      _rpc('get_shared_shots', {'p_token': athlete?.token ?? token, 'p_exercise_id': sessionId}, athlete: athlete);
 
   Future<List<Map<String, dynamic>>> fetchComments(String sessionId) =>
       _rpc('get_shared_comments', {'p_token': token, 'p_package_id': sessionId});
@@ -200,6 +200,17 @@ class CoachAccessService {
       'p_text': text,
     });
   }
+
+  /// «Чат со спортсменами» (sql/coach-chat.sql) — по токену конкретного спортсмена.
+  Future<List<CoachChatMessage>> fetchCoachChat(CoachAthlete athlete) async => [
+        for (final r in await _rpc('get_coach_chat', {'p_token': athlete.token}, athlete: athlete)) coachChatFromRow(r),
+      ];
+
+  Future<void> sendCoachChat(CoachAthlete athlete, String text) =>
+      _rpc('add_coach_chat', {'p_token': athlete.token, 'p_text': text}, athlete: athlete);
+
+  Future<void> deleteCoachChat(CoachAthlete athlete, String id) =>
+      _rpc('delete_coach_chat', {'p_token': athlete.token, 'p_id': id}, athlete: athlete);
 
   /// Явная проверка токена — вызывает уже существующую
   /// `validate_share_token` НАПРЯМУЮ (не переопределяет её, просто
