@@ -731,9 +731,10 @@ class _ProfileSheetState extends State<_ProfileSheet> {
   @override
   Widget build(BuildContext context) {
     final auth = widget.auth;
+    // Отступ под клавиатуру + прокрутка — иначе поле «О себе» уходит под неё.
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + MediaQuery.viewInsetsOf(context).bottom),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

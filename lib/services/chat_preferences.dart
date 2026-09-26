@@ -233,6 +233,21 @@ class ChatPreferences extends ChangeNotifier {
     };
   }
 
+  /// Беззвучный диалог — колокольчик в панели собеседника. Push-уведомление
+  /// о сообщении из него не показывается (см. push_service.dart).
+  bool mutedFor(String contactId) => _read('chat_muted_ids').split(',').contains(contactId);
+
+  void setMutedFor(String contactId, bool muted) {
+    final ids = _read('chat_muted_ids').split(',').where((e) => e.isNotEmpty && e != contactId).toList();
+    if (muted) ids.add(contactId);
+    _write('chat_muted_ids', ids.join(','));
+    notifyListeners();
+  }
+
+  /// Колонок в плитках фото панели собеседника (щипок 1–8, общее для всех чатов).
+  int get mediaColumns => (int.tryParse(_read('chat_media_columns')) ?? 4).clamp(1, 8);
+  set mediaColumns(int v) => _write('chat_media_columns', '${v.clamp(1, 8)}');
+
   /// Размер текста в переписке (множитель 0.85–1.3).
   double get fontScale => (double.tryParse(_read('chat_font_scale')) ?? 1.0).clamp(0.85, 1.3);
   set fontScale(double v) {

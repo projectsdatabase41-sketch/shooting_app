@@ -118,6 +118,10 @@ class LocalDbService {
         'chat_translation_mode': "TEXT NOT NULL DEFAULT 'off'",
         // Пусто = язык системы устройства (см. ChatPreferences.translationLanguage).
         'chat_translation_language': 'TEXT',
+        // Беззвучные диалоги (id через запятую) и число колонок плиток фото
+        // в панели собеседника — см. ChatPreferences.
+        'chat_muted_ids': 'TEXT',
+        'chat_media_columns': 'TEXT',
         // Цвета/тень пузырей — пусто = значение по умолчанию (см.
         // ChatPreferences). Пресеты (chat_appearance_screen.dart) просто
         // заполняют эти же поля разом, отдельно не хранятся.

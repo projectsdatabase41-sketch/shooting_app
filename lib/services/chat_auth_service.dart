@@ -594,6 +594,16 @@ class ChatAuthService {
     }
   }
 
+  /// Код контакта собеседника — сервер отдаёт его только другу или
+  /// участнику общей группы (sql/chat-contact-code.sql); иначе пусто.
+  Future<String> codeOf(String userId) async {
+    try {
+      return '${await _rpc('chat_code_of', {'p_user': userId}) ?? ''}';
+    } catch (_) {
+      return '';
+    }
+  }
+
   /// Все участники мессенджера (кроме себя) — по имени, «о себе» или точному
   /// коду контакта; пустой запрос — все по алфавиту. Постранично по [limit].
   Future<List<({String userId, String nickname, String? avatarBase64, String about})>> searchProfiles(

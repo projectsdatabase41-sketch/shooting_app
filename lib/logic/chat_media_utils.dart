@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -61,6 +62,22 @@ class ChatMediaUtils {
   static bool looksLikeImage(String fileName) {
     final lower = fileName.toLowerCase();
     return ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.heic'].any(lower.endsWith);
+  }
+
+  static bool looksLikeAudio(String fileName) {
+    final lower = fileName.toLowerCase();
+    return ['.mp3', '.m4a', '.aac', '.flac', '.wav', '.ogg', '.opus', '.wma'].any(lower.endsWith);
+  }
+
+  /// Одна декодированная картинка на сообщение: раньше каждая перестройка
+  /// списка делала новый `Image.memory(base64Decode(...))` — новый ключ
+  /// кэша, картинка грузилась заново с нулевой высотой, и при прокрутке
+  /// фото мерцало и дёргало ленту.
+  // ponytail: без LRU — держит байты просмотренных фото, сбрасывается целиком после 300.
+  static final Map<String, MemoryImage> _images = {};
+  static MemoryImage imageOf(String id, String base64) {
+    if (_images.length > 300) _images.clear();
+    return _images.putIfAbsent(id, () => MemoryImage(base64Decode(base64)));
   }
 
   static bool looksLikeVideo(String fileName) {

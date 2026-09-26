@@ -323,6 +323,7 @@ Future<void> showCallNotification(Map<String, dynamic> data) async {
 /// локальных контактов — в push оно не влезает (лимит 4 КБ).
 Future<void> showMessageNotification(Map<String, dynamic> data) async {
   final contactId = '${data['contact_id'] ?? ''}';
+  if (await _isMuted(contactId)) return;
   Uint8List? icon;
   try {
     final badge = (await rootBundle.load('assets/icon/badge.png')).buffer.asUint8List();
@@ -344,6 +345,22 @@ Future<void> showMessageNotification(Map<String, dynamic> data) async {
     ),
     payload: contactId,
   );
+}
+
+/// Диалог с выключенным колокольчиком (ChatPreferences.mutedFor).
+Future<bool> _isMuted(String contactId) async {
+  if (contactId.isEmpty) return false;
+  try {
+    final db = await openAppDatabase();
+    try {
+      final rows = db.select('SELECT chat_muted_ids FROM project_settings WHERE id = 1');
+      return rows.isNotEmpty && '${rows.first['chat_muted_ids'] ?? ''}'.split(',').contains(contactId);
+    } finally {
+      db.close();
+    }
+  } catch (_) {
+    return false; // колонки ещё нет (приложение не открывали после обновления)
+  }
 }
 
 /// Фото собеседника из локальной базы — отдельным коротким подключением

@@ -70,6 +70,7 @@ dependencies:
   flutter_webrtc: ^1.6.2+hotfix.3
   llamadart: ^0.8.24
   background_downloader: ">=9.5.9 <9.6.0"
+  emoji_picker_flutter: ^4.5.4
 
 dev_dependencies:
   flutter_test:
