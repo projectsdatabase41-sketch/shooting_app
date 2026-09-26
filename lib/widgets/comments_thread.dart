@@ -1,9 +1,11 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import '../models/comment.dart';
+import '../services/chat_preferences.dart';
 import '../services/comments_repository.dart';
 import '../state/app_data_store.dart';
 import '../state/target_view_model.dart';
@@ -110,6 +112,8 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
       CommentLevel.coach => repo.forCoach(vm.session.id),
     };
     final df = DateFormat('dd.MM HH:mm');
+    final myRole = store.workMode == WorkMode.coach ? AuthorRole.coach : AuthorRole.athlete;
+    final prefs = ChatPreferences(store.db);
 
     return SafeArea(
       child: Column(
@@ -125,31 +129,24 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
           Expanded(
             child: comments.isEmpty
                 ? Center(
-                    child: Text(widget.level == CommentLevel.coach
-                        ? 'Переписки с тренером пока нет'
-                        : 'Комментариев пока нет'),
+                    child: Text(
+                        widget.level == CommentLevel.coach ? 'Переписки с тренером пока нет' : 'Комментариев пока нет'),
                   )
+                // Как в мессенджере: свои справа, собеседника слева, новые
+                // внизу (лента перевёрнута и прижата к полю ввода).
                 : ListView.builder(
+                    reverse: true,
                     padding: const EdgeInsets.all(12),
                     itemCount: comments.length,
                     itemBuilder: (context, i) {
-                      final c = comments[i];
-                      return GestureDetector(
-                        onLongPress: () => _showActions(context, repo, c),
-                        child: Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('${c.authorLabel}: ${df.format(c.createdAt)}',
-                                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                        fontWeight: FontWeight.w600,
-                                      )),
-                              Text(c.text),
-                            ],
-                          ),
-                        ),
+                      final c = comments[comments.length - 1 - i];
+                      final mine = c.authorRole == myRole;
+                      return _CommentBubble(
+                        comment: c,
+                        mine: mine,
+                        prefs: prefs,
+                        time: df.format(c.createdAt),
+                        onLongPress: () => _showActions(context, repo, c, mine),
                       );
                     },
                   ),
@@ -216,7 +213,7 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
 
   /// Меню "Изменить"/"Удалить" по долгому нажатию (пункт 6 списка
   /// правок) — тот же приём, что уже есть у сообщений ассистента.
-  void _showActions(BuildContext context, CommentsRepository repo, Comment c) {
+  void _showActions(BuildContext context, CommentsRepository repo, Comment c, bool mine) {
     showModalBottomSheet(
       context: context,
       builder: (ctx) => SafeArea(
@@ -224,20 +221,40 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.edit_outlined),
-              title: const Text('Изменить'),
+              leading: const Icon(Icons.copy_outlined),
+              title: const Text('Копировать'),
               onTap: () {
                 Navigator.of(ctx).pop();
-                _editComment(context, repo, c);
+                Clipboard.setData(ClipboardData(text: c.text));
               },
             ),
+            if (mine)
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('Изменить'),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _editComment(context, repo, c);
+                },
+              ),
             ListTile(
-              leading: const Icon(Icons.delete_outline),
-              title: const Text('Удалить'),
-              onTap: () {
+              leading: Icon(Icons.delete_outline, color: Theme.of(ctx).colorScheme.error),
+              title: Text('Удалить', style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
+              onTap: () async {
                 Navigator.of(ctx).pop();
+                final ok = await showDialog<bool>(
+                  context: context,
+                  builder: (d) => AlertDialog(
+                    title: const Text('Удалить сообщение?'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.of(d).pop(false), child: const Text('Отмена')),
+                      FilledButton(onPressed: () => Navigator.of(d).pop(true), child: const Text('Удалить')),
+                    ],
+                  ),
+                );
+                if (ok != true) return;
                 repo.delete(c.id);
-                setState(() {});
+                if (mounted) setState(() {});
               },
             ),
           ],
@@ -273,4 +290,76 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
         CommentLevel.session => 'Комментарии к тренировке',
         CommentLevel.coach => 'Чат с тренером',
       };
+}
+
+/// Пузырь комментария в стиле мессенджера: цвета и скругление — из
+/// настроек оформления чата, время снаружи под пузырём.
+class _CommentBubble extends StatelessWidget {
+  final Comment comment;
+  final bool mine;
+  final ChatPreferences prefs;
+  final String time;
+  final VoidCallback onLongPress;
+  const _CommentBubble(
+      {required this.comment, required this.mine, required this.prefs, required this.time, required this.onLongPress});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final base = mine ? prefs.mineBubbleColor : prefs.otherBubbleColor;
+    final fg = mine ? prefs.mineTextColor : prefs.otherTextColor;
+    return Align(
+      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+      child: GestureDetector(
+        onLongPress: onLongPress,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Column(
+            crossAxisAlignment: mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            children: [
+              Container(
+                constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.78),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(prefs.bubbleRadius),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color.lerp(base, Colors.white, 0.08)!, Color.lerp(base, Colors.black, 0.10)!],
+                  ),
+                  boxShadow: prefs.shadowEnabled
+                      ? [
+                          BoxShadow(
+                              color: Colors.black.withValues(alpha: prefs.shadowIntensity),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4))
+                        ]
+                      : null,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (!mine)
+                      Text(comment.authorLabel,
+                          style: theme.textTheme.labelMedium?.copyWith(color: fg, fontWeight: FontWeight.w700)),
+                    Text(comment.text,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: fg,
+                          fontSize: (theme.textTheme.bodyMedium?.fontSize ?? 14) * prefs.fontScale,
+                        )),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 3),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(time, style: theme.textTheme.labelSmall?.copyWith(color: theme.hintColor)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

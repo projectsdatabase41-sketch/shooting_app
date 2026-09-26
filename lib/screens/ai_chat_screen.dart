@@ -11,6 +11,7 @@ import '../models/series_spec.dart';
 import '../models/shot.dart';
 import '../models/target_face.dart';
 import '../models/training_session.dart';
+import '../services/chat_preferences.dart';
 import '../services/coach_notes_repository.dart';
 import '../services/feedback_service.dart';
 import '../state/ai_chat_view_model.dart';
@@ -444,8 +445,10 @@ class _Bubble extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final mine = message.fromUser;
-    final bg = message.isError ? cs.errorContainer : (mine ? cs.primaryContainer : cs.surfaceContainerHigh);
-    final fg = message.isError ? cs.onErrorContainer : (mine ? cs.onPrimaryContainer : cs.onSurface);
+    // Оформление как в мессенджере — те же цвета, скругление и тень пузырей.
+    final prefs = ChatPreferences(context.read<AppDataStore>().db);
+    final bg = message.isError ? cs.errorContainer : (mine ? prefs.mineBubbleColor : prefs.otherBubbleColor);
+    final fg = message.isError ? cs.onErrorContainer : (mine ? prefs.mineTextColor : prefs.otherTextColor);
 
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
@@ -455,7 +458,22 @@ class _Bubble extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 560),
           margin: const EdgeInsets.only(bottom: 10),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14)),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(prefs.bubbleRadius),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color.lerp(bg, Colors.white, 0.08)!, Color.lerp(bg, Colors.black, 0.10)!],
+            ),
+            boxShadow: prefs.shadowEnabled
+                ? [
+                    BoxShadow(
+                        color: Colors.black.withValues(alpha: prefs.shadowIntensity),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4))
+                  ]
+                : null,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
