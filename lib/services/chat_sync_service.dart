@@ -12,6 +12,7 @@ import 'chat_auth_service.dart';
 import 'chat_drive_service.dart';
 import 'chat_messages_repository.dart';
 import 'chat_settings.dart';
+import 'group_live_session.dart';
 import 'live_chat_session.dart';
 import '../i18n/i18n.dart';
 
@@ -43,6 +44,11 @@ class ChatSyncService {
   /// Живой канал открытого диалога (см. `LiveChatSession`) — если задан и
   /// собеседник в нём, текст уходит напрямую, иначе как обычно через базу.
   LiveChatSession? live;
+
+  /// Живой канал открытой группы (см. `GroupLiveSession`) — только
+  /// ускоряет доставку присутствующим, обычная отправка через базу
+  /// (fan-out) в `retry()` всё равно происходит всегда.
+  GroupLiveSession? groupLive;
 
   /// Строка(и) для транзитной таблицы: личному собеседнику — одна, группе —
   /// по строке на каждого участника, кроме себя (группа живёт в
@@ -355,6 +361,13 @@ class ChatSyncService {
     }
     final l = live;
     if (l != null && l.contactId == message.contactId && await l.trySend(message)) return;
+    // Только обычный текст — вложения, правки и «позвать» идут как раньше
+    // (broadcastText создаёт у получателя ТЕКСТОВОЕ входящее сообщение,
+    // фото/файл так не передать).
+    final gl = groupLive;
+    if (gl != null && gl.groupId == message.contactId && message.type == ChatMessageType.text) {
+      gl.broadcastText(message);
+    }
     if (!ChatSettings.isConfigured) {
       repo.updateStatus(message.id, ChatMessageStatus.error);
       throw Exception(tr('Чат не настроен'));

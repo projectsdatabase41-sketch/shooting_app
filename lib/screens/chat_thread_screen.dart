@@ -25,6 +25,7 @@ import '../services/chat_preferences.dart';
 import '../services/chat_presence.dart';
 import '../services/chat_sync_service.dart';
 import '../services/chat_translation_service.dart';
+import '../services/group_live_session.dart';
 import '../services/live_chat_session.dart';
 import '../services/remote_config.dart';
 import '../services/webrtc_peer_link.dart';
@@ -72,6 +73,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   final _scroll = ScrollController();
   PollLoop? _pollLoop;
   LiveChatSession? _live;
+  GroupLiveSession? _groupLive;
   List<ChatMessage> _messages = [];
   bool _sending = false;
   bool _aiBusy = false;
@@ -174,6 +176,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       );
       widget.sync.live = _live;
       _live!.open();
+    } else {
+      _groupLive = GroupLiveSession(
+        auth: widget.auth,
+        repo: widget.repo,
+        groupId: _contact.id,
+        onIncoming: () {
+          if (!mounted) return;
+          widget.repo.markThreadSeen(_contact.id);
+          _reload();
+          _scrollToEnd();
+        },
+        onPresenceChanged: () {
+          if (mounted) setState(() {});
+        },
+      );
+      widget.sync.groupLive = _groupLive;
+      _groupLive!.open();
     }
     // Адаптивный опрос: пока собеседник пишет — каждые 5 секунд, в тишине
     // растёт до 30 (см. AdaptivePoller). Отправка своего сообщения возвращает
@@ -182,7 +201,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       poller: AdaptivePoller(
           min: const Duration(seconds: 5),
           max: const Duration(seconds: 30),
-          scale: () => RemoteConfig.pollScale * (_live?.peerOnline == true ? 4 : 1)),
+          scale: () => RemoteConfig.pollScale * (_live?.peerOnline == true || (_groupLive?.onlineCount ?? 0) > 1 ? 4 : 1)),
       tick: () async {
         final added = await widget.sync.pollIncoming();
         if (added > 0 && mounted) {
@@ -203,6 +222,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     _pollLoop?.stop();
     if (widget.sync.live == _live) widget.sync.live = null;
     _live?.close();
+    if (widget.sync.groupLive == _groupLive) widget.sync.groupLive = null;
+    _groupLive?.close();
     _input.dispose();
     _scroll.dispose();
     _showJumpToEnd.dispose();
@@ -744,8 +765,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
                     if (_contact.isGroup)
-                      Text(tr('Участников: {length}', {'length': _contact.members.length}),
-                          style: theme.textTheme.bodySmall)
+                      Text(
+                        (_groupLive?.onlineCount ?? 0) > 1
+                            ? tr('Участников: {length}, в сети: {online}',
+                                {'length': _contact.members.length, 'online': _groupLive!.onlineCount})
+                            : tr('Участников: {length}', {'length': _contact.members.length}),
+                        style: theme.textTheme.bodySmall,
+                      )
                     else if (seen != null)
                       Text(seen,
                           style: theme.textTheme.bodySmall?.copyWith(color: online ? const Color(0xFF3DDC84) : null))
