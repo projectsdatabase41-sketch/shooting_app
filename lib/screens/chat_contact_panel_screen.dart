@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../logic/chat_media_utils.dart';
@@ -13,6 +14,7 @@ import '../services/chat_auth_service.dart';
 import '../services/chat_messages_repository.dart';
 import '../services/chat_preferences.dart';
 import '../services/chat_sync_service.dart';
+import '../state/personalization_view_model.dart';
 import '../widgets/chat_avatar.dart';
 import 'chat_group_screen.dart';
 import 'photo_viewer_screen.dart';
@@ -155,11 +157,14 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
     final prefs = widget.prefs;
     final muted = prefs.mutedFor(_contact.id);
     final translate = prefs.autoTranslateFor(_contact.id);
+    // Звонки/видеозвонки остаются разработческой функцией (решение
+    // пользователя), даже когда сам мессенджер уже доступен всем.
+    final devMode = context.watch<PersonalizationViewModel>().devMode;
     final tiles = <Widget>[
-      if (!_contact.isGroup) ...[
+      if (!_contact.isGroup && devMode) ...[
         _Tile3D(icon: Icons.call, label: tr('Звонок'), onTap: () => Navigator.of(context).pop('call')),
         _Tile3D(icon: Icons.videocam, label: tr('Видео'), onTap: () => Navigator.of(context).pop('video')),
-      ] else
+      ] else if (_contact.isGroup)
         _Tile3D(icon: Icons.groups, label: tr('О группе'), onTap: _openGroupInfo),
       _Tile3D(
         icon: muted ? Icons.notifications_off : Icons.notifications_active,
