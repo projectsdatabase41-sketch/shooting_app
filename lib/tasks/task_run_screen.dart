@@ -11,6 +11,8 @@ import '../models/training_session.dart';
 import '../screens/target_screen.dart';
 import '../services/ai_settings.dart';
 import '../state/app_data_store.dart';
+import '../widgets/press_3d.dart';
+import '../widgets/raised_3d_button.dart';
 import 'task_ai.dart';
 import 'task_models.dart';
 import 'task_service.dart';
@@ -116,10 +118,16 @@ class _TaskRunScreenState extends State<TaskRunScreen> {
     }
     final counted = r.shots.where((x) => x.counts).length;
     if (s.isShooting && counted > s.plannedShots) {
-      r.events.add({'type': 'extra_shots', 'details': {'planned': s.plannedShots, 'actual': counted}});
+      r.events.add({
+        'type': 'extra_shots',
+        'details': {'planned': s.plannedShots, 'actual': counted}
+      });
     }
     if (s.isShooting && counted < s.plannedShots) {
-      r.events.add({'type': 'fewer_shots', 'details': {'planned': s.plannedShots, 'actual': counted}});
+      r.events.add({
+        'type': 'fewer_shots',
+        'details': {'planned': s.plannedShots, 'actual': counted}
+      });
     }
     if (s.sighting?['required'] == true && !r.shots.any((x) => !x.counts)) {
       r.events.add({'type': 'no_sighting', 'details': const {}});
@@ -205,7 +213,6 @@ class _TaskRunScreenState extends State<TaskRunScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pageCount = _stageCount + 3; // обзор + ступени + итог + отчёты
     return PopScope(
       // Во время выполнения назад — к обзору, а не потеря результата.
       canPop: _page == 0 || _runId != null,
@@ -216,8 +223,12 @@ class _TaskRunScreenState extends State<TaskRunScreen> {
         appBar: AppBar(
           title: Text(task.title, maxLines: 1, overflow: TextOverflow.ellipsis),
           bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(4),
-            child: LinearProgressIndicator(value: pageCount <= 1 ? 1 : _page / (pageCount - 1)),
+            preferredSize: const Size.fromHeight(36),
+            child: StageProgressPills(
+              count: _stageCount,
+              current: _page >= 1 && _page <= _stageCount ? _page - 1 : null,
+              isDone: _stageDone,
+            ),
           ),
         ),
         body: PageView(
@@ -268,10 +279,11 @@ class _TaskRunScreenState extends State<TaskRunScreen> {
         const SizedBox(height: 8),
         TaskPlanView(plan: task),
         const SizedBox(height: 20),
-        FilledButton.icon(
-          onPressed: task.stages.isEmpty ? null : _start,
-          icon: const Icon(Icons.play_arrow),
-          label: Text(task.done ? tr('Выполнить ещё раз') : tr('Начать')),
+        Raised3DButton(
+          icon: Icons.play_arrow,
+          label: task.done ? tr('Выполнить ещё раз') : tr('Начать'),
+          baseColor: theme.colorScheme.primary,
+          onTap: task.stages.isEmpty ? null : _start,
         ),
         const SizedBox(height: 6),
         Text(tr('Начать можно когда удобно — сейчас можно просто ознакомиться.'),
@@ -298,7 +310,11 @@ class _TaskRunScreenState extends State<TaskRunScreen> {
                   if (step.isShooting)
                     tr('{n} выстр., сумма {s}', {
                       'n': _results['$si-$pi']!.shots.where((x) => x.counts).length,
-                      's': _results['$si-$pi']!.shots.where((x) => x.counts).fold<double>(0, (a, x) => a + x.score).toStringAsFixed(1),
+                      's': _results['$si-$pi']!
+                          .shots
+                          .where((x) => x.counts)
+                          .fold<double>(0, (a, x) => a + x.score)
+                          .toStringAsFixed(1),
                     }),
                   for (final e in _results['$si-$pi']!.events) _eventLabel(e),
                 ].join(' · ')),
@@ -311,12 +327,15 @@ class _TaskRunScreenState extends State<TaskRunScreen> {
           decoration: InputDecoration(labelText: tr('Заметка по заданию'), border: const OutlineInputBorder()),
         ),
         const SizedBox(height: 16),
-        FilledButton(
-          onPressed: _submitting ? null : _submit,
-          child: _submitting
-              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-              : Text(tr('Отправить тренеру')),
-        ),
+        if (_submitting)
+          const Center(child: CircularProgressIndicator())
+        else
+          Raised3DButton(
+            icon: Icons.send,
+            label: tr('Отправить тренеру'),
+            baseColor: theme.colorScheme.primary,
+            onTap: _submit,
+          ),
         if (_status != null) ...[const SizedBox(height: 8), Text(_status!, textAlign: TextAlign.center)],
       ],
     );
@@ -376,7 +395,8 @@ class _StagePageState extends State<_StagePage> {
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
       child: Row(
         children: [
-          Text(tr('Ступень {n} из {m}', {'n': widget.stage + 1, 'm': run._stageCount}), style: theme.textTheme.labelLarge),
+          Text(tr('Ступень {n} из {m}', {'n': widget.stage + 1, 'm': run._stageCount}),
+              style: theme.textTheme.labelLarge),
           const Spacer(),
           Text(stageModeLabel(stage.mode),
               style: theme.textTheme.labelMedium?.copyWith(color: stageModeColor(context, stage.mode))),
@@ -393,32 +413,41 @@ class _StagePageState extends State<_StagePage> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Text(
-              stage.mode == StageMode.pickOne ? tr('Выберите один этап') : tr('Выберите, с чего начать — сделать нужно все'),
+              stage.mode == StageMode.pickOne
+                  ? tr('Выберите один этап')
+                  : tr('Выберите, с чего начать — сделать нужно все'),
               style: theme.textTheme.titleMedium,
             ),
           ),
           for (final (i, s) in stage.steps.indexed)
-            Card(
-              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: ListTile(
-                leading: Icon(run._result(widget.stage, i).done
-                    ? Icons.check_circle
-                    : (s.isShooting ? Icons.gps_fixed : Icons.self_improvement)),
-                title: Text(s.title),
-                subtitle: s.instructions.isEmpty ? null : Text(s.instructions, maxLines: 2, overflow: TextOverflow.ellipsis),
-                trailing: run._result(widget.stage, i).done ? Text(tr('готово')) : const Icon(Icons.chevron_right),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              child: Press3D(
+                padding: EdgeInsets.zero,
+                accent: run._result(widget.stage, i).done ? Colors.green : stageModeColor(context, stage.mode),
                 onTap: run._result(widget.stage, i).done || (stage.mode == StageMode.pickOne && done)
                     ? null
                     : () => setState(() {
                           run._ensureSession(widget.stage, i);
                           _active = i;
                         }),
+                child: ListTile(
+                  leading: Icon(run._result(widget.stage, i).done
+                      ? Icons.check_circle
+                      : (s.isShooting ? Icons.gps_fixed : Icons.self_improvement)),
+                  title: Text(s.title),
+                  subtitle: s.instructions.isEmpty
+                      ? null
+                      : Text(s.instructions, maxLines: 2, overflow: TextOverflow.ellipsis),
+                  trailing: run._result(widget.stage, i).done ? Text(tr('готово')) : const Icon(Icons.chevron_right),
+                ),
               ),
             ),
           if (done)
             Padding(
               padding: const EdgeInsets.all(16),
-              child: FilledButton(onPressed: _next, child: Text(tr('Дальше'))),
+              child: Raised3DButton(
+                  icon: Icons.arrow_forward, label: tr('Дальше'), baseColor: theme.colorScheme.primary, onTap: _next),
             ),
         ],
       );
@@ -458,7 +487,8 @@ class _StepView extends StatefulWidget {
   final int stage;
   final List<int> steps;
   final VoidCallback onDone;
-  const _StepView({required this.header, required this.run, required this.stage, required this.steps, required this.onDone});
+  const _StepView(
+      {required this.header, required this.run, required this.stage, required this.steps, required this.onDone});
 
   @override
   State<_StepView> createState() => _StepViewState();
@@ -503,49 +533,47 @@ class _StepViewState extends State<_StepView> {
     final shootIdx = _shootingIndex;
     final noteModes = {for (final s in _steps) s.noteMode};
 
-    final instructions = Card(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      child: InkWell(
+    final instructions = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: Press3D(
         onTap: () => setState(() => _showInstructions = !_showInstructions),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(_steps.map((s) => s.title).join(' + '), style: theme.textTheme.titleMedium),
-                  ),
-                  Icon(Icons.timer_outlined, size: 16, color: over ? Colors.orange : theme.hintColor),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${_mmss(elapsed)}${limit == null ? '' : ' / ${_mmss(Duration(seconds: limit))}'}',
-                    style: theme.textTheme.labelLarge?.copyWith(color: over ? Colors.orange : null),
-                  ),
-                  Icon(_showInstructions ? Icons.expand_less : Icons.expand_more),
-                ],
-              ),
-              if (over)
-                Text(tr('Время вышло — это не мешает, просто будет отмечено'),
-                    style: theme.textTheme.bodySmall?.copyWith(color: Colors.orange)),
-              if (_showInstructions)
-                for (final s in _steps) ...[
-                  const SizedBox(height: 6),
-                  if (_steps.length > 1) Text(s.title, style: theme.textTheme.labelLarge),
-                  if (s.instructions.isNotEmpty) Text(s.instructions),
-                  Text(
-                    [
-                      if (s.isShooting) tr('{n} выстр.', {'n': s.plannedShots}),
-                      if (s.exercise?['position'] != null) '${s.exercise!['position']}',
-                      if (s.sighting?['required'] == true) tr('с пристрелкой'),
-                      noteModeLabel(s.noteMode),
-                    ].join(' · '),
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ],
-            ],
-          ),
+        accent: over ? Colors.orange : null,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(_steps.map((s) => s.title).join(' + '), style: theme.textTheme.titleMedium),
+                ),
+                Icon(Icons.timer_outlined, size: 16, color: over ? Colors.orange : theme.hintColor),
+                const SizedBox(width: 4),
+                Text(
+                  '${_mmss(elapsed)}${limit == null ? '' : ' / ${_mmss(Duration(seconds: limit))}'}',
+                  style: theme.textTheme.labelLarge?.copyWith(color: over ? Colors.orange : null),
+                ),
+                Icon(_showInstructions ? Icons.expand_less : Icons.expand_more),
+              ],
+            ),
+            if (over)
+              Text(tr('Время вышло — это не мешает, просто будет отмечено'),
+                  style: theme.textTheme.bodySmall?.copyWith(color: Colors.orange)),
+            if (_showInstructions)
+              for (final s in _steps) ...[
+                const SizedBox(height: 6),
+                if (_steps.length > 1) Text(s.title, style: theme.textTheme.labelLarge),
+                if (s.instructions.isNotEmpty) Text(s.instructions),
+                Text(
+                  [
+                    if (s.isShooting) tr('{n} выстр.', {'n': s.plannedShots}),
+                    if (s.exercise?['position'] != null) '${s.exercise!['position']}',
+                    if (s.sighting?['required'] == true) tr('с пристрелкой'),
+                    noteModeLabel(s.noteMode),
+                  ].join(' · '),
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+          ],
         ),
       ),
     );
@@ -553,10 +581,11 @@ class _StepViewState extends State<_StepView> {
     final notes = _notesPanel(shootIdx, noteModes);
     final finish = Padding(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-      child: FilledButton.icon(
-        onPressed: widget.onDone,
-        icon: const Icon(Icons.check),
-        label: Text(tr('Этап выполнен')),
+      child: Raised3DButton(
+        icon: Icons.check,
+        label: tr('Этап выполнен'),
+        baseColor: Colors.green.shade700,
+        onTap: widget.onDone,
       ),
     );
 
@@ -732,7 +761,8 @@ class _TaskReportsViewState extends State<TaskReportsView> {
       children: [
         Text(tr('Отчёт'), style: theme.textTheme.titleLarge),
         if (widget.status != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(widget.status!)),
-        if (visual == null && widget.status == null) const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator())),
+        if (visual == null && widget.status == null)
+          const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator())),
         if (visual != null) TaskVisualReport(content: '${visual['content']}'),
         if (structured != null)
           ExpansionTile(

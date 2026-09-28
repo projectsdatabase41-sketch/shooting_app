@@ -16,13 +16,15 @@ class AthleteTaskService {
 
   Future<List<TaskPlan>> list() async {
     final rows = (await auth.rest('GET',
-        'tasks?select=*,task_stages(*,task_steps(*)),task_runs(id,started_at,finished_at,status)&order=created_at.desc')) as List;
+            'tasks?select=*,task_stages(*,task_steps(*)),task_runs(id,started_at,finished_at,status)&order=created_at.desc'))
+        as List;
     return [for (final r in rows) TaskPlan.fromJson((r as Map).cast<String, dynamic>())];
   }
 
   Future<TaskPlan?> byId(String id) async {
-    final rows = (await auth.rest('GET',
-        'tasks?id=eq.$id&select=*,task_stages(*,task_steps(*)),task_runs(id,started_at,finished_at,status)')) as List;
+    final rows = (await auth.rest(
+            'GET', 'tasks?id=eq.$id&select=*,task_stages(*,task_steps(*)),task_runs(id,started_at,finished_at,status)'))
+        as List;
     return rows.isEmpty ? null : TaskPlan.fromJson((rows.first as Map).cast<String, dynamic>());
   }
 
@@ -31,8 +33,13 @@ class AthleteTaskService {
       '${await auth.rest('POST', 'rpc/athlete_submit_run', body: {'p_run': run})}';
 
   Future<void> saveReport(String runId, String kind, String content, {String? model, String? request}) =>
-      auth.rest('POST', 'task_reports',
-          body: {'run_id': runId, 'kind': kind, 'content': content, if (model != null) 'model': model, if (request != null) 'request': request});
+      auth.rest('POST', 'task_reports', body: {
+        'run_id': runId,
+        'kind': kind,
+        'content': content,
+        if (model != null) 'model': model,
+        if (request != null) 'request': request
+      });
 
   Future<List<Map<String, dynamic>>> reports(String runId) async => [
         for (final r in (await auth.rest('GET', 'task_reports?run_id=eq.$runId&order=created_at')) as List)
@@ -78,7 +85,8 @@ class CoachTaskService {
       access.rawRpc('coach_set_task_status', {'p_token': a.token, 'p_task_id': taskId, 'p_status': status}, athlete: a);
 
   Future<List<TaskPlan>> list(CoachAthlete a, {String? taskId}) async {
-    final rows = await access.rawRpc('coach_get_tasks', {'p_token': a.token, if (taskId != null) 'p_task_id': taskId}, athlete: a);
+    final rows = await access.rawRpc('coach_get_tasks', {'p_token': a.token, if (taskId != null) 'p_task_id': taskId},
+        athlete: a);
     return [for (final r in (rows as List? ?? const [])) TaskPlan.fromJson((r as Map).cast<String, dynamic>())];
   }
 

@@ -8,6 +8,9 @@ import '../services/ai_settings.dart';
 import '../services/coach_access_service.dart';
 import '../services/push_service.dart';
 import '../state/app_data_store.dart';
+import '../widgets/glass_pill.dart';
+import '../widgets/press_3d.dart';
+import '../widgets/raised_3d_button.dart';
 import 'task_ai.dart';
 import 'task_models.dart';
 import 'task_run_screen.dart';
@@ -52,7 +55,10 @@ class _CoachTasksScreenState extends State<CoachTasksScreen> {
     final copies = <_Copy>[];
     await Future.wait([
       for (final a in _athletes)
-        _service.list(a).then((list) => copies.addAll([for (final t in list) (athlete: a, task: t)])).catchError((_) {}),
+        _service
+            .list(a)
+            .then((list) => copies.addAll([for (final t in list) (athlete: a, task: t)]))
+            .catchError((_) {}),
     ]);
     final groups = <String, List<_Copy>>{};
     for (final c in copies) {
@@ -87,7 +93,9 @@ class _CoachTasksScreenState extends State<CoachTasksScreen> {
     final theme = Theme.of(context);
     final groups = _groups;
     return Scaffold(
-      appBar: AppBar(title: Text(tr('Задания'))),
+      appBar: GlassHeader(
+        title: Text(tr('Задания'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+      ),
       floatingActionButton: _athletes.isEmpty
           ? null
           : FloatingActionButton.extended(onPressed: _create, icon: const Icon(Icons.add), label: Text(tr('Задание'))),
@@ -103,20 +111,26 @@ class _CoachTasksScreenState extends State<CoachTasksScreen> {
                         padding: const EdgeInsets.fromLTRB(12, 12, 12, 88),
                         children: [
                           for (final g in (groups.values.toList()
-                            ..sort((a, b) => (b.first.task.createdAt ?? DateTime(0)).compareTo(a.first.task.createdAt ?? DateTime(0)))))
-                            Card(
-                              child: ListTile(
-                                leading: const Icon(Icons.assignment_outlined),
-                                title: Text(g.first.task.title),
-                                subtitle: Text([
-                                  g.map((c) => c.athlete.name).join(', '),
-                                  tr('выполнили: {n} из {m}', {
-                                    'n': g.where((c) => c.task.done).length,
-                                    'm': g.where((c) => !c.task.removed).length,
-                                  }),
-                                ].join(' · ')),
-                                trailing: const Icon(Icons.chevron_right),
+                            ..sort((a, b) => (b.first.task.createdAt ?? DateTime(0))
+                                .compareTo(a.first.task.createdAt ?? DateTime(0)))))
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: Press3D(
+                                padding: EdgeInsets.zero,
+                                accent: theme.colorScheme.primary,
                                 onTap: () => _openGroup(g),
+                                child: ListTile(
+                                  leading: const Icon(Icons.assignment_outlined),
+                                  title: Text(g.first.task.title),
+                                  subtitle: Text([
+                                    g.map((c) => c.athlete.name).join(', '),
+                                    tr('выполнили: {n} из {m}', {
+                                      'n': g.where((c) => c.task.done).length,
+                                      'm': g.where((c) => !c.task.removed).length,
+                                    }),
+                                  ].join(' · ')),
+                                  trailing: const Icon(Icons.chevron_right),
+                                ),
                               ),
                             ),
                         ],
@@ -178,7 +192,9 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
         _answers.addAll(answers);
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('ИИ не ответил: {e}', {'e': e}))));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('ИИ не ответил: {e}', {'e': e}))));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -198,7 +214,8 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
               for (final (i, q) in questions.indexed)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: TextField(controller: ctrls[i], decoration: InputDecoration(labelText: q), maxLines: 3, minLines: 1),
+                  child: TextField(
+                      controller: ctrls[i], decoration: InputDecoration(labelText: q), maxLines: 3, minLines: 1),
                 ),
             ],
           ),
@@ -323,7 +340,9 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
               ),
               const SizedBox(width: 8),
               OutlinedButton(
-                onPressed: () => setState(() => _plan ??= TaskPlan(title: _title.text, stages: [TaskStage(steps: [TaskStep(title: tr('Этап 1'))])])),
+                onPressed: () => setState(() => _plan ??= TaskPlan(title: _title.text, stages: [
+                      TaskStage(steps: [TaskStep(title: tr('Этап 1'))])
+                    ])),
                 child: Text(tr('Вручную')),
               ),
             ],
@@ -343,10 +362,11 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
           : SafeArea(
               child: Padding(
                 padding: const EdgeInsets.all(12),
-                child: FilledButton.icon(
-                  onPressed: _busy || _to.isEmpty ? null : _send,
-                  icon: const Icon(Icons.send),
-                  label: Text(_to.isEmpty ? tr('Выберите спортсменов') : tr('Отправить ({n})', {'n': _to.length})),
+                child: Raised3DButton(
+                  icon: Icons.send,
+                  label: _to.isEmpty ? tr('Выберите спортсменов') : tr('Отправить ({n})', {'n': _to.length}),
+                  baseColor: theme.colorScheme.primary,
+                  onTap: _busy || _to.isEmpty ? null : _send,
                 ),
               ),
             ),
@@ -367,12 +387,10 @@ class _PlanEditor extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (final (i, stage) in plan.stages.indexed)
-          Card(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: stageModeColor(context, stage.mode).withValues(alpha: 0.6)),
-            ),
-            child: Padding(
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Press3D(
+              accent: stageModeColor(context, stage.mode),
               padding: const EdgeInsets.fromLTRB(12, 6, 4, 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -499,7 +517,9 @@ class _StepDialogState extends State<_StepDialog> {
             }
           : null
       ..timeLimitSec = int.tryParse(_minutes.text) == null ? null : int.parse(_minutes.text) * 60
-      ..sighting = _sighting ? {'required': true, if (int.tryParse(_sightMax.text) != null) 'max_shots': int.parse(_sightMax.text)} : null
+      ..sighting = _sighting
+          ? {'required': true, if (int.tryParse(_sightMax.text) != null) 'max_shots': int.parse(_sightMax.text)}
+          : null
       ..noteMode = _note
       ..keepStats = _keep;
     Navigator.of(context).pop();
@@ -536,12 +556,16 @@ class _StepDialogState extends State<_StepDialog> {
                 children: [
                   Expanded(
                     child: TextField(
-                        controller: _shots, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: tr('Выстрелов'))),
+                        controller: _shots,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(labelText: tr('Выстрелов'))),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: TextField(
-                        controller: _series, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: tr('В серии'))),
+                        controller: _series,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(labelText: tr('В серии'))),
                   ),
                 ],
               ),
@@ -574,7 +598,8 @@ class _StepDialogState extends State<_StepDialog> {
               initialValue: _note,
               decoration: InputDecoration(labelText: tr('Отметки спортсмена')),
               items: [
-                for (final m in ['step', 'shot', 'series', 'none']) DropdownMenuItem(value: m, child: Text(noteModeLabel(m))),
+                for (final m in ['step', 'shot', 'series', 'none'])
+                  DropdownMenuItem(value: m, child: Text(noteModeLabel(m))),
               ],
               onChanged: (v) => setState(() => _note = v ?? _note),
             ),
@@ -683,7 +708,9 @@ class _CoachTaskGroupScreenState extends State<_CoachTaskGroupScreen> {
                   for (final r in runs.reversed)
                     TaskReportsView(
                       runId: '${r['id']}',
-                      reports: [for (final x in (r['reports'] as List? ?? const [])) (x as Map).cast<String, dynamic>()],
+                      reports: [
+                        for (final x in (r['reports'] as List? ?? const [])) (x as Map).cast<String, dynamic>()
+                      ],
                       status: tr('Выполнено {d} · заметка: {n}', {
                         'd': '${DateTime.tryParse('${r['finished_at']}')?.toLocal() ?? ''}'.split('.').first,
                         'n': '${r['final_note'] ?? ''}'.isEmpty ? '—' : '${r['final_note']}',
@@ -708,25 +735,33 @@ class _CoachTaskGroupScreenState extends State<_CoachTaskGroupScreen> {
             children: [
               Text(tr('Получатели'), style: theme.textTheme.titleMedium),
               const Spacer(),
-              TextButton.icon(onPressed: _busy ? null : _addAthletes, icon: const Icon(Icons.person_add), label: Text(tr('Добавить'))),
+              TextButton.icon(
+                  onPressed: _busy ? null : _addAthletes,
+                  icon: const Icon(Icons.person_add),
+                  label: Text(tr('Добавить'))),
             ],
           ),
           for (final c in _copies)
-            Card(
-              child: ListTile(
-                leading: Icon(
-                  c.task.removed ? Icons.block : (c.task.done ? Icons.task_alt : Icons.hourglass_empty),
-                  color: c.task.removed ? theme.colorScheme.error : (c.task.done ? Colors.green : null),
-                ),
-                title: Text(c.athlete.name),
-                subtitle: Text(c.task.removed
-                    ? tr('снято')
-                    : (c.task.done ? tr('выполнено: {n}', {'n': c.task.runs.length}) : tr('ещё не выполнял'))),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Press3D(
+                padding: EdgeInsets.zero,
+                accent: c.task.removed ? theme.colorScheme.error : (c.task.done ? Colors.green : null),
                 onTap: c.task.runs.isEmpty ? null : () => _openRuns(c),
-                trailing: IconButton(
-                  tooltip: c.task.removed ? tr('Вернуть') : tr('Снять'),
-                  icon: Icon(c.task.removed ? Icons.undo : Icons.remove_circle_outline),
-                  onPressed: _busy ? null : () => _setRemoved(c, !c.task.removed),
+                child: ListTile(
+                  leading: Icon(
+                    c.task.removed ? Icons.block : (c.task.done ? Icons.task_alt : Icons.hourglass_empty),
+                    color: c.task.removed ? theme.colorScheme.error : (c.task.done ? Colors.green : null),
+                  ),
+                  title: Text(c.athlete.name),
+                  subtitle: Text(c.task.removed
+                      ? tr('снято')
+                      : (c.task.done ? tr('выполнено: {n}', {'n': c.task.runs.length}) : tr('ещё не выполнял'))),
+                  trailing: IconButton(
+                    tooltip: c.task.removed ? tr('Вернуть') : tr('Снять'),
+                    icon: Icon(c.task.removed ? Icons.undo : Icons.remove_circle_outline),
+                    onPressed: _busy ? null : () => _setRemoved(c, !c.task.removed),
+                  ),
                 ),
               ),
             ),

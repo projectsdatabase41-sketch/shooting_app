@@ -5,6 +5,8 @@ import '../i18n/i18n.dart';
 import '../services/push_service.dart';
 import '../services/supabase_auth_service.dart';
 import '../state/app_data_store.dart';
+import '../widgets/glass_pill.dart';
+import '../widgets/press_3d.dart';
 import 'task_models.dart';
 import 'task_run_screen.dart';
 import 'task_service.dart';
@@ -84,22 +86,28 @@ class _AthleteTasksScreenState extends State<AthleteTasksScreen> {
           padding: const EdgeInsets.all(12),
           children: [
             for (final t in sorted)
-              Card(
-                child: ListTile(
-                  leading: Icon(
-                    t.removed ? Icons.block : (t.done ? Icons.task_alt : Icons.assignment_outlined),
-                    color: t.removed ? theme.colorScheme.error : (t.done ? Colors.green : theme.colorScheme.primary),
-                  ),
-                  title: Text(t.title),
-                  subtitle: Text([
-                    tr('{n} ступ., {m} этап.', {'n': t.stages.length, 'm': t.stepCount}),
-                    if (t.removed) tr('снято тренером'),
-                    if (t.done) tr('выполнено: {n}', {'n': t.runs.where((r) => r.status == 'done').length}),
-                    if (t.dueAt != null) tr('до {d}', {'d': '${t.dueAt!.day}.${t.dueAt!.month.toString().padLeft(2, '0')}'}),
-                    if ((t.repeatRule ?? '').isNotEmpty) repeatLabel(t.repeatRule),
-                  ].join(' · ')),
-                  trailing: const Icon(Icons.chevron_right),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Press3D(
+                  padding: EdgeInsets.zero,
+                  accent: t.removed ? theme.colorScheme.error : (t.done ? Colors.green : theme.colorScheme.primary),
                   onTap: () => _open(t),
+                  child: ListTile(
+                    leading: Icon(
+                      t.removed ? Icons.block : (t.done ? Icons.task_alt : Icons.assignment_outlined),
+                      color: t.removed ? theme.colorScheme.error : (t.done ? Colors.green : theme.colorScheme.primary),
+                    ),
+                    title: Text(t.title),
+                    subtitle: Text([
+                      tr('{n} ступ., {m} этап.', {'n': t.stages.length, 'm': t.stepCount}),
+                      if (t.removed) tr('снято тренером'),
+                      if (t.done) tr('выполнено: {n}', {'n': t.runs.where((r) => r.status == 'done').length}),
+                      if (t.dueAt != null)
+                        tr('до {d}', {'d': '${t.dueAt!.day}.${t.dueAt!.month.toString().padLeft(2, '0')}'}),
+                      if ((t.repeatRule ?? '').isNotEmpty) repeatLabel(t.repeatRule),
+                    ].join(' · ')),
+                    trailing: const Icon(Icons.chevron_right),
+                  ),
                 ),
               ),
           ],
@@ -107,9 +115,9 @@ class _AthleteTasksScreenState extends State<AthleteTasksScreen> {
       );
     }
     return Scaffold(
-      appBar: AppBar(
-        title: Text(tr('Задания')),
-        actions: [IconButton(icon: const Icon(Icons.refresh), tooltip: tr('Обновить'), onPressed: _load)],
+      appBar: GlassHeader(
+        title: Text(tr('Задания'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        actions: [GlassCircleButton(icon: const Icon(Icons.refresh), tooltip: tr('Обновить'), onTap: _load)],
       ),
       body: body,
     );

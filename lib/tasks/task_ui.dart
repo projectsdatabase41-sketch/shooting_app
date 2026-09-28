@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../i18n/i18n.dart';
 import '../widgets/ai_chart_view.dart';
+import '../widgets/press_3d.dart';
 import 'task_models.dart';
 
 String stageModeLabel(StageMode m) => switch (m) {
@@ -57,15 +58,9 @@ class TaskPlanView extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 2),
               child: Icon(Icons.arrow_downward, size: 18, color: theme.hintColor),
             ),
-          Container(
+          Press3D(
             padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: current == i ? theme.colorScheme.primary : theme.dividerColor,
-                width: current == i ? 2 : 1,
-              ),
-            ),
+            accent: current == null || current == i ? stageModeColor(context, stage.mode) : null,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -102,6 +97,56 @@ class TaskPlanView extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// Ступени «таблетками» над выполнением: выполнено / сейчас / закрыто.
+class StageProgressPills extends StatelessWidget {
+  final int count;
+
+  /// Текущая ступень (null — обзор или итог).
+  final int? current;
+  final bool Function(int stage) isDone;
+  const StageProgressPills({super.key, required this.count, required this.current, required this.isDone});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      child: Row(
+        children: [
+          for (var i = 0; i < count; i++) ...[
+            if (i > 0) const SizedBox(width: 6),
+            () {
+              final done = isDone(i);
+              final now = current == i;
+              final color = done ? Colors.green : (now ? cs.primary : cs.outline);
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: now ? 0.25 : 0.12),
+                  borderRadius: BorderRadius.circular(999),
+                  boxShadow: now
+                      ? [BoxShadow(color: color.withValues(alpha: 0.35), blurRadius: 8, offset: const Offset(0, 3))]
+                      : null,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(done ? Icons.check : (now ? Icons.play_arrow : Icons.lock_outline), size: 14, color: color),
+                    const SizedBox(width: 4),
+                    Text('${i + 1}', style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              );
+            }(),
+          ],
+        ],
+      ),
     );
   }
 }

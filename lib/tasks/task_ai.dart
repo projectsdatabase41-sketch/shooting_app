@@ -56,8 +56,8 @@ class TaskAi {
   /// Два отчёта по прохождению: текст для базы и наглядный (блоки
   /// текст/график/таблица, JSON). [runJson] — всё, что сохранено (план,
   /// выстрелы, отметки, отклонения, итоговая заметка).
-  Future<({String structured, String visual, String model})> reports(
-      TaskPlan plan, Map<String, dynamic> runJson, {String request = ''}) async {
+  Future<({String structured, String visual, String model})> reports(TaskPlan plan, Map<String, dynamic> runJson,
+      {String request = ''}) async {
     final data = jsonEncode({'task': plan.toJson(), 'run': runJson});
     final ai = AiService(settings);
     final structured = await ai.ask(

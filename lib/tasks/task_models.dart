@@ -92,7 +92,10 @@ class TaskStage {
     return TaskStage(id: j['id'] as String?, mode: StageMode.fromDb(j['mode'] as String?), steps: steps);
   }
 
-  Map<String, dynamic> toJson() => {'mode': mode.db, 'steps': [for (final s in steps) s.toJson()]};
+  Map<String, dynamic> toJson() => {
+        'mode': mode.db,
+        'steps': [for (final s in steps) s.toJson()]
+      };
 }
 
 /// Краткие сведения о прохождении (для списков).
@@ -158,7 +161,9 @@ class TaskPlan {
     final stages = [
       for (final s in rawStages) (s as Map).cast<String, dynamic>(),
     ]..sort((a, b) => ((a['position'] as num?) ?? 0).compareTo((b['position'] as num?) ?? 0));
-    final rawRuns = [for (final r in (j['runs'] ?? t['task_runs'] ?? const []) as List) (r as Map).cast<String, dynamic>()];
+    final rawRuns = [
+      for (final r in (j['runs'] ?? t['task_runs'] ?? const []) as List) (r as Map).cast<String, dynamic>()
+    ];
     return TaskPlan(
       id: t['id'] as String?,
       title: '${t['title'] ?? ''}',
@@ -172,8 +177,8 @@ class TaskPlan {
         for (final s in stages)
           TaskStage.fromJson({
             ...s,
-            'steps': ([...((s['steps'] ?? s['task_steps'] ?? const []) as List)]
-              ..sort((a, b) => (((a as Map)['position'] as num?) ?? 0).compareTo(((b as Map)['position'] as num?) ?? 0))),
+            'steps': ([...((s['steps'] ?? s['task_steps'] ?? const []) as List)]..sort(
+                (a, b) => (((a as Map)['position'] as num?) ?? 0).compareTo(((b as Map)['position'] as num?) ?? 0))),
           }),
       ],
       runs: [for (final r in rawRuns) TaskRunInfo.fromJson(r)],
@@ -188,6 +193,8 @@ class TaskPlan {
         if (repeatRule != null) 'repeat_rule': repeatRule,
         if (groupKey != null) 'group_key': groupKey,
         'stages': [for (final s in stages) s.toJson()],
-        'clarifications': [for (final c in clarifications) {'question': c.question, 'answer': c.answer}],
+        'clarifications': [
+          for (final c in clarifications) {'question': c.question, 'answer': c.answer}
+        ],
       };
 }
