@@ -3,23 +3,29 @@ import 'package:flutter/foundation.dart';
 import 'chat_auth_service.dart';
 import '../i18n/i18n.dart';
 
-/// «В сети» у друзей (sql/chat-presence.sql). Раз в минуту, пока открыт
-/// мессенджер, отмечаемся на сервере и забираем время появления друзей.
+/// «В сети» у друзей (sql/chat-presence.sql). Пока открыт мессенджер,
+/// отмечаемся на сервере и забираем время появления друзей — обычным
+/// HTTP-опросом (не WebSocket, см. обсуждение стоимости соединений).
 class ChatPresence {
   static final seen = ValueNotifier<Map<String, DateTime>>({});
   static DateTime _last = DateTime(0);
+  static const _minInterval = Duration(seconds: 15);
 
-  static Future<void> tick(ChatAuthService auth) async {
-    if (DateTime.now().difference(_last) < const Duration(seconds: 60)) return;
+  /// [force] — сразу, без троттлинга (открыли переписку — не ждать до
+  /// ближайшего тика). Живой канал (LiveChatSession) даёт «в сети» мгновенно
+  /// и без опроса вовсе, пока собеседник тоже держит канал открытым; этот
+  /// опрос — запасной путь, когда живой связи нет.
+  static Future<void> tick(ChatAuthService auth, {bool force = false}) async {
+    if (!force && DateTime.now().difference(_last) < _minInterval) return;
     _last = DateTime.now();
     final fresh = await auth.presence();
     if (fresh != null) seen.value = fresh;
   }
 
-  /// Отметка раз в минуту + запас на задержку опроса.
+  /// Отметка не реже [_minInterval] + запас на сетевую задержку опроса.
   static bool online(String id) {
     final t = seen.value[id];
-    return t != null && DateTime.now().difference(t) < const Duration(minutes: 2, seconds: 30);
+    return t != null && DateTime.now().difference(t) < const Duration(seconds: 45);
   }
 
   /// «в сети» / «был(а) в 14:05» / «был(а) 03.10» / null (не друг или неизвестно).

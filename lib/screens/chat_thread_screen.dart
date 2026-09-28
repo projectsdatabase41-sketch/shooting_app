@@ -148,6 +148,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     widget.prefs.addListener(_onPrefsChanged);
     widget.repo.markThreadSeen(_contact.id);
     widget.sync.reportRead(_contact.id);
+    // Открыли переписку — сразу спросить «в сети», не ждать общего тика
+    // с домашнего экрана; если поднимется живой канал ниже, он даст
+    // мгновенный статус и без этого опроса.
+    if (!_contact.isGroup) ChatPresence.tick(widget.auth, force: true);
     _reload();
     _scroll.addListener(_onScroll);
     _inputFocus.addListener(() {
