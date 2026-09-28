@@ -20,6 +20,12 @@ import 'remote_config.dart';
 /// базу как раньше. Получатель дедуплицирует по `client_message_id`, так
 /// что «опоздавший» ack не создаёт двойников.
 ///
+/// Как только поднимается прямой WebRTC-датаканал, WS-канал сигнализации
+/// закрывается совсем (адрес P2P-пары не меняется, пока соединение живо —
+/// держать канал и слать heartbeat незачем). Переоткрывается только если
+/// датаканал оборвался — тогда заново заходим в канал, пересигналимся и
+/// пробуем поднять P2P снова (не больше [_maxRtcTries] раз за диалог).
+///
 /// Всё выключено, пока в удалённом конфиге `realtime.enabled = false` —
 /// тогда [open] ничего не делает, [trySend] сразу `false`.
 class LiveChatSession {
@@ -205,12 +211,33 @@ class LiveChatSession {
     };
     // onState зовётся только при открытии и закрытии канала.
     l.onState = () {
-      if (_link == l && !l.isOpen) {
-        _link = null;
+      if (_link != l) return;
+      if (l.isOpen) {
+        _restIdle();
+        return;
+      }
+      _link = null;
+      if (_closed) return;
+      // Канал сигнализации мог быть закрыт «на отдыхе» (P2P и так работал) —
+      // поднимаем его заново; presence подскажет, когда пробовать P2P снова.
+      if (_client == null) {
+        open();
+      } else {
         _maybeStartRtc(); // не более _maxRtcTries попыток за диалог
       }
     };
     return l;
+  }
+
+  /// P2P установлен — WS-канал сигнализации (и его heartbeat) больше не
+  /// нужен, пока соединение живо. Переоткроется сам, если P2P оборвётся.
+  void _restIdle() {
+    _retry?.cancel();
+    _tokenTimer?.cancel();
+    final c = _client;
+    _client = null;
+    c?.onClosed = null;
+    c?.close();
   }
 
   void _onSignal(Map<String, dynamic> s) {

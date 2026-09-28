@@ -342,12 +342,23 @@ void main() {
     expect(repoB.forContact('uA').single.text, 'напрямую');
     expect(server.msgBroadcasts, 0);
 
-    // прямой канал оборвался → тот же диалог продолжает работать через Broadcast
+    // Прямой канал оборвался → WS-канал сигнализации (закрытый «на отдыхе» P2P)
+    // переоткрывается сам и пробует поднять P2P заново (1-я попытка из 2 уже
+    // израсходована на исходное соединение). Реальный RTCPeerConnection
+    // замечает разрыв локально на КАЖДОЙ стороне (pc.onConnectionState →
+    // close()), поэтому закрываются оба фейковых линка.
     _FakeLink.created[0].close();
-    _FakeLink.created[1].open = false;
+    _FakeLink.created[1].close();
+    await _until(() => sa.isDirect && sb.isDirect); // 2-я (последняя) попытка удалась
+    expect(_FakeLink.created, hasLength(4));
+
+    // Попытки исчерпаны (макс. 2) — следующий разрыв уже не переподключается
+    // по P2P, диалог остаётся на Broadcast.
+    _FakeLink.created[2].close();
+    _FakeLink.created[3].close();
     final m2 = _out('uB', 'через сервер', clientId: 'c2');
     repoA.addMessage(m2);
-    await _until(() => sa.peerOnline);
+    await _until(() => sa.peerOnline && !sa.isDirect);
     expect(await sa.trySend(m2), isTrue);
     expect(server.msgBroadcasts, 1);
     expect(repoB.forContact('uA'), hasLength(2));
