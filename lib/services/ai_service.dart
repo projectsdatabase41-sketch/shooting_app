@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -165,6 +166,10 @@ class AiService {
     String? task,
     bool json = false,
     bool Function(String text)? accept,
+    /// Фото к вопросу (чат) — только когда task == 'chat' и выбрана
+    /// модель со зрением (кнопка в ai_chat_screen.dart сама решает,
+    /// когда её показывать). Молча игнорируется остальными задачами.
+    Uint8List? image,
   }) async {
     // Со своим ключом — он один; на встроенном — целый список (пользователь
     // принёс несколько ключей именно на случай, если один упрётся в лимит:
@@ -206,6 +211,7 @@ class AiService {
         history: history,
         json: json,
         accept: check,
+        image: image,
       );
       if (text != null) {
         try {
@@ -215,7 +221,7 @@ class AiService {
         }
       }
     } else if (chatChoice != 'auto') {
-      final reply = await _askCloud(system.toString(), history, onlyModel: chatChoice);
+      final reply = await _askCloud(system.toString(), history, onlyModel: chatChoice, image: image);
       local.learn(settings, 'chat', history, reply.text);
       return reply;
     } else if (local.wants(settings, task)) {
@@ -236,7 +242,7 @@ class AiService {
       }
     }
 
-    final reply = await _askCloud(system.toString(), history);
+    final reply = await _askCloud(system.toString(), history, image: image);
     if (task != null && check(reply.text)) local.learn(settings, task, history, reply.text);
     return reply;
   }
@@ -255,15 +261,34 @@ class AiService {
 
   /// [onlyModel] — не перебирать список моделей, попробовать только эту
   /// (ручной выбор в чате); `null` — обычное поведение, по очереди.
-  Future<AiReply> _askCloud(String system, List<({String role, String text})> history, {String? onlyModel}) async {
+  /// [image] — прикрепляется к ПОСЛЕДНЕМУ сообщению (формат OpenRouter/
+  /// OpenAI `image_url` с data URI) — модель без зрения его просто не
+  /// поймёт или ответит с ошибкой, это решает вызывающий код (кнопка
+  /// в чате показывается, только когда выбрана модель со зрением).
+  Future<AiReply> _askCloud(
+    String system,
+    List<({String role, String text})> history, {
+    String? onlyModel,
+    Uint8List? image,
+  }) async {
     final keys = settings.hasOwnKey ? [settings.apiKey] : AiSettings.testApiKeys;
     if (keys.isEmpty) {
       throw const AiException('Не задан API Key — укажите его в настройках ассистента');
     }
 
-    final messages = [
+    final messages = <Map<String, dynamic>>[
       {'role': 'system', 'content': system},
-      for (final m in history) {'role': m.role, 'content': m.text},
+      for (final (i, m) in history.indexed)
+        if (image != null && i == history.length - 1)
+          {
+            'role': m.role,
+            'content': [
+              {'type': 'text', 'text': m.text},
+              {'type': 'image_url', 'image_url': {'url': 'data:image/jpeg;base64,${base64Encode(image)}'}},
+            ],
+          }
+        else
+          {'role': m.role, 'content': m.text},
     ];
 
     final errors = <String>[];
@@ -301,7 +326,7 @@ class AiService {
 
   Future<AiReply> _askModel(
     String model,
-    List<Map<String, String>> messages,
+    List<Map<String, dynamic>> messages,
     String key,
   ) async {
     final res = await _client

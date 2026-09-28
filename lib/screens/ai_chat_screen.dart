@@ -1,5 +1,8 @@
+import 'dart:typed_data';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import 'package:uuid/uuid.dart';
@@ -183,6 +186,10 @@ class _AiChatBodyState extends State<_AiChatBody> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
 
+  /// Фото к следующему вопросу — только пока «Модель ответа» (кнопка в
+  /// шапке) реально умеет смотреть, см. `_visionAvailable`.
+  Uint8List? _pendingImage;
+
   @override
   void dispose() {
     _input.dispose();
@@ -194,8 +201,39 @@ class _AiChatBodyState extends State<_AiChatBody> {
     final text = _input.text;
     if (text.trim().isEmpty) return;
     _input.clear();
-    vm.send(text).then((_) => _scrollToEnd());
+    final image = _pendingImage;
+    setState(() => _pendingImage = null);
+    vm.send(text, image: image).then((_) => _scrollToEnd());
     _scrollToEnd();
+  }
+
+  /// `true` — активная модель (AiSettings.chatModelChoice) точно умеет
+  /// смотреть на фото: либо явно выбрана скачанная локальная модель со
+  /// зрением, либо выбрана конкретная облачная (доверяем выбору — для
+  /// облака заранее неизвестно, поддерживает ли модель картинки). При
+  /// «Авто» — нет: ответит могла и текстовая модель, фото потеряется зря.
+  Future<bool> _visionAvailable(AiSettings s) async {
+    final choice = s.chatModelChoice;
+    if (choice == 'auto') return false;
+    if (choice != 'local') return true;
+    final model = localModelById(s.localModelId);
+    return model != null && model.sees && await LocalAi.installedPath(model) != null;
+  }
+
+  Future<void> _attachImage(AiSettings s) async {
+    if (!await _visionAvailable(s)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(tr('Сначала выберите модель со зрением — кнопка ⚙ рядом с «Очистить»')),
+        ));
+      }
+      return;
+    }
+    final xfile = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1600, imageQuality: 85);
+    if (xfile == null || !mounted) return;
+    setState(() => _pendingImage = null); // сброс, пока читаем — не путать со старым превью при ошибке
+    final bytes = await xfile.readAsBytes();
+    if (mounted) setState(() => _pendingImage = bytes);
   }
 
   void _scrollToEnd() {
@@ -444,37 +482,75 @@ class _AiChatBodyState extends State<_AiChatBody> {
       top: false,
       child: Padding(
         padding: EdgeInsets.fromLTRB(12, 0, 12, 12 + keyboardInset),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: GlassPill(
-                radius: 25,
-                padding: const EdgeInsets.symmetric(horizontal: 18),
-                child: TextField(
-                  controller: _input,
-                  minLines: 1,
-                  maxLines: 4,
-                  // Enter — перевод строки, а не отправка (решение
-                  // пользователя): сообщение уходит только по кнопке.
-                  textInputAction: TextInputAction.newline,
-                  decoration: InputDecoration(
-                    hintText: tr('Вопрос по стрельбе'),
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    filled: false,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
+            if (_pendingImage != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6, left: 4),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.memory(_pendingImage!, width: 56, height: 56, fit: BoxFit.cover),
+                    ),
+                    Positioned(
+                      right: -6,
+                      top: -6,
+                      child: GestureDetector(
+                        onTap: () => setState(() => _pendingImage = null),
+                        child: CircleAvatar(
+                          radius: 10,
+                          backgroundColor: Theme.of(context).colorScheme.error,
+                          child: const Icon(Icons.close, size: 13, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            GlassCircleButton(
-              size: 50,
-              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.85),
-              onTap: vm.busy ? null : () => _send(vm),
-              icon: Icon(Icons.send, color: Theme.of(context).colorScheme.onPrimary),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                GlassCircleButton(
+                  size: 50,
+                  icon: const Icon(Icons.add_photo_alternate_outlined),
+                  tooltip: tr('Приложить фото (нужна модель со зрением)'),
+                  onTap: vm.busy ? null : () => _attachImage(vm.service.settings),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: GlassPill(
+                    radius: 25,
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    child: TextField(
+                      controller: _input,
+                      minLines: 1,
+                      maxLines: 4,
+                      // Enter — перевод строки, а не отправка (решение
+                      // пользователя): сообщение уходит только по кнопке.
+                      textInputAction: TextInputAction.newline,
+                      decoration: InputDecoration(
+                        hintText: tr('Вопрос по стрельбе'),
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        filled: false,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                GlassCircleButton(
+                  size: 50,
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.85),
+                  onTap: vm.busy ? null : () => _send(vm),
+                  icon: Icon(Icons.send, color: Theme.of(context).colorScheme.onPrimary),
+                ),
+              ],
             ),
           ],
         ),
@@ -555,6 +631,16 @@ class _Bubble extends StatelessWidget {
             children: [
               if (message.reasoning != null) ...[
                 _ReasoningBlock(text: message.reasoning!, color: fg),
+                const SizedBox(height: 8),
+              ],
+              if (message.imageBytes != null) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(prefs.bubbleRadius * 0.6),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 220),
+                    child: Image.memory(message.imageBytes!, fit: BoxFit.cover),
+                  ),
+                ),
                 const SizedBox(height: 8),
               ],
               SelectableText(message.text, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),

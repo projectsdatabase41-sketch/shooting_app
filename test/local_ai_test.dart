@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -50,8 +51,9 @@ void main() {
   });
   tearDown(() => LocalAi.debugGenerate = null);
 
-  Future<AiReply> ask(AiService ai, {String? task, bool json = false, String q = 'создай заметку про хват'}) =>
-      ai.ask(systemPrompt: 'sys', contextBlock: '', history: [(role: 'user', text: q)], task: task, json: json);
+  Future<AiReply> ask(AiService ai,
+          {String? task, bool json = false, String q = 'создай заметку про хват', Uint8List? image}) =>
+      ai.ask(systemPrompt: 'sys', contextBlock: '', history: [(role: 'user', text: q)], task: task, json: json, image: image);
 
   test('лёгкая задача отвечается локально, облако не трогаем; повтор — из кэша', () async {
     final s = await _settings();
@@ -158,6 +160,66 @@ void main() {
     // другая задача — chatModelChoice тут ни при чём, идёт в облако как обычно
     expect((await ask(ai, task: 'note_create', json: true)).text, 'облако');
     localReply = '{"ok": true}';
+  });
+
+  test('фото к вопросу: локальная модель без зрения — молча игнорирует картинку, не падает', () async {
+    final s = await _settings(); // qwen2.5-1.5b — без projector, sees == false
+    s.chatModelChoice = 'local';
+    LocalAi.debugGenerate = (r) async {
+      localCalls++;
+      expect(r.image, isNull); // не умеет — и не должна получить
+      return localReply;
+    };
+    final (ai, _) = _service(s, 'облако');
+    final r = await ask(ai, task: 'chat', image: Uint8List.fromList([1, 2, 3]));
+    expect(r.text, '{"ok": true}');
+  });
+
+  test('фото к вопросу: локальная модель со зрением — получает картинку, кэш не используется', () async {
+    final s = await _settings();
+    s.localModelId = 'qwen2.5-vl-3b'; // с projector — sees == true
+    s.chatModelChoice = 'local';
+    var seenImages = 0;
+    LocalAi.debugGenerate = (r) async {
+      localCalls++;
+      if (r.image != null) seenImages++;
+      return 'на фото мишень';
+    };
+    final ai = AiService(s, client: MockClient((_) async => http.Response('', 500)));
+    final img1 = Uint8List.fromList([1, 2, 3]);
+    final img2 = Uint8List.fromList([4, 5, 6]);
+    expect((await ask(ai, task: 'chat', q: 'что на фото', image: img1)).text, 'на фото мишень');
+    expect((await ask(ai, task: 'chat', q: 'что на фото', image: img2)).text, 'на фото мишень');
+    expect(seenImages, 2); // оба раза дошло до движка — не подменено кэшем по тому же тексту
+    expect(localCalls, 2);
+  });
+
+  test('фото к вопросу: облачная модель — уходит как image_url в последнем сообщении', () async {
+    final s = await _settings(mode: 'off');
+    s.chatModelChoice = 'qwen/vl-model:free';
+    Map<String, dynamic>? sentBody;
+    final client = MockClient((req) async {
+      sentBody = jsonDecode(req.body) as Map<String, dynamic>;
+      return http.Response(
+        jsonEncode({
+          'choices': [
+            {'message': {'content': 'вижу фото'}},
+          ],
+        }),
+        200,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      );
+    });
+    final ai = AiService(s, client: client);
+    final img = Uint8List.fromList([9, 9, 9]);
+    final r = await ask(ai, task: 'chat', q: 'что на фото', image: img);
+    expect(r.text, 'вижу фото');
+    final messages = sentBody!['messages'] as List;
+    final last = messages.last as Map<String, dynamic>;
+    final content = last['content'] as List;
+    expect(content.any((c) => c['type'] == 'image_url'), isTrue);
+    expect('${content.firstWhere((c) => c['type'] == 'image_url')['image_url']['url']}',
+        contains(base64Encode(img)));
   });
 
   test('память: лимит объёма вытесняет давно неиспользованное, поиск находит похожее', () async {

@@ -101,15 +101,21 @@ class LocalAi {
     required List<({String role, String text})> history,
     required bool json,
     required bool Function(String text) accept,
+    Uint8List? image,
   }) async {
     final model = localModelById(s.localModelId);
     if (model == null) return null;
     final path = debugGenerate != null ? 'test' : await installedPath(model);
     if (path == null) return null;
+    // Модель без зрения не понимает вложение — молча игнорируем, а не
+    // валимся: остальной вопрос всё равно можно обсудить текстом.
+    final effectiveImage = image != null && model.sees ? image : null;
 
     final memory = LocalAiMemory(s.db);
     final input = '$system\n---\n${history.map((m) => '${m.role}: ${m.text}').join('\n')}';
-    final hit = memory.cached(task, input);
+    // Разное фото с тем же текстом вопроса — разный ответ; кэш по одному
+    // тексту тут ввёл бы в заблуждение.
+    final hit = effectiveImage == null ? memory.cached(task, input) : null;
     if (hit != null && accept(hit)) return hit;
 
     final lastUser = history.lastWhere((m) => m.role == 'user', orElse: () => (role: 'user', text: '')).text;
@@ -131,12 +137,12 @@ class LocalAi {
       system: _clip(sys.toString(), _maxSystemChars),
       history: trimmedHistory,
       json: json,
-      image: null,
+      image: effectiveImage,
     );
     try {
       final text = (await (debugGenerate ?? _generate)(req)).trim();
       if (text.isEmpty || !accept(text)) return null;
-      memory.remember('cache', task, input, text);
+      if (effectiveImage == null) memory.remember('cache', task, input, text);
       return text;
     } catch (_) {
       return null;

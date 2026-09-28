@@ -41,6 +41,11 @@ class AiMessage {
   final Map<String, dynamic>? feedback;
   final bool feedbackSent;
 
+  /// Фото, приложенное к своему вопросу (только у `fromUser`) — показывается
+  /// в пузыре как обычное вложение. Не сохраняется (весь разговор
+  /// эфемерный, см. докстринг класса), уходит модели один раз, при отправке.
+  final Uint8List? imageBytes;
+
   const AiMessage({
     required this.fromUser,
     required this.text,
@@ -55,6 +60,7 @@ class AiMessage {
     this.noteCreated = false,
     this.feedback,
     this.feedbackSent = false,
+    this.imageBytes,
   });
 
   AiMessage copyWith({bool? exerciseCreated, bool? noteCreated, bool? feedbackSent}) => AiMessage(
@@ -165,11 +171,13 @@ class AiChatViewModel extends ChangeNotifier {
     await send(newText);
   }
 
-  Future<void> send(String text) async {
+  /// [image] — фото к вопросу (кнопка-скрепка в чате, только когда активна
+  /// модель со зрением, см. `_ModelPickerButton`/`AiSettings.chatModelChoice`).
+  Future<void> send(String text, {Uint8List? image}) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty || _busy) return;
 
-    messages.add(AiMessage(fromUser: true, text: trimmed));
+    messages.add(AiMessage(fromUser: true, text: trimmed, imageBytes: image));
     _busy = true;
     notifyListeners();
 
@@ -188,6 +196,7 @@ class AiChatViewModel extends ChangeNotifier {
       final askedAt = DateTime.now();
       final reply = await service.ask(
         task: 'chat',
+        image: image,
         systemPrompt: AiContext.systemPrompt(
           customInstructions: service.settings.customInstructions,
           coachMode: rawCtx.coachMode,
