@@ -588,12 +588,14 @@ class ChatSyncService {
         if (rawType == 'edit') {
           final target = repo.byClientId(threadId, '${row['edit_of_client_message_id']}');
           if (target != null) repo.updateText(target.id, '${row['text'] ?? ''}');
+          added++; // экран открытой ветки должен перерисоваться
           doneIds.add('${row['id']}');
           continue;
         }
         if (rawType == 'delete') {
           final target = repo.byClientId(threadId, '${row['delete_of_client_message_id']}');
           if (target != null) repo.deleteMessage(target.id);
+          added++;
           doneIds.add('${row['id']}');
           continue;
         }
@@ -601,6 +603,9 @@ class ChatSyncService {
           try {
             final ids = (jsonDecode('${row['text']}') as List).map((e) => '$e').toList();
             repo.markPeerRead(threadId, ids);
+            // ponytail: перерисовать открытую ветку, иначе галочка «прочитано»
+            // не появится, пока не придёт ещё одно обычное сообщение.
+            added++;
           } catch (_) {}
           doneIds.add('${row['id']}');
           continue;
@@ -608,12 +613,14 @@ class ChatSyncService {
         if (rawType == 'call_ack') {
           final target = repo.byClientId(threadId, '${row['ack_of_client_message_id']}');
           if (target != null) repo.updateCallStatus(target.id, 'acknowledged');
+          added++;
           doneIds.add('${row['id']}');
           continue;
         }
         if (rawType == 'call_cancel') {
           final target = repo.byClientId(threadId, '${row['cancel_of_client_message_id']}');
           if (target != null) repo.updateCallStatus(target.id, 'cancelled');
+          added++;
           doneIds.add('${row['id']}');
           continue;
         }
