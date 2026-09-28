@@ -455,13 +455,17 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
   Widget build(BuildContext context) {
     final decoded = _decoded;
     return PopScope(
-      canPop: !_visionRunning,
+      // ponytail: раньше canPop блокировался на время распознавания — «назад»
+      // не уводил с экрана, пока ИИ не остановится, а сама остановка у
+      // тяжёлой модели на слабом железе может занять десятки секунд —
+      // выглядело как зависшая кнопка. Теперь «назад» уходит сразу, отмена
+      // уходит в фон (dispose() уже её шлёт).
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) LocalAi.instance.cancel();
+        if (didPop && _visionRunning) LocalAi.instance.cancel();
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(_visionRunning ? tr('ИИ смотрит… (назад — прервать)') : tr('Фото мишени')),
+          title: Text(_visionRunning ? tr('ИИ смотрит… (назад — прервать и выйти)') : tr('Фото мишени')),
           actions: [
             if (_confirmedMm.isNotEmpty)
               TextButton(
