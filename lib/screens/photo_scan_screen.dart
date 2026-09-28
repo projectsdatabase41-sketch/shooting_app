@@ -250,7 +250,10 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
   }
 
   Future<void> _loadPhoto(Uint8List bytes) async {
-    final decoded = ShotPhotoService.decode(bytes);
+    // compute(): декодирование полноразмерного снимка (десятки мегапикселей
+    // на современном телефоне) — не на главном изоляте, иначе интерфейс
+    // подвисает на время декодирования.
+    final decoded = await compute(ShotPhotoService.decode, bytes);
     final analyzed = ShotPhotoService.analyze(decoded);
     final autoCircle = await compute(
       _detectCircleInIsolate,

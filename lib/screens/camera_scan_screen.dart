@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show compute, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import 'package:sensors_plus/sensors_plus.dart';
@@ -348,7 +348,10 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
       _countdownTicker?.cancel();
       await _accelSub?.cancel();
       final file = await controller.takePicture();
-      final decoded = ShotPhotoService.decode(await file.readAsBytes());
+      // compute(): декодирование полноразмерного снимка (десятки мегапикселей
+      // на современном телефоне) — не на главном изоляте, иначе интерфейс
+      // подвисает на время декодирования.
+      final decoded = await compute(ShotPhotoService.decode, await file.readAsBytes());
 
       // Проверка "мишень вообще в кадре" — тем же детектором, что и
       // калибровка на следующем экране, но уже на полном снимке, а не
