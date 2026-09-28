@@ -41,14 +41,13 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Иван Петров'), findsOneWidget);
     expect(find.text('Без истории'), findsNothing); // на главном — только переписки
-    // шторка слева → Контакты
+    // шторка слева → Друзья
     await tester.tap(find.byTooltip('Меню'));
     await tester.pumpAndSettle();
     expect(find.text('Код: AAAA-BBBB'), findsOneWidget);
-    await tester.tap(find.text('Контакты'));
+    await tester.tap(find.text('Друзья'));
     await tester.pumpAndSettle();
-    expect(find.text('Без истории'), findsOneWidget); // в «Контактах» — все
-    expect(find.byIcon(Icons.add), findsOneWidget); // «+» → все участники
+    expect(find.byIcon(Icons.add), findsOneWidget); // «+» → поиск по нику
     await tester.pageBack();
     await tester.pumpAndSettle();
     await tester.tap(find.text('Иван Петров'));

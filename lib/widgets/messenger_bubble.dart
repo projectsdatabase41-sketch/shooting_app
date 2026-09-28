@@ -2,6 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../services/chat_preferences.dart';
 
+/// Объём пузыря: сверху светлее, к низу — тень на самом пузыре.
+LinearGradient bubbleGradient(Color base) => LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      stops: const [0, 0.55, 1],
+      colors: [Color.lerp(base, Colors.white, 0.12)!, base, Color.lerp(base, Colors.black, 0.28)!],
+    );
+
 /// Пузырь сообщения в стиле мессенджера (комментарии, чат с тренером): цвета и скругление — из
 /// настроек оформления чата, время снаружи под пузырём.
 class MessengerBubble extends StatelessWidget {
@@ -41,11 +49,7 @@ class MessengerBubble extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(prefs.bubbleRadius),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color.lerp(base, Colors.white, 0.08)!, Color.lerp(base, Colors.black, 0.10)!],
-                  ),
+                  gradient: bubbleGradient(base),
                   boxShadow: prefs.shadowEnabled
                       ? [
                           BoxShadow(

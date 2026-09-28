@@ -42,11 +42,33 @@ class ChatMessagesRepository {
     db.db.execute('DELETE FROM chat_contacts WHERE id = ?', [oldId]);
   }
 
+  static bool _timesNormalized = false;
+
+  /// Один раз: старые записи с местным временем без пояса → UTC.
+  void _normalizeTimes() {
+    if (_timesNormalized) return;
+    _timesNormalized = true;
+    final rows = db.db.select(
+        "SELECT id, created_at FROM chat_local_messages WHERE created_at NOT LIKE '%Z' AND created_at NOT LIKE '%+%'");
+    for (final r in rows) {
+      final t = DateTime.tryParse('${r['created_at']}');
+      if (t == null) continue;
+      db.db.execute('UPDATE chat_local_messages SET created_at = ? WHERE id = ?', [t.toUtc().toIso8601String(), r['id']]);
+    }
+  }
+
+  /// Удалить чат целиком: сообщения и сам контакт (чёрный список).
+  void deleteChat(String id) {
+    db.db.execute('DELETE FROM chat_local_messages WHERE contact_id = ?', [id]);
+    db.db.execute('DELETE FROM chat_contacts WHERE id = ?', [id]);
+  }
+
   void deleteContact(String id) {
     db.db.execute('DELETE FROM chat_contacts WHERE id = ?', [id]);
   }
 
   List<ChatMessage> forContact(String contactId) {
+    _normalizeTimes();
     final rows = db.db.select(
       'SELECT * FROM chat_local_messages WHERE contact_id = ? ORDER BY created_at',
       [contactId],
@@ -56,6 +78,7 @@ class ChatMessagesRepository {
 
   /// Последнее сообщение переписки — для превью в списке контактов.
   ChatMessage? lastForContact(String contactId) {
+    _normalizeTimes();
     final rows = db.db.select(
       'SELECT * FROM chat_local_messages WHERE contact_id = ? ORDER BY created_at DESC LIMIT 1',
       [contactId],
@@ -89,7 +112,7 @@ class ChatMessagesRepository {
         m.replyToPreview,
         m.downloadAllowed ? 1 : 0,
         m.senderId,
-        m.createdAt.toIso8601String(),
+        m.createdAt.toUtc().toIso8601String(),
       ],
     );
   }

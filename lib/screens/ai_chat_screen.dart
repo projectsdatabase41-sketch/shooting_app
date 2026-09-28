@@ -21,6 +21,7 @@ import '../widgets/empty_state.dart';
 import '../widgets/glass_pill.dart';
 import '../widgets/raised_3d_button.dart';
 import '../i18n/i18n.dart';
+import '../widgets/messenger_bubble.dart';
 
 /// Чат с ассистентом по результатам стрельбы.
 ///
@@ -461,11 +462,7 @@ class _Bubble extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(prefs.bubbleRadius),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color.lerp(bg, Colors.white, 0.08)!, Color.lerp(bg, Colors.black, 0.10)!],
-            ),
+            gradient: bubbleGradient(bg),
             boxShadow: prefs.shadowEnabled
                 ? [
                     BoxShadow(

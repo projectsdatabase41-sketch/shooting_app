@@ -601,6 +601,62 @@ class ChatAuthService {
     }
   }
 
+  /// Друзья и заблокированные — последний известный список (для списка
+  /// чатов без лишних запросов). Обновляет [friendOverview] / [myBlocks].
+  static Set<String> friendIds = {};
+  static Set<String> blockedIds = {};
+
+  /// Добавить в друзья: 'accepted' (встречная заявка — сразу дружба),
+  /// 'pending' (ждём ответа) или 'blocked'.
+  Future<String> requestFriend(String userId) async =>
+      '${await _rpc('request_friend', {'p_user': userId})}'.replaceAll('"', '');
+
+  Future<void> respondFriend(String userId, bool accept) =>
+      _rpc('respond_friend', {'p_user': userId, 'p_accept': accept});
+
+  Future<void> removeFriend(String userId) async {
+    await _rpc('remove_friend', {'p_user': userId});
+    friendIds.remove(userId);
+  }
+
+  /// Все связи: state — friend | incoming | outgoing.
+  Future<List<({String userId, String nickname, String? avatarBase64, String about, String state})>> friendOverview() async {
+    final rows = await _rpc('friend_overview', {});
+    final list = [
+      for (final r in (rows as List? ?? const []))
+        (
+          userId: '${r['user_id']}',
+          nickname: '${r['nickname'] ?? '—'}',
+          avatarBase64: r['avatar_base64'] as String?,
+          about: '${r['about'] ?? ''}',
+          state: '${r['state']}',
+        ),
+    ];
+    friendIds = {for (final f in list) if (f.state == 'friend') f.userId};
+    return list;
+  }
+
+  Future<void> blockUser(String userId) async {
+    await _rpc('block_user', {'p_user': userId});
+    blockedIds.add(userId);
+    friendIds.remove(userId);
+  }
+
+  Future<void> unblockUser(String userId) async {
+    await _rpc('unblock_user', {'p_user': userId});
+    blockedIds.remove(userId);
+  }
+
+  Future<List<({String userId, String nickname, String? avatarBase64})>> myBlocks() async {
+    final rows = await _rpc('my_blocks', {});
+    final list = [
+      for (final r in (rows as List? ?? const []))
+        (userId: '${r['user_id']}', nickname: '${r['nickname'] ?? '—'}', avatarBase64: r['avatar_base64'] as String?),
+    ];
+    blockedIds = {for (final b in list) b.userId};
+    return list;
+  }
+
   /// Код контакта собеседника — сервер отдаёт его только другу или
   /// участнику общей группы (sql/chat-contact-code.sql); иначе пусто.
   Future<String> codeOf(String userId) async {

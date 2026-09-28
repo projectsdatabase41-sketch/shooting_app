@@ -71,6 +71,7 @@ dependencies:
   llamadart: ^0.8.24
   background_downloader: ">=9.5.9 <9.6.0"
   emoji_picker_flutter: ^4.5.4
+  web: ^1.1.1
 
 dev_dependencies:
   flutter_test:

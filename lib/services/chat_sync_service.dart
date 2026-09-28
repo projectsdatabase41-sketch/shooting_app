@@ -79,7 +79,6 @@ class ChatSyncService {
       createdAt: DateTime.now(),
     );
     repo.addMessage(message);
-    auth.ensureFriendRequest(contactId);
     await retry(message);
     return message;
   }
@@ -105,7 +104,6 @@ class ChatSyncService {
       createdAt: DateTime.now(),
     );
     repo.addMessage(message);
-    auth.ensureFriendRequest(contactId);
     await retry(message);
     return message;
   }
@@ -300,7 +298,6 @@ class ChatSyncService {
       createdAt: DateTime.now(),
     );
     repo.addMessage(message);
-    auth.ensureFriendRequest(contactId);
     await retry(message);
     return message;
   }
@@ -336,7 +333,6 @@ class ChatSyncService {
       createdAt: DateTime.now(),
     );
     repo.addMessage(message);
-    auth.ensureFriendRequest(contactId);
     await retry(message);
     return message;
   }
@@ -646,6 +642,12 @@ class ChatSyncService {
           // ponytail: файл группы нужен всем участникам — не удаляем его после
           // первого получателя; чистка хранилища по сроку — когда начнёт копиться.
           if (groupId == null) await _deleteAttachment(path, token, client);
+        }
+        // Пока качалось вложение, ту же строку мог принять параллельный опрос
+        // (общий, открытый чат, push) — второй раз не сохраняем.
+        if (repo.existsByClientId(clientId)) {
+          doneIds.add('${row['id']}');
+          continue;
         }
 
         repo.addMessage(ChatMessage(

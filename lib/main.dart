@@ -268,13 +268,13 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
       nav.push(MaterialPageRoute(builder: (_) => const ChatHomeScreen()));
       return;
     }
+    // Сразу список переписок, поверх — чат: «назад» ведёт к списку, а не
+    // на главный экран приложения.
+    nav.push(MaterialPageRoute(builder: (_) => const ChatHomeScreen()));
     final sync = ChatSyncService(auth, repo);
-    await sync.pollIncoming();
+    if (repo.contactById(target.contactId!) == null) await sync.pollIncoming();
     final contact = repo.contactById(target.contactId!);
-    if (contact == null) {
-      nav.push(MaterialPageRoute(builder: (_) => const ChatHomeScreen()));
-      return;
-    }
+    if (contact == null) return;
     nav.push(MaterialPageRoute(
       builder: (_) => ChatThreadScreen(contact: contact, auth: auth, repo: repo, sync: sync, prefs: ChatPreferences(widget.db)),
     ));

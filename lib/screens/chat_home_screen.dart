@@ -27,6 +27,7 @@ import '../widgets/empty_state.dart';
 import '../widgets/glass_pill.dart';
 import '../widgets/emoji_warmup.dart';
 import '../services/chat_presence.dart';
+import 'chat_blocklist_screen.dart';
 import 'chat_group_screen.dart';
 import 'chat_people_screen.dart';
 import 'chat_settings_screen.dart';
@@ -128,20 +129,29 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
     if (mounted) _reload();
     await _linkCoachesAndAthletes();
     await _remapStaleContacts();
-    final friends = await _auth.listFriends();
-    if (friends.isEmpty) return;
-    for (final f in friends) {
-      _repo.addContact(ChatContact(
-        id: f.userId,
-        nickname: f.nickname,
-        chatCode: '',
-        avatarBase64: f.avatarBase64,
-        about: f.about,
-        addedAt: DateTime.now(),
-      ));
+    try {
+      await _auth.myBlocks();
+      final people = await _auth.friendOverview();
+      for (final f in people.where((f) => f.state == 'friend')) {
+        if (_repo.contactById(f.userId) != null) continue;
+        _repo.addContact(ChatContact(
+          id: f.userId,
+          nickname: f.nickname,
+          chatCode: '',
+          avatarBase64: f.avatarBase64,
+          about: f.about,
+          addedAt: DateTime.now(),
+        ));
+      }
+      _incoming = people.where((f) => f.state == 'incoming').length;
+    } catch (_) {
+      // сеть — обновим при следующем открытии
     }
     if (mounted) _reload();
   }
+
+  /// Входящие заявки в друзья — счётчик в меню.
+  int _incoming = 0;
 
   /// После переезда сервера мессенджера у всех новые id — контакт, которого
   /// нет на сервере, ищем по точному нику и, если он один, переносим туда
@@ -301,6 +311,8 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
       prefs: _prefs,
       db: _db,
       contacts: _contacts,
+      incomingRequests: _incoming,
+      onFriendsChanged: _syncFriends,
       onContactsChanged: _reload,
       onOpenThread: (contact) async {
         await Navigator.of(context).push(MaterialPageRoute(
@@ -325,8 +337,12 @@ class _ChatContactsView extends StatelessWidget {
   final List<ChatContact> contacts;
   final VoidCallback onContactsChanged;
   final void Function(ChatContact) onOpenThread;
+  final int incomingRequests;
+  final Future<void> Function() onFriendsChanged;
 
   const _ChatContactsView({
+    required this.incomingRequests,
+    required this.onFriendsChanged,
     required this.auth,
     required this.repo,
     required this.sync,
@@ -367,10 +383,12 @@ class _ChatContactsView extends StatelessWidget {
     onContactsChanged();
   }
 
-  void _openContacts(BuildContext context) => Navigator.of(context).push(MaterialPageRoute(
+  void _openContacts(BuildContext context) => Navigator.of(context)
+      .push(MaterialPageRoute(
         builder: (_) =>
             ChatContactsScreen(auth: auth, repo: repo, sync: sync, prefs: prefs, onOpenThread: onOpenThread),
-      ));
+      ))
+      .then((_) => onFriendsChanged());
 
   void _openDirectory(BuildContext context) => Navigator.of(context).push(MaterialPageRoute(
         builder: (_) => ChatDirectoryScreen(auth: auth, repo: repo, onOpenThread: onOpenThread),
@@ -398,7 +416,11 @@ class _ChatContactsView extends StatelessWidget {
     // в конце по алфавиту (порядок из repo.listContacts).
     final last = {for (final c in contacts) c.id: repo.lastForContact(c.id)};
     // Здесь — только переписки (и группы); все контакты — в «Контактах».
-    final sorted = contacts.where((c) => c.isGroup || last[c.id] != null).toList()
+    // Главный экран: те, с кем есть переписка, группы и все друзья; без чёрного списка.
+    final sorted = contacts
+        .where((c) => c.isGroup || last[c.id] != null || ChatAuthService.friendIds.contains(c.id))
+        .where((c) => !ChatAuthService.blockedIds.contains(c.id))
+        .toList()
       ..sort((a, b) {
         final ta = last[a.id]?.createdAt, tb = last[b.id]?.createdAt;
         if (ta == null && tb == null) return 0;
@@ -470,8 +492,10 @@ class _ChatContactsView extends StatelessWidget {
               const Divider(height: 1),
               ListTile(
                 leading: const Icon(Icons.people_outline),
-                title: Text(tr('Контакты')),
-                trailing: Text('${contacts.where((c) => !c.isGroup).length}'),
+                title: Text(tr('Друзья')),
+                trailing: incomingRequests > 0
+                    ? Badge(label: Text('$incomingRequests'))
+                    : Text('${ChatAuthService.friendIds.length}'),
                 onTap: () {
                   Navigator.of(context).pop();
                   _openContacts(context);
@@ -492,6 +516,15 @@ class _ChatContactsView extends StatelessWidget {
                 onTap: () {
                   Navigator.of(context).pop();
                   _newGroup(context);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.block),
+                title: Text(tr('Чёрный список')),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  await Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChatBlocklistScreen(auth: auth)));
+                  await onFriendsChanged();
                 },
               ),
               ListTile(

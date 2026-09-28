@@ -12,8 +12,9 @@ import '../widgets/chat_avatar.dart';
 import '../widgets/empty_state.dart';
 import '../i18n/i18n.dart';
 
-/// Мои контакты (без групп) с поиском по списку. Кнопка «+» открывает всех
-/// участников мессенджера — там же поиск по имени и по коду контакта.
+/// Друзья: входящие заявки (принять/отклонить), друзья (тап — чат, долгое
+/// нажатие — выделение: в группу, звук, убрать из друзей) и свои заявки,
+/// ждущие ответа. «+» — поиск по нику среди всех участников.
 class ChatContactsScreen extends StatefulWidget {
   final ChatAuthService auth;
   final ChatMessagesRepository repo;
@@ -35,6 +36,47 @@ class ChatContactsScreen extends StatefulWidget {
 
 class _ChatContactsScreenState extends State<ChatContactsScreen> {
   final _search = TextEditingController();
+
+  /// Связи с сервера: state — friend | incoming | outgoing.
+  List<({String userId, String nickname, String? avatarBase64, String about, String state})>? _people;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final list = await widget.auth.friendOverview();
+      // Друзья должны быть и в локальных контактах — оттуда открывается чат.
+      for (final f in list.where((f) => f.state == 'friend')) {
+        if (widget.repo.contactById(f.userId) == null) {
+          widget.repo.addContact(ChatContact(
+            id: f.userId,
+            nickname: f.nickname,
+            chatCode: '',
+            avatarBase64: f.avatarBase64,
+            about: f.about,
+            addedAt: DateTime.now(),
+          ));
+        }
+      }
+      if (mounted) setState(() => (_people = list, _error = null));
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    }
+  }
+
+  Future<void> _run(Future<void> Function() action) async {
+    try {
+      await action();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+    await _load();
+  }
 
   /// Выделение: долгое нажатие — выделить, дальше тап добавляет/убирает.
   final Set<String> _selected = {};
@@ -104,19 +146,22 @@ class _ChatContactsScreenState extends State<ChatContactsScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(tr('Удалить из контактов: {length}?', {'length': _selected.length})),
-        content: Text(tr('Переписка останется на устройстве, пропадут только сами контакты.')),
+        title: Text(tr('Убрать из друзей: {length}?', {'length': _selected.length})),
+        content: Text(tr('Переписка останется, просто они больше не будут у вас в друзьях.')),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr('Отмена'))),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(tr('Удалить'))),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(tr('Убрать'))),
         ],
       ),
     );
     if (ok != true || !mounted) return;
-    for (final id in _selected) {
-      widget.repo.deleteContact(id);
-    }
+    final ids = _selected.toList();
     setState(() => _selected.clear());
+    await _run(() async {
+      for (final id in ids) {
+        await widget.auth.removeFriend(id);
+      }
+    });
   }
 
   @override
@@ -129,17 +174,23 @@ class _ChatContactsScreenState extends State<ChatContactsScreen> {
     await Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => ChatDirectoryScreen(auth: widget.auth, repo: widget.repo, onOpenThread: widget.onOpenThread),
     ));
-    if (mounted) setState(() {});
+    await _load();
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final q = _search.text.trim().toLowerCase();
-    final contacts = widget.repo
-        .listContacts()
-        .where((c) => !c.isGroup)
-        .where((c) => q.isEmpty || c.nickname.toLowerCase().contains(q) || c.about.toLowerCase().contains(q))
+    final people = (_people ?? const [])
+        .where((p) => q.isEmpty || p.nickname.toLowerCase().contains(q) || p.about.toLowerCase().contains(q))
         .toList();
+    final incoming = people.where((p) => p.state == 'incoming').toList();
+    final friends = people.where((p) => p.state == 'friend').toList();
+    final outgoing = people.where((p) => p.state == 'outgoing').toList();
+    Widget header(String text) => Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+          child: Text(text, style: theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.primary)),
+        );
     final selecting = _selected.isNotEmpty;
     return PopScope(
       canPop: !selecting,
@@ -160,10 +211,10 @@ class _ChatContactsScreenState extends State<ChatContactsScreen> {
                     tooltip: tr('Уведомления'),
                     onPressed: _toggleMute,
                   ),
-                  IconButton(icon: const Icon(Icons.delete_outline), tooltip: tr('Удалить'), onPressed: _delete),
+                  IconButton(icon: const Icon(Icons.person_remove_outlined), tooltip: tr('Убрать из друзей'), onPressed: _delete),
                 ],
               )
-            : AppBar(title: Text(tr('Контакты'))),
+            : AppBar(title: Text(tr('Друзья'))),
         floatingActionButton: selecting
             ? null
             : FloatingActionButton(
@@ -177,40 +228,86 @@ class _ChatContactsScreenState extends State<ChatContactsScreen> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
               child: SearchBar(
                 controller: _search,
-                hintText: tr('Поиск в контактах'),
+                hintText: tr('Поиск среди друзей'),
                 leading: const Icon(Icons.search),
                 onChanged: (_) => setState(() {}),
               ),
             ),
             Expanded(
-              child: contacts.isEmpty
-                  ? EmptyState(
-                      icon: Icons.people_outline,
-                      text: q.isEmpty ? tr('Контактов пока нет — нажмите «+», чтобы найти участника') : tr('Никого не нашли'),
-                    )
-                  : ListView(
-                      padding: const EdgeInsets.only(bottom: 88),
-                      children: [
-                        for (final c in contacts)
-                          ListTile(
-                            selected: _selected.contains(c.id),
-                            selectedTileColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
-                            leading: _selected.contains(c.id)
-                                ? CircleAvatar(
-                                    backgroundColor: Theme.of(context).colorScheme.primary,
-                                    child: Icon(Icons.check, color: Theme.of(context).colorScheme.onPrimary),
-                                  )
-                                : ChatAvatar(base64: c.avatarBase64, nickname: c.nickname),
-                            title: Text(c.nickname, overflow: TextOverflow.ellipsis),
-                            subtitle: c.about.isEmpty ? null : Text(c.about, overflow: TextOverflow.ellipsis),
-                            trailing: widget.prefs.mutedFor(c.id)
-                                ? const Icon(Icons.notifications_off_outlined, size: 18)
-                                : null,
-                            onTap: selecting ? () => _toggle(c.id) : () => widget.onOpenThread(c),
-                            onLongPress: () => _toggle(c.id),
+              child: _people == null
+                  ? Center(child: _error == null ? const CircularProgressIndicator() : Text(_error!))
+                  : people.isEmpty
+                      ? EmptyState(
+                          icon: Icons.people_outline,
+                          text: q.isEmpty
+                              ? tr('Друзей пока нет — нажмите «+», найдите человека по нику и добавьте в друзья')
+                              : tr('Никого не нашли'),
+                        )
+                      : RefreshIndicator(
+                          onRefresh: _load,
+                          child: ListView(
+                            padding: const EdgeInsets.only(bottom: 88),
+                            children: [
+                              if (incoming.isNotEmpty) header(tr('Заявки в друзья ({n})', {'n': incoming.length})),
+                              for (final p in incoming)
+                                ListTile(
+                                  leading: ChatAvatar(base64: p.avatarBase64, nickname: p.nickname),
+                                  title: Text(p.nickname, overflow: TextOverflow.ellipsis),
+                                  subtitle: p.about.isEmpty ? null : Text(p.about, overflow: TextOverflow.ellipsis),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        tooltip: tr('Отклонить'),
+                                        icon: const Icon(Icons.close),
+                                        onPressed: () => _run(() => widget.auth.respondFriend(p.userId, false)),
+                                      ),
+                                      IconButton.filled(
+                                        tooltip: tr('Принять'),
+                                        icon: const Icon(Icons.check),
+                                        onPressed: () => _run(() => widget.auth.respondFriend(p.userId, true)),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              if (friends.isNotEmpty) header(tr('Друзья ({n})', {'n': friends.length})),
+                              for (final p in friends)
+                                ListTile(
+                                  selected: _selected.contains(p.userId),
+                                  selectedTileColor: theme.colorScheme.primary.withValues(alpha: 0.12),
+                                  leading: _selected.contains(p.userId)
+                                      ? CircleAvatar(
+                                          backgroundColor: theme.colorScheme.primary,
+                                          child: Icon(Icons.check, color: theme.colorScheme.onPrimary),
+                                        )
+                                      : ChatAvatar(base64: p.avatarBase64, nickname: p.nickname),
+                                  title: Text(p.nickname, overflow: TextOverflow.ellipsis),
+                                  subtitle: p.about.isEmpty ? null : Text(p.about, overflow: TextOverflow.ellipsis),
+                                  trailing: widget.prefs.mutedFor(p.userId)
+                                      ? const Icon(Icons.notifications_off_outlined, size: 18)
+                                      : null,
+                                  onTap: selecting
+                                      ? () => _toggle(p.userId)
+                                      : () {
+                                          final c = widget.repo.contactById(p.userId);
+                                          if (c != null) widget.onOpenThread(c);
+                                        },
+                                  onLongPress: () => _toggle(p.userId),
+                                ),
+                              if (outgoing.isNotEmpty) header(tr('Ждут ответа ({n})', {'n': outgoing.length})),
+                              for (final p in outgoing)
+                                ListTile(
+                                  leading: ChatAvatar(base64: p.avatarBase64, nickname: p.nickname),
+                                  title: Text(p.nickname, overflow: TextOverflow.ellipsis),
+                                  subtitle: Text(tr('заявка отправлена')),
+                                  trailing: TextButton(
+                                    onPressed: () => _run(() => widget.auth.removeFriend(p.userId)),
+                                    child: Text(tr('Отменить')),
+                                  ),
+                                ),
+                            ],
                           ),
-                      ],
-                    ),
+                        ),
             ),
           ],
         ),
@@ -344,13 +441,33 @@ class _ChatDirectoryScreenState extends State<ChatDirectoryScreen> {
                             padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator()));
                       }
                       final p = _people[i];
-                      final known = widget.repo.contactById(p.userId) != null;
                       return ListTile(
                         leading: ChatAvatar(base64: p.avatarBase64, nickname: p.nickname),
                         title: Text(p.nickname, overflow: TextOverflow.ellipsis),
                         subtitle: p.about.isEmpty ? null : Text(p.about, overflow: TextOverflow.ellipsis),
-                        trailing:
-                            known ? const Icon(Icons.check, size: 18) : const Icon(Icons.chat_bubble_outline, size: 18),
+                        // Тап — написать; кнопка — заявка в друзья.
+                        trailing: ChatAuthService.friendIds.contains(p.userId)
+                            ? const Icon(Icons.how_to_reg, size: 20)
+                            : IconButton(
+                                tooltip: tr('Добавить в друзья'),
+                                icon: const Icon(Icons.person_add_alt_1),
+                                onPressed: () async {
+                                  final messenger = ScaffoldMessenger.of(context);
+                                  try {
+                                    final r = await widget.auth.requestFriend(p.userId);
+                                    messenger.showSnackBar(SnackBar(
+                                      content: Text(switch (r) {
+                                        'accepted' => tr('Теперь вы друзья'),
+                                        'blocked' => tr('Нельзя: пользователь в чёрном списке'),
+                                        _ => tr('Заявка в друзья отправлена'),
+                                      }),
+                                    ));
+                                    if (mounted) setState(() {});
+                                  } catch (e) {
+                                    messenger.showSnackBar(SnackBar(content: Text('$e')));
+                                  }
+                                },
+                              ),
                         onTap: () => _open(p),
                       );
                     },

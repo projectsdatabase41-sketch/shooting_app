@@ -79,9 +79,37 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
           for (final match in _linkRe.allMatches(m.text ?? '')) (match.group(0)!, m),
       ];
 
+  /// Явная заявка; встречная заявка сразу даёт дружбу (request_friend).
   Future<void> _addFriend() async {
-    await widget.auth.ensureFriendRequest(_contact.id);
-    if (mounted) setState(() => _friend = 'pending');
+    try {
+      final r = await widget.auth.requestFriend(_contact.id);
+      if (mounted) setState(() => _friend = r == 'accepted' ? 'accepted' : 'pending');
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
+  /// Чёрный список: сообщения от него перестают доходить, чат удаляется.
+  Future<void> _block() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('Заблокировать {name}?', {'name': _contact.nickname})),
+        content: Text(tr('Чат будет удалён, сообщения от него перестанут приходить. Разблокировать можно в «Чёрном списке».')),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr('Отмена'))),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(tr('Заблокировать'))),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await widget.auth.blockUser(_contact.id);
+      widget.repo.deleteChat(_contact.id);
+      if (mounted) Navigator.of(context).pop('removed');
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
   }
 
   Future<void> _removeContact() async {
@@ -208,8 +236,11 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
         actions: [
           if (!_contact.isGroup)
             PopupMenuButton<String>(
-              onSelected: (_) => _removeContact(),
-              itemBuilder: (_) => [PopupMenuItem(value: 'remove', child: Text(tr('Удалить из контактов')))],
+              onSelected: (v) => v == 'block' ? _block() : _removeContact(),
+              itemBuilder: (_) => [
+                PopupMenuItem(value: 'remove', child: Text(tr('Удалить чат'))),
+                PopupMenuItem(value: 'block', child: Text(tr('Заблокировать'))),
+              ],
             ),
         ],
       ),
@@ -412,7 +443,7 @@ class _PhotoGridState extends State<_PhotoGrid> {
     Widget image(ChatMessage m, BoxFit fit) {
       final provider = ChatMediaUtils.imageOf(m.id, m.attachmentBase64!);
       return GestureDetector(
-        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PhotoViewerScreen(image: provider))),
+        onTap: () => PhotoViewerScreen.open(context, provider),
         child: Image(
           image: ResizeImage(provider, width: (width / _cols * dpr).round(), policy: ResizeImagePolicy.fit),
           fit: fit,
