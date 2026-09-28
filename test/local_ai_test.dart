@@ -114,6 +114,52 @@ void main() {
     expect(cloud[0], 1);
   });
 
+  test('ручной выбор модели чата: конкретная облачная — без перебора остальных', () async {
+    final s = await _settings(mode: 'off'); // облако сразу, локальную не подмешивать
+    // Отвечает успехом только на ПОСЛЕДНЮЮ модель цепочки — остальные 500.
+    final requestedModels = <String>[];
+    final client = MockClient((req) async {
+      final model = (jsonDecode(req.body) as Map)['model'] as String;
+      requestedModels.add(model);
+      if (model != s.models.last) return http.Response('{"error":{"message":"нет"}}', 500);
+      return http.Response(
+        jsonEncode({
+          'choices': [
+            {'message': {'content': 'ответ'}},
+          ],
+        }),
+        200,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      );
+    });
+    final ai = AiService(s, client: client);
+
+    // auto — перебирает всю цепочку по очереди, пока не дойдёт до рабочей.
+    final r = await ask(ai, task: 'chat');
+    expect(requestedModels, s.models);
+    expect(r.text, 'ответ');
+
+    // Конкретная модель, которая как раз отвечает 500, — падает СРАЗУ, а не
+    // пробует остальные (в отличие от auto выше).
+    requestedModels.clear();
+    s.chatModelChoice = s.models.first;
+    await expectLater(ask(ai, task: 'chat'), throwsA(anything));
+    expect(requestedModels, [s.models.first]);
+  });
+
+  test('ручной выбор модели чата: «локальная» — мимо localMode, вне chat не влияет', () async {
+    final s = await _settings(mode: 'off'); // облако — обычный режим для всех остальных задач
+    s.chatModelChoice = 'local';
+    localReply = 'локальный ответ';
+    final (ai, cloud) = _service(s, 'облако');
+    // чат — форсирован на локальную, несмотря на localMode == off
+    expect((await ask(ai, task: 'chat')).text, 'локальный ответ');
+    expect(cloud[0], 0);
+    // другая задача — chatModelChoice тут ни при чём, идёт в облако как обычно
+    expect((await ask(ai, task: 'note_create', json: true)).text, 'облако');
+    localReply = '{"ok": true}';
+  });
+
   test('память: лимит объёма вытесняет давно неиспользованное, поиск находит похожее', () async {
     final s = await _settings();
     final m = LocalAiMemory(s.db, maxChars: 3000);

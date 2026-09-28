@@ -58,6 +58,7 @@ class AiSettings {
   static const String keyApiBaseUrl = 'ai_api_base_url';
   static const String keyLocalMode = 'ai_local_mode';
   static const String keyLocalModel = 'ai_local_model';
+  static const String keyChatModelChoice = 'ai_chat_model_choice';
 
   /// Все ключи ИИ — чтобы «сбросить все цвета» их не снесло.
   static const List<String> allKeys = [
@@ -83,6 +84,13 @@ class AiSettings {
   /// id из `localModelCatalog`.
   String get localModelId => _read(keyLocalModel);
   set localModelId(String v) => _write(keyLocalModel, v);
+
+  /// Ручной выбор модели в чате с ИИ (AiChatScreen): `'auto'` — как
+  /// раньше (localMode решает, дальше по очереди `models`); `'local'` —
+  /// всегда локальная, мимо `localMode`; иначе — id конкретной облачной
+  /// модели из `models`, без перебора остальных.
+  String get chatModelChoice => _read(keyChatModelChoice, fallback: 'auto');
+  set chatModelChoice(String v) => _write(keyChatModelChoice, v);
 
 
   String get apiBaseUrl => _read(keyApiBaseUrl, fallback: defaultApiBaseUrl);

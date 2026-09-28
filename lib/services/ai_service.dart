@@ -191,7 +191,34 @@ class AiService {
     // прошёл проверку, идём в облако.
     final check = accept ?? (json ? _looksLikeJson : (String t) => t.trim().isNotEmpty);
     final local = LocalAi.instance;
-    if (local.wants(settings, task)) {
+    // Ручной выбор модели в чате (AiSettings.chatModelChoice) — только для
+    // task == 'chat' и только если выбор не 'auto': тогда обычное поведение
+    // ниже (wants()/models по очереди), как для всех остальных задач.
+    // 'local' — форсирует локальную МИМО wants() (не спрашивает разрешения
+    // у localMode); конкретный id — конкретная облачная модель без
+    // перебора остальных.
+    final chatChoice = task == 'chat' ? settings.chatModelChoice : 'auto';
+    if (chatChoice == 'local') {
+      final text = await local.tryRun(
+        settings,
+        task: 'chat',
+        system: system.toString(),
+        history: history,
+        json: json,
+        accept: check,
+      );
+      if (text != null) {
+        try {
+          return _parse(text, null, 'локальная: ${settings.localModelId}');
+        } on AiException {
+          // разобрать не вышло — пусть ответит облако (запасной путь ниже)
+        }
+      }
+    } else if (chatChoice != 'auto') {
+      final reply = await _askCloud(system.toString(), history, onlyModel: chatChoice);
+      local.learn(settings, 'chat', history, reply.text);
+      return reply;
+    } else if (local.wants(settings, task)) {
       final text = await local.tryRun(
         settings,
         task: task!,
@@ -226,7 +253,9 @@ class AiService {
     }
   }
 
-  Future<AiReply> _askCloud(String system, List<({String role, String text})> history) async {
+  /// [onlyModel] — не перебирать список моделей, попробовать только эту
+  /// (ручной выбор в чате); `null` — обычное поведение, по очереди.
+  Future<AiReply> _askCloud(String system, List<({String role, String text})> history, {String? onlyModel}) async {
     final keys = settings.hasOwnKey ? [settings.apiKey] : AiSettings.testApiKeys;
     if (keys.isEmpty) {
       throw const AiException('Не задан API Key — укажите его в настройках ассистента');
@@ -240,7 +269,7 @@ class AiService {
     final errors = <String>[];
     var anyRateLimited = false;
     for (final key in keys) {
-      for (final model in settings.models) {
+      for (final model in onlyModel != null ? [onlyModel] : settings.models) {
         try {
           return await _askModel(model, messages, key);
         } on RateLimitedException catch (e) {
