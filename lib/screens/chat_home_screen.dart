@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+import 'package:flutter/services.dart' show Clipboard, ClipboardData, SystemSound, SystemSoundType;
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -263,7 +263,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
     // Личный опрос и так дешёвый (в транзитной таблице только МОИ строки).
     _pollLoop = PollLoop(
       poller: AdaptivePoller(
-          min: const Duration(seconds: 10), max: const Duration(seconds: 60), scale: () => RemoteConfig.pollScale),
+          min: const Duration(seconds: 5), max: const Duration(seconds: 30), scale: () => RemoteConfig.pollScale),
       tick: () async {
         ChatPresence.tick(_auth);
         final added = await _sync.pollIncoming();
@@ -271,7 +271,13 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
         // добавленного отправителя заводит контакт автоматически (см.
         // ChatSyncService.pollIncoming), и он должен сразу появиться в
         // списке слева, а не только после ручного обновления экрана.
-        if (added > 0 && mounted) _reload();
+        if (added > 0 && mounted) {
+          // Лёгкий «щелчок» — мессенджер уже открыт (список чатов), значит
+          // пользователь «в сети»; системный пуш в этот момент обычно и не
+          // приходит (экран уже открыт), так что это единственный сигнал.
+          SystemSound.play(SystemSoundType.click);
+          _reload();
+        }
         return added > 0;
       },
     )..start();

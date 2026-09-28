@@ -175,6 +175,10 @@ class ChatSyncService {
   Future<void> deleteMessage(ChatMessage message, {required bool alsoRemote}) async {
     repo.deleteMessage(message.id);
     if (!alsoRemote || !ChatSettings.isConfigured) return;
+    // Мгновенно, пока собеседник в сети — рядом с обычным путём через базу
+    // ниже, не вместо него.
+    final l = live;
+    if (l != null && l.contactId == message.contactId) l.sendDelete(message.clientMessageId);
     final token = await auth.ensureFreshToken();
     if (token == null) return;
     final client = clientFactory();

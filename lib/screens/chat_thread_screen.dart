@@ -4,7 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+import 'package:flutter/services.dart' show Clipboard, ClipboardData, SystemSound, SystemSoundType;
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -168,6 +168,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         linkFactory: WebRtcPeerLink.new,
         onIncoming: () {
           if (!mounted) return;
+          SystemSound.play(SystemSoundType.click); // лёгкий «щелчок» — переписка уже открыта
           widget.repo.markThreadSeen(_contact.id);
           widget.sync.reportRead(_contact.id);
           _reload();
@@ -186,6 +187,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         groupId: _contact.id,
         onIncoming: () {
           if (!mounted) return;
+          SystemSound.play(SystemSoundType.click);
           widget.repo.markThreadSeen(_contact.id);
           _reload();
           _scrollToEnd();
@@ -197,13 +199,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       widget.sync.groupLive = _groupLive;
       _groupLive!.open();
     }
-    // Адаптивный опрос: пока собеседник пишет — каждые 5 секунд, в тишине
-    // растёт до 30 (см. AdaptivePoller). Отправка своего сообщения возвращает
+    // Адаптивный опрос: пока собеседник пишет — каждые 2-3 секунды, в тишине
+    // растёт до 15 (см. AdaptivePoller). Отправка своего сообщения возвращает
     // частый режим — ответ обычно приходит скоро.
     _pollLoop = PollLoop(
       poller: AdaptivePoller(
-          min: const Duration(seconds: 5),
-          max: const Duration(seconds: 30),
+          min: const Duration(seconds: 2, milliseconds: 500),
+          max: const Duration(seconds: 15),
           scale: () => RemoteConfig.pollScale * (_live?.peerOnline == true || (_groupLive?.onlineCount ?? 0) > 1 ? 4 : 1)),
       tick: () async {
         final added = await widget.sync.pollIncoming();
@@ -1502,7 +1504,9 @@ class _Bubble extends StatelessWidget {
               ),
               if (mine) ...[
                 const SizedBox(width: 6),
-                // ✓ отправлено, ✓✓ доставлено, синие ✓✓ — прочитано.
+                // Одна серая ✓ — дошло (на сервере или уже на устройстве, но
+                // не прочитано), синие ✓✓ — прочитано. Промежуточного
+                // «доставлено, но двумя галочками» нет — путает с «прочитано».
                 Icon(
                   message.readByPeer ? Icons.done_all : _statusIcon(message.status),
                   size: 14,
@@ -1536,7 +1540,7 @@ class _Bubble extends StatelessWidget {
   IconData _statusIcon(ChatMessageStatus s) => switch (s) {
         ChatMessageStatus.sending => Icons.schedule,
         ChatMessageStatus.sent => Icons.check,
-        ChatMessageStatus.delivered => Icons.done_all,
+        ChatMessageStatus.delivered => Icons.check, // дошло, но не прочитано — одна галочка
         ChatMessageStatus.error => Icons.error_outline,
       };
 }

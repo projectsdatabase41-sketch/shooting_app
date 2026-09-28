@@ -9,7 +9,7 @@ import '../i18n/i18n.dart';
 class ChatPresence {
   static final seen = ValueNotifier<Map<String, DateTime>>({});
   static DateTime _last = DateTime(0);
-  static const _minInterval = Duration(seconds: 15);
+  static const _minInterval = Duration(seconds: 7);
 
   /// [force] — сразу, без троттлинга (открыли переписку — не ждать до
   /// ближайшего тика). Живой канал (LiveChatSession) даёт «в сети» мгновенно
@@ -25,7 +25,7 @@ class ChatPresence {
   /// Отметка не реже [_minInterval] + запас на сетевую задержку опроса.
   static bool online(String id) {
     final t = seen.value[id];
-    return t != null && DateTime.now().difference(t) < const Duration(seconds: 45);
+    return t != null && DateTime.now().difference(t) < const Duration(seconds: 22);
   }
 
   /// «в сети» / «был(а) в 14:05» / «был(а) 03.10» / null (не друг или неизвестно).

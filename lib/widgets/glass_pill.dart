@@ -171,8 +171,8 @@ class EdgeShade extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
-    // Сильнее на 50% (решение пользователя).
-    final shade = Colors.black.withValues(alpha: dark ? 0.825 : 0.42);
+    // Сильнее на 50%, потом ещё на 50% (решение пользователя).
+    final shade = Colors.black.withValues(alpha: dark ? 1.0 : 0.63);
     Widget band(double h, Alignment from) => Container(
           height: h,
           decoration: BoxDecoration(

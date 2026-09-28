@@ -285,6 +285,33 @@ void main() {
     sb.close();
   });
 
+  test('«удалить у всех» уходит мгновенно; собеседник уже удаливший сам — тихо, без ошибки', () async {
+    final (authA, repoA) = await _user('uA', 'uB');
+    final (authB, repoB) = await _user('uB', 'uA');
+    var incomingB = 0;
+    final sa = LiveChatSession(auth: authA, repo: repoA, contactId: 'uB', clientFactory: factoryFor('uA'));
+    final sb = LiveChatSession(
+        auth: authB, repo: repoB, contactId: 'uA', clientFactory: factoryFor('uB'), onIncoming: () => incomingB++);
+    await sa.open();
+    await sb.open();
+    await _until(() => sa.peerOnline && sb.peerOnline);
+
+    final m = _out('uB', 'удалю');
+    repoA.addMessage(m);
+    expect(await sa.trySend(m), isTrue);
+    await _until(() => repoB.byClientId('uA', m.clientMessageId) != null);
+
+    sa.sendDelete(m.clientMessageId);
+    await _until(() => repoB.byClientId('uA', m.clientMessageId) == null);
+    expect(incomingB, greaterThan(0)); // экран собеседника должен перерисоваться
+
+    // Повтор (например, B уже удалил его сам у себя) — не бросает исключение.
+    sa.sendDelete(m.clientMessageId);
+    sa.sendDelete('нет-такого-id');
+    sa.close();
+    sb.close();
+  });
+
   test('нет подтверждения за таймаут → false (вызывающий уйдёт через базу)', () async {
     final (authA, repoA) = await _user('uA', 'uB');
     final (authB, repoB) = await _user('uB', 'uA');

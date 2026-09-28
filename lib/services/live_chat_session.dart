@@ -168,12 +168,30 @@ class LiveChatSession {
     _emit('read', {'ids': clientIds});
   }
 
+  /// Мгновенное «удалить у всех», пока собеседник в сети — рядом с обычным
+  /// сигналом через базу (`ChatSyncService.deleteMessage`), не вместо него.
+  void sendDelete(String clientMessageId) {
+    if (!peerOnline) return;
+    _emit('delete', {'delete_of_client_message_id': clientMessageId});
+  }
+
   void _onBroadcast(String event, Map<String, dynamic> p) {
     if (event == 'read') {
       final ids = p['ids'];
       if (ids is List) {
         repo.markPeerRead(contactId, [for (final id in ids) '$id']);
         onPeerRead?.call();
+      }
+      return;
+    }
+    if (event == 'delete') {
+      final id = p['delete_of_client_message_id'];
+      // Собеседник мог уже удалить его сам (у себя) — тогда byClientId не
+      // найдёт строку, и это просто тихо ничего не делает, без ошибки.
+      if (id is String && id.isNotEmpty) {
+        final target = repo.byClientId(contactId, id);
+        if (target != null) repo.deleteMessage(target.id);
+        onIncoming?.call();
       }
       return;
     }
