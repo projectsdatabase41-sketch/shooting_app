@@ -67,7 +67,6 @@ class _CallCoachButtonState extends State<CallCoachButton> {
               ListTile(
                 leading: ChatAvatar(base64: c.avatarBase64, nickname: c.nickname),
                 title: Text(c.nickname),
-                subtitle: c.about.isEmpty ? null : Text(c.about),
                 trailing: c.id == _prefs.coachContactId ? const Icon(Icons.check) : null,
                 onTap: () => Navigator.of(ctx).pop(c.id),
               ),

@@ -54,7 +54,7 @@ void main() {
     await tester.pumpAndSettle(const Duration(milliseconds: 100), EnginePhase.sendSemanticsUpdate, const Duration(seconds: 2));
     expect(tester.takeException(), isNull);
     expect(find.byType(ChatThreadScreen), findsOneWidget);
-    expect(find.text('Клуб Динамо'), findsOneWidget); // «о себе» в шапке
+    expect(find.text('Клуб Динамо'), findsNothing); // «о себе» теперь только на странице собеседника
     expect(find.text('привет 0'), findsOneWidget);
   });
 }

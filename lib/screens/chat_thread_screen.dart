@@ -773,11 +773,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                         style: theme.textTheme.bodySmall,
                       )
                     else if (seen != null)
+                      // «О себе» тут не показываем — только на странице собеседника
+                      // (ChatContactPanelScreen), решение пользователя.
                       Text(seen,
-                          style: theme.textTheme.bodySmall?.copyWith(color: online ? const Color(0xFF3DDC84) : null))
-                    else if (_contact.about.isNotEmpty)
-                      Text(_contact.about,
-                          maxLines: 1, overflow: TextOverflow.ellipsis, style: theme.textTheme.bodySmall),
+                          style: theme.textTheme.bodySmall?.copyWith(color: online ? const Color(0xFF3DDC84) : null)),
                   ],
                 ),
               ),

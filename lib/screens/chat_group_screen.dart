@@ -193,7 +193,6 @@ class _ChatGroupEditScreenState extends State<ChatGroupEditScreen> {
                 contentPadding: EdgeInsets.zero,
                 secondary: ChatAvatar(base64: c.avatarBase64, nickname: c.nickname),
                 title: Text(c.nickname),
-                subtitle: c.about.isEmpty ? null : Text(c.about, overflow: TextOverflow.ellipsis),
                 value: _members.contains(c.id),
                 onChanged: (v) => setState(() => v == true ? _members.add(c.id) : _members.remove(c.id)),
               ),

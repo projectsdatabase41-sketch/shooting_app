@@ -253,7 +253,6 @@ class _ChatContactsScreenState extends State<ChatContactsScreen> {
                                 ListTile(
                                   leading: ChatAvatar(base64: p.avatarBase64, nickname: p.nickname),
                                   title: Text(p.nickname, overflow: TextOverflow.ellipsis),
-                                  subtitle: p.about.isEmpty ? null : Text(p.about, overflow: TextOverflow.ellipsis),
                                   trailing: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
@@ -282,7 +281,6 @@ class _ChatContactsScreenState extends State<ChatContactsScreen> {
                                         )
                                       : ChatAvatar(base64: p.avatarBase64, nickname: p.nickname),
                                   title: Text(p.nickname, overflow: TextOverflow.ellipsis),
-                                  subtitle: p.about.isEmpty ? null : Text(p.about, overflow: TextOverflow.ellipsis),
                                   trailing: widget.prefs.mutedFor(p.userId)
                                       ? const Icon(Icons.notifications_off_outlined, size: 18)
                                       : null,
@@ -444,7 +442,6 @@ class _ChatDirectoryScreenState extends State<ChatDirectoryScreen> {
                       return ListTile(
                         leading: ChatAvatar(base64: p.avatarBase64, nickname: p.nickname),
                         title: Text(p.nickname, overflow: TextOverflow.ellipsis),
-                        subtitle: p.about.isEmpty ? null : Text(p.about, overflow: TextOverflow.ellipsis),
                         // Тап — написать; кнопка — заявка в друзья.
                         trailing: ChatAuthService.friendIds.contains(p.userId)
                             ? const Icon(Icons.how_to_reg, size: 20)

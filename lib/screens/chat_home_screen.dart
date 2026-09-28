@@ -571,7 +571,9 @@ class _ChatContactsView extends StatelessWidget {
                               final c = sorted[i];
                               final m = last[c.id];
                               final unread = repo.unreadCount(c.id);
-                              var sub = m != null ? ChatSyncService.previewOf(m) : c.about;
+                              // «О себе» — только на странице собеседника (решение пользователя),
+                              // тут пусто, пока нет ни одного сообщения.
+                              var sub = m != null ? ChatSyncService.previewOf(m) : '';
                               // В группе — кто написал последним.
                               if (c.isGroup && m != null) {
                                 final who = m.direction == ChatMessageDirection.outgoing
@@ -601,11 +603,6 @@ class _ChatContactsView extends StatelessWidget {
                                 subtitle: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    if (m != null && c.about.isNotEmpty && !c.isGroup)
-                                      Text(c.about,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary)),
                                     if (sub.isNotEmpty) Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis),
                                   ],
                                 ),
