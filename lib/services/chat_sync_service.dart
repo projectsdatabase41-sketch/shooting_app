@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 
@@ -49,6 +50,12 @@ class ChatSyncService {
   /// ускоряет доставку присутствующим, обычная отправка через базу
   /// (fan-out) в `retry()` всё равно происходит всегда.
   GroupLiveSession? groupLive;
+
+  /// Прогресс загрузки вложения (0..1) по `client_message_id` — пока идёт
+  /// сама загрузка; ключа нет ни до, ни после (сбрасывается в finally).
+  /// Экран переписки рисует по нему прогресс поверх превью фото/файла
+  /// вместо мгновенного «залипания» интерфейса на время отправки.
+  static final uploadProgress = ValueNotifier<Map<String, double>>({});
 
   /// Строка(и) для транзитной таблицы: личному собеседнику — одна, группе —
   /// по строке на каждого участника, кроме себя (группа живёт в
@@ -389,25 +396,42 @@ class ChatSyncService {
         if (b64 == null) throw Exception(tr('Файл повреждён'));
         attachmentPath =
             '${auth.userId}/${message.clientMessageId}/${ChatMediaUtils.safePathSegment(message.attachmentName ?? 'file')}';
-        final uploadRes = await client
-            .post(
-              Uri.parse('${ChatSettings.url}/storage/v1/object/chat-media/$attachmentPath'),
-              headers: {
-                'apikey': ChatSettings.anonKey,
-                'Authorization': 'Bearer $token',
-                'Content-Type': message.attachmentMime ?? 'application/octet-stream',
-                // Без x-upsert: перезапись требует ещё и права ЧИТАТЬ файл, а
-                // оно появляется только после записи сообщения — Supabase
-                // отвечал «violates row-level security policy».
-              },
-              body: base64Decode(b64),
-            )
-            .timeout(_timeout);
-        // «Уже существует» — это повторная отправка после сбоя: файл уже на
-        // месте, дальше просто записываем сообщение.
-        final duplicate = uploadRes.statusCode == 409 || uploadRes.body.contains('Duplicate') || uploadRes.body.contains('already exists');
-        if (uploadRes.statusCode >= 300 && !duplicate) {
-          throw Exception(tr('Не удалось загрузить файл ({statusCode}): {body}', {'statusCode': uploadRes.statusCode, 'body': uploadRes.body}));
+        final bytes = base64Decode(b64);
+        try {
+          final request = http.StreamedRequest('POST', Uri.parse('${ChatSettings.url}/storage/v1/object/chat-media/$attachmentPath'))
+            ..headers.addAll({
+              'apikey': ChatSettings.anonKey,
+              'Authorization': 'Bearer $token',
+              'Content-Type': message.attachmentMime ?? 'application/octet-stream',
+              // Без x-upsert: перезапись требует ещё и права ЧИТАТЬ файл, а
+              // оно появляется только после записи сообщения — Supabase
+              // отвечал «violates row-level security policy».
+              'Content-Length': '${bytes.length}',
+            });
+          // Чанками, а не всё сразу — иначе прогресс либо 0%, либо 100%,
+          // толку от него не больше, чем от обычного спиннера.
+          unawaited(() async {
+            const chunk = 32 * 1024;
+            for (var i = 0; i < bytes.length; i += chunk) {
+              final end = (i + chunk < bytes.length) ? i + chunk : bytes.length;
+              request.sink.add(bytes.sublist(i, end));
+              uploadProgress.value = {...uploadProgress.value, message.clientMessageId: end / bytes.length};
+            }
+            await request.sink.close();
+          }());
+          final streamedRes = await client.send(request).timeout(_timeout);
+          final uploadBody = await streamedRes.stream.bytesToString();
+          // «Уже существует» — это повторная отправка после сбоя: файл уже на
+          // месте, дальше просто записываем сообщение.
+          final duplicate =
+              streamedRes.statusCode == 409 || uploadBody.contains('Duplicate') || uploadBody.contains('already exists');
+          if (streamedRes.statusCode >= 300 && !duplicate) {
+            throw Exception(
+                tr('Не удалось загрузить файл ({statusCode}): {body}', {'statusCode': streamedRes.statusCode, 'body': uploadBody}));
+          }
+        } finally {
+          final left = {...uploadProgress.value}..remove(message.clientMessageId);
+          uploadProgress.value = left;
         }
       }
 

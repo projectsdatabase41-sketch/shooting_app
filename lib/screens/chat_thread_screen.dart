@@ -1474,6 +1474,36 @@ class _Bubble extends StatelessWidget {
       );
     }
 
+    // Уровень загрузки вложения поверх превью — вместо мгновенного
+    // «залипания» на статусе «отправляется» до внезапного «отправлено»
+    // (решение пользователя). Фото/файл и так уже видно из локальных
+    // байт сразу же, тут только индикатор поверх него.
+    final framedWithProgress = mine && message.status == ChatMessageStatus.sending && message.attachmentBase64 != null
+        ? ValueListenableBuilder<Map<String, double>>(
+            valueListenable: ChatSyncService.uploadProgress,
+            builder: (context, progress, _) {
+              final p = progress[message.clientMessageId];
+              if (p == null) return frame;
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  frame,
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(radius),
+                    child: Container(color: Colors.black.withValues(alpha: 0.35)),
+                  ),
+                  SizedBox(
+                    width: 36,
+                    height: 36,
+                    child: CircularProgressIndicator(strokeWidth: 3, value: p, color: Colors.white),
+                  ),
+                  Text('${(p * 100).round()}%', style: const TextStyle(color: Colors.white, fontSize: 10)),
+                ],
+              );
+            },
+          )
+        : frame;
+
     // Без Align: место в строке задаёт _item — тогда свайп ловит только пузырь.
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -1487,7 +1517,7 @@ class _Bubble extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 480),
             child: AiChartView(spec: chart),
           ),
-        if (hasCaption || chart == null || message.replyToPreview != null || senderName != null) frame,
+        if (hasCaption || chart == null || message.replyToPreview != null || senderName != null) framedWithProgress,
         const SizedBox(height: 3),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
