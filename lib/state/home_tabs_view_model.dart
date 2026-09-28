@@ -41,7 +41,12 @@ class HomeTabsViewModel extends ChangeNotifier {
     'home_tabs_hidden_coach',
     'home_tabs_layout_athlete',
     'home_tabs_layout_coach',
+    _keyTileColumns,
   ];
+
+  /// Общий для обоих режимов — не привязан к `$mode` (визуальная плотность,
+  /// а не выбор рабочего процесса).
+  static const _keyTileColumns = 'home_tile_columns';
 
   late List<String> _visible = List.of(allIds);
   Set<String> _hidden = {};
@@ -57,6 +62,18 @@ class HomeTabsViewModel extends ChangeNotifier {
     if (value == _layout) return;
     _layout = value;
     _write('home_tabs_layout_$mode', value);
+    notifyListeners();
+  }
+
+  /// Сколько плиток в ширину в режиме "плитки" — щипком (HomeTileGrid),
+  /// 2..5, сохраняется, общий счёт для обоих режимов.
+  int _tileColumns = 2;
+  int get tileColumns => _tileColumns;
+  set tileColumns(int value) {
+    final clamped = value.clamp(2, 5);
+    if (clamped == _tileColumns) return;
+    _tileColumns = clamped;
+    _write(_keyTileColumns, '$clamped');
     notifyListeners();
   }
 
@@ -123,6 +140,9 @@ class HomeTabsViewModel extends ChangeNotifier {
   void _load() {
     final savedLayout = _readRaw('home_tabs_layout_$mode');
     if (savedLayout.isNotEmpty) _layout = savedLayout;
+
+    final savedCols = int.tryParse(_readRaw(_keyTileColumns));
+    if (savedCols != null) _tileColumns = savedCols.clamp(2, 5);
 
     final savedVisible = _readRaw(_keyVisible);
     final savedHidden = _readRaw(_keyHidden);

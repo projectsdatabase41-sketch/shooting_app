@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -23,7 +25,8 @@ OverlayEntry? _hidePopup;
 /// ещё просто закрывает всплывашку, ничего не меняя. Общая реализация
 /// для `HomeTabsBar` (режим "страницы") и `HomeTileGrid` (режим
 /// "плитки") — оба долго нажимают на один и тот же значок одинаково.
-void showHideTabPopup(BuildContext context, GlobalKey anchorKey, VoidCallback onHide) {
+void showHideTabPopup(
+    BuildContext context, GlobalKey anchorKey, VoidCallback onHide) {
   _hidePopup?.remove();
   final box = anchorKey.currentContext?.findRenderObject() as RenderBox?;
   if (box == null) return;
@@ -54,7 +57,8 @@ void showHideTabPopup(BuildContext context, GlobalKey anchorKey, VoidCallback on
               child: Container(
                 width: 28,
                 height: 28,
-                decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                decoration: const BoxDecoration(
+                    color: Colors.red, shape: BoxShape.circle),
                 child: const Icon(Icons.close, size: 16, color: Colors.white),
               ),
             ),
@@ -108,7 +112,9 @@ class _HomeTabsBarState extends State<HomeTabsBar> {
     // Тот же фон приложения, что и у AppBar (AppTheme) — иначе нижняя
     // панель осталась бы старого цвета при выбранном пользователем фоне,
     // как уже было с верхней шапкой.
-    final background = context.watch<PersonalizationViewModel>().appBackgroundFor(Theme.of(context).brightness);
+    final background = context
+        .watch<PersonalizationViewModel>()
+        .appBackgroundFor(Theme.of(context).brightness);
 
     return Material(
       color: background ?? theme.colorScheme.surfaceContainer,
@@ -123,9 +129,11 @@ class _HomeTabsBarState extends State<HomeTabsBar> {
                 scrollDirection: Axis.horizontal,
                 buildDefaultDragHandles: false,
                 onReorder: widget.vm.move,
-                onReorderEnd: (index) => _showHidePopup(widget.vm.visible[index]),
+                onReorderEnd: (index) =>
+                    _showHidePopup(widget.vm.visible[index]),
                 children: [
-                  for (final id in visible) _tile(context, id, tileWidth, key: ValueKey(id)),
+                  for (final id in visible)
+                    _tile(context, id, tileWidth, key: ValueKey(id)),
                 ],
               );
             },
@@ -135,12 +143,15 @@ class _HomeTabsBarState extends State<HomeTabsBar> {
     );
   }
 
-  Widget _tile(BuildContext context, String id, double width, {required Key key}) {
+  Widget _tile(BuildContext context, String id, double width,
+      {required Key key}) {
     final spec = widget.specs[id];
     if (spec == null) return SizedBox(key: key, width: width);
     final theme = Theme.of(context);
     final isSelected = id == widget.selected;
-    final color = isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant;
+    final color = isSelected
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurfaceVariant;
 
     return SizedBox(
       key: key,
@@ -159,7 +170,8 @@ class _HomeTabsBarState extends State<HomeTabsBar> {
             // экране с подписью у каждой не помещаются.
             if (isSelected) ...[
               const SizedBox(height: 2),
-              Text(tr(spec.label), style: theme.textTheme.labelSmall?.copyWith(color: color)),
+              Text(tr(spec.label),
+                  style: theme.textTheme.labelSmall?.copyWith(color: color)),
             ],
           ],
         ),
@@ -181,7 +193,11 @@ class HomeTileGrid extends StatefulWidget {
   final Map<String, HomeTabSpec> specs;
   final ValueChanged<String> onSelect;
 
-  const HomeTileGrid({super.key, required this.vm, required this.specs, required this.onSelect});
+  const HomeTileGrid(
+      {super.key,
+      required this.vm,
+      required this.specs,
+      required this.onSelect});
 
   @override
   State<HomeTileGrid> createState() => _HomeTileGridState();
@@ -212,9 +228,48 @@ class _HomeTileGridState extends State<HomeTileGrid> {
     showHideTabPopup(context, _keyFor(id), () => widget.vm.hide(id));
   }
 
-  static const _spacing = 16.0;
   static const _padding = 16.0;
-  static const _crossAxisCount = 2;
+
+  /// Чуть теснее с каждой лишней колонкой (решение пользователя).
+  double get _spacing => (16.0 - (_crossAxisCount - 2) * 2).clamp(8.0, 16.0);
+
+  /// Щипок двумя пальцами — 2..5 плиток в ширину, зазор чуть уменьшается
+  /// при большем числе колонок (решение пользователя). Тот же приём, что
+  /// у `_PhotoGrid` в chat_contact_panel_screen.dart: `Listener`, а не
+  /// `GestureDetector`, — только наблюдает за пальцами, не отбирает жест
+  /// у `LongPressDraggable`/`DragTarget` плиток.
+  final Map<int, Offset> _pointers = {};
+  double? _startDist;
+
+  double _dist() {
+    final p = _pointers.values.take(2).toList();
+    return (p[0] - p[1]).distance;
+  }
+
+  void _pinchDown(PointerDownEvent e) {
+    _pointers[e.pointer] = e.position;
+    if (_pointers.length == 2) _startDist = math.max(_dist(), 1);
+  }
+
+  void _pinchMove(PointerMoveEvent e) {
+    if (!_pointers.containsKey(e.pointer)) return;
+    _pointers[e.pointer] = e.position;
+    if (_startDist == null || _pointers.length < 2) return;
+    final ratio = _dist() / _startDist!;
+    // Развели — крупнее (меньше колонок), свели — мельче (больше колонок).
+    final cols = widget.vm.tileColumns;
+    final next = ratio > 1.25 ? cols - 1 : (ratio < 0.8 ? cols + 1 : cols);
+    if (next == cols) return;
+    widget.vm.tileColumns = next;
+    _startDist = math.max(_dist(), 1);
+  }
+
+  void _pinchUp(PointerEvent e) {
+    _pointers.remove(e.pointer);
+    if (_pointers.length < 2) _startDist = null;
+  }
+
+  int get _crossAxisCount => widget.vm.tileColumns;
 
   /// Куда встанет каждая плитка, если отпустить ПРЯМО СЕЙЧАС — та же
   /// поправка на индекс, что и в `HomeTabsViewModel.move` (иначе
@@ -250,44 +305,58 @@ class _HomeTileGridState extends State<HomeTileGrid> {
     final preview = _previewOrder(ids);
     final rows = (ids.length / _crossAxisCount).ceil();
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final tileSize = (constraints.maxWidth - _padding * 2 - _spacing * (_crossAxisCount - 1)) / _crossAxisCount;
-        final gaps = rows > 0 ? rows - 1 : 0;
-        final contentHeight = _padding * 2 + rows * tileSize + gaps * _spacing;
+    return Listener(
+      onPointerDown: _pinchDown,
+      onPointerMove: _pinchMove,
+      onPointerUp: _pinchUp,
+      onPointerCancel: _pinchUp,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final tileSize = (constraints.maxWidth -
+                  _padding * 2 -
+                  _spacing * (_crossAxisCount - 1)) /
+              _crossAxisCount;
+          final gaps = rows > 0 ? rows - 1 : 0;
+          final contentHeight =
+              _padding * 2 + rows * tileSize + gaps * _spacing;
 
-        Rect rectFor(int index) {
-          final row = index ~/ _crossAxisCount;
-          final col = index % _crossAxisCount;
-          final x = _padding + col * (tileSize + _spacing);
-          final y = _padding + row * (tileSize + _spacing);
-          return Rect.fromLTWH(x, y, tileSize, tileSize);
-        }
+          Rect rectFor(int index) {
+            final row = index ~/ _crossAxisCount;
+            final col = index % _crossAxisCount;
+            final x = _padding + col * (tileSize + _spacing);
+            final y = _padding + row * (tileSize + _spacing);
+            return Rect.fromLTWH(x, y, tileSize, tileSize);
+          }
 
-        return SingleChildScrollView(
-          child: SizedBox(
-            height: contentHeight,
-            child: Stack(
-              children: [
-                // Позиция каждой плитки — её место в ПРЕДПРОСМОТРЕ
-                // (расступились или нет), а исходный индекс (для
-                // DragTarget/vm.move) — из настоящего порядка `ids`.
-                for (var originalIndex = 0; originalIndex < ids.length; originalIndex++)
-                  AnimatedPositioned(
-                    key: ValueKey(ids[originalIndex]),
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeOutCubic,
-                    left: rectFor(preview.indexOf(ids[originalIndex])).left,
-                    top: rectFor(preview.indexOf(ids[originalIndex])).top,
-                    width: rectFor(preview.indexOf(ids[originalIndex])).width,
-                    height: rectFor(preview.indexOf(ids[originalIndex])).height,
-                    child: _buildTile(context, ids[originalIndex], originalIndex),
-                  ),
-              ],
+          return SingleChildScrollView(
+            child: SizedBox(
+              height: contentHeight,
+              child: Stack(
+                children: [
+                  // Позиция каждой плитки — её место в ПРЕДПРОСМОТРЕ
+                  // (расступились или нет), а исходный индекс (для
+                  // DragTarget/vm.move) — из настоящего порядка `ids`.
+                  for (var originalIndex = 0;
+                      originalIndex < ids.length;
+                      originalIndex++)
+                    AnimatedPositioned(
+                      key: ValueKey(ids[originalIndex]),
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      left: rectFor(preview.indexOf(ids[originalIndex])).left,
+                      top: rectFor(preview.indexOf(ids[originalIndex])).top,
+                      width: rectFor(preview.indexOf(ids[originalIndex])).width,
+                      height:
+                          rectFor(preview.indexOf(ids[originalIndex])).height,
+                      child: _buildTile(
+                          context, ids[originalIndex], originalIndex),
+                    ),
+                ],
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
@@ -313,10 +382,15 @@ class _HomeTileGridState extends State<HomeTileGrid> {
             widget.vm.move(oldIndex, index);
             setState(() => _hoverIndex = null);
           },
-          builder: (context, candidateData, rejectedData) => LongPressDraggable<String>(
+          builder: (context, candidateData, rejectedData) =>
+              LongPressDraggable<String>(
             data: id,
-            feedback: SizedBox(width: 96, height: 96, child: _tileCard(context, id, elevated: true)),
-            childWhenDragging: Opacity(opacity: 0.3, child: _tileCard(context, id)),
+            feedback: SizedBox(
+                width: 96,
+                height: 96,
+                child: _tileCard(context, id, elevated: true)),
+            childWhenDragging:
+                Opacity(opacity: 0.3, child: _tileCard(context, id)),
             onDragStarted: () => setState(() => _dragging = id),
             onDraggableCanceled: (_, __) => setState(() {
               _dragging = null;
@@ -329,7 +403,8 @@ class _HomeTileGridState extends State<HomeTileGrid> {
               });
               _showHidePopup(id);
             },
-            child: KeyedSubtree(key: _keyFor(id), child: _tileCard(context, id)),
+            child:
+                KeyedSubtree(key: _keyFor(id), child: _tileCard(context, id)),
           ),
         ),
       ),
@@ -345,7 +420,8 @@ class _HomeTileGridState extends State<HomeTileGrid> {
     // на цвета приложения из настроек (решение пользователя), а не
     // только обычные Filled/ElevatedButton.
     final personalization = context.watch<PersonalizationViewModel>();
-    final bg = personalization.appButtonFor(cs.brightness) ?? cs.surfaceContainerHigh;
+    final bg =
+        personalization.appButtonFor(cs.brightness) ?? cs.surfaceContainerHigh;
     final fg = personalization.appButtonTextFor(cs.brightness) ?? cs.primary;
     // Вдавливание — только у "живой" плитки на месте, не у теней
     // перетаскивания (elevated — палец уже держит её приподнятой).
@@ -365,11 +441,15 @@ class _HomeTileGridState extends State<HomeTileGrid> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color.lerp(bg, Colors.white, 0.10)!, Color.lerp(bg, Colors.black, 0.08)!],
+            colors: [
+              Color.lerp(bg, Colors.white, 0.10)!,
+              Color.lerp(bg, Colors.black, 0.08)!
+            ],
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: pressed ? 0.10 : (elevated ? 0.35 : 0.22)),
+              color: Colors.black
+                  .withValues(alpha: pressed ? 0.10 : (elevated ? 0.35 : 0.22)),
               offset: Offset(0, pressed ? 1 : (elevated ? 8 : 4)),
               blurRadius: pressed ? 2 : (elevated ? 12 : 6),
             ),
