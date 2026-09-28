@@ -1,9 +1,10 @@
 // Edge Function: отправляет push через Firebase (FCM), когда в чате
-// появляется новое сообщение — вызывается триггером chat_push_gate
-// (sql/chat-push-gate.sql; он шлёт push не чаще раза в 2 минуты на пару
-// отправитель→получатель, чтобы уложиться в квоту Edge Function) или, пока
-// он не установлен, Database Webhook'ом на INSERT в chat_messages. Сама переписка остаётся полностью на Supabase —
-// эта функция только "будит" закрытое приложение (см. lib/services/push_service.dart).
+// появляется новое сообщение — вызывается триггером chat_messages_push
+// (chat_notify_push() в базе yirvom, поставлен вручную через дашборд —
+// не sql/chat-push-gate.sql: та версия с троттлингом раз в 2 минуты
+// существует в этом репозитории как справка, но в базе не установлена).
+// Сама переписка остаётся полностью на Supabase — эта функция только
+// "будит" закрытое приложение (см. lib/services/push_service.dart).
 //
 // Использует FCM HTTP v1 API (legacy-ключ Google полностью отключил в
 // 2024 — см. Firebase Console → Project settings → Cloud Messaging,
@@ -79,13 +80,33 @@ async function getAccessToken(): Promise<string> {
   return json.access_token;
 }
 
-async function sendPush(token: string, title: string, body: string, data: Record<string, string>) {
-  const accessToken = await getAccessToken();
-  await fetch(`https://fcm.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/messages:send`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message: { token, notification: { title, body }, data } }),
-  });
+// Диагностика: раньше все sendXxx были fire-and-forget (await fetch без
+// проверки ответа), а вызывающий код глотал исключения через
+// `.catch(() => {})` — если FCM отвечал 4xx/5xx (просроченный токен,
+// неверный project id, невалидный ключ), это нигде не было видно: ни в
+// логах (тут нет console.error), ни в ответе функции (везде плоское
+// "ok"). Теперь каждый sendXxx возвращает результат, и он попадает в
+// тело HTTP-ответа — его видно в net._http_response.content в базе, без
+// похода в дашборд/логи Edge Function.
+type FcmResult = { ok: boolean; status: number; body?: string };
+
+async function fcmPost(payload: unknown): Promise<FcmResult> {
+  try {
+    const accessToken = await getAccessToken();
+    const res = await fetch(`https://fcm.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/messages:send`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const text = await res.text();
+    return { ok: res.ok, status: res.status, body: res.ok ? undefined : text.slice(0, 300) };
+  } catch (e) {
+    return { ok: false, status: 0, body: String(e).slice(0, 300) };
+  }
+}
+
+async function sendPush(token: string, title: string, body: string, data: Record<string, string>): Promise<FcmResult> {
+  return fcmPost({ message: { token, notification: { title, body }, data } });
 }
 
 // "Позвать" — БЕЗ `notification`-поля (данными), намеренно: иначе ОС
@@ -95,14 +116,9 @@ async function sendPush(token: string, title: string, body: string, data: Record
 // рисует уведомление САМО через flutter_local_notifications. `priority:
 // high` — чтобы data-сообщение доставилось сразу, а не с задержкой
 // (Android иначе может придержать его до следующей синхронизации).
-async function sendCallPush(token: string, title: string, body: string, contactId: string) {
-  const accessToken = await getAccessToken();
-  await fetch(`https://fcm.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/messages:send`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      message: { token, data: { type: 'call', title, body, contact_id: contactId }, android: { priority: 'high' } },
-    }),
+async function sendCallPush(token: string, title: string, body: string, contactId: string): Promise<FcmResult> {
+  return fcmPost({
+    message: { token, data: { type: 'call', title, body, contact_id: contactId }, android: { priority: 'high' } },
   });
 }
 
@@ -110,30 +126,27 @@ async function sendCallPush(token: string, title: string, body: string, contactI
 // уведомление с фото отправителя и значком приложения, см.
 // showMessageNotification в push_service.dart); на iOS/вебе — обычное
 // уведомление, как раньше.
-async function sendMessagePush(token: string, title: string, body: string, contactId: string) {
-  const accessToken = await getAccessToken();
-  await fetch(`https://fcm.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/messages:send`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      message: {
-        token,
-        data: { type: 'msg', title, body: body.slice(0, 500), contact_id: contactId },
-        android: { priority: 'high' },
-        apns: { payload: { aps: { alert: { title, body } } } },
-        webpush: { notification: { title, body } },
-      },
-    }),
+async function sendMessagePush(token: string, title: string, body: string, contactId: string): Promise<FcmResult> {
+  return fcmPost({
+    message: {
+      token,
+      data: { type: 'msg', title, body: body.slice(0, 500), contact_id: contactId },
+      android: { priority: 'high' },
+      apns: { payload: { aps: { alert: { title, body } } } },
+      webpush: { notification: { title, body } },
+    },
   });
 }
 
 // Только данные, без показа — приложение само решает (например, убрать уведомление).
-async function sendDataOnly(token: string, data: Record<string, string>) {
-  const accessToken = await getAccessToken();
-  await fetch(`https://fcm.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/messages:send`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message: { token, data, android: { priority: 'high' } } }),
+async function sendDataOnly(token: string, data: Record<string, string>): Promise<FcmResult> {
+  return fcmPost({ message: { token, data, android: { priority: 'high' } } });
+}
+
+function resultsBody(results: FcmResult[]): Response {
+  const failed = results.filter((r) => !r.ok);
+  return new Response(JSON.stringify({ sent: results.length, failed: failed.length, results }), {
+    headers: { 'Content-Type': 'application/json' },
   });
 }
 
@@ -175,8 +188,7 @@ Deno.serve(async (req: Request) => {
     if (targets.length === 0) return new Response('ok');
     const res = await fetch(`${SUPABASE_URL}/rest/v1/chat_push_tokens?select=token&user_id=in.(${targets.join(',')})`, { headers: H0 });
     const toks = ((await res.json()) as { token: string }[]).map((t) => t.token);
-    await Promise.all(toks.map((t) => sendDataOnly(t, { type: 'msg_delete', contact_id: threadId }).catch(() => {})));
-    return new Response('ok');
+    return resultsBody(await Promise.all(toks.map((t) => sendDataOnly(t, { type: 'msg_delete', contact_id: threadId }))));
   }
 
   const H = { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` };
@@ -259,29 +271,25 @@ Deno.serve(async (req: Request) => {
     const title = senderNickname ?? 'Звонок';
     const body = 'вызывает вас';
     if (alertsEnabled) {
-      await Promise.all(tokens.map((t) => sendCallPush(t, title, body, senderId).catch(() => {})));
-    } else {
-      await Promise.all(
-        tokens.map((t) => sendPush(t, title, body, { type: 'chat', contact_id: senderId }).catch(() => {})),
-      );
+      return resultsBody(await Promise.all(tokens.map((t) => sendCallPush(t, title, body, senderId))));
     }
-    return new Response('ok');
+    return resultsBody(
+      await Promise.all(tokens.map((t) => sendPush(t, title, body, { type: 'chat', contact_id: senderId }))),
+    );
   }
   if (msgType === 'call_ack') {
     const title = senderNickname ?? 'Тренер';
     const body = 'идёт к вам';
-    await Promise.all(
-      tokens.map((t) => sendPush(t, title, body, { type: 'chat', contact_id: senderId }).catch(() => {})),
+    return resultsBody(
+      await Promise.all(tokens.map((t) => sendPush(t, title, body, { type: 'chat', contact_id: senderId }))),
     );
-    return new Response('ok');
   }
   if (msgType === 'call_cancel') {
     const title = senderNickname ?? 'Спортсмен';
     const body = 'отменил вызов — помощь больше не нужна';
-    await Promise.all(
-      tokens.map((t) => sendPush(t, title, body, { type: 'chat', contact_id: senderId }).catch(() => {})),
+    return resultsBody(
+      await Promise.all(tokens.map((t) => sendPush(t, title, body, { type: 'chat', contact_id: senderId }))),
     );
-    return new Response('ok');
   }
 
   const preview = (r: Record<string, unknown>): string => {
@@ -304,7 +312,5 @@ Deno.serve(async (req: Request) => {
   // Тап по уведомлению открывает диалог группы, а не личку с автором.
   const threadId = groupId ?? senderId;
 
-  await Promise.all(tokens.map((t) => sendMessagePush(t, title, body, threadId).catch(() => {})));
-
-  return new Response('ok');
+  return resultsBody(await Promise.all(tokens.map((t) => sendMessagePush(t, title, body, threadId))));
 });
