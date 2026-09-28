@@ -1,5 +1,7 @@
 // Детект пробоин по фото (лог. слой, без камеры и без package:image —
 // синтетические изображения строятся прямо в тесте).
+import 'dart:math' as math;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shooting_app/logic/shot_photo_detection.dart';
 import 'package:shooting_app/models/target_face.dart';
@@ -272,6 +274,50 @@ void main() {
     test('слишком маленький кадр отклоняется сразу', () {
       final img = GrayImage.filled(10, 10, 210);
       expect(detectTargetCircle(img), isNull);
+    });
+
+    test('настоящий круг (снят строго анфас) — radiusYPx ≈ radiusPx, овал не выдумывается', () {
+      final img = GrayImage.filled(300, 300, 40);
+      img.fillCircle(150, 150, 100, 210);
+      final result = detectTargetCircle(img)!;
+      expect(result.radiusYPx, closeTo(result.radiusPx, result.radiusPx * 0.08));
+    });
+
+    test('фото под углом — печатное кольцо на кадре овал: radiusYPx заметно меньше radiusPx', () {
+      // Полуось a=120 вдоль угла 30°, полуось b=80 поперёк — как круглая
+      // мишень, снятая не строго анфас (перспективное сжатие по одной оси).
+      const cx = 200.0, cy = 200.0, a = 120.0, b = 80.0, angleDeg = 30.0;
+      final angle = angleDeg * 3.14159265 / 180;
+      final cosA = math.cos(angle), sinA = math.sin(angle);
+      final img = GrayImage.filled(400, 400, 40);
+      for (var y = 0; y < 400; y++) {
+        for (var x = 0; x < 400; x++) {
+          final dx = x - cx, dy = y - cy;
+          final u = dx * cosA + dy * sinA; // вдоль большой полуоси
+          final v = -dx * sinA + dy * cosA; // поперёк
+          if ((u * u) / (a * a) + (v * v) / (b * b) <= 1) img.set(x, y, 210);
+        }
+      }
+      final result = detectTargetCircle(img)!;
+      // radiusX/radiusY у эллипса из подгонки могут поменяться местами с
+      // углом (radiusX всегда "вдоль angleRad", а какая из осей отдана в
+      // radiusX — большая или меньшая — не важно: (rx,ry,φ) и (ry,rx,φ+90°)
+      // задают тот же самый эллипс, дальше по коду используются вместе).
+      // Проверяем сам ЭЛЛИПС: обе полуоси найдены верно, овальность
+      // выражена, а radiusX действительно измерена именно под тем углом,
+      // что вернула функция.
+      final axes = [result.radiusPx, result.radiusYPx]..sort();
+      expect(axes[0], closeTo(b, b * 0.15), reason: 'меньшая полуось');
+      expect(axes[1], closeTo(a, a * 0.15), reason: 'большая полуось');
+      expect(result.radiusYPx, isNot(closeTo(result.radiusPx, result.radiusPx * 0.1)), reason: 'явно не круг');
+      // Истинный радиус мишени под углом angleRad — сверяем с formula
+      // эллипса (a=120 по 30°, b=80 поперёк), а не гадаем, какая полуось
+      // считается "первой".
+      final trueAngle = angleDeg * 3.14159265 / 180;
+      final d = result.angleRad - trueAngle;
+      final expectedAtAngle =
+          (a * b) / math.sqrt(math.pow(b * math.cos(d), 2) + math.pow(a * math.sin(d), 2));
+      expect(result.radiusPx, closeTo(expectedAtAngle, expectedAtAngle * 0.15));
     });
   });
 

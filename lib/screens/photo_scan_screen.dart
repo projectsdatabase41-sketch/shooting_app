@@ -36,21 +36,25 @@ List<HoleCandidate> _detectInIsolate(_DetectArgs args) {
   );
 }
 
-({PixelPoint center, double radiusPx})? _detectCircleInIsolate(_CalibArgs args) {
+({PixelPoint center, double radiusPx, double radiusYPx, double angleRad})? _detectCircleInIsolate(_CalibArgs args) {
   final auto = detectTargetCircle(args.image, bullseyeToFaceRatio: args.bullseyeToFaceRatio);
   if (auto == null) return null;
   // Уточнение по печатным кольцам — поверх уже найденного центра и
   // грубого радиуса: точные, заранее известные расстояния до всех 10
   // колец надёжнее любой эвристики по форме пятна или контрасту с
-  // фоном (см. комментарий к refineRadiusByRings).
-  final refined = refineRadiusByRings(
+  // фоном (см. комментарий к refineRadiusByRings). Работает со СКАЛЯРОМ
+  // (средний радиус овала) — поправку-множитель переносим на обе полуоси,
+  // овальность (rx/ry) при этом не меняется, только общий масштаб.
+  final avgRadius = (auto.radiusPx + auto.radiusYPx) / 2;
+  final refinedAvg = refineRadiusByRings(
     image: args.image,
     center: auto.center,
-    initialRadiusPx: auto.radiusPx,
+    initialRadiusPx: avgRadius,
     ringRadiiMm: args.ringRadiiMm,
     faceRadiusMm: args.faceRadiusMm,
   );
-  return (center: auto.center, radiusPx: refined);
+  final scale = avgRadius > 0 ? refinedAvg / avgRadius : 1.0;
+  return (center: auto.center, radiusPx: auto.radiusPx * scale, radiusYPx: auto.radiusYPx * scale, angleRad: auto.angleRad);
 }
 
 class _CalibArgs {
@@ -270,23 +274,26 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
     );
 
     Offset center;
-    double radius;
+    double radiusX, radiusY, angle;
     if (autoCircle != null) {
       final s = analyzed.scale;
       center = Offset(autoCircle.center.x / s, autoCircle.center.y / s);
-      radius = autoCircle.radiusPx / s;
+      radiusX = autoCircle.radiusPx / s;
+      radiusY = autoCircle.radiusYPx / s;
+      angle = autoCircle.angleRad;
     } else {
       center = Offset(decoded.width / 2, decoded.height / 2);
-      radius = (decoded.width < decoded.height ? decoded.width : decoded.height) * 0.35;
+      radiusX = radiusY = (decoded.width < decoded.height ? decoded.width : decoded.height) * 0.35;
+      angle = 0;
     }
 
     setState(() {
       _bytes = bytes;
       _decoded = decoded;
       _calibCenter = center;
-      _calibRx = radius;
-      _calibRy = radius;
-      _calibAngle = 0;
+      _calibRx = radiusX;
+      _calibRy = radiusY;
+      _calibAngle = angle;
       _candidates = [];
     });
     await _runDetection();

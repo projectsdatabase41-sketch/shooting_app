@@ -365,7 +365,12 @@ bool _nearRingLabel(
 /// маленький, в центре сам фон, область почти не выросла или расползлась
 /// до всех четырёх краёв кадра сразу) — вызывающий код в этом случае
 /// оставляет прежнюю ручную калибровку по умолчанию.
-({PixelPoint center, double radiusPx})? detectTargetCircle(GrayImage image, {double? bullseyeToFaceRatio}) {
+///
+/// `radiusYPx`/`angleRad` — овал, а не круг, когда фото снято не строго
+/// анфас (найден лучами, см. `_fitEllipseFromRays`); `radiusYPx == radiusPx`
+/// и `angleRad == 0`, если овал подогнать не вышло — обычный круг, как раньше.
+({PixelPoint center, double radiusPx, double radiusYPx, double angleRad})? detectTargetCircle(GrayImage image,
+    {double? bullseyeToFaceRatio}) {
   final w = image.width, h = image.height;
   if (w < 20 || h < 20) return null;
 
@@ -459,13 +464,21 @@ bool _nearRingLabel(
   // центр к геометрии кадра, а не к настоящей мишени.
   final foundPoints = <PixelPoint>[];
   final foundAngles = <double>[];
+  // Для овальной мишени floodRadius (из AABB разлива) может быть БОЛЬШЕ
+  // истинного радиуса вдоль малой полуоси — искать вниз только до
+  // floodRadius тогда в принципе не находит границу в этих направлениях
+  // (реальная находка при подгонке овала: лучи собирались только с
+  // "внешней" половины эллипса, подгонка выходила почти кругом). Запас
+  // вдвое ниже ловит эллипс с соотношением осей вплоть до ~2:1, для
+  // круга ничего не меняет (граница там и так у самого floodRadius).
+  final raySearchFloor = floodRadius * 0.5;
   for (var i = 0; i < rays; i++) {
     final angle = 2 * math.pi * i / rays;
     final dx = math.cos(angle), dy = math.sin(angle);
     final edgeR = _rayDistanceToEdge(floodCenter.x, floodCenter.y, dx, dy, w, h);
-    if (edgeR <= floodRadius) continue;
+    if (edgeR <= raySearchFloor) continue;
     double? found;
-    for (var r = edgeR; r > floodRadius; r -= 2) {
+    for (var r = edgeR; r > raySearchFloor; r -= 2) {
       final x = (floodCenter.x + dx * r).round().clamp(0, w - 1);
       final y = (floodCenter.y + dy * r).round().clamp(0, h - 1);
       if (differsFromBg(x, y)) {
@@ -547,6 +560,10 @@ bool _nearRingLabel(
   final foundRealEdge = rayRefinedRadius > floodRadius * 1.15;
   PixelPoint finalCenter;
   double finalRadius;
+  // Овал лучами подгоняем, только когда финальные центр/радиус реально
+  // ВЗЯТЫ из лучей (а не из bbox яблока/разлива-от-фона, где точек границы
+  // по кругу нет вовсе) — тот же признак, что использован ниже для выбора.
+  var usedRayEstimate = false;
   if (bullseyeEstimate != null) {
     final ratio = rayRefinedRadius / bullseyeEstimate.radiusPx;
     final centerDx = refinedCenter.x - bullseyeEstimate.center.x;
@@ -560,6 +577,7 @@ bool _nearRingLabel(
     if (agrees) {
       finalCenter = refinedCenter;
       finalRadius = rayRefinedRadius;
+      usedRayEstimate = true;
     } else {
       finalCenter = bullseyeEstimate.center;
       finalRadius = bullseyeEstimate.radiusPx;
@@ -567,6 +585,7 @@ bool _nearRingLabel(
   } else if (foundRealEdge) {
     finalCenter = refinedCenter;
     finalRadius = rayRefinedRadius;
+    usedRayEstimate = true;
   } else if (bullseyeToFaceRatio != null) {
     // Своё яблоко отдельным поиском не нашлось (редкость) — запасной
     // вариант через уже имеющийся разлив-от-фона, как было раньше.
@@ -574,10 +593,88 @@ bool _nearRingLabel(
     finalRadius = floodRadius * bullseyeToFaceRatio;
   } else {
     finalCenter = refinedCenter;
+    usedRayEstimate = true;
     finalRadius = rayRefinedRadius;
   }
 
-  return (center: finalCenter, radiusPx: finalRadius);
+  // Овал вместо круга — фото редко снято строго анфас, и печатное кольцо
+  // на нём тогда эллипс, не круг (та же поправка, что и у РУЧНОЙ
+  // калибровки — см. _calibRy/_calibAngle в photo_scan_screen.dart).
+  // Только когда финальные центр/радиус реально из лучей (usedRayEstimate)
+  // — оценка через яблоко (bullseyeEstimate) даёт всего одну bbox-точку,
+  // эллипс из неё не подогнать, остаёмся кругом.
+  var radiusYPx = finalRadius;
+  var angleRad = 0.0;
+  if (usedRayEstimate) {
+    final angles = <double>[], radii = <double>[];
+    for (final p in foundPoints) {
+      final dx = p.x - finalCenter.x, dy = p.y - finalCenter.y;
+      radii.add(math.sqrt(dx * dx + dy * dy));
+      angles.add(math.atan2(dy, dx));
+    }
+    final fit = _fitEllipseFromRays(angles, radii);
+    if (fit != null) {
+      finalRadius = fit.rx;
+      radiusYPx = fit.ry;
+      angleRad = fit.angleRad;
+    }
+  }
+
+  return (center: finalCenter, radiusPx: finalRadius, radiusYPx: radiusYPx, angleRad: angleRad);
+}
+
+/// Подгонка эллипса (обычный МНК, без итераций) по точкам границы,
+/// найденным лучами в `detectTargetCircle`: для угла θ и радиуса r у
+/// эллипса с полуосями (a вдоль поворота φ, b поперёк) верно
+/// `1/r² = A + B·cos(2θ) + C·sin(2θ)` — линейное относительно (A,B,C)
+/// (стандартное разложение обратного квадрата радиуса эллипса по
+/// удвоенному углу). Решаем нормальными уравнениями 3×3, оси и поворот —
+/// дальше в закрытом виде: `1/a² = A+D`, `1/b² = A-D`, `D = √(B²+C²)`,
+/// `φ = atan2(C,B)/2`.
+/// Возвращает `null`, если точек мало или решение не похоже на реальный
+/// эллипс (вырожденное/отрицательное) — вызывающий код остаётся кругом.
+({double rx, double ry, double angleRad})? _fitEllipseFromRays(List<double> angles, List<double> radii) {
+  if (angles.length < 8) return null;
+  var n = 0.0, sC = 0.0, sS = 0.0, sCC = 0.0, sCS = 0.0, sSS = 0.0, sW = 0.0, sCW = 0.0, sSW = 0.0;
+  for (var i = 0; i < angles.length; i++) {
+    final r = radii[i];
+    if (r <= 0) continue;
+    final w = 1 / (r * r);
+    final c = math.cos(2 * angles[i]);
+    final s = math.sin(2 * angles[i]);
+    n++;
+    sC += c;
+    sS += s;
+    sCC += c * c;
+    sCS += c * s;
+    sSS += s * s;
+    sW += w;
+    sCW += c * w;
+    sSW += s * w;
+  }
+  if (n < 8) return null;
+
+  // 3×3: [[n,sC,sS],[sC,sCC,sCS],[sS,sCS,sSS]] · [A,B,C] = [sW,sCW,sSW].
+  final det = n * (sCC * sSS - sCS * sCS) - sC * (sC * sSS - sCS * sS) + sS * (sC * sCS - sCC * sS);
+  if (det.abs() < 1e-9) return null;
+  final a = (sW * (sCC * sSS - sCS * sCS) - sC * (sCW * sSS - sCS * sSW) + sS * (sCW * sCS - sCC * sSW)) / det;
+  final b = (n * (sCW * sSS - sCS * sSW) - sW * (sC * sSS - sCS * sS) + sS * (sC * sSW - sCW * sS)) / det;
+  final c = (n * (sCC * sSW - sCW * sCS) - sC * (sC * sSW - sCW * sS) + sW * (sC * sCS - sCC * sS)) / det;
+
+  final d = math.sqrt(b * b + c * c);
+  // 1/r² максимален (r минимален) вдоль φ — значит rx (радиус ИМЕННО
+  // вдоль угла φ, как того требует вызывающий код — см. radiusX в
+  // _ReviewOverlay) там МЕНЬШАЯ полуось, ry (перпендикулярно) — большая.
+  // Какая из них физически "большая ось мишени" тут не важно: (rx,ry,φ)
+  // однозначно задают тот же самый эллипс, что и (ry,rx,φ+90°).
+  final invA2 = a + d, invB2 = a - d; // 1/rx², 1/ry²
+  if (invA2 <= 0 || invB2 <= 0) return null; // не эллипс — уходим кругом
+  final rx = 1 / math.sqrt(invA2), ry = 1 / math.sqrt(invB2);
+  final angle = math.atan2(c, b) / 2;
+  // Разумные пределы — иначе шум по немногим точкам даёт вытянутый эллипс,
+  // которому веры нет (реальный перекос фото редко больше чем в 2 раза).
+  if (rx / ry > 2.5 || ry / rx > 2.5) return null;
+  return (rx: rx, ry: ry, angleRad: angle);
 }
 
 /// Связная тёмная область вокруг ЦЕНТРА КАДРА по АБСОЛЮТНОЙ яркости
