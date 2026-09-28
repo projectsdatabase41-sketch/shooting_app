@@ -10,6 +10,7 @@ import '../models/home_tab_specs.dart';
 import '../services/ai_service.dart';
 import '../services/ai_settings.dart';
 import '../services/custom_services_repository.dart';
+import '../services/app_update_service.dart';
 import '../services/knowledge_column_discovery.dart';
 import '../services/supabase_auth_service.dart';
 import '../i18n/i18n.dart';
@@ -126,6 +127,7 @@ class SettingsScreen extends StatelessWidget {
               store.refreshView();
             },
           ),
+          const _UpdateTile(),
           const Divider(height: 24),
           // Учётная запись — в самом низу, как просил пользователь:
           // заходят сюда раз в жизни, а место наверху занимает то, что
@@ -143,6 +145,96 @@ class SettingsScreen extends StatelessWidget {
 /// высоты — решение пользователя. Причина здравая: вход в базу это не
 /// раздел приложения, а разовое действие, и отдельный экран со своей
 /// кнопкой «назад» под него избыточен.
+/// Обновление одной кнопкой — только там, где оно вообще возможно
+/// (Android, сборка из CI со встроенным GIT_SHA; локальная/debug-сборка
+/// и веб — плитка просто не показывается, сверять не с чем).
+class _UpdateTile extends StatefulWidget {
+  const _UpdateTile();
+
+  @override
+  State<_UpdateTile> createState() => _UpdateTileState();
+}
+
+enum _UpdateStage { idle, checking, upToDate, available, downloading, error }
+
+class _UpdateTileState extends State<_UpdateTile> {
+  _UpdateStage _stage = _UpdateStage.idle;
+  AppUpdateInfo? _info;
+  double _progress = 0;
+  String? _error;
+
+  Future<void> _check() async {
+    setState(() => _stage = _UpdateStage.checking);
+    final info = await AppUpdateService.check();
+    if (!mounted) return;
+    setState(() {
+      _info = info;
+      _stage = info == null ? _UpdateStage.upToDate : _UpdateStage.available;
+    });
+  }
+
+  Future<void> _install() async {
+    final info = _info;
+    if (info == null) return;
+    setState(() {
+      _stage = _UpdateStage.downloading;
+      _progress = 0;
+    });
+    try {
+      await AppUpdateService.downloadAndInstall(info, onProgress: (p) {
+        if (mounted) setState(() => _progress = p);
+      });
+      // Дальше решает системный установщик — экран можно просто оставить
+      // как есть, приложение необязательно будет перезапущено сразу.
+      if (mounted) setState(() => _stage = _UpdateStage.idle);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _stage = _UpdateStage.error;
+          _error = '$e';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!AppUpdateService.supported) return const SizedBox.shrink();
+    return switch (_stage) {
+      _UpdateStage.idle || _UpdateStage.upToDate => ListTile(
+          leading: const Icon(Icons.system_update_outlined),
+          title: Text(tr('Проверить обновления')),
+          subtitle: _stage == _UpdateStage.upToDate ? Text(tr('У вас последняя версия')) : null,
+          onTap: _check,
+        ),
+      _UpdateStage.checking => ListTile(
+          leading: const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
+          title: Text(tr('Проверяю…')),
+        ),
+      _UpdateStage.available => ListTile(
+          leading: const Icon(Icons.system_update_outlined, color: Colors.orange),
+          title: Text(tr('Доступно обновление')),
+          subtitle: Text(tr('Коммит {sha}', {'sha': _info!.sha.substring(0, 7)})),
+          trailing: FilledButton(onPressed: _install, child: Text(tr('Обновить'))),
+        ),
+      _UpdateStage.downloading => ListTile(
+          leading: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2, value: _progress > 0 ? _progress : null),
+          ),
+          title: Text(tr('Скачиваю… {percent}%', {'percent': (_progress * 100).round()})),
+        ),
+      _UpdateStage.error => ListTile(
+          leading: const Icon(Icons.error_outline, color: Colors.red),
+          title: Text(tr('Не удалось обновить')),
+          subtitle: Text(_error ?? ''),
+          onTap: _check,
+        ),
+    };
+  }
+}
+
 class _AccountTile extends StatelessWidget {
   const _AccountTile();
 

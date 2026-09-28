@@ -20,6 +20,10 @@
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-feature android:name="android.hardware.microphone" android:required="false"/>
+    <!-- Обновление одной кнопкой из настроек (AppUpdateService) — система
+         спросит один раз при первой установке из этого источника, дальше
+         не переспрашивает. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
 
     <application
         android:label="Pusl"
