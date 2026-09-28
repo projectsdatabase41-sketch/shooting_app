@@ -123,6 +123,10 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
   /// ИИ смотрит на фото — «назад» и сворачивание прерывают, а не уходят.
   bool _visionRunning = false;
 
+  /// Участок ИСХОДНОГО фото (пиксели), который сейчас разбирает модель —
+  /// только пока идёт сам анализ, см. `_runVision`/`_ScanningOverlay`.
+  Rect? _visionCropRect;
+
   @override
   void initState() {
     super.initState();
@@ -320,6 +324,7 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
         }
       } finally {
         if (mounted) setState(() => _visionRunning = false);
+        _visionCropRect = null;
       }
     }
     try {
@@ -380,6 +385,9 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
     final y0 = (center.dy - half).clamp(0, decoded.height - 1).floor();
     final x1 = (center.dx + half).clamp(1, decoded.width).ceil();
     final y1 = (center.dy + half).clamp(1, decoded.height).ceil();
+    // Видно, КАКОЙ участок фото сейчас смотрит модель — минуты ожидания на
+    // слабом железе иначе выглядят как замёрзший экран (решение пользователя).
+    setState(() => _visionCropRect = Rect.fromLTRB(x0.toDouble(), y0.toDouble(), x1.toDouble(), y1.toDouble()));
     final crop = img.copyCrop(decoded, x: x0, y: y0, width: x1 - x0, height: y1 - y0);
     final square = img.copyResize(crop, width: LocalVision.side, height: LocalVision.side);
     final jpeg = Uint8List.fromList(img.encodeJpg(square, quality: 90));
@@ -389,6 +397,7 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
     if (!mounted) return;
     setState(() {
       _busy = false;
+      _visionCropRect = null;
       _candidates = [
         for (final p in points)
           if ((Offset(x0 + p.dx * sx, y0 + p.dy * sy) - center).distance <= maxR)
@@ -578,37 +587,46 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
                     child: LayoutBuilder(
                       builder: (context, box) {
                         _displayScale = box.maxWidth / decoded.width;
-                        return _ReviewOverlay(
-                          bytes: _bytes!,
-                          displayScale: _displayScale,
-                          center: _calibCenter!,
-                          radiusX: _calibRx,
-                          radiusY: _calibRy,
-                          angle: _calibAngle,
-                          // Радиус пробоины в тех же пикселях фото, что и
-                          // калибровка (по среднему радиусу эллипса) — от
-                          // него и масштабируется маркер, чтобы на экране
-                          // он был не крупнее настоящего отверстия
-                          // (решение пользователя, иначе точную подгонку
-                          // неудобно делать).
-                          holeRadiusPx:
-                              (_calibRx + _calibRy) / 2 * widget.face.caliberRadiusMm / widget.face.faceRadiusMm,
-                          candidates: _candidates,
-                          addMode: _addMode,
-                          onCalibrationChanged: (c, rx, ry, angle) => setState(() {
-                            _calibCenter = c;
-                            _calibRx = rx;
-                            _calibRy = ry;
-                            _calibAngle = angle;
-                          }),
-                          onCandidateMoved: (i, p) => setState(() => _candidates[i] = p),
-                          onCandidateRemoved: (i) => setState(() => _candidates.removeAt(i)),
-                          onCandidateAdded: (p) => setState(() {
-                            _candidates.add(p);
-                            _addMode = false;
-                            _lastManualAddAt = DateTime.now();
-                          }),
-                          onPinchStart: _cancelAccidentalTap,
+                        return Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            _ReviewOverlay(
+                              bytes: _bytes!,
+                              displayScale: _displayScale,
+                              center: _calibCenter!,
+                              radiusX: _calibRx,
+                              radiusY: _calibRy,
+                              angle: _calibAngle,
+                              // Радиус пробоины в тех же пикселях фото, что и
+                              // калибровка (по среднему радиусу эллипса) — от
+                              // него и масштабируется маркер, чтобы на экране
+                              // он был не крупнее настоящего отверстия
+                              // (решение пользователя, иначе точную подгонку
+                              // неудобно делать).
+                              holeRadiusPx:
+                                  (_calibRx + _calibRy) / 2 * widget.face.caliberRadiusMm / widget.face.faceRadiusMm,
+                              candidates: _candidates,
+                              addMode: _addMode,
+                              onCalibrationChanged: (c, rx, ry, angle) => setState(() {
+                                _calibCenter = c;
+                                _calibRx = rx;
+                                _calibRy = ry;
+                                _calibAngle = angle;
+                              }),
+                              onCandidateMoved: (i, p) => setState(() => _candidates[i] = p),
+                              onCandidateRemoved: (i) => setState(() => _candidates.removeAt(i)),
+                              onCandidateAdded: (p) => setState(() {
+                                _candidates.add(p);
+                                _addMode = false;
+                                _lastManualAddAt = DateTime.now();
+                              }),
+                              onPinchStart: _cancelAccidentalTap,
+                            ),
+                            if (_visionRunning && _visionCropRect != null)
+                              IgnorePointer(
+                                child: _ScanningOverlay(cropRect: _visionCropRect!, displayScale: _displayScale),
+                              ),
+                          ],
                         );
                       },
                     ),
@@ -922,4 +940,79 @@ class _CalibrationPainter extends CustomPainter {
       oldDelegate.radiusX != radiusX ||
       oldDelegate.radiusY != radiusY ||
       oldDelegate.angle != angle;
+}
+
+/// Видно, какой участок фото сейчас смотрит ИИ, пока идёт распознавание
+/// (минуты на слабом железе — см. фото_scan_screen докстринг у
+/// `_visionCropRect`): снаружи участка — затемнение, внутри — бегущая
+/// полоса сканирования. Сам жест сюда не долетает (обёрнут в IgnorePointer
+/// снаружи) — калибровка/точки под ним по-прежнему видны и не мешают.
+class _ScanningOverlay extends StatefulWidget {
+  final Rect cropRect; // в пикселях исходного фото
+  final double displayScale;
+  const _ScanningOverlay({required this.cropRect, required this.displayScale});
+
+  @override
+  State<_ScanningOverlay> createState() => _ScanningOverlayState();
+}
+
+class _ScanningOverlayState extends State<_ScanningOverlay> with SingleTickerProviderStateMixin {
+  late final _ctrl = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final rect = Rect.fromLTWH(
+      widget.cropRect.left * widget.displayScale,
+      widget.cropRect.top * widget.displayScale,
+      widget.cropRect.width * widget.displayScale,
+      widget.cropRect.height * widget.displayScale,
+    );
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (context, _) => CustomPaint(
+        painter: _ScanPainter(rect: rect, t: _ctrl.value),
+      ),
+    );
+  }
+}
+
+class _ScanPainter extends CustomPainter {
+  final Rect rect;
+  final double t; // 0..1, бегущая полоса сверху вниз, дальше по кругу
+
+  const _ScanPainter({required this.rect, required this.t});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Снаружи участка — затемнение (тонкой рамкой обводим сам участок).
+    final outside = Path.combine(PathOperation.difference, Path()..addRect(Offset.zero & size), Path()..addRect(rect));
+    canvas.drawPath(outside, Paint()..color = Colors.black.withValues(alpha: 0.45));
+    canvas.drawRect(rect, Paint()..color = Colors.amberAccent..style = PaintingStyle.stroke..strokeWidth = 2);
+
+    // Полоса — сама расширяется/гаснет по краям (градиент), а не жёсткая линия.
+    final y = rect.top + rect.height * t;
+    final band = Rect.fromLTWH(rect.left, y - 18, rect.width, 36);
+    canvas.save();
+    canvas.clipRect(rect);
+    canvas.drawRect(
+      band,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.transparent, Colors.amberAccent, Colors.transparent],
+          stops: [0, 0.5, 1],
+        ).createShader(band),
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _ScanPainter oldDelegate) => oldDelegate.t != t || oldDelegate.rect != rect;
 }
