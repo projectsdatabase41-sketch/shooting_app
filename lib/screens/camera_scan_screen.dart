@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show File;
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -348,10 +349,22 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
       _countdownTicker?.cancel();
       await _accelSub?.cancel();
       final file = await controller.takePicture();
+      final rawBytes = await file.readAsBytes();
+      // Снимок с камеры ложится во временный файл ПРИЛОЖЕНИЯ (не в системную
+      // галерею) — но на некоторых прошивках (MIUI) он всё равно попадает в
+      // индекс галереи, пока лежит на диске. Байты уже прочитаны — файл
+      // больше не нужен, чистим сразу же (веб таким файлом не управляет).
+      if (!kIsWeb) {
+        unawaited(Future(() async {
+          try {
+            await File(file.path).delete();
+          } catch (_) {}
+        }));
+      }
       // compute(): декодирование полноразмерного снимка (десятки мегапикселей
       // на современном телефоне) — не на главном изоляте, иначе интерфейс
       // подвисает на время декодирования.
-      final decoded = await compute(ShotPhotoService.decode, await file.readAsBytes());
+      final decoded = await compute(ShotPhotoService.decode, rawBytes);
 
       // Проверка "мишень вообще в кадре" — тем же детектором, что и
       // калибровка на следующем экране, но уже на полном снимке, а не
