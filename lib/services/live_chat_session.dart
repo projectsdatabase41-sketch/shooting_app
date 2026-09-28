@@ -34,6 +34,7 @@ class LiveChatSession {
     required this.repo,
     required this.contactId,
     this.onIncoming,
+    this.onPeerRead,
     this.ackTimeout = const Duration(seconds: 3),
     this.clientFactory,
     this.linkFactory,
@@ -45,6 +46,10 @@ class LiveChatSession {
 
   /// Пришло сообщение по живому каналу (уже сохранено в `repo`).
   final void Function()? onIncoming;
+
+  /// Собеседник прочитал наши сообщения (уже отмечено в `repo`) — та же
+  /// мгновенная доставка, что у сообщений, только для галочки «прочитано».
+  final void Function()? onPeerRead;
   final Duration ackTimeout;
   final RealtimeChannelClient Function(String topic)? clientFactory;
 
@@ -155,7 +160,23 @@ class LiveChatSession {
     return ok;
   }
 
+  /// Мгновенная отметка «прочитано» присутствующему собеседнику — рядом
+  /// с обычной отправкой через базу (`ChatSyncService.reportRead`), не
+  /// вместо неё: тут только ускорение для того, кто уже в сети.
+  void sendReadReceipt(List<String> clientIds) {
+    if (clientIds.isEmpty || !peerOnline) return;
+    _emit('read', {'ids': clientIds});
+  }
+
   void _onBroadcast(String event, Map<String, dynamic> p) {
+    if (event == 'read') {
+      final ids = p['ids'];
+      if (ids is List) {
+        repo.markPeerRead(contactId, [for (final id in ids) '$id']);
+        onPeerRead?.call();
+      }
+      return;
+    }
     final clientId = p['client_message_id'];
     if (clientId is! String || clientId.isEmpty) return;
     if (event == 'ack') {

@@ -173,6 +173,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
           _reload();
           _scrollToEnd();
         },
+        onPeerRead: () {
+          if (mounted) _reload();
+        },
       );
       widget.sync.live = _live;
       _live!.open();

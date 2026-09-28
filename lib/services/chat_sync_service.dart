@@ -708,6 +708,10 @@ class ChatSyncService {
     if (contact == null || contact.isGroup || !ChatSettings.isConfigured) return;
     final ids = repo.unreportedRead(contactId);
     if (ids.isEmpty) return;
+    // Мгновенно, пока собеседник в сети — не дожидаясь его следующего опроса
+    // базы; база всё равно идёт следом, это только ускорение.
+    final l = live;
+    if (l != null && l.contactId == contactId) l.sendReadReceipt(ids);
     final token = await auth.ensureFreshToken();
     if (token == null) return;
     final client = clientFactory();

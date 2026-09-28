@@ -259,6 +259,32 @@ void main() {
     sb.close();
   });
 
+  test('«прочитано» уходит мгновенно присутствующему собеседнику, не самому себе', () async {
+    final (authA, repoA) = await _user('uA', 'uB');
+    final (authB, repoB) = await _user('uB', 'uA');
+    var peerReadFired = 0;
+    final sa = LiveChatSession(
+        auth: authA, repo: repoA, contactId: 'uB', clientFactory: factoryFor('uA'), onPeerRead: () => peerReadFired++);
+    final sb = LiveChatSession(auth: authB, repo: repoB, contactId: 'uA', clientFactory: factoryFor('uB'));
+    await sa.open();
+    await sb.open();
+    await _until(() => sa.peerOnline && sb.peerOnline);
+
+    final m = _out('uB', 'привет');
+    repoA.addMessage(m);
+    expect(await sa.trySend(m), isTrue); // у B теперь входящее с тем же client_message_id
+
+    // никого нет в канале у B — молча ничего не делает, не бросает исключение
+    sb.sendReadReceipt([]);
+    expect(peerReadFired, 0);
+
+    sb.sendReadReceipt([m.clientMessageId]);
+    await _until(() => repoA.forContact('uB').single.readByPeer);
+    expect(peerReadFired, 1);
+    sa.close();
+    sb.close();
+  });
+
   test('нет подтверждения за таймаут → false (вызывающий уйдёт через базу)', () async {
     final (authA, repoA) = await _user('uA', 'uB');
     final (authB, repoB) = await _user('uB', 'uA');
