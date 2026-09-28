@@ -13,7 +13,7 @@ import '../widgets/home_tabs_bar.dart';
 // "Упражнения" и "Тренировки" объединены визуально в одну плитку: тап
 // по упражнению в `ExercisesScreen` открывает список ЕГО тренировок
 // (`TrainingsHistoryScreen(exercise: ...)`).
-const athleteTabIds = ['exercises', 'target', 'statistics', 'assistant', 'messenger', 'settings'];
+const athleteTabIds = ['exercises', 'target', 'statistics', 'assistant', 'tasks', 'messenger', 'settings'];
 const athleteUnhidable = {'target', 'settings'};
 
 const coachTabIds = ['diary', 'athletes', 'statistics_coach', 'assistant_coach', 'tasks', 'messenger', 'settings'];

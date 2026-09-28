@@ -87,6 +87,8 @@ flutter:
     - assets/icon/badge.png
     # Встроенные словари интерфейса (en/de/zh), см. lib/i18n/i18n.dart.
     - assets/i18n/
+    # Справочник ИИ по заданиям тренера (lib/tasks/task_ai.dart).
+    - assets/ai/
 
 flutter_launcher_icons:
   android: true

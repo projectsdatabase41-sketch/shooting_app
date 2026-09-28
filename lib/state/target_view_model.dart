@@ -30,12 +30,17 @@ class TargetViewModel extends ChangeNotifier {
   /// тренер никогда не владеет чужой тренировкой (C.2).
   final bool isOwnSession;
 
+  /// Мишень внутри задания: выстрелы живут только в прохождении задания и
+  /// НЕ попадают в тренировки (store не трогаем вовсе).
+  final bool detached;
+
   TargetViewModel({
     required this.store,
     required this.session,
     required this.exercise,
     required this.face,
     this.isOwnSession = true,
+    this.detached = false,
   }) {
     _selectedIndex = session.shots.isEmpty ? -1 : session.shots.length - 1;
     if (isOwnSession) {
@@ -234,7 +239,7 @@ class TargetViewModel extends ChangeNotifier {
     // store.isBackgroundSyncing сам, а ручная кнопка на экране
     // настроек остаётся — это ДОПОЛНЕНИЕ, не замена (решение
     // пользователя, пункт 7 списка правок).
-    unawaited(store.syncInBackground());
+    if (!detached) unawaited(store.syncInBackground());
   }
 
   // ---- B.2/B.3 — таймеры ----
@@ -681,6 +686,10 @@ class TargetViewModel extends ChangeNotifier {
   void _persist() {
     _refreshTimersNow();
     if (unlockedForEdit) _dirtySinceUnlock = true;
+    if (detached) {
+      notifyListeners();
+      return;
+    }
     store.upsertSession(session);
     // Держим AppDataStore в курсе — HomeShell не видит эту вью-модель
     // напрямую, но должен успеть спросить "применить/откатить" при
@@ -692,6 +701,7 @@ class TargetViewModel extends ChangeNotifier {
   /// B.6 — "тренировка-призрак": вызывается из `dispose()` экрана.
   /// Пустая сессия НЕ попадает/не остаётся в истории.
   void disposeSession() {
+    if (detached) return;
     if (SessionLogic.isGhost(session)) {
       store.discardGhost(session.id);
     } else {

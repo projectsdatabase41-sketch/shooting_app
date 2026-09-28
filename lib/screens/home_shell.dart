@@ -14,7 +14,8 @@ import 'coach_ai_chat_screen.dart';
 import 'coach_athletes_screen.dart';
 import 'coach_diary_notes_screen.dart';
 import 'coach_statistics_screen.dart';
-import 'coach_tasks_screen.dart';
+import '../tasks/athlete_tasks_screen.dart';
+import '../tasks/coach_tasks_screen.dart';
 import 'chat_home_screen.dart';
 import 'exercises_screen.dart';
 import 'service_tile_screen.dart';
@@ -54,7 +55,7 @@ class _HomeShellState extends State<HomeShell> {
   /// между пользователями и задания тренера ещё не готовы к нагрузке
   /// реальных пользователей). Не про удаление функции, только про то,
   /// чтобы её не увидели раньше времени — сам код никуда не делся.
-  static const _devOnlyTabIds = {'messenger', 'tasks'};
+  static const _devOnlyTabIds = {'messenger'};
 
   @override
   void initState() {
@@ -218,6 +219,7 @@ class _HomeShellState extends State<HomeShell> {
       // с контекстом конкретной тренировки.
       'assistant' => const AiChatScreen(),
       'messenger' => ChatHomeScreen(onClose: tabs.layout == 'tiles' ? null : () => _leaveMessenger(store, isCoach)),
+      'tasks' => const AthleteTasksScreen(),
       _ => SettingsScreen(homeTabs: tabs, services: _services),
     };
   }

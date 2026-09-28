@@ -50,6 +50,10 @@ Future<void> cancelIncomingCallNotification() async {
 void Function(Map<String, dynamic> data, {required bool accepted})? incomingCallHandler;
 
 bool _tapHandlingRegistered = false;
+bool _foregroundRegistered = false;
+
+/// Тап по push задания — открыть это задание (задаёт корень приложения).
+void Function(String taskId)? pushTaskTapHandler;
 
 /// Push-уведомления чата через Firebase (FCM) — ДОБАВКА к Supabase, не
 /// замена: сообщения/контакты/вход остаются там же, Firebase здесь
@@ -115,15 +119,40 @@ class PushService {
           : await messaging.getToken();
       if (token != null) await _saveToken(token);
       messaging.onTokenRefresh.listen(_saveToken);
-      FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-      await _initTapHandling(messaging);
+      await _registerListeners(messaging);
     } catch (_) {
       // Push — необязательное усиление доставки (опрос раз в 10-20с и
       // так работает) — сбой здесь не должен ронять чат.
     }
   }
 
-  void _handleForegroundMessage(RemoteMessage message) {
+  /// Адрес устройства для push ЗАДАНИЙ — без входа в мессенджер (задания
+  /// идут своим каналом). null — push недоступен на этой платформе/сборке.
+  static Future<String?> deviceToken() async {
+    if (!FirebaseSettings.isConfigured || !_supportedPlatform) return null;
+    try {
+      if (Firebase.apps.isEmpty) await Firebase.initializeApp(options: _options);
+      if (_isAndroid) await _initLocalNotifications();
+      final messaging = FirebaseMessaging.instance;
+      await messaging.requestPermission();
+      await _registerListeners(messaging);
+      return kIsWeb ? await messaging.getToken(vapidKey: FirebaseSettings.webVapidKey) : await messaging.getToken();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Подписки на входящие и тапы — один раз на приложение (их зовут и чат, и задания).
+  static Future<void> _registerListeners(FirebaseMessaging messaging) async {
+    if (!_foregroundRegistered) {
+      _foregroundRegistered = true;
+      FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+    }
+    await _initTapHandling(messaging);
+  }
+
+  static void _handleForegroundMessage(RemoteMessage message) {
+    if (message.data['type'] == 'task' && _isAndroid) showTaskNotification(message.data);
     // На вебе/iOS усиленного канала нет (см. showCallNotification) —
     // пока приложение открыто, новое "Позвать" и так почти сразу
     // покажет опрос (10-20с), отдельно тут его не дублируем.
@@ -147,7 +176,7 @@ class PushService {
   /// а не просто запустить приложение на главный экран. `init()` зовут и
   /// из корня приложения, и из ChatHomeScreen — подписка нужна только
   /// один раз, дальше `pushChatTapHandler` вызывается напрямую.
-  Future<void> _initTapHandling(FirebaseMessaging messaging) async {
+  static Future<void> _initTapHandling(FirebaseMessaging messaging) async {
     if (_tapHandlingRegistered) return;
     _tapHandlingRegistered = true;
     final initial = await messaging.getInitialMessage();
@@ -162,8 +191,13 @@ class PushService {
     FirebaseMessaging.onMessageOpenedApp.listen(_handleTap);
   }
 
-  void _handleTap(RemoteMessage message) {
+  static void _handleTap(RemoteMessage message) {
     final type = message.data['type'];
+    if (type == 'task') {
+      final id = '${message.data['task_id'] ?? ''}';
+      if (id.isNotEmpty) pushTaskTapHandler?.call(id);
+      return;
+    }
     if (type == 'global') {
       pushChatTapHandler?.call(const PushChatTarget.global());
     } else {
@@ -273,6 +307,10 @@ void _onNotificationAction(NotificationResponse response) {
   }
   // Входящий звонок: payload — JSON с данными звонка.
   final payload = response.payload ?? '';
+  if (payload.startsWith('task:')) {
+    pushTaskTapHandler?.call(payload.substring(5));
+    return;
+  }
   if (payload.startsWith('{')) {
     _localNotifications.cancel(PushService._incomingCallNotificationId);
     if (response.actionId == 'call_decline') return; // звонящий увидит «не отвечает»
@@ -419,7 +457,10 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: PushService._options);
   if (!PushService._isAndroid) return;
   final type = message.data['type'];
-  if (type == 'call') {
+  if (type == 'task') {
+    await _initLocalNotifications();
+    await showTaskNotification(message.data);
+  } else if (type == 'call') {
     await _initLocalNotifications();
     await showCallNotification(message.data);
   } else if (type == 'msg') {
@@ -447,4 +488,31 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       payload: '${message.data['from']}',
     );
   }
+}
+
+/// Уведомление о задании (новое / снято / выполнено) — тап открывает задание.
+/// В фоновом изоляте словарь перевода не загружен, поэтому текст по-русски.
+Future<void> showTaskNotification(Map<String, dynamic> data) async {
+  final taskId = '${data['task_id'] ?? ''}';
+  final who = '${data['who'] ?? ''}';
+  final heading = switch ('${data['kind']}') {
+    'done' => '${who.isEmpty ? 'Спортсмен' : who}: задание выполнено',
+    'removed' => 'Задание снято тренером',
+    'reminder' => 'Напоминание о задании',
+    _ => 'Новое задание',
+  };
+  await _localNotifications.show(
+    taskId.hashCode & 0x3fffffff,
+    heading,
+    '${data['title'] ?? ''}',
+    const NotificationDetails(
+      android: AndroidNotificationDetails(
+        PushService.messageChannelId,
+        'Сообщения',
+        importance: Importance.high,
+        priority: Priority.high,
+      ),
+    ),
+    payload: 'task:$taskId',
+  );
 }

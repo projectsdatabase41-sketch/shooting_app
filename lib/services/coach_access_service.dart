@@ -263,6 +263,12 @@ class CoachAccessService {
   }
 
   Future<List<Map<String, dynamic>>> _rpc(String fn, Map<String, dynamic> args, {CoachAthlete? athlete}) async {
+    final decoded = await rawRpc(fn, args, athlete: athlete);
+    return decoded is List ? decoded.cast<Map<String, dynamic>>() : const [];
+  }
+
+  /// То же, но ответ как есть (например, id созданного задания — строка).
+  Future<dynamic> rawRpc(String fn, Map<String, dynamic> args, {CoachAthlete? athlete}) async {
     final effectiveUrl = athlete?.url ?? url;
     final effectiveKey = athlete?.anonKey ?? anonKey;
     if (effectiveUrl.isEmpty || effectiveKey.isEmpty || (args['p_token'] as String? ?? '').isEmpty) {
@@ -287,10 +293,8 @@ class CoachAccessService {
       if (res.statusCode >= 400) {
         throw CoachAccessException(_errorMessage(res.body, res.statusCode));
       }
-      if (res.bodyBytes.isEmpty) return const [];
-      final decoded = jsonDecode(utf8.decode(res.bodyBytes));
-      if (decoded is! List) return const [];
-      return decoded.cast<Map<String, dynamic>>();
+      if (res.bodyBytes.isEmpty) return null;
+      return jsonDecode(utf8.decode(res.bodyBytes));
     } finally {
       client.close();
     }

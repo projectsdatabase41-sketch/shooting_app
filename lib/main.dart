@@ -25,6 +25,10 @@ import 'screens/chat_home_screen.dart';
 import 'screens/call_screen.dart';
 import 'screens/chat_thread_screen.dart';
 import 'i18n/i18n.dart';
+import 'services/coach_access_service.dart';
+import 'tasks/athlete_tasks_screen.dart';
+import 'tasks/coach_tasks_screen.dart';
+import 'tasks/task_service.dart';
 import 'screens/home_shell.dart';
 import 'theme/app_theme.dart';
 
@@ -151,6 +155,9 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
     // и getInitialMessage() внутри PushService.init() тоже. Если чат ещё
     // не настроен или пользователь не входил — init() сам ничего не делает.
     pushChatTapHandler = _openChatFromPush;
+    // Push заданий открывает само задание (у тренера — группу с ним).
+    pushTaskTapHandler = _openTaskFromPush;
+    _registerTaskPush();
     incomingCallHandler = _openIncomingCall;
     incomingCallEndHandler = (callId) {
       final c = CallSession.current;
@@ -222,6 +229,33 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
         repo: ChatMessagesRepository(widget.db),
       ),
     ));
+  }
+
+  Future<void> _openTaskFromPush(String taskId) async {
+    final nav = navigatorKey.currentState;
+    if (nav == null) return;
+    if (_store.workMode == WorkMode.coach) {
+      nav.push(MaterialPageRoute(builder: (_) => CoachTasksScreen(openTaskId: taskId)));
+    } else {
+      final ctx = navigatorKey.currentContext;
+      if (ctx != null) await openAthleteTask(ctx, taskId);
+    }
+  }
+
+  /// Адрес устройства для push заданий: спортсмен — в свою базу, тренер —
+  /// в базу каждого своего спортсмена. Заодно ловит холодный старт по тапу.
+  Future<void> _registerTaskPush() async {
+    final personal = SupabaseAuthService(widget.db);
+    final access = CoachAccessService(widget.db);
+    final athletes = access.listAthletes();
+    // Разрешение на уведомления спрашиваем только тем, кому задания вообще могут прийти.
+    if (!personal.isSignedIn && athletes.isEmpty) return;
+    final token = await PushService.deviceToken();
+    if (token == null) return;
+    if (personal.isSignedIn) AthleteTaskService(personal).registerDevice(token);
+    for (final a in athletes) {
+      CoachTaskService(access).registerDevice(a, token);
+    }
   }
 
   Future<void> _openChatFromPush(PushChatTarget target) async {

@@ -287,7 +287,7 @@ class SupabaseAuthService {
   /// (одна переписка на токен, sql/coach-chat.sql).
   Future<List<({String grantId, String name})>> fetchChatCoaches() async {
     final rows =
-        await _rest('GET', 'share_grants?select=id,label,coach_chat_nickname&revoked_at=is.null&order=created_at');
+        await rest('GET', 'share_grants?select=id,label,coach_chat_nickname&revoked_at=is.null&order=created_at');
     return [
       for (final r in rows)
         (
@@ -300,17 +300,18 @@ class SupabaseAuthService {
   }
 
   Future<List<CoachChatMessage>> fetchCoachChat(String grantId) async => [
-        for (final r in await _rest('GET', 'coach_chat?grant_id=eq.$grantId&order=created_at.desc&limit=500'))
-          coachChatFromRow(r),
+        for (final r in (await rest('GET', 'coach_chat?grant_id=eq.$grantId&order=created_at.desc&limit=500')) as List)
+          coachChatFromRow((r as Map).cast<String, dynamic>()),
       ].reversed.toList();
 
   Future<void> sendCoachChat(String grantId, String text) =>
-      _rest('POST', 'coach_chat', body: {'grant_id': grantId, 'author_role': 'athlete', 'text': text});
+      rest('POST', 'coach_chat', body: {'grant_id': grantId, 'author_role': 'athlete', 'text': text});
 
-  Future<void> deleteCoachChat(String id) => _rest('DELETE', 'coach_chat?id=eq.$id');
+  Future<void> deleteCoachChat(String id) => rest('DELETE', 'coach_chat?id=eq.$id');
 
-  /// Запрос к своей базе от имени владельца; ошибка — исключение с текстом сервера.
-  Future<List<Map<String, dynamic>>> _rest(String method, String path, {Object? body}) async {
+  /// Запрос к своей базе от имени владельца (разобранный JSON); ошибка —
+  /// исключение с текстом сервера.
+  Future<dynamic> rest(String method, String path, {Object? body}) async {
     final token = await ensureFreshToken();
     if (token == null) throw Exception(tr('Войдите в свою базу (Настройки → Учётная запись)'));
     final client = clientFactory();
@@ -326,8 +327,7 @@ class SupabaseAuthService {
       final res = await http.Response.fromStream(await client.send(req).timeout(const Duration(seconds: 20)));
       if (res.statusCode >= 400) throw Exception(tr('Сервер ответил {statusCode}: {body}', {'statusCode': res.statusCode, 'body': res.body}));
       if (res.bodyBytes.isEmpty) return const [];
-      final decoded = jsonDecode(utf8.decode(res.bodyBytes));
-      return decoded is List ? decoded.cast<Map<String, dynamic>>() : const [];
+      return jsonDecode(utf8.decode(res.bodyBytes));
     } finally {
       client.close();
     }

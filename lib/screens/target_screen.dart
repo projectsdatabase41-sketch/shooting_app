@@ -77,6 +77,38 @@ class TargetScreen extends StatelessWidget {
   }
 }
 
+/// Мишень этапа задания: только мишень, кнопка выстрела и колесо — без
+/// рабочего стола и управления тренировкой. Выстрелы не сохраняются в
+/// тренировки ([TargetViewModel.detached]); [onChanged] отдаёт сессию наружу
+/// после каждого изменения (задание собирает выстрелы само).
+class TaskTargetPanel extends StatelessWidget {
+  final TrainingSession session;
+  final Exercise exercise;
+  final ValueChanged<TrainingSession> onChanged;
+
+  const TaskTargetPanel({super.key, required this.session, required this.exercise, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final store = context.read<AppDataStore>();
+    return ChangeNotifierProvider<TargetViewModel>(
+      create: (_) {
+        final vm = TargetViewModel(
+          store: store,
+          session: session,
+          exercise: exercise,
+          face: TargetFace.byCode(exercise.targetFaceCode),
+          detached: true,
+        );
+        if (vm.session.status != SessionStatus.running) vm.start();
+        vm.addListener(() => onChanged(vm.session));
+        return vm;
+      },
+      child: const _TargetPage(),
+    );
+  }
+}
+
 class _WorkspaceBody extends StatefulWidget {
   const _WorkspaceBody();
 

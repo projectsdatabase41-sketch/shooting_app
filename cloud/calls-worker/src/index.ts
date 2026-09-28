@@ -138,6 +138,35 @@ async function sendData(env: Env, token: string, data: Record<string, string>): 
   return res.ok;
 }
 
+// ---------- Задания тренера (не мессенджер) ----------
+
+/** Адреса устройств из личной базы спортсмена (RPC Supabase). */
+async function rpcTokens(db: string, key: string, auth: string, fn: string, args: Record<string, unknown>): Promise<string[]> {
+  const r = await fetch(`${db}/rest/v1/rpc/${fn}`, {
+    method: 'POST',
+    headers: { apikey: key, Authorization: `Bearer ${auth}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(args),
+  }).catch(() => null);
+  if (!r?.ok) return [];
+  const j = (await r.json().catch(() => [])) as unknown;
+  if (!Array.isArray(j)) return [];
+  return j
+    .map((x) => (typeof x === 'string' ? x : x && typeof x === 'object' ? String(Object.values(x)[0] ?? '') : ''))
+    .filter((t) => t.length > 20 && t.length < 4096);
+}
+
+/** Push задания: данные — приложение на Android рисует уведомление само; веб — уведомление FCM. */
+async function sendTask(env: Env, token: string, data: Record<string, string>, title: string, body: string): Promise<boolean> {
+  const res = await fetch(`https://fcm.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/messages:send`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${await fcmAccessToken(env)}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message: { token, data, android: { priority: 'high' }, webpush: { notification: { title, body } } },
+    }),
+  });
+  return res.ok;
+}
+
 // ---------- Worker ----------
 
 export default {
@@ -154,6 +183,36 @@ export default {
       const headers = new Headers(req.headers);
       headers.set('x-uid', uid);
       return env.ROOMS.get(env.ROOMS.idFromName(callId)).fetch(new Request(req, { headers }));
+    }
+
+    // Push заданий. Без входа в мессенджер: «новое/снято» — по токену
+    // доступа тренера (проверяет база спортсмена), «выполнено» — по входу
+    // спортсмена в свою же базу. Только адреса Supabase, до 10 устройств.
+    // ponytail: без ограничения частоты; добавить счётчик в UsageDO, если начнут злоупотреблять.
+    if (url.pathname === '/task-push' && req.method === 'POST') {
+      const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+      const db = String(b.db ?? '');
+      const key = String(b.key ?? '');
+      const kind = String(b.kind ?? '');
+      const taskId = String(b.taskId ?? '');
+      if (!/^https:\/\/[a-z0-9]{8,40}\.supabase\.co$/.test(db) || !key || key.length > 2000) return json({ error: 'bad db' }, 400);
+      if (!/^[0-9a-f-]{36}$/.test(taskId)) return json({ error: 'bad task' }, 400);
+      const title = String(b.title ?? '').slice(0, 120);
+      const who = String(b.who ?? '').slice(0, 60);
+      let tokens: string[];
+      if (kind === 'done') {
+        tokens = await rpcTokens(db, key, String(b.jwt ?? ''), 'task_coach_targets', {});
+      } else if (kind === 'new' || kind === 'removed' || kind === 'reminder') {
+        tokens = await rpcTokens(db, key, key, 'task_push_targets', { p_token: String(b.token ?? '') });
+      } else {
+        return json({ error: 'bad kind' }, 400);
+      }
+      const heading = kind === 'done' ? `${who || 'Спортсмен'}: задание выполнено` : kind === 'removed' ? 'Задание снято тренером' : 'Новое задание';
+      let sent = 0;
+      for (const t of tokens.slice(0, 10)) {
+        if (await sendTask(env, t, { type: 'task', kind, task_id: taskId, title, who }, heading, title)) sent++;
+      }
+      return json({ sent });
     }
 
     const uid = await verifyUser(env, bearer(req));
