@@ -204,6 +204,27 @@ class _UpdateTileState extends State<_UpdateTile> {
   Future<void> _install() async {
     final info = _info;
     if (info == null) return;
+    // Если подпись новой сборки когда-нибудь снова разойдётся со стоящей
+    // на телефоне — Android сам потребует снести старое приложение перед
+    // установкой нового, а это стирает всю локальную базу (уже
+    // случалось однажды). Предупреждаем и напоминаем синхронизироваться
+    // заранее — само приложение это никак не обойти, решает Android.
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('Перед обновлением')),
+        content: Text(tr(
+          'Если Android попросит подтвердить удаление текущей версии — это редкий, но возможный случай, '
+          'и вместе со старой версией сотрётся вся локальная база на телефоне. Сначала нажмите '
+          '«Синхронизировать сейчас» в этом разделе, чтобы данные точно были в облаке.',
+        )),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr('Отмена'))),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(tr('Обновить'))),
+        ],
+      ),
+    );
+    if (proceed != true || !mounted) return;
     setState(() {
       _stage = _UpdateStage.downloading;
       _progress = 0;
