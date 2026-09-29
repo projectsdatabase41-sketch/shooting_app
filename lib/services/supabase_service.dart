@@ -237,6 +237,17 @@ class SupabaseSyncService {
   /// АКТИВНЫЕ выстрелы (корзина на сервер не идёт — см. класс) и все
   /// комментарии тренировки. Помечает отправленной ЛОКАЛЬНО только
   /// после того, как она реально уехала.
+  /// Отправляет ОДНО упражнение в каталог сразу при создании, не дожидаясь
+  /// первой завершённой тренировки по нему — иначе ИИ, заносящий данные
+  /// в базу напрямую, не видит только что созданное упражнение и не
+  /// может на него сослаться при импорте.
+  Future<void> pushExerciseTemplate(Exercise exercise) async {
+    final token = await _requireToken();
+    final face = TargetFace.byCode(exercise.targetFaceCode);
+    final faceId = await _resolveTargetFaceId(token, exercise.targetFaceCode, await _targetFaceIdsByCode(token));
+    await _upsert(token, 'exercise_templates', [_exerciseTemplateJson(exercise, face, faceId)]);
+  }
+
   Future<int> push(AppDataStore store) async {
     final token = await _requireToken();
     final repo = CommentsRepository(store.db);

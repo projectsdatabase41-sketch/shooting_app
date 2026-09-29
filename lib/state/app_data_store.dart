@@ -565,6 +565,20 @@ class AppDataStore extends ChangeNotifier {
   /// "Синхронизировать сейчас" на экране настроек, а не взамен неё.
   /// Молча ничего не делает, если облако не подключено или уже идёт
   /// другая синхронизация.
+  /// Отправляет одно созданное упражнение в облачный каталог сразу же —
+  /// молча ничего не делает, если облако не подключено или нет сети:
+  /// упражнение и так уже создано локально, попадёт в каталог как обычно
+  /// при следующей синхронизации (`push`/`syncInBackground`).
+  Future<void> syncNewExercise(Exercise exercise) async {
+    final auth = SupabaseAuthService(db);
+    if (!auth.isSignedIn) return;
+    try {
+      await SupabaseSyncService(auth).pushExerciseTemplate(exercise);
+    } catch (_) {
+      // тихо: не блокировать создание упражнения из-за сети/облака.
+    }
+  }
+
   Future<void> syncInBackground() async {
     if (isBackgroundSyncing) return;
     final auth = SupabaseAuthService(db);

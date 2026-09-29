@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/exercise.dart';
 import '../models/series_spec.dart';
 import '../models/target_face.dart';
 import '../state/app_data_store.dart';
@@ -63,8 +64,9 @@ class _ExerciseEditorScreenState extends State<ExerciseEditorScreen> {
 
   void _save() {
     final store = context.read<AppDataStore>();
+    final Exercise created;
     if (_simple) {
-      store.createExercise(
+      created = store.createExercise(
         name: _name.text.trim(),
         targetFaceCode: _faceCode,
         totalShots: int.tryParse(_totalShots.text) ?? 60,
@@ -80,7 +82,7 @@ class _ExerciseEditorScreenState extends State<ExerciseEditorScreen> {
         (s) => s.shotCount != null,
         orElse: () => const SeriesSpec(name: '', shotCount: 10),
       );
-      store.createExercise(
+      created = store.createExercise(
         name: _name.text.trim(),
         targetFaceCode: _faceCode,
         totalShots: counted > 0 ? counted : 60,
@@ -88,6 +90,7 @@ class _ExerciseEditorScreenState extends State<ExerciseEditorScreen> {
         series: List.of(_series),
       );
     }
+    store.syncNewExercise(created);
     Navigator.of(context).pop();
   }
 
