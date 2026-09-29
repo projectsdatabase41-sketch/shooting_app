@@ -120,6 +120,10 @@ class AppUpdateService {
       baseDirectory: BaseDirectory.applicationSupport,
       directory: 'updates',
       updates: Updates.statusAndProgress,
+      // group — своя настройка уведомления (см. initModelDownloads в
+      // local_ai_platform_io.dart), displayName — что показать в нём.
+      group: 'app-update',
+      displayName: tr('Обновление Pusl'),
     );
     final result = await FileDownloader().download(task, onProgress: (p) => onProgress(p < 0 ? 0 : p));
     await _finishDownload(TaskStatusUpdate(task, result.status, result.exception));

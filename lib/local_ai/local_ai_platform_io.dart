@@ -77,9 +77,34 @@ bool _downloadsReady = false;
 Future<void> initModelDownloads() async {
   if (_downloadsReady) return;
   _downloadsReady = true;
-  // Без уведомлений в шторке (решение пользователя: две строки прыгали
-  // местами). Прогресс виден на экране «Локальная модель»; паузу
-  // Android по таймауту загрузчик снимает сам.
+  // Уведомление обязательно: без него Android вправе остановить закачку,
+  // если приложение надолго свернули (жалоба: "свернул на время, опять
+  // зашёл — не загрузилось"). Раньше было отключено из-за бага "две
+  // строки прыгали местами" — причина была в том, что заголовок в разных
+  // состояниях показывал то имя файла, то прогресс, и они менялись
+  // местами при смене состояния. Теперь заголовок — ВСЕГДА имя (не
+  // меняется), а меняется только вторая строка (статус).
+  FileDownloader().configureNotification(
+    running: TaskNotification(tr('{displayName}'), tr('{progress} · осталось {timeRemaining}')),
+    paused: TaskNotification(tr('{displayName}'), tr('Пауза')),
+    complete: TaskNotification(tr('{displayName}'), tr('Готово')),
+    error: TaskNotification(tr('{displayName}'), tr('Ошибка загрузки')),
+    progressBar: true,
+  );
+  // Тот же приём для загрузки APK (см. app_update_service_io.dart) — вынесено
+  // сюда, а не в её собственный файл: это единственная точка старта
+  // FileDownloader на всё приложение (trackTasks/start ниже — тоже общие).
+  // tapOpensFile: тап по «Готово» сразу открывает установщик — полезно,
+  // если загрузка досчиталась, пока приложение было свёрнуто.
+  FileDownloader().configureNotificationForGroup(
+    'app-update',
+    running: TaskNotification(tr('{displayName}'), tr('{progress} · осталось {timeRemaining}')),
+    paused: TaskNotification(tr('{displayName}'), tr('Пауза')),
+    complete: TaskNotification(tr('{displayName}'), tr('Готово — нажмите, чтобы установить')),
+    error: TaskNotification(tr('{displayName}'), tr('Ошибка загрузки')),
+    progressBar: true,
+    tapOpensFile: true,
+  );
   // trackTasks — чтобы состояние загрузки пережило перезапуск приложения.
   await FileDownloader().trackTasks();
   await FileDownloader().start();

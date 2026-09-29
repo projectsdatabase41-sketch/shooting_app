@@ -66,11 +66,10 @@ jobs:
         # использовался. Подозревается как причина «не грузится в
         # Safari на айфоне» — сеть до gstatic не всегда доступна там, где
         # доступен сам сайт (блокировщики, приватные режимы, MDM).
-        # --pwa-strategy=none: без него Flutter ставит service worker,
-        # который кеширует main.dart.js офлайн-первым — телефон может
-        # показывать старую сборку ещё долго после деплоя новой,
-        # пока воркер сам не решит обновиться. Приложению офлайн-режим
-        # не нужен, а бага «на телефоне всё ещё старое» не нужна тем более.
+        # --pwa-strategy=none: Flutter не ставит СВОЙ service worker —
+        # кеширование статики теперь живёт в web/firebase-messaging-sw.js
+        # (см. комментарий там) вместе с push, а не в отдельном воркере:
+        # два воркера на один scope конфликтовали бы друг с другом.
         run: |
           flutter build web --release \
             --base-href "/${{ github.event.repository.name }}/" \
@@ -80,6 +79,12 @@ jobs:
             --dart-define=OPENROUTER_KEY_2="${{ secrets.OPENROUTER_KEY_2 }}" \
             --dart-define=OPENROUTER_KEY_3="${{ secrets.OPENROUTER_KEY_3 }}" \
             --dart-define=OPENROUTER_KEY_4="${{ secrets.OPENROUTER_KEY_4 }}"
+
+      # Имя кеша меняется на каждый деплой — иначе байты воркера не
+      # меняются, браузер не видит новую версию и не проходит цикл
+      # обновления (self.skipWaiting в самом воркере активирует его
+      # сразу, но только если браузер вообще заметил, что файл другой).
+      - run: sed -i "s/__BUILD_SHA__/${{ github.sha }}/" build/web/firebase-messaging-sw.js
 
       - uses: actions/upload-pages-artifact@v3
         with:

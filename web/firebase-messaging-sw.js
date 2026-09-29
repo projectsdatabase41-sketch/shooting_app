@@ -36,3 +36,59 @@ messaging.onBackgroundMessage((payload) => {
     });
   }
 });
+
+// ---- Кеш тяжёлой статики сборки (CanvasKit ~7 МБ, main.dart.js ~7 МБ,
+// sqlite3.wasm) — без него первый заход на каждое посещение скачивает
+// эти файлы заново (жалоба: "тормоза в виде долгой задержки, ждать
+// приходится"). Этот же файл, а не отдельный Flutter service worker
+// (`--pwa-strategy=offline-first`) — намеренно: Firebase JS SDK сам
+// регистрирует ровно ЭТОТ файл под push (см. выше), и второй воркер
+// того же scope с ним конфликтовал бы (кто последний зарегистрировался
+// — тот и главный, гонка). CACHE_NAME со сборки меняется КАЖДЫЙ деплой
+// (подставляется в CI, см. deploy-web.yml) — значит меняются и байты
+// файла, браузер это видит и проходит цикл обновления воркера.
+// skipWaiting/clients.claim — новый воркер встаёт у руля сразу же, а не
+// ждёт закрытия всех вкладок со старой версией (та самая причина, из-за
+// которой раньше отключили офлайн-кеш целиком: "Anonymous sign-ins are
+// disabled" из-за зависшей старой JS ещё долго после деплоя).
+const CACHE_NAME = 'pusl-static-__BUILD_SHA__';
+const CACHE_SUFFIXES = [
+  'main.dart.js',
+  'flutter.js',
+  'flutter_bootstrap.js',
+  'canvaskit/chromium/canvaskit.js',
+  'canvaskit/chromium/canvaskit.wasm',
+  'canvaskit/canvaskit.js',
+  'canvaskit/canvaskit.wasm',
+  'sqlite3.wasm',
+];
+
+self.addEventListener('install', (event) => {
+  self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => Promise.all(
+      CACHE_SUFFIXES.map((s) => cache.add(s).catch(() => {})),
+    )),
+  );
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys()
+      .then((names) => Promise.all(names.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n))))
+      .then(() => self.clients.claim()),
+  );
+});
+
+self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
+  const url = new URL(event.request.url);
+  if (!CACHE_SUFFIXES.some((s) => url.pathname.endsWith(s))) return;
+  event.respondWith(
+    caches.match(event.request).then((cached) => cached || fetch(event.request).then((res) => {
+      const copy = res.clone();
+      caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+      return res;
+    })),
+  );
+});
