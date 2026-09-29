@@ -75,6 +75,7 @@ jobs:
             --base-href "/${{ github.event.repository.name }}/" \
             --no-web-resources-cdn \
             --pwa-strategy=none \
+            --dart-define=BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --dart-define=OPENROUTER_KEY="${{ secrets.OPENROUTER_KEY }}" \
             --dart-define=OPENROUTER_KEY_2="${{ secrets.OPENROUTER_KEY_2 }}" \
             --dart-define=OPENROUTER_KEY_3="${{ secrets.OPENROUTER_KEY_3 }}" \

@@ -9,6 +9,13 @@ class AppUpdateService {
   static const bool supported = false;
   static const String currentSha = '';
 
+  /// Время сборки (ISO 8601, UTC) — подставляется в CI при деплое на
+  /// GitHub Pages (--dart-define=BUILD_TIME), в локальной сборке пусто.
+  /// Обновлений одной кнопкой на вебе нет (сайт и так всегда последняя
+  /// версия — см. кеш в firebase-messaging-sw.js), но время сборки
+  /// полезно, чтобы свериться, что кеш не отдаёт старое.
+  static const String buildTime = String.fromEnvironment('BUILD_TIME');
+
   static Future<AppUpdateInfo?> check() async => null;
   static Future<bool> downloadActive() async => false;
   static Future<bool> attachToActiveDownload({required void Function(double progress) onProgress}) async => false;

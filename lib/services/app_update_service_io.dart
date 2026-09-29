@@ -29,6 +29,10 @@ class AppUpdateService {
   /// сборке пусто.
   static const String currentSha = String.fromEnvironment('GIT_SHA');
 
+  /// Только у веб-сборки (см. app_update_service_web.dart) — здесь
+  /// обновление и так показывает currentSha/дату релиза через check().
+  static const String buildTime = '';
+
   /// `null` — обновлений нет (или сверить не с чем: локальная сборка без
   /// GIT_SHA, либо сеть недоступна — молчим, не тревожим ложной тревогой).
   static Future<AppUpdateInfo?> check() async {

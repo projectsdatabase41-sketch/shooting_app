@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData, rootBundle;
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/home_tab_specs.dart';
@@ -251,7 +252,21 @@ class _UpdateTileState extends State<_UpdateTile> {
 
   @override
   Widget build(BuildContext context) {
-    if (!AppUpdateService.supported) return const SizedBox.shrink();
+    if (!AppUpdateService.supported) {
+      // Веб сам всегда последняя версия (кеш статики версионный, см.
+      // firebase-messaging-sw.js) — кнопка "проверить" тут не нужна, но
+      // время сборки полезно свериться, что открылась не старая
+      // закешированная версия.
+      if (kIsWeb && AppUpdateService.buildTime.isNotEmpty) {
+        final built = DateTime.tryParse(AppUpdateService.buildTime)?.toLocal();
+        return ListTile(
+          leading: const Icon(Icons.info_outline),
+          title: Text(tr('Версия сайта')),
+          subtitle: Text(built == null ? AppUpdateService.buildTime : DateFormat('dd.MM.yyyy HH:mm').format(built)),
+        );
+      }
+      return const SizedBox.shrink();
+    }
     return switch (_stage) {
       _UpdateStage.idle || _UpdateStage.upToDate => ListTile(
           leading: const Icon(Icons.system_update_outlined),
