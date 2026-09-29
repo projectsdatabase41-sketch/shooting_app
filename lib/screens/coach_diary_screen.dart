@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../services/coach_access_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/glass_pill.dart';
 import 'coach_exercise_detail_screen.dart';
 import '../i18n/i18n.dart';
 
@@ -118,12 +119,22 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
     // Подключение делает CoachAthletesScreen ДО перехода сюда
     // (selectAthlete) — сюда нельзя попасть без него, кроме случая,
     // когда токен отозвали прямо во время просмотра (см. _load).
+    final topInset = MediaQuery.paddingOf(context).top;
     if (!_access.hasConnection) {
       return Scaffold(
-        appBar: AppBar(title: Text(widget.athleteName)),
-        body: EmptyState(
-          icon: Icons.link_off,
-          text: tr('Подключение снято — вернитесь к списку спортсменов.'),
+        extendBodyBehindAppBar: true,
+        appBar: GlassHeader(
+          title: Text(widget.athleteName, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        ),
+        body: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.only(top: topInset + GlassHeader.height),
+          children: [
+            EmptyState(
+              icon: Icons.link_off,
+              text: tr('Подключение снято — вернитесь к списку спортсменов.'),
+            ),
+          ],
         ),
       );
     }
@@ -132,15 +143,16 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
     final df = DateFormat('dd.MM.yyyy');
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.athleteName),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(widget.athleteName, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
-          IconButton(
+          GlassCircleButton(
             icon: _loading
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.refresh),
+                : const BoldIcon(Icons.refresh),
             tooltip: tr('Обновить'),
-            onPressed: _loading ? null : _load,
+            onTap: _loading ? null : _load,
           ),
         ],
       ),
@@ -152,11 +164,18 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
               ),
             )
           : groups.isEmpty && !_loading
-              ? EmptyState(
-                  icon: Icons.groups_outlined,
-                  text: tr('У спортсмена пока нет отправленных тренировок'),
+              ? ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.only(top: topInset + GlassHeader.height),
+                  children: [
+                    EmptyState(
+                      icon: Icons.groups_outlined,
+                      text: tr('У спортсмена пока нет отправленных тренировок'),
+                    ),
+                  ],
                 )
               : ListView.builder(
+                  padding: EdgeInsets.only(top: topInset + GlassHeader.height),
                   itemCount: groups.length,
                   itemBuilder: (context, i) {
                     final g = groups[i];
@@ -203,8 +222,12 @@ class _ExerciseTrainingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final df = DateFormat('dd.MM.yyyy · HH:mm');
     return Scaffold(
-      appBar: AppBar(title: Text(group.name)),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(group.name, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+      ),
       body: ListView.builder(
+        padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + GlassHeader.height),
         itemCount: group.sessions.length,
         itemBuilder: (context, i) {
           final s = group.sessions[i];

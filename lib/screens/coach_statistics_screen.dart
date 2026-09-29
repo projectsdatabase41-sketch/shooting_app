@@ -11,6 +11,7 @@ import '../services/coach_data_mapper.dart';
 import '../state/app_data_store.dart';
 import '../widgets/analytics_panel.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/glass_pill.dart';
 import '../i18n/i18n.dart';
 
 /// Вкладка "Статистика" тренера (раздел 8 ТЗ): то же самое, что у
@@ -89,12 +90,20 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final topInset = MediaQuery.paddingOf(context).top;
     return Scaffold(
-      appBar: AppBar(title: Text(tr('Статистика'))),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(tr('Статистика'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+      ),
       body: _athletes.isEmpty
-          ? EmptyState(icon: Icons.groups_outlined, text: tr('Сначала добавьте спортсмена'))
+          ? ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.only(top: topInset + GlassHeader.height),
+              children: [EmptyState(icon: Icons.groups_outlined, text: tr('Сначала добавьте спортсмена'))],
+            )
           : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+              padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 40),
               children: [
                 _athletePicker(),
                 const SizedBox(height: 12),

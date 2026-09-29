@@ -127,8 +127,13 @@ class SettingsScreen extends StatelessWidget {
               store.saveSettings();
               // notifyListeners() (тот же AppDataStore, который слушает
               // HomeShell через context.watch) сам перерисует нижнюю
-              // навигацию — здесь достаточно просто сохранить.
+              // навигацию и переключит вкладку на домашнюю нового режима
+              // (см. _lastMode в home_shell.dart) — но только в "страничной"
+              // раскладке, где вкладки не отдельные маршруты. В раскладке
+              // "плитки" настройки — отдельный запушенный экран поверх
+              // главного, и без этого он так и оставался бы открытым.
               store.refreshView();
+              Navigator.of(context).popUntil((r) => r.isFirst);
             },
           ),
           const _UpdateTile(),

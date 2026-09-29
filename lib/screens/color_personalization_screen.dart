@@ -14,6 +14,7 @@ import '../services/ai_settings.dart';
 import '../state/app_data_store.dart';
 import '../state/personalization_view_model.dart';
 import '../widgets/color_picker_dialog.dart';
+import '../widgets/glass_pill.dart';
 import '../i18n/i18n.dart';
 
 /// Переключатель светлой/тёмной темы интерфейса.
@@ -116,58 +117,74 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(tr('Цветовые настройки')),
-        bottom: TabBar(controller: _tab, tabs: [Tab(text: tr('ЭЛЕМЕНТЫ')), Tab(text: tr('ПРЕСЕТЫ'))]),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(tr('Цветовые настройки'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
-          PopupMenuButton<String>(
-            onSelected: (v) => v == 'export' ? _export(context) : _import(context),
-            itemBuilder: (_) => [
-              PopupMenuItem(value: 'export', child: Text(tr('Экспорт'))),
-              PopupMenuItem(value: 'import', child: Text(tr('Импорт'))),
-            ],
+          GlassPill(
+            radius: 24,
+            child: SizedBox(
+              width: 48,
+              height: 48,
+              child: PopupMenuButton<String>(
+                icon: const BoldIcon(Icons.more_vert),
+                onSelected: (v) => v == 'export' ? _export(context) : _import(context),
+                itemBuilder: (_) => [
+                  PopupMenuItem(value: 'export', child: Text(tr('Экспорт'))),
+                  PopupMenuItem(value: 'import', child: Text(tr('Импорт'))),
+                ],
+              ),
+            ),
           ),
         ],
       ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final wide = constraints.maxWidth >= 700;
-          final list = TabBarView(
-            controller: _tab,
-            children: [_buildElementsTab(context, wide), _buildPresetsTab(context)],
-          );
-          if (wide) {
-            return Row(
-              children: [
-                Expanded(flex: 3, child: list),
-                const VerticalDivider(width: 1),
-                Expanded(flex: 2, child: _buildFullPreview(context)),
-              ],
-            );
-          }
-          return Stack(
-            children: [
-              list,
-              if (_showPreviewOnNarrow)
-                Positioned.fill(
-                  child: Container(
-                    color: Colors.black54,
-                    child: Column(
-                      children: [
-                        Expanded(child: _buildFullPreview(context)),
-                        SafeArea(
-                          child: TextButton(
-                            onPressed: () => setState(() => _showPreviewOnNarrow = false),
-                            child: Text(tr('Скрыть мишень'), style: const TextStyle(color: Colors.white)),
+      body: Column(
+        children: [
+          SizedBox(height: MediaQuery.paddingOf(context).top + GlassHeader.height),
+          TabBar(controller: _tab, tabs: [Tab(text: tr('ЭЛЕМЕНТЫ')), Tab(text: tr('ПРЕСЕТЫ'))]),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final wide = constraints.maxWidth >= 700;
+                final list = TabBarView(
+                  controller: _tab,
+                  children: [_buildElementsTab(context, wide), _buildPresetsTab(context)],
+                );
+                if (wide) {
+                  return Row(
+                    children: [
+                      Expanded(flex: 3, child: list),
+                      const VerticalDivider(width: 1),
+                      Expanded(flex: 2, child: _buildFullPreview(context)),
+                    ],
+                  );
+                }
+                return Stack(
+                  children: [
+                    list,
+                    if (_showPreviewOnNarrow)
+                      Positioned.fill(
+                        child: Container(
+                          color: Colors.black54,
+                          child: Column(
+                            children: [
+                              Expanded(child: _buildFullPreview(context)),
+                              SafeArea(
+                                child: TextButton(
+                                  onPressed: () => setState(() => _showPreviewOnNarrow = false),
+                                  child: Text(tr('Скрыть мишень'), style: const TextStyle(color: Colors.white)),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          );
-        },
+                      ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: Builder(builder: (context) {
         final wide = MediaQuery.of(context).size.width >= 700;

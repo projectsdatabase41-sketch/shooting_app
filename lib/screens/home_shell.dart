@@ -7,6 +7,7 @@ import '../state/app_data_store.dart';
 import '../state/home_tabs_view_model.dart';
 import '../state/personalization_view_model.dart';
 import '../widgets/finished_edit_exit_dialog.dart';
+import '../widgets/glass_pill.dart';
 import '../widgets/home_tabs_bar.dart';
 import '../widgets/service_icon_picker.dart';
 import 'ai_chat_screen.dart';
@@ -131,16 +132,20 @@ class _HomeShellState extends State<HomeShell> {
 
         if (tabs.layout == 'tiles') {
           return Scaffold(
-            appBar: AppBar(title: const Text('Pusl')),
+            extendBodyBehindAppBar: true,
+            appBar: const GlassHeader(title: Text('Pusl', style: TextStyle(fontWeight: FontWeight.w600))),
             body: Column(
               children: [
                 if (store.isBackgroundSyncing) const _SyncBanner(),
                 Expanded(
-                  child: HomeTileGrid(
-                    vm: tabs,
-                    specs: specs,
-                    onSelect: (id) => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => _pageFor(id, store, isCoach, tabs)),
+                  child: Padding(
+                    padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + GlassHeader.height),
+                    child: HomeTileGrid(
+                      vm: tabs,
+                      specs: specs,
+                      onSelect: (id) => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => _pageFor(id, store, isCoach, tabs)),
+                      ),
                     ),
                   ),
                 ),
@@ -276,7 +281,10 @@ class _ActiveTargetTab extends StatelessWidget {
     );
     if (active.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: Text(tr('Мишень'))),
+        extendBodyBehindAppBar: true,
+        appBar: GlassHeader(
+          title: Text(tr('Мишень'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        ),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),

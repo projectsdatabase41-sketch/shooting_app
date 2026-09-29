@@ -18,6 +18,7 @@ import '../state/personalization_view_model.dart';
 import '../state/target_view_model.dart';
 import '../widgets/analytics_panel.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/glass_pill.dart';
 import '../widgets/shot_wheel.dart';
 import '../widgets/target_canvas.dart';
 import 'ai_chat_screen.dart';
@@ -103,7 +104,10 @@ class _CoachExerciseDetailScreenState extends State<CoachExerciseDetailScreen> {
     final error = _error;
     if (error != null) {
       return Scaffold(
-        appBar: AppBar(title: Text(widget.exerciseName)),
+        extendBodyBehindAppBar: true,
+        appBar: GlassHeader(
+          title: Text(widget.exerciseName, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        ),
         body: Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(error))),
       );
     }
@@ -152,28 +156,27 @@ class _DetailBody extends StatelessWidget {
     final multiTouch = context.watch<TargetViewModel>().multiTouch;
     final total = session.totalScore;
 
+    final topInset = MediaQuery.paddingOf(context).top;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(exercise.label),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(24),
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Text(tr('{p} очка ({p2})', {'p': total.toStringAsFixed(1), 'p2': total.round()})),
-          ),
-        ),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(exercise.label, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.tune),
+          GlassCircleButton(
+            icon: const BoldIcon(Icons.tune),
             tooltip: tr('Порядок блоков'),
-            onPressed: () => _openBlockSettings(context),
+            onTap: () => _openBlockSettings(context),
           ),
         ],
       ),
       body: ListView(
         physics: multiTouch ? const NeverScrollableScrollPhysics() : null,
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+        padding: EdgeInsets.fromLTRB(12, topInset + GlassHeader.height + 4, 12, 24),
         children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(tr('{p} очка ({p2})', {'p': total.toStringAsFixed(1), 'p2': total.round()})),
+          ),
           for (final block in blocks.visible) ...[
             _buildBlock(context, block),
             const SizedBox(height: 16),
@@ -360,11 +363,21 @@ class _SeriesShotsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final shots = session.shots.where((s) => s.seriesNo == seriesNo).toList();
+    final topInset = MediaQuery.paddingOf(context).top;
     return Scaffold(
-      appBar: AppBar(title: Text(tr('Серия {seriesNo}', {'seriesNo': seriesNo}))),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(tr('Серия {seriesNo}', {'seriesNo': seriesNo}),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+      ),
       body: shots.isEmpty
-          ? EmptyState(icon: Icons.list_alt, text: tr('В серии нет выстрелов'))
+          ? ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.only(top: topInset + GlassHeader.height),
+              children: [EmptyState(icon: Icons.list_alt, text: tr('В серии нет выстрелов'))],
+            )
           : ListView.builder(
+              padding: EdgeInsets.only(top: topInset + GlassHeader.height),
               itemCount: shots.length,
               itemBuilder: (context, i) {
                 final shot = shots[i];
@@ -399,9 +412,13 @@ class _SingleShotScreen extends StatelessWidget {
     final notes = comments.where((c) => c['level'] == 'shot' && '${c['shot_id']}' == shot.id).toList()
       ..sort((a, b) => '${a['created_at']}'.compareTo('${b['created_at']}'));
     return Scaffold(
-      appBar: AppBar(title: Text(tr('Выстрел №{shotNumber}', {'shotNumber': shot.shotNumber}))),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(tr('Выстрел №{shotNumber}', {'shotNumber': shot.shotNumber}),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+      ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(16, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 16, 16),
         children: [
           AspectRatio(
             aspectRatio: 1,

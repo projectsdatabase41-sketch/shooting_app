@@ -1,5 +1,6 @@
 import '../local_ai/local_ai_platform.dart';
 import '../local_ai/local_ai_screen.dart';
+import '../widgets/glass_pill.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -225,13 +226,17 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
+    final topInset = MediaQuery.paddingOf(context).top;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(tr('Ассистент')),
-        actions: [TextButton(onPressed: _save, child: Text(tr('СОХРАНИТЬ')))],
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(tr('Ассистент'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        actions: [
+          GlassCircleButton(icon: const BoldIcon(Icons.check), tooltip: tr('Сохранить'), onTap: _save),
+        ],
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+        padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 32),
         children: [
           SectionHeader(title: tr('Доступ'), subtitle: tr('Бесплатный облачный ИИ')),
           const SizedBox(height: 12),

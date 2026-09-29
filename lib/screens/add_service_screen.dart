@@ -10,6 +10,7 @@ import '../services/ai_service.dart';
 import '../services/ai_settings.dart';
 import '../services/custom_services_repository.dart';
 import '../state/app_data_store.dart';
+import '../widgets/glass_pill.dart';
 import '../widgets/service_icon_picker.dart';
 import '../i18n/i18n.dart';
 
@@ -250,27 +251,31 @@ class _AddServiceScreenState extends State<AddServiceScreen> with SingleTickerPr
 
   @override
   Widget build(BuildContext context) {
+    final topInset = MediaQuery.paddingOf(context).top;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_editing ? tr('Изменить сервис') : tr('Новый сервис')),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(_editing ? tr('Изменить сервис') : tr('Новый сервис'),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
-          IconButton(
+          GlassCircleButton(
             icon: _aiBusy
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.auto_awesome_outlined),
+                : const BoldIcon(Icons.auto_awesome_outlined),
             tooltip: tr('Заполнить с ИИ'),
-            onPressed: _aiBusy ? null : _fillWithAi,
+            onTap: _aiBusy ? null : _fillWithAi,
           ),
-          TextButton(
-            onPressed: _aiBusy ? null : _save,
-            child: _aiBusy
+          GlassCircleButton(
+            icon: _aiBusy
                 ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                : Text(_editing ? tr('СОХРАНИТЬ') : tr('СОЗДАТЬ')),
+                : const BoldIcon(Icons.check),
+            tooltip: _editing ? tr('Сохранить') : tr('Создать'),
+            onTap: _aiBusy ? null : _save,
           ),
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 16),
         children: [
           TextField(
             controller: _name,

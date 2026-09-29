@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/custom_services_repository.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/glass_pill.dart';
 import '../widgets/service_icon_picker.dart';
 import 'add_service_screen.dart';
 import '../i18n/i18n.dart';
@@ -20,22 +21,34 @@ class SettingsServicesScreen extends StatelessWidget {
       animation: repo,
       builder: (context, _) {
         final services = repo.list();
+        final topInset = MediaQuery.paddingOf(context).top;
         return Scaffold(
-          appBar: AppBar(title: Text(tr('Сервисы'))),
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => AddServiceScreen(repo: repo)),
-            ),
-            icon: const Icon(Icons.add),
-            label: Text(tr('Сервис')),
+          extendBodyBehindAppBar: true,
+          appBar: GlassHeader(
+            title: Text(tr('Сервисы'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+            actions: [
+              GlassCircleButton(
+                icon: const BoldIcon(Icons.add),
+                tooltip: tr('Добавить сервис'),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => AddServiceScreen(repo: repo)),
+                ),
+              ),
+            ],
           ),
           body: services.isEmpty
-              ? EmptyState(
-                  icon: Icons.dashboard_customize_outlined,
-                  text: tr('Сервисов пока нет — подключите Google Диск, Supabase, заметки или что-то ещё, и на главном экране появится своя плитка.'),
+              ? ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.only(top: topInset + GlassHeader.height),
+                  children: [
+                    EmptyState(
+                      icon: Icons.dashboard_customize_outlined,
+                      text: tr('Сервисов пока нет — подключите Google Диск, Supabase, заметки или что-то ещё, и на главном экране появится своя плитка.'),
+                    ),
+                  ],
                 )
               : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+                  padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 32),
                   itemCount: services.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 8),
                   itemBuilder: (context, i) {

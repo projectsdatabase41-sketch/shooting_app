@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../i18n/i18n.dart';
 import '../state/app_data_store.dart';
 import '../state/personalization_view_model.dart';
+import '../widgets/glass_pill.dart';
 import 'color_personalization_screen.dart';
 
 /// "Внешний вид" — язык интерфейса и цветовые настройки, вынесены из
@@ -70,9 +71,14 @@ class SettingsAppearanceScreen extends StatelessWidget {
     final personalization = context.watch<PersonalizationViewModel>();
     final currentLabel = _label(personalization.localeCode);
 
+    final topInset = MediaQuery.paddingOf(context).top;
     return Scaffold(
-      appBar: AppBar(title: Text(tr('Внешний вид'))),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(tr('Внешний вид'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+      ),
       body: ListView(
+        padding: EdgeInsets.only(top: topInset + GlassHeader.height),
         children: [
           ListTile(
             leading: const Icon(Icons.language_outlined),

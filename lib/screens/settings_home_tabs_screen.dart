@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../state/home_tabs_view_model.dart';
+import '../widgets/glass_pill.dart';
 import '../widgets/home_tabs_bar.dart';
 import '../i18n/i18n.dart';
 
@@ -54,12 +55,16 @@ class SettingsHomeTabsScreen extends StatelessWidget {
           ),
         );
 
+    final topInset = MediaQuery.paddingOf(context).top;
     return Scaffold(
-      appBar: AppBar(title: Text(tr('Рабочие пространства'))),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(tr('Рабочие пространства'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+      ),
       body: CustomScrollView(
         slivers: [
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 12, 16, 4),
             sliver: SliverToBoxAdapter(
               child: SegmentedButton<String>(
                 segments: [

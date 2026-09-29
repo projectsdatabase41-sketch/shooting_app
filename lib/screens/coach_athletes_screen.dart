@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 import '../services/coach_access_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/glass_pill.dart';
 import 'coach_athletes_chat_screen.dart';
 import 'coach_diary_screen.dart';
 import '../i18n/i18n.dart';
@@ -152,15 +153,25 @@ class _CoachAthletesScreenState extends State<CoachAthletesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final topInset = MediaQuery.paddingOf(context).top;
     return Scaffold(
-      appBar: AppBar(title: Text(tr('Спортсмены'))),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(tr('Спортсмены'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+      ),
       body: _athletes.isEmpty
-          ? EmptyState(
-              icon: Icons.groups_outlined,
-              text: tr('Пока никого не подключили — нажмите "+", чтобы добавить спортсмена.'),
+          ? ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.only(top: topInset + GlassHeader.height),
+              children: [
+                EmptyState(
+                  icon: Icons.groups_outlined,
+                  text: tr('Пока никого не подключили — нажмите "+", чтобы добавить спортсмена.'),
+                ),
+              ],
             )
           : GridView.builder(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 80),
+              padding: EdgeInsets.fromLTRB(12, topInset + GlassHeader.height + 12, 12, 80),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
                 mainAxisSpacing: 12,

@@ -11,6 +11,7 @@ import '../models/training_session.dart';
 import '../screens/target_screen.dart';
 import '../services/ai_settings.dart';
 import '../state/app_data_store.dart';
+import '../widgets/glass_pill.dart';
 import '../widgets/press_3d.dart';
 import '../widgets/raised_3d_button.dart';
 import 'task_ai.dart';
@@ -220,25 +221,33 @@ class _TaskRunScreenState extends State<TaskRunScreen> {
         if (!didPop) _go(0);
       },
       child: Scaffold(
-        appBar: AppBar(
-          title: Text(task.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(36),
-            child: StageProgressPills(
+        extendBodyBehindAppBar: true,
+        appBar: GlassHeader(
+          title: Text(task.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        ),
+        body: Column(
+          children: [
+            SizedBox(height: MediaQuery.paddingOf(context).top + GlassHeader.height),
+            StageProgressPills(
               count: _stageCount,
               current: _page >= 1 && _page <= _stageCount ? _page - 1 : null,
               isDone: _stageDone,
             ),
-          ),
-        ),
-        body: PageView(
-          controller: _pages,
-          physics: const NeverScrollableScrollPhysics(),
-          children: [
-            _overview(),
-            for (var i = 0; i < _stageCount; i++) _StagePage(key: ValueKey('stage$i'), state: this, stage: i),
-            _finalPage(),
-            _reportsPage(),
+            Expanded(
+              child: PageView(
+                controller: _pages,
+                physics: const NeverScrollableScrollPhysics(),
+                children: [
+                  _overview(),
+                  for (var i = 0; i < _stageCount; i++) _StagePage(key: ValueKey('stage$i'), state: this, stage: i),
+                  _finalPage(),
+                  _reportsPage(),
+                ],
+              ),
+            ),
           ],
         ),
       ),

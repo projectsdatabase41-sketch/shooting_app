@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/supabase_auth_service.dart';
 import '../services/supabase_service.dart';
 import '../state/app_data_store.dart';
+import '../widgets/glass_pill.dart';
 import '../widgets/section_header.dart';
 import 'export_screen.dart';
 import '../i18n/i18n.dart';
@@ -28,10 +29,14 @@ class _SettingsDataScreenState extends State<SettingsDataScreen> {
   Widget build(BuildContext context) {
     final store = context.watch<AppDataStore>();
 
+    final topInset = MediaQuery.paddingOf(context).top;
     return Scaffold(
-      appBar: AppBar(title: Text(tr('Данные и синхронизация'))),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(tr('Данные и синхронизация'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+      ),
       body: ListView(
-        padding: const EdgeInsets.only(bottom: 32),
+        padding: EdgeInsets.fromLTRB(0, topInset + GlassHeader.height, 0, 32),
         children: [
           ListTile(
             leading: const Icon(Icons.file_download_outlined),
