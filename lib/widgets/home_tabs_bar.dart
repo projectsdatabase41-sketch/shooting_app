@@ -271,6 +271,12 @@ class _HomeTileGridState extends State<HomeTileGrid> {
 
   int get _crossAxisCount => widget.vm.tileColumns;
 
+  // Меньше плитка (больше колонок при зуме) — меньше значок, а подпись при
+  // 4+ колонках вовсе не помещается разборчиво (решение пользователя:
+  // убрать текст совсем, а не переносить его на две строки).
+  double get _tileIconSize => switch (_crossAxisCount) { <= 2 => 40.0, 3 => 32.0, _ => 26.0 };
+  bool get _showTileLabel => _crossAxisCount <= 3;
+
   /// Куда встанет каждая плитка, если отпустить ПРЯМО СЕЙЧАС — та же
   /// поправка на индекс, что и в `HomeTabsViewModel.move` (иначе
   /// предпросмотр во время перетаскивания не совпадал бы с тем, что
@@ -466,15 +472,17 @@ class _HomeTileGridState extends State<HomeTileGrid> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(spec.icon, size: 40, color: fg),
-                  const SizedBox(height: 8),
-                  Text(
-                    tr(spec.label),
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelMedium?.copyWith(color: fg),
-                  ),
+                  Icon(spec.icon, size: _tileIconSize, color: fg),
+                  if (_showTileLabel) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      tr(spec.label),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelMedium?.copyWith(color: fg),
+                    ),
+                  ],
                 ],
               ),
             ),

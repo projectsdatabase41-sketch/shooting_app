@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 
 import '../local_ai/local_ai.dart';
 import '../local_ai/local_ai_catalog.dart';
+import '../local_ai/local_ai_platform.dart';
 import '../local_ai/local_vision.dart';
 import '../logic/scoring.dart';
 import '../logic/shot_photo_detection.dart';
@@ -299,6 +300,36 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
     await _runDetection();
   }
 
+  /// Спрашиваем один раз за запуск приложения: разбор фото моделью «со
+  /// зрением» — самая тяжёлая нагрузка на CPU из всего, что делает
+  /// приложение, и на слабом по ОЗУ устройстве реально роняет его
+  /// (жалоба пользователя: зависание, еле открывается «назад», потом
+  /// вылет) — не баг конкретно фото, а нехватка памяти под саму модель.
+  /// `true` — работаем моделью как обычно, `false` — обычный алгоритм.
+  static bool _ramWarned = false;
+  Future<bool> _confirmRamOk(LocalModelInfo vision) async {
+    if (_ramWarned) return true;
+    final ram = await totalRamBytes();
+    if (ram == null || vision.minRamGb <= ram / 1e9 + 0.5) return true; // хватает — не спрашиваем
+    _ramWarned = true;
+    if (!mounted) return true;
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('Может не хватить памяти')),
+        content: Text(tr(
+          'Модели «{name}» нужно от {min} ГБ ОЗУ, у устройства примерно {have} ГБ — распознавание может надолго зависнуть или приложение закроется. Можно продолжить или воспользоваться обычным алгоритмом (быстрее, но менее точен на сложных фото).',
+          {'name': vision.name, 'min': vision.minRamGb, 'have': (ram / 1e9).toStringAsFixed(1)},
+        )),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr('Обычный алгоритм'))),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(tr('Всё равно ИИ'))),
+        ],
+      ),
+    );
+    return proceed ?? false;
+  }
+
   Future<void> _runDetection() async {
     final decoded = _decoded;
     final center = _calibCenter;
@@ -309,7 +340,8 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
     });
     // Режим разработчика + скачанная модель «со зрением» — пробоины ищет она
     // (обычный алгоритм путает цифры колец с пробоинами). Сбой — алгоритм.
-    final vision = await LocalVision.active(AiSettings(context.read<AppDataStore>().db));
+    var vision = await LocalVision.active(AiSettings(context.read<AppDataStore>().db));
+    if (vision != null && !await _confirmRamOk(vision)) vision = null; // отказался — обычный алгоритм
     if (vision != null) {
       setState(() => _visionRunning = true);
       try {

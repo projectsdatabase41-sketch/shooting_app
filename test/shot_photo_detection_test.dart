@@ -287,7 +287,7 @@ void main() {
       // Полуось a=120 вдоль угла 30°, полуось b=80 поперёк — как круглая
       // мишень, снятая не строго анфас (перспективное сжатие по одной оси).
       const cx = 200.0, cy = 200.0, a = 120.0, b = 80.0, angleDeg = 30.0;
-      final angle = angleDeg * 3.14159265 / 180;
+      const angle = angleDeg * 3.14159265 / 180;
       final cosA = math.cos(angle), sinA = math.sin(angle);
       final img = GrayImage.filled(400, 400, 40);
       for (var y = 0; y < 400; y++) {
@@ -313,7 +313,7 @@ void main() {
       // Истинный радиус мишени под углом angleRad — сверяем с formula
       // эллипса (a=120 по 30°, b=80 поперёк), а не гадаем, какая полуось
       // считается "первой".
-      final trueAngle = angleDeg * 3.14159265 / 180;
+      const trueAngle = angleDeg * 3.14159265 / 180;
       final d = result.angleRad - trueAngle;
       final expectedAtAngle =
           (a * b) / math.sqrt(math.pow(b * math.cos(d), 2) + math.pow(a * math.sin(d), 2));

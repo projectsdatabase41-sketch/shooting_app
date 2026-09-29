@@ -23,3 +23,4 @@ Future<void> downloadModel({
     throw UnsupportedError('web');
 Future<void> pauseModelDownload(String id) async {}
 Future<bool> modelDownloadActive(String id) async => false;
+int recommendedThreads() => 0; // не используется — localAiSupported false

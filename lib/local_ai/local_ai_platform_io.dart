@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:math' as math;
 
 import 'package:background_downloader/background_downloader.dart';
 import 'package:crypto/crypto.dart';
@@ -171,3 +172,11 @@ Future<bool> modelDownloadActive(String id) async {
   final r = await FileDownloader().database.recordForId('model-$id');
   return r != null && (r.status == TaskStatus.running || r.status == TaskStatus.enqueued);
 }
+
+/// llama.cpp по умолчанию (0 = "auto") занимает ВСЕ ядра — на телефоне это
+/// душит интерфейс (жалоба пользователя: «еле получается нажать назад»,
+/// потом вылет) даже при генерации в фоновом изоляте: изоляты Dart не
+/// делят потоки, но нативные потоки llama.cpp всё равно конкурируют с
+/// потоком рендеринга Flutter за физические ядра устройства. Оставляем
+/// системе минимум одно ядро свободным.
+int recommendedThreads() => math.max(1, Platform.numberOfProcessors - 2);

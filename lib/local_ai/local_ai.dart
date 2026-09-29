@@ -191,7 +191,15 @@ class LocalAi {
           // Процессор, не видеокарта: на встроенной графике (проверено на
           // Intel N95 + UHD) Vulkan в 2–5 раз медленнее.
           // ponytail: переключатель «видеокарта» — когда будет мощное железо проверить.
-          await e.loadModel(r.modelPath, modelParams: const ModelParams(contextSize: _contextTokens, gpuLayers: 0));
+          await e.loadModel(
+            r.modelPath,
+            modelParams: ModelParams(
+              contextSize: _contextTokens,
+              gpuLayers: 0,
+              numberOfThreads: recommendedThreads(),
+              numberOfThreadsBatch: recommendedThreads(),
+            ),
+          );
           _engine = e;
           _loadedPath = r.modelPath;
         }
