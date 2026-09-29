@@ -40,6 +40,7 @@ import 'attachment_compose_screen.dart';
 import 'call_screen.dart';
 import 'chat_contact_panel_screen.dart';
 import 'chat_home_screen.dart';
+import 'pdf_viewer_screen.dart';
 import 'photo_viewer_screen.dart';
 import '../i18n/i18n.dart';
 import '../widgets/messenger_bubble.dart';
@@ -654,17 +655,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     }
 
     final isImage = ChatMediaUtils.looksLikeImage(picked.name);
-    final caption = await Navigator.of(context).push<String>(MaterialPageRoute(
+    final result = await Navigator.of(context).push<AttachmentComposeResult>(MaterialPageRoute(
       builder: (_) => AttachmentComposeScreen(bytes: bytes, fileName: picked.name, isImage: isImage),
     ));
-    if (caption == null) return; // экран закрыли без отправки
+    if (result == null) return; // экран закрыли без отправки
+    final finalBytes = result.bytes; // те же байты либо отредактированные в компоузере
 
     setState(() => _sending = true);
     try {
-      final compressed = isImage ? ChatMediaUtils.compressImage(bytes) : null;
+      final compressed = isImage ? ChatMediaUtils.compressImage(finalBytes) : null;
       await widget.sync.sendAttachment(
         contactId: _contact.id,
-        bytes: compressed ?? bytes,
+        bytes: compressed ?? finalBytes,
         fileName: picked.name,
         // Сжатие всегда перекодирует в JPEG (см. ChatMediaUtils.compressImage)
         // — mime должен это отражать, а не оставаться от исходного .png/.webp.
@@ -672,7 +674,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
             ? (compressed != null ? 'image/jpeg' : ChatMediaUtils.mimeFor(picked.name))
             : 'application/octet-stream',
         type: isImage ? ChatMessageType.image : ChatMessageType.file,
-        caption: caption.isEmpty ? null : caption,
+        caption: result.caption.isEmpty ? null : result.caption,
         downloadAllowed: widget.prefs.downloadAllowedFor(isPersonal: !_contact.isGroup),
       );
       _scrollToEnd();
@@ -1257,11 +1259,25 @@ class _Bubble extends StatelessWidget {
               Icon(Icons.insert_drive_file_outlined, color: fg),
               const SizedBox(width: 8),
               Flexible(
-                child: Text(
-                  '${message.attachmentName ?? 'Файл'} · ${ChatMediaUtils.formatSize(message.attachmentSize)}',
-                  style: theme.textTheme.bodyMedium?.copyWith(color: fg),
-                  overflow: TextOverflow.ellipsis,
-                ),
+                child: Builder(builder: (context) {
+                  final name = message.attachmentName ?? 'Файл';
+                  final base64 = message.attachmentBase64;
+                  final isPdf = message.attachmentMime == 'application/pdf' || name.toLowerCase().endsWith('.pdf');
+                  final text = Text(
+                    '$name · ${ChatMediaUtils.formatSize(message.attachmentSize)}',
+                    style: theme.textTheme.bodyMedium?.copyWith(color: fg),
+                    overflow: TextOverflow.ellipsis,
+                  );
+                  // PDF — сразу в приложении, а не наружу (решение
+                  // пользователя): та же логика, что в панели контакта.
+                  if (!isPdf || base64 == null) return text;
+                  return InkWell(
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => PdfViewerScreen(bytes: base64Decode(base64), fileName: name),
+                    )),
+                    child: text,
+                  );
+                }),
               ),
               if ((mine || message.downloadAllowed) && message.attachmentBase64 != null) ...[
                 const SizedBox(width: 6),

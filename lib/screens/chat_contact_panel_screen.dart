@@ -18,6 +18,7 @@ import '../state/personalization_view_model.dart';
 import '../widgets/chat_avatar.dart';
 import '../widgets/glass_pill.dart';
 import 'chat_group_screen.dart';
+import 'pdf_viewer_screen.dart';
 import 'photo_viewer_screen.dart';
 import '../i18n/i18n.dart';
 
@@ -150,6 +151,24 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
     } else if (m.attachmentLocalPath != null) {
       ChatMediaUtils.shareAttachmentPath(m.attachmentLocalPath!, m.attachmentMime);
     }
+  }
+
+  /// PDF — сразу внутри приложения (решение пользователя: "удобный
+  /// просмотр файлов"), остальные типы — как раньше, вовне. Только когда
+  /// байты уже под рукой (attachmentBase64) — для одного лишь пути на
+  /// диске плодить отдельное чтение файла ради редкого случая не стоит,
+  /// внешний просмотрщик и так открывает его отлично.
+  void _open(ChatMessage m) {
+    final name = m.attachmentName ?? '';
+    final isPdf = m.attachmentMime == 'application/pdf' || name.toLowerCase().endsWith('.pdf');
+    final base64 = m.attachmentBase64;
+    if (isPdf && base64 != null) {
+      Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => PdfViewerScreen(bytes: base64Decode(base64), fileName: name.isEmpty ? tr('Файл') : name),
+      ));
+      return;
+    }
+    _share(m);
   }
 
   @override
@@ -305,7 +324,7 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
           leading: Icon(icon),
           title: Text(m.attachmentName ?? tr('Файл'), maxLines: 1, overflow: TextOverflow.ellipsis),
           subtitle: Text('${ChatMediaUtils.formatSize(m.attachmentSize)} · ${_date(m)}'),
-          onTap: () => _share(m),
+          onTap: () => _open(m),
         );
       },
     );
