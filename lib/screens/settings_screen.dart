@@ -163,6 +163,34 @@ class _UpdateTileState extends State<_UpdateTile> {
   double _progress = 0;
   String? _error;
 
+  @override
+  void initState() {
+    super.initState();
+    // Экран мог пересобраться посреди уже идущей загрузки (свернули
+    // приложение и вернулись) — подключаемся к ней, а не показываем
+    // «ничего не происходит» (и не даём нажать «Обновить» ещё раз, отчего
+    // раньше стартовала вторая загрузка поверх первой).
+    _attachIfDownloading();
+  }
+
+  Future<void> _attachIfDownloading() async {
+    if (!await AppUpdateService.downloadActive()) return;
+    if (mounted) setState(() => _stage = _UpdateStage.downloading);
+    try {
+      await AppUpdateService.attachToActiveDownload(onProgress: (p) {
+        if (mounted) setState(() => _progress = p);
+      });
+      if (mounted) setState(() => _stage = _UpdateStage.idle);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _stage = _UpdateStage.error;
+          _error = '$e';
+        });
+      }
+    }
+  }
+
   Future<void> _check() async {
     setState(() => _stage = _UpdateStage.checking);
     final info = await AppUpdateService.check();

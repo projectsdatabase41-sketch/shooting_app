@@ -10,6 +10,8 @@ class AppUpdateService {
   static const String currentSha = '';
 
   static Future<AppUpdateInfo?> check() async => null;
+  static Future<bool> downloadActive() async => false;
+  static Future<bool> attachToActiveDownload({required void Function(double progress) onProgress}) async => false;
 
   static Future<void> downloadAndInstall(
     AppUpdateInfo info, {

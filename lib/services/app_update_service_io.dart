@@ -73,24 +73,45 @@ class AppUpdateService {
   /// Старые скачанные APK этой же папки — с прошлых попыток обновления
   /// (после запуска установщика приложение не может узнать, нажал ли
   /// пользователь «Установить»: заново открывшийся апп удаляет то, что
-  /// осталось, при следующей проверке).
+  /// осталось, при следующей проверке). Идущую сейчас загрузку не трогает.
   static Future<void> cleanupStale() async {
     try {
+      final active = await FileDownloader().database.recordForId(_taskId);
+      final skip = active != null && (active.status == TaskStatus.running || active.status == TaskStatus.enqueued)
+          ? 'pusl-update.apk'
+          : null;
       final d = await _dir();
       await for (final f in d.list()) {
-        if (f is File && f.path.endsWith('.apk')) await f.delete();
+        if (f is File && f.path.endsWith('.apk') && p.basename(f.path) != skip) await f.delete();
       }
     } catch (_) {}
   }
 
+  /// Уже идёт (в том числе начатая до пересборки экрана — свернули
+  /// приложение во время загрузки, вернулись, а виджет «забыл» про неё и
+  /// без этой проверки запустил бы вторую загрузку поверх первой,
+  /// жалоба пользователя: «прыгает прогресс, будто загрузка двойная»).
+  static Future<bool> downloadActive() async {
+    final r = await FileDownloader().database.recordForId(_taskId);
+    return r != null && (r.status == TaskStatus.running || r.status == TaskStatus.enqueued);
+  }
+
   /// Качает APK и сразу открывает системный установщик поверх него —
   /// подтверждение установки (и один раз — разрешение «Устанавливать из
-  /// этого источника») делает сам Android, не приложение.
+  /// этого источника») делает сам Android, не приложение. Если загрузка с
+  /// тем же taskId уже идёт (например, начата до пересборки экрана) —
+  /// подключается к ней, а не начинает новую поверх (жалоба пользователя:
+  /// «прыгает прогресс, будто загрузка двойная»); тот же приём, что у
+  /// загрузки моделей ИИ.
   static Future<void> downloadAndInstall(
     AppUpdateInfo info, {
     required void Function(double progress) onProgress,
   }) async {
     if (!Platform.isAndroid) throw UnsupportedError('Обновление APK доступно только на Android');
+    final existing = await FileDownloader().database.recordForId(_taskId);
+    if (existing != null && (existing.status == TaskStatus.running || existing.status == TaskStatus.enqueued)) {
+      return _finishDownload(await _waitFor(_taskId, onProgress));
+    }
     await cleanupStale();
     final task = DownloadTask(
       taskId: _taskId,
@@ -101,10 +122,39 @@ class AppUpdateService {
       updates: Updates.statusAndProgress,
     );
     final result = await FileDownloader().download(task, onProgress: (p) => onProgress(p < 0 ? 0 : p));
+    await _finishDownload(TaskStatusUpdate(task, result.status, result.exception));
+  }
+
+  /// Экран обновления пересобрался (свернули/открыли приложение) — если
+  /// загрузка всё это время шла в фоне, подключается к ней вместо
+  /// показа "ничего не происходит". `false` — активной загрузки нет,
+  /// экран остаётся в обычном состоянии.
+  static Future<bool> attachToActiveDownload({required void Function(double progress) onProgress}) async {
+    if (!await downloadActive()) return false;
+    await _finishDownload(await _waitFor(_taskId, onProgress));
+    return true;
+  }
+
+  static Future<void> _finishDownload(TaskStatusUpdate result) async {
     if (result.status != TaskStatus.complete) {
       throw HttpException(result.exception?.description ?? tr('загрузка не удалась ({name})', {'name': result.status.name}));
     }
-    final opened = await FileDownloader().openFile(task: task, mimeType: 'application/vnd.android.package-archive');
+    final opened = await FileDownloader().openFile(task: result.task, mimeType: 'application/vnd.android.package-archive');
     if (!opened) throw StateError(tr('Не удалось открыть установщик'));
+  }
+
+  static Future<TaskStatusUpdate> _waitFor(String taskId, void Function(double) onProgress) async {
+    while (true) {
+      await Future<void>.delayed(const Duration(seconds: 1));
+      final r = await FileDownloader().database.recordForId(taskId);
+      if (r == null) {
+        return TaskStatusUpdate(
+          DownloadTask(taskId: taskId, url: '', filename: 'x'),
+          TaskStatus.failed,
+        );
+      }
+      if (r.progress >= 0) onProgress(r.progress);
+      if (r.status.isFinalState) return TaskStatusUpdate(r.task, r.status);
+    }
   }
 }
