@@ -200,6 +200,23 @@ class AppDataStore extends ChangeNotifier {
   /// CASCADE`, но полагаться на это нельзя: в sqlite контроль внешних
   /// ключей по умолчанию ВЫКЛЮЧЕН, и без явного удаления в базе остались
   /// бы висячие строки.
+  /// Снимает ВСЕ локальные тромбстоуны (мягко удалённые упражнения,
+  /// скрытые/ожидающие удаления тренировки) и перечитывает списки из базы.
+  ///
+  /// Восстановление после ситуации, когда `pull()` молчит "ничего нового"
+  /// (дедуп видит тромбстоун как "уже есть"), а экраны при этом пустые —
+  /// пользователь попросил принудительный режим синхронизации вместо
+  /// повторного разбора, как тромбстоуны вообще все проставились.
+  void clearLocalTombstones() {
+    db.db.execute('UPDATE exercises SET deleted_at = NULL WHERE deleted_at IS NOT NULL');
+    db.db.execute(
+      'UPDATE training_sessions SET local_hidden = 0, pending_delete = 0 WHERE local_hidden = 1 OR pending_delete = 1',
+    );
+    _loadExercises();
+    _loadSessions();
+    notifyListeners();
+  }
+
   void confirmSessionDeleted(String id) {
     db.db.execute('BEGIN');
     try {

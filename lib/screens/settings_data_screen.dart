@@ -83,6 +83,17 @@ class _SettingsDataScreenState extends State<SettingsDataScreen> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 8),
+                // На случай, когда "Загрузить из облака" пишет "ничего
+                // нового", а списки на телефоне пустые — обычно значит,
+                // что нужные записи локально помечены удалёнными/скрытыми
+                // и из-за этого не считаются новыми при обычной сверке.
+                // Снимает эти отметки и подтягивает всё, чего не хватает.
+                TextButton.icon(
+                  onPressed: _syncing ? null : () => _forceRecover(context),
+                  icon: const Icon(Icons.restore_outlined),
+                  label: Text(tr('Восстановить всё из облака')),
+                ),
                 if (_syncMessage != null) ...[
                   const SizedBox(height: 8),
                   Text(_syncMessage!, style: Theme.of(context).textTheme.bodySmall),
@@ -107,6 +118,28 @@ class _SettingsDataScreenState extends State<SettingsDataScreen> {
       _syncMessage = null;
     });
     final store = context.read<AppDataStore>();
+    final sync = SupabaseSyncService(SupabaseAuthService(store.db));
+    try {
+      final result = await sync.pull(store);
+      final parts = <String>[];
+      if (result.pulledSessions > 0) parts.add(tr('получено тренировок: {pulledSessions}', {'pulledSessions': result.pulledSessions}));
+      if (result.pulledExercises > 0) parts.add(tr('упражнений: {pulledExercises}', {'pulledExercises': result.pulledExercises}));
+      if (result.pulledComments > 0) parts.add(tr('комментариев: {pulledComments}', {'pulledComments': result.pulledComments}));
+      setState(() => _syncMessage = parts.isEmpty ? tr('Готово, новых данных не было') : tr('Готово — {p}', {'p': parts.join(', ')}));
+    } catch (e) {
+      setState(() => _syncMessage = '$e');
+    } finally {
+      setState(() => _syncing = false);
+    }
+  }
+
+  Future<void> _forceRecover(BuildContext context) async {
+    setState(() {
+      _syncing = true;
+      _syncMessage = null;
+    });
+    final store = context.read<AppDataStore>();
+    store.clearLocalTombstones();
     final sync = SupabaseSyncService(SupabaseAuthService(store.db));
     try {
       final result = await sync.pull(store);
