@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../logic/chat_media_utils.dart';
+import '../widgets/glass_pill.dart';
 import '../i18n/i18n.dart';
 
 /// Предпросмотр фото/файла перед отправкой — подпись пишется здесь, а не
@@ -32,13 +33,26 @@ class _AttachmentComposeScreenState extends State<AttachmentComposeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.isImage ? tr('Фото') : tr('Файл'))),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(widget.isImage ? tr('Фото') : tr('Файл'),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+      ),
       body: Column(
         children: [
           Expanded(
             child: Center(
               child: widget.isImage
-                  ? InteractiveViewer(child: Image.memory(widget.bytes, fit: BoxFit.contain))
+                  // maxScale/SizedBox.expand — как в PhotoViewerScreen (просмотр
+                  // уже отправленного фото): без SizedBox.expand ребёнок
+                  // InteractiveViewer сжимается под размер картинки, а не
+                  // вьюпорта, и жесту почти некуда «увеличивать» — зум
+                  // казался нерабочим именно для ещё не отправленного фото.
+                  ? InteractiveViewer(
+                      maxScale: 6,
+                      clipBehavior: Clip.none,
+                      child: SizedBox.expand(child: Image.memory(widget.bytes, fit: BoxFit.contain)),
+                    )
                   : Padding(
                       padding: const EdgeInsets.all(24),
                       child: Column(

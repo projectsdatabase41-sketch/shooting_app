@@ -16,6 +16,7 @@ import '../services/chat_preferences.dart';
 import '../services/chat_sync_service.dart';
 import '../state/personalization_view_model.dart';
 import '../widgets/chat_avatar.dart';
+import '../widgets/glass_pill.dart';
 import 'chat_group_screen.dart';
 import 'photo_viewer_screen.dart';
 import '../i18n/i18n.dart';
@@ -237,15 +238,24 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
     );
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: GlassHeader(
+        title: const SizedBox.shrink(),
         actions: [
           if (!_contact.isGroup)
-            PopupMenuButton<String>(
-              onSelected: (v) => v == 'block' ? _block() : _removeContact(),
-              itemBuilder: (_) => [
-                PopupMenuItem(value: 'remove', child: Text(tr('Удалить чат'))),
-                PopupMenuItem(value: 'block', child: Text(tr('Заблокировать'))),
-              ],
+            GlassPill(
+              radius: 24,
+              child: SizedBox(
+                width: 48,
+                height: 48,
+                child: PopupMenuButton<String>(
+                  icon: const BoldIcon(Icons.more_vert),
+                  onSelected: (v) => v == 'block' ? _block() : _removeContact(),
+                  itemBuilder: (_) => [
+                    PopupMenuItem(value: 'remove', child: Text(tr('Удалить чат'))),
+                    PopupMenuItem(value: 'block', child: Text(tr('Заблокировать'))),
+                  ],
+                ),
+              ),
             ),
         ],
       ),

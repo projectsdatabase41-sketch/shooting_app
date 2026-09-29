@@ -264,10 +264,14 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final topInset = MediaQuery.paddingOf(context).top;
     return Scaffold(
-      appBar: AppBar(title: Text(tr('Новое задание'))),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(tr('Новое задание'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+      ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+        padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 4, 16, 100),
         children: [
           Text(tr('1. Кому'), style: theme.textTheme.titleMedium),
           Wrap(
@@ -700,7 +704,10 @@ class _CoachTaskGroupScreenState extends State<_CoachTaskGroupScreen> {
     final runs = full.first.runsRaw;
     await Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => Scaffold(
-        appBar: AppBar(title: Text('${c.athlete.name} · ${c.task.title}')),
+        appBar: GlassHeader(
+          title: Text('${c.athlete.name} · ${c.task.title}',
+              overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        ),
         body: runs.isEmpty
             ? Center(child: Text(tr('Ещё не выполнял')))
             : PageView(
@@ -725,10 +732,14 @@ class _CoachTaskGroupScreenState extends State<_CoachTaskGroupScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final topInset = MediaQuery.paddingOf(context).top;
     return Scaffold(
-      appBar: AppBar(title: Text(_plan.title)),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(_plan.title, overflow: TextOverflow.ellipsis, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+      ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 16),
         children: [
           if (_busy) const LinearProgressIndicator(),
           Row(

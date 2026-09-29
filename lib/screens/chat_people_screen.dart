@@ -10,6 +10,7 @@ import '../services/chat_sync_service.dart';
 import 'chat_group_screen.dart';
 import '../widgets/chat_avatar.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/glass_pill.dart';
 import '../i18n/i18n.dart';
 
 /// Друзья: входящие заявки (принять/отклонить), друзья (тап — чат, долгое
@@ -199,22 +200,25 @@ class _ChatContactsScreenState extends State<ChatContactsScreen> {
       },
       child: Scaffold(
         appBar: selecting
-            ? AppBar(
-                leading: IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _selected.clear())),
-                title: Text('${_selected.length}'),
+            ? GlassHeader(
+                leading: GlassCircleButton(
+                  icon: const BoldIcon(Icons.close),
+                  onTap: () => setState(() => _selected.clear()),
+                ),
+                title: Text('${_selected.length}', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
                 actions: [
-                  IconButton(icon: const Icon(Icons.group_add_outlined), tooltip: tr('В группу'), onPressed: _addToGroup),
-                  IconButton(
-                    icon: Icon(_selected.every(widget.prefs.mutedFor)
+                  GlassCircleButton(icon: const BoldIcon(Icons.group_add_outlined), tooltip: tr('В группу'), onTap: _addToGroup),
+                  GlassCircleButton(
+                    icon: BoldIcon(_selected.every(widget.prefs.mutedFor)
                         ? Icons.notifications_active_outlined
                         : Icons.notifications_off_outlined),
                     tooltip: tr('Уведомления'),
-                    onPressed: _toggleMute,
+                    onTap: _toggleMute,
                   ),
-                  IconButton(icon: const Icon(Icons.person_remove_outlined), tooltip: tr('Убрать из друзей'), onPressed: _delete),
+                  GlassCircleButton(icon: const BoldIcon(Icons.person_remove_outlined), tooltip: tr('Убрать из друзей'), onTap: _delete),
                 ],
               )
-            : AppBar(title: Text(tr('Друзья'))),
+            : GlassHeader(title: Text(tr('Друзья'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600))),
         floatingActionButton: selecting
             ? null
             : FloatingActionButton(
@@ -401,7 +405,9 @@ class _ChatDirectoryScreenState extends State<ChatDirectoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(tr('Все участники'))),
+      appBar: GlassHeader(
+        title: Text(tr('Все участники'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+      ),
       body: Column(
         children: [
           Padding(

@@ -10,6 +10,7 @@ import '../models/training_session.dart';
 import '../services/session_import.dart';
 import '../state/app_data_store.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/glass_pill.dart';
 import '../i18n/i18n.dart';
 
 enum _Scope { all, exercise, session }
@@ -46,12 +47,24 @@ class _ExportScreenState extends State<ExportScreen> {
     // started_at), так что честнее не предлагать их вовсе.
     final sessions = store.sessions.where((s) => s.shots.isNotEmpty && s.startedAt != null).toList();
 
+    final topInset = MediaQuery.paddingOf(context).top;
+    final header = GlassHeader(
+      title: Text(tr('Экспорт тренировок'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+    );
+
     if (sessions.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: Text(tr('Экспорт тренировок'))),
-        body: EmptyState(
-          icon: Icons.ios_share_outlined,
-          text: tr('Экспортировать пока нечего — нет ни одной записанной тренировки.'),
+        extendBodyBehindAppBar: true,
+        appBar: header,
+        body: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.only(top: topInset + GlassHeader.height),
+          children: [
+            EmptyState(
+              icon: Icons.ios_share_outlined,
+              text: tr('Экспортировать пока нечего — нет ни одной записанной тренировки.'),
+            ),
+          ],
         ),
       );
     }
@@ -60,9 +73,10 @@ class _ExportScreenState extends State<ExportScreen> {
     final shotCount = selected.fold<int>(0, (a, s) => a + s.shots.length);
 
     return Scaffold(
-      appBar: AppBar(title: Text(tr('Экспорт тренировок'))),
+      extendBodyBehindAppBar: true,
+      appBar: header,
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+        padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 32),
         children: [
           Text(
             tr('Файл в формате приложения — тот же, что понимает импорт: подходит для резервной копии и переноса на другое устройство.'),

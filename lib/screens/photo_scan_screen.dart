@@ -17,6 +17,7 @@ import '../models/target_face.dart';
 import '../services/ai_settings.dart';
 import '../services/shot_photo_service.dart';
 import '../state/app_data_store.dart';
+import '../widgets/glass_pill.dart';
 import 'camera_scan_screen.dart';
 import 'shot_review_screen.dart';
 import '../i18n/i18n.dart';
@@ -515,13 +516,16 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
         if (didPop && _visionRunning) LocalAi.instance.cancel();
       },
       child: Scaffold(
-        appBar: AppBar(
-          title: Text(_visionRunning ? tr('ИИ смотрит… (назад — прервать и выйти)') : tr('Фото мишени')),
+        appBar: GlassHeader(
+          title: Text(_visionRunning ? tr('ИИ смотрит… (назад — прервать и выйти)') : tr('Фото мишени'),
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
           actions: [
             if (_confirmedMm.isNotEmpty)
-              TextButton(
-                onPressed: _finish,
-                child: Text(tr('Готово ({length})', {'length': _confirmedMm.length}), style: const TextStyle(color: Colors.white)),
+              GlassCircleButton(
+                icon: const BoldIcon(Icons.check),
+                tooltip: tr('Готово ({length})', {'length': _confirmedMm.length}),
+                onTap: _finish,
               ),
           ],
         ),

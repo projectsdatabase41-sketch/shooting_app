@@ -9,6 +9,7 @@ import '../models/shot.dart';
 import '../models/target_face.dart';
 import '../painters/target_painter.dart';
 import '../state/personalization_view_model.dart';
+import '../widgets/glass_pill.dart';
 import '../i18n/i18n.dart';
 
 /// Проверка выстрелов, найденных ИИ на фото, — сразу на схеме мишени, без
@@ -66,7 +67,10 @@ class _ShotReviewScreenState extends State<ShotReviewScreen> {
     ];
     final total = _mm.fold<double>(0, (a, mm) => a + _score(mm));
     return Scaffold(
-      appBar: AppBar(title: Text(tr('Найдено выстрелов: {length}', {'length': _mm.length}))),
+      appBar: GlassHeader(
+        title: Text(tr('Найдено выстрелов: {length}', {'length': _mm.length}),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+      ),
       body: Column(
         children: [
           Padding(

@@ -12,6 +12,7 @@ import 'package:sensors_plus/sensors_plus.dart';
 import '../logic/shot_photo_detection.dart';
 import '../models/target_face.dart';
 import '../services/shot_photo_service.dart';
+import '../widgets/glass_pill.dart';
 import '../i18n/i18n.dart';
 
 /// Живая камера: наводим на мишень, приложение само делает снимок.
@@ -447,10 +448,17 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
     final controller = _controller;
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        title: Text(tr('Наведите на мишень')),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        // Камера всегда тёмная, независимо от темы приложения — цвет
+        // иконки/текста фиксирован белым, а не берётся из IconTheme (в
+        // светлой теме он был бы тёмным и потерялся бы на чёрном фоне).
+        leading: GlassCircleButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          tooltip: tr('Назад'),
+          onTap: () => Navigator.of(context).maybePop(),
+        ),
+        title: Text(tr('Наведите на мишень'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
       ),
       body: _error != null
           ? Center(

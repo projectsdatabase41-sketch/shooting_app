@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import 'glass_pill.dart';
 import '../i18n/i18n.dart';
 
 /// Рендер графика/таблицы по описанию от модели.
@@ -240,8 +241,9 @@ class _ChartGalleryScreenState extends State<ChartGalleryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(tr('{p} из {length}', {'p': _current + 1, 'length': widget.specs.length})),
+      appBar: GlassHeader(
+        title: Text(tr('{p} из {length}', {'p': _current + 1, 'length': widget.specs.length}),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
       ),
       body: PageView.builder(
         controller: _pages,

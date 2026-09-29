@@ -7,6 +7,7 @@ import '../services/chat_preferences.dart';
 import '../services/chat_sync_service.dart';
 import '../widgets/chat_avatar.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/glass_pill.dart';
 import '../i18n/i18n.dart';
 
 /// "Приватность" — режим "все могут написать" (как раньше) или "только
@@ -108,14 +109,18 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final mode = widget.auth.privacyMode;
+    final topInset = MediaQuery.paddingOf(context).top;
     return Scaffold(
-      appBar: AppBar(title: Text(tr('Приватность'))),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(tr('Приватность'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _reload,
               child: ListView(
-                padding: const EdgeInsets.all(16),
+                padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 16),
                 children: [
                   Text(tr('Кто может написать'), style: theme.textTheme.titleMedium),
                   const SizedBox(height: 8),

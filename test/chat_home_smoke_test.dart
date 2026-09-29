@@ -48,7 +48,9 @@ void main() {
     await tester.tap(find.text('Друзья'));
     await tester.pumpAndSettle();
     expect(find.byIcon(Icons.add), findsOneWidget); // «+» → поиск по нику
-    await tester.pageBack();
+    // tester.pageBack() ищет стандартный BackButtonIcon — у GlassHeader
+    // (стеклянная кнопка "назад") другой виджет, поэтому идём по тултипу.
+    await tester.tap(find.byTooltip('Назад'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Иван Петров'));
     await tester.pumpAndSettle(const Duration(milliseconds: 100), EnginePhase.sendSemanticsUpdate, const Duration(seconds: 2));

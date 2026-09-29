@@ -4,6 +4,7 @@ import '../i18n/i18n.dart';
 import '../services/chat_auth_service.dart';
 import '../widgets/chat_avatar.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/glass_pill.dart';
 
 /// Чёрный список: от этих людей сообщения не доходят (сервер молча их
 /// отбрасывает), в друзья они не попадают. «Разблокировать» — убрать из списка.
@@ -46,13 +47,22 @@ class _ChatBlocklistScreenState extends State<ChatBlocklistScreen> {
   @override
   Widget build(BuildContext context) {
     final list = _list;
+    final topInset = MediaQuery.paddingOf(context).top;
     return Scaffold(
-      appBar: AppBar(title: Text(tr('Чёрный список'))),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(tr('Чёрный список'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+      ),
       body: list == null
           ? Center(child: _error == null ? const CircularProgressIndicator() : Text(_error!))
           : list.isEmpty
-              ? EmptyState(icon: Icons.block, text: tr('Чёрный список пуст'))
+              ? ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.only(top: topInset + GlassHeader.height),
+                  children: [EmptyState(icon: Icons.block, text: tr('Чёрный список пуст'))],
+                )
               : ListView(
+                  padding: EdgeInsets.only(top: topInset + GlassHeader.height),
                   children: [
                     for (final b in list)
                       ListTile(

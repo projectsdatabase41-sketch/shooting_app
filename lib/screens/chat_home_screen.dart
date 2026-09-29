@@ -757,10 +757,14 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final topInset = MediaQuery.paddingOf(context).top;
     return Scaffold(
-      appBar: AppBar(title: Text(tr('Мессенджер'))),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(tr('Мессенджер'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+      ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 16),
         children: [
           SegmentedButton<bool>(
             segments: [

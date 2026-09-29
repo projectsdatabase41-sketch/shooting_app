@@ -6,6 +6,7 @@ import '../services/chat_auth_service.dart';
 import '../services/chat_messages_repository.dart';
 import '../services/chat_sync_service.dart';
 import '../widgets/chat_avatar.dart';
+import '../widgets/glass_pill.dart';
 import '../i18n/i18n.dart';
 
 /// Цвета оформления группы (аватар без фото, шапка переписки).
@@ -113,15 +114,18 @@ class _ChatGroupEditScreenState extends State<ChatGroupEditScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final contacts = widget.repo.listContacts().where((c) => !c.isGroup).toList();
+    final topInset = MediaQuery.paddingOf(context).top;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_creating ? tr('Новая группа') : tr('Изменить группу')),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(_creating ? tr('Новая группа') : tr('Изменить группу'),
+            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
-          TextButton(onPressed: _busy ? null : _save, child: Text(_creating ? tr('СОЗДАТЬ') : tr('СОХРАНИТЬ'))),
+          GlassCircleButton(icon: const BoldIcon(Icons.check), tooltip: tr('Сохранить'), onTap: _busy ? null : _save),
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 16),
         children: [
           Center(
             child: GestureDetector(
@@ -338,14 +342,15 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
     final members = [..._group.members]..sort(
         (a, b) => ['owner', 'admin', 'member'].indexOf(a.role).compareTo(['owner', 'admin', 'member'].indexOf(b.role)));
     return Scaffold(
-      appBar: AppBar(
-        title: Text(tr('О группе')),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(tr('О группе'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
           if (_isAdmin)
-            IconButton(
-              icon: const Icon(Icons.edit_outlined),
+            GlassCircleButton(
+              icon: const BoldIcon(Icons.edit_outlined),
               tooltip: tr('Изменить'),
-              onPressed: () async {
+              onTap: () async {
                 final updated = await Navigator.of(context).push<ChatContact>(MaterialPageRoute(
                   builder: (_) =>
                       ChatGroupEditScreen(auth: widget.auth, repo: widget.repo, sync: widget.sync, group: _group),
@@ -356,6 +361,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
         ],
       ),
       body: ListView(
+        padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + GlassHeader.height),
         children: [
           if (_busy) const LinearProgressIndicator(),
           const SizedBox(height: 16),

@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../models/target_face.dart';
 import '../services/session_import.dart';
 import '../state/app_data_store.dart';
+import '../widgets/glass_pill.dart';
 import '../widgets/section_header.dart';
 import '../i18n/i18n.dart';
 
@@ -96,10 +97,14 @@ class _ImportScreenState extends State<ImportScreen> {
     final bundle = _bundle;
     final df = DateFormat('dd.MM.yyyy HH:mm');
 
+    final topInset = MediaQuery.paddingOf(context).top;
     return Scaffold(
-      appBar: AppBar(title: Text(tr('Импорт тренировок'))),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(tr('Импорт тренировок'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+      ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+        padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 32),
         children: [
           SectionHeader(
             title: tr('Файл'),

@@ -6,6 +6,7 @@ import 'local_ai.dart';
 import 'local_ai_catalog.dart';
 import 'local_ai_memory.dart';
 import 'local_ai_platform.dart';
+import '../widgets/glass_pill.dart';
 import '../i18n/i18n.dart';
 
 /// Идущие загрузки живут дольше экрана: закрыли настройки — качается дальше.
@@ -173,11 +174,16 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final topInset = MediaQuery.paddingOf(context).top;
+    final header = GlassHeader(
+      title: Text(tr('Локальная модель'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+    );
     if (!localAiSupported) {
       return Scaffold(
-        appBar: AppBar(title: Text(tr('Локальная модель'))),
+        extendBodyBehindAppBar: true,
+        appBar: header,
         body: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.fromLTRB(24, topInset + GlassHeader.height + 8, 24, 24),
           child: Text(tr('В браузере локальная модель пока не работает — только в приложении для Android и Windows.')),
         ),
       );
@@ -185,9 +191,10 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
     final memory = LocalAiMemory(s.db);
     final recommended = _recommendedId;
     return Scaffold(
-      appBar: AppBar(title: Text(tr('Локальная модель'))),
+      extendBodyBehindAppBar: true,
+      appBar: header,
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+        padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 32),
         children: [
           Text(
             tr('ИИ прямо на устройстве, без интернета и ключей. Слабее облачного: лучше всего подходит для служебных задач.'),

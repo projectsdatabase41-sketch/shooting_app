@@ -7,6 +7,7 @@ import '../services/ai_service.dart';
 import '../services/ai_settings.dart';
 import '../services/chat_preferences.dart';
 import '../services/local_db_service.dart';
+import '../widgets/glass_pill.dart';
 import '../i18n/i18n.dart';
 
 /// Настройки чата (пункты 4, 6, 7 списка правок) — открывается из левой
@@ -42,24 +43,26 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
   Widget _buildScaffold(BuildContext context) {
     final theme = Theme.of(context);
     final prefs = widget.prefs;
+    final topInset = MediaQuery.paddingOf(context).top;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(tr('Персонализация')),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(tr('Персонализация'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
-          IconButton(
-            onPressed: () => showModalBottomSheet(
+          GlassCircleButton(
+            onTap: () => showModalBottomSheet(
               context: context,
               isScrollControlled: true,
               showDragHandle: true,
               builder: (_) => _AiThemeAssistantSheet(prefs: prefs, db: widget.db),
             ),
-            icon: const Icon(Icons.auto_awesome_outlined),
+            icon: const BoldIcon(Icons.auto_awesome_outlined),
             tooltip: tr('Настроить с ИИ'),
           ),
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 16),
         children: [
           _preview(),
           const SizedBox(height: 24),

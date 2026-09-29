@@ -6,6 +6,7 @@ import '../services/chat_preferences.dart';
 import '../services/chat_sync_service.dart';
 import '../services/chat_translation_service.dart';
 import '../services/local_db_service.dart';
+import '../widgets/glass_pill.dart';
 import 'chat_appearance_screen.dart';
 import 'chat_privacy_screen.dart';
 import '../i18n/i18n.dart';
@@ -53,9 +54,14 @@ class _ChatSettingsScreenState extends State<ChatSettingsScreen> {
           trailing: const Icon(Icons.chevron_right),
           onTap: () => _open(page),
         );
+    final topInset = MediaQuery.paddingOf(context).top;
     return Scaffold(
-      appBar: AppBar(title: Text(tr('Настройки'))),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(tr('Настройки'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+      ),
       body: ListView(
+        padding: EdgeInsets.only(top: topInset + GlassHeader.height),
         children: [
           folder(
             Icons.translate_outlined,
@@ -151,9 +157,12 @@ class ChatTranslationSettingsScreen extends StatelessWidget {
     return AnimatedBuilder(
       animation: prefs,
       builder: (context, _) => Scaffold(
-        appBar: AppBar(title: Text(tr('Язык и перевод'))),
+        extendBodyBehindAppBar: true,
+        appBar: GlassHeader(
+          title: Text(tr('Язык и перевод'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        ),
         body: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.fromLTRB(16, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 16, 16),
           children: [
             Text(tr('Переводить на'), style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
@@ -214,8 +223,12 @@ class _ChatNotificationSettingsScreenState extends State<ChatNotificationSetting
   Widget build(BuildContext context) {
     final auth = widget.auth;
     return Scaffold(
-      appBar: AppBar(title: Text(tr('Уведомления'))),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(tr('Уведомления'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+      ),
       body: ListView(
+        padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + GlassHeader.height),
         children: [
           SwitchListTile(
             secondary: const Icon(Icons.notifications_outlined),
@@ -268,8 +281,12 @@ class ChatAccountSettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final error = Theme.of(context).colorScheme.error;
     return Scaffold(
-      appBar: AppBar(title: Text(tr('Аккаунт'))),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(tr('Аккаунт'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+      ),
       body: ListView(
+        padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + GlassHeader.height),
         children: [
           ListTile(
             leading: const Icon(Icons.badge_outlined),
