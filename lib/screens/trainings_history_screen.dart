@@ -85,7 +85,17 @@ class TrainingsHistoryScreen extends StatelessWidget {
                       : tr('Тренировка{when} и все {length} выстрелов будут удалены из базы без возможности восстановить.', {'when': when, 'length': s.shots.length}),
                   confirmLabel: empty ? tr('Да') : tr('Удалить навсегда'),
                   cancelLabel: empty ? tr('Нет') : tr('Отмена'),
-                  onConfirmed: () => store.deleteSession(s.id),
+                  // Помечает на удаление сразу и толкает в облако тут же —
+                  // иначе строка повисает pending_delete до следующей
+                  // синхронизации, а «Восстановить всё из облака» на
+                  // экране настроек снимает такие незавершённые отметки
+                  // как зависшие, воскрешая то, что человек только что
+                  // удалил (жалоба: "нажал удалить, потом восстановить —
+                  // и всё вернулось").
+                  onConfirmed: () {
+                    store.deleteSession(s.id);
+                    store.syncInBackground();
+                  },
                   onConfirmedLocalOnly: empty ? null : () => store.deleteSessionLocalOnly(s.id),
                   child: _SessionCard(
                     title: exercise?.label ?? s.exerciseId,
