@@ -3,9 +3,11 @@ import 'package:provider/provider.dart';
 import '../models/exercise.dart';
 import '../models/series_spec.dart';
 import '../models/target_face.dart';
+import '../services/supabase_auth_service.dart';
+import '../services/supabase_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/empty_state.dart';
-import '../widgets/raised_3d_button.dart';
+import '../widgets/glass_pill.dart';
 import '../widgets/swipe_to_delete.dart';
 import 'exercise_editor_screen.dart';
 import 'trainings_history_screen.dart';
@@ -22,37 +24,45 @@ class ExercisesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final store = context.watch<AppDataStore>();
     // Считаем один раз: activeExercises каждый раз строит новый список,
     // а itemBuilder вызывается на каждую строку.
     final list = store.activeExercises;
+    final topInset = MediaQuery.paddingOf(context).top;
     return Scaffold(
-      appBar: AppBar(title: Text(tr('Упражнения'))),
-      // На пустом списке кнопка создания уже есть в самом EmptyState —
-      // вторая, плавающая, с тем же действием рядом только дублировала
-      // её и спорила за внимание. FAB нужен, когда список уже не пуст:
-      // тогда центральной кнопки нет и создавать больше не откуда.
-      floatingActionButton: list.isEmpty
-          ? null
-          : Raised3DButton(
-              icon: Icons.add,
-              label: tr('Упражнение'),
-              baseColor: Theme.of(context).colorScheme.primary,
-              onTap: () => _showCreateExerciseDialog(context),
-            ),
-      body: list.isEmpty
-          ? EmptyState(
-              icon: Icons.fitness_center,
-              text: tr('Упражнений пока нет — приложение стартует полностью пустым.'),
-              action: Raised3DButton(
-                icon: Icons.add,
-                label: tr('Создать первое'),
-                baseColor: Theme.of(context).colorScheme.primary,
-                onTap: () => _showCreateExerciseDialog(context),
-              ),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(tr('Упражнения'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        actions: [
+          GlassCircleButton(
+            icon: const BoldIcon(Icons.add),
+            tooltip: tr('Новое упражнение'),
+            onTap: () => _showCreateExerciseDialog(context),
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: () => _pullFromCloud(context),
+        child: list.isEmpty
+          ? ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.only(top: topInset + GlassHeader.height),
+              children: [
+                EmptyState(
+                  icon: Icons.fitness_center,
+                  text: tr('Упражнений пока нет — приложение стартует полностью пустым.'),
+                  action: FilledButton.icon(
+                    icon: const Icon(Icons.add),
+                    label: Text(tr('Создать первое')),
+                    onPressed: () => _showCreateExerciseDialog(context),
+                  ),
+                ),
+              ],
             )
           : ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 32),
               itemCount: list.length,
               separatorBuilder: (_, __) => const SizedBox(height: 10),
               itemBuilder: (context, i) {
@@ -82,7 +92,18 @@ class ExercisesScreen extends StatelessWidget {
                 );
               },
             ),
+      ),
     );
+  }
+
+  Future<void> _pullFromCloud(BuildContext context) async {
+    final store = context.read<AppDataStore>();
+    final sync = SupabaseSyncService(SupabaseAuthService(store.db));
+    try {
+      await sync.pull(store);
+    } catch (e) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
   }
 
   /// Склонение для «3 тренировки останутся».

@@ -5,6 +5,7 @@ import '../models/exercise.dart';
 import '../models/series_spec.dart';
 import '../models/target_face.dart';
 import '../state/app_data_store.dart';
+import '../widgets/glass_pill.dart';
 import '../i18n/i18n.dart';
 
 /// Создание упражнения со свободной структурой серий.
@@ -97,19 +98,23 @@ class _ExerciseEditorScreenState extends State<ExerciseEditorScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final topInset = MediaQuery.paddingOf(context).top;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(tr('Новое упражнение')),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(tr('Новое упражнение'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
-          TextButton(
-            onPressed: _canSave ? _save : null,
-            child: Text(tr('СОЗДАТЬ')),
+          GlassCircleButton(
+            icon: Icon(Icons.check, color: _canSave ? cs.primary : cs.onSurfaceVariant.withValues(alpha: 0.4)),
+            tooltip: tr('Создать'),
+            onTap: _canSave ? _save : null,
           ),
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+        padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 32),
         children: [
           TextField(
             controller: _name,

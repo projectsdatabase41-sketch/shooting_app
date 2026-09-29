@@ -4,10 +4,12 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import '../models/exercise.dart';
 import '../models/training_session.dart';
+import '../services/supabase_auth_service.dart';
+import '../services/supabase_service.dart';
 import '../state/app_data_store.dart';
 import '../theme/app_theme.dart';
 import '../widgets/empty_state.dart';
-import '../widgets/raised_3d_button.dart';
+import '../widgets/glass_pill.dart';
 import '../widgets/swipe_to_delete.dart';
 import 'exercise_history_detail_screen.dart';
 import 'target_screen.dart';
@@ -33,38 +35,51 @@ class TrainingsHistoryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final store = context.watch<AppDataStore>();
     final ex = exercise;
     final sessions = ex == null ? store.sessions : store.sessions.where((s) => s.exerciseId == ex.id).toList();
     final df = DateFormat('dd.MM.yyyy · HH:mm');
+    final topInset = MediaQuery.paddingOf(context).top;
 
     return Scaffold(
-      appBar: AppBar(title: Text(ex?.label ?? tr('Тренировки'))),
-      floatingActionButton: ex == null
-          ? null
-          : Raised3DButton(
-              icon: Icons.add,
-              label: tr('Тренировка'),
-              baseColor: Theme.of(context).colorScheme.primary,
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(ex?.label ?? tr('Тренировки'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        actions: [
+          if (ex != null)
+            GlassCircleButton(
+              icon: const BoldIcon(Icons.add),
+              tooltip: tr('Новая тренировка'),
               onTap: () => _startTraining(context, ex),
             ),
-      body: sessions.isEmpty
-          ? EmptyState(
-              icon: Icons.history,
-              text: ex == null
-                  ? tr('Тренировок пока нет. Начните первую на вкладке «Упражнения».')
-                  : tr('У «{label}» пока нет тренировок.', {'label': ex.label}),
-              action: ex == null
-                  ? null
-                  : Raised3DButton(
-                      icon: Icons.add,
-                      label: tr('Создать первую'),
-                      baseColor: Theme.of(context).colorScheme.primary,
-                      onTap: () => _startTraining(context, ex),
-                    ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: () => _pullFromCloud(context),
+        child: sessions.isEmpty
+          ? ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.only(top: topInset + GlassHeader.height),
+              children: [
+                EmptyState(
+                  icon: Icons.history,
+                  text: ex == null
+                      ? tr('Тренировок пока нет. Начните первую на вкладке «Упражнения».')
+                      : tr('У «{label}» пока нет тренировок.', {'label': ex.label}),
+                  action: ex == null
+                      ? null
+                      : FilledButton.icon(
+                          icon: const Icon(Icons.add),
+                          label: Text(tr('Создать первую')),
+                          onPressed: () => _startTraining(context, ex),
+                        ),
+                ),
+              ],
             )
           : ListView.separated(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, ex == null ? 32 : 96),
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 32),
               itemCount: sessions.length,
               separatorBuilder: (_, __) => const SizedBox(height: 10),
               itemBuilder: (context, i) {
@@ -122,7 +137,18 @@ class TrainingsHistoryScreen extends StatelessWidget {
                 );
               },
             ),
+      ),
     );
+  }
+
+  Future<void> _pullFromCloud(BuildContext context) async {
+    final store = context.read<AppDataStore>();
+    final sync = SupabaseSyncService(SupabaseAuthService(store.db));
+    try {
+      await sync.pull(store);
+    } catch (e) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
   }
 
   void _startTraining(BuildContext context, Exercise exercise) {
