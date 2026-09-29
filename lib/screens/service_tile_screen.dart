@@ -10,6 +10,7 @@ import '../models/custom_service.dart';
 import '../services/ai_settings.dart';
 import '../services/custom_services_repository.dart';
 import '../state/app_data_store.dart';
+import '../widgets/glass_pill.dart';
 import '../i18n/i18n.dart';
 
 /// Экран одной плитки сервиса — простую ссылку (без заголовков) сразу
@@ -249,28 +250,39 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
     final spec = _parsedSpec();
     final displayRows = _filteredRows ?? _rows;
 
+    final topInset = MediaQuery.paddingOf(context).top;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.service.name),
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(widget.service.name,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+            overflow: TextOverflow.ellipsis),
         actions: [
           if (_rows != null && !_aiBusy)
-            IconButton(
-              icon: const Icon(Icons.search),
+            GlassCircleButton(
+              icon: const BoldIcon(Icons.search),
               tooltip: tr('Спросить ИИ'),
-              onPressed: _askAiFilter,
+              onTap: _askAiFilter,
             ),
           if (_response != null && !_aiBusy)
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.auto_awesome_outlined),
-              tooltip: tr('Вид записей'),
-              onSelected: (v) {
-                if (v == 'configure') _configureDisplay();
-                if (v == 'reset') _resetDisplay();
-              },
-              itemBuilder: (context) => [
-                PopupMenuItem(value: 'configure', child: Text(tr('Настроить вид с ИИ'))),
-                if (spec != null) PopupMenuItem(value: 'reset', child: Text(tr('Сбросить вид'))),
-              ],
+            GlassPill(
+              radius: 24,
+              child: SizedBox(
+                width: 48,
+                height: 48,
+                child: PopupMenuButton<String>(
+                  icon: const BoldIcon(Icons.auto_awesome_outlined),
+                  tooltip: tr('Вид записей'),
+                  onSelected: (v) {
+                    if (v == 'configure') _configureDisplay();
+                    if (v == 'reset') _resetDisplay();
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem(value: 'configure', child: Text(tr('Настроить вид с ИИ'))),
+                    if (spec != null) PopupMenuItem(value: 'reset', child: Text(tr('Сбросить вид'))),
+                  ],
+                ),
+              ),
             ),
           if (_aiBusy)
             const Padding(
@@ -278,24 +290,25 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
               child: Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))),
             ),
           if (_rows != null)
-            IconButton(
-              icon: Icon(_showRaw ? Icons.table_chart_outlined : Icons.code),
+            GlassCircleButton(
+              icon: BoldIcon(_showRaw ? Icons.table_chart_outlined : Icons.code),
               tooltip: _showRaw ? tr('Показать таблицей') : tr('Показать как есть'),
-              onPressed: () => setState(() => _showRaw = !_showRaw),
+              onTap: () => setState(() => _showRaw = !_showRaw),
             ),
-          IconButton(
-            icon: const Icon(Icons.open_in_new),
+          GlassCircleButton(
+            icon: const BoldIcon(Icons.open_in_new),
             tooltip: tr('Открыть ссылку в браузере'),
-            onPressed: () => launchUrl(Uri.parse(widget.service.url), mode: LaunchMode.externalApplication),
+            onTap: () => launchUrl(Uri.parse(widget.service.url), mode: LaunchMode.externalApplication),
           ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _busy ? null : _runRequest,
+          GlassCircleButton(
+            icon: const BoldIcon(Icons.refresh),
+            onTap: _busy ? null : _runRequest,
           ),
         ],
       ),
       body: Column(
         children: [
+          SizedBox(height: topInset + GlassHeader.height),
           if (_filteredRows != null)
             Material(
               color: Theme.of(context).colorScheme.primaryContainer,

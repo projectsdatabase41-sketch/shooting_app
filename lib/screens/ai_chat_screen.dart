@@ -142,14 +142,17 @@ class _ModelPickerButtonState extends State<_ModelPickerButton> {
             children: [
               ListTile(title: Text(tr('Модель ответа'))),
               tile(value: 'auto', title: tr('Авто'), subtitle: tr('Как решают настройки ИИ')),
-              tile(
-                value: 'local',
-                title: localModel?.name ?? tr('Локальная'),
-                subtitle: localInstalled
-                    ? tr('Скачана, работает без интернета')
-                    : tr('Не скачана — выберите и скачайте в настройках ИИ'),
-                enabled: localInstalled,
-              ),
+              // На вебе локальной модели не бывает вовсе (нет файловой
+              // системы) — не показываем недоступный вариант.
+              if (!kIsWeb)
+                tile(
+                  value: 'local',
+                  title: localModel?.name ?? tr('Локальная'),
+                  subtitle: localInstalled
+                      ? tr('Скачана, работает без интернета')
+                      : tr('Не скачана — выберите и скачайте в настройках ИИ'),
+                  enabled: localInstalled,
+                ),
               const Divider(),
               for (final m in s.models) tile(value: m, title: m),
             ],

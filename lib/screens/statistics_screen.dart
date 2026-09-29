@@ -9,6 +9,7 @@ import '../models/training_session.dart';
 import '../state/app_data_store.dart';
 import '../widgets/analytics_panel.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/glass_pill.dart';
 import '../i18n/i18n.dart';
 
 /// Вкладка "Статистика" — разбор стрельбы на четырёх срезах
@@ -65,12 +66,25 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     // только мешает.
     final sessions = store.sessions.where((s) => s.shots.isNotEmpty).toList();
 
+    final theme = Theme.of(context);
+    final topInset = MediaQuery.paddingOf(context).top;
+    final header = GlassHeader(
+      title: Text(tr('Статистика'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+    );
+
     if (sessions.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: Text(tr('Статистика'))),
-        body: EmptyState(
-          icon: Icons.insights_outlined,
-          text: tr('Статистика появится после первых записанных выстрелов'),
+        extendBodyBehindAppBar: true,
+        appBar: header,
+        body: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.only(top: topInset + GlassHeader.height),
+          children: [
+            EmptyState(
+              icon: Icons.insights_outlined,
+              text: tr('Статистика появится после первых записанных выстрелов'),
+            ),
+          ],
         ),
       );
     }
@@ -78,9 +92,11 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     final selection = _resolveSelection(store, sessions);
 
     return Scaffold(
-      appBar: AppBar(title: Text(tr('Статистика'))),
+      extendBodyBehindAppBar: true,
+      appBar: header,
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 40),
         children: [
           _scopeSelector(),
           const SizedBox(height: 12),

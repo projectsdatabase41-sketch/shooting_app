@@ -14,6 +14,7 @@ import '../widgets/analytics_panel.dart';
 import '../widgets/call_coach_button.dart';
 import '../widgets/comments_thread.dart';
 import '../widgets/finished_edit_exit_dialog.dart';
+import '../widgets/glass_pill.dart';
 import '../widgets/raised_3d_button.dart';
 import '../widgets/shot_list_sheet.dart';
 import '../widgets/athlete_coach_chat.dart';
@@ -174,37 +175,39 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
         _handleFinishedEditExit(context, vm);
       },
       child: Scaffold(
-        appBar: AppBar(
-          title: Text(vm.exercise.name),
+        appBar: GlassHeader(
+          title: Text(vm.exercise.name,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              overflow: TextOverflow.ellipsis),
           actions: [
             // Сброс зума — раньше был только жестом (щипок обратно), а
             // щипок легко "залипал" на максимуме, если пальцы не сводить
             // ровно по той же линии. Кнопка — гарантированный выход
             // независимо от того, как повёл себя жест.
             if (vm.zoom != 1.0 || vm.panX != 0 || vm.panY != 0)
-              IconButton(
-                icon: const Icon(Icons.zoom_out_map),
+              GlassCircleButton(
+                icon: const BoldIcon(Icons.zoom_out_map),
                 tooltip: tr('Сбросить зум'),
-                onPressed: vm.resetZoom,
+                onTap: vm.resetZoom,
               ),
             if (vm.isFinishedAndLocked)
-              IconButton(
-                icon: const Icon(Icons.lock_outline),
+              GlassCircleButton(
+                icon: const BoldIcon(Icons.lock_outline),
                 tooltip: tr('Разблокировать правку завершённой тренировки'),
-                onPressed: () => _confirmUnlockFinished(context, vm),
+                onTap: () => _confirmUnlockFinished(context, vm),
               ),
             if (vm.canEditShots)
-              IconButton(
-                icon: Icon(vm.isEditing ? Icons.remove_red_eye_outlined : Icons.edit_outlined),
+              GlassCircleButton(
+                icon: BoldIcon(vm.isEditing ? Icons.remove_red_eye_outlined : Icons.edit_outlined),
                 tooltip: vm.isEditing ? tr('Просмотр') : tr('Правка'),
-                onPressed: () => _toggleEditMode(vm),
+                onTap: () => _toggleEditMode(vm),
               ),
             if (vm.session.status == SessionStatus.running || vm.session.status == SessionStatus.paused)
               CallCoachButton(db: context.read<AppDataStore>().db),
-            IconButton(
-              icon: const Icon(Icons.grid_view),
+            GlassCircleButton(
+              icon: const BoldIcon(Icons.grid_view),
               tooltip: tr('Страницы'),
-              onPressed: () => _openOverview(context),
+              onTap: () => _openOverview(context),
             ),
           ],
         ),

@@ -1,3 +1,4 @@
+import '../local_ai/local_ai_platform.dart';
 import '../local_ai/local_ai_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -291,7 +292,9 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
           ],
           // Третий вариант — ИИ на самом устройстве (см. lib/local_ai/);
           // доступен всем, не только в режиме разработчика (решение пользователя).
-          ...[
+          // На вебе не поддерживается вовсе (нет файловой системы для
+          // модели) — плитка там вела в тупик, убрана (решение пользователя).
+          if (localAiSupported) ...[
             const SizedBox(height: 12),
             Card(
               child: ListTile(

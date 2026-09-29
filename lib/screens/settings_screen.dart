@@ -17,6 +17,7 @@ import '../i18n/i18n.dart';
 import '../state/app_data_store.dart';
 import '../state/home_tabs_view_model.dart';
 import '../state/personalization_view_model.dart';
+import '../widgets/glass_pill.dart';
 import '../widgets/home_tabs_bar.dart';
 import '../widgets/service_icon_picker.dart';
 import 'ai_settings_screen.dart';
@@ -49,10 +50,12 @@ class SettingsScreen extends StatelessWidget {
         '$serviceTabPrefix${s.id}': HomeTabSpec(icon: iconForService(s.iconName), label: s.name),
     };
 
+    final topInset = MediaQuery.paddingOf(context).top;
     return Scaffold(
-      appBar: AppBar(title: const _HiddenDevModeToggle()),
+      extendBodyBehindAppBar: true,
+      appBar: const GlassHeader(title: _HiddenDevModeToggle()),
       body: ListView(
-        padding: const EdgeInsets.only(bottom: 32),
+        padding: EdgeInsets.fromLTRB(0, topInset + GlassHeader.height, 0, 32),
         children: [
           ListTile(
             leading: const Icon(Icons.palette_outlined),
