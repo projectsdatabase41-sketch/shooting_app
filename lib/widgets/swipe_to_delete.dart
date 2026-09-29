@@ -37,6 +37,12 @@ class SwipeToDelete extends StatelessWidget {
   /// `null` — показывается только один вариант удаления, как раньше.
   final VoidCallback? onConfirmedLocalOnly;
 
+  /// Подпись кнопки [onConfirmedLocalOnly]. По умолчанию «Только с
+  /// телефона» — подходит для тренировок, но не для других сущностей
+  /// с двумя вариантами удаления (например упражнений: «мягко» vs
+  /// «навсегда»).
+  final String? localOnlyLabel;
+
   final Widget child;
 
   const SwipeToDelete({
@@ -49,6 +55,7 @@ class SwipeToDelete extends StatelessWidget {
     this.onConfirmedLocalOnly,
     this.confirmLabel,
     this.cancelLabel,
+    this.localOnlyLabel,
   });
 
   /// Насколько далеко надо провести, чтобы жест засчитался.
@@ -106,12 +113,12 @@ class SwipeToDelete extends StatelessWidget {
               if (onConfirmedLocalOnly != null)
                 TextButton(
                   onPressed: () => Navigator.of(ctx).pop(1),
-                  child: Text(tr('Только с телефона')),
+                  child: Text(localOnlyLabel ?? tr('Только с телефона')),
                 ),
               FilledButton(
                 style: FilledButton.styleFrom(backgroundColor: cs.error),
                 onPressed: () => Navigator.of(ctx).pop(2),
-                child: Text(onConfirmedLocalOnly != null ? tr('И из облака') : confirmLabel ?? tr('Удалить')),
+                child: Text(confirmLabel ?? (onConfirmedLocalOnly != null ? tr('И из облака') : tr('Удалить'))),
               ),
             ],
           ),

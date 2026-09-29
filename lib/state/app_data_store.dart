@@ -217,6 +217,22 @@ class AppDataStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Стирает упражнение физически — в отличие от [deleteExercise] (мягкое
+  /// удаление, `deleted_at`), строку уже нечему вернуть: ни отмене в
+  /// снекбаре, ни «Восстановить всё из облака» (та снимает только
+  /// `deleted_at`/`local_hidden`/`pending_delete`, а здесь строки не
+  /// станет вовсе). Жалоба пользователя: упражнение «невозможно удалить
+  /// совсем» — мягкое удаление он путал с окончательным.
+  ///
+  /// Тренировки по нему НЕ трогаются (внешний ключ на exercises у
+  /// training_sessions есть только в схеме — контроль внешних ключей в
+  /// sqlite выключен), просто перестанут находить имя упражнения.
+  void deleteExerciseForever(String id) {
+    db.db.execute('DELETE FROM exercises WHERE id = ?', [id]);
+    exercises = [for (final e in exercises) if (e.id != id) e];
+    notifyListeners();
+  }
+
   void confirmSessionDeleted(String id) {
     db.db.execute('BEGIN');
     try {

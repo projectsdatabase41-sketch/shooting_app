@@ -63,9 +63,12 @@ class ExercisesScreen extends StatelessWidget {
                   itemKey: ex.id,
                   title: tr('Удалить упражнение?'),
                   message: used == 0
-                      ? tr('«{name}» пропадёт из списка. Тренировок по нему пока нет.', {'name': ex.name})
-                      : tr('«{name}» пропадёт из списка, но {used} {p} останутся в истории — вместе с названием упражнения.', {'name': ex.name, 'used': used, 'p': _sessionsWord(used)}),
-                  onConfirmed: () => _deleteExercise(context, ex),
+                      ? tr('«{name}» будет удалено насовсем — или можно просто скрыть его из списка.', {'name': ex.name})
+                      : tr('«{name}»: {used} {p} останутся в истории. «Скрыть» — можно вернуть кнопкой «Восстановить всё из облака»; «Удалить навсегда» — стирает упражнение без возможности восстановить, тренировки останутся без его названия.', {'name': ex.name, 'used': used, 'p': _sessionsWord(used)}),
+                  confirmLabel: tr('Удалить навсегда'),
+                  localOnlyLabel: tr('Скрыть'),
+                  onConfirmed: () => store.deleteExerciseForever(ex.id),
+                  onConfirmedLocalOnly: () => _deleteExercise(context, ex),
                   child: _ExerciseCard(
                     name: ex.name,
                     faceName: face.name,
