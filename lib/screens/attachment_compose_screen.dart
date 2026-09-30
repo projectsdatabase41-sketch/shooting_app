@@ -38,12 +38,18 @@ class _AttachmentComposeScreenState extends State<AttachmentComposeScreen> {
   }
 
   Future<void> _edit() async {
+    // ТОЛЬКО onImageEditingComplete — редактор сам вызывает onCloseEditor
+    // ВСЛЕД за ним и при сохранении тоже (не только при отмене), так что
+    // если оба обработчика делают Navigator.pop, второй pop схлопывает уже
+    // не редактор (тот и так закрылся первым pop'ом), а этот самый экран
+    // предпросмотра — фото пропадало, будто его и не прикрепляли. Без
+    // onCloseEditor кнопка "назад"/отмена в редакторе падает на его
+    // СОБСТВЕННЫЙ internal Navigator.pop(context) — закрывает ровно себя.
     final edited = await Navigator.of(context).push<Uint8List>(MaterialPageRoute(
       builder: (_) => ProImageEditor.memory(
         _bytes,
         callbacks: ProImageEditorCallbacks(
           onImageEditingComplete: (bytes) async => Navigator.of(context).pop(bytes),
-          onCloseEditor: (editorMode) => Navigator.of(context).maybePop(),
         ),
       ),
     ));
