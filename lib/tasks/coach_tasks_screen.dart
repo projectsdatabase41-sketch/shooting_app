@@ -11,6 +11,7 @@ import '../state/app_data_store.dart';
 import '../widgets/glass_pill.dart';
 import '../widgets/press_3d.dart';
 import '../widgets/raised_3d_button.dart';
+import '../widgets/swipe_to_delete.dart';
 import 'task_ai.dart';
 import 'task_models.dart';
 import 'task_run_screen.dart';
@@ -81,6 +82,23 @@ class _CoachTasksScreenState extends State<CoachTasksScreen> {
     _load();
   }
 
+  /// Снимает задание у ВСЕХ спортсменов группы разом — отправлено сразу
+  /// нескольким, свайп на экране тренера относится ко всей группе, не к
+  /// одной копии. Тот же статус 'removed', что уже понимает
+  /// `TaskPlan.removed` (сортировка в конец, иконка "снято тренером" на
+  /// экране спортсмена) — только раньше его некому было выставить.
+  Future<void> _removeGroup(List<_Copy> copies) async {
+    try {
+      await Future.wait([
+        for (final c in copies)
+          if (c.task.id != null) _service.setStatus(c.athlete, c.task.id!, 'removed'),
+      ]);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+    _load();
+  }
+
   Future<void> _create() async {
     final sent = await Navigator.of(context).push<bool>(MaterialPageRoute(
       builder: (_) => _CoachTaskEditorScreen(service: _service, athletes: _athletes),
@@ -115,21 +133,31 @@ class _CoachTasksScreenState extends State<CoachTasksScreen> {
                                 .compareTo(a.first.task.createdAt ?? DateTime(0)))))
                             Padding(
                               padding: const EdgeInsets.only(bottom: 10),
-                              child: Press3D(
-                                padding: EdgeInsets.zero,
-                                accent: theme.colorScheme.primary,
-                                onTap: () => _openGroup(g),
-                                child: ListTile(
-                                  leading: const Icon(Icons.assignment_outlined),
-                                  title: Text(g.first.task.title),
-                                  subtitle: Text([
-                                    g.map((c) => c.athlete.name).join(', '),
-                                    tr('выполнили: {n} из {m}', {
-                                      'n': g.where((c) => c.task.done).length,
-                                      'm': g.where((c) => !c.task.removed).length,
-                                    }),
-                                  ].join(' · ')),
-                                  trailing: const Icon(Icons.chevron_right),
+                              child: SwipeToDelete(
+                                itemKey: g.first.task.id ?? g.first.task.title,
+                                title: tr('Снять задание?'),
+                                message: tr(
+                                  '«{title}» станет недоступно всем получателям ({names}). Отменить нельзя.',
+                                  {'title': g.first.task.title, 'names': g.map((c) => c.athlete.name).join(', ')},
+                                ),
+                                confirmLabel: tr('Снять'),
+                                onConfirmed: () => _removeGroup(g),
+                                child: Press3D(
+                                  padding: EdgeInsets.zero,
+                                  accent: theme.colorScheme.primary,
+                                  onTap: () => _openGroup(g),
+                                  child: ListTile(
+                                    leading: const Icon(Icons.assignment_outlined),
+                                    title: Text(g.first.task.title),
+                                    subtitle: Text([
+                                      g.map((c) => c.athlete.name).join(', '),
+                                      tr('выполнили: {n} из {m}', {
+                                        'n': g.where((c) => c.task.done).length,
+                                        'm': g.where((c) => !c.task.removed).length,
+                                      }),
+                                    ].join(' · ')),
+                                    trailing: const Icon(Icons.chevron_right),
+                                  ),
                                 ),
                               ),
                             ),
@@ -200,30 +228,58 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
     }
   }
 
-  /// Уточняющие вопросы ИИ — тренер отвечает текстом.
+  /// Уточняющие вопросы ИИ — тренер отвечает текстом, по одному вопросу
+  /// за раз со счётчиком (N/M) и стрелкой назад — жалоба пользователя:
+  /// все вопросы сразу одним списком было толком не прочитать.
   Future<List<({String question, String answer})>?> _askQuestions(List<String> questions) async {
     final ctrls = [for (final _ in questions) TextEditingController()];
+    var index = 0;
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(tr('ИИ уточняет')),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final (i, q) in questions.indexed)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: TextField(
-                      controller: ctrls[i], decoration: InputDecoration(labelText: q), maxLines: 3, minLines: 1),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final last = index == questions.length - 1;
+          return AlertDialog(
+            title: Row(
+              children: [
+                if (index > 0)
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    tooltip: tr('Назад'),
+                    onPressed: () => setDialogState(() => index--),
+                  ),
+                Expanded(
+                  child: Text(
+                    tr('ИИ уточняет ({i}/{n})', {'i': index + 1, 'n': questions.length}),
+                    textAlign: index > 0 ? TextAlign.center : TextAlign.start,
+                  ),
                 ),
+                if (index > 0) const SizedBox(width: 48), // баланс под стрелку слева
+              ],
+            ),
+            content: TextField(
+              key: ValueKey(index),
+              controller: ctrls[index],
+              decoration: InputDecoration(labelText: questions[index]),
+              maxLines: 4,
+              minLines: 1,
+              autofocus: true,
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr('Отмена'))),
+              FilledButton(
+                onPressed: () {
+                  if (last) {
+                    Navigator.of(ctx).pop(true);
+                  } else {
+                    setDialogState(() => index++);
+                  }
+                },
+                child: Text(last ? tr('Ответить') : tr('Далее')),
+              ),
             ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr('Отмена'))),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(tr('Ответить'))),
-        ],
+          );
+        },
       ),
     );
     if (ok != true) return null;

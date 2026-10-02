@@ -21,6 +21,14 @@ class AthleteTaskService {
     return [for (final r in rows) TaskPlan.fromJson((r as Map).cast<String, dynamic>())];
   }
 
+  /// Спортсмен — владелец своей базы, прямой REST без RPC (в отличие от
+  /// `CoachTaskService.setStatus`, которому нужен токен доступа к ЧУЖОЙ
+  /// базе). 'removed' — тот же статус, что ставит тренер: карточка
+  /// остаётся видна (решение из `t.removed` в task_models.dart — "снято
+  /// тренером"/сортировка в конец), просто становится недоступна.
+  Future<void> setStatus(String taskId, String status) =>
+      auth.rest('PATCH', 'tasks?id=eq.$taskId', body: {'status': status});
+
   Future<TaskPlan?> byId(String id) async {
     final rows = (await auth.rest(
             'GET', 'tasks?id=eq.$id&select=*,task_stages(*,task_steps(*)),task_runs(id,started_at,finished_at,status)'))

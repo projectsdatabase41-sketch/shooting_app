@@ -43,8 +43,13 @@ class AppTheme {
   static ThemeData light({Color? background, Color? buttonColor, Color? buttonTextColor}) =>
       _build(_scheme(Brightness.light), background: background, buttonColor: buttonColor, buttonTextColor: buttonTextColor);
 
+  /// Фон по умолчанию — чистый чёрный (#000000), а не `cs.surface`: на
+  /// OLED-экранах чёрный пиксель не светится вообще, экономит заряд
+  /// (запрос пользователя — рабочий фон приложения по умолчанию). Любой
+  /// пресет пользователя (`background`) всё равно переопределяет его.
   static ThemeData dark({Color? background, Color? buttonColor, Color? buttonTextColor}) =>
-      _build(_scheme(Brightness.dark), background: background, buttonColor: buttonColor, buttonTextColor: buttonTextColor);
+      _build(_scheme(Brightness.dark),
+          background: background ?? Colors.black, buttonColor: buttonColor, buttonTextColor: buttonTextColor);
 
   static ColorScheme _scheme(Brightness brightness) {
     final base = ColorScheme.fromSeed(seedColor: _slate, brightness: brightness);
