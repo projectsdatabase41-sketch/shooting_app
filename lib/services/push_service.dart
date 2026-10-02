@@ -3,7 +3,8 @@ import 'dart:typed_data';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
@@ -47,7 +48,8 @@ Future<void> cancelIncomingCallNotification() async {
 
 /// Входящий звонок: открыть экран звонка ([accepted] — уже нажали «Принять»
 /// в уведомлении). Задаёт корень приложения (`main.dart`).
-void Function(Map<String, dynamic> data, {required bool accepted})? incomingCallHandler;
+void Function(Map<String, dynamic> data, {required bool accepted})?
+    incomingCallHandler;
 
 bool _tapHandlingRegistered = false;
 bool _foregroundRegistered = false;
@@ -99,17 +101,23 @@ class PushService {
   /// Notifications и Background Modes → Remote notifications
   /// capability, иначе `requestPermission`/`getToken` не сработают.
   static bool get _supportedPlatform =>
-      kIsWeb || defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS;
+      kIsWeb ||
+      defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS;
 
-  static bool get _isAndroid => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+  static bool get _isAndroid =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
   Future<void> init() async {
-    if (!FirebaseSettings.isConfigured || !_supportedPlatform || !auth.isSignedIn) return;
+    if (!FirebaseSettings.isConfigured ||
+        !_supportedPlatform ||
+        !auth.isSignedIn) return;
     try {
       // init() вызывается из нескольких мест (корень приложения — ради
       // холодного старта по тапу на уведомление, и ChatHomeScreen — после
       // входа в чат), Firebase инициализируется только один раз.
-      if (Firebase.apps.isEmpty) await Firebase.initializeApp(options: _options);
+      if (Firebase.apps.isEmpty)
+        await Firebase.initializeApp(options: _options);
       // Канал с рингтоном/вибрацией — только Android (см. showCallNotification).
       if (_isAndroid) await _initLocalNotifications();
       final messaging = FirebaseMessaging.instance;
@@ -131,12 +139,15 @@ class PushService {
   static Future<String?> deviceToken() async {
     if (!FirebaseSettings.isConfigured || !_supportedPlatform) return null;
     try {
-      if (Firebase.apps.isEmpty) await Firebase.initializeApp(options: _options);
+      if (Firebase.apps.isEmpty)
+        await Firebase.initializeApp(options: _options);
       if (_isAndroid) await _initLocalNotifications();
       final messaging = FirebaseMessaging.instance;
       await messaging.requestPermission();
       await _registerListeners(messaging);
-      return kIsWeb ? await messaging.getToken(vapidKey: FirebaseSettings.webVapidKey) : await messaging.getToken();
+      return kIsWeb
+          ? await messaging.getToken(vapidKey: FirebaseSettings.webVapidKey)
+          : await messaging.getToken();
     } catch (_) {
       return null;
     }
@@ -152,11 +163,13 @@ class PushService {
   }
 
   static void _handleForegroundMessage(RemoteMessage message) {
-    if (message.data['type'] == 'task' && _isAndroid) showTaskNotification(message.data);
+    if (message.data['type'] == 'task' && _isAndroid)
+      showTaskNotification(message.data);
     // На вебе/iOS усиленного канала нет (см. showCallNotification) —
     // пока приложение открыто, новое "Позвать" и так почти сразу
     // покажет опрос (10-20с), отдельно тут его не дублируем.
-    if (_isAndroid && message.data['type'] == 'call') showCallNotification(message.data);
+    if (_isAndroid && message.data['type'] == 'call')
+      showCallNotification(message.data);
     // Приложение открыто — сразу экран входящего звонка, плюс рингтон
     // уведомлением (иначе звонок был бы беззвучным).
     if (message.data['type'] == 'call_in') {
@@ -164,7 +177,8 @@ class PushService {
       incomingCallHandler?.call(message.data, accepted: false);
     }
     if (message.data['type'] == 'msg_delete' && _isAndroid) {
-      _localNotifications.cancel('${message.data['contact_id']}'.hashCode & 0x3fffffff);
+      _localNotifications
+          .cancel('${message.data['contact_id']}'.hashCode & 0x3fffffff);
     }
     if (message.data['type'] == 'call_end') {
       cancelIncomingCallNotification();
@@ -184,9 +198,11 @@ class PushService {
     // Приложение запущено тапом по НАШЕМУ уведомлению (сообщение с фото
     // или «Позвать») — открыть нужный чат.
     if (_isAndroid) {
-      final launch = await _localNotifications.getNotificationAppLaunchDetails();
+      final launch =
+          await _localNotifications.getNotificationAppLaunchDetails();
       final resp = launch?.notificationResponse;
-      if (launch?.didNotificationLaunchApp == true && resp != null) _onNotificationAction(resp);
+      if (launch?.didNotificationLaunchApp == true && resp != null)
+        _onNotificationAction(resp);
     }
     FirebaseMessaging.onMessageOpenedApp.listen(_handleTap);
   }
@@ -220,7 +236,8 @@ class PushService {
       );
     }
     return FirebaseOptions(
-      apiKey: isIOS ? FirebaseSettings.iosApiKey : FirebaseSettings.androidApiKey,
+      apiKey:
+          isIOS ? FirebaseSettings.iosApiKey : FirebaseSettings.androidApiKey,
       appId: isIOS ? FirebaseSettings.iosAppId : FirebaseSettings.androidAppId,
       messagingSenderId: FirebaseSettings.messagingSenderId,
       projectId: FirebaseSettings.projectId,
@@ -258,7 +275,8 @@ class PushService {
   }
 }
 
-final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
+final FlutterLocalNotificationsPlugin _localNotifications =
+    FlutterLocalNotificationsPlugin();
 
 /// Готовит плагин и заводит канал "Позвать" — рингтон устройства
 /// (обычно длиннее и громче стандартного уведомления, ровно то, что
@@ -269,11 +287,13 @@ final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotifica
 /// вручную (нормальное поведение системы, не баг).
 Future<void> _initLocalNotifications() async {
   await _localNotifications.initialize(
-    const InitializationSettings(android: AndroidInitializationSettings('@mipmap/ic_launcher')),
+    const InitializationSettings(
+        android: AndroidInitializationSettings('@mipmap/ic_launcher')),
     onDidReceiveNotificationResponse: _onNotificationAction,
   );
   await _localNotifications
-      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>()
       ?.createNotificationChannel(AndroidNotificationChannel(
         PushService.messageChannelId,
         tr('Сообщения'),
@@ -283,22 +303,26 @@ Future<void> _initLocalNotifications() async {
   final channel = AndroidNotificationChannel(
     PushService.callChannelId,
     tr('Позвать'),
-    description: tr('Вызов от собеседника в чате — длиннее и громче обычного уведомления'),
+    description: tr(
+        'Вызов от собеседника в чате — длиннее и громче обычного уведомления'),
     importance: Importance.max,
     playSound: true,
-    sound: const UriAndroidNotificationSound('content://settings/system/ringtone'),
+    sound:
+        const UriAndroidNotificationSound('content://settings/system/ringtone'),
     enableVibration: true,
     vibrationPattern: _callVibrationPattern,
   );
   await _localNotifications
-      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>()
       ?.createNotificationChannel(channel);
 }
 
 /// Три ощутимых импульса вместо одного короткого — заметнее обычного
 /// уведомления, но не бесконечно (решение пользователя: без зацикливания
 /// "как настоящий звонок", просто громче и дольше).
-final Int64List _callVibrationPattern = Int64List.fromList([0, 800, 400, 800, 400, 800]);
+final Int64List _callVibrationPattern =
+    Int64List.fromList([0, 800, 400, 800, 400, 800]);
 
 void _onNotificationAction(NotificationResponse response) {
   if (response.actionId == 'decline') {
@@ -313,17 +337,19 @@ void _onNotificationAction(NotificationResponse response) {
   }
   if (payload.startsWith('{')) {
     _localNotifications.cancel(PushService._incomingCallNotificationId);
-    if (response.actionId == 'call_decline') return; // звонящий увидит «не отвечает»
+    if (response.actionId == 'call_decline')
+      return; // звонящий увидит «не отвечает»
     try {
       final data = Map<String, dynamic>.from(jsonDecode(payload) as Map);
-      incomingCallHandler?.call(data, accepted: response.actionId == 'call_accept');
+      incomingCallHandler?.call(data,
+          accepted: response.actionId == 'call_accept');
     } catch (_) {}
     return;
   }
-  // Тап по телу уведомления (не по кнопке "Сбросить") — открыть чат со
-  // звонящим, тот же payload-приём, что и у FCM-уведомлений обычных
-  // сообщений (см. PushService._handleTap), но здесь контакт передан
-  // через payload, а не через data сообщения — это ЛОКАЛЬНОЕ
+  // Тап по телу уведомления ИЛИ кнопка "Иду" (не "Сбросить") — открыть
+  // чат со звонящим, тот же payload-приём, что и у FCM-уведомлений
+  // обычных сообщений (см. PushService._handleTap), но здесь контакт
+  // передан через payload, а не через data сообщения — это ЛОКАЛЬНОЕ
   // уведомление, Android/iOS ничего не знают о FCM data при его тапе.
   final contactId = response.payload;
   if (contactId != null && contactId.isNotEmpty) {
@@ -349,7 +375,18 @@ Future<void> showCallNotification(Map<String, dynamic> data) async {
         importance: Importance.max,
         priority: Priority.max,
         category: AndroidNotificationCategory.call,
-        actions: [AndroidNotificationAction('decline', tr('Сбросить'), cancelNotification: true)],
+        // «Иду» — отдельная явная кнопка вместо единственного тапа по
+        // телу уведомления: откликнуться на вызов тренеру стало на один
+        // жест заметнее (решение пользователя, пункт 22 списка правок).
+        // Открывает переписку тем же путём, что и обычный тап — там уже
+        // есть кнопка "Иду" на самом сообщении, отправляющая сигнал
+        // `call_ack` (см. `ChatSyncService.acknowledgeCall`).
+        actions: [
+          AndroidNotificationAction('open', tr('Иду'),
+              showsUserInterface: true, cancelNotification: true),
+          AndroidNotificationAction('decline', tr('Сбросить'),
+              cancelNotification: true),
+        ],
       ),
     ),
     payload: data['contact_id'] as String?,
@@ -365,11 +402,13 @@ Future<void> showMessageNotification(Map<String, dynamic> data) async {
   if (await _isMuted(contactId)) return;
   Uint8List? icon;
   try {
-    final badge = (await rootBundle.load('assets/icon/badge.png')).buffer.asUint8List();
+    final badge =
+        (await rootBundle.load('assets/icon/badge.png')).buffer.asUint8List();
     icon = composeNotificationAvatar(await _contactAvatar(contactId), badge);
   } catch (_) {}
   await _localNotifications.show(
-    contactId.hashCode & 0x3fffffff, // одно уведомление на собеседника, новые его обновляют
+    contactId.hashCode &
+        0x3fffffff, // одно уведомление на собеседника, новые его обновляют
     '${data['title'] ?? 'Сообщение'}',
     '${data['body'] ?? ''}',
     NotificationDetails(
@@ -392,8 +431,12 @@ Future<bool> _isMuted(String contactId) async {
   try {
     final db = await openAppDatabase();
     try {
-      final rows = db.select('SELECT chat_muted_ids FROM project_settings WHERE id = 1');
-      return rows.isNotEmpty && '${rows.first['chat_muted_ids'] ?? ''}'.split(',').contains(contactId);
+      final rows =
+          db.select('SELECT chat_muted_ids FROM project_settings WHERE id = 1');
+      return rows.isNotEmpty &&
+          '${rows.first['chat_muted_ids'] ?? ''}'
+              .split(',')
+              .contains(contactId);
     } finally {
       db.close();
     }
@@ -408,7 +451,8 @@ Future<String?> _contactAvatar(String contactId) async {
   if (contactId.isEmpty) return null;
   final db = await openAppDatabase();
   try {
-    final rows = db.select('SELECT avatar_base64 FROM chat_contacts WHERE id = ?', [contactId]);
+    final rows = db.select(
+        'SELECT avatar_base64 FROM chat_contacts WHERE id = ?', [contactId]);
     return rows.isEmpty ? null : rows.first['avatar_base64'] as String?;
   } finally {
     db.close();
@@ -434,8 +478,10 @@ Future<void> showIncomingCallNotification(Map<String, dynamic> data) async {
         ongoing: true,
         timeoutAfter: 45000,
         actions: [
-          AndroidNotificationAction('call_decline', tr('Отклонить'), cancelNotification: true),
-          AndroidNotificationAction('call_accept', tr('Принять'), showsUserInterface: true, cancelNotification: true),
+          AndroidNotificationAction('call_decline', tr('Отклонить'),
+              cancelNotification: true),
+          AndroidNotificationAction('call_accept', tr('Принять'),
+              showsUserInterface: true, cancelNotification: true),
         ],
       ),
     ),
@@ -469,7 +515,8 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   } else if (type == 'msg_delete') {
     // Сообщение удалили — убрать уведомление с его текстом.
     await _initLocalNotifications();
-    await _localNotifications.cancel('${message.data['contact_id']}'.hashCode & 0x3fffffff);
+    await _localNotifications
+        .cancel('${message.data['contact_id']}'.hashCode & 0x3fffffff);
   } else if (type == 'call_in') {
     await _initLocalNotifications();
     await showIncomingCallNotification(message.data);
@@ -482,8 +529,10 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       tr('Пропущенный звонок'),
       tr('Нажмите, чтобы открыть переписку'),
       NotificationDetails(
-        android: AndroidNotificationDetails(PushService.messageChannelId, tr('Сообщения'),
-            importance: Importance.high, category: AndroidNotificationCategory.missedCall),
+        android: AndroidNotificationDetails(
+            PushService.messageChannelId, tr('Сообщения'),
+            importance: Importance.high,
+            category: AndroidNotificationCategory.missedCall),
       ),
       payload: '${message.data['from']}',
     );
