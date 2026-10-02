@@ -98,20 +98,14 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
     // вариантов меньше (в одной серии нечего сравнивать по сериям).
     final mode = modes.isEmpty ? 0 : _mode % modes.length;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _tiles(context, a, accent),
-        if (modes.isNotEmpty) ...[
-          const SizedBox(height: 24),
-          SectionHeader(
-            title: modes[mode].title,
-            subtitle: modes.length > 1
-                ? tr('{p} · нажмите, чтобы сменить', {'p': modes[mode].subtitle})
-                : modes[mode].subtitle,
-          ),
-          const SizedBox(height: 12),
-          GestureDetector(
+    final blocks = <Widget>[
+      if (modes.isNotEmpty)
+        _block(
+          title: modes[mode].title,
+          subtitle: modes.length > 1
+              ? tr('{p} · нажмите, чтобы сменить', {'p': modes[mode].subtitle})
+              : modes[mode].subtitle,
+          child: GestureDetector(
             onTap: modes.length > 1 ? () => setState(() => _mode = mode + 1) : null,
             child: _chartCard(
               height: modes[mode].verticalXLabels ? 220 : 190,
@@ -130,17 +124,14 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
               ),
             ),
           ),
-        ],
-        const SizedBox(height: 24),
-        SectionHeader(
-          title: a.allInTen ? tr('Распределение внутри десятки') : tr('Распределение по габаритам'),
-          // У разбивки по десятым подписи нет намеренно: заголовок
-          // «Распределение внутри десятки» и сами подписи 10.9…10.0
-          // говорят всё сами.
-          subtitle: '',
         ),
-        const SizedBox(height: 12),
-        _chartCard(
+      _block(
+        // У разбивки по десятым подписи нет намеренно: заголовок
+        // «Распределение внутри десятки» и сами подписи 10.9…10.0
+        // говорят всё сами.
+        title: a.allInTen ? tr('Распределение внутри десятки') : tr('Распределение по габаритам'),
+        subtitle: '',
+        child: _chartCard(
           height: _ringChartHeight(a),
           child: CustomPaint(
             painter: RingDistributionPainter(
@@ -152,17 +143,14 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
             child: const SizedBox.expand(),
           ),
         ),
-        if (mixedFacesNote != null) ...[
-          const SizedBox(height: 16),
-          _noteCard(context, mixedFacesNote!),
-        ] else ...[
-          const SizedBox(height: 24),
-          SectionHeader(
-            title: tr('СТП и кучность'),
-            subtitle: _groupSubtitle(a),
-          ),
-          const SizedBox(height: 12),
-          _chartCard(
+      ),
+      if (mixedFacesNote != null)
+        _noteCard(context, mixedFacesNote!)
+      else
+        _block(
+          title: tr('СТП и кучность'),
+          subtitle: _groupSubtitle(a),
+          child: _chartCard(
             height: 240,
             child: Row(
               children: [
@@ -192,15 +180,12 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
               ],
             ),
           ),
-        ],
-        if (showSeries && series.length > 1) ...[
-          const SizedBox(height: 24),
-          SectionHeader(
-            title: tr('Средний результат по сериям'),
-            subtitle: tr('Видно, где результат садится к концу'),
-          ),
-          const SizedBox(height: 12),
-          _chartCard(
+        ),
+      if (showSeries && series.length > 1)
+        _block(
+          title: tr('Средний результат по сериям'),
+          subtitle: tr('Видно, где результат садится к концу'),
+          child: _chartCard(
             height: 180,
             child: CustomPaint(
               painter: SeriesBarsPainter(
@@ -211,7 +196,48 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
               child: const SizedBox.expand(),
             ),
           ),
-        ],
+        ),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _tiles(context, a, accent),
+        const SizedBox(height: 24),
+        // Горизонтальная ориентация — карточки в два столбца вместо
+        // одной длинной ленты (решение пользователя): на развёрнутом
+        // экране лента графиков уходила далеко за пределы видимого.
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final wide = MediaQuery.orientationOf(context) == Orientation.landscape && constraints.maxWidth > 600;
+            if (!wide) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [for (final b in blocks) Padding(padding: const EdgeInsets.only(bottom: 24), child: b)],
+              );
+            }
+            const gap = 16.0;
+            final colWidth = (constraints.maxWidth - gap) / 2;
+            return Wrap(
+              spacing: gap,
+              runSpacing: gap,
+              children: [for (final b in blocks) SizedBox(width: colWidth, child: b)],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  /// Заголовок + подпись + карточка одним блоком — единица раскладки:
+  /// в альбомной ориентации такие блоки идут по два в ряд (см. build()).
+  Widget _block({required String title, required String subtitle, required Widget child}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionHeader(title: title, subtitle: subtitle),
+        const SizedBox(height: 12),
+        child,
       ],
     );
   }
