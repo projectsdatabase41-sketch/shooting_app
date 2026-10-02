@@ -7,6 +7,7 @@ import '../models/comment.dart';
 import '../models/target_face.dart';
 import '../models/training_session.dart';
 import '../models/workspace_page.dart';
+import '../services/display_rate.dart';
 import '../state/app_data_store.dart';
 import '../state/target_view_model.dart';
 import '../state/workspace_view_model.dart';
@@ -87,7 +88,11 @@ class TaskTargetPanel extends StatelessWidget {
   final Exercise exercise;
   final ValueChanged<TrainingSession> onChanged;
 
-  const TaskTargetPanel({super.key, required this.session, required this.exercise, required this.onChanged});
+  const TaskTargetPanel(
+      {super.key,
+      required this.session,
+      required this.exercise,
+      required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -120,9 +125,17 @@ class _WorkspaceBody extends StatefulWidget {
 class _WorkspaceBodyState extends State<_WorkspaceBody> {
   PageController? _pages;
   int _current = 0;
+  late final _db = context.read<AppDataStore>().db;
+
+  @override
+  void initState() {
+    super.initState();
+    DisplayRate.setActive(_db, true);
+  }
 
   @override
   void dispose() {
+    DisplayRate.setActive(_db, false);
     _pages?.dispose();
     super.dispose();
   }
@@ -165,7 +178,8 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
       // Если тренировка была завершена, но пользователь её разблокировал
       // и что-то поправил, выход дополнительно спрашивает — применить
       // правки или вернуть как было (решение пользователя, часть 12).
-      canPop: safeCurrent == workspace.targetIndex && !vm.hasUnsavedFinishedEdits,
+      canPop:
+          safeCurrent == workspace.targetIndex && !vm.hasUnsavedFinishedEdits,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
         if (safeCurrent != workspace.targetIndex) {
@@ -177,7 +191,10 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
       child: Scaffold(
         appBar: GlassHeader(
           title: Text(vm.exercise.name,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w600),
               overflow: TextOverflow.ellipsis),
           actions: [
             // Сброс зума — раньше был только жестом (щипок обратно), а
@@ -198,11 +215,14 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
               ),
             if (vm.canEditShots)
               GlassCircleButton(
-                icon: BoldIcon(vm.isEditing ? Icons.remove_red_eye_outlined : Icons.edit_outlined),
+                icon: BoldIcon(vm.isEditing
+                    ? Icons.remove_red_eye_outlined
+                    : Icons.edit_outlined),
                 tooltip: vm.isEditing ? tr('Просмотр') : tr('Правка'),
                 onTap: () => _toggleEditMode(vm),
               ),
-            if (vm.session.status == SessionStatus.running || vm.session.status == SessionStatus.paused)
+            if (vm.session.status == SessionStatus.running ||
+                vm.session.status == SessionStatus.paused)
               CallCoachButton(db: context.read<AppDataStore>().db),
             GlassCircleButton(
               icon: const BoldIcon(Icons.grid_view),
@@ -237,7 +257,10 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
             // Точки НАД нижним краем: у самой кромки экрана
             // вертикальный свайп перехватывает Android своим жестом
             // «назад/домой», и обзор почти не открывался.
-            _PageDots(count: pages.length, current: safeCurrent, onOverview: () => _openOverview(context)),
+            _PageDots(
+                count: pages.length,
+                current: safeCurrent,
+                onOverview: () => _openOverview(context)),
           ],
         ),
       ),
@@ -270,13 +293,15 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
       case WorkspacePage.coach:
         // Переписка с тренером на тренировке + «Позвать тренера» (в
         // мессенджере этой кнопки нет — решение пользователя).
-        final training = vm.session.status == SessionStatus.running || vm.session.status == SessionStatus.paused;
+        final training = vm.session.status == SessionStatus.running ||
+            vm.session.status == SessionStatus.paused;
         return Column(
           children: [
             if (training)
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                child: CallCoachButton(db: context.read<AppDataStore>().db, large: true),
+                child: CallCoachButton(
+                    db: context.read<AppDataStore>().db, large: true),
               ),
             // Отдельный канал с тренером (не мессенджер и не комментарии к тренировке).
             const Expanded(child: AthleteCoachChat()),
@@ -295,7 +320,8 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
     }
   }
 
-  Future<void> _confirmUnlockFinished(BuildContext context, TargetViewModel vm) async {
+  Future<void> _confirmUnlockFinished(
+      BuildContext context, TargetViewModel vm) async {
     final sure = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -304,8 +330,12 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
           tr('Тренировка уже завершена. Можно поправить выстрелы задним числом — при выходе с экрана будет ещё раз спрошено, применить изменения или вернуть как было.'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr('Отмена'))),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(tr('Разблокировать'))),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text(tr('Отмена'))),
+          FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text(tr('Разблокировать'))),
         ],
       ),
     );
@@ -314,7 +344,8 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
 
   /// Выход с экрана мишени, когда завершённая тренировка была
   /// разблокирована и в ней что-то поменяли (часть 12 списка).
-  Future<void> _handleFinishedEditExit(BuildContext context, TargetViewModel vm) async {
+  Future<void> _handleFinishedEditExit(
+      BuildContext context, TargetViewModel vm) async {
     final keep = await confirmFinishedEditExit(context);
     // null — диалог закрыли, не выбрав ничего (тап мимо/системное
     // "назад" внутри диалога): остаёмся на экране, ничего не решаем.
@@ -353,7 +384,8 @@ class _PageDots extends StatelessWidget {
   final int current;
   final VoidCallback onOverview;
 
-  const _PageDots({required this.count, required this.current, required this.onOverview});
+  const _PageDots(
+      {required this.count, required this.current, required this.onOverview});
 
   @override
   Widget build(BuildContext context) {
@@ -378,7 +410,9 @@ class _PageDots extends StatelessWidget {
                   height: 6,
                   margin: const EdgeInsets.symmetric(horizontal: 3),
                   decoration: BoxDecoration(
-                    color: i == current ? cs.primary : cs.onSurfaceVariant.withValues(alpha: 0.35),
+                    color: i == current
+                        ? cs.primary
+                        : cs.onSurfaceVariant.withValues(alpha: 0.35),
                     borderRadius: BorderRadius.circular(3),
                   ),
                 ),
@@ -428,7 +462,8 @@ class _WorkspaceOverview extends StatelessWidget {
                     child: ListTile(
                       leading: Icon(_iconFor(page)),
                       title: Text(page.title),
-                      subtitle: workspace.isHidden(page) ? Text(tr('скрыта')) : null,
+                      subtitle:
+                          workspace.isHidden(page) ? Text(tr('скрыта')) : null,
                       onTap: workspace.isHidden(page)
                           ? null
                           : () {
@@ -519,42 +554,51 @@ class _StatisticsPageState extends State<_StatisticsPage> {
     // Пристрелка в разбор не идёт — только зачётные выстрелы.
     final all = widget.session.countingShots;
     final seriesNos = all.map((s) => s.seriesNo).toSet().toList()..sort();
-    final shots = _seriesNo == null ? all : all.where((s) => s.seriesNo == _seriesNo).toList();
+    final shots = _seriesNo == null
+        ? all
+        : all.where((s) => s.seriesNo == _seriesNo).toList();
 
     return ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-        children: [
-          Text(widget.exerciseName, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 12),
-          if (seriesNos.length > 1)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: DropdownButtonFormField<int>(
-                initialValue: seriesNos.contains(_seriesNo) ? _seriesNo : null,
-                decoration: InputDecoration(labelText: tr('Серия')),
-                items: [
-                  DropdownMenuItem<int>(value: null, child: Text(tr('Все серии'))),
-                  for (final n in seriesNos) DropdownMenuItem(value: n, child: Text(tr('Серия {n}', {'n': n}))),
-                ],
-                onChanged: (v) => setState(() => _seriesNo = v),
-              ),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      children: [
+        Text(widget.exerciseName,
+            style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 12),
+        if (seriesNos.length > 1)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: DropdownButtonFormField<int>(
+              initialValue: seriesNos.contains(_seriesNo) ? _seriesNo : null,
+              decoration: InputDecoration(labelText: tr('Серия')),
+              items: [
+                DropdownMenuItem<int>(
+                    value: null, child: Text(tr('Все серии'))),
+                for (final n in seriesNos)
+                  DropdownMenuItem(
+                      value: n, child: Text(tr('Серия {n}', {'n': n}))),
+              ],
+              onChanged: (v) => setState(() => _seriesNo = v),
             ),
-          AnalyticsPanel(
-            shots: shots,
-            face: widget.face,
-            showSeries: _seriesNo == null,
-            dynamics: shots.isEmpty
-                ? null
-                : [
-                    AnalyticsDynamics(
-                      title: _seriesNo == null ? tr('Динамика выстрелов') : tr('Динамика серии {seriesNo}', {'seriesNo': _seriesNo}),
-                      subtitle: '',
-                      points: shots,
-                      maxY: 10.9,
-                    ),
-                  ],
           ),
-        ],
+        AnalyticsPanel(
+          shots: shots,
+          face: widget.face,
+          showSeries: _seriesNo == null,
+          dynamics: shots.isEmpty
+              ? null
+              : [
+                  AnalyticsDynamics(
+                    title: _seriesNo == null
+                        ? tr('Динамика выстрелов')
+                        : tr('Динамика серии {seriesNo}',
+                            {'seriesNo': _seriesNo}),
+                    subtitle: '',
+                    points: shots,
+                    maxY: 10.9,
+                  ),
+                ],
+        ),
+      ],
     );
   }
 }
@@ -580,9 +624,16 @@ class _TrainingControlsBar extends StatelessWidget {
               children: [
                 _buildActionButton(context, vm, status),
                 const SizedBox(width: 12),
-                Text(tr('Общее: {p}', {'p': _fmt(vm.elapsed)}), style: const TextStyle(fontSize: 12)),
+                Text(tr('Общее: {p}', {'p': _fmt(vm.elapsed)}),
+                    style: const TextStyle(fontSize: 12)),
                 const SizedBox(width: 12),
-                Text(tr('С посл. выстрела: {p}', {'p': vm.sinceLastShot == null ? '—' : _fmt(vm.sinceLastShot!)}), style: const TextStyle(fontSize: 12)),
+                Text(
+                    tr('С посл. выстрела: {p}', {
+                      'p': vm.sinceLastShot == null
+                          ? '—'
+                          : _fmt(vm.sinceLastShot!)
+                    }),
+                    style: const TextStyle(fontSize: 12)),
               ],
             ),
             const _CurrentSeriesLine(),
@@ -592,25 +643,47 @@ class _TrainingControlsBar extends StatelessWidget {
     );
   }
 
-  Widget _buildActionButton(BuildContext context, TargetViewModel vm, SessionStatus status) {
+  Widget _buildActionButton(
+      BuildContext context, TargetViewModel vm, SessionStatus status) {
     final cs = Theme.of(context).colorScheme;
     switch (status) {
       case SessionStatus.notStarted:
-        return Raised3DButton(dense: true, label: tr('Начать'), baseColor: cs.primary, onTap: vm.start);
+        return Raised3DButton(
+            dense: true,
+            label: tr('Начать'),
+            baseColor: cs.primary,
+            onTap: vm.start);
       case SessionStatus.running:
         return Row(mainAxisSize: MainAxisSize.min, children: [
-          Raised3DButton(dense: true, label: tr('Пауза'), baseColor: cs.secondary, onTap: vm.pause),
+          Raised3DButton(
+              dense: true,
+              label: tr('Пауза'),
+              baseColor: cs.secondary,
+              onTap: vm.pause),
           const SizedBox(width: 8),
-          Raised3DButton(dense: true, label: tr('Завершить'), baseColor: cs.error, onTap: vm.finish),
+          Raised3DButton(
+              dense: true,
+              label: tr('Завершить'),
+              baseColor: cs.error,
+              onTap: vm.finish),
         ]);
       case SessionStatus.paused:
         return Row(mainAxisSize: MainAxisSize.min, children: [
-          Raised3DButton(dense: true, label: tr('Продолжить'), baseColor: cs.secondary, onTap: vm.resume),
+          Raised3DButton(
+              dense: true,
+              label: tr('Продолжить'),
+              baseColor: cs.secondary,
+              onTap: vm.resume),
           const SizedBox(width: 8),
-          Raised3DButton(dense: true, label: tr('Завершить'), baseColor: cs.error, onTap: vm.finish),
+          Raised3DButton(
+              dense: true,
+              label: tr('Завершить'),
+              baseColor: cs.error,
+              onTap: vm.finish),
         ]);
       case SessionStatus.finished:
-        return Text(tr('Завершена'), style: const TextStyle(fontWeight: FontWeight.bold));
+        return Text(tr('Завершена'),
+            style: const TextStyle(fontWeight: FontWeight.bold));
     }
   }
 
@@ -652,10 +725,12 @@ class _CurrentSeriesLine extends StatelessWidget {
       } else {
         final m = left.inMinutes.remainder(60).toString().padLeft(2, '0');
         final s = left.inSeconds.remainder(60).toString().padLeft(2, '0');
-        parts.add(tr('осталось {p}{m}:{s}', {'p': left.inHours > 0 ? '${left.inHours}:' : '', 'm': m, 's': s}));
+        parts.add(tr('осталось {p}{m}:{s}',
+            {'p': left.inHours > 0 ? '${left.inHours}:' : '', 'm': m, 's': s}));
       }
     } else if (spec.shotCount != null) {
-      parts.add(tr('выстрел {p} из {shotCount}', {'p': vm.shotsInCurrentSeries + 1, 'shotCount': spec.shotCount}));
+      parts.add(tr('выстрел {p} из {shotCount}',
+          {'p': vm.shotsInCurrentSeries + 1, 'shotCount': spec.shotCount}));
     }
     if (!spec.counts) parts.add(tr('без зачёта'));
 
@@ -664,7 +739,8 @@ class _CurrentSeriesLine extends StatelessWidget {
       child: Row(
         children: [
           if (expired) ...[
-            Icon(Icons.timer_off_outlined, size: 14, color: theme.colorScheme.error),
+            Icon(Icons.timer_off_outlined,
+                size: 14, color: theme.colorScheme.error),
             const SizedBox(width: 4),
           ],
           Expanded(
@@ -734,7 +810,8 @@ class _EditActionBar extends StatelessWidget {
                     icon: Icons.comment_outlined,
                     label: tr('Заметка'),
                     baseColor: cs.secondary,
-                    onTap: () => CommentsThreadSheet.showForShot(context, existingShot.id),
+                    onTap: () => CommentsThreadSheet.showForShot(
+                        context, existingShot.id),
                   ),
                   const SizedBox(width: 12),
                   Raised3DButton(
@@ -796,11 +873,13 @@ class _ShotActionBarState extends State<_ShotActionBar> {
     setState(() => _scanning = true);
     try {
       final knownHolesMm = [
-        for (final s in [...vm.session.shots, ...vm.session.trash]) PixelPoint(s.xMm, s.yMm),
+        for (final s in [...vm.session.shots, ...vm.session.trash])
+          PixelPoint(s.xMm, s.yMm),
       ];
       final points = await Navigator.of(context).push<List<PixelPoint>>(
         MaterialPageRoute(
-          builder: (_) => PhotoScanScreen(face: vm.face, knownHolesMm: knownHolesMm),
+          builder: (_) =>
+              PhotoScanScreen(face: vm.face, knownHolesMm: knownHolesMm),
         ),
       );
       if (points == null || points.isEmpty || !context.mounted) return;

@@ -1,5 +1,6 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'logic/ai_context.dart';
@@ -14,6 +15,7 @@ import 'services/chat_sync_service.dart';
 import 'services/firebase_settings.dart';
 import 'services/knowledge_service.dart';
 import 'services/local_db_service.dart';
+import 'services/display_rate.dart';
 import 'services/push_service.dart';
 import 'services/remote_config.dart';
 import 'local_ai/local_ai_platform.dart';
@@ -44,7 +46,8 @@ Future<void> main() async {
   // сообщения, поэтому здесь, до runApp (см. push_service.dart).
   if (FirebaseSettings.isConfigured &&
       !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS)) {
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS)) {
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   }
   final db = LocalDbService();
@@ -87,9 +90,12 @@ class _DbOpenFailedApp extends StatelessWidget {
                 children: [
                   const Icon(Icons.error_outline, size: 48),
                   const SizedBox(height: 16),
-                  Text(tr('Не удалось открыть базу данных'), textAlign: TextAlign.center),
+                  Text(tr('Не удалось открыть базу данных'),
+                      textAlign: TextAlign.center),
                   const SizedBox(height: 8),
-                  Text('$error', textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall),
+                  Text('$error',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall),
                   const SizedBox(height: 16),
                   Text(
                     tr('Попробуйте перезагрузить страницу. Если не поможет — очистите данные сайта в настройках браузера.'),
@@ -125,7 +131,6 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
   /// объект обязан жить дольше экрана — то есть здесь, в корне.
   /// Хранится только в памяти: закрыл приложение — переписка исчезла.
   late final AiChatViewModel _aiChat;
-
 
   String? _appliedLocale;
 
@@ -163,6 +168,7 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
       final c = CallSession.current;
       if (c != null && c.callId == callId) c.cancelledByCaller();
     };
+    DisplayRate.setActive(widget.db, false);
     final chatAuth = ChatAuthService(widget.db);
     if (chatAuth.isSignedIn) PushService(chatAuth).init();
 
@@ -181,7 +187,8 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
       contextBuilder: () => AiContext(
         scope: AiScope.general,
         allSessions: _store.sessions,
-        exerciseNameOf: (s) => _store.exerciseFor(s)?.label ?? tr('без упражнения'),
+        exerciseNameOf: (s) =>
+            _store.exerciseFor(s)?.label ?? tr('без упражнения'),
       ),
     );
   }
@@ -206,9 +213,14 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
     if (nav == null || !auth.isSignedIn) return;
     final busy = CallSession.current;
     if (busy != null) {
-      if (busy.callId == data['call_id']) return; // тот же звонок (push + уведомление)
+      if (busy.callId == data['call_id'])
+        return; // тот же звонок (push + уведомление)
       // Уже разговариваем — второму звонящему «занято».
-      CallSession.incoming(auth, callId: '${data['call_id']}', peerId: '${data['from']}', peerName: '', video: false)
+      CallSession.incoming(auth,
+              callId: '${data['call_id']}',
+              peerId: '${data['from']}',
+              peerName: '',
+              video: false)
           .rejectBusy();
       return;
     }
@@ -235,7 +247,8 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
     final nav = navigatorKey.currentState;
     if (nav == null) return;
     if (_store.workMode == WorkMode.coach) {
-      nav.push(MaterialPageRoute(builder: (_) => CoachTasksScreen(openTaskId: taskId)));
+      nav.push(MaterialPageRoute(
+          builder: (_) => CoachTasksScreen(openTaskId: taskId)));
     } else {
       final ctx = navigatorKey.currentContext;
       if (ctx != null) await openAthleteTask(ctx, taskId);
@@ -276,7 +289,12 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
     final contact = repo.contactById(target.contactId!);
     if (contact == null) return;
     nav.push(MaterialPageRoute(
-      builder: (_) => ChatThreadScreen(contact: contact, auth: auth, repo: repo, sync: sync, prefs: ChatPreferences(widget.db)),
+      builder: (_) => ChatThreadScreen(
+          contact: contact,
+          auth: auth,
+          repo: repo,
+          sync: sync,
+          prefs: ChatPreferences(widget.db)),
     ));
   }
 
@@ -301,7 +319,8 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<AppDataStore>.value(value: _store),
-        ChangeNotifierProvider<PersonalizationViewModel>.value(value: _personalization),
+        ChangeNotifierProvider<PersonalizationViewModel>.value(
+            value: _personalization),
         ChangeNotifierProvider<AiChatViewModel>.value(value: _aiChat),
       ],
       // Selector, а не Consumer: PersonalizationViewModel уведомляет
@@ -311,37 +330,56 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
       // светлой/тёмной темы и цвета ПРИЛОЖЕНИЯ (фон/кнопки, отдельные от
       // цветов мишени — см. `AppTheme`), которые пользователь тоже может
       // поменять.
-      child: Selector<PersonalizationViewModel, (ThemeMode, (Color?, Color?, Color?), (Color?, Color?, Color?))>(
+      child: Selector<PersonalizationViewModel,
+          (ThemeMode, (Color?, Color?, Color?), (Color?, Color?, Color?))>(
         selector: (_, vm) => (
           vm.themeMode,
-          (vm.appBackgroundFor(Brightness.light), vm.appButtonFor(Brightness.light), vm.appButtonTextFor(Brightness.light)),
-          (vm.appBackgroundFor(Brightness.dark), vm.appButtonFor(Brightness.dark), vm.appButtonTextFor(Brightness.dark)),
+          (
+            vm.appBackgroundFor(Brightness.light),
+            vm.appButtonFor(Brightness.light),
+            vm.appButtonTextFor(Brightness.light)
+          ),
+          (
+            vm.appBackgroundFor(Brightness.dark),
+            vm.appButtonFor(Brightness.dark),
+            vm.appButtonTextFor(Brightness.dark)
+          ),
         ),
         builder: (context, data, _) {
-          final (themeMode, (lightBg, lightButton, lightText), (darkBg, darkButton, darkText)) = data;
+          final (
+            themeMode,
+            (lightBg, lightButton, lightText),
+            (darkBg, darkButton, darkText)
+          ) = data;
           return MaterialApp(
-          key: ValueKey(I18n.code),
-          navigatorKey: navigatorKey,
-          title: 'Pusl',
-          debugShowCheckedModeBanner: false,
-          theme: AppTheme.light(background: lightBg, buttonColor: lightButton, buttonTextColor: lightText),
-          darkTheme: AppTheme.dark(background: darkBg, buttonColor: darkButton, buttonTextColor: darkText),
-          themeMode: themeMode,
-          // null — системный язык устройства (по умолчанию). Сам текст
-          // экранов при этом не переводится — см. комментарий у
-          // `PersonalizationViewModel.locale`.
-          locale: _personalization.locale,
-          // Личные цвета мишени — отдельная персонализация (часть A), НЕ
-          // связана с этой темой (раздел 9 ТЗ): стрелок подбирает цвета
-          // мишени под свою видимость, а не под оформление приложения.
-          //
-          // Стартуем СРАЗУ со списка тренировок, а не с экрана
-          // подключения. Облако не обязательно: приложение полностью
-          // работает локально, и требовать вход при каждом запуске ради
-          // необязательной возможности — значит запирать дверь, за
-          // которой ничего нет. Подключение к базе живёт в настройках.
-          home: const HomeShell(),
-        );
+            key: ValueKey(I18n.code),
+            navigatorKey: navigatorKey,
+            title: 'Pusl',
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light(
+                background: lightBg,
+                buttonColor: lightButton,
+                buttonTextColor: lightText),
+            darkTheme: AppTheme.dark(
+                background: darkBg,
+                buttonColor: darkButton,
+                buttonTextColor: darkText),
+            themeMode: themeMode,
+            // null — системный язык устройства (по умолчанию). Сам текст
+            // экранов при этом не переводится — см. комментарий у
+            // `PersonalizationViewModel.locale`.
+            locale: _personalization.locale,
+            // Личные цвета мишени — отдельная персонализация (часть A), НЕ
+            // связана с этой темой (раздел 9 ТЗ): стрелок подбирает цвета
+            // мишени под свою видимость, а не под оформление приложения.
+            //
+            // Стартуем СРАЗУ со списка тренировок, а не с экрана
+            // подключения. Облако не обязательно: приложение полностью
+            // работает локально, и требовать вход при каждом запуске ради
+            // необязательной возможности — значит запирать дверь, за
+            // которой ничего нет. Подключение к базе живёт в настройках.
+            home: const HomeShell(),
+          );
         },
       ),
     );

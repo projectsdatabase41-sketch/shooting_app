@@ -1,8 +1,10 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData, rootBundle;
+import 'package:flutter/services.dart'
+    show Clipboard, ClipboardData, rootBundle;
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -11,6 +13,7 @@ import '../models/home_tab_specs.dart';
 import '../services/ai_service.dart';
 import '../services/ai_settings.dart';
 import '../services/custom_services_repository.dart';
+import '../services/display_rate.dart';
 import '../services/app_update_service.dart';
 import '../services/knowledge_column_discovery.dart';
 import '../services/supabase_auth_service.dart';
@@ -40,7 +43,8 @@ class SettingsScreen extends StatelessWidget {
   final HomeTabsViewModel homeTabs;
   final CustomServicesRepository services;
 
-  const SettingsScreen({super.key, required this.homeTabs, required this.services});
+  const SettingsScreen(
+      {super.key, required this.homeTabs, required this.services});
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +52,8 @@ class SettingsScreen extends StatelessWidget {
     final specs = <String, HomeTabSpec>{
       ...homeTabSpecs,
       for (final s in services.list())
-        '$serviceTabPrefix${s.id}': HomeTabSpec(icon: iconForService(s.iconName), label: s.name),
+        '$serviceTabPrefix${s.id}':
+            HomeTabSpec(icon: iconForService(s.iconName), label: s.name),
     };
 
     final topInset = MediaQuery.paddingOf(context).top;
@@ -64,7 +69,8 @@ class SettingsScreen extends StatelessWidget {
             subtitle: Text(tr('Язык, цвета и тема интерфейса')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const SettingsAppearanceScreen()),
+              MaterialPageRoute(
+                  builder: (_) => const SettingsAppearanceScreen()),
             ),
           ),
           ListTile(
@@ -88,19 +94,24 @@ class SettingsScreen extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.dashboard_customize_outlined),
             title: Text(tr('Рабочие пространства')),
-            subtitle: Text(tr('Какие вкладки показывать на главном экране и в каком порядке')),
+            subtitle: Text(tr(
+                'Какие вкладки показывать на главном экране и в каком порядке')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => SettingsHomeTabsScreen(specs: specs, tabs: homeTabs)),
+              MaterialPageRoute(
+                  builder: (_) =>
+                      SettingsHomeTabsScreen(specs: specs, tabs: homeTabs)),
             ),
           ),
           ListTile(
             leading: const Icon(Icons.extension_outlined),
             title: Text(tr('Сервисы')),
-            subtitle: Text(tr('Google Диск, Supabase, заметки и другие свои плитки')),
+            subtitle:
+                Text(tr('Google Диск, Supabase, заметки и другие свои плитки')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => SettingsServicesScreen(repo: services)),
+              MaterialPageRoute(
+                  builder: (_) => SettingsServicesScreen(repo: services)),
             ),
           ),
           const Divider(height: 24),
@@ -114,7 +125,8 @@ class SettingsScreen extends StatelessWidget {
             title: Text(tr('Режим тренера')),
             subtitle: Text(
               store.workMode == WorkMode.coach
-                  ? tr('Тренер — свои тренировки не ведёте, только дневники подключённых спортсменов')
+                  ? tr(
+                      'Тренер — свои тренировки не ведёте, только дневники подключённых спортсменов')
                   : tr('Спортсмен — обычный режим'),
             ),
             value: store.workMode == WorkMode.coach,
@@ -136,6 +148,7 @@ class SettingsScreen extends StatelessWidget {
               Navigator.of(context).popUntil((r) => r.isFirst);
             },
           ),
+          const _AdaptiveFpsTile(),
           const _UpdateTile(),
           const Divider(height: 24),
           // Учётная запись — в самом низу, как просил пользователь:
@@ -144,6 +157,35 @@ class SettingsScreen extends StatelessWidget {
           const _AccountTile(),
         ],
       ),
+    );
+  }
+}
+
+/// Экономия заряда: ~60 Гц вне тренировки, максимум — на экране
+/// мишени (только Android — на остальных платформах плитки нет).
+class _AdaptiveFpsTile extends StatefulWidget {
+  const _AdaptiveFpsTile();
+
+  @override
+  State<_AdaptiveFpsTile> createState() => _AdaptiveFpsTileState();
+}
+
+class _AdaptiveFpsTileState extends State<_AdaptiveFpsTile> {
+  @override
+  Widget build(BuildContext context) {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android)
+      return const SizedBox.shrink();
+    final db = context.read<AppDataStore>().db;
+    return SwitchListTile(
+      secondary: const Icon(Icons.battery_saver_outlined),
+      title: Text(tr('Экономия заряда')),
+      subtitle: Text(tr('Частота экрана ~60 Гц везде, кроме тренировки')),
+      value: DisplayRate.isEnabled(db),
+      onChanged: (v) {
+        DisplayRate.setEnabled(db, v);
+        if (v) DisplayRate.setActive(db, false);
+        setState(() {});
+      },
     );
   }
 }
@@ -228,8 +270,12 @@ class _UpdateTileState extends State<_UpdateTile> {
           '«Синхронизировать сейчас» в этом разделе, чтобы данные точно были в облаке.',
         )),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr('Отмена'))),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(tr('Обновить'))),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text(tr('Отмена'))),
+          FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text(tr('Обновить'))),
         ],
       ),
     );
@@ -267,7 +313,9 @@ class _UpdateTileState extends State<_UpdateTile> {
         return ListTile(
           leading: const Icon(Icons.info_outline),
           title: Text(tr('Версия сайта')),
-          subtitle: Text(built == null ? AppUpdateService.buildTime : DateFormat('dd.MM.yyyy HH:mm').format(built)),
+          subtitle: Text(built == null
+              ? AppUpdateService.buildTime
+              : DateFormat('dd.MM.yyyy HH:mm').format(built)),
         );
       }
       return const SizedBox.shrink();
@@ -276,26 +324,36 @@ class _UpdateTileState extends State<_UpdateTile> {
       _UpdateStage.idle || _UpdateStage.upToDate => ListTile(
           leading: const Icon(Icons.system_update_outlined),
           title: Text(tr('Проверить обновления')),
-          subtitle: _stage == _UpdateStage.upToDate ? Text(tr('У вас последняя версия')) : null,
+          subtitle: _stage == _UpdateStage.upToDate
+              ? Text(tr('У вас последняя версия'))
+              : null,
           onTap: _check,
         ),
       _UpdateStage.checking => ListTile(
-          leading: const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
+          leading: const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2)),
           title: Text(tr('Проверяю…')),
         ),
       _UpdateStage.available => ListTile(
-          leading: const Icon(Icons.system_update_outlined, color: Colors.orange),
+          leading:
+              const Icon(Icons.system_update_outlined, color: Colors.orange),
           title: Text(tr('Доступно обновление')),
-          subtitle: Text(tr('Коммит {sha}', {'sha': _info!.sha.substring(0, 7)})),
-          trailing: FilledButton(onPressed: _install, child: Text(tr('Обновить'))),
+          subtitle:
+              Text(tr('Коммит {sha}', {'sha': _info!.sha.substring(0, 7)})),
+          trailing:
+              FilledButton(onPressed: _install, child: Text(tr('Обновить'))),
         ),
       _UpdateStage.downloading => ListTile(
           leading: SizedBox(
             width: 24,
             height: 24,
-            child: CircularProgressIndicator(strokeWidth: 2, value: _progress > 0 ? _progress : null),
+            child: CircularProgressIndicator(
+                strokeWidth: 2, value: _progress > 0 ? _progress : null),
           ),
-          title: Text(tr('Скачиваю… {percent}%', {'percent': (_progress * 100).round()})),
+          title: Text(tr(
+              'Скачиваю… {percent}%', {'percent': (_progress * 100).round()})),
         ),
       _UpdateStage.error => ListTile(
           leading: const Icon(Icons.error_outline, color: Colors.red),
@@ -317,7 +375,8 @@ class _AccountTile extends StatelessWidget {
     final signedIn = auth.isSignedIn;
 
     return ListTile(
-      leading: Icon(signedIn ? Icons.cloud_done_outlined : Icons.cloud_off_outlined),
+      leading:
+          Icon(signedIn ? Icons.cloud_done_outlined : Icons.cloud_off_outlined),
       title: Text(tr('Учётная запись')),
       subtitle: Text(
         signedIn
@@ -402,14 +461,16 @@ class _AccountSheetState extends State<_AccountSheet> {
     try {
       final sql = await rootBundle.loadString('lib/db/puls_install.sql');
       await Clipboard.setData(ClipboardData(text: sql));
-      message = tr('SQL скопирован — вставьте в SQL Editor Supabase и нажмите Run');
+      message =
+          tr('SQL скопирован — вставьте в SQL Editor Supabase и нажмите Run');
     } catch (e) {
       // Браузер иногда отказывает в доступе к буферу обмена (нет разрешения,
       // окно не в фокусе) — тогда честно сказать об этом, а не падать молча.
       message = tr('Не удалось скопировать: {e}', {'e': e});
     }
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _run(Future<String?> Function() action) async {
@@ -474,7 +535,8 @@ class _AccountSheetState extends State<_AccountSheet> {
           content: SizedBox(
             width: double.maxFinite,
             child: names.isEmpty
-                ? Text(tr('В базе не нашлось таблиц, кроме тех, что уже использует само приложение.'))
+                ? Text(tr(
+                    'В базе не нашлось таблиц, кроме тех, что уже использует само приложение.'))
                 : SingleChildScrollView(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -483,15 +545,20 @@ class _AccountSheetState extends State<_AccountSheet> {
                           CheckboxListTile(
                             value: selected[n],
                             title: Text(n),
-                            onChanged: (v) => setDialogState(() => selected[n] = v ?? false),
+                            onChanged: (v) =>
+                                setDialogState(() => selected[n] = v ?? false),
                           ),
                       ],
                     ),
                   ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr('Отмена'))),
-            FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(tr('Сохранить'))),
+            TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: Text(tr('Отмена'))),
+            FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: Text(tr('Сохранить'))),
           ],
         ),
       ),
@@ -516,7 +583,9 @@ class _AccountSheetState extends State<_AccountSheet> {
     Navigator.of(context).pop();
     final chosen = settings.tables.map((t) => t.label).join(', ');
     messenger.showSnackBar(SnackBar(
-      content: Text(chosen.isEmpty ? tr('Таблицы для ИИ отключены') : tr('ИИ теперь видит: {chosen}', {'chosen': chosen})),
+      content: Text(chosen.isEmpty
+          ? tr('Таблицы для ИИ отключены')
+          : tr('ИИ теперь видит: {chosen}', {'chosen': chosen})),
     ));
 
     // Понять, что за таблицу подключили: без описания ИИ видит только
@@ -525,15 +594,18 @@ class _AccountSheetState extends State<_AccountSheet> {
     // базы... сохраняет во внутреннюю память, что это за база"). Пустую
     // таблицу описываем только по структуре — само содержание опишется
     // при следующем открытии этого экрана, когда данные уже появятся.
-    final needsDescription =
-        settings.tables.where((t) => t.description.isEmpty || t.description == _emptyTableNote).toList();
+    final needsDescription = settings.tables
+        .where((t) => t.description.isEmpty || t.description == _emptyTableNote)
+        .toList();
     // Описание — в фоне: лист уже закрыт, результат просто сохранится.
-    if (needsDescription.isNotEmpty) _describeTables(settings, needsDescription);
+    if (needsDescription.isNotEmpty)
+      _describeTables(settings, needsDescription);
   }
 
   static const _emptyTableNote = 'Таблица пока пустая, содержимого ещё нет.';
 
-  Future<String?> _describeTables(AiSettings settings, List<KnowledgeTableConfig> tables) async {
+  Future<String?> _describeTables(
+      AiSettings settings, List<KnowledgeTableConfig> tables) async {
     final token = await _auth.ensureFreshToken() ?? _auth.anonKey;
     final baseUrl = '${_auth.url}/rest/v1';
     final aiService = AiService(settings);
@@ -541,7 +613,11 @@ class _AccountSheetState extends State<_AccountSheet> {
     for (final t in tables) {
       final desc = await _describeOneTable(t, baseUrl, token, aiService);
       if (desc != null) {
-        updated[t.name] = KnowledgeTableConfig(name: t.name, label: t.label, description: desc, contentColumn: t.contentColumn);
+        updated[t.name] = KnowledgeTableConfig(
+            name: t.name,
+            label: t.label,
+            description: desc,
+            contentColumn: t.contentColumn);
       }
     }
     settings.tables = updated.values.toList();
@@ -555,7 +631,8 @@ class _AccountSheetState extends State<_AccountSheet> {
     AiService aiService,
   ) async {
     try {
-      final uri = Uri.parse('$baseUrl/${t.name}').replace(queryParameters: {'select': '*', 'limit': '3'});
+      final uri = Uri.parse('$baseUrl/${t.name}')
+          .replace(queryParameters: {'select': '*', 'limit': '3'});
       final res = await http.get(uri, headers: {
         'apikey': token,
         'Authorization': 'Bearer $token',
@@ -569,11 +646,13 @@ class _AccountSheetState extends State<_AccountSheet> {
       if (firstRow is! Map) return null;
       final reply = await aiService.ask(
         task: 'table_describe',
-        systemPrompt: 'Ты помогаешь приложению для стрельбы понять смысл ЧУЖОЙ таблицы базы данных, '
+        systemPrompt:
+            'Ты помогаешь приложению для стрельбы понять смысл ЧУЖОЙ таблицы базы данных, '
             'которую подключил пользователь. Дан список колонок и примеры строк. Опиши ОДНИМ коротким '
             'предложением, что это за таблица и как её содержимое использовать при ответах пользователю. '
             'Без markdown, без кавычек, только суть.',
-        contextBlock: 'Таблица "${t.name}". Колонки: ${firstRow.keys.join(", ")}. '
+        contextBlock:
+            'Таблица "${t.name}". Колонки: ${firstRow.keys.join(", ")}. '
             'Примеры строк: ${jsonEncode(rows.take(2).toList())}',
         history: const [(role: 'user', text: 'Что это за таблица?')],
       );
@@ -603,13 +682,15 @@ class _AccountSheetState extends State<_AccountSheet> {
         // браузеров) — двойная компенсация оставляла пустой промежуток
         // снизу и уезжавший вверх лист уже после того, как клавиатура
         // скрылась.
-        padding: EdgeInsets.only(bottom: kIsWeb ? 0 : MediaQuery.of(context).viewInsets.bottom),
+        padding: EdgeInsets.only(
+            bottom: kIsWeb ? 0 : MediaQuery.of(context).viewInsets.bottom),
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           children: [
             Text(tr('Учётная запись'), style: theme.textTheme.titleMedium),
             const SizedBox(height: 4),
-            Text(tr('Подключение к Supabase'), style: theme.textTheme.bodySmall),
+            Text(tr('Подключение к Supabase'),
+                style: theme.textTheme.bodySmall),
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: () => launchUrl(
@@ -620,13 +701,14 @@ class _AccountSheetState extends State<_AccountSheet> {
               label: Text(tr('Регистрация в Supabase')),
             ),
             const SizedBox(height: 16),
-
             if (signedIn) ...[
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.person_outline),
-                title: Text(_auth.email.isEmpty ? tr('Вход выполнен') : _auth.email),
-                subtitle: Text(_auth.url, maxLines: 1, overflow: TextOverflow.ellipsis),
+                title: Text(
+                    _auth.email.isEmpty ? tr('Вход выполнен') : _auth.email),
+                subtitle: Text(_auth.url,
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
               ),
               const SizedBox(height: 8),
               OutlinedButton.icon(
@@ -652,7 +734,8 @@ class _AccountSheetState extends State<_AccountSheet> {
                     : () {
                         _auth.signOutLocally();
                         context.read<AppDataStore>().refreshView();
-                        setState(() => _message = tr('Вы вышли. Тренировки на устройстве остались на месте.'));
+                        setState(() => _message = tr(
+                            'Вы вышли. Тренировки на устройстве остались на месте.'));
                       },
                 icon: const Icon(Icons.logout),
                 label: Text(tr('Выйти')),
@@ -672,7 +755,8 @@ class _AccountSheetState extends State<_AccountSheet> {
                         });
                       },
                 icon: Icon(Icons.link_off, color: cs.error),
-                label: Text(tr('Отключить базу'), style: TextStyle(color: cs.error)),
+                label: Text(tr('Отключить базу'),
+                    style: TextStyle(color: cs.error)),
               ),
             ] else ...[
               if (_showBaseFields) ...[
@@ -706,7 +790,8 @@ class _AccountSheetState extends State<_AccountSheet> {
                     style: theme.textTheme.bodySmall,
                   ),
                   const SizedBox(height: 14),
-                  Text(tr('3. Вставить адрес и ключ'), style: theme.textTheme.labelLarge),
+                  Text(tr('3. Вставить адрес и ключ'),
+                      style: theme.textTheme.labelLarge),
                   const SizedBox(height: 10),
                 ],
                 TextField(
@@ -737,7 +822,8 @@ class _AccountSheetState extends State<_AccountSheet> {
                 TextButton.icon(
                   onPressed: () => setState(() => _showBaseFields = true),
                   icon: const Icon(Icons.edit_outlined),
-                  label: Text(tr('База: {url}', {'url': _auth.url}), overflow: TextOverflow.ellipsis),
+                  label: Text(tr('База: {url}', {'url': _auth.url}),
+                      overflow: TextOverflow.ellipsis),
                 ),
               const SizedBox(height: 14),
               TextField(
@@ -789,7 +875,8 @@ class _AccountSheetState extends State<_AccountSheet> {
                                 // приложение.
                                 return immediate
                                     ? tr('Готово, вы вошли')
-                                    : tr('Аккаунт создан. Подтвердите адрес письмом и войдите — либо отключите подтверждение почты в настройках своего проекта Supabase.');
+                                    : tr(
+                                        'Аккаунт создан. Подтвердите адрес письмом и войдите — либо отключите подтверждение почты в настройках своего проекта Supabase.');
                               }),
                       child: Text(tr('Зарегистрироваться')),
                     ),
@@ -797,7 +884,6 @@ class _AccountSheetState extends State<_AccountSheet> {
                 ],
               ),
             ],
-
             if (_busy) ...[
               const SizedBox(height: 16),
               const Center(child: CircularProgressIndicator()),
@@ -843,10 +929,15 @@ class _HiddenDevModeToggleState extends State<_HiddenDevModeToggle> {
         context: context,
         builder: (ctx) => AlertDialog(
           title: Text(tr('Режим разработчика')),
-          content: Text(tr('Выключить? Недоделанные вкладки (Мессенджер, Задания) снова скроются.')),
+          content: Text(tr(
+              'Выключить? Недоделанные вкладки (Мессенджер, Задания) снова скроются.')),
           actions: [
-            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr('Отмена'))),
-            FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(tr('Выключить'))),
+            TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: Text(tr('Отмена'))),
+            FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: Text(tr('Выключить'))),
           ],
         ),
       );
@@ -867,8 +958,12 @@ class _HiddenDevModeToggleState extends State<_HiddenDevModeToggle> {
           decoration: InputDecoration(labelText: tr('Пароль')),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr('Отмена'))),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(ctrl.text), child: Text(tr('Включить'))),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(tr('Отмена'))),
+          FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(ctrl.text),
+              child: Text(tr('Включить'))),
         ],
       ),
     );
@@ -876,7 +971,9 @@ class _HiddenDevModeToggleState extends State<_HiddenDevModeToggle> {
     final ok = personalization.tryEnableDevMode(password);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(ok ? tr('Режим разработчика включён') : tr('Неверный пароль'))),
+      SnackBar(
+          content: Text(
+              ok ? tr('Режим разработчика включён') : tr('Неверный пароль'))),
     );
   }
 

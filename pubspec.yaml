@@ -82,6 +82,7 @@ dependencies:
   # вшит в саму сборку, см. deploy-web.yml про --no-web-resources-cdn:
   # тот же принцип, внешних зависимостей на сайте не прибавляем).
   pdfrx: ^1.3.5
+  flutter_displaymode: ^0.7.0
 
 dev_dependencies:
   flutter_test:
