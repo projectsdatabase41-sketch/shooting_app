@@ -168,7 +168,7 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
       final c = CallSession.current;
       if (c != null && c.callId == callId) c.cancelledByCaller();
     };
-    DisplayRate.setActive(widget.db, false);
+    DisplayRate.setTraining(widget.db, false);
     final chatAuth = ChatAuthService(widget.db);
     if (chatAuth.isSignedIn) PushService(chatAuth).init();
 
@@ -354,7 +354,7 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
           return MaterialApp(
             key: ValueKey(I18n.code),
             navigatorKey: navigatorKey,
-            title: 'Pusl',
+            title: 'Nexus',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light(
                 background: lightBg,

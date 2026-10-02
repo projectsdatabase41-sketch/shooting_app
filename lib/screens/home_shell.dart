@@ -63,8 +63,10 @@ class _HomeShellState extends State<HomeShell> {
   void initState() {
     super.initState();
     final db = context.read<AppDataStore>().db;
-    _athleteTabs = HomeTabsViewModel(db, mode: 'athlete', allIds: athleteTabIds, unhidable: athleteUnhidable);
-    _coachTabs = HomeTabsViewModel(db, mode: 'coach', allIds: coachTabIds, unhidable: coachUnhidable);
+    _athleteTabs = HomeTabsViewModel(db,
+        mode: 'athlete', allIds: athleteTabIds, unhidable: athleteUnhidable);
+    _coachTabs = HomeTabsViewModel(db,
+        mode: 'coach', allIds: coachTabIds, unhidable: coachUnhidable);
     _services = CustomServicesRepository(db);
     _personalization = context.read<PersonalizationViewModel>();
     _services.addListener(_onServicesChanged);
@@ -85,9 +87,12 @@ class _HomeShellState extends State<HomeShell> {
   /// режима разработчика — те же id, просто с учётом `_devOnlyTabIds`.
   void _onServicesChanged() {
     final devMode = _personalization.devMode;
-    final serviceIds = [for (final s in _services.list()) '$serviceTabPrefix${s.id}'];
-    List<String> withDevFilter(List<String> ids) =>
-        devMode ? ids : ids.where((id) => !_devOnlyTabIds.contains(id)).toList();
+    final serviceIds = [
+      for (final s in _services.list()) '$serviceTabPrefix${s.id}'
+    ];
+    List<String> withDevFilter(List<String> ids) => devMode
+        ? ids
+        : ids.where((id) => !_devOnlyTabIds.contains(id)).toList();
     _athleteTabs.setAllIds([...withDevFilter(athleteTabIds), ...serviceIds]);
     _coachTabs.setAllIds([...withDevFilter(coachTabIds), ...serviceIds]);
   }
@@ -95,7 +100,8 @@ class _HomeShellState extends State<HomeShell> {
   Map<String, HomeTabSpec> _specsWithServices() => {
         ...homeTabSpecs,
         for (final s in _services.list())
-          '$serviceTabPrefix${s.id}': HomeTabSpec(icon: iconForService(s.iconName), label: s.name),
+          '$serviceTabPrefix${s.id}':
+              HomeTabSpec(icon: iconForService(s.iconName), label: s.name),
       };
 
   @override
@@ -133,18 +139,23 @@ class _HomeShellState extends State<HomeShell> {
         if (tabs.layout == 'tiles') {
           return Scaffold(
             extendBodyBehindAppBar: true,
-            appBar: const GlassHeader(title: Text('Pusl', style: TextStyle(fontWeight: FontWeight.w600))),
+            appBar: const GlassHeader(
+                title: Text('Nexus',
+                    style: TextStyle(fontWeight: FontWeight.w600))),
             body: Column(
               children: [
                 if (store.isBackgroundSyncing) const _SyncBanner(),
                 Expanded(
                   child: Padding(
-                    padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + GlassHeader.height),
+                    padding: EdgeInsets.only(
+                        top: MediaQuery.paddingOf(context).top +
+                            GlassHeader.height),
                     child: HomeTileGrid(
                       vm: tabs,
                       specs: specs,
                       onSelect: (id) => Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => _pageFor(id, store, isCoach, tabs)),
+                        MaterialPageRoute(
+                            builder: (_) => _pageFor(id, store, isCoach, tabs)),
                       ),
                     ),
                   ),
@@ -157,7 +168,8 @@ class _HomeShellState extends State<HomeShell> {
         final selected = isCoach ? _coachTab : _athleteTab;
         // Скрыли вкладку, на которой стояли — переезжаем на первую
         // оставшуюся видимую, а не оставляем экран без вкладки вовсе.
-        final current = tabs.visible.contains(selected) ? selected : tabs.visible.first;
+        final current =
+            tabs.visible.contains(selected) ? selected : tabs.visible.first;
         final homeTabId = isCoach ? 'diary' : 'target';
 
         // Вкладки в "страничном" режиме — не отдельные маршруты
@@ -186,7 +198,8 @@ class _HomeShellState extends State<HomeShell> {
               vm: tabs,
               specs: specs,
               selected: current,
-              onSelect: (id) => _onDestinationSelected(context, store, isCoach, id),
+              onSelect: (id) =>
+                  _onDestinationSelected(context, store, isCoach, id),
             ),
           ),
         );
@@ -199,10 +212,12 @@ class _HomeShellState extends State<HomeShell> {
   // приложения (у HomeShell нет своего), а Provider, объявленный внутри
   // поддерева HomeShell, пушнутому поверх всего маршруту не виден
   // (см. `SettingsHomeTabsScreen`).
-  Widget _pageFor(String id, AppDataStore store, bool isCoach, HomeTabsViewModel tabs) {
+  Widget _pageFor(
+      String id, AppDataStore store, bool isCoach, HomeTabsViewModel tabs) {
     if (id.startsWith(serviceTabPrefix)) {
       final service = _services.byId(id.substring(serviceTabPrefix.length));
-      if (service != null) return ServiceTileScreen(service: service, repo: _services);
+      if (service != null)
+        return ServiceTileScreen(service: service, repo: _services);
     }
     if (isCoach) {
       return switch (id) {
@@ -211,7 +226,10 @@ class _HomeShellState extends State<HomeShell> {
         'statistics_coach' => const CoachStatisticsScreen(),
         'assistant_coach' => const CoachAiChatScreen(),
         'tasks' => const CoachTasksScreen(),
-        'messenger' => ChatHomeScreen(onClose: tabs.layout == 'tiles' ? null : () => _leaveMessenger(store, isCoach)),
+        'messenger' => ChatHomeScreen(
+            onClose: tabs.layout == 'tiles'
+                ? null
+                : () => _leaveMessenger(store, isCoach)),
         _ => SettingsScreen(homeTabs: tabs, services: _services),
       };
     }
@@ -224,7 +242,10 @@ class _HomeShellState extends State<HomeShell> {
       // экран»). Тот же экран открывается и из шапки мишени, но там —
       // с контекстом конкретной тренировки.
       'assistant' => const AiChatScreen(),
-      'messenger' => ChatHomeScreen(onClose: tabs.layout == 'tiles' ? null : () => _leaveMessenger(store, isCoach)),
+      'messenger' => ChatHomeScreen(
+          onClose: tabs.layout == 'tiles'
+              ? null
+              : () => _leaveMessenger(store, isCoach)),
       'tasks' => const AthleteTasksScreen(),
       _ => SettingsScreen(homeTabs: tabs, services: _services),
     };
@@ -232,7 +253,8 @@ class _HomeShellState extends State<HomeShell> {
 
   void _leaveMessenger(AppDataStore store, bool isCoach) {
     final back = _beforeMessenger ?? (isCoach ? 'diary' : 'target');
-    _onDestinationSelected(context, store, isCoach, back == 'messenger' ? (isCoach ? 'diary' : 'target') : back);
+    _onDestinationSelected(context, store, isCoach,
+        back == 'messenger' ? (isCoach ? 'diary' : 'target') : back);
   }
 
   /// Переключение нижней вкладки — не Navigator.pop, поэтому PopScope
@@ -243,7 +265,8 @@ class _HomeShellState extends State<HomeShell> {
   /// running/paused тренировки, а редактирование завершённой открыто
   /// отдельным экраном из истории — но это дешёвая защита на будущее,
   /// если это когда-нибудь изменится).
-  Future<void> _onDestinationSelected(BuildContext context, AppDataStore store, bool isCoach, String id) async {
+  Future<void> _onDestinationSelected(
+      BuildContext context, AppDataStore store, bool isCoach, String id) async {
     final current = isCoach ? _coachTab : _athleteTab;
     if (id != current && store.hasUnsavedFinishedEdit) {
       final keep = await confirmFinishedEditExit(context);
@@ -261,7 +284,8 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   String _activeSessionKey(AppDataStore store) {
-    final active = store.sessions.where((s) => s.status == SessionStatus.running || s.status == SessionStatus.paused);
+    final active = store.sessions.where((s) =>
+        s.status == SessionStatus.running || s.status == SessionStatus.paused);
     return active.isEmpty ? 'none' : active.first.id;
   }
 }
@@ -277,13 +301,18 @@ class _ActiveTargetTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final store = context.watch<AppDataStore>();
     final active = store.sessions.where(
-      (s) => s.status == SessionStatus.running || s.status == SessionStatus.paused,
+      (s) =>
+          s.status == SessionStatus.running || s.status == SessionStatus.paused,
     );
     if (active.isEmpty) {
       return Scaffold(
         extendBodyBehindAppBar: true,
         appBar: GlassHeader(
-          title: Text(tr('Мишень'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+          title: Text(tr('Мишень'),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w600)),
         ),
         body: Center(
           child: Padding(

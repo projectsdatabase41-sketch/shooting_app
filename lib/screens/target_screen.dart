@@ -130,12 +130,12 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
   @override
   void initState() {
     super.initState();
-    DisplayRate.setActive(_db, true);
+    DisplayRate.setTraining(_db, true);
   }
 
   @override
   void dispose() {
-    DisplayRate.setActive(_db, false);
+    DisplayRate.setTraining(_db, false);
     _pages?.dispose();
     super.dispose();
   }

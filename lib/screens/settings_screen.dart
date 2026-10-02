@@ -179,11 +179,11 @@ class _AdaptiveFpsTileState extends State<_AdaptiveFpsTile> {
     return SwitchListTile(
       secondary: const Icon(Icons.battery_saver_outlined),
       title: Text(tr('Экономия заряда')),
-      subtitle: Text(tr('Частота экрана ~60 Гц везде, кроме тренировки')),
+      subtitle: Text(tr('Максимум частоты экрана везде, на тренировке ~60 Гц')),
       value: DisplayRate.isEnabled(db),
       onChanged: (v) {
         DisplayRate.setEnabled(db, v);
-        if (v) DisplayRate.setActive(db, false);
+        if (v) DisplayRate.setTraining(db, false);
         setState(() {});
       },
     );

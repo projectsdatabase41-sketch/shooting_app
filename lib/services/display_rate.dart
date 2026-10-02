@@ -3,9 +3,10 @@ import 'package:flutter_displaymode/flutter_displaymode.dart';
 
 import 'local_db_service.dart';
 
-/// Адаптивная частота обновления экрана (только Android): ~60 Гц в
-/// мессенджере, статистике и настройках, максимум дисплея — на экране
-/// мишени во время работы (решение пользователя, пункт 16 списка правок —
+/// Адаптивная частота обновления экрана (только Android): максимум
+/// дисплея везде, где человек пользуется телефоном (анимации, прокрутка),
+/// и ~60 Гц на открытой тренировке — стрелок почти не трогает экран, а он
+/// включён часами (решение пользователя, пункт 16 списка правок —
 /// экономия заряда). Остальные платформы и устройства без выбора
 /// режимов — молча ничего не делают.
 class DisplayRate {
@@ -25,11 +26,11 @@ class DisplayRate {
     if (!v) _apply(high: true); // выключили — вернуть максимум
   }
 
-  /// `true` — режим с максимальной частотой (тренировка), `false` —
-  /// экономный (~60 Гц, но не ниже 55, чтобы прокрутка не дёргалась).
-  static Future<void> setActive(LocalDbService db, bool active) async {
+  /// `true` — открыта тренировка: экономный режим (~60 Гц, но не ниже
+  /// 55, чтобы не дёргалось), `false` — максимум дисплея.
+  static Future<void> setTraining(LocalDbService db, bool training) async {
     if (!isEnabled(db)) return;
-    await _apply(high: active);
+    await _apply(high: !training);
   }
 
   static Future<void> _apply({required bool high}) async {
