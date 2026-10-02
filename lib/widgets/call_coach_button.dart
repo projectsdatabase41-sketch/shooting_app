@@ -5,6 +5,7 @@ import '../services/chat_auth_service.dart';
 import '../services/chat_messages_repository.dart';
 import '../services/chat_preferences.dart';
 import '../services/chat_sync_service.dart';
+import '../services/coach_chat_link.dart';
 import '../services/local_db_service.dart';
 import '../services/supabase_auth_service.dart';
 import 'chat_avatar.dart';
@@ -33,26 +34,8 @@ class _CallCoachButtonState extends State<CallCoachButton> {
   bool _busy = false;
 
   /// Тренеры из токенов; заодно заводит их в контакты мессенджера.
-  Future<List<ChatContact>> _coaches() async {
-    final linked = await _main.fetchLinkedCoaches();
-    final profiles = await _auth.resolveProfiles([for (final c in linked) c.chatUserId]);
-    final result = <ChatContact>[];
-    for (final c in linked) {
-      final existing = _repo.contactById(c.chatUserId);
-      final p = profiles[c.chatUserId];
-      final contact = ChatContact(
-        id: c.chatUserId,
-        nickname: p?.nickname ?? (c.nickname.isNotEmpty ? c.nickname : c.label),
-        chatCode: existing?.chatCode ?? '',
-        avatarBase64: p?.avatarBase64 ?? existing?.avatarBase64,
-        about: p?.about ?? existing?.about ?? '',
-        addedAt: existing?.addedAt ?? DateTime.now(),
-      );
-      _repo.addContact(contact);
-      result.add(contact);
-    }
-    return result;
-  }
+  Future<List<ChatContact>> _coaches() =>
+      fetchLinkedCoachContacts(_main, _auth, _repo);
 
   Future<String?> _pick(List<ChatContact> coaches) async {
     final id = await showModalBottomSheet<String>(
@@ -65,9 +48,12 @@ class _CallCoachButtonState extends State<CallCoachButton> {
             ListTile(title: Text(tr('Кого позвать?'))),
             for (final c in coaches)
               ListTile(
-                leading: ChatAvatar(base64: c.avatarBase64, nickname: c.nickname),
+                leading:
+                    ChatAvatar(base64: c.avatarBase64, nickname: c.nickname),
                 title: Text(c.nickname),
-                trailing: c.id == _prefs.coachContactId ? const Icon(Icons.check) : null,
+                trailing: c.id == _prefs.coachContactId
+                    ? const Icon(Icons.check)
+                    : null,
                 onTap: () => Navigator.of(ctx).pop(c.id),
               ),
           ],
@@ -82,13 +68,15 @@ class _CallCoachButtonState extends State<CallCoachButton> {
     final messenger = ScaffoldMessenger.of(context);
     if (!_auth.isSignedIn) {
       messenger.showSnackBar(SnackBar(
-        content: Text(tr('Сначала войдите в мессенджер — через него тренер получит вызов')),
+        content: Text(tr(
+            'Сначала войдите в мессенджер — через него тренер получит вызов')),
       ));
       return;
     }
     if (!_main.isSignedIn) {
       messenger.showSnackBar(SnackBar(
-        content: Text(tr('Войдите в свою базу (Настройки → Данные и синхронизация) — там выданы токены тренерам')),
+        content: Text(tr(
+            'Войдите в свою базу (Настройки → Данные и синхронизация) — там выданы токены тренерам')),
       ));
       return;
     }
@@ -97,7 +85,8 @@ class _CallCoachButtonState extends State<CallCoachButton> {
       final coaches = await _coaches();
       if (coaches.isEmpty) {
         messenger.showSnackBar(SnackBar(
-          content: Text(tr('Тренер ещё не подключён: выдайте ему токен — он вводит его и открывает мессенджер')),
+          content: Text(tr(
+              'Тренер ещё не подключён: выдайте ему токен — он вводит его и открывает мессенджер')),
         ));
         return;
       }
@@ -110,9 +99,12 @@ class _CallCoachButtonState extends State<CallCoachButton> {
       }
       if (id.isEmpty) return;
       await ChatSyncService(_auth, _repo).sendCall(id);
-      messenger.showSnackBar(SnackBar(content: Text(tr('{p} получит вызов', {'p': _repo.contactById(id)?.nickname ?? tr('Тренер')}))));
+      messenger.showSnackBar(SnackBar(
+          content: Text(tr('{p} получит вызов',
+              {'p': _repo.contactById(id)?.nickname ?? tr('Тренер')}))));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(tr('Не удалось позвать: {e}', {'e': e}))));
+      messenger.showSnackBar(
+          SnackBar(content: Text(tr('Не удалось позвать: {e}', {'e': e}))));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -127,7 +119,10 @@ class _CallCoachButtonState extends State<CallCoachButton> {
           style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
           onPressed: _busy ? null : _call,
           icon: _busy
-              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2))
               : const Icon(Icons.campaign_outlined),
           label: Text(tr('Позвать тренера')),
         ),
@@ -137,7 +132,10 @@ class _CallCoachButtonState extends State<CallCoachButton> {
       onLongPress: _busy ? null : () => _call(choose: true),
       child: IconButton(
         icon: _busy
-            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2))
             : const Icon(Icons.campaign_outlined),
         tooltip: tr('Позвать тренера'),
         onPressed: _busy ? null : _call,
