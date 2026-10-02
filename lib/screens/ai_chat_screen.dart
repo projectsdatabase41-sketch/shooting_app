@@ -92,7 +92,8 @@ class AiChatScreen extends StatelessWidget {
           // Код в подпись обязательно: пользователь спрашивает
           // «а по упражнению 234», и это именно код, а не название.
           // Без него модель просто не находит, о чём речь.
-          exerciseNameOf: exerciseNameOfOverride ?? (s) => store.exerciseFor(s)?.label ?? tr('без упражнения'),
+          exerciseNameOf: exerciseNameOfOverride ??
+              (s) => store.exerciseFor(s)?.label ?? tr('без упражнения'),
           coachMode: coachMode,
         ));
     return _AiChatBody(embedded: embedded, coachMode: coachMode);
@@ -122,14 +123,20 @@ class _ModelPickerButtonState extends State<_ModelPickerButton> {
   Future<void> _open() async {
     final s = widget.settings;
     final localModel = localModelById(s.localModelId);
-    final localInstalled = localModel != null && await LocalAi.installedPath(localModel) != null;
+    final localInstalled =
+        localModel != null && await LocalAi.installedPath(localModel) != null;
     if (!mounted) return;
     final choice = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
       builder: (ctx) {
         final current = s.chatModelChoice;
-        Widget tile({required String value, required String title, String? subtitle, bool enabled = true}) => ListTile(
+        Widget tile(
+                {required String value,
+                required String title,
+                String? subtitle,
+                bool enabled = true}) =>
+            ListTile(
               title: Text(title),
               subtitle: subtitle == null ? null : Text(subtitle),
               trailing: current == value ? const Icon(Icons.check) : null,
@@ -141,7 +148,10 @@ class _ModelPickerButtonState extends State<_ModelPickerButton> {
             shrinkWrap: true,
             children: [
               ListTile(title: Text(tr('Модель ответа'))),
-              tile(value: 'auto', title: tr('Авто'), subtitle: tr('Как решают настройки ИИ')),
+              tile(
+                  value: 'auto',
+                  title: tr('Авто'),
+                  subtitle: tr('Как решают настройки ИИ')),
               // На вебе локальной модели не бывает вовсе (нет файловой
               // системы) — не показываем недоступный вариант.
               if (!kIsWeb)
@@ -169,7 +179,8 @@ class _ModelPickerButtonState extends State<_ModelPickerButton> {
   Widget build(BuildContext context) {
     return GlassCircleButton(
       icon: const Icon(Icons.tune),
-      tooltip: tr('Модель: {label}', {'label': _shortLabel(widget.settings.chatModelChoice)}),
+      tooltip: tr('Модель: {label}',
+          {'label': _shortLabel(widget.settings.chatModelChoice)}),
       onTap: _open,
     );
   }
@@ -200,14 +211,41 @@ class _AiChatBodyState extends State<_AiChatBody> {
     super.dispose();
   }
 
-  void _send(AiChatViewModel vm) {
-    final text = _input.text;
-    if (text.trim().isEmpty) return;
+  void _send(AiChatViewModel vm, {String? forceFormat}) {
+    final text = _input.text.trim();
+    if (text.isEmpty) return;
     _input.clear();
     final image = _pendingImage;
     setState(() => _pendingImage = null);
-    vm.send(text, image: image).then((_) => _scrollToEnd());
+    vm
+        .send(forceFormat == null ? text : '$text ($forceFormat)', image: image)
+        .then((_) => _scrollToEnd());
     _scrollToEnd();
+  }
+
+  /// Долгое нажатие на отправку — явно попросить формат ответа, а не
+  /// надеяться, что модель сама угадает его по тексту вопроса (решение
+  /// пользователя, пункт 10 списка правок).
+  Future<void> _pickFormat(AiChatViewModel vm) async {
+    if (_input.text.trim().isEmpty) return;
+    final format = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            leading: const Icon(Icons.show_chart),
+            title: Text(tr('Ответить графиком')),
+            onTap: () => Navigator.of(ctx).pop('ответь графиком'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.table_chart_outlined),
+            title: Text(tr('Ответить таблицей')),
+            onTap: () => Navigator.of(ctx).pop('ответь таблицей'),
+          ),
+        ]),
+      ),
+    );
+    if (format != null && mounted) _send(vm, forceFormat: format);
   }
 
   /// `true` — активная модель (AiSettings.chatModelChoice) точно умеет
@@ -220,21 +258,26 @@ class _AiChatBodyState extends State<_AiChatBody> {
     if (choice == 'auto') return false;
     if (choice != 'local') return true;
     final model = localModelById(s.localModelId);
-    return model != null && model.sees && await LocalAi.installedPath(model) != null;
+    return model != null &&
+        model.sees &&
+        await LocalAi.installedPath(model) != null;
   }
 
   Future<void> _attachImage(AiSettings s) async {
     if (!await _visionAvailable(s)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(tr('Сначала выберите модель со зрением — кнопка ⚙ рядом с «Очистить»')),
+          content: Text(tr(
+              'Сначала выберите модель со зрением — кнопка ⚙ рядом с «Очистить»')),
         ));
       }
       return;
     }
-    final xfile = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1600, imageQuality: 85);
+    final xfile = await ImagePicker().pickImage(
+        source: ImageSource.gallery, maxWidth: 1600, imageQuality: 85);
     if (xfile == null || !mounted) return;
-    setState(() => _pendingImage = null); // сброс, пока читаем — не путать со старым превью при ошибке
+    setState(() => _pendingImage =
+        null); // сброс, пока читаем — не путать со старым превью при ошибке
     final bytes = await xfile.readAsBytes();
     if (mounted) setState(() => _pendingImage = bytes);
   }
@@ -270,7 +313,10 @@ class _AiChatBodyState extends State<_AiChatBody> {
                   children: [
                     Positioned.fill(child: _buildChat(vm)),
                     Positioned.fill(
-                      child: EdgeShade(top: MediaQuery.paddingOf(context).top + GlassHeader.height + 16),
+                      child: EdgeShade(
+                          top: MediaQuery.paddingOf(context).top +
+                              GlassHeader.height +
+                              16),
                     ),
                   ],
                 ),
@@ -284,7 +330,11 @@ class _AiChatBodyState extends State<_AiChatBody> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
-        title: Text(tr('Ассистент'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        title: Text(tr('Ассистент'),
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
           _ModelPickerButton(settings: vm.service.settings),
           GlassCircleButton(
@@ -302,7 +352,8 @@ class _AiChatBodyState extends State<_AiChatBody> {
       // на то, как именно клавиатуру закрыли.
       resizeToAvoidBottomInset: false,
       body: AnimatedPadding(
-        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+        padding:
+            EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
         duration: const Duration(milliseconds: 100),
         child: body,
       ),
@@ -319,7 +370,12 @@ class _AiChatBodyState extends State<_AiChatBody> {
     return ListView.builder(
       controller: _scroll,
       padding: EdgeInsets.fromLTRB(
-          12, widget.embedded ? 12 : MediaQuery.paddingOf(context).top + GlassHeader.height, 12, 12),
+          12,
+          widget.embedded
+              ? 12
+              : MediaQuery.paddingOf(context).top + GlassHeader.height,
+          12,
+          12),
       itemCount: vm.messages.length + (vm.busy ? 1 : 0),
       itemBuilder: (context, i) {
         if (i >= vm.messages.length) return const _TypingBubble();
@@ -338,10 +394,15 @@ class _AiChatBodyState extends State<_AiChatBody> {
               // вопроса) — решение пользователя: маленькие кнопки
               // "Удалить"/"Повторить" прямо под сообщением об ошибке,
               // а не через долгое нажатие.
-              : (message.isError && !vm.busy && i > 0 && vm.messages[i - 1].fromUser)
+              : (message.isError &&
+                      !vm.busy &&
+                      i > 0 &&
+                      vm.messages[i - 1].fromUser)
                   ? () => vm.retryFrom(i - 1)
                   : null,
-          onEdit: message.fromUser && !vm.busy ? () => _editMessage(context, vm, i) : null,
+          onEdit: message.fromUser && !vm.busy
+              ? () => _editMessage(context, vm, i)
+              : null,
           // Удаление ответа ассистента забирает с собой и СВОЙ вопрос
           // (решение пользователя) — иначе от переписки оставался вопрос
           // без ответа. Удаление своего вопроса и так тянет всё, что
@@ -349,14 +410,24 @@ class _AiChatBodyState extends State<_AiChatBody> {
           // добиваем обратный случай.
           onDelete: vm.busy
               ? null
-              : () => vm.removeFrom(!message.fromUser && i > 0 && vm.messages[i - 1].fromUser ? i - 1 : i),
+              : () => vm.removeFrom(
+                  !message.fromUser && i > 0 && vm.messages[i - 1].fromUser
+                      ? i - 1
+                      : i),
           onCreateExercise:
-              (message.exercise != null && !message.exerciseCreated) ? () => _createExercise(context, vm, i) : null,
-          onSaveNote: (message.note != null && !message.noteCreated) ? () => _saveNote(context, vm, i) : null,
-          onSendFeedback:
-              (message.feedback != null && !message.feedbackSent) ? () => _sendFeedback(context, vm, i) : null,
-          chartGallery: message.chart == null ? null : [for (final m in charts) m.chart!],
-          chartGalleryIndex: message.chart == null ? 0 : charts.indexOf(message),
+              (message.exercise != null && !message.exerciseCreated)
+                  ? () => _createExercise(context, vm, i)
+                  : null,
+          onSaveNote: (message.note != null && !message.noteCreated)
+              ? () => _saveNote(context, vm, i)
+              : null,
+          onSendFeedback: (message.feedback != null && !message.feedbackSent)
+              ? () => _sendFeedback(context, vm, i)
+              : null,
+          chartGallery:
+              message.chart == null ? null : [for (final m in charts) m.chart!],
+          chartGalleryIndex:
+              message.chart == null ? 0 : charts.indexOf(message),
         );
       },
     );
@@ -380,7 +451,9 @@ class _AiChatBodyState extends State<_AiChatBody> {
               SeriesSpec(
                 name: '${s['name']}',
                 shotCount: (s['shot_count'] as num?)?.toInt(),
-                timeLimit: s['time_limit_min'] == null ? null : Duration(minutes: (s['time_limit_min'] as num).toInt()),
+                timeLimit: s['time_limit_min'] == null
+                    ? null
+                    : Duration(minutes: (s['time_limit_min'] as num).toInt()),
                 counts: s['counts'] != false,
               ),
           ]
@@ -408,7 +481,8 @@ class _AiChatBodyState extends State<_AiChatBody> {
     vm.markExerciseCreated(index);
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(tr('Упражнение «{name}» создано', {'name': ex.name}))));
+      ..showSnackBar(SnackBar(
+          content: Text(tr('Упражнение «{name}» создано', {'name': ex.name}))));
   }
 
   /// Сохраняет заметку, которую предложил ассистент, в дневник тренера —
@@ -426,21 +500,26 @@ class _AiChatBodyState extends State<_AiChatBody> {
     vm.markNoteCreated(index);
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(tr('Заметка сохранена в дневник'))));
+      ..showSnackBar(
+          SnackBar(content: Text(tr('Заметка сохранена в дневник'))));
   }
 
   /// Правка своего вопроса перед повторной отправкой (пункт 6 списка
   /// правок) — то же удаление-и-переспрос, что и `retryFrom`, но с
   /// изменённым текстом вместо исходного.
-  Future<void> _editMessage(BuildContext context, AiChatViewModel vm, int index) async {
+  Future<void> _editMessage(
+      BuildContext context, AiChatViewModel vm, int index) async {
     final controller = TextEditingController(text: vm.messages[index].text);
     final text = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Изменить вопрос')),
-        content: TextField(controller: controller, autofocus: true, minLines: 1, maxLines: 6),
+        content: TextField(
+            controller: controller, autofocus: true, minLines: 1, maxLines: 6),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr('Отмена'))),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(tr('Отмена'))),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
             child: Text(tr('Спросить заново')),
@@ -455,7 +534,8 @@ class _AiChatBodyState extends State<_AiChatBody> {
 
   /// Отправляет предложенный отзыв в общую базу разработчика (пункт 10
   /// списка правок) — показ-на-подтверждение, как у заметки и упражнения.
-  Future<void> _sendFeedback(BuildContext context, AiChatViewModel vm, int index) async {
+  Future<void> _sendFeedback(
+      BuildContext context, AiChatViewModel vm, int index) async {
     final spec = vm.messages[index].feedback;
     if (spec == null) return;
     try {
@@ -480,7 +560,9 @@ class _AiChatBodyState extends State<_AiChatBody> {
     // об этом заботится AnimatedPadding вокруг всего тела в build() —
     // дублировать отступ здесь не нужно (и на вебе `viewInsets` к тому
     // же не всегда возвращается ровно к нулю после закрытия клавиатуры).
-    final keyboardInset = widget.embedded && !kIsWeb ? MediaQuery.of(context).viewInsets.bottom : 0.0;
+    final keyboardInset = widget.embedded && !kIsWeb
+        ? MediaQuery.of(context).viewInsets.bottom
+        : 0.0;
     return SafeArea(
       top: false,
       child: Padding(
@@ -497,7 +579,8 @@ class _AiChatBodyState extends State<_AiChatBody> {
                   children: [
                     ClipRRect(
                       borderRadius: BorderRadius.circular(10),
-                      child: Image.memory(_pendingImage!, width: 56, height: 56, fit: BoxFit.cover),
+                      child: Image.memory(_pendingImage!,
+                          width: 56, height: 56, fit: BoxFit.cover),
                     ),
                     Positioned(
                       right: -6,
@@ -507,7 +590,8 @@ class _AiChatBodyState extends State<_AiChatBody> {
                         child: CircleAvatar(
                           radius: 10,
                           backgroundColor: Theme.of(context).colorScheme.error,
-                          child: const Icon(Icons.close, size: 13, color: Colors.white),
+                          child: const Icon(Icons.close,
+                              size: 13, color: Colors.white),
                         ),
                       ),
                     ),
@@ -521,7 +605,8 @@ class _AiChatBodyState extends State<_AiChatBody> {
                   size: 50,
                   icon: const Icon(Icons.add_photo_alternate_outlined),
                   tooltip: tr('Приложить фото (нужна модель со зрением)'),
-                  onTap: vm.busy ? null : () => _attachImage(vm.service.settings),
+                  onTap:
+                      vm.busy ? null : () => _attachImage(vm.service.settings),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -541,17 +626,25 @@ class _AiChatBodyState extends State<_AiChatBody> {
                         enabledBorder: InputBorder.none,
                         focusedBorder: InputBorder.none,
                         filled: false,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                        contentPadding:
+                            const EdgeInsets.symmetric(vertical: 14),
                       ),
                     ),
                   ),
                 ),
                 const SizedBox(width: 8),
-                GlassCircleButton(
-                  size: 50,
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.85),
-                  onTap: vm.busy ? null : () => _send(vm),
-                  icon: Icon(Icons.send, color: Theme.of(context).colorScheme.onPrimary),
+                GestureDetector(
+                  onLongPress: vm.busy ? null : () => _pickFormat(vm),
+                  child: GlassCircleButton(
+                    size: 50,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .primary
+                        .withValues(alpha: 0.85),
+                    onTap: vm.busy ? null : () => _send(vm),
+                    icon: Icon(Icons.send,
+                        color: Theme.of(context).colorScheme.onPrimary),
+                  ),
                 ),
               ],
             ),
@@ -605,13 +698,19 @@ class _Bubble extends StatelessWidget {
     final mine = message.fromUser;
     // Оформление как в мессенджере — те же цвета, скругление и тень пузырей.
     final prefs = ChatPreferences(context.read<AppDataStore>().db);
-    final bg = message.isError ? cs.errorContainer : (mine ? prefs.mineBubbleColor : prefs.otherBubbleColor);
-    final fg = message.isError ? cs.onErrorContainer : (mine ? prefs.mineTextColor : prefs.otherTextColor);
+    final bg = message.isError
+        ? cs.errorContainer
+        : (mine ? prefs.mineBubbleColor : prefs.otherBubbleColor);
+    final fg = message.isError
+        ? cs.onErrorContainer
+        : (mine ? prefs.mineTextColor : prefs.otherTextColor);
 
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
-        onLongPress: (onRetry == null && onEdit == null && onDelete == null) ? null : () => _showActions(context),
+        onLongPress: (onRetry == null && onEdit == null && onDelete == null)
+            ? null
+            : () => _showActions(context),
         child: Container(
           constraints: const BoxConstraints(maxWidth: 560),
           margin: const EdgeInsets.only(bottom: 10),
@@ -622,7 +721,8 @@ class _Bubble extends StatelessWidget {
             boxShadow: prefs.shadowEnabled
                 ? [
                     BoxShadow(
-                        color: Colors.black.withValues(alpha: prefs.shadowIntensity),
+                        color: Colors.black
+                            .withValues(alpha: prefs.shadowIntensity),
                         blurRadius: 10,
                         offset: const Offset(0, 4))
                   ]
@@ -646,7 +746,8 @@ class _Bubble extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
               ],
-              SelectableText(message.text, style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
+              SelectableText(message.text,
+                  style: theme.textTheme.bodyMedium?.copyWith(color: fg)),
               if (message.chart != null) ...[
                 const SizedBox(height: 8),
                 AiChartView(
@@ -683,14 +784,16 @@ class _Bubble extends StatelessWidget {
                 const SizedBox(height: 6),
                 Text(
                   tr('Источники: {p}', {'p': message.sources.join(', ')}),
-                  style: theme.textTheme.labelSmall?.copyWith(color: fg.withValues(alpha: 0.75)),
+                  style: theme.textTheme.labelSmall
+                      ?.copyWith(color: fg.withValues(alpha: 0.75)),
                 ),
               ],
               if (message.model != null) ...[
                 const SizedBox(height: 4),
                 Text(
                   message.model!,
-                  style: theme.textTheme.labelSmall?.copyWith(color: fg.withValues(alpha: 0.6)),
+                  style: theme.textTheme.labelSmall
+                      ?.copyWith(color: fg.withValues(alpha: 0.6)),
                 ),
               ],
               // Маленькие кнопки прямо под сообщением об ошибке (решение
@@ -706,14 +809,18 @@ class _Bubble extends StatelessWidget {
                         onPressed: onRetry,
                         icon: const Icon(Icons.refresh, size: 16),
                         label: Text(tr('Повторить')),
-                        style: TextButton.styleFrom(foregroundColor: fg, visualDensity: VisualDensity.compact),
+                        style: TextButton.styleFrom(
+                            foregroundColor: fg,
+                            visualDensity: VisualDensity.compact),
                       ),
                     if (onDelete != null)
                       TextButton.icon(
                         onPressed: onDelete,
                         icon: const Icon(Icons.delete_outline, size: 16),
                         label: Text(tr('Удалить')),
-                        style: TextButton.styleFrom(foregroundColor: fg, visualDensity: VisualDensity.compact),
+                        style: TextButton.styleFrom(
+                            foregroundColor: fg,
+                            visualDensity: VisualDensity.compact),
                       ),
                   ],
                 ),
@@ -775,7 +882,8 @@ class _ExerciseProposalCard extends StatelessWidget {
   final bool created;
   final VoidCallback? onCreate;
 
-  const _ExerciseProposalCard({required this.spec, required this.created, required this.onCreate});
+  const _ExerciseProposalCard(
+      {required this.spec, required this.created, required this.onCreate});
 
   @override
   Widget build(BuildContext context) {
@@ -801,7 +909,8 @@ class _ExerciseProposalCard extends StatelessWidget {
               Icon(Icons.assignment_add, size: 18, color: cs.primary),
               const SizedBox(width: 6),
               Expanded(
-                child: Text('${spec['name']}', style: theme.textTheme.titleSmall),
+                child:
+                    Text('${spec['name']}', style: theme.textTheme.titleSmall),
               ),
             ],
           ),
@@ -823,7 +932,8 @@ class _ExerciseProposalCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 2),
               child: Text(
-                tr('{p} выстрелов по {p2}', {'p': spec['total_shots'], 'p2': spec['series_size']}),
+                tr('{p} выстрелов по {p2}',
+                    {'p': spec['total_shots'], 'p2': spec['series_size']}),
                 style: theme.textTheme.bodySmall,
               ),
             ),
@@ -833,7 +943,9 @@ class _ExerciseProposalCard extends StatelessWidget {
               children: [
                 Icon(Icons.check_circle, size: 18, color: cs.primary),
                 const SizedBox(width: 6),
-                Text(tr('Создано'), style: theme.textTheme.bodySmall?.copyWith(color: cs.primary)),
+                Text(tr('Создано'),
+                    style:
+                        theme.textTheme.bodySmall?.copyWith(color: cs.primary)),
               ],
             )
           else
@@ -857,7 +969,8 @@ class _NoteProposalCard extends StatelessWidget {
   final bool created;
   final VoidCallback? onSave;
 
-  const _NoteProposalCard({required this.spec, required this.created, required this.onSave});
+  const _NoteProposalCard(
+      {required this.spec, required this.created, required this.onSave});
 
   @override
   Widget build(BuildContext context) {
@@ -879,7 +992,9 @@ class _NoteProposalCard extends StatelessWidget {
             children: [
               Icon(Icons.menu_book_outlined, size: 18, color: cs.primary),
               const SizedBox(width: 6),
-              Expanded(child: Text('${spec['topic']}', style: theme.textTheme.titleSmall)),
+              Expanded(
+                  child: Text('${spec['topic']}',
+                      style: theme.textTheme.titleSmall)),
             ],
           ),
           const SizedBox(height: 4),
@@ -890,7 +1005,9 @@ class _NoteProposalCard extends StatelessWidget {
               children: [
                 Icon(Icons.check_circle, size: 18, color: cs.primary),
                 const SizedBox(width: 6),
-                Text(tr('Сохранено'), style: theme.textTheme.bodySmall?.copyWith(color: cs.primary)),
+                Text(tr('Сохранено'),
+                    style:
+                        theme.textTheme.bodySmall?.copyWith(color: cs.primary)),
               ],
             )
           else
@@ -914,7 +1031,8 @@ class _FeedbackProposalCard extends StatelessWidget {
   final bool sent;
   final VoidCallback? onSend;
 
-  const _FeedbackProposalCard({required this.spec, required this.sent, required this.onSend});
+  const _FeedbackProposalCard(
+      {required this.spec, required this.sent, required this.onSend});
 
   @override
   Widget build(BuildContext context) {
@@ -936,7 +1054,8 @@ class _FeedbackProposalCard extends StatelessWidget {
             children: [
               Icon(Icons.rate_review_outlined, size: 18, color: cs.primary),
               const SizedBox(width: 6),
-              Text(tr('Отзыв о приложении'), style: const TextStyle(fontWeight: FontWeight.w600)),
+              Text(tr('Отзыв о приложении'),
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
             ],
           ),
           const SizedBox(height: 4),
@@ -947,7 +1066,9 @@ class _FeedbackProposalCard extends StatelessWidget {
               children: [
                 Icon(Icons.check_circle, size: 18, color: cs.primary),
                 const SizedBox(width: 6),
-                Text(tr('Отправлено'), style: theme.textTheme.bodySmall?.copyWith(color: cs.primary)),
+                Text(tr('Отправлено'),
+                    style:
+                        theme.textTheme.bodySmall?.copyWith(color: cs.primary)),
               ],
             )
           else
@@ -982,7 +1103,8 @@ class _TypingBubble extends StatelessWidget {
         child: SizedBox(
           width: 20,
           height: 20,
-          child: CircularProgressIndicator(strokeWidth: 2, color: cs.onSurfaceVariant),
+          child: CircularProgressIndicator(
+              strokeWidth: 2, color: cs.onSurfaceVariant),
         ),
       ),
     );
@@ -1031,7 +1153,8 @@ class _ReasoningBlockState extends State<_ReasoningBlock> {
                   tr('Завершено размышление'),
                   style: theme.textTheme.labelMedium?.copyWith(color: muted),
                 ),
-                Icon(_open ? Icons.expand_more : Icons.chevron_right, size: 18, color: muted),
+                Icon(_open ? Icons.expand_more : Icons.chevron_right,
+                    size: 18, color: muted),
               ],
             ),
           ),
@@ -1045,7 +1168,8 @@ class _ReasoningBlockState extends State<_ReasoningBlock> {
             ),
             child: SelectableText(
               widget.text,
-              style: theme.textTheme.bodySmall?.copyWith(color: muted, height: 1.35),
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: muted, height: 1.35),
             ),
           ),
         ],
