@@ -4,6 +4,7 @@ import '../widgets/glass_pill.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../logic/ai_context.dart';
 import '../services/ai_service.dart';
 import '../services/knowledge_service.dart';
 import '../services/ai_settings.dart';
@@ -378,6 +379,26 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             maxLength: _customInstructionsLimit,
             decoration:
                 InputDecoration(labelText: tr('Что ещё должен знать ИИ')),
+          ),
+          const SizedBox(height: 12),
+          // Встроенные правила ассистента — видны пользователю, а не
+          // только зашиты в коде (решение пользователя, пункты 2/3/6
+          // списка правок: инструкции должны быть читаемы без похода в
+          // исходники; редактирование — отдельный, более поздний шаг).
+          Theme(
+            data: theme.copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              title: Text(tr('Встроенные правила ассистента'),
+                  style: theme.textTheme.bodyMedium),
+              children: [
+                SelectableText(
+                  AiContext.systemPrompt(coachMode: false),
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 24),
           // Окно выбора цепочки моделей нужно, только когда пользователь
