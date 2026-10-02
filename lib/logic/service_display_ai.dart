@@ -18,7 +18,9 @@ class ServiceDisplayAi {
   /// [discoverAndSuggestSpec], если обычная эвристика не распознает
   /// список) и разобранные записи, если ответ — список (или один
   /// объект-запись).
-  static Future<(String response, String rawText, List<Map<String, dynamic>>? rows)> fetchRows(CustomService s) async {
+  static Future<
+          (String response, String rawText, List<Map<String, dynamic>>? rows)>
+      fetchRows(CustomService s) async {
     final uri = Uri.parse(s.url);
     final http.Response res;
     switch (s.method) {
@@ -32,7 +34,11 @@ class ServiceDisplayAi {
         res = await http.get(uri, headers: s.headers);
     }
     final text = utf8.decode(res.bodyBytes);
-    return ('${res.statusCode}\n\n${_prettyIfJson(text)}', text, _tryParseRows(text));
+    return (
+      '${res.statusCode}\n\n${_prettyIfJson(text)}',
+      text,
+      _tryParseRows(text)
+    );
   }
 
   static String _prettyIfJson(String text) {
@@ -48,7 +54,11 @@ class ServiceDisplayAi {
   /// а не одним общим "fields".
   static Map<String, dynamic> _flattenRecord(Map<String, dynamic> r) {
     final fields = r['fields'];
-    if (fields is Map) return {if (r['id'] != null) 'id': r['id'], ...fields.map((k, v) => MapEntry('$k', v))};
+    if (fields is Map)
+      return {
+        if (r['id'] != null) 'id': r['id'],
+        ...fields.map((k, v) => MapEntry('$k', v))
+      };
     return r;
   }
 
@@ -71,8 +81,12 @@ class ServiceDisplayAi {
         // или объект вида {"id":..,"fields":{...}} у Airtable).
         list ??= decoded.isEmpty ? null : [decoded];
       }
-      if (list == null || list.isEmpty || list.any((e) => e is! Map)) return null;
-      return list.map((e) => _flattenRecord((e as Map).map((k, v) => MapEntry('$k', v)))).toList();
+      if (list == null || list.isEmpty || list.any((e) => e is! Map))
+        return null;
+      return list
+          .map((e) =>
+              _flattenRecord((e as Map).map((k, v) => MapEntry('$k', v))))
+          .toList();
     } catch (_) {
       return null;
     }
@@ -91,10 +105,15 @@ class ServiceDisplayAi {
     String note = '',
   }) async {
     final columns = <String>{for (final r in rows) ...r.keys}.toList();
-    final samples = rows.take(2).map((r) => {for (final c in columns) c: truncate(cell(r[c]), 60)}).toList();
+    final samples = rows
+        .take(2)
+        .map((r) => {for (final c in columns) c: truncate(cell(r[c]), 60)})
+        .toList();
     final reply = await AiService(settings).ask(
-      task: 'service_display', json: true,
-      systemPrompt: 'Ты раскладываешь поля записей стороннего API по ролям отображения в карточке списка. '
+      task: 'service_display',
+      json: true,
+      systemPrompt:
+          'Ты раскладываешь поля записей стороннего API по ролям отображения в карточке списка. '
           'Тебе дан только список названий полей и по паре обрезанных примеров значений — не вся таблица. '
           'Ответь ТОЛЬКО JSON-объектом без пояснений, без markdown, без ```: '
           '{"title": "одно поле для заголовка карточки", '
@@ -115,11 +134,17 @@ class ServiceDisplayAi {
       ],
     );
     final decoded = jsonDecode(_stripCodeFence(reply.text));
-    if (decoded is! Map) throw const FormatException('Ассистент ответил не JSON-объектом');
+    if (decoded is! Map)
+      throw const FormatException('Ассистент ответил не JSON-объектом');
 
     final columnSet = columns.toSet();
-    final title = decoded['title'] is String && columnSet.contains(decoded['title']) ? decoded['title'] as String : null;
-    List<String> asFieldList(dynamic v) => v is List ? v.map((e) => '$e').where(columnSet.contains).toList() : const [];
+    final title =
+        decoded['title'] is String && columnSet.contains(decoded['title'])
+            ? decoded['title'] as String
+            : null;
+    List<String> asFieldList(dynamic v) => v is List
+        ? v.map((e) => '$e').where(columnSet.contains).toList()
+        : const [];
     final spec = {
       if (title != null) 'title': title,
       'subtitle': asFieldList(decoded['subtitle']),
@@ -131,7 +156,8 @@ class ServiceDisplayAi {
   /// Идёт по точечному пути ("data.items") внутри разобранного JSON и
   /// возвращает найденный список записей — пусто/не указано означает,
   /// что сам корень и есть одна запись.
-  static List<Map<String, dynamic>>? _applyListPath(dynamic root, String listPath) {
+  static List<Map<String, dynamic>>? _applyListPath(
+      dynamic root, String listPath) {
     var node = root;
     if (listPath.trim().isNotEmpty) {
       for (final segment in listPath.split('.')) {
@@ -149,7 +175,9 @@ class ServiceDisplayAi {
       list = [node];
     }
     if (list == null || list.isEmpty || list.any((e) => e is! Map)) return null;
-    return list.map((e) => _flattenRecord((e as Map).map((k, v) => MapEntry('$k', v)))).toList();
+    return list
+        .map((e) => _flattenRecord((e as Map).map((k, v) => MapEntry('$k', v))))
+        .toList();
   }
 
   /// Когда обычная эвристика (`fetchRows`) не нашла список записей —
@@ -158,7 +186,8 @@ class ServiceDisplayAi {
   /// ответа (не целиком, чтобы не заваливать контекст). Бросает
   /// исключение, если модель не смогла найти в ответе ничего похожего
   /// на список записей.
-  static Future<(List<Map<String, dynamic>> rows, String specJson)> discoverAndSuggestSpec(
+  static Future<(List<Map<String, dynamic>> rows, String specJson)>
+      discoverAndSuggestSpec(
     AiSettings settings,
     String rawResponseText, {
     String note = '',
@@ -167,12 +196,16 @@ class ServiceDisplayAi {
     try {
       root = jsonDecode(rawResponseText);
     } catch (_) {
-      throw const FormatException('Ответ сервиса не в формате JSON');
+      // Не JSON вовсе (XML, CSV, произвольный текст) — отдельный путь,
+      // без парсера под каждый формат (решение пользователя, пункты 18/19).
+      return _discoverFromNonJson(settings, rawResponseText, note: note);
     }
     final preview = truncate(const JsonEncoder().convert(root), 3000);
     final reply = await AiService(settings).ask(
-      task: 'service_discover', json: true,
-      systemPrompt: 'Тебе дан обрезанный пример ответа стороннего API (JSON), в котором обычная эвристика не '
+      task: 'service_discover',
+      json: true,
+      systemPrompt:
+          'Тебе дан обрезанный пример ответа стороннего API (JSON), в котором обычная эвристика не '
           'нашла список записей по стандартным ключам (records/items/data/results/rows). '
           'Найди сама путь к списку записей и разложи поля по ролям отображения в карточке списка. '
           'Ответь ТОЛЬКО JSON-объектом без пояснений, без markdown, без ```: '
@@ -194,15 +227,84 @@ class ServiceDisplayAi {
       ],
     );
     final decoded = jsonDecode(_stripCodeFence(reply.text));
-    if (decoded is! Map) throw const FormatException('Ассистент ответил не JSON-объектом');
+    if (decoded is! Map)
+      throw const FormatException('Ассистент ответил не JSON-объектом');
 
     final rows = _applyListPath(root, '${decoded['listPath'] ?? ''}');
     if (rows == null || rows.isEmpty) {
-      throw const FormatException('Не нашлось список записей в ответе — проверьте адрес сервиса');
+      throw const FormatException(
+          'Не нашлось список записей в ответе — проверьте адрес сервиса');
     }
     final columnSet = <String>{for (final r in rows) ...r.keys};
-    final title = decoded['title'] is String && columnSet.contains(decoded['title']) ? decoded['title'] as String : null;
-    List<String> asFieldList(dynamic v) => v is List ? v.map((e) => '$e').where(columnSet.contains).toList() : const [];
+    final title =
+        decoded['title'] is String && columnSet.contains(decoded['title'])
+            ? decoded['title'] as String
+            : null;
+    List<String> asFieldList(dynamic v) => v is List
+        ? v.map((e) => '$e').where(columnSet.contains).toList()
+        : const [];
+    final spec = {
+      if (title != null) 'title': title,
+      'subtitle': asFieldList(decoded['subtitle']),
+      'detail': asFieldList(decoded['detail']),
+    };
+    return (rows, jsonEncode(spec));
+  }
+
+  /// Ответ сервиса не в JSON (XML, CSV, произвольный текст, таблица) —
+  /// вместо парсера под каждый формат по отдельности просим сам ИИ
+  /// вытащить записи прямо из текста и сразу разложить поля по ролям
+  /// (решение пользователя, пункты 18/19: "любой другой формат", не
+  /// только JSON с нестандартными ключами списка).
+  static Future<(List<Map<String, dynamic>> rows, String specJson)>
+      _discoverFromNonJson(
+    AiSettings settings,
+    String rawResponseText, {
+    String note = '',
+  }) async {
+    final preview = truncate(rawResponseText, 4000);
+    final reply = await AiService(settings).ask(
+      task: 'service_discover_text',
+      json: true,
+      systemPrompt:
+          'Тебе дан обрезанный ответ стороннего API НЕ в формате JSON (может быть XML, CSV, '
+          'произвольный текст, таблица — что угодно). Извлеки из него записи (строки таблицы) и разложи поля '
+          'по ролям отображения в карточке списка. Ответь ТОЛЬКО JSON-объектом без пояснений, без markdown, '
+          'без ```: {"rows": [{"поле": "значение", …}, …], "title": "поле для заголовка карточки", '
+          '"subtitle": ["1-3 поля для краткой строки под заголовком"], '
+          '"detail": ["остальные значимые поля — показываются полностью в развороте карточки"]}. '
+          'Названия полей придумай сам по смыслу содержимого (атрибуты XML, заголовки CSV, подписи в тексте). '
+          'Если записей несколько — верни их все, не только первую.',
+      contextBlock: '',
+      history: [
+        (
+          role: 'user',
+          text: jsonEncode({
+            'response_preview': preview,
+            if (note.trim().isNotEmpty) 'пожелание': note.trim()
+          }),
+        ),
+      ],
+    );
+    final decoded = jsonDecode(_stripCodeFence(reply.text));
+    if (decoded is! Map)
+      throw const FormatException('Ассистент ответил не JSON-объектом');
+    final rawRows = decoded['rows'];
+    if (rawRows is! List || rawRows.isEmpty || rawRows.any((e) => e is! Map)) {
+      throw const FormatException(
+          'Не удалось извлечь записи из ответа сервиса');
+    }
+    final rows = rawRows
+        .map((e) => (e as Map).map((k, v) => MapEntry('$k', v)))
+        .toList();
+    final columnSet = <String>{for (final r in rows) ...r.keys};
+    final title =
+        decoded['title'] is String && columnSet.contains(decoded['title'])
+            ? decoded['title'] as String
+            : null;
+    List<String> asFieldList(dynamic v) => v is List
+        ? v.map((e) => '$e').where(columnSet.contains).toList()
+        : const [];
     final spec = {
       if (title != null) 'title': title,
       'subtitle': asFieldList(decoded['subtitle']),
@@ -221,7 +323,8 @@ class ServiceDisplayAi {
   /// подходящие значения СТРОГО из данного набора; сам отбор строк —
   /// точное сравнение в Dart-коде ниже, ИИ никогда не видит и не
   /// пересказывает содержимое конкретных записей.
-  static Future<({String field, List<String> values, String reply})> suggestFilter(
+  static Future<({String field, List<String> values, String reply})>
+      suggestFilter(
     AiSettings settings,
     List<Map<String, dynamic>> rows,
     String query,
@@ -238,8 +341,10 @@ class ServiceDisplayAi {
       if (values.isNotEmpty) valuesByField[c] = values.toList();
     }
     final reply = await AiService(settings).ask(
-      task: 'service_filter', json: true,
-      systemPrompt: 'Ты помогаешь отобрать нужные записи из таблицы стороннего сервиса по свободному запросу '
+      task: 'service_filter',
+      json: true,
+      systemPrompt:
+          'Ты помогаешь отобрать нужные записи из таблицы стороннего сервиса по свободному запросу '
           'пользователя. Тебе НЕ дана сама таблица — только список полей и уникальные значения по каждому '
           '(могут быть обрезаны). Выбери РОВНО ОДНО поле для фильтра и подходящие значения СТРОГО из данного '
           'набора (не придумывай новых, не исправляй их). Ответь ТОЛЬКО JSON-объектом без пояснений, без '
@@ -249,14 +354,28 @@ class ServiceDisplayAi {
           'Если запрос не про отбор по конкретному полю (общий вопрос, не про фильтр) — "field" и "values" пустые.',
       contextBlock: '',
       history: [
-        (role: 'user', text: jsonEncode({'fields': columns, 'значения_по_полю': valuesByField, 'запрос': query})),
+        (
+          role: 'user',
+          text: jsonEncode({
+            'fields': columns,
+            'значения_по_полю': valuesByField,
+            'запрос': query
+          })
+        ),
       ],
     );
     final decoded = jsonDecode(_stripCodeFence(reply.text));
-    if (decoded is! Map) throw const FormatException('Ассистент ответил не JSON-объектом');
-    final field = decoded['field'] is String && columns.contains(decoded['field']) ? decoded['field'] as String : '';
-    final values = decoded['values'] is List ? (decoded['values'] as List).map((e) => '$e').toList() : <String>[];
-    final replyText = decoded['reply'] is String ? decoded['reply'] as String : '';
+    if (decoded is! Map)
+      throw const FormatException('Ассистент ответил не JSON-объектом');
+    final field =
+        decoded['field'] is String && columns.contains(decoded['field'])
+            ? decoded['field'] as String
+            : '';
+    final values = decoded['values'] is List
+        ? (decoded['values'] as List).map((e) => '$e').toList()
+        : <String>[];
+    final replyText =
+        decoded['reply'] is String ? decoded['reply'] as String : '';
     return (field: field, values: values, reply: replyText);
   }
 
@@ -269,7 +388,10 @@ class ServiceDisplayAi {
     List<String> values,
   ) {
     if (field.isEmpty || values.isEmpty) return rows;
-    final needles = values.map((v) => v.replaceAll('…', '').trim().toLowerCase()).where((v) => v.isNotEmpty).toList();
+    final needles = values
+        .map((v) => v.replaceAll('…', '').trim().toLowerCase())
+        .where((v) => v.isNotEmpty)
+        .toList();
     if (needles.isEmpty) return rows;
     return rows.where((r) {
       final v = cell(r[field]).toLowerCase();
@@ -284,10 +406,13 @@ class ServiceDisplayAi {
     if (!trimmed.startsWith('```')) return trimmed;
     final withoutFirst = trimmed.substring(trimmed.indexOf('\n') + 1);
     final end = withoutFirst.lastIndexOf('```');
-    return end == -1 ? withoutFirst.trim() : withoutFirst.substring(0, end).trim();
+    return end == -1
+        ? withoutFirst.trim()
+        : withoutFirst.substring(0, end).trim();
   }
 
-  static String truncate(String s, int max) => s.length <= max ? s : '${s.substring(0, max)}…';
+  static String truncate(String s, int max) =>
+      s.length <= max ? s : '${s.substring(0, max)}…';
 
   static String cell(dynamic v) {
     if (v == null) return '';
