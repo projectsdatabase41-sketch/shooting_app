@@ -288,6 +288,21 @@ class _TaskRunScreenState extends State<TaskRunScreen> {
         const SizedBox(height: 8),
         TaskPlanView(plan: task),
         const SizedBox(height: 20),
+        // Раньше посмотреть отчёт УЖЕ выполненного задания можно было
+        // только сразу после отправки (_reportsPage работает только с
+        // _runId этого же сеанса) — открыть задание повторно вело в
+        // обзор без пути к прошлому отчёту (жалоба пользователя:
+        // "задание просмотреть нельзя, только отчёт").
+        if (_lastDoneRunId != null) ...[
+          OutlinedButton.icon(
+            icon: const Icon(Icons.description_outlined),
+            label: Text(tr('Посмотреть отчёт')),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => _TaskReportScreen(service: widget.service, runId: _lastDoneRunId!, title: task.title),
+            )),
+          ),
+          const SizedBox(height: 8),
+        ],
         Raised3DButton(
           icon: Icons.play_arrow,
           label: task.done ? tr('Выполнить ещё раз') : tr('Начать'),
@@ -299,6 +314,14 @@ class _TaskRunScreenState extends State<TaskRunScreen> {
             textAlign: TextAlign.center, style: theme.textTheme.bodySmall),
       ],
     );
+  }
+
+  /// Id последнего ЗАВЕРШЁННОГО прохождения — самый свежий по времени
+  /// окончания, `null`, если ни одного нет.
+  String? get _lastDoneRunId {
+    final done = task.runs.where((r) => r.status == 'done' && r.finishedAt != null).toList()
+      ..sort((a, b) => b.finishedAt!.compareTo(a.finishedAt!));
+    return done.firstOrNull?.id;
   }
 
   Widget _finalPage() {
@@ -784,6 +807,31 @@ class _TaskReportsViewState extends State<TaskReportsView> {
           OutlinedButton(onPressed: widget.onClose, child: Text(tr('Закрыть'))),
         ],
       ],
+    );
+  }
+}
+
+/// Отчёт прошлого прохождения отдельным экраном — со своей шапкой,
+/// без полёта через все страницы `TaskRunScreen`.
+class _TaskReportScreen extends StatelessWidget {
+  final AthleteTaskService service;
+  final String runId;
+  final String title;
+  const _TaskReportScreen({required this.service, required this.runId, required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(title,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+      ),
+      body: Padding(
+        padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + GlassHeader.height),
+        child: TaskReportsView(service: service, runId: runId),
+      ),
     );
   }
 }

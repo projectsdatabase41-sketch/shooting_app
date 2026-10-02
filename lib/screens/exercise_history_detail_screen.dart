@@ -222,12 +222,17 @@ class _TargetBlock extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: FractionallySizedBox(
             widthFactor: 0.9,
+            // Вдвое тоньше, как и у тренера в точно таком же экране
+            // просмотра (coach_exercise_detail_screen.dart) — здесь
+            // колесо только листает уже записанные выстрелы, а не
+            // главный элемент экрана, как на рабочем столе тренировки.
             child: ShotWheel(
               value: vm.selectedIndex < 0 ? 0 : vm.selectedIndex,
               minValue: 0,
               maxValue: total == 0 ? 0 : total - 1,
               enabled: total > 1,
               onChanged: vm.selectIndex,
+              height: 26,
             ),
           ),
         ),
