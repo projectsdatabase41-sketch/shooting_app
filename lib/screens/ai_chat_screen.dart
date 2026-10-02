@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:uuid/uuid.dart';
 
@@ -280,6 +281,19 @@ class _AiChatBodyState extends State<_AiChatBody> {
         null); // сброс, пока читаем — не путать со старым превью при ошибке
     final bytes = await xfile.readAsBytes();
     if (mounted) setState(() => _pendingImage = bytes);
+  }
+
+  /// Поиск в интернете — не свой API поиска (решение пользователя: без
+  /// Tavily и подобных), а то, что уже умеет сам телефон: открывает
+  /// вопрос в системном браузере/поисковом приложении по умолчанию.
+  /// Результат ИИ не видит — это для пользователя, не контекст ассистенту.
+  Future<void> _searchWeb() async {
+    final text = _input.text.trim();
+    if (text.isEmpty) return;
+    await launchUrl(
+      Uri.https('www.google.com', '/search', {'q': text}),
+      mode: LaunchMode.externalApplication,
+    );
   }
 
   void _scrollToEnd() {
@@ -607,6 +621,13 @@ class _AiChatBodyState extends State<_AiChatBody> {
                   tooltip: tr('Приложить фото (нужна модель со зрением)'),
                   onTap:
                       vm.busy ? null : () => _attachImage(vm.service.settings),
+                ),
+                const SizedBox(width: 8),
+                GlassCircleButton(
+                  size: 50,
+                  icon: const Icon(Icons.travel_explore_outlined),
+                  tooltip: tr('Найти в интернете (через браузер телефона)'),
+                  onTap: _searchWeb,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
