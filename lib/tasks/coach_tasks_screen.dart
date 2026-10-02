@@ -184,7 +184,24 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
   final _text = TextEditingController();
   final _title = TextEditingController();
   DateTime? _due;
-  String? _repeat;
+
+  /// Дни недели повтора — свободный набор вместо трёх жёстких пресетов
+  /// (решение пользователя: "выбор дней недели"). Пусто — без повтора,
+  /// все семь — то же самое, что 'daily'.
+  final Set<String> _repeatDays = {};
+  static const _weekdayOrder = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+  static const _weekdayLabels = {
+    'mon': 'Пн',
+    'tue': 'Вт',
+    'wed': 'Ср',
+    'thu': 'Чт',
+    'fri': 'Пт',
+    'sat': 'Сб',
+    'sun': 'Вс',
+  };
+  String? get _repeat => _repeatDays.isEmpty
+      ? null
+      : (_repeatDays.length == 7 ? 'daily' : _weekdayOrder.where(_repeatDays.contains).join(','));
   TaskPlan? _plan;
   final List<({String question, String answer})> _answers = [];
   bool _busy = false;
@@ -355,35 +372,32 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
             ),
           ),
           const SizedBox(height: 8),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.event),
+            label: Text(_due == null ? tr('Срок') : '${_due!.day}.${_due!.month.toString().padLeft(2, '0')}'),
+            onPressed: () async {
+              final d = await showDatePicker(
+                context: context,
+                firstDate: DateTime.now(),
+                lastDate: DateTime.now().add(const Duration(days: 365)),
+                initialDate: _due ?? DateTime.now().add(const Duration(days: 3)),
+              );
+              setState(() => _due = d == null ? null : DateTime(d.year, d.month, d.day, 23, 59));
+            },
+          ),
+          const SizedBox(height: 8),
+          Text(tr('Повторять по дням недели'), style: Theme.of(context).textTheme.labelMedium),
+          const SizedBox(height: 4),
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 6,
+            runSpacing: 6,
             children: [
-              OutlinedButton.icon(
-                icon: const Icon(Icons.event),
-                label: Text(_due == null ? tr('Срок') : '${_due!.day}.${_due!.month.toString().padLeft(2, '0')}'),
-                onPressed: () async {
-                  final d = await showDatePicker(
-                    context: context,
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime.now().add(const Duration(days: 365)),
-                    initialDate: _due ?? DateTime.now().add(const Duration(days: 3)),
-                  );
-                  setState(() => _due = d == null ? null : DateTime(d.year, d.month, d.day, 23, 59));
-                },
-              ),
-              DropdownButton<String?>(
-                value: _repeat,
-                hint: Text(tr('Без повтора')),
-                items: [
-                  DropdownMenuItem(value: null, child: Text(tr('Без повтора'))),
-                  DropdownMenuItem(value: 'daily', child: Text(tr('Каждый день'))),
-                  DropdownMenuItem(value: 'mon,wed,fri', child: Text(tr('Пн, ср, пт'))),
-                  DropdownMenuItem(value: 'tue,thu,sat', child: Text(tr('Вт, чт, сб'))),
-                ],
-                onChanged: (v) => setState(() => _repeat = v),
-              ),
+              for (final d in _weekdayOrder)
+                FilterChip(
+                  label: Text(tr(_weekdayLabels[d]!)),
+                  selected: _repeatDays.contains(d),
+                  onSelected: (v) => setState(() => v ? _repeatDays.add(d) : _repeatDays.remove(d)),
+                ),
             ],
           ),
           const SizedBox(height: 12),
