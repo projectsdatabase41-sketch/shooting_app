@@ -239,6 +239,12 @@ class _AiChatBodyState extends State<_AiChatBody> {
             onTap: () => Navigator.of(ctx).pop('ответь графиком'),
           ),
           ListTile(
+            leading: const Icon(Icons.pie_chart_outline),
+            title: Text(tr('Ответить круговой диаграммой')),
+            onTap: () =>
+                Navigator.of(ctx).pop('ответь круговой диаграммой (pie)'),
+          ),
+          ListTile(
             leading: const Icon(Icons.table_chart_outlined),
             title: Text(tr('Ответить таблицей')),
             onTap: () => Navigator.of(ctx).pop('ответь таблицей'),

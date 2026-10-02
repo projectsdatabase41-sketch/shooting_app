@@ -44,6 +44,8 @@ class AiChartView extends StatelessWidget {
     Widget body;
     if (type == 'table') {
       body = _buildTable(context);
+    } else if (type == 'pie') {
+      body = _buildPie(context, height: 190);
     } else if (type == 'line' || type == 'bar') {
       body = _buildChart(context, bar: type == 'bar');
     } else {
@@ -63,9 +65,11 @@ class AiChartView extends StatelessWidget {
             if (title.isNotEmpty) ...[
               Row(
                 children: [
-                  Expanded(child: Text(title, style: theme.textTheme.titleSmall)),
+                  Expanded(
+                      child: Text(title, style: theme.textTheme.titleSmall)),
                   if (gallery != null)
-                    Icon(Icons.open_in_full, size: 15, color: theme.colorScheme.onSurfaceVariant),
+                    Icon(Icons.open_in_full,
+                        size: 15, color: theme.colorScheme.onSurfaceVariant),
                 ],
               ),
               const SizedBox(height: 10),
@@ -81,7 +85,8 @@ class AiChartView extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: () => Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => ChartGalleryScreen(specs: list, initialIndex: galleryIndex),
+        builder: (_) =>
+            ChartGalleryScreen(specs: list, initialIndex: galleryIndex),
       )),
       child: card,
     );
@@ -92,7 +97,8 @@ class AiChartView extends StatelessWidget {
     final labels = _parseLabels(spec);
     final series = _parseSeries(spec);
     if (series.isEmpty) {
-      return Text(tr('Нет данных для графика'), style: Theme.of(context).textTheme.bodySmall);
+      return Text(tr('Нет данных для графика'),
+          style: Theme.of(context).textTheme.bodySmall);
     }
 
     final palette = [cs.primary, AppTheme.accentFor(cs), cs.tertiary];
@@ -133,7 +139,8 @@ class AiChartView extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 5),
-                    Text(series[i].name, style: Theme.of(context).textTheme.labelSmall),
+                    Text(series[i].name,
+                        style: Theme.of(context).textTheme.labelSmall),
                   ],
                 ),
             ],
@@ -142,6 +149,9 @@ class AiChartView extends StatelessWidget {
       ],
     );
   }
+
+  Widget _buildPie(BuildContext context, {required double height}) =>
+      _PieView(spec: spec, height: height);
 
   Widget _buildTable(BuildContext context) {
     final theme = Theme.of(context);
@@ -161,7 +171,8 @@ class AiChartView extends StatelessWidget {
         dataRowMinHeight: 36,
         dataRowMaxHeight: 64,
         columns: [
-          for (final c in columns) DataColumn(label: Text(c, style: theme.textTheme.labelMedium)),
+          for (final c in columns)
+            DataColumn(label: Text(c, style: theme.textTheme.labelMedium)),
         ],
         rows: [
           for (final r in rows)
@@ -169,13 +180,119 @@ class AiChartView extends StatelessWidget {
               for (var i = 0; i < columns.length; i++)
                 DataCell(ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 160),
-                  child: Text(i < r.length ? r[i] : '', style: theme.textTheme.bodySmall, softWrap: true),
+                  child: Text(i < r.length ? r[i] : '',
+                      style: theme.textTheme.bodySmall, softWrap: true),
                 )),
             ]),
         ],
       ),
     );
   }
+}
+
+/// Круговая диаграмма: доли первого ряда `series` по подписям `x`
+/// (отрицательные/нулевые значения пропускаются — доля не бывает меньше нуля).
+class _PieView extends StatelessWidget {
+  final Map<String, dynamic> spec;
+  final double height;
+  const _PieView({required this.spec, required this.height});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final labels = _parseLabels(spec);
+    final series = _parseSeries(spec);
+    if (series.isEmpty)
+      return Text(tr('Нет данных для графика'),
+          style: theme.textTheme.bodySmall);
+    final values = series.first.values;
+    final slices = <(String, double)>[
+      for (var i = 0; i < values.length; i++)
+        if (values[i] > 0)
+          (i < labels.length ? labels[i] : '${i + 1}', values[i]),
+    ];
+    if (slices.isEmpty)
+      return Text(tr('Нет данных для графика'),
+          style: theme.textTheme.bodySmall);
+    final total = slices.fold<double>(0, (a, s) => a + s.$2);
+    final base = [
+      cs.primary,
+      AppTheme.accentFor(cs),
+      cs.tertiary,
+      cs.secondary,
+      cs.error,
+      cs.primaryContainer
+    ];
+    Color colorAt(int i) =>
+        base[i % base.length].withValues(alpha: i < base.length ? 1 : 0.6);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        SizedBox(
+          width: height,
+          height: height,
+          child: CustomPaint(
+              painter: _PiePainter([for (final s in slices) s.$2],
+                  [for (var i = 0; i < slices.length; i++) colorAt(i)])),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var i = 0; i < slices.length; i++)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                              color: colorAt(i),
+                              borderRadius: BorderRadius.circular(2))),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                            '${slices[i].$1} — ${(slices[i].$2 / total * 100).toStringAsFixed(0)}%',
+                            style: theme.textTheme.labelSmall,
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PiePainter extends CustomPainter {
+  final List<double> values;
+  final List<Color> colors;
+  _PiePainter(this.values, this.colors);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final total = values.fold<double>(0, (a, b) => a + b);
+    final rect = Rect.fromCircle(
+        center: size.center(Offset.zero),
+        radius: math.min(size.width, size.height) / 2);
+    var start = -math.pi / 2;
+    for (var i = 0; i < values.length; i++) {
+      final sweep = values[i] / total * 2 * math.pi;
+      canvas.drawArc(rect, start, sweep, true, Paint()..color = colors[i]);
+      start += sweep;
+    }
+  }
+
+  @override
+  bool shouldRepaint(_PiePainter old) =>
+      old.values != values || old.colors != colors;
 }
 
 /// Разбирает "x"/"series" общим кодом для компактной карточки и
@@ -198,7 +315,9 @@ List<_Series> _parseSeries(Map<String, dynamic> spec) {
 }
 
 (List<String>, List<List<String>>) _parseTable(Map<String, dynamic> spec) {
-  final columns = [for (final c in (spec['columns'] as List? ?? const [])) '$c'];
+  final columns = [
+    for (final c in (spec['columns'] as List? ?? const [])) '$c'
+  ];
   final rows = <List<String>>[];
   for (final r in (spec['rows'] as List? ?? const [])) {
     if (r is List) rows.add([for (final c in r) '$c']);
@@ -222,14 +341,16 @@ class ChartGalleryScreen extends StatefulWidget {
   final List<Map<String, dynamic>> specs;
   final int initialIndex;
 
-  const ChartGalleryScreen({super.key, required this.specs, required this.initialIndex});
+  const ChartGalleryScreen(
+      {super.key, required this.specs, required this.initialIndex});
 
   @override
   State<ChartGalleryScreen> createState() => _ChartGalleryScreenState();
 }
 
 class _ChartGalleryScreenState extends State<ChartGalleryScreen> {
-  late final PageController _pages = PageController(initialPage: widget.initialIndex);
+  late final PageController _pages =
+      PageController(initialPage: widget.initialIndex);
   late int _current = widget.initialIndex;
 
   @override
@@ -242,8 +363,13 @@ class _ChartGalleryScreenState extends State<ChartGalleryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: GlassHeader(
-        title: Text(tr('{p} из {length}', {'p': _current + 1, 'length': widget.specs.length}),
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        title: Text(
+            tr('{p} из {length}',
+                {'p': _current + 1, 'length': widget.specs.length}),
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
       ),
       body: PageView.builder(
         controller: _pages,
@@ -255,19 +381,63 @@ class _ChartGalleryScreenState extends State<ChartGalleryScreen> {
   }
 }
 
-class _GalleryPage extends StatelessWidget {
+class _GalleryPage extends StatefulWidget {
   final Map<String, dynamic> spec;
   const _GalleryPage({required this.spec});
 
   @override
+  State<_GalleryPage> createState() => _GalleryPageState();
+}
+
+class _GalleryPageState extends State<_GalleryPage> {
+  Map<String, dynamic> get spec => widget.spec;
+
+  /// Выбранный вручную вид — график с рядами можно переключить между
+  /// линией/столбиками/кругом без нового запроса к ИИ (те же данные).
+  String? _override;
+
+  @override
   Widget build(BuildContext context) {
-    final type = '${spec['type'] ?? ''}'.toLowerCase();
+    final type = (_override ?? '${spec['type'] ?? ''}').toLowerCase();
+    final convertible =
+        ['line', 'bar', 'pie'].contains('${spec['type'] ?? ''}'.toLowerCase());
     // Название графика сюда не выводим (решение пользователя) — в
     // увеличенном виде оно наезжало на верх графика; заголовок уже
     // виден в самом чате на карточке.
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: type == 'table' ? _buildExpandedTable(context) : _buildExpandedChart(context, bar: type == 'bar'),
+      child: Column(
+        children: [
+          if (convertible)
+            SegmentedButton<String>(
+              segments: [
+                ButtonSegment(
+                    value: 'line',
+                    icon: const Icon(Icons.show_chart),
+                    label: Text(tr('Линия'))),
+                ButtonSegment(
+                    value: 'bar',
+                    icon: const Icon(Icons.bar_chart),
+                    label: Text(tr('Столбцы'))),
+                ButtonSegment(
+                    value: 'pie',
+                    icon: const Icon(Icons.pie_chart_outline),
+                    label: Text(tr('Круг'))),
+              ],
+              selected: {type},
+              showSelectedIcon: false,
+              onSelectionChanged: (v) => setState(() => _override = v.first),
+            ),
+          if (convertible) const SizedBox(height: 12),
+          Expanded(
+            child: type == 'table'
+                ? _buildExpandedTable(context)
+                : type == 'pie'
+                    ? Center(child: _PieView(spec: spec, height: 220))
+                    : _buildExpandedChart(context, bar: type == 'bar'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -276,7 +446,9 @@ class _GalleryPage extends StatelessWidget {
     final labels = _parseLabels(spec);
     final series = _parseSeries(spec);
     if (series.isEmpty) {
-      return Center(child: Text(tr('Нет данных для графика'), style: Theme.of(context).textTheme.bodyMedium));
+      return Center(
+          child: Text(tr('Нет данных для графика'),
+              style: Theme.of(context).textTheme.bodyMedium));
     }
     final palette = [cs.primary, AppTheme.accentFor(cs), cs.tertiary];
 
@@ -328,7 +500,8 @@ class _GalleryPage extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 6),
-                    Text(series[i].name, style: Theme.of(context).textTheme.bodySmall),
+                    Text(series[i].name,
+                        style: Theme.of(context).textTheme.bodySmall),
                   ],
                 ),
             ],
@@ -342,7 +515,8 @@ class _GalleryPage extends StatelessWidget {
     final theme = Theme.of(context);
     final (columns, rows) = _parseTable(spec);
     if (columns.isEmpty && rows.isEmpty) {
-      return Center(child: Text(tr('Пустая таблица'), style: theme.textTheme.bodyMedium));
+      return Center(
+          child: Text(tr('Пустая таблица'), style: theme.textTheme.bodyMedium));
     }
     // constrained: false — таблица занимает свой естественный размер
     // (часто шире экрана), а панорамирование и зум даёт сам
@@ -357,7 +531,8 @@ class _GalleryPage extends StatelessWidget {
         dataRowMinHeight: 44,
         dataRowMaxHeight: 72,
         columns: [
-          for (final c in columns) DataColumn(label: Text(c, style: theme.textTheme.titleSmall)),
+          for (final c in columns)
+            DataColumn(label: Text(c, style: theme.textTheme.titleSmall)),
         ],
         rows: [
           for (final r in rows)
@@ -365,7 +540,8 @@ class _GalleryPage extends StatelessWidget {
               for (var i = 0; i < columns.length; i++)
                 DataCell(ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 240),
-                  child: Text(i < r.length ? r[i] : '', style: theme.textTheme.bodyMedium, softWrap: true),
+                  child: Text(i < r.length ? r[i] : '',
+                      style: theme.textTheme.bodyMedium, softWrap: true),
                 )),
             ]),
         ],
@@ -446,7 +622,8 @@ class _SpecChartPainter extends CustomPainter {
     double xAt(int i) => count <= 1
         ? _left + plotWidth / 2
         : _left + plotWidth * i / (count - 1);
-    double yAt(double v) => plotBottom - (v - minV) / (maxV - minV) * plotBottom;
+    double yAt(double v) =>
+        plotBottom - (v - minV) / (maxV - minV) * plotBottom;
 
     if (bar) {
       final slot = plotWidth / count;
@@ -455,12 +632,14 @@ class _SpecChartPainter extends CustomPainter {
       for (var si = 0; si < series.length; si++) {
         final paint = Paint()..color = colors[si % colors.length];
         for (var i = 0; i < series[si].values.length; i++) {
-          final cx = _left + slot * (i + 0.5) - groupWidth / 2 + barWidth * (si + 0.5);
+          final cx =
+              _left + slot * (i + 0.5) - groupWidth / 2 + barWidth * (si + 0.5);
           final y = yAt(series[si].values[i]);
           final zero = yAt(math.max(0, minV));
           canvas.drawRRect(
             RRect.fromRectAndCorners(
-              Rect.fromLTRB(cx - barWidth / 2 + 1, math.min(y, zero), cx + barWidth / 2 - 1, math.max(y, zero)),
+              Rect.fromLTRB(cx - barWidth / 2 + 1, math.min(y, zero),
+                  cx + barWidth / 2 - 1, math.max(y, zero)),
               topLeft: const Radius.circular(2),
               topRight: const Radius.circular(2),
             ),
@@ -491,7 +670,8 @@ class _SpecChartPainter extends CustomPainter {
       for (var i = 0; i < labels.length; i++) {
         if (i % step != 0 && i != labels.length - 1) continue;
         final x = bar ? _left + plotWidth / labels.length * (i + 0.5) : xAt(i);
-        _text(canvas, labels[i], Offset(x, plotBottom + 3), axisColor, 9, center: true);
+        _text(canvas, labels[i], Offset(x, plotBottom + 3), axisColor, 9,
+            center: true);
       }
     }
   }
@@ -505,7 +685,8 @@ class _SpecChartPainter extends CustomPainter {
       text: TextSpan(text: s, style: TextStyle(color: color, fontSize: size)),
       textDirection: TextDirection.ltr,
     )..layout();
-    final dx = right ? pos.dx - tp.width : (center ? pos.dx - tp.width / 2 : pos.dx);
+    final dx =
+        right ? pos.dx - tp.width : (center ? pos.dx - tp.width / 2 : pos.dx);
     final dy = right ? pos.dy - tp.height / 2 : pos.dy;
     tp.paint(canvas, Offset(dx, dy));
   }

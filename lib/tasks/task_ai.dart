@@ -14,7 +14,8 @@ class TaskAi {
   TaskAi(this.settings);
 
   static String? _guide;
-  static Future<String> guide() async => _guide ??= await rootBundle.loadString('assets/ai/tasks_guide.md');
+  static Future<String> guide() async =>
+      _guide ??= await rootBundle.loadString('assets/ai/tasks_guide.md');
 
   /// Черновик задания или вопросы. [answers] — уже заданные вопросы и ответы тренера.
   Future<({List<String> questions, TaskPlan? plan})> build({
@@ -23,7 +24,8 @@ class TaskAi {
     String athletesInfo = '',
   }) async {
     final reply = await AiService(settings).ask(
-      systemPrompt: 'Ты помогаешь тренеру по пулевой стрельбе собрать задание для спортсмена в приложении. '
+      systemPrompt:
+          'Ты помогаешь тренеру по пулевой стрельбе собрать задание для спортсмена в приложении. '
           'Ниже справочник, как устроены задания. Прочитай описание тренера и ответы на уточнения.\n'
           'Если без уточнения нельзя правильно собрать СТРУКТУРУ — верни JSON {"questions": ["…", "…"]} '
           '(1–4 коротких вопроса, только о структуре и неясном). Иначе верни JSON {"task": {…}} строго по '
@@ -44,24 +46,30 @@ class TaskAi {
     final qs = [for (final q in (j['questions'] as List? ?? const [])) '$q'];
     final task = j['task'];
     if (task is Map) {
-      final plan = TaskPlan.fromJson({...task.cast<String, dynamic>(), 'stages': task['stages'] ?? const []});
+      final plan = TaskPlan.fromJson({
+        ...task.cast<String, dynamic>(),
+        'stages': task['stages'] ?? const []
+      });
       if (plan.coachText.isEmpty) plan.coachText = coachText;
       plan.clarifications.addAll(answers);
       return (questions: const <String>[], plan: plan);
     }
-    if (qs.isEmpty) throw const FormatException('ИИ не вернул ни задание, ни вопросы');
+    if (qs.isEmpty)
+      throw const FormatException('ИИ не вернул ни задание, ни вопросы');
     return (questions: qs, plan: null);
   }
 
   /// Два отчёта по прохождению: текст для базы и наглядный (блоки
   /// текст/график/таблица, JSON). [runJson] — всё, что сохранено (план,
   /// выстрелы, отметки, отклонения, итоговая заметка).
-  Future<({String structured, String visual, String model})> reports(TaskPlan plan, Map<String, dynamic> runJson,
+  Future<({String structured, String visual, String model})> reports(
+      TaskPlan plan, Map<String, dynamic> runJson,
       {String request = ''}) async {
     final data = jsonEncode({'task': plan.toJson(), 'run': runJson});
     final ai = AiService(settings);
     final structured = await ai.ask(
-      systemPrompt: 'Составь отчёт о выполнении задания стрелком — для хранения в базе и чтения другим ИИ. '
+      systemPrompt:
+          'Составь отчёт о выполнении задания стрелком — для хранения в базе и чтения другим ИИ. '
           'Структурированный текст с разделами: План; Факт по каждому этапу (результат, время, выстрелы, '
           'отметки спортсмена своими словами); Отклонения (с цифрами план/факт и возможной причиной); '
           'Итоговая заметка спортсмена; Выводы и рекомендации тренеру. Ничего не выдумывай — только из данных.\n\n'
@@ -70,9 +78,10 @@ class TaskAi {
       history: const [(role: 'user', text: 'Составь отчёт.')],
     );
     final visual = await ai.ask(
-      systemPrompt: 'Сделай наглядный отчёт о выполнении задания стрелком. Ответ — ТОЛЬКО JSON '
+      systemPrompt:
+          'Сделай наглядный отчёт о выполнении задания стрелком. Ответ — ТОЛЬКО JSON '
           '{"blocks": [ … ]}, где блок — {"type":"text","text":"…"} или {"type":"chart","chart":{…}}. '
-          'chart: {"type":"line"|"bar"|"table","title":"…","x":[…],"series":[{"name":"…","values":[…]}]}; '
+          'chart: {"type":"line"|"bar"|"pie"|"table","title":"…","x":[…],"series":[{"name":"…","values":[…]}]}; '
           'для таблицы — "columns":[…],"rows":[[…]]. Сочетай короткие тексты, графики по сериям/этапам и '
           'таблицы. Только настоящие данные. ${request.isEmpty ? '' : 'Пожелание к формату: $request'}',
       contextBlock: 'ДАННЫЕ:\n$data',
@@ -80,13 +89,18 @@ class TaskAi {
       json: true,
       accept: (t) => t.contains('"blocks"'),
     );
-    return (structured: structured.text.trim(), visual: jsonEncode(_json(visual.text)), model: structured.model);
+    return (
+      structured: structured.text.trim(),
+      visual: jsonEncode(_json(visual.text)),
+      model: structured.model
+    );
   }
 
   static Map<String, dynamic> _json(String text) {
     final a = text.indexOf('{');
     final b = text.lastIndexOf('}');
     if (a < 0 || b <= a) throw const FormatException('ИИ ответил не JSON');
-    return (jsonDecode(text.substring(a, b + 1)) as Map).cast<String, dynamic>();
+    return (jsonDecode(text.substring(a, b + 1)) as Map)
+        .cast<String, dynamic>();
   }
 }

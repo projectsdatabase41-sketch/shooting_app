@@ -76,7 +76,8 @@ class AiService {
   final AiSettings settings;
   final http.Client _client;
 
-  AiService(this.settings, {http.Client? client}) : _client = client ?? http.Client();
+  AiService(this.settings, {http.Client? client})
+      : _client = client ?? http.Client();
 
   static const String defaultBase = 'https://openrouter.ai/api/v1';
 
@@ -94,10 +95,12 @@ class AiService {
         .get(Uri.parse('$_base/models'), headers: _headers())
         .timeout(_timeout);
     if (res.statusCode != 200) {
-      throw AiException('Не удалось получить список моделей (${res.statusCode})');
+      throw AiException(
+          'Не удалось получить список моделей (${res.statusCode})');
     }
     try {
-      final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+      final data =
+          jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
       final list = (data['data'] as List?) ?? const [];
       final free = <String>[];
       for (final m in list) {
@@ -115,7 +118,8 @@ class AiService {
       // Сервер ответил 200, но не тем форматом, что мы ждём (сменился
       // API, временная заглушка вместо JSON) — пользователю нужна не
       // тарабарщина из FormatException, а понятная просьба повторить.
-      throw const AiException('Не удалось разобрать ответ моделей — попробуйте ещё раз');
+      throw const AiException(
+          'Не удалось разобрать ответ моделей — попробуйте ещё раз');
     }
   }
 
@@ -132,9 +136,11 @@ class AiService {
   /// которая на «привет» отвечает, а здесь уходит в рассуждения, для
   /// ассистента бесполезна, и узнать это лучше заранее.
   Future<String> probeModel(String model) async {
-    const system = 'Ты — ассистент по спортивной стрельбе. Отвечай коротко, по-русски, '
+    const system =
+        'Ты — ассистент по спортивной стрельбе. Отвечай коротко, по-русски, '
         'не рассуждай вслух. Выстрелы: (0.4, -1.2), (-0.8, 0.3), (1.1, 0.9) мм от центра.';
-    const question = 'Посчитай СТП по этим трём выстрелам и добавь блок ```chart с типом bar.';
+    const question =
+        'Посчитай СТП по этим трём выстрелам и добавь блок ```chart с типом bar.';
 
     final started = DateTime.now();
     try {
@@ -166,6 +172,7 @@ class AiService {
     String? task,
     bool json = false,
     bool Function(String text)? accept,
+
     /// Фото к вопросу (чат) — только когда task == 'chat' и выбрана
     /// модель со зрением (кнопка в ai_chat_screen.dart сама решает,
     /// когда её показывать). Молча игнорируется остальными задачами.
@@ -174,11 +181,14 @@ class AiService {
     // Со своим ключом — он один; на встроенном — целый список (пользователь
     // принёс несколько ключей именно на случай, если один упрётся в лимит:
     // "если отвалится один, запуститься другой и так до последнего").
-    final system = StringBuffer(systemPrompt)..writeln()..writeln(contextBlock);
+    final system = StringBuffer(systemPrompt)
+      ..writeln()
+      ..writeln(contextBlock);
     if (booksExcerpt != null && booksExcerpt.isNotEmpty) {
       system
         ..writeln()
-        ..writeln('ДАННЫЕ ИЗ БАЗЫ ЗНАНИЙ И ПОДКЛЮЧЁННЫХ ТАБЛИЦ ПОЛЬЗОВАТЕЛЯ (книги и правила — для вопросов '
+        ..writeln(
+            'ДАННЫЕ ИЗ БАЗЫ ЗНАНИЙ И ПОДКЛЮЧЁННЫХ ТАБЛИЦ ПОЛЬЗОВАТЕЛЯ (книги и правила — для вопросов '
             'о теории стрельбы; личные таблицы пользователя, например заметки, — когда вопрос о его делах и записях):')
         ..writeln(booksExcerpt);
     }
@@ -187,14 +197,16 @@ class AiService {
     if (I18n.code != 'ru') {
       system
         ..writeln()
-        ..writeln('Отвечай пользователю на языке с кодом «${I18n.code}» (язык его интерфейса), '
+        ..writeln(
+            'Отвечай пользователю на языке с кодом «${I18n.code}» (язык его интерфейса), '
             'даже если инструкции выше написаны по-русски. JSON-ключи и служебные блоки не переводи.');
     }
 
     // Сначала локальная модель (если включена для этой задачи); её ответ
     // проверяется так же, как его потом разберёт вызывающий код, — не
     // прошёл проверку, идём в облако.
-    final check = accept ?? (json ? _looksLikeJson : (String t) => t.trim().isNotEmpty);
+    final check =
+        accept ?? (json ? _looksLikeJson : (String t) => t.trim().isNotEmpty);
     final local = LocalAi.instance;
     // Ручной выбор модели в чате (AiSettings.chatModelChoice) — только для
     // task == 'chat' и только если выбор не 'auto': тогда обычное поведение
@@ -221,7 +233,8 @@ class AiService {
         }
       }
     } else if (chatChoice != 'auto') {
-      final reply = await _askCloud(system.toString(), history, onlyModel: chatChoice, image: image);
+      final reply = await _askCloud(system.toString(), history,
+          onlyModel: chatChoice, image: image);
       local.learn(settings, 'chat', history, reply.text);
       return reply;
     } else if (local.wants(settings, task)) {
@@ -243,7 +256,8 @@ class AiService {
     }
 
     final reply = await _askCloud(system.toString(), history, image: image);
-    if (task != null && check(reply.text)) local.learn(settings, task, history, reply.text);
+    if (task != null && check(reply.text))
+      local.learn(settings, task, history, reply.text);
     return reply;
   }
 
@@ -271,9 +285,11 @@ class AiService {
     String? onlyModel,
     Uint8List? image,
   }) async {
-    final keys = settings.hasOwnKey ? [settings.apiKey] : AiSettings.testApiKeys;
+    final keys =
+        settings.hasOwnKey ? [settings.apiKey] : AiSettings.testApiKeys;
     if (keys.isEmpty) {
-      throw const AiException('Не задан API Key — укажите его в настройках ассистента');
+      throw const AiException(
+          'Не задан API Key — укажите его в настройках ассистента');
     }
 
     final messages = <Map<String, dynamic>>[
@@ -284,7 +300,12 @@ class AiService {
             'role': m.role,
             'content': [
               {'type': 'text', 'text': m.text},
-              {'type': 'image_url', 'image_url': {'url': 'data:image/jpeg;base64,${base64Encode(image)}'}},
+              {
+                'type': 'image_url',
+                'image_url': {
+                  'url': 'data:image/jpeg;base64,${base64Encode(image)}'
+                }
+              },
             ],
           }
         else
@@ -360,7 +381,9 @@ class AiService {
     // модели. 429 — всегда про лимит, тут сомнений нет.
     final errorMsg = _errorFrom(res);
     final isRateLimit = res.statusCode == 429 ||
-        (res.statusCode == 403 && RegExp(r'rate.?limit|too many requests|quota', caseSensitive: false).hasMatch(errorMsg));
+        (res.statusCode == 403 &&
+            RegExp(r'rate.?limit|too many requests|quota', caseSensitive: false)
+                .hasMatch(errorMsg));
     if (isRateLimit) {
       throw RateLimitedException(errorMsg);
     }
@@ -392,7 +415,8 @@ class AiService {
       parts.add(fieldReasoning.trim());
     }
     final inline = split.$2;
-    if (inline != null && !parts.any((p) => p.contains(inline) || inline.contains(p))) {
+    if (inline != null &&
+        !parts.any((p) => p.contains(inline) || inline.contains(p))) {
       parts.add(inline);
     }
     final reasoning = parts.join('\n\n');
@@ -441,7 +465,7 @@ class AiService {
 
   /// Допустимые типы графика. Всё остальное — мусор, который в
   /// интерфейс пускать нельзя.
-  static const Set<String> chartTypes = {'line', 'bar', 'table'};
+  static const Set<String> chartTypes = {'line', 'bar', 'pie', 'table'};
 
   /// Отделяет блок ```chart от текста ответа.
   ///
@@ -460,7 +484,8 @@ class AiService {
   /// везде в приложении, "универсальный язык" вместо отдельного формата
   /// для чата).
   static (String, Map<String, dynamic>?) splitChart(String raw) {
-    final matches = RegExp(r'```chart\s*([\s\S]*?)```').allMatches(raw).toList();
+    final matches =
+        RegExp(r'```chart\s*([\s\S]*?)```').allMatches(raw).toList();
     if (matches.isEmpty) return (raw, null);
 
     // Текст без всех chart-блоков.
@@ -500,7 +525,8 @@ class AiService {
   /// "не выдумывай мишень", однажды её выдумает. Негодная спецификация
   /// молча отбрасывается, текст ответа остаётся как есть.
   static (String, Map<String, dynamic>?) _splitExercise(String raw) {
-    final matches = RegExp(r'```exercise\s*([\s\S]*?)```').allMatches(raw).toList();
+    final matches =
+        RegExp(r'```exercise\s*([\s\S]*?)```').allMatches(raw).toList();
     if (matches.isEmpty) return (raw, null);
 
     var text = raw;
@@ -553,7 +579,10 @@ class AiService {
     // Без series — старый вид: обязательны total_shots и series_size.
     final totalShots = spec['total_shots'];
     final seriesSize = spec['series_size'];
-    return totalShots is num && totalShots > 0 && seriesSize is num && seriesSize > 0;
+    return totalShots is num &&
+        totalShots > 0 &&
+        seriesSize is num &&
+        seriesSize > 0;
   }
 
   /// Отделяет блок ```note (предложенная заметка в дневник тренера) от
@@ -582,13 +611,17 @@ class AiService {
   static bool _isValidNote(Map<String, dynamic> spec) {
     final topic = spec['topic'];
     final content = spec['content'];
-    return topic is String && topic.trim().isNotEmpty && content is String && content.trim().isNotEmpty;
+    return topic is String &&
+        topic.trim().isNotEmpty &&
+        content is String &&
+        content.trim().isNotEmpty;
   }
 
   /// Отделяет блок ```feedback (предложенный отзыв о приложении) от
   /// текста — тот же принцип, что у `_splitExercise`/`_splitNote`.
   static (String, Map<String, dynamic>?) _splitFeedback(String raw) {
-    final matches = RegExp(r'```feedback\s*([\s\S]*?)```').allMatches(raw).toList();
+    final matches =
+        RegExp(r'```feedback\s*([\s\S]*?)```').allMatches(raw).toList();
     if (matches.isEmpty) return (raw, null);
 
     var text = raw;
@@ -625,7 +658,8 @@ class AiService {
   /// Если ничего не сработало — весь текст считается ответом. Потерять
   /// ответ хуже, чем показать лишнее.
   static (String, String?) splitReasoning(String raw) {
-    final think = RegExp(r'<think>([\s\S]*?)</think>', caseSensitive: false).firstMatch(raw);
+    final think = RegExp(r'<think>([\s\S]*?)</think>', caseSensitive: false)
+        .firstMatch(raw);
     if (think != null) {
       final text = raw.replaceRange(think.start, think.end, '').trim();
       return (text, think.group(1)!.trim());
