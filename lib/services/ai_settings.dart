@@ -25,7 +25,8 @@ class KnowledgeTableConfig {
     this.contentColumn = 'content',
   }) : label = label ?? name;
 
-  factory KnowledgeTableConfig.fromJson(Map<String, dynamic> json) => KnowledgeTableConfig(
+  factory KnowledgeTableConfig.fromJson(Map<String, dynamic> json) =>
+      KnowledgeTableConfig(
         name: json['name'] as String,
         label: json['label'] as String?,
         description: json['description'] as String? ?? '',
@@ -59,6 +60,7 @@ class AiSettings {
   static const String keyLocalMode = 'ai_local_mode';
   static const String keyLocalModel = 'ai_local_model';
   static const String keyChatModelChoice = 'ai_chat_model_choice';
+  static const String keyModelPriority = 'ai_model_priority';
 
   /// Все ключи ИИ — чтобы «сбросить все цвета» их не снесло.
   static const List<String> allKeys = [
@@ -92,9 +94,19 @@ class AiSettings {
   String get chatModelChoice => _read(keyChatModelChoice, fallback: 'auto');
   set chatModelChoice(String v) => _write(keyChatModelChoice, v);
 
+  /// 'quality' (по умолчанию) — цепочка/подбор моделей как раньше, по
+  /// точности. 'speed' — цепочка переворачивается (хвост, который
+  /// меньше рассуждает и быстрее отвечает, идёт первым), а «Подобрать
+  /// модели» просит ИИ ранжировать по скорости ответа, а не по точности
+  /// арифметики (решение пользователя, пункт 13 списка правок).
+  /// ponytail: грубая эвристика (разворот списка), не замер реальной
+  /// скорости моделей — апгрейд, если понадобится точнее.
+  String get modelPriority => _read(keyModelPriority, fallback: 'quality');
+  set modelPriority(String v) => _write(keyModelPriority, v);
 
   String get apiBaseUrl => _read(keyApiBaseUrl, fallback: defaultApiBaseUrl);
-  set apiBaseUrl(String v) => _write(keyApiBaseUrl, v.trim().replaceAll(RegExp(r'/+$'), ''));
+  set apiBaseUrl(String v) =>
+      _write(keyApiBaseUrl, v.trim().replaceAll(RegExp(r'/+$'), ''));
 
   /// Тестовый ключ OpenRouter. В исходниках его больше НЕТ — он
   /// приходит на сборку: `--dart-define=OPENROUTER_KEY=sk-or-...`.
@@ -189,7 +201,8 @@ class AiSettings {
   ];
 
   String _read(String key, {String fallback = ''}) {
-    final rows = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [key]);
+    final rows =
+        db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [key]);
     if (rows.isEmpty) return fallback;
     final v = rows.first['hex'] as String?;
     return (v == null || v.isEmpty) ? fallback : v;
@@ -212,9 +225,16 @@ class AiSettings {
 
   List<String> get models {
     final raw = _read(keyModels);
-    if (raw.isEmpty) return defaultModels;
-    final list = raw.split('\n').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
-    return list.isEmpty ? defaultModels : list;
+    final fallback = modelPriority == 'speed'
+        ? defaultModels.reversed.toList()
+        : defaultModels;
+    if (raw.isEmpty) return fallback;
+    final list = raw
+        .split('\n')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+    return list.isEmpty ? fallback : list;
   }
 
   set models(List<String> v) => _write(keyModels, v.join('\n'));
@@ -231,8 +251,10 @@ class AiSettings {
   /// правок: "справочные материалы вшиты и скрыты внутри приложения").
   /// Адрес и публикуемый ключ поэтому зашиты как константы — ни то, ни
   /// другое больше не редактируется в настройках.
-  static const String booksUrl = 'https://yirvomezybprdlntxyas.supabase.co/rest/v1';
-  static const String booksToken = 'sb_publishable_2nW7G7lKueMQamuFeoC3Cw_iql48Xj3';
+  static const String booksUrl =
+      'https://yirvomezybprdlntxyas.supabase.co/rest/v1';
+  static const String booksToken =
+      'sb_publishable_2nW7G7lKueMQamuFeoC3Cw_iql48Xj3';
 
   /// Таблицы общей базы, вшитые в приложение — всегда активны, нигде в
   /// настройках не показываются и не редактируются.
@@ -257,13 +279,20 @@ class AiSettings {
       if (raw.trimLeft().startsWith('[')) {
         try {
           final decoded = jsonDecode(raw) as List;
-          return decoded.cast<Map<String, dynamic>>().map(KnowledgeTableConfig.fromJson).toList();
+          return decoded
+              .cast<Map<String, dynamic>>()
+              .map(KnowledgeTableConfig.fromJson)
+              .toList();
         } catch (_) {
           return const [];
         }
       }
       // Старый формат — простые имена через запятую.
-      final names = raw.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+      final names = raw
+          .split(',')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
       return [for (final n in names) KnowledgeTableConfig(name: n)];
     }
 
@@ -276,7 +305,8 @@ class AiSettings {
     return parse().where((t) => !builtInNames.contains(t.name)).toList();
   }
 
-  set tables(List<KnowledgeTableConfig> v) => _write(keyTables, jsonEncode([for (final t in v) t.toJson()]));
+  set tables(List<KnowledgeTableConfig> v) =>
+      _write(keyTables, jsonEncode([for (final t in v) t.toJson()]));
 
   /// Таблицы, которые заводит сама схема приложения (`sql/schema.sql`) в
   /// ЛИЧНОЙ базе пользователя — исключаются из списка при подключении
@@ -318,6 +348,7 @@ class AiSettings {
   static const int customInstructionsLimitBuiltIn = 300;
   static const int customInstructionsLimitOwnKey = 2000;
 
-  int get customInstructionsLimit =>
-      hasOwnKey ? customInstructionsLimitOwnKey : customInstructionsLimitBuiltIn;
+  int get customInstructionsLimit => hasOwnKey
+      ? customInstructionsLimitOwnKey
+      : customInstructionsLimitBuiltIn;
 }

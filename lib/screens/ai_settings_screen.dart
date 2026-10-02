@@ -45,6 +45,12 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
   /// Пользователь ввёл собственный ключ, а не пользуется вшитым.
   late bool _ownKey;
 
+  /// Единый трёхпозиционный выбор источника ИИ (решение пользователя,
+  /// пункт 11 списка правок) — раньше «Локальный» был отдельной плиткой
+  /// сбоку, теперь это такой же равноправный третий вариант, как
+  /// встроенный/свой ключ, и выбор одного выключает остальные.
+  late String _mode; // 'builtin' | 'ownKey' | 'local'
+
   @override
   void initState() {
     super.initState();
@@ -52,15 +58,22 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     _settings = AiSettings(_db);
     _personalAuth = SupabaseAuthService(_db);
     _ownKey = _settings.hasOwnKey;
+    _mode = _settings.localMode != 'off'
+        ? 'local'
+        : (_ownKey ? 'ownKey' : 'builtin');
     _key = TextEditingController(text: _ownKey ? _settings.apiKey : '');
     // Адрес по умолчанию не показываем — пустое поле = встроенный сервис.
-    _apiBaseUrl =
-        TextEditingController(text: _settings.apiBaseUrl == AiSettings.defaultApiBaseUrl ? '' : _settings.apiBaseUrl);
+    _apiBaseUrl = TextEditingController(
+        text: _settings.apiBaseUrl == AiSettings.defaultApiBaseUrl
+            ? ''
+            : _settings.apiBaseUrl);
     // Со своим ключом поле цепочки стартует ПУСТЫМ, если пользователь
     // ещё ничего не вводил — не подставляем модели, подобранные под
     // встроенный бесплатный ключ, это разные наборы задач/ограничений.
-    _models = TextEditingController(text: _ownKey ? _settings.rawModels : _settings.models.join('\n'));
-    _customInstructions = TextEditingController(text: _settings.customInstructions);
+    _models = TextEditingController(
+        text: _ownKey ? _settings.rawModels : _settings.models.join('\n'));
+    _customInstructions =
+        TextEditingController(text: _settings.customInstructions);
   }
 
   @override
@@ -75,17 +88,23 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
   /// Со встроенным ключом предел заметно уже — экран использует ЭТОТ
   /// геттер (не `_settings.customInstructionsLimit`), чтобы предел в UI
   /// менялся сразу при переключении сегмента, не дожидаясь "Сохранить".
-  int get _customInstructionsLimit =>
-      _ownKey ? AiSettings.customInstructionsLimitOwnKey : AiSettings.customInstructionsLimitBuiltIn;
+  int get _customInstructionsLimit => _mode == 'ownKey'
+      ? AiSettings.customInstructionsLimitOwnKey
+      : AiSettings.customInstructionsLimitBuiltIn;
 
   void _save() {
+    if (_mode != 'local' && _settings.localMode != 'off')
+      _settings.localMode = 'off';
     _settings.apiKey = _ownKey ? _key.text : '';
-    _settings.apiBaseUrl = _apiBaseUrl.text.isEmpty ? AiSettings.defaultApiBaseUrl : _apiBaseUrl.text;
+    _settings.apiBaseUrl = _apiBaseUrl.text.isEmpty
+        ? AiSettings.defaultApiBaseUrl
+        : _apiBaseUrl.text;
     _settings.models = _models.text.split('\n');
     final rawInstructions = _customInstructions.text;
-    _settings.customInstructions = rawInstructions.length > _customInstructionsLimit
-        ? rawInstructions.substring(0, _customInstructionsLimit)
-        : rawInstructions;
+    _settings.customInstructions =
+        rawInstructions.length > _customInstructionsLimit
+            ? rawInstructions.substring(0, _customInstructionsLimit)
+            : rawInstructions;
     // "Сохранить" — это закрыть экран настроек, а не остаться на нём:
     // настройки — не рабочий экран, к которому возвращаются, а разовое
     // действие, после которого логично вернуться туда, откуда пришёл.
@@ -114,7 +133,11 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     // Проверяем то, что сейчас в поле, даже если пользователь ещё не
     // нажал «Сохранить» — иначе проверка идёт не по тому списку,
     // который человек видит перед собой.
-    final list = _models.text.split('\n').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    final list = _models.text
+        .split('\n')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
     if (list.isEmpty) return;
 
     setState(() {
@@ -132,7 +155,8 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
       // идущие запросы с одного ключа провайдеры иногда встречают сбоем
       // — не 429 явным текстом, а обрывком ответа, который выглядит как
       // "модель не ответила", хотя дело не в самой модели.
-      if (model != list.last) await Future.delayed(const Duration(milliseconds: 400));
+      if (model != list.last)
+        await Future.delayed(const Duration(milliseconds: 400));
     }
     if (!mounted) return;
     // Рабочие модели остаются в порядке, который написал пользователь,
@@ -166,13 +190,20 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
       final service = AiService(_settings);
       final free = await service.fetchFreeModels();
       if (free.isEmpty) throw AiException(tr('Бесплатных моделей сейчас нет'));
+      final preferSpeed = _settings.modelPriority == 'speed';
       final reply = await service.ask(
-        systemPrompt: 'Ты помогаешь настроить цепочку ИИ-моделей для ассистента по '
-            'спортивной стрельбе. Нужны модели, которые точно считают арифметику '
-            '(например, среднюю точку попадания и кучность по координатам выстрелов) '
-            'и не рассуждают вслух подолгу — ответ должен быть коротким и по делу, а не '
-            'дорогим и медленным.',
-        contextBlock: 'Доступные бесплатные модели OpenRouter прямо сейчас, по одной в строке:\n'
+        systemPrompt: preferSpeed
+            ? 'Ты помогаешь настроить цепочку ИИ-моделей для ассистента по спортивной '
+                'стрельбе. Приоритет — скорость и краткость ответа: модель не должна '
+                'подолгу рассуждать вслух, даже если это немного снижает точность '
+                'арифметики.'
+            : 'Ты помогаешь настроить цепочку ИИ-моделей для ассистента по '
+                'спортивной стрельбе. Нужны модели, которые точно считают арифметику '
+                '(например, среднюю точку попадания и кучность по координатам выстрелов) '
+                'и не рассуждают вслух подолгу — ответ должен быть коротким и по делу, а не '
+                'дорогим и медленным.',
+        contextBlock:
+            'Доступные бесплатные модели OpenRouter прямо сейчас, по одной в строке:\n'
             '${free.join('\n')}',
         history: const [
           (
@@ -183,8 +214,14 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
           ),
         ],
       );
-      final ranked = reply.text.split('\n').map((l) => l.trim()).where(free.contains).toList();
-      if (ranked.isEmpty) throw AiException(tr('Не удалось разобрать ответ моделей — попробуйте ещё раз'));
+      final ranked = reply.text
+          .split('\n')
+          .map((l) => l.trim())
+          .where(free.contains)
+          .toList();
+      if (ranked.isEmpty)
+        throw AiException(
+            tr('Не удалось разобрать ответ моделей — попробуйте ещё раз'));
       _settings.models = ranked;
       setState(() {
         _models.text = ranked.join('\n');
@@ -230,29 +267,48 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
-        title: Text(tr('Ассистент'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        title: Text(tr('Ассистент'),
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
-          GlassCircleButton(icon: const BoldIcon(Icons.check), tooltip: tr('Сохранить'), onTap: _save),
+          GlassCircleButton(
+              icon: const BoldIcon(Icons.check),
+              tooltip: tr('Сохранить'),
+              onTap: _save),
         ],
       ),
       body: ListView(
-        padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 32),
+        padding:
+            EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 32),
         children: [
-          SectionHeader(title: tr('Доступ'), subtitle: tr('Бесплатный облачный ИИ')),
+          SectionHeader(
+            title: tr('Доступ'),
+            subtitle: switch (_mode) {
+              'local' => tr(
+                  'Использует производительные мощности этого устройства (долгие ответы и нагрев устройства)'),
+              'ownKey' => tr(
+                  'Плата взимается поставщиком услуг (возможности, скорость, расход зависят от выбранной LLM модели)'),
+              _ => tr('Бесплатный облачный сервис'),
+            },
+          ),
           const SizedBox(height: 12),
-          // Переключатель вместо прежнего предупреждения: поле ключа
-          // показывается, только когда пользователь выбрал свой ключ.
-          // Постоянная плашка «ключ можно достать из сборки» висела над
-          // экраном всегда и ничего не меняла.
-          SegmentedButton<bool>(
+          // Один трёхпозиционный выбор вместо отдельной плитки «Локальная
+          // модель» сбоку — Локальный теперь равноправная альтернатива
+          // облаку, а не довесок (решение пользователя, пункт 11).
+          SegmentedButton<String>(
             segments: [
-              ButtonSegment(value: false, label: Text(tr('Встроенный'))),
-              ButtonSegment(value: true, label: Text(tr('Свой API Key'))),
+              ButtonSegment(value: 'builtin', label: Text(tr('Бесплатный'))),
+              ButtonSegment(value: 'ownKey', label: Text(tr('Свой ключ'))),
+              if (localAiSupported)
+                ButtonSegment(value: 'local', label: Text(tr('На устройстве'))),
             ],
-            selected: {_ownKey},
+            selected: {_mode},
             showSelectedIcon: false,
             onSelectionChanged: (v) => setState(() {
-              _ownKey = v.first;
+              _mode = v.first;
+              _ownKey = _mode == 'ownKey';
+              if (_mode == 'local' && _settings.localMode == 'off')
+                _settings.localMode = 'tasks';
               if (!_ownKey) {
                 _key.text = '';
                 // Возвращаемся к эффективной цепочке встроенного ключа
@@ -265,6 +321,22 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
               }
             }),
           ),
+          if (_mode == 'local') ...[
+            const SizedBox(height: 12),
+            LocalAiPanel(settings: _settings),
+          ] else ...[
+            const SizedBox(height: 12),
+            SegmentedButton<String>(
+              segments: [
+                ButtonSegment(value: 'quality', label: Text(tr('Качество'))),
+                ButtonSegment(value: 'speed', label: Text(tr('Скорость'))),
+              ],
+              selected: {_settings.modelPriority},
+              showSelectedIcon: false,
+              onSelectionChanged: (v) =>
+                  setState(() => _settings.modelPriority = v.first),
+            ),
+          ],
           if (_ownKey) ...[
             const SizedBox(height: 12),
             TextField(
@@ -277,49 +349,23 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
               controller: _apiBaseUrl,
               decoration: InputDecoration(
                 labelText: 'URL',
-                helperText: tr('Адрес API вашего сервиса (совместимого с OpenAI)'),
+                helperText:
+                    tr('Адрес API вашего сервиса (совместимого с OpenAI)'),
               ),
               keyboardType: TextInputType.url,
               autocorrect: false,
             ),
-          ] else if (AiSettings.testApiKey.isEmpty) ...[
+          ] else if (_mode == 'builtin' && AiSettings.testApiKey.isEmpty) ...[
             // Ключ подставляется на сборке (--dart-define). Если его
             // туда не передали, «ключ из сборки» — это пустая строка, и
             // ассистент будет молча получать 401. Сказать об этом здесь
             // дешевле, чем разбираться по ошибке в чате.
             const SizedBox(height: 12),
             Text(
-              tr('В этой сборке ключа нет — ассистент не ответит. Переключитесь на «Свой API Key» и вставьте свой.'),
+              tr('В этой сборке ключа нет — ассистент не ответит. Переключитесь на «Свой ключ» и вставьте свой.'),
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.error,
                   ),
-            ),
-          ],
-          // Третий вариант — ИИ на самом устройстве (см. lib/local_ai/);
-          // доступен всем, не только в режиме разработчика (решение пользователя).
-          // На вебе не поддерживается вовсе (нет файловой системы для
-          // модели) — плитка там вела в тупик, убрана (решение пользователя).
-          if (localAiSupported) ...[
-            const SizedBox(height: 12),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.offline_bolt_outlined),
-                title: Text(tr('Локальная модель (без интернета)')),
-                subtitle: Text(switch (_settings.localMode) {
-                  'tasks' =>
-                    tr('Служебные задачи · {p}', {'p': _settings.localModelId.isEmpty ? tr('модель не выбрана') : _settings.localModelId}),
-                  'all' =>
-                    tr('Всё локально · {p}', {'p': _settings.localModelId.isEmpty ? tr('модель не выбрана') : _settings.localModelId}),
-                  _ => tr('Выключена'),
-                }),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () async {
-                  await Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => LocalAiScreen(settings: _settings)),
-                  );
-                  if (mounted) setState(() {});
-                },
-              ),
             ),
           ],
           const SizedBox(height: 24),
@@ -330,7 +376,8 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             minLines: 2,
             maxLines: 6,
             maxLength: _customInstructionsLimit,
-            decoration: InputDecoration(labelText: tr('Что ещё должен знать ИИ')),
+            decoration:
+                InputDecoration(labelText: tr('Что ещё должен знать ИИ')),
           ),
           const SizedBox(height: 24),
           // Окно выбора цепочки моделей нужно, только когда пользователь
@@ -342,15 +389,20 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
               title: tr('Модели'),
               subtitle: tr('Список используемых ИИ моделей'),
               trailing: _loading
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : TextButton(onPressed: _loadModels, child: Text(tr('Обновить'))),
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : TextButton(
+                      onPressed: _loadModels, child: Text(tr('Обновить'))),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _models,
               minLines: 3,
               maxLines: 8,
-              decoration: InputDecoration(labelText: tr('ИИ модели (по одной в строке)')),
+              decoration: InputDecoration(
+                  labelText: tr('ИИ модели (по одной в строке)')),
             ),
             const SizedBox(height: 10),
             Row(
@@ -384,9 +436,13 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Icon(
-                        _probeOk(e.value) ? Icons.check_circle : Icons.cancel_outlined,
+                        _probeOk(e.value)
+                            ? Icons.check_circle
+                            : Icons.cancel_outlined,
                         size: 16,
-                        color: _probeOk(e.value) ? Colors.green.shade600 : cs.error,
+                        color: _probeOk(e.value)
+                            ? Colors.green.shade600
+                            : cs.error,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -412,7 +468,8 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             if (_available != null) ...[
               const SizedBox(height: 12),
               Text(
-                tr('Бесплатные модели сейчас ({p}) — нажмите, чтобы добавить:', {'p': _available!.length}),
+                tr('Бесплатные модели сейчас ({p}) — нажмите, чтобы добавить:',
+                    {'p': _available!.length}),
                 style: theme.textTheme.bodySmall,
               ),
               const SizedBox(height: 8),
@@ -424,7 +481,10 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                     ActionChip(
                       label: Text(m, style: theme.textTheme.labelSmall),
                       onPressed: () => setState(() {
-                        final lines = _models.text.split('\n').where((e) => e.trim().isNotEmpty).toList();
+                        final lines = _models.text
+                            .split('\n')
+                            .where((e) => e.trim().isNotEmpty)
+                            .toList();
                         if (!lines.contains(m)) lines.add(m);
                         _models.text = lines.join('\n');
                       }),
@@ -459,7 +519,14 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              tr('Сейчас в цепочке: {length} модел{p}', {'length': _settings.models.length, 'p': _settings.models.length == 1 ? tr('ь') : _settings.models.length < 5 ? tr('и') : tr('ей')}),
+              tr('Сейчас в цепочке: {length} модел{p}', {
+                'length': _settings.models.length,
+                'p': _settings.models.length == 1
+                    ? tr('ь')
+                    : _settings.models.length < 5
+                        ? tr('и')
+                        : tr('ей')
+              }),
               style: theme.textTheme.bodySmall,
             ),
           ],
@@ -468,7 +535,8 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             const SizedBox(height: 24),
             SectionHeader(
               title: tr('Справочные материалы'),
-              subtitle: tr('Книги и правила стрельбы встроены в приложение — подключать вручную не нужно. Свои таблицы добавляются в настройках учётной записи.'),
+              subtitle: tr(
+                  'Книги и правила стрельбы встроены в приложение — подключать вручную не нужно. Свои таблицы добавляются в настройках учётной записи.'),
             ),
             const SizedBox(height: 12),
             Row(
@@ -488,7 +556,9 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                 if (_books != null)
                   Expanded(
                     child: Text(
-                      _books!.entries.map((e) => '${e.key}: ${e.value}').join(' · '),
+                      _books!.entries
+                          .map((e) => '${e.key}: ${e.value}')
+                          .join(' · '),
                       style: theme.textTheme.bodySmall,
                     ),
                   ),
