@@ -61,6 +61,7 @@ class AiSettings {
   static const String keyLocalModel = 'ai_local_model';
   static const String keyChatModelChoice = 'ai_chat_model_choice';
   static const String keyModelPriority = 'ai_model_priority';
+  static const String keyBaseInstructions = 'ai_base_instructions';
 
   /// Все ключи ИИ — чтобы «сбросить все цвета» их не снесло.
   static const List<String> allKeys = [
@@ -103,6 +104,15 @@ class AiSettings {
   /// скорости моделей — апгрейд, если понадобится точнее.
   String get modelPriority => _read(keyModelPriority, fallback: 'quality');
   set modelPriority(String v) => _write(keyModelPriority, v);
+
+  /// Пользователь переписал встроенные правила ассистента целиком —
+  /// пусто, если правила не трогали (тогда действует дефолтный текст
+  /// `AiContext.systemPrompt`). Решение пользователя, пункт 6 списка
+  /// правок: сначала правила стали видимыми, теперь — редактируемыми.
+  /// Формат ```chart/```exercise/```note/```feedback в своём тексте
+  /// нужно сохранить самостоятельно — приложение его не проверяет.
+  String get baseInstructionsOverride => _read(keyBaseInstructions);
+  set baseInstructionsOverride(String v) => _write(keyBaseInstructions, v);
 
   String get apiBaseUrl => _read(keyApiBaseUrl, fallback: defaultApiBaseUrl);
   set apiBaseUrl(String v) =>

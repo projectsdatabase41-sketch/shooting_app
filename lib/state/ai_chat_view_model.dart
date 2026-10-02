@@ -63,7 +63,9 @@ class AiMessage {
     this.imageBytes,
   });
 
-  AiMessage copyWith({bool? exerciseCreated, bool? noteCreated, bool? feedbackSent}) => AiMessage(
+  AiMessage copyWith(
+          {bool? exerciseCreated, bool? noteCreated, bool? feedbackSent}) =>
+      AiMessage(
         fromUser: fromUser,
         text: text,
         chart: chart,
@@ -187,11 +189,15 @@ class AiChatViewModel extends ChangeNotifier {
       // решение пользователя (пункт 10, уточнение того же дня):
       // старая версия тянула недавние сводки независимо от темы.
       final pastSummaries = await memory.search(trimmed);
-      final ctx = pastSummaries.isEmpty ? rawCtx : rawCtx.withPastSummaries(pastSummaries);
+      final ctx = pastSummaries.isEmpty
+          ? rawCtx
+          : rawCtx.withPastSummaries(pastSummaries);
       final chunks = await knowledge.search(trimmed);
-      final books = KnowledgeService.asPromptBlock(chunks, tables: knowledge.settings.tables);
+      final books = KnowledgeService.asPromptBlock(chunks,
+          tables: knowledge.settings.tables);
       final history = <({String role, String text})>[
-        for (final m in _recent()) (role: m.fromUser ? 'user' : 'assistant', text: m.text),
+        for (final m in _recent())
+          (role: m.fromUser ? 'user' : 'assistant', text: m.text),
       ];
       final askedAt = DateTime.now();
       final reply = await service.ask(
@@ -200,6 +206,7 @@ class AiChatViewModel extends ChangeNotifier {
         systemPrompt: AiContext.systemPrompt(
           customInstructions: service.settings.customInstructions,
           coachMode: rawCtx.coachMode,
+          baseOverride: service.settings.baseInstructionsOverride,
         ),
         contextBlock: ctx.buildContextBlock(askedAt),
         history: history,
@@ -224,8 +231,10 @@ class AiChatViewModel extends ChangeNotifier {
       unawaited(memory.append(AiMemorySummary(
         periodStart: askedAt,
         periodEnd: DateTime.now(),
-        summary: tr('В: {trimmed}\nО: {p}', {'trimmed': trimmed, 'p': _gist(reply.text)}),
-        trainingPackageIds: rawCtx.session != null ? [rawCtx.session!.id] : const [],
+        summary: tr('В: {trimmed}\nО: {p}',
+            {'trimmed': trimmed, 'p': _gist(reply.text)}),
+        trainingPackageIds:
+            rawCtx.session != null ? [rawCtx.session!.id] : const [],
       )));
     } catch (e) {
       messages.add(AiMessage(fromUser: false, text: '$e', isError: true));

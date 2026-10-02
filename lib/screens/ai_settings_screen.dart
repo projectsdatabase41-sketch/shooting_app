@@ -28,6 +28,8 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
   late final TextEditingController _apiBaseUrl;
   late final TextEditingController _models;
   late final TextEditingController _customInstructions;
+  late final TextEditingController _baseInstructions;
+  bool _editingBase = false;
   late final SupabaseAuthService _personalAuth;
   late final LocalDbService _db;
 
@@ -75,6 +77,10 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
         text: _ownKey ? _settings.rawModels : _settings.models.join('\n'));
     _customInstructions =
         TextEditingController(text: _settings.customInstructions);
+    _baseInstructions = TextEditingController(
+        text: _settings.baseInstructionsOverride.isEmpty
+            ? AiContext.defaultBasePrompt
+            : _settings.baseInstructionsOverride);
   }
 
   @override
@@ -83,6 +89,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     _apiBaseUrl.dispose();
     _models.dispose();
     _customInstructions.dispose();
+    _baseInstructions.dispose();
     super.dispose();
   }
 
@@ -106,6 +113,12 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
         rawInstructions.length > _customInstructionsLimit
             ? rawInstructions.substring(0, _customInstructionsLimit)
             : rawInstructions;
+    // Не храним копию дефолтного текста как «переопределение» — override
+    // пустой, если пользователь его не менял (или вручную вернул как было).
+    _settings.baseInstructionsOverride =
+        _baseInstructions.text.trim() == AiContext.defaultBasePrompt.trim()
+            ? ''
+            : _baseInstructions.text;
     // "Сохранить" — это закрыть экран настроек, а не остаться на нём:
     // настройки — не рабочий экран, к которому возвращаются, а разовое
     // действие, после которого логично вернуться туда, откуда пришёл.
@@ -382,9 +395,8 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
           ),
           const SizedBox(height: 12),
           // Встроенные правила ассистента — видны пользователю, а не
-          // только зашиты в коде (решение пользователя, пункты 2/3/6
-          // списка правок: инструкции должны быть читаемы без похода в
-          // исходники; редактирование — отдельный, более поздний шаг).
+          // только зашиты в коде, и их можно переписать целиком (решение
+          // пользователя, пункты 2/3/6 списка правок).
           Theme(
             data: theme.copyWith(dividerColor: Colors.transparent),
             child: ExpansionTile(
@@ -392,11 +404,49 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
               title: Text(tr('Встроенные правила ассистента'),
                   style: theme.textTheme.bodyMedium),
               children: [
-                SelectableText(
-                  AiContext.systemPrompt(coachMode: false),
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                ),
+                if (_editingBase) ...[
+                  Text(
+                    tr('Осторожно: формат ```chart/```exercise/```note/```feedback должен остаться в тексте — иначе перестанут работать графики и предложения упражнений/заметок/отзыва.'),
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.error),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _baseInstructions,
+                    minLines: 6,
+                    maxLines: 20,
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      TextButton(
+                        onPressed: () => setState(() {
+                          _baseInstructions.text = AiContext.defaultBasePrompt;
+                        }),
+                        child: Text(tr('Восстановить по умолчанию')),
+                      ),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: () => setState(() => _editingBase = false),
+                        child: Text(tr('Готово')),
+                      ),
+                    ],
+                  ),
+                ] else ...[
+                  SelectableText(
+                    _baseInstructions.text,
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () => setState(() => _editingBase = true),
+                      child: Text(tr('Редактировать')),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

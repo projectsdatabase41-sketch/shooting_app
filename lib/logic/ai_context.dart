@@ -109,8 +109,25 @@ class AiContext {
   /// `customInstructions` — необязательная короткая инструкция от
   /// пользователя из настроек ассистента (см. `AiSettings.customInstructions`),
   /// дописывается ПОСЛЕ базовых правил, а не вместо них.
-  static String systemPrompt({String? customInstructions, bool coachMode = false}) {
-    const base = '''
+  static String systemPrompt(
+      {String? customInstructions,
+      bool coachMode = false,
+      String? baseOverride}) {
+    final base = (baseOverride != null && baseOverride.trim().isNotEmpty)
+        ? baseOverride
+        : defaultBasePrompt;
+    final withCoach = coachMode ? '$base$_coachExtra' : base;
+    final extra = customInstructions?.trim();
+    if (extra == null || extra.isEmpty) return withCoach;
+    return '$withCoach\n'
+        'ДОПОЛНИТЕЛЬНАЯ ИНСТРУКЦИЯ ОТ ПОЛЬЗОВАТЕЛЯ (не должна противоречить правилам выше):\n'
+        '$extra\n';
+  }
+
+  /// Правила ассистента по умолчанию — видны пользователю в настройках
+  /// (читаемый текст, пункты 2/3 списка правок) и переопределяемы целиком
+  /// (пункт 6: `AiSettings.baseInstructionsOverride`).
+  static const String defaultBasePrompt = '''
 Ты — ассистент в приложении для спортивной пулевой стрельбы. Разбираешь результаты стрельбы пользователя и просто общаешься с ним.
 
 Как отвечать:
@@ -195,7 +212,8 @@ class AiContext {
 {"text":"Текст отзыва"}
 ```
 ''';
-    const coachExtra = '''
+
+  static const String _coachExtra = '''
 
 С тобой сейчас разговаривает ТРЕНЕР, а не спортсмен. Если он просит СОХРАНИТЬ/ЗАВЕСТИ заметку в дневник — опиши её блоком ```note в конце ответа. Только когда явно просят, никогда сам по себе. Содержимое заметки — ТОЛЬКО формулировка того, что попросил тренер, ничего от себя не добавляй: не вставляй в неё данные о тренировках, выстрелах или прошлых заметках спортсмена, даже если они есть в контексте этого разговора — заметка дневника не про разбор результатов, а про то, что тренер сам продиктовал.
 ```note
@@ -203,13 +221,6 @@ class AiContext {
 ```
 Текст ответа перед блоком — коротко подтверди, что сохраняешь, без пересказа JSON.
 ''';
-    final withCoach = coachMode ? '$base$coachExtra' : base;
-    final extra = customInstructions?.trim();
-    if (extra == null || extra.isEmpty) return withCoach;
-    return '$withCoach\n'
-        'ДОПОЛНИТЕЛЬНАЯ ИНСТРУКЦИЯ ОТ ПОЛЬЗОВАТЕЛЯ (не должна противоречить правилам выше):\n'
-        '$extra\n';
-  }
 
   /// Блок КОНТЕКСТ — компактный JSON, чтобы модель не тратила внимание
   /// на разбор прозы.
@@ -221,7 +232,8 @@ class AiContext {
       // самому себе противоречить в соседнем поле "статус".
       'источник': switch (scope) {
         AiScope.general => 'отдельный чат, вне тренировки',
-        AiScope.session => 'экран тренировки (${_statusRu(session?.status ?? SessionStatus.notStarted)})',
+        AiScope.session =>
+          'экран тренировки (${_statusRu(session?.status ?? SessionStatus.notStarted)})',
         AiScope.shot => 'заметка к конкретному выстрелу',
       },
     };
