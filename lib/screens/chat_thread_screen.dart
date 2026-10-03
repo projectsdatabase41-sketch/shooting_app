@@ -4,7 +4,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData, SystemSound, SystemSoundType;
+import 'package:flutter/services.dart'
+    show Clipboard, ClipboardData, SystemSound, SystemSoundType;
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -24,6 +25,7 @@ import '../services/chat_messages_repository.dart';
 import '../services/chat_preferences.dart';
 import '../services/chat_presence.dart';
 import '../services/chat_sync_service.dart';
+import '../services/push_service.dart' show pendingCallAckContactId;
 import '../services/chat_translation_service.dart';
 import '../services/group_live_session.dart';
 import '../services/live_chat_session.dart';
@@ -141,7 +143,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   bool _isMasked(ChatMessage m) {
     final override = _maskOverride[m.id];
     if (override != null) return override;
-    return _autoOn && m.direction == ChatMessageDirection.incoming && _translations.containsKey(m.id);
+    return _autoOn &&
+        m.direction == ChatMessageDirection.incoming &&
+        _translations.containsKey(m.id);
   }
 
   @override
@@ -158,7 +162,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     _reload();
     _scroll.addListener(_onScroll);
     _inputFocus.addListener(() {
-      if (_inputFocus.hasFocus && _emojiOpen) setState(() => _emojiOpen = false);
+      if (_inputFocus.hasFocus && _emojiOpen)
+        setState(() => _emojiOpen = false);
     });
     // Живой канал (WebSocket) — включается удалённо, по умолчанию выключен.
     if (!_contact.isGroup) {
@@ -169,7 +174,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         linkFactory: WebRtcPeerLink.new,
         onIncoming: () {
           if (!mounted) return;
-          SystemSound.play(SystemSoundType.click); // лёгкий «щелчок» — переписка уже открыта
+          SystemSound.play(
+              SystemSoundType.click); // лёгкий «щелчок» — переписка уже открыта
           widget.repo.markThreadSeen(_contact.id);
           widget.sync.reportRead(_contact.id);
           _reload();
@@ -207,7 +213,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       poller: AdaptivePoller(
           min: const Duration(seconds: 2, milliseconds: 500),
           max: const Duration(seconds: 15),
-          scale: () => RemoteConfig.pollScale * (_live?.peerOnline == true || (_groupLive?.onlineCount ?? 0) > 1 ? 4 : 1)),
+          scale: () =>
+              RemoteConfig.pollScale *
+              (_live?.peerOnline == true || (_groupLive?.onlineCount ?? 0) > 1
+                  ? 4
+                  : 1)),
       tick: () async {
         final added = await widget.sync.pollIncoming();
         if (added > 0 && mounted) {
@@ -270,6 +280,27 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   void _reload() {
     setState(() => _messages = widget.repo.forContact(_contact.id));
     if (_autoOn) _autoTranslateIncoming();
+    _autoAckCall();
+  }
+
+  /// Тренер принял вызов кнопкой «Иду» прямо на уведомлении — подтверждаем
+  /// последний неотвеченный входящий вызов этого контакта сами. Флаг гасится
+  /// только когда вызов найден: сообщение может подтянуться опросом позже.
+  void _autoAckCall() {
+    if (pendingCallAckContactId != _contact.id) return;
+    for (final m in _messages.reversed) {
+      if (m.type == ChatMessageType.call &&
+          m.direction == ChatMessageDirection.incoming &&
+          m.callStatus == null) {
+        pendingCallAckContactId = null;
+        widget.sync.acknowledgeCall(m).then((_) {
+          if (mounted) {
+            setState(() => _messages = widget.repo.forContact(_contact.id));
+          }
+        });
+        return;
+      }
+    }
   }
 
   /// Режим "всегда автоматически" — переводит входящие в фоне, без
@@ -285,7 +316,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       final m = _messages[i];
       if (m.direction != ChatMessageDirection.incoming) continue;
       if (m.text == null || m.text!.isEmpty) continue;
-      if (_translations.containsKey(m.id) || _translating.contains(m.id) || _translationErrors.containsKey(m.id)) {
+      if (_translations.containsKey(m.id) ||
+          _translating.contains(m.id) ||
+          _translationErrors.containsKey(m.id)) {
         continue;
       }
       _translate(m, silent: true);
@@ -299,7 +332,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       _translationErrors.remove(m.id);
     });
     try {
-      final translated = await _translator.translateIfNeeded(AiService.splitChart(m.text!).$1,
+      final translated = await _translator.translateIfNeeded(
+          AiService.splitChart(m.text!).$1,
           targetLanguage: widget.prefs.translationLanguage);
       if (!mounted) return;
       setState(() {
@@ -313,7 +347,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         _translationErrors[m.id] = '$e';
       });
       if (!silent) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Не удалось перевести: {e}', {'e': e}))));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(tr('Не удалось перевести: {e}', {'e': e}))));
       }
     }
   }
@@ -321,7 +356,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   void _scrollToEnd() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) {
-        _scroll.animateTo(0, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+        _scroll.animateTo(0,
+            duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
       }
     });
   }
@@ -332,7 +368,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     if ((caption.isEmpty && chart == null) || _sending) return;
     // График едет внутри текста блоком ```chart — тот же формат, что у
     // ассистента; получатель рисует его отдельной карточкой.
-    final text = chart == null ? caption : '$caption\n```chart\n${jsonEncode(chart)}\n```'.trim();
+    final text = chart == null
+        ? caption
+        : '$caption\n```chart\n${jsonEncode(chart)}\n```'.trim();
     final replyTo = _replyingTo;
     _input.clear();
     setState(() {
@@ -351,7 +389,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       // без единого следа для пользователя. Теперь ошибка видна и не
       // блокирует дальнейшую отправку.
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Не отправлено: {e}', {'e': e}))));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(tr('Не отправлено: {e}', {'e': e}))));
       }
     } finally {
       // Всегда, а не только при успехе — иначе сообщение с красным
@@ -380,12 +419,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
           minLines: 2,
           maxLines: 6,
           decoration: InputDecoration(
-            hintText: tr('Например: «расскажи тренеру, как прошла последняя тренировка, с графиком по сериям»'),
+            hintText: tr(
+                'Например: «расскажи тренеру, как прошла последняя тренировка, с графиком по сериям»'),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr('Отмена'))),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()), child: Text(tr('Составить'))),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(tr('Отмена'))),
+          FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()),
+              child: Text(tr('Составить'))),
         ],
       ),
     );
@@ -396,13 +440,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       final ctx = AiContext(
         scope: AiScope.general,
         allSessions: store.sessions,
-        exerciseNameOf: (s) => store.exerciseFor(s)?.label ?? tr('без упражнения'),
+        exerciseNameOf: (s) =>
+            store.exerciseFor(s)?.label ?? tr('без упражнения'),
       );
       final who = _contact.isGroup
           ? tr('в группу «{nickname}»', {'nickname': _contact.nickname})
           : tr('собеседнику {nickname}', {'nickname': _contact.nickname});
       final reply = await AiService(AiSettings(store.db)).ask(
-        systemPrompt: 'Ты помогаешь спортсмену-стрелку написать сообщение $who в мессенджере приложения. '
+        systemPrompt:
+            'Ты помогаешь спортсмену-стрелку написать сообщение $who в мессенджере приложения. '
             'Тебе дан КОНТЕКСТ с его тренировками и задание. Ответь ТОЛЬКО готовым текстом сообщения — '
             'без пояснений, кавычек и рассуждений, от первого лица, на языке задания, аккуратно оформленным '
             '(абзацы, при необходимости короткий список), чтобы его можно было сразу отправить. '
@@ -427,7 +473,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('ИИ не ответил: {e}', {'e': e}))));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(tr('ИИ не ответил: {e}', {'e': e}))));
       }
     } finally {
       if (mounted) setState(() => _aiBusy = false);
@@ -440,7 +487,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     Navigator.of(context)
         .push(MaterialPageRoute(
           builder: (_) => CallScreen(
-            session: CallSession.outgoing(widget.auth, peerId: _contact.id, peerName: _contact.nickname, video: video),
+            session: CallSession.outgoing(widget.auth,
+                peerId: _contact.id, peerName: _contact.nickname, video: video),
             avatarBase64: _contact.avatarBase64,
             repo: widget.repo,
           ),
@@ -453,7 +501,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     final wasAuto = _autoOn;
     final result = await Navigator.of(context).push<String>(MaterialPageRoute(
       builder: (_) => ChatContactPanelScreen(
-          contact: _contact, auth: widget.auth, repo: widget.repo, sync: widget.sync, prefs: widget.prefs),
+          contact: _contact,
+          auth: widget.auth,
+          repo: widget.repo,
+          sync: widget.sync,
+          prefs: widget.prefs),
     ));
     if (!mounted) return;
     switch (result) {
@@ -480,7 +532,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       await widget.sync.retry(m);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Не отправлено: {e}', {'e': e}))));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(tr('Не отправлено: {e}', {'e': e}))));
       }
     } finally {
       _reload();
@@ -507,13 +560,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     setState(() => _sending = true);
     try {
       final dir = await getApplicationDocumentsDirectory();
-      final destPath = p.join(dir.path, 'chat_downloads', '${m.clientMessageId}_${m.attachmentName ?? 'file'}');
+      final destPath = p.join(dir.path, 'chat_downloads',
+          '${m.clientMessageId}_${m.attachmentName ?? 'file'}');
       await Directory(p.dirname(destPath)).create(recursive: true);
       await widget.sync.downloadLargeAttachment(m, destPath: destPath);
       _reload();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Не удалось скачать: {e}', {'e': e}))));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(tr('Не удалось скачать: {e}', {'e': e}))));
       }
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -524,11 +579,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
 
   Future<void> _copySelected() async {
     final ordered = _messages.where((m) => _selected.contains(m.id));
-    final text = ordered.map((m) => m.text ?? '').where((t) => t.isNotEmpty).join('\n\n');
+    final text = ordered
+        .map((m) => m.text ?? '')
+        .where((t) => t.isNotEmpty)
+        .join('\n\n');
     setState(() => _selected.clear());
     if (text.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: text));
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Скопировано'))));
+    if (mounted)
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(tr('Скопировано'))));
   }
 
   /// Переводит и сразу показывает перевод ВМЕСТО оригинала (та же
@@ -581,23 +641,39 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   Future<void> _deleteSelected() async {
     final ids = Set<String>.from(_selected);
     final chosen = _messages.where((m) => ids.contains(m.id)).toList();
-    final canForAll = chosen.where((m) => m.direction == ChatMessageDirection.outgoing && !m.readByPeer).length;
-    final read = chosen.where((m) => m.direction == ChatMessageDirection.outgoing && m.readByPeer).length;
+    final canForAll = chosen
+        .where((m) =>
+            m.direction == ChatMessageDirection.outgoing && !m.readByPeer)
+        .length;
+    final read = chosen
+        .where(
+            (m) => m.direction == ChatMessageDirection.outgoing && m.readByPeer)
+        .length;
     final choice = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(
-            chosen.length == 1 ? tr('Удалить сообщение?') : tr('Удалить {length} сообщ.?', {'length': chosen.length})),
+        title: Text(chosen.length == 1
+            ? tr('Удалить сообщение?')
+            : tr('Удалить {length} сообщ.?', {'length': chosen.length})),
         content: canForAll == 0
-            ? Text(
-                read > 0 ? tr('Собеседник уже прочитал — удалить можно только у себя.') : tr('Удалится только у вас.'))
+            ? Text(read > 0
+                ? tr('Собеседник уже прочитал — удалить можно только у себя.')
+                : tr('Удалится только у вас.'))
             : Text(read > 0
-                ? tr('Уже прочитанные ({read}) удалятся только у вас.', {'read': read})
+                ? tr('Уже прочитанные ({read}) удалятся только у вас.',
+                    {'read': read})
                 : tr('Можно удалить и у собеседника — он ещё не прочитал.')),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr('Отмена'))),
-          TextButton(onPressed: () => Navigator.of(ctx).pop('me'), child: Text(tr('У меня'))),
-          if (canForAll > 0) FilledButton(onPressed: () => Navigator.of(ctx).pop('all'), child: Text(tr('У всех'))),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(tr('Отмена'))),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop('me'),
+              child: Text(tr('У меня'))),
+          if (canForAll > 0)
+            FilledButton(
+                onPressed: () => Navigator.of(ctx).pop('all'),
+                child: Text(tr('У всех'))),
         ],
       ),
     );
@@ -616,8 +692,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         title: Text(tr('Изменить сообщение')),
         content: TextField(controller: ctrl, autofocus: true, maxLines: 4),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr('Отмена'))),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()), child: Text(tr('Сохранить'))),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(tr('Отмена'))),
+          FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()),
+              child: Text(tr('Сохранить'))),
         ],
       ),
     );
@@ -628,7 +708,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
 
   Future<void> _delete(ChatMessage m, {bool forAll = false}) async {
     final mine = m.direction == ChatMessageDirection.outgoing;
-    await widget.sync.deleteMessage(m, alsoRemote: forAll && mine && !m.readByPeer);
+    await widget.sync
+        .deleteMessage(m, alsoRemote: forAll && mine && !m.readByPeer);
     _translations.remove(m.id);
     _translationErrors.remove(m.id);
     _reload();
@@ -647,23 +728,28 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     if (bytes.length > ChatMediaUtils.maxAttachmentBytes) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-              tr('Слишком большой файл — до {p}', {'p': ChatMediaUtils.formatSize(ChatMediaUtils.maxAttachmentBytes)})),
+          content: Text(tr('Слишком большой файл — до {p}', {
+            'p': ChatMediaUtils.formatSize(ChatMediaUtils.maxAttachmentBytes)
+          })),
         ));
       }
       return;
     }
 
     final isImage = ChatMediaUtils.looksLikeImage(picked.name);
-    final result = await Navigator.of(context).push<AttachmentComposeResult>(MaterialPageRoute(
-      builder: (_) => AttachmentComposeScreen(bytes: bytes, fileName: picked.name, isImage: isImage),
+    final result = await Navigator.of(context)
+        .push<AttachmentComposeResult>(MaterialPageRoute(
+      builder: (_) => AttachmentComposeScreen(
+          bytes: bytes, fileName: picked.name, isImage: isImage),
     ));
     if (result == null) return; // экран закрыли без отправки
-    final finalBytes = result.bytes; // те же байты либо отредактированные в компоузере
+    final finalBytes =
+        result.bytes; // те же байты либо отредактированные в компоузере
 
     setState(() => _sending = true);
     try {
-      final compressed = isImage ? ChatMediaUtils.compressImage(finalBytes) : null;
+      final compressed =
+          isImage ? ChatMediaUtils.compressImage(finalBytes) : null;
       await widget.sync.sendAttachment(
         contactId: _contact.id,
         bytes: compressed ?? finalBytes,
@@ -671,16 +757,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         // Сжатие всегда перекодирует в JPEG (см. ChatMediaUtils.compressImage)
         // — mime должен это отражать, а не оставаться от исходного .png/.webp.
         mime: isImage
-            ? (compressed != null ? 'image/jpeg' : ChatMediaUtils.mimeFor(picked.name))
+            ? (compressed != null
+                ? 'image/jpeg'
+                : ChatMediaUtils.mimeFor(picked.name))
             : 'application/octet-stream',
         type: isImage ? ChatMessageType.image : ChatMessageType.file,
         caption: result.caption.isEmpty ? null : result.caption,
-        downloadAllowed: widget.prefs.downloadAllowedFor(isPersonal: !_contact.isGroup),
+        downloadAllowed:
+            widget.prefs.downloadAllowedFor(isPersonal: !_contact.isGroup),
       );
       _scrollToEnd();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Не отправлено: {e}', {'e': e}))));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(tr('Не отправлено: {e}', {'e': e}))));
       }
     } finally {
       if (mounted) {
@@ -710,12 +800,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
             : 'application/octet-stream',
         type: ChatMessageType.file,
         fileSize: picked.size,
-        downloadAllowed: widget.prefs.downloadAllowedFor(isPersonal: !_contact.isGroup),
+        downloadAllowed:
+            widget.prefs.downloadAllowedFor(isPersonal: !_contact.isGroup),
       );
       _scrollToEnd();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Не отправлено: {e}', {'e': e}))));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(tr('Не отправлено: {e}', {'e': e}))));
       }
     } finally {
       if (mounted) {
@@ -750,15 +842,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       title: ValueListenableBuilder(
         valueListenable: ChatPresence.seen,
         builder: (context, _, __) {
-          final online = !_contact.isGroup && (_live?.peerOnline == true || ChatPresence.online(_contact.id));
-          final seen = _contact.isGroup ? null : (online ? tr('в сети') : ChatPresence.label(_contact.id));
+          final online = !_contact.isGroup &&
+              (_live?.peerOnline == true || ChatPresence.online(_contact.id));
+          final seen = _contact.isGroup
+              ? null
+              : (online ? tr('в сети') : ChatPresence.label(_contact.id));
           return Row(
             children: [
               ChatAvatar(
                 base64: _contact.avatarBase64,
                 nickname: _contact.nickname,
                 radius: 20,
-                background: _contact.isGroup ? chatGroupColor(_contact.color) : null,
+                background:
+                    _contact.isGroup ? chatGroupColor(_contact.color) : null,
                 online: online,
               ),
               const SizedBox(width: 10),
@@ -770,25 +866,31 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                     Text(_contact.nickname,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                        style: theme.textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w600)),
                     if (_contact.isGroup)
                       Text(
                         (_groupLive?.onlineCount ?? 0) > 1
-                            ? tr('Участников: {length}, в сети: {online}',
-                                {'length': _contact.members.length, 'online': _groupLive!.onlineCount})
-                            : tr('Участников: {length}', {'length': _contact.members.length}),
+                            ? tr('Участников: {length}, в сети: {online}', {
+                                'length': _contact.members.length,
+                                'online': _groupLive!.onlineCount
+                              })
+                            : tr('Участников: {length}',
+                                {'length': _contact.members.length}),
                         style: theme.textTheme.bodySmall,
                       )
                     else if (seen != null)
                       // «О себе» тут не показываем — только на странице собеседника
                       // (ChatContactPanelScreen), решение пользователя.
                       Text(seen,
-                          style: theme.textTheme.bodySmall?.copyWith(color: online ? const Color(0xFF3DDC84) : null)),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                              color: online ? const Color(0xFF3DDC84) : null)),
                   ],
                 ),
               ),
               if (widget.prefs.mutedFor(_contact.id))
-                Icon(Icons.notifications_off_outlined, size: 18, color: theme.hintColor),
+                Icon(Icons.notifications_off_outlined,
+                    size: 18, color: theme.hintColor),
             ],
           );
         },
@@ -805,15 +907,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       children: [
         if (_pendingChart != null)
           Container(
-            constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.35),
+            constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.35),
             margin: const EdgeInsets.fromLTRB(8, 0, 8, 6),
             padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
-            decoration:
-                BoxDecoration(color: cs.surface.withValues(alpha: 0.85), borderRadius: BorderRadius.circular(20)),
+            decoration: BoxDecoration(
+                color: cs.surface.withValues(alpha: 0.85),
+                borderRadius: BorderRadius.circular(20)),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(child: SingleChildScrollView(child: AiChartView(spec: _pendingChart!))),
+                Expanded(
+                    child: SingleChildScrollView(
+                        child: AiChartView(spec: _pendingChart!))),
                 IconButton(
                   icon: const Icon(Icons.close),
                   tooltip: tr('Убрать график'),
@@ -830,7 +936,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                   ? tr('Ответ себе')
                   : tr('Ответ {p}', {
                       'p': _contact.isGroup
-                          ? (_contact.member(_replyingTo!.senderId ?? '')?.nickname ?? '')
+                          ? (_contact
+                                  .member(_replyingTo!.senderId ?? '')
+                                  ?.nickname ??
+                              '')
                           : _contact.nickname
                     }),
               preview: ChatSyncService.previewOf(_replyingTo!),
@@ -847,15 +956,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
               children: [
                 Expanded(
                   child: GlassPill(
-                    radius: 25, // постоянное — многострочный текст не раздувает скругление
+                    radius:
+                        25, // постоянное — многострочный текст не раздувает скругление
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         IconButton(
                           onPressed: _toggleEmoji,
-                          tooltip: _emojiOpen ? tr('Клавиатура') : tr('Смайлики'),
-                          icon: Icon(_emojiOpen ? Icons.keyboard_outlined : Icons.emoji_emotions_outlined),
+                          tooltip:
+                              _emojiOpen ? tr('Клавиатура') : tr('Смайлики'),
+                          icon: Icon(_emojiOpen
+                              ? Icons.keyboard_outlined
+                              : Icons.emoji_emotions_outlined),
                         ),
                         Expanded(
                           child: TextField(
@@ -870,15 +983,21 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                               enabledBorder: InputBorder.none,
                               focusedBorder: InputBorder.none,
                               filled: false,
-                              contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                              contentPadding:
+                                  const EdgeInsets.symmetric(vertical: 14),
                             ),
                           ),
                         ),
                         IconButton(
-                          onPressed: _sending || _aiBusy ? null : _composeWithAi,
+                          onPressed:
+                              _sending || _aiBusy ? null : _composeWithAi,
                           tooltip: tr('Написать с ИИ'),
                           icon: _aiBusy
-                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2))
                               : const Icon(Icons.auto_awesome_outlined),
                         ),
                         GestureDetector(
@@ -888,7 +1007,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                           child: IconButton(
                             onPressed: _sending ? null : _attach,
                             icon: const Icon(Icons.attach_file),
-                            tooltip: tr('Прикрепить фото или файл (долгое нажатие — большой файл)'),
+                            tooltip: tr(
+                                'Прикрепить фото или файл (долгое нажатие — большой файл)'),
                           ),
                         ),
                       ],
@@ -916,7 +1036,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     // ленте нужен точный отступ, меряем после кадра.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final h = _barKey.currentContext?.size?.height;
-      if (mounted && h != null && (h - _barHeight).abs() > 1) setState(() => _barHeight = h);
+      if (mounted && h != null && (h - _barHeight).abs() > 1)
+        setState(() => _barHeight = h);
     });
     final topInset = MediaQuery.paddingOf(context).top + 60;
     return AnimatedBuilder(
@@ -930,32 +1051,41 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
           extendBodyBehindAppBar: true,
           appBar: _selecting
               ? AppBar(
-                  leading:
-                      IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _selected.clear())),
+                  leading: IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => setState(() => _selected.clear())),
                   title: Text('${_selected.length}'),
                   actions: [
                     IconButton(
-                        icon: const Icon(Icons.copy_outlined), tooltip: tr('Копировать'), onPressed: _copySelected),
+                        icon: const Icon(Icons.copy_outlined),
+                        tooltip: tr('Копировать'),
+                        onPressed: _copySelected),
                     IconButton(
                         icon: const Icon(Icons.translate_outlined),
                         tooltip: tr('Перевести'),
                         onPressed: _translateSelected),
                     if (_singleSelectedMessage() case final single?) ...[
                       IconButton(
-                          icon: const Icon(Icons.reply_outlined), tooltip: tr('Ответить'), onPressed: _replySelected),
-                      if (single.direction == ChatMessageDirection.outgoing && single.type == ChatMessageType.text)
+                          icon: const Icon(Icons.reply_outlined),
+                          tooltip: tr('Ответить'),
+                          onPressed: _replySelected),
+                      if (single.direction == ChatMessageDirection.outgoing &&
+                          single.type == ChatMessageType.text)
                         IconButton(
                             icon: const Icon(Icons.edit_outlined),
                             tooltip: tr('Редактировать'),
                             onPressed: _editSelected),
-                      if (single.direction == ChatMessageDirection.outgoing && single.status == ChatMessageStatus.error)
+                      if (single.direction == ChatMessageDirection.outgoing &&
+                          single.status == ChatMessageStatus.error)
                         IconButton(
                             icon: const Icon(Icons.refresh),
                             tooltip: tr('Отправить ещё раз'),
                             onPressed: _retrySelected),
                     ],
                     IconButton(
-                        icon: const Icon(Icons.delete_outline), tooltip: tr('Удалить'), onPressed: _deleteSelected),
+                        icon: const Icon(Icons.delete_outline),
+                        tooltip: tr('Удалить'),
+                        onPressed: _deleteSelected),
                   ],
                 )
               : _glassHeader(context),
@@ -966,7 +1096,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
           // и не завязан на то, как именно клавиатуру закрыли.
           resizeToAvoidBottomInset: false,
           body: AnimatedPadding(
-            padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+            padding: EdgeInsets.only(
+                bottom: MediaQuery.viewInsetsOf(context).bottom),
             duration: const Duration(milliseconds: 100),
             child: Column(
               children: [
@@ -976,27 +1107,38 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                     child: Stack(
                       children: [
                         _messages.isEmpty
-                            ? EmptyState(icon: Icons.forum_outlined, text: tr('Переписки пока нет'))
+                            ? EmptyState(
+                                icon: Icons.forum_outlined,
+                                text: tr('Переписки пока нет'))
                             // Перевёрнутая лента: низ (новые) закреплён — при
                             // открытии клавиатуры последние сообщения остаются
                             // видны, а подгрузка картинок выше не сдвигает экран.
                             : ListView.builder(
                                 controller: _scroll,
                                 reverse: true,
-                                padding: EdgeInsets.fromLTRB(12, _selecting ? 12 : topInset, 12, _barHeight + 8),
+                                padding: EdgeInsets.fromLTRB(
+                                    12,
+                                    _selecting ? 12 : topInset,
+                                    12,
+                                    _barHeight + 8),
                                 itemCount: _messages.length,
                                 itemBuilder: (context, i) {
                                   final idx = _messages.length - 1 - i;
                                   final m = _messages[idx];
                                   final item = _item(m);
                                   // Первое сообщение дня — плашка с датой над ним (как в Telegram).
-                                  if (idx > 0 && _sameDay(_messages[idx - 1].createdAt, m.createdAt)) return item;
-                                  return Column(children: [_dayChip(m.createdAt), item]);
+                                  if (idx > 0 &&
+                                      _sameDay(_messages[idx - 1].createdAt,
+                                          m.createdAt)) return item;
+                                  return Column(
+                                      children: [_dayChip(m.createdAt), item]);
                                 },
                               ),
                         // Лента уходит под шапку и поле ввода с мягким затемнением.
                         Positioned.fill(
-                          child: EdgeShade(top: _selecting ? 0 : topInset + 16, bottom: _barHeight + 24),
+                          child: EdgeShade(
+                              top: _selecting ? 0 : topInset + 16,
+                              bottom: _barHeight + 24),
                         ),
                         Positioned(
                           right: 12,
@@ -1005,11 +1147,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                             valueListenable: _showJumpToEnd,
                             builder: (_, show, __) => show
                                 ? GlassCircleButton(
-                                    size: 44, onTap: _scrollToEnd, icon: const Icon(Icons.arrow_downward))
+                                    size: 44,
+                                    onTap: _scrollToEnd,
+                                    icon: const Icon(Icons.arrow_downward))
                                 : const SizedBox.shrink(),
                           ),
                         ),
-                        Positioned(left: 0, right: 0, bottom: 0, child: _glassComposer(context)),
+                        Positioned(
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            child: _glassComposer(context)),
                       ],
                     ),
                   ),
@@ -1028,10 +1176,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                       categoryViewConfig: CategoryViewConfig(
                         backgroundColor: Theme.of(context).colorScheme.surface,
                         indicatorColor: Theme.of(context).colorScheme.primary,
-                        iconColorSelected: Theme.of(context).colorScheme.primary,
+                        iconColorSelected:
+                            Theme.of(context).colorScheme.primary,
                         backspaceColor: Theme.of(context).colorScheme.primary,
                       ),
-                      bottomActionBarConfig: const BottomActionBarConfig(enabled: false),
+                      bottomActionBarConfig:
+                          const BottomActionBarConfig(enabled: false),
                       searchViewConfig: SearchViewConfig(
                         backgroundColor: Theme.of(context).colorScheme.surface,
                         hintText: tr('Поиск'),
@@ -1083,7 +1233,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
           child: GlassPill(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
             child: Text(dayLabel(t.toLocal(), DateTime.now()),
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600)),
+                style: Theme.of(context)
+                    .textTheme
+                    .labelMedium
+                    ?.copyWith(fontWeight: FontWeight.w600)),
           ),
         ),
       );
@@ -1095,7 +1248,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: Dismissible(
         key: ValueKey(m.id),
-        direction: _selecting ? DismissDirection.none : DismissDirection.startToEnd,
+        direction:
+            _selecting ? DismissDirection.none : DismissDirection.startToEnd,
         // Свайп только показывает жест "ответить" и всегда возвращает пузырь
         // на место (решение пользователя: ответ свайпом за само сообщение).
         confirmDismiss: (_) async {
@@ -1105,17 +1259,21 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         background: Container(
           alignment: Alignment.centerLeft,
           padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Icon(Icons.reply_outlined, color: Theme.of(context).colorScheme.primary),
+          child: Icon(Icons.reply_outlined,
+              color: Theme.of(context).colorScheme.primary),
         ),
         child: GestureDetector(
           onTap: _selecting ? () => _toggleSelect(m.id) : null,
           onLongPress: () => _toggleSelect(m.id),
           child: Container(
-            color: selected ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15) : null,
+            color: selected
+                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)
+                : null,
             child: _Bubble(
               message: m,
               prefs: widget.prefs,
-              senderName: _contact.isGroup && m.direction == ChatMessageDirection.incoming
+              senderName: _contact.isGroup &&
+                      m.direction == ChatMessageDirection.incoming
                   ? (_contact.member(m.senderId ?? '')?.nickname ?? '—')
                   : null,
               translation: _translations[m.id],
@@ -1176,7 +1334,8 @@ class _Bubble extends StatelessWidget {
   /// [mine] — это МОЙ исходный вызов (я звонил) или чужой (звонили мне).
   static String _callLabel(bool mine, String? status) => switch (status) {
         'acknowledged' => mine ? tr('Тренер идёт') : tr('Вы согласились идти'),
-        'cancelled' => mine ? tr('Вызов отменён') : tr('Пропущенный — помощь не нужна'),
+        'cancelled' =>
+          mine ? tr('Вызов отменён') : tr('Пропущенный — помощь не нужна'),
         _ => mine ? tr('Вы позвали') : tr('Вас позвали'),
       };
 
@@ -1186,21 +1345,28 @@ class _Bubble extends StatelessWidget {
     final cs = theme.colorScheme;
     final mine = message.direction == ChatMessageDirection.outgoing;
     final isError = message.status == ChatMessageStatus.error;
-    final base = isError ? cs.errorContainer : (mine ? prefs.mineBubbleColor : prefs.otherBubbleColor);
-    final fg = isError ? cs.onErrorContainer : (mine ? prefs.mineTextColor : prefs.otherTextColor);
+    final base = isError
+        ? cs.errorContainer
+        : (mine ? prefs.mineBubbleColor : prefs.otherBubbleColor);
+    final fg = isError
+        ? cs.onErrorContainer
+        : (mine ? prefs.mineTextColor : prefs.otherTextColor);
     // График (```chart) рисуется отдельной карточкой над пузырём.
-    final (captionText, chart) = message.text == null ? ('', null) : AiService.splitChart(message.text!);
+    final (captionText, chart) =
+        message.text == null ? ('', null) : AiService.splitChart(message.text!);
     final hasCaption = captionText.isNotEmpty;
     final radius = prefs.bubbleRadius;
     final textStyle = theme.textTheme.bodyMedium?.copyWith(
       color: fg,
       fontSize: (theme.textTheme.bodyMedium?.fontSize ?? 14) * prefs.fontScale,
     );
-    final isImage = message.type == ChatMessageType.image && message.attachmentBase64 != null;
+    final isImage = message.type == ChatMessageType.image &&
+        message.attachmentBase64 != null;
     // Фото без подписи — совсем без рамки/фона (решение пользователя):
     // рамка появляется, только только когда под фото есть что оборачивать
     // (подпись или цитата ответа).
-    final isBareImage = isImage && !hasCaption && message.replyToPreview == null;
+    final isBareImage =
+        isImage && !hasCaption && message.replyToPreview == null;
 
     final decoration = BoxDecoration(
       // Лёгкий градиент вместо плоской заливки — тот самый "3D"-эффект
@@ -1242,13 +1408,15 @@ class _Bubble extends StatelessWidget {
             decoration: BoxDecoration(
               color: fg.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(8),
-              border: Border(left: BorderSide(color: fg.withValues(alpha: 0.5), width: 3)),
+              border: Border(
+                  left: BorderSide(color: fg.withValues(alpha: 0.5), width: 3)),
             ),
             child: Text(
               message.replyToPreview!,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(color: fg.withValues(alpha: 0.85)),
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: fg.withValues(alpha: 0.85)),
             ),
           ),
         ],
@@ -1262,7 +1430,8 @@ class _Bubble extends StatelessWidget {
                 child: Builder(builder: (context) {
                   final name = message.attachmentName ?? 'Файл';
                   final base64 = message.attachmentBase64;
-                  final isPdf = message.attachmentMime == 'application/pdf' || name.toLowerCase().endsWith('.pdf');
+                  final isPdf = message.attachmentMime == 'application/pdf' ||
+                      name.toLowerCase().endsWith('.pdf');
                   final text = Text(
                     '$name · ${ChatMediaUtils.formatSize(message.attachmentSize)}',
                     style: theme.textTheme.bodyMedium?.copyWith(color: fg),
@@ -1273,13 +1442,15 @@ class _Bubble extends StatelessWidget {
                   if (!isPdf || base64 == null) return text;
                   return InkWell(
                     onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => PdfViewerScreen(bytes: base64Decode(base64), fileName: name),
+                      builder: (_) => PdfViewerScreen(
+                          bytes: base64Decode(base64), fileName: name),
                     )),
                     child: text,
                   );
                 }),
               ),
-              if ((mine || message.downloadAllowed) && message.attachmentBase64 != null) ...[
+              if ((mine || message.downloadAllowed) &&
+                  message.attachmentBase64 != null) ...[
                 const SizedBox(width: 6),
                 InkWell(
                   onTap: () => ChatMediaUtils.shareAttachment(
@@ -1287,32 +1458,45 @@ class _Bubble extends StatelessWidget {
                     message.attachmentName ?? 'file',
                     message.attachmentMime,
                   ),
-                  child: Tooltip(message: tr('Поделиться'), child: Icon(Icons.share_outlined, color: fg, size: 20)),
+                  child: Tooltip(
+                      message: tr('Поделиться'),
+                      child: Icon(Icons.share_outlined, color: fg, size: 20)),
                 ),
                 if (!mine) ...[
                   const SizedBox(width: 6),
                   InkWell(
-                    onTap: () => saveBytes(base64Decode(message.attachmentBase64!), message.attachmentName ?? 'file'),
-                    child: Tooltip(message: tr('Скачать'), child: Icon(Icons.download_outlined, color: fg, size: 20)),
+                    onTap: () => saveBytes(
+                        base64Decode(message.attachmentBase64!),
+                        message.attachmentName ?? 'file'),
+                    child: Tooltip(
+                        message: tr('Скачать'),
+                        child:
+                            Icon(Icons.download_outlined, color: fg, size: 20)),
                   ),
                 ],
-              ] else if (!mine && message.downloadAllowed && message.attachmentLocalPath != null) ...[
+              ] else if (!mine &&
+                  message.downloadAllowed &&
+                  message.attachmentLocalPath != null) ...[
                 // Большое вложение уже скачано (или это своя же
                 // исходная копия у отправителя) — байты не в SQLite,
                 // делимся по пути на диске.
                 const SizedBox(width: 4),
                 InkWell(
-                  onTap: () => ChatMediaUtils.shareAttachmentPath(message.attachmentLocalPath!, message.attachmentMime),
+                  onTap: () => ChatMediaUtils.shareAttachmentPath(
+                      message.attachmentLocalPath!, message.attachmentMime),
                   child: Icon(Icons.folder_open_outlined, color: fg, size: 20),
                 ),
-              ] else if (!mine && message.downloadAllowed && message.driveFileId != null) ...[
+              ] else if (!mine &&
+                  message.downloadAllowed &&
+                  message.driveFileId != null) ...[
                 // Большое вложение ещё лежит на Диске — сама передача
                 // начинается только по явному тапу, не сама по себе при
                 // получении сообщения (см. `ChatSyncService.pollIncoming`).
                 const SizedBox(width: 4),
                 InkWell(
                   onTap: onDownloadLarge,
-                  child: Icon(Icons.cloud_download_outlined, color: fg, size: 20),
+                  child:
+                      Icon(Icons.cloud_download_outlined, color: fg, size: 20),
                 ),
               ],
             ],
@@ -1326,7 +1510,8 @@ class _Bubble extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 _callLabel(mine, message.callStatus),
-                style: theme.textTheme.bodyMedium?.copyWith(color: fg, fontWeight: FontWeight.w600),
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(color: fg, fontWeight: FontWeight.w600),
               ),
             ],
           ),
@@ -1339,7 +1524,8 @@ class _Bubble extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: mine
                   ? TextButton(
-                      style: TextButton.styleFrom(foregroundColor: fg, padding: EdgeInsets.zero),
+                      style: TextButton.styleFrom(
+                          foregroundColor: fg, padding: EdgeInsets.zero),
                       onPressed: onCancelCall,
                       child: Text(tr('Отменить')),
                     )
@@ -1357,7 +1543,8 @@ class _Bubble extends StatelessWidget {
           SizedBox(
             height: 14,
             width: 14,
-            child: CircularProgressIndicator(strokeWidth: 1.5, color: fg.withValues(alpha: 0.7)),
+            child: CircularProgressIndicator(
+                strokeWidth: 1.5, color: fg.withValues(alpha: 0.7)),
           ),
         ] else if (masked && translation != null) ...[
           Row(
@@ -1366,7 +1553,8 @@ class _Bubble extends StatelessWidget {
             children: [
               Padding(
                 padding: const EdgeInsets.only(top: 3, right: 4),
-                child: Icon(Icons.translate_outlined, size: 13, color: fg.withValues(alpha: 0.7)),
+                child: Icon(Icons.translate_outlined,
+                    size: 13, color: fg.withValues(alpha: 0.7)),
               ),
               Flexible(
                 child: Text(translation!, style: textStyle),
@@ -1383,7 +1571,8 @@ class _Bubble extends StatelessWidget {
 
     // «Скачать» — только получателю (у отправителя фото и так есть);
     // «Поделиться» (переслать в другое приложение) — обоим, если разрешено.
-    Widget roundAction(IconData icon, String tip, VoidCallback onTap) => Padding(
+    Widget roundAction(IconData icon, String tip, VoidCallback onTap) =>
+        Padding(
           padding: const EdgeInsets.only(left: 6),
           child: Material(
             color: Colors.black.withValues(alpha: 0.45),
@@ -1393,7 +1582,9 @@ class _Bubble extends StatelessWidget {
               onTap: onTap,
               child: Tooltip(
                 message: tip,
-                child: Padding(padding: const EdgeInsets.all(6), child: Icon(icon, color: Colors.white, size: 18)),
+                child: Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: Icon(icon, color: Colors.white, size: 18)),
               ),
             ),
           ),
@@ -1418,12 +1609,16 @@ class _Bubble extends StatelessWidget {
                       Icons.share_outlined,
                       tr('Поделиться'),
                       () => ChatMediaUtils.shareAttachment(
-                          base64Decode(message.attachmentBase64!), name, message.attachmentMime)),
+                          base64Decode(message.attachmentBase64!),
+                          name,
+                          message.attachmentMime)),
                 if (canDownload)
                   roundAction(Icons.download_outlined, tr('Скачать'), () async {
-                    final ok = await saveBytes(base64Decode(message.attachmentBase64!), name);
+                    final ok = await saveBytes(
+                        base64Decode(message.attachmentBase64!), name);
                     if (ok && context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Сохранено'))));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(tr('Сохранено'))));
                     }
                   }),
               ],
@@ -1434,7 +1629,8 @@ class _Bubble extends StatelessWidget {
     }
 
     void openFullscreen() {
-      PhotoViewerScreen.open(context, ChatMediaUtils.imageOf(message.id, message.attachmentBase64!));
+      PhotoViewerScreen.open(context,
+          ChatMediaUtils.imageOf(message.id, message.attachmentBase64!));
     }
 
     final Widget frame;
@@ -1446,7 +1642,8 @@ class _Bubble extends StatelessWidget {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: _imageMaxWidth),
             child: Image(
-                image: ChatMediaUtils.imageOf(message.id, message.attachmentBase64!),
+                image: ChatMediaUtils.imageOf(
+                    message.id, message.attachmentBase64!),
                 fit: BoxFit.contain,
                 gaplessPlayback: true),
           ),
@@ -1467,7 +1664,8 @@ class _Bubble extends StatelessWidget {
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: _imageMaxWidth),
                   child: Image(
-                      image: ChatMediaUtils.imageOf(message.id, message.attachmentBase64!),
+                      image: ChatMediaUtils.imageOf(
+                          message.id, message.attachmentBase64!),
                       fit: BoxFit.cover,
                       gaplessPlayback: true),
                 ),
@@ -1475,7 +1673,9 @@ class _Bubble extends StatelessWidget {
             ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: decoration.copyWith(borderRadius: BorderRadius.vertical(bottom: Radius.circular(radius))),
+              decoration: decoration.copyWith(
+                  borderRadius:
+                      BorderRadius.vertical(bottom: Radius.circular(radius))),
               child: captionContent,
             ),
           ],
@@ -1485,7 +1685,8 @@ class _Bubble extends StatelessWidget {
       frame = Container(
         constraints: const BoxConstraints(maxWidth: 480),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: decoration.copyWith(borderRadius: BorderRadius.circular(radius)),
+        decoration:
+            decoration.copyWith(borderRadius: BorderRadius.circular(radius)),
         child: captionContent,
       );
     }
@@ -1494,7 +1695,9 @@ class _Bubble extends StatelessWidget {
     // «залипания» на статусе «отправляется» до внезапного «отправлено»
     // (решение пользователя). Фото/файл и так уже видно из локальных
     // байт сразу же, тут только индикатор поверх него.
-    final framedWithProgress = mine && message.status == ChatMessageStatus.sending && message.attachmentBase64 != null
+    final framedWithProgress = mine &&
+            message.status == ChatMessageStatus.sending &&
+            message.attachmentBase64 != null
         ? ValueListenableBuilder<Map<String, double>>(
             valueListenable: ChatSyncService.uploadProgress,
             builder: (context, progress, _) {
@@ -1506,14 +1709,18 @@ class _Bubble extends StatelessWidget {
                   frame,
                   ClipRRect(
                     borderRadius: BorderRadius.circular(radius),
-                    child: Container(color: Colors.black.withValues(alpha: 0.35)),
+                    child:
+                        Container(color: Colors.black.withValues(alpha: 0.35)),
                   ),
                   SizedBox(
                     width: 36,
                     height: 36,
-                    child: CircularProgressIndicator(strokeWidth: 3, value: p, color: Colors.white),
+                    child: CircularProgressIndicator(
+                        strokeWidth: 3, value: p, color: Colors.white),
                   ),
-                  Text('${(p * 100).round()}%', style: const TextStyle(color: Colors.white, fontSize: 10)),
+                  Text('${(p * 100).round()}%',
+                      style:
+                          const TextStyle(color: Colors.white, fontSize: 10)),
                 ],
               );
             },
@@ -1523,7 +1730,8 @@ class _Bubble extends StatelessWidget {
     // Без Align: место в строке задаёт _item — тогда свайп ловит только пузырь.
     return Column(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      crossAxisAlignment:
+          mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
         // Рамка — только содержимое сообщения. Дата, статус и пометка
         // "изменено" вынесены НАРУЖУ, тем же краем, что и сам пузырь
@@ -1533,7 +1741,11 @@ class _Bubble extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 480),
             child: AiChartView(spec: chart),
           ),
-        if (hasCaption || chart == null || message.replyToPreview != null || senderName != null) framedWithProgress,
+        if (hasCaption ||
+            chart == null ||
+            message.replyToPreview != null ||
+            senderName != null)
+          framedWithProgress,
         const SizedBox(height: 3),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -1541,12 +1753,15 @@ class _Bubble extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (message.edited) ...[
-                Text(tr('изменено'), style: theme.textTheme.labelSmall?.copyWith(color: theme.hintColor)),
+                Text(tr('изменено'),
+                    style: theme.textTheme.labelSmall
+                        ?.copyWith(color: theme.hintColor)),
                 const SizedBox(width: 6),
               ],
               Text(
                 DateFormat('HH:mm').format(message.createdAt.toLocal()),
-                style: theme.textTheme.labelSmall?.copyWith(color: theme.hintColor),
+                style: theme.textTheme.labelSmall
+                    ?.copyWith(color: theme.hintColor),
               ),
               if (mine) ...[
                 const SizedBox(width: 6),
@@ -1554,16 +1769,22 @@ class _Bubble extends StatelessWidget {
                 // не прочитано), синие ✓✓ — прочитано. Промежуточного
                 // «доставлено, но двумя галочками» нет — путает с «прочитано».
                 Icon(
-                  message.readByPeer ? Icons.done_all : _statusIcon(message.status),
+                  message.readByPeer
+                      ? Icons.done_all
+                      : _statusIcon(message.status),
                   size: 14,
-                  color: message.readByPeer ? const Color(0xFF34B7F1) : theme.hintColor,
+                  color: message.readByPeer
+                      ? const Color(0xFF34B7F1)
+                      : theme.hintColor,
                 ),
               ],
               if (translationError != null) ...[
                 const SizedBox(width: 6),
                 GestureDetector(
-                  onTapDown: (d) => showChatErrorBubble(context, d.globalPosition, translationError!),
-                  child: const Icon(Icons.translate_outlined, size: 13, color: Colors.red),
+                  onTapDown: (d) => showChatErrorBubble(
+                      context, d.globalPosition, translationError!),
+                  child: const Icon(Icons.translate_outlined,
+                      size: 13, color: Colors.red),
                 ),
               ],
             ],
@@ -1575,7 +1796,8 @@ class _Bubble extends StatelessWidget {
             onPressed: onRetry,
             icon: const Icon(Icons.refresh, size: 14),
             label: Text(tr('Отправить ещё раз')),
-            style: TextButton.styleFrom(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero),
+            style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact, padding: EdgeInsets.zero),
           ),
         ],
         const SizedBox(height: 5),
@@ -1586,7 +1808,8 @@ class _Bubble extends StatelessWidget {
   IconData _statusIcon(ChatMessageStatus s) => switch (s) {
         ChatMessageStatus.sending => Icons.schedule,
         ChatMessageStatus.sent => Icons.check,
-        ChatMessageStatus.delivered => Icons.check, // дошло, но не прочитано — одна галочка
+        ChatMessageStatus.delivered =>
+          Icons.check, // дошло, но не прочитано — одна галочка
         ChatMessageStatus.error => Icons.error_outline,
       };
 }

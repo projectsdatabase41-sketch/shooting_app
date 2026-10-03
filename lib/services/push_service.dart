@@ -51,6 +51,11 @@ Future<void> cancelIncomingCallNotification() async {
 void Function(Map<String, dynamic> data, {required bool accepted})?
     incomingCallHandler;
 
+/// Контакт, чей вызов тренер принял кнопкой «Иду» на уведомлении: после
+/// открытия переписки и подгрузки сообщений вызов подтверждается сам
+/// (`call_ack`), не требуя второго нажатия внутри чата.
+String? pendingCallAckContactId;
+
 bool _tapHandlingRegistered = false;
 bool _foregroundRegistered = false;
 
@@ -353,6 +358,7 @@ void _onNotificationAction(NotificationResponse response) {
   // уведомление, Android/iOS ничего не знают о FCM data при его тапе.
   final contactId = response.payload;
   if (contactId != null && contactId.isNotEmpty) {
+    if (response.actionId == 'open') pendingCallAckContactId = contactId;
     pushChatTapHandler?.call(PushChatTarget.personal(contactId));
   }
 }
@@ -375,6 +381,11 @@ Future<void> showCallNotification(Map<String, dynamic> data) async {
         importance: Importance.max,
         priority: Priority.max,
         category: AndroidNotificationCategory.call,
+        // FLAG_INSISTENT (4): рингтон повторяется, пока тренер не нажмёт
+        // «Иду»/«Сбросить» или не смахнёт уведомление — чтобы вызов
+        // услышали, а не пропустили одним коротким сигналом.
+        additionalFlags: Int32List.fromList([4]),
+        timeoutAfter: 120000,
         // «Иду» — отдельная явная кнопка вместо единственного тапа по
         // телу уведомления: откликнуться на вызов тренеру стало на один
         // жест заметнее (решение пользователя, пункт 22 списка правок).
