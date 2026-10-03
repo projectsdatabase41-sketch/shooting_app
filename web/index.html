@@ -65,7 +65,7 @@
     }
     #loading span { opacity: 0.85; letter-spacing: 0.02em; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    #loading.fade-out { animation: fade-out 0.25s ease forwards; }
+    #loading.fade-out { animation: fade-out 0.25s ease forwards; pointer-events: none; }
     @keyframes fade-out { to { opacity: 0; } }
   </style>
 </head>
@@ -87,7 +87,12 @@
       var el = document.getElementById('loading');
       if (!el) return;
       el.classList.add('fade-out');
+      // animationend на iOS бывает не приходит (вкладка ушла в фон, экономия
+      // анимаций) — невидимая, но живая заглушка перекрывала бы весь экран и
+      // «съедала» нажатия на кнопки. Поэтому pointer-events:none выше и
+      // принудительное удаление по таймеру.
       el.addEventListener('animationend', function () { el.remove(); });
+      setTimeout(function () { el.remove(); }, 600);
     });
   </script>
   <script src="flutter_bootstrap.js" async></script>
