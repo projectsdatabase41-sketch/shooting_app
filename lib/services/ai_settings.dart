@@ -63,6 +63,7 @@ class AiSettings {
   static const String keyModelPriority = 'ai_model_priority';
   static const String keyBaseInstructions = 'ai_base_instructions';
   static const String keyGeminiKey = 'ai_gemini_key';
+  static const String keyThinkingMode = 'ai_thinking_mode';
 
   /// Все ключи ИИ — чтобы «сбросить все цвета» их не снесло.
   static const List<String> allKeys = [
@@ -112,6 +113,11 @@ class AiSettings {
   /// правок: сначала правила стали видимыми, теперь — редактируемыми.
   /// Формат ```chart/```exercise/```note/```feedback в своём тексте
   /// нужно сохранить самостоятельно — приложение его не проверяет.
+  /// «Режим мышления»: несколько проходов (план → решение по шагам →
+  /// ответ) вместо одного запроса. По умолчанию выключен — быстрый режим.
+  bool get thinkingMode => _read(keyThinkingMode) == '1';
+  set thinkingMode(bool v) => _write(keyThinkingMode, v ? '1' : '0');
+
   /// Ключ Google Gemini для поиска в интернете (aistudio.google.com).
   String get geminiKey => _read(keyGeminiKey);
   set geminiKey(String v) => _write(keyGeminiKey, v.trim());

@@ -355,6 +355,14 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                   setState(() => _settings.modelPriority = v.first),
             ),
           ],
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(tr('Режим мышления')),
+            subtitle: Text(tr(
+                'Несколько ИИ по очереди: план → решение по шагам → ответ. Точнее на сложных вопросах, но медленнее и тратит больше запросов. По умолчанию — быстрый режим.')),
+            value: _settings.thinkingMode,
+            onChanged: (v) => setState(() => _settings.thinkingMode = v),
+          ),
           if (_ownKey) ...[
             const SizedBox(height: 12),
             TextField(

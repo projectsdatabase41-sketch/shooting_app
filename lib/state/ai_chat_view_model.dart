@@ -201,6 +201,14 @@ class AiChatViewModel extends ChangeNotifier {
           (role: m.fromUser ? 'user' : 'assistant', text: m.text),
       ];
       final askedAt = DateTime.now();
+      var contextBlock = ctx.buildContextBlock(askedAt);
+      if (service.settings.thinkingMode) {
+        final notes = await _think(trimmed, contextBlock, history);
+        if (notes.isNotEmpty) {
+          contextBlock +=
+              '\n\nРАБОЧИЕ ЗАМЕТКИ ПОМОЩНИКОВ (план и промежуточные расчёты — проверь их и используй для ответа, не пересказывай пользователю как есть):\n$notes';
+        }
+      }
       final reply = await service.ask(
         task: 'chat',
         image: image,
@@ -209,7 +217,7 @@ class AiChatViewModel extends ChangeNotifier {
           coachMode: rawCtx.coachMode,
           baseOverride: service.settings.baseInstructionsOverride,
         ),
-        contextBlock: ctx.buildContextBlock(askedAt),
+        contextBlock: contextBlock,
         history: history,
         booksExcerpt: books,
       );
@@ -242,6 +250,46 @@ class AiChatViewModel extends ChangeNotifier {
     } finally {
       _busy = false;
       notifyListeners();
+    }
+  }
+
+  /// «Режим мышления» — несколько ИИ-помощников по очереди: первый
+  /// составляет план из 2–4 шагов, второй решает каждый шаг по данным
+  /// контекста, а итоговый ответ потом пишет обычный чатовый запрос,
+  /// видя эти заметки. Любой сбой — тихо возвращаем пусто и отвечаем в
+  /// быстром режиме (качество не должно упасть из-за лишнего шага).
+  /// ponytail: шаги идут последовательно, не параллельно — бесплатные
+  /// ключи не любят пачки запросов.
+  Future<String> _think(String question, String contextBlock,
+      List<({String role, String text})> history) async {
+    try {
+      final plan = await service.ask(
+        systemPrompt:
+            'Ты планировщик. Разбей вопрос пользователя про стрельбу на 2–4 коротких шага анализа (что посчитать или сравнить по данным КОНТЕКСТА). Ответ — только шаги, по одному в строке, без нумерации и пояснений.',
+        contextBlock: contextBlock,
+        history: [(role: 'user', text: question)],
+      );
+      final steps = plan.text
+          .split('\n')
+          .map((l) => l.replaceFirst(RegExp(r'^[\s\-\d.)•]+'), '').trim())
+          .where((l) => l.length > 3)
+          .take(4)
+          .toList();
+      if (steps.isEmpty) return '';
+      final notes =
+          StringBuffer('План:\n${steps.map((s) => '- $s').join('\n')}\n');
+      for (final step in steps) {
+        final r = await service.ask(
+          systemPrompt:
+              'Ты исполнитель одного шага анализа. Реши ТОЛЬКО указанный шаг по данным КОНТЕКСТА: приведи числа и короткий вывод (до 80 слов). Не выдумывай данных, которых нет.',
+          contextBlock: '$contextBlock\n\nУЖЕ СДЕЛАНО:\n$notes',
+          history: [(role: 'user', text: 'Вопрос: $question\nШаг: $step')],
+        );
+        notes.writeln('Шаг «$step»: ${r.text.trim()}');
+      }
+      return notes.toString();
+    } catch (_) {
+      return '';
     }
   }
 
