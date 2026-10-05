@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -14,6 +16,9 @@ import '../widgets/ai_chart_view.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/glass_pill.dart';
 import '../widgets/swipe_to_delete.dart';
+import '../logic/save_file.dart';
+import 'pdf_viewer_screen.dart';
+import 'photo_viewer_screen.dart';
 import '../i18n/i18n.dart';
 
 /// "Дневник" тренера (раздел 8 ТЗ) — темы и заметки, не привязан ни к
@@ -51,10 +56,15 @@ class _CoachDiaryNotesScreenState extends State<CoachDiaryNotesScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
-        title: Text(tr('Дневник'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        title: Text(tr('Дневник'),
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
       ),
       body: _notes.isEmpty
-          ? EmptyState(icon: Icons.menu_book_outlined, text: tr('Заметок пока нет'))
+          ? EmptyState(
+              icon: Icons.menu_book_outlined, text: tr('Заметок пока нет'))
           : Stack(
               children: [
                 Positioned.fill(
@@ -66,7 +76,9 @@ class _CoachDiaryNotesScreenState extends State<CoachDiaryNotesScreen> {
                     return SwipeToDelete(
                       itemKey: n.id,
                       title: tr('Удалить заметку?'),
-                      message: tr('«{topic}» будет удалена без возможности восстановить.', {'topic': n.topic}),
+                      message: tr(
+                          '«{topic}» будет удалена без возможности восстановить.',
+                          {'topic': n.topic}),
                       onConfirmed: () {
                         _repo.delete(n.id);
                         _reload();
@@ -79,16 +91,23 @@ class _CoachDiaryNotesScreenState extends State<CoachDiaryNotesScreen> {
                           width: 52,
                           child: Text(
                             df.format(n.createdAt.toLocal()),
-                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelSmall
+                                ?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
                                 ),
                           ),
                         ),
-                        title: Text(n.topic, style: Theme.of(context).textTheme.titleMedium),
+                        title: Text(n.topic,
+                            style: Theme.of(context).textTheme.titleMedium),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () async {
                           await Navigator.of(context).push(MaterialPageRoute(
-                            builder: (_) => _NoteScreen(note: n, repo: _repo, aiSettings: _aiSettings),
+                            builder: (_) => _NoteScreen(
+                                note: n, repo: _repo, aiSettings: _aiSettings),
                           ));
                           _reload();
                         },
@@ -166,7 +185,8 @@ class _AddNoteDialogState extends State<_AddNoteDialog> {
       final reply = await AiService(widget.aiSettings).ask(
         task: 'note_create',
         json: true,
-        systemPrompt: 'Ты помогаешь тренеру по стрельбе вести дневник в приложении. '
+        systemPrompt:
+            'Ты помогаешь тренеру по стрельбе вести дневник в приложении. '
             'По заданию тренера придумай короткую тему заметки (3-6 слов) и напиши сам текст. '
             'Используй ТОЛЬКО то, что написал тренер в задании ниже — никаких данных о '
             'тренировках, выстрелах или заметках спортсмена ты не знаешь и не используешь, '
@@ -208,12 +228,14 @@ class _AddNoteDialogState extends State<_AddNoteDialog> {
                   child: TextField(
                     controller: _topicCtrl,
                     enabled: !_aiMode,
-                    decoration: InputDecoration(labelText: _aiMode ? tr('Я сам заполню') : tr('Тема')),
+                    decoration: InputDecoration(
+                        labelText: _aiMode ? tr('Я сам заполню') : tr('Тема')),
                   ),
                 ),
                 const SizedBox(width: 8),
                 IconButton.filledTonal(
-                  tooltip: _aiMode ? tr('Заполнить вручную') : tr('Придумает ИИ'),
+                  tooltip:
+                      _aiMode ? tr('Заполнить вручную') : tr('Придумает ИИ'),
                   icon: const Icon(Icons.auto_awesome, size: 18),
                   isSelected: _aiMode,
                   onPressed: () => setState(() => _aiMode = !_aiMode),
@@ -225,21 +247,28 @@ class _AddNoteDialogState extends State<_AddNoteDialog> {
               controller: _contentCtrl,
               minLines: 3,
               maxLines: 8,
-              decoration: InputDecoration(labelText: _aiMode ? tr('Что требуется?') : tr('Текст')),
+              decoration: InputDecoration(
+                  labelText: _aiMode ? tr('Что требуется?') : tr('Текст')),
             ),
             if (_error != null) ...[
               const SizedBox(height: 8),
-              Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              Text(_error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ],
           ],
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(tr('Отмена'))),
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(tr('Отмена'))),
         FilledButton(
           onPressed: _busy ? null : _submit,
           child: _busy
-              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2))
               : Text(tr('Сохранить')),
         ),
       ],
@@ -252,7 +281,8 @@ class _NoteScreen extends StatefulWidget {
   final CoachNotesRepository repo;
   final AiSettings aiSettings;
 
-  const _NoteScreen({required this.note, required this.repo, required this.aiSettings});
+  const _NoteScreen(
+      {required this.note, required this.repo, required this.aiSettings});
 
   @override
   State<_NoteScreen> createState() => _NoteScreenState();
@@ -262,12 +292,82 @@ class _NoteScreenState extends State<_NoteScreen> {
   late final TextEditingController _content;
   bool _aiBusy = false;
   String? _error;
+  late List<CoachNoteFile> _files = widget.repo.files(widget.note.id);
 
   @override
   void initState() {
     super.initState();
     _content = TextEditingController(text: widget.note.content);
   }
+
+  static const _maxFileBytes = 15 * 1024 * 1024;
+
+  /// Прикрепить файл к ЭТОЙ заметке: PDF, Word, TXT или изображение.
+  Future<void> _attach() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const [
+        'pdf',
+        'doc',
+        'docx',
+        'txt',
+        'jpg',
+        'jpeg',
+        'png',
+        'webp'
+      ],
+      withData: true,
+    );
+    final f = result?.files.single;
+    final bytes = f?.bytes;
+    if (f == null || bytes == null || !mounted) return;
+    if (bytes.length > _maxFileBytes) {
+      setState(
+          () => _error = tr('Файл больше 15 МБ — он не поместится в дневник'));
+      return;
+    }
+    widget.repo.addFile(widget.note.id, const Uuid().v4(), f.name, null, bytes);
+    setState(() {
+      _error = null;
+      _files = widget.repo.files(widget.note.id);
+    });
+  }
+
+  Future<void> _openFile(CoachNoteFile f) async {
+    final bytes = widget.repo.fileBytes(f.id);
+    if (bytes == null) return;
+    if (f.isImage) {
+      await PhotoViewerScreen.open(context, MemoryImage(bytes));
+    } else if (f.isPdf) {
+      await Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => PdfViewerScreen(bytes: bytes, fileName: f.name)));
+    } else if (f.isText) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(f.name),
+          content: SingleChildScrollView(
+              child: SelectableText(utf8.decode(bytes, allowMalformed: true))),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: Text(tr('Закрыть')))
+          ],
+        ),
+      );
+    } else {
+      // Word и прочее встроенно не показать — сохраняем/открываем системой.
+      await saveBytes(Uint8List.fromList(bytes), f.name);
+    }
+  }
+
+  IconData _fileIcon(CoachNoteFile f) => f.isImage
+      ? Icons.image_outlined
+      : f.isPdf
+          ? Icons.picture_as_pdf_outlined
+          : f.isText
+              ? Icons.text_snippet_outlined
+              : Icons.description_outlined;
 
   @override
   void dispose() {
@@ -276,7 +376,8 @@ class _NoteScreenState extends State<_NoteScreen> {
   }
 
   void _save() {
-    widget.repo.update(widget.note.id, topic: widget.note.topic, content: _content.text.trim());
+    widget.repo.update(widget.note.id,
+        topic: widget.note.topic, content: _content.text.trim());
   }
 
   /// Кнопка "AI" в заметке: пишешь задание в отдельном диалоге, ответ
@@ -294,10 +395,13 @@ class _NoteScreenState extends State<_NoteScreen> {
             autofocus: true,
             minLines: 2,
             maxLines: 6,
-            decoration: InputDecoration(hintText: tr('Что изменить или дописать в заметке')),
+            decoration: InputDecoration(
+                hintText: tr('Что изменить или дописать в заметке')),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr('Отмена'))),
+            TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: Text(tr('Отмена'))),
             FilledButton(
               onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()),
               child: Text(tr('Отправить')),
@@ -315,7 +419,8 @@ class _NoteScreenState extends State<_NoteScreen> {
     try {
       final reply = await AiService(widget.aiSettings).ask(
         task: 'note_edit',
-        systemPrompt: 'Ты помогаешь тренеру по стрельбе редактировать заметку дневника в приложении. '
+        systemPrompt:
+            'Ты помогаешь тренеру по стрельбе редактировать заметку дневника в приложении. '
             'Тебе дан текущий текст заметки и задание, что в нём изменить или дописать. '
             'Используй ТОЛЬКО текст заметки и само задание — никаких данных о тренировках, '
             'выстрелах или заметках спортсмена ты не знаешь и не используешь. '
@@ -347,12 +452,18 @@ class _NoteScreenState extends State<_NoteScreen> {
           title: Text(widget.note.topic,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w600)),
           actions: [
             GlassCircleButton(
               tooltip: tr('Помощь ИИ'),
               icon: _aiBusy
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.auto_awesome),
               onTap: _aiBusy ? null : _editWithAi,
             ),
@@ -370,7 +481,8 @@ class _NoteScreenState extends State<_NoteScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             Text(
-              DateFormat('dd.MM.yyyy HH:mm').format(widget.note.createdAt.toLocal()),
+              DateFormat('dd.MM.yyyy HH:mm')
+                  .format(widget.note.createdAt.toLocal()),
               style: Theme.of(context).textTheme.labelMedium,
             ),
             const SizedBox(height: 12),
@@ -385,12 +497,43 @@ class _NoteScreenState extends State<_NoteScreen> {
             ),
             if (_error != null) ...[
               const SizedBox(height: 8),
-              Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              Text(_error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ],
             if (widget.note.chart != null) ...[
               const SizedBox(height: 12),
               AiChartView(spec: widget.note.chart!),
             ],
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                    child: Text(tr('Файлы'),
+                        style: Theme.of(context).textTheme.titleSmall)),
+                TextButton.icon(
+                  onPressed: _attach,
+                  icon: const Icon(Icons.attach_file, size: 18),
+                  label: Text(tr('Прикрепить')),
+                ),
+              ],
+            ),
+            for (final f in _files)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(_fileIcon(f)),
+                title:
+                    Text(f.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Text('${(f.size / 1024).ceil()} ${tr('КБ')}'),
+                onTap: () => _openFile(f),
+                trailing: IconButton(
+                  tooltip: tr('Удалить'),
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: () {
+                    widget.repo.deleteFile(f.id);
+                    setState(() => _files = widget.repo.files(widget.note.id));
+                  },
+                ),
+              ),
           ],
         ),
       ),

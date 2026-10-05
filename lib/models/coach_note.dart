@@ -23,7 +23,9 @@ class CoachNote {
         id: row['id'] as String,
         topic: row['topic'] as String,
         content: row['content'] as String,
-        chart: row['chart_json'] == null ? null : jsonDecode(row['chart_json'] as String) as Map<String, dynamic>,
+        chart: row['chart_json'] == null
+            ? null
+            : jsonDecode(row['chart_json'] as String) as Map<String, dynamic>,
         createdAt: DateTime.parse(row['created_at'] as String),
       );
 
@@ -34,4 +36,20 @@ class CoachNote {
         chart: chart,
         createdAt: createdAt,
       );
+}
+
+/// Файл, приложенный к заметке дневника (без байтов — см. `CoachNotesRepository.fileBytes`).
+class CoachNoteFile {
+  final String id;
+  final String name;
+  final String? mime;
+  final int size;
+  const CoachNoteFile(
+      {required this.id, required this.name, this.mime, required this.size});
+
+  String get ext =>
+      name.contains('.') ? name.split('.').last.toLowerCase() : '';
+  bool get isImage => const {'jpg', 'jpeg', 'png', 'webp', 'gif'}.contains(ext);
+  bool get isPdf => ext == 'pdf';
+  bool get isText => ext == 'txt';
 }

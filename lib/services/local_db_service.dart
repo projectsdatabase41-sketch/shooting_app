@@ -411,6 +411,16 @@ CREATE TABLE IF NOT EXISTS coach_notes (
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS coach_note_files (
+  id          TEXT PRIMARY KEY,
+  note_id     TEXT NOT NULL,
+  name        TEXT NOT NULL,
+  mime        TEXT,
+  size        INTEGER NOT NULL DEFAULT 0,
+  data        BLOB NOT NULL,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS chat_contacts (
   id             TEXT PRIMARY KEY,
   nickname       TEXT NOT NULL,
