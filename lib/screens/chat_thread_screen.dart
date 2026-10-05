@@ -922,10 +922,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                 Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: LinkSignal(
-                    level: linkLevel(
+                    mode: linkMode(
                       direct: _live?.isDirect == true,
                       live: _live?.peerOnline == true,
-                      online: online,
                     ),
                   ),
                 ),

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../i18n/i18n.dart';
 import 'ai_settings.dart';
 
 /// Поиск в интернете с ответом ИИ прямо в приложении: Gemini с
@@ -79,7 +80,7 @@ class WebSearchService {
       dynamic json) {
     final cands =
         (json is Map ? json['candidates'] : null) as List? ?? const [];
-    if (cands.isEmpty) throw Exception('Пустой ответ поиска');
+    if (cands.isEmpty) throw Exception(tr('Пустой ответ поиска'));
     final cand = cands.first as Map;
     final parts = ((cand['content'] as Map?)?['parts'] as List?) ?? const [];
     final text = parts.map((p) => (p as Map)['text'] ?? '').join().trim();
@@ -94,7 +95,7 @@ class WebSearchService {
       if (url.isEmpty || !seen.add(url)) continue;
       sources.add((title: '${web?['title'] ?? url}', url: url));
     }
-    if (text.isEmpty) throw Exception('Поиск не вернул текст');
+    if (text.isEmpty) throw Exception(tr('Поиск не вернул текст'));
     return (text: text, sources: sources);
   }
 }
