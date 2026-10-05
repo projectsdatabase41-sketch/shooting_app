@@ -290,17 +290,40 @@ class _AiChatBodyState extends State<_AiChatBody> {
     if (mounted) setState(() => _pendingImage = bytes);
   }
 
-  /// Поиск в интернете — не свой API поиска (решение пользователя: без
-  /// Tavily и подобных), а то, что уже умеет сам телефон: открывает
-  /// вопрос в системном браузере/поисковом приложении по умолчанию.
-  /// Результат ИИ не видит — это для пользователя, не контекст ассистенту.
+  /// Поиск в интернете: вопрос уходит в Google Search через Gemini, ответ
+  /// с источниками приходит прямо в чат. Без ключа Gemini (бесплатный, из
+  /// aistudio.google.com — вставляется в настройках ИИ) предлагаем хотя бы
+  /// открыть поиск в браузере телефона.
   Future<void> _searchWeb() async {
     final text = _input.text.trim();
     if (text.isEmpty) return;
-    await launchUrl(
-      Uri.https('www.google.com', '/search', {'q': text}),
-      mode: LaunchMode.externalApplication,
-    );
+    final vm = context.read<AiChatViewModel>();
+    if (vm.service.settings.geminiKey.isEmpty) {
+      final openBrowser = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(tr('Поиск в интернете')),
+          content: Text(tr(
+              'Чтобы ответ приходил прямо сюда, вставьте бесплатный ключ Google Gemini: Настройки → ИИ Ассистент → «Поиск в интернете». Пока можно открыть поиск в браузере.')),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: Text(tr('Закрыть'))),
+            FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: Text(tr('Открыть в браузере'))),
+          ],
+        ),
+      );
+      if (openBrowser == true) {
+        await launchUrl(Uri.https('www.google.com', '/search', {'q': text}),
+            mode: LaunchMode.externalApplication);
+      }
+      return;
+    }
+    _input.clear();
+    vm.searchWeb(text).then((_) => _scrollToEnd());
+    _scrollToEnd();
   }
 
   void _scrollToEnd() {

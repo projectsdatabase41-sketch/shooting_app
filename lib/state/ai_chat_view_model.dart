@@ -7,6 +7,7 @@ import '../models/ai_memory_summary.dart';
 import '../services/ai_memory_service.dart';
 import '../services/ai_service.dart';
 import '../services/knowledge_service.dart';
+import '../services/web_search_service.dart';
 import '../i18n/i18n.dart';
 
 class AiMessage {
@@ -236,6 +237,31 @@ class AiChatViewModel extends ChangeNotifier {
         trainingPackageIds:
             rawCtx.session != null ? [rawCtx.session!.id] : const [],
       )));
+    } catch (e) {
+      messages.add(AiMessage(fromUser: false, text: '$e', isError: true));
+    } finally {
+      _busy = false;
+      notifyListeners();
+    }
+  }
+
+  /// Вопрос идёт не в чат-модель, а в поиск Google (Gemini с Google
+  /// Search): ответ приходит прямо в разговор, источники — списком под ним.
+  Future<void> searchWeb(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty || _busy) return;
+    messages.add(AiMessage(fromUser: true, text: '🔎 $trimmed'));
+    _busy = true;
+    notifyListeners();
+    try {
+      final r = await WebSearchService(service.settings).search(trimmed);
+      final links = r.sources.isEmpty
+          ? ''
+          : '\n\n${tr('Источники:')}\n${r.sources.take(6).map((s) => '• ${s.title} — ${s.url}').join('\n')}';
+      messages.add(AiMessage(
+          fromUser: false,
+          text: '${r.text}$links',
+          model: tr('Поиск в интернете')));
     } catch (e) {
       messages.add(AiMessage(fromUser: false, text: '$e', isError: true));
     } finally {

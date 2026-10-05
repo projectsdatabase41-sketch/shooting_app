@@ -62,6 +62,7 @@ class AiSettings {
   static const String keyChatModelChoice = 'ai_chat_model_choice';
   static const String keyModelPriority = 'ai_model_priority';
   static const String keyBaseInstructions = 'ai_base_instructions';
+  static const String keyGeminiKey = 'ai_gemini_key';
 
   /// Все ключи ИИ — чтобы «сбросить все цвета» их не снесло.
   static const List<String> allKeys = [
@@ -111,6 +112,10 @@ class AiSettings {
   /// правок: сначала правила стали видимыми, теперь — редактируемыми.
   /// Формат ```chart/```exercise/```note/```feedback в своём тексте
   /// нужно сохранить самостоятельно — приложение его не проверяет.
+  /// Ключ Google Gemini для поиска в интернете (aistudio.google.com).
+  String get geminiKey => _read(keyGeminiKey);
+  set geminiKey(String v) => _write(keyGeminiKey, v.trim());
+
   String get baseInstructionsOverride => _read(keyBaseInstructions);
   set baseInstructionsOverride(String v) => _write(keyBaseInstructions, v);
 

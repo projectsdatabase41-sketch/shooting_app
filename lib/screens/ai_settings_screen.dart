@@ -29,6 +29,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
   late final TextEditingController _models;
   late final TextEditingController _customInstructions;
   late final TextEditingController _baseInstructions;
+  late final TextEditingController _geminiKey;
   bool _editingBase = false;
   late final SupabaseAuthService _personalAuth;
   late final LocalDbService _db;
@@ -77,6 +78,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
         text: _ownKey ? _settings.rawModels : _settings.models.join('\n'));
     _customInstructions =
         TextEditingController(text: _settings.customInstructions);
+    _geminiKey = TextEditingController(text: _settings.geminiKey);
     _baseInstructions = TextEditingController(
         text: _settings.baseInstructionsOverride.isEmpty
             ? AiContext.defaultBasePrompt
@@ -90,6 +92,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     _models.dispose();
     _customInstructions.dispose();
     _baseInstructions.dispose();
+    _geminiKey.dispose();
     super.dispose();
   }
 
@@ -113,6 +116,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
         rawInstructions.length > _customInstructionsLimit
             ? rawInstructions.substring(0, _customInstructionsLimit)
             : rawInstructions;
+    _settings.geminiKey = _geminiKey.text;
     // Не храним копию дефолтного текста как «переопределение» — override
     // пустой, если пользователь его не менял (или вручную вернул как было).
     _settings.baseInstructionsOverride =
@@ -382,6 +386,19 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                   ),
             ),
           ],
+          const SizedBox(height: 24),
+          SectionHeader(
+            title: tr('Поиск в интернете'),
+            subtitle: tr(
+                'Ответ из Google прямо в чате: вставьте бесплатный ключ Gemini (aistudio.google.com → Get API key)'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _geminiKey,
+            obscureText: true,
+            autocorrect: false,
+            decoration: const InputDecoration(labelText: 'Gemini API Key'),
+          ),
           const SizedBox(height: 24),
           SectionHeader(title: tr('Инструкция ассистенту')),
           const SizedBox(height: 12),
