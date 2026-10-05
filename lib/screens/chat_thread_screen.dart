@@ -58,8 +58,14 @@ class ChatThreadScreen extends StatefulWidget {
   final ChatSyncService sync;
   final ChatPreferences prefs;
 
+  /// Переписка встроена во вкладку «Тренер» на тренировке: без стрелки
+  /// «назад» и кнопки «Свернуть», вместо неё в шапке — колокольчик
+  /// «Вызвать тренера» (см. `AthleteCoachChat`).
+  final bool embedded;
+
   const ChatThreadScreen({
     super.key,
+    this.embedded = false,
     required this.contact,
     required this.auth,
     required this.repo,
@@ -827,17 +833,40 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     }
   }
 
+  /// Колокольчик в шапке встроенной переписки: вызов этого тренера
+  /// (громкий push с кнопкой «Иду», см. `ChatSyncService.sendCall`).
+  Future<void> _callCoach() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await widget.sync.sendCall(_contact.id);
+      messenger.showSnackBar(SnackBar(
+          content: Text(tr('{p} получит вызов', {'p': _contact.nickname}))));
+      _reload();
+    } catch (e) {
+      messenger.showSnackBar(
+          SnackBar(content: Text(tr('Не удалось позвать: {e}', {'e': e}))));
+    }
+  }
+
   /// Шапка — отдельные стеклянные плитки поверх ленты, а не полоса.
   PreferredSizeWidget _glassHeader(BuildContext context) {
     final theme = Theme.of(context);
     return GlassHeader(
       onTitleTap: _openPanel,
+      leading: widget.embedded ? const SizedBox.shrink() : null,
       actions: [
-        GlassCircleButton(
-          icon: const BoldIcon(Icons.close),
-          tooltip: tr('Свернуть мессенджер'),
-          onTap: () => ChatHomeScreen.close(context),
-        ),
+        if (widget.embedded)
+          GlassCircleButton(
+            icon: const BoldIcon(Icons.notifications_active_outlined),
+            tooltip: tr('Вызвать тренера'),
+            onTap: _callCoach,
+          )
+        else
+          GlassCircleButton(
+            icon: const BoldIcon(Icons.close),
+            tooltip: tr('Свернуть мессенджер'),
+            onTap: () => ChatHomeScreen.close(context),
+          ),
       ],
       titlePadding: const EdgeInsets.fromLTRB(4, 4, 18, 4),
       title: ValueListenableBuilder(

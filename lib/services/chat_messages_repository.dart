@@ -1,4 +1,3 @@
-
 import '../models/chat_contact.dart';
 import '../models/chat_message.dart';
 import 'local_db_service.dart';
@@ -29,16 +28,28 @@ class ChatMessagesRepository {
       'ON CONFLICT(id) DO UPDATE SET nickname = excluded.nickname, chat_code = excluded.chat_code, '
       'avatar_base64 = excluded.avatar_base64, about = excluded.about, kind = excluded.kind, '
       'group_json = excluded.group_json',
-      [c.id, c.nickname, c.chatCode, c.avatarBase64, c.about, c.isGroup ? 'group' : 'person', c.isGroup ? c.groupJson : null],
+      [
+        c.id,
+        c.nickname,
+        c.chatCode,
+        c.avatarBase64,
+        c.about,
+        c.isGroup ? 'group' : 'person',
+        c.isGroup ? c.groupJson : null
+      ],
     );
   }
 
   /// Собеседник получил новый id (переезд сервера мессенджера) — переносим
   /// контакт и всю переписку на него.
   void moveContact(String oldId, String newId) {
-    db.db.execute('INSERT OR IGNORE INTO chat_contacts (id, nickname, chat_code, avatar_base64, about, kind, group_json, added_at) '
-        'SELECT ?, nickname, chat_code, avatar_base64, about, kind, group_json, added_at FROM chat_contacts WHERE id = ?', [newId, oldId]);
-    db.db.execute('UPDATE chat_local_messages SET contact_id = ? WHERE contact_id = ?', [newId, oldId]);
+    db.db.execute(
+        'INSERT OR IGNORE INTO chat_contacts (id, nickname, chat_code, avatar_base64, about, kind, group_json, added_at) '
+        'SELECT ?, nickname, chat_code, avatar_base64, about, kind, group_json, added_at FROM chat_contacts WHERE id = ?',
+        [newId, oldId]);
+    db.db.execute(
+        'UPDATE chat_local_messages SET contact_id = ? WHERE contact_id = ?',
+        [newId, oldId]);
     db.db.execute('DELETE FROM chat_contacts WHERE id = ?', [oldId]);
   }
 
@@ -53,7 +64,9 @@ class ChatMessagesRepository {
     for (final r in rows) {
       final t = DateTime.tryParse('${r['created_at']}');
       if (t == null) continue;
-      db.db.execute('UPDATE chat_local_messages SET created_at = ? WHERE id = ?', [t.toUtc().toIso8601String(), r['id']]);
+      db.db.execute(
+          'UPDATE chat_local_messages SET created_at = ? WHERE id = ?',
+          [t.toUtc().toIso8601String(), r['id']]);
     }
   }
 
@@ -80,7 +93,13 @@ class ChatMessagesRepository {
   ChatMessage? lastForContact(String contactId) {
     _normalizeTimes();
     final rows = db.db.select(
-      'SELECT * FROM chat_local_messages WHERE contact_id = ? ORDER BY created_at DESC LIMIT 1',
+      // Без attachment_base64: для превью в списке он не нужен, а у
+      // сообщения-фото это мегабайты, читаемые на КАЖДОЙ перерисовке по
+      // каждому контакту (мессенджер «висел» и плохо переключался).
+      'SELECT id, client_message_id, contact_id, direction, text, status, msg_type, '
+      'NULL AS attachment_base64, attachment_name, attachment_mime, attachment_size, drive_file_id, attachment_local_path, '
+      'edited, reply_to_client_message_id, reply_to_preview, seen, download_allowed, call_status, sender_id, peer_read, created_at '
+      'FROM chat_local_messages WHERE contact_id = ? ORDER BY created_at DESC LIMIT 1',
       [contactId],
     );
     return rows.isEmpty ? null : ChatMessage.fromRow(rows.first);
@@ -118,26 +137,32 @@ class ChatMessagesRepository {
   }
 
   void updateStatus(String id, ChatMessageStatus status) {
-    db.db.execute('UPDATE chat_local_messages SET status = ? WHERE id = ?', [status.name, id]);
+    db.db.execute('UPDATE chat_local_messages SET status = ? WHERE id = ?',
+        [status.name, id]);
   }
 
   /// После успешной загрузки большого вложения на Drive — записать
   /// выданный id файла (см. `ChatSyncService.retryLargeAttachment`).
   void updateDriveFileId(String id, String driveFileId) {
-    db.db.execute('UPDATE chat_local_messages SET drive_file_id = ? WHERE id = ?', [driveFileId, id]);
+    db.db.execute(
+        'UPDATE chat_local_messages SET drive_file_id = ? WHERE id = ?',
+        [driveFileId, id]);
   }
 
   /// После скачивания большого вложения получателем — путь к файлу НА
   /// УСТРОЙСТВЕ (см. `ChatSyncService.downloadLargeAttachment`).
   void updateAttachmentLocalPath(String id, String path) {
-    db.db.execute('UPDATE chat_local_messages SET attachment_local_path = ? WHERE id = ?', [path, id]);
+    db.db.execute(
+        'UPDATE chat_local_messages SET attachment_local_path = ? WHERE id = ?',
+        [path, id]);
   }
 
   /// "Иду"/отмена вызова (см. `ChatSyncService.acknowledgeCall`/`cancelCall`) —
   /// правит уже существующую `call`-строку, ту же самую и у отправителя,
   /// и (через сигнал) у получателя.
   void updateCallStatus(String id, String status) {
-    db.db.execute('UPDATE chat_local_messages SET call_status = ? WHERE id = ?', [status, id]);
+    db.db.execute('UPDATE chat_local_messages SET call_status = ? WHERE id = ?',
+        [status, id]);
   }
 
   /// Находит локальное сообщение этой переписки по `client_message_id` —
@@ -154,7 +179,9 @@ class ChatMessagesRepository {
   /// Правка текста задним числом — своя (сразу после отправки edit-
   /// сигнала) или пришедшая от собеседника.
   void updateText(String id, String text) {
-    db.db.execute('UPDATE chat_local_messages SET text = ?, edited = 1 WHERE id = ?', [text, id]);
+    db.db.execute(
+        'UPDATE chat_local_messages SET text = ?, edited = 1 WHERE id = ?',
+        [text, id]);
   }
 
   void deleteMessage(String id) {

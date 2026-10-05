@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData, SystemSound, SystemSoundType;
+import 'package:flutter/services.dart'
+    show Clipboard, ClipboardData, SystemSound, SystemSoundType;
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -165,7 +166,8 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
         final found = (await _auth.searchProfiles(c.nickname))
             .where((p) => p.nickname.toLowerCase() == c.nickname.toLowerCase())
             .toList();
-        if (found.length == 1 && found.single.userId != c.id) _repo.moveContact(c.id, found.single.userId);
+        if (found.length == 1 && found.single.userId != c.id)
+          _repo.moveContact(c.id, found.single.userId);
       }
     } catch (_) {
       // сеть — попробуем при следующей синхронизации
@@ -178,10 +180,12 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
   /// подключённому спортсмену сообщает свой и получает его — оба сразу в
   /// контактах друг у друга, без поиска и кодов.
   Future<void> _linkCoachesAndAthletes() async {
-    if (_mainAuth.isSignedIn) await _mainAuth.saveChatIdentity(_auth.userId, _auth.nickname);
+    if (_mainAuth.isSignedIn)
+      await _mainAuth.saveChatIdentity(_auth.userId, _auth.nickname);
     final access = CoachAccessService(_db);
     for (final a in access.listAthletes()) {
-      final link = await access.linkChat(a, chatUserId: _auth.userId, nickname: _auth.nickname);
+      final link = await access.linkChat(a,
+          chatUserId: _auth.userId, nickname: _auth.nickname);
       if (link == null || _repo.contactById(link.chatUserId) != null) continue;
       _repo.addContact(ChatContact(
         id: link.chatUserId,
@@ -218,7 +222,10 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
           // заводим его заново с тем же сохранённым паролем. Не вышло —
           // обычная форма входа.
           try {
-            await _auth.signUp(nickname: email.split('@').first, email: email, password: stored);
+            await _auth.signUp(
+                nickname: email.split('@').first,
+                email: email,
+                password: stored);
           } on AuthException {
             // остаётся форма
           }
@@ -226,7 +233,10 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
       } else {
         final generated = _generatePassword();
         try {
-          final ok = await _auth.signUp(nickname: email.split('@').first, email: email, password: generated);
+          final ok = await _auth.signUp(
+              nickname: email.split('@').first,
+              email: email,
+              password: generated);
           if (ok) await _mainAuth.saveChatPassword(generated);
         } on AuthException {
           // Скорее всего "уже зарегистрирован" — чат-аккаунт с этой
@@ -263,7 +273,9 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
     // Личный опрос и так дешёвый (в транзитной таблице только МОИ строки).
     _pollLoop = PollLoop(
       poller: AdaptivePoller(
-          min: const Duration(seconds: 5), max: const Duration(seconds: 30), scale: () => RemoteConfig.pollScale),
+          min: const Duration(seconds: 5),
+          max: const Duration(seconds: 30),
+          scale: () => RemoteConfig.pollScale),
       tick: () async {
         ChatPresence.tick(_auth);
         final added = await _sync.pollIncoming();
@@ -289,7 +301,8 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
       return Scaffold(
         body: EmptyState(
           icon: Icons.forum_outlined,
-          text: tr('Публичный чат скоро появится — сервер для него ещё не подключён'),
+          text: tr(
+              'Публичный чат скоро появится — сервер для него ещё не подключён'),
         ),
       );
     }
@@ -322,7 +335,12 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
       onContactsChanged: _reload,
       onOpenThread: (contact) async {
         await Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => ChatThreadScreen(contact: contact, auth: _auth, repo: _repo, sync: _sync, prefs: _prefs),
+          builder: (_) => ChatThreadScreen(
+              contact: contact,
+              auth: _auth,
+              repo: _repo,
+              sync: _sync,
+              prefs: _prefs),
         ));
         _reload();
       },
@@ -369,7 +387,8 @@ class _ChatContactsView extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _ProfileSheet(auth: auth, nickname: nickname, about: about),
+      builder: (_) =>
+          _ProfileSheet(auth: auth, nickname: nickname, about: about),
     );
     final nick = nickname.text.trim();
     final aboutText = about.text;
@@ -381,8 +400,9 @@ class _ChatContactsView extends StatelessWidget {
         await auth.updateAbout(aboutText);
       } catch (e) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(tr('Профиль не сохранён: {p}', {'p': '$e'.replaceFirst('AuthException: ', '')}))));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(tr('Профиль не сохранён: {p}',
+                  {'p': '$e'.replaceFirst('AuthException: ', '')}))));
         }
       }
     }
@@ -391,17 +411,24 @@ class _ChatContactsView extends StatelessWidget {
 
   void _openContacts(BuildContext context) => Navigator.of(context)
       .push(MaterialPageRoute(
-        builder: (_) =>
-            ChatContactsScreen(auth: auth, repo: repo, sync: sync, prefs: prefs, onOpenThread: onOpenThread),
+        builder: (_) => ChatContactsScreen(
+            auth: auth,
+            repo: repo,
+            sync: sync,
+            prefs: prefs,
+            onOpenThread: onOpenThread),
       ))
       .then((_) => onFriendsChanged());
 
-  void _openDirectory(BuildContext context) => Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => ChatDirectoryScreen(auth: auth, repo: repo, onOpenThread: onOpenThread),
+  void _openDirectory(BuildContext context) =>
+      Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => ChatDirectoryScreen(
+            auth: auth, repo: repo, onOpenThread: onOpenThread),
       ));
 
   Future<void> _newGroup(BuildContext context) async {
-    final group = await Navigator.of(context).push<ChatContact>(MaterialPageRoute(
+    final group =
+        await Navigator.of(context).push<ChatContact>(MaterialPageRoute(
       builder: (_) => ChatGroupEditScreen(auth: auth, repo: repo, sync: sync),
     ));
     onContactsChanged();
@@ -410,7 +437,8 @@ class _ChatContactsView extends StatelessWidget {
 
   static String _time(DateTime t) {
     final now = DateTime.now();
-    if (t.year == now.year && t.month == now.month && t.day == now.day) return DateFormat.Hm().format(t);
+    if (t.year == now.year && t.month == now.month && t.day == now.day)
+      return DateFormat.Hm().format(t);
     if (t.year == now.year) return DateFormat('dd.MM').format(t);
     return DateFormat('dd.MM.yy').format(t);
   }
@@ -424,7 +452,10 @@ class _ChatContactsView extends StatelessWidget {
     // Здесь — только переписки (и группы); все контакты — в «Контактах».
     // Главный экран: те, с кем есть переписка, группы и все друзья; без чёрного списка.
     final sorted = contacts
-        .where((c) => c.isGroup || last[c.id] != null || ChatAuthService.friendIds.contains(c.id))
+        .where((c) =>
+            c.isGroup ||
+            last[c.id] != null ||
+            ChatAuthService.friendIds.contains(c.id))
         .where((c) => !ChatAuthService.blockedIds.contains(c.id))
         .toList()
       ..sort((a, b) {
@@ -454,14 +485,10 @@ class _ChatContactsView extends StatelessWidget {
             onTap: () => Scaffold.of(ctx).openDrawer(),
           ),
         ),
-        title: Text(tr('Мессенджер'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        title: Text(tr('Мессенджер'),
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
-          // Поиск по нику (и коду) среди всех участников мессенджера.
-          GlassCircleButton(
-            icon: const Icon(Icons.search),
-            tooltip: tr('Найти по нику'),
-            onTap: () => _openDirectory(context),
-          ),
           GlassCircleButton(
             icon: const BoldIcon(Icons.close),
             tooltip: tr('Свернуть мессенджер'),
@@ -485,12 +512,20 @@ class _ChatContactsView extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      ChatAvatar(base64: auth.avatarBase64, nickname: auth.nickname, radius: 32),
+                      ChatAvatar(
+                          base64: auth.avatarBase64,
+                          nickname: auth.nickname,
+                          radius: 32),
                       const SizedBox(height: 12),
-                      Text(auth.nickname, style: theme.textTheme.titleMedium, overflow: TextOverflow.ellipsis),
+                      Text(auth.nickname,
+                          style: theme.textTheme.titleMedium,
+                          overflow: TextOverflow.ellipsis),
                       if (auth.about.isNotEmpty)
-                        Text(auth.about, style: theme.textTheme.bodySmall, overflow: TextOverflow.ellipsis),
-                      Text(tr('Код: {chatCode}', {'chatCode': auth.chatCode}), style: theme.textTheme.bodySmall),
+                        Text(auth.about,
+                            style: theme.textTheme.bodySmall,
+                            overflow: TextOverflow.ellipsis),
+                      Text(tr('Код: {chatCode}', {'chatCode': auth.chatCode}),
+                          style: theme.textTheme.bodySmall),
                     ],
                   ),
                 ),
@@ -529,7 +564,8 @@ class _ChatContactsView extends StatelessWidget {
                 title: Text(tr('Чёрный список')),
                 onTap: () async {
                   Navigator.of(context).pop();
-                  await Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChatBlocklistScreen(auth: auth)));
+                  await Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => ChatBlocklistScreen(auth: auth)));
                   await onFriendsChanged();
                 },
               ),
@@ -565,13 +601,15 @@ class _ChatContactsView extends StatelessWidget {
                   child: sorted.isEmpty
                       ? EmptyState(
                           icon: Icons.forum_outlined,
-                          text: tr('Переписок пока нет — откройте шторку слева: «Контакты» или «Все участники»'),
+                          text: tr(
+                              'Переписок пока нет — откройте шторку слева: «Контакты» или «Все участники»'),
                         )
                       : ValueListenableBuilder(
                           valueListenable: ChatPresence.seen,
                           builder: (context, _, __) => ListView.builder(
                             // Контекст здесь внутри тела Scaffold — высота шапки уже в padding.top.
-                            padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top),
+                            padding: EdgeInsets.only(
+                                top: MediaQuery.paddingOf(context).top),
                             itemCount: sorted.length,
                             itemBuilder: (context, i) {
                               final c = sorted[i];
@@ -579,49 +617,67 @@ class _ChatContactsView extends StatelessWidget {
                               final unread = repo.unreadCount(c.id);
                               // «О себе» — только на странице собеседника (решение пользователя),
                               // тут пусто, пока нет ни одного сообщения.
-                              var sub = m != null ? ChatSyncService.previewOf(m) : '';
+                              var sub =
+                                  m != null ? ChatSyncService.previewOf(m) : '';
                               // В группе — кто написал последним.
                               if (c.isGroup && m != null) {
-                                final who = m.direction == ChatMessageDirection.outgoing
+                                final who = m.direction ==
+                                        ChatMessageDirection.outgoing
                                     ? tr('Вы')
-                                    : (c.member(m.senderId ?? '')?.nickname ?? '');
+                                    : (c.member(m.senderId ?? '')?.nickname ??
+                                        '');
                                 if (who.isNotEmpty) sub = '$who: $sub';
                               }
                               return ListTile(
                                 // Ниже стандартной строки на ~15% (решение пользователя).
-                                visualDensity: const VisualDensity(vertical: -1),
+                                visualDensity:
+                                    const VisualDensity(vertical: -1),
                                 minVerticalPadding: 2,
                                 leading: ChatAvatar(
                                   base64: c.avatarBase64,
                                   nickname: c.nickname,
-                                  background: c.isGroup ? chatGroupColor(c.color) : null,
-                                  online: !c.isGroup && ChatPresence.online(c.id),
+                                  background: c.isGroup
+                                      ? chatGroupColor(c.color)
+                                      : null,
+                                  online:
+                                      !c.isGroup && ChatPresence.online(c.id),
                                 ),
                                 title: Row(
                                   children: [
                                     if (c.isGroup) ...[
-                                      Icon(Icons.groups_outlined, size: 16, color: theme.hintColor),
+                                      Icon(Icons.groups_outlined,
+                                          size: 16, color: theme.hintColor),
                                       const SizedBox(width: 4),
                                     ],
-                                    Expanded(child: Text(c.nickname, overflow: TextOverflow.ellipsis)),
+                                    Expanded(
+                                        child: Text(c.nickname,
+                                            overflow: TextOverflow.ellipsis)),
                                   ],
                                 ),
                                 subtitle: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    if (sub.isNotEmpty) Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                    if (sub.isNotEmpty)
+                                      Text(sub,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis),
                                   ],
                                 ),
                                 trailing: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
-                                    if (m != null) Text(_time(m.createdAt), style: theme.textTheme.bodySmall),
+                                    if (m != null)
+                                      Text(_time(m.createdAt),
+                                          style: theme.textTheme.bodySmall),
                                     if (unread > 0)
                                       Padding(
                                         padding: const EdgeInsets.only(top: 4),
                                         child: CircleAvatar(
-                                            radius: 11, child: Text('$unread', style: const TextStyle(fontSize: 11))),
+                                            radius: 11,
+                                            child: Text('$unread',
+                                                style: const TextStyle(
+                                                    fontSize: 11))),
                                       ),
                                   ],
                                 ),
@@ -635,7 +691,10 @@ class _ChatContactsView extends StatelessWidget {
             ),
           ),
           Positioned.fill(
-            child: EdgeShade(top: MediaQuery.paddingOf(context).top + GlassHeader.height + 16),
+            child: EdgeShade(
+                top: MediaQuery.paddingOf(context).top +
+                    GlassHeader.height +
+                    16),
           ),
         ],
       ),
@@ -648,7 +707,8 @@ class _ChatAuthScreen extends StatefulWidget {
   final ChatAuthService auth;
   final LocalDbService db;
   final VoidCallback onSignedIn;
-  const _ChatAuthScreen({required this.auth, required this.db, required this.onSignedIn});
+  const _ChatAuthScreen(
+      {required this.auth, required this.db, required this.onSignedIn});
 
   @override
   State<_ChatAuthScreen> createState() => _ChatAuthScreenState();
@@ -690,8 +750,12 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
           decoration: InputDecoration(labelText: tr('Почта')),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr('Отмена'))),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(emailCtrl.text.trim()), child: Text(tr('Отправить'))),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(tr('Отмена'))),
+          FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(emailCtrl.text.trim()),
+              child: Text(tr('Отправить'))),
         ],
       ),
     );
@@ -700,10 +764,14 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
       await widget.auth.requestPasswordReset(email);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(tr('Если такая почта зарегистрирована — письмо со ссылкой уже отправлено'))),
+        SnackBar(
+            content: Text(tr(
+                'Если такая почта зарегистрирована — письмо со ссылкой уже отправлено'))),
       );
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
     }
   }
 
@@ -717,7 +785,8 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
   Future<void> _maybeSaveChatPasswordForMainAccount(String password) async {
     final mainAuth = SupabaseAuthService(widget.db);
     if (!mainAuth.isSignedIn) return;
-    if (mainAuth.email.trim().toLowerCase() != _email.text.trim().toLowerCase()) return;
+    if (mainAuth.email.trim().toLowerCase() != _email.text.trim().toLowerCase())
+      return;
     final existing = await mainAuth.fetchChatPassword();
     if (existing != null) return;
     await mainAuth.saveChatPassword(password);
@@ -737,8 +806,8 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
           avatarBase64: _avatarBase64,
         );
         if (!ok) {
-          setState(() => _error =
-              tr('Аккаунт создан. Если почта требует подтверждения — перейдите по ссылке из письма, затем войдите через "Вход" (код контакта появится автоматически).'));
+          setState(() => _error = tr(
+              'Аккаунт создан. Если почта требует подтверждения — перейдите по ссылке из письма, затем войдите через "Вход" (код контакта появится автоматически).'));
           return;
         }
       } else {
@@ -761,10 +830,15 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
-        title: Text(tr('Мессенджер'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        title: Text(tr('Мессенджер'),
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
       ),
       body: ListView(
-        padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 16),
+        padding:
+            EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 16),
         children: [
           SegmentedButton<bool>(
             segments: [
@@ -782,18 +856,24 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
                 onTap: _pickAvatar,
                 child: Stack(
                   children: [
-                    ChatAvatar(base64: _avatarBase64, nickname: _nickname.text, radius: 40),
+                    ChatAvatar(
+                        base64: _avatarBase64,
+                        nickname: _nickname.text,
+                        radius: 40),
                     const Positioned(
                       right: 0,
                       bottom: 0,
-                      child: CircleAvatar(radius: 12, child: Icon(Icons.edit, size: 14)),
+                      child: CircleAvatar(
+                          radius: 12, child: Icon(Icons.edit, size: 14)),
                     ),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 16),
-            TextField(controller: _nickname, decoration: InputDecoration(labelText: tr('Никнейм'))),
+            TextField(
+                controller: _nickname,
+                decoration: InputDecoration(labelText: tr('Никнейм'))),
             const SizedBox(height: 10),
           ],
           TextField(
@@ -811,19 +891,25 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
           if (!_register) ...[
             Align(
               alignment: Alignment.centerRight,
-              child: TextButton(onPressed: _forgotPassword, child: Text(tr('Забыли пароль?'))),
+              child: TextButton(
+                  onPressed: _forgotPassword,
+                  child: Text(tr('Забыли пароль?'))),
             ),
           ],
           const SizedBox(height: 16),
           FilledButton(
             onPressed: _busy ? null : _submit,
             child: _busy
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2))
                 : Text(_register ? tr('Зарегистрироваться') : tr('Войти')),
           ),
           if (_error != null) ...[
             const SizedBox(height: 16),
-            Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            Text(_error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error)),
           ],
         ],
       ),
@@ -837,7 +923,8 @@ class _ProfileSheet extends StatefulWidget {
   final ChatAuthService auth;
   final TextEditingController nickname;
   final TextEditingController about;
-  const _ProfileSheet({required this.auth, required this.nickname, required this.about});
+  const _ProfileSheet(
+      {required this.auth, required this.nickname, required this.about});
 
   @override
   State<_ProfileSheet> createState() => _ProfileSheetState();
@@ -882,13 +969,17 @@ class _ProfileSheetState extends State<_ProfileSheet> {
     // Отступ под клавиатуру + прокрутка — иначе поле «О себе» уходит под неё.
     return SafeArea(
       child: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + MediaQuery.viewInsetsOf(context).bottom),
+        padding: EdgeInsets.fromLTRB(
+            20, 20, 20, 20 + MediaQuery.viewInsetsOf(context).bottom),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             GestureDetector(
               onTap: _busy ? null : _changeAvatar,
-              child: ChatAvatar(base64: auth.avatarBase64, nickname: auth.nickname, radius: 40),
+              child: ChatAvatar(
+                  base64: auth.avatarBase64,
+                  nickname: auth.nickname,
+                  radius: 40),
             ),
             const SizedBox(height: 16),
             TextField(
@@ -906,22 +997,30 @@ class _ProfileSheetState extends State<_ProfileSheet> {
               ),
             ),
             Text(tr('Сохранится само, когда закроете шторку'),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor)),
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: Theme.of(context).hintColor)),
             if (_status != null) ...[
               const SizedBox(height: 8),
               Text(
                 _status!,
                 textAlign: TextAlign.center,
-                style: TextStyle(color: _failed ? Theme.of(context).colorScheme.error : const Color(0xFF3DDC84)),
+                style: TextStyle(
+                    color: _failed
+                        ? Theme.of(context).colorScheme.error
+                        : const Color(0xFF3DDC84)),
               ),
             ],
             const SizedBox(height: 16),
-            Text(tr('Ваш код контакта — дайте его собеседнику, чтобы он вас добавил')),
+            Text(tr(
+                'Ваш код контакта — дайте его собеседнику, чтобы он вас добавил')),
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: () {
                 Clipboard.setData(ClipboardData(text: auth.chatCode));
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Код скопирован'))));
+                ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(tr('Код скопирован'))));
               },
               icon: const Icon(Icons.copy),
               label: Text(auth.chatCode.isEmpty ? '—' : auth.chatCode),

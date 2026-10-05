@@ -282,22 +282,8 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
       case WorkspacePage.notes:
         return const CommentsThreadSheet(level: CommentLevel.session);
       case WorkspacePage.coach:
-        // Переписка с тренером на тренировке + «Позвать тренера» (в
-        // мессенджере этой кнопки нет — решение пользователя).
-        final training = vm.session.status == SessionStatus.running ||
-            vm.session.status == SessionStatus.paused;
-        return Column(
-          children: [
-            if (training)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                child: CallCoachButton(
-                    db: context.read<AppDataStore>().db, large: true),
-              ),
-            // Отдельный канал с тренером (не мессенджер и не комментарии к тренировке).
-            const Expanded(child: AthleteCoachChat()),
-          ],
-        );
+        // Чат прямо с тренером; колокольчик «Вызвать тренера» — в его шапке.
+        return const AthleteCoachChat();
     }
   }
 

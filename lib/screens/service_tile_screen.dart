@@ -23,7 +23,8 @@ import '../i18n/i18n.dart';
 class ServiceTileScreen extends StatefulWidget {
   final CustomService service;
   final CustomServicesRepository repo;
-  const ServiceTileScreen({super.key, required this.service, required this.repo});
+  const ServiceTileScreen(
+      {super.key, required this.service, required this.repo});
 
   @override
   State<ServiceTileScreen> createState() => _ServiceTileScreenState();
@@ -64,7 +65,8 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
   }
 
   Future<void> _openLink() async {
-    await launchUrl(Uri.parse(widget.service.url), mode: LaunchMode.externalApplication);
+    await launchUrl(Uri.parse(widget.service.url),
+        mode: LaunchMode.externalApplication);
     if (mounted) Navigator.of(context).pop();
   }
 
@@ -74,7 +76,8 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
       _error = null;
     });
     try {
-      final (response, rawText, rows) = await ServiceDisplayAi.fetchRows(widget.service);
+      final (response, rawText, rows) =
+          await ServiceDisplayAi.fetchRows(widget.service);
       setState(() {
         _response = response;
         _rawText = rawText;
@@ -110,12 +113,17 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
           minLines: 2,
           maxLines: 5,
           decoration: InputDecoration(
-            hintText: tr('Необязательно: что показать заголовком, что подробностями и т.п.'),
+            hintText: tr(
+                'Необязательно: что показать заголовком, что подробностями и т.п.'),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr('Отмена'))),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(tr('Настроить'))),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text(tr('Отмена'))),
+          FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text(tr('Настроить'))),
         ],
       ),
     );
@@ -128,11 +136,13 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
       final String specJson;
       final List<Map<String, dynamic>> resultRows;
       if (rows != null && rows.isNotEmpty) {
-        specJson = await ServiceDisplayAi.suggestSpec(aiSettings, rows, note: noteCtrl.text);
+        specJson = await ServiceDisplayAi.suggestSpec(aiSettings, rows,
+            note: noteCtrl.text);
         resultRows = rows;
       } else {
-        (resultRows, specJson) =
-            await ServiceDisplayAi.discoverAndSuggestSpec(aiSettings, _rawText, note: noteCtrl.text);
+        (resultRows, specJson) = await ServiceDisplayAi.discoverAndSuggestSpec(
+            aiSettings, _rawText,
+            note: noteCtrl.text);
       }
       widget.repo.setDisplaySpec(_service.id, specJson);
       if (!mounted) return;
@@ -141,7 +151,9 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
         _service = _withDisplaySpec(specJson);
       });
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Не удалось настроить вид: {e}', {'e': e}))));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(tr('Не удалось настроить вид: {e}', {'e': e}))));
     } finally {
       if (mounted) setState(() => _aiBusy = false);
     }
@@ -171,10 +183,13 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
           autofocus: true,
           minLines: 1,
           maxLines: 3,
-          decoration: InputDecoration(hintText: tr('Например: покажи все записи про долги')),
+          decoration: InputDecoration(
+              hintText: tr('Например: покажи все записи про долги')),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr('Отмена'))),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(tr('Отмена'))),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(queryCtrl.text.trim()),
             child: Text(tr('Спросить')),
@@ -187,17 +202,23 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
     setState(() => _aiBusy = true);
     try {
       final aiSettings = AiSettings(context.read<AppDataStore>().db);
-      final result = await ServiceDisplayAi.suggestFilter(aiSettings, rows, query);
-      final filtered = ServiceDisplayAi.applyFilter(rows, result.field, result.values);
+      final result =
+          await ServiceDisplayAi.suggestFilter(aiSettings, rows, query);
+      final filtered =
+          ServiceDisplayAi.applyFilter(rows, result.field, result.values);
       if (!mounted) return;
       setState(() {
         _filteredRows = filtered;
         _filterReply = result.reply.isNotEmpty
             ? result.reply
-            : (result.field.isEmpty ? tr('Не нашлось поле для фильтра по этому запросу') : tr('Показаны подходящие записи'));
+            : (result.field.isEmpty
+                ? tr('Не нашлось поле для фильтра по этому запросу')
+                : tr('Показаны подходящие записи'));
       });
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Не удалось отфильтровать: {e}', {'e': e}))));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(tr('Не удалось отфильтровать: {e}', {'e': e}))));
     } finally {
       if (mounted) setState(() => _aiBusy = false);
     }
@@ -233,7 +254,9 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
             },
             child: Text(tr('Копировать')),
           ),
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr('Закрыть'))),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(tr('Закрыть'))),
         ],
       ),
     );
@@ -255,54 +278,73 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
         title: Text(widget.service.name,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600),
             overflow: TextOverflow.ellipsis),
         actions: [
-          if (_rows != null && !_aiBusy)
-            GlassCircleButton(
-              icon: const BoldIcon(Icons.search),
-              tooltip: tr('Спросить ИИ'),
-              onTap: _askAiFilter,
-            ),
-          if (_response != null && !_aiBusy)
-            GlassPill(
-              radius: 24,
-              child: SizedBox(
-                width: 48,
-                height: 48,
-                child: PopupMenuButton<String>(
-                  icon: const BoldIcon(Icons.auto_awesome_outlined),
-                  tooltip: tr('Вид записей'),
-                  onSelected: (v) {
-                    if (v == 'configure') _configureDisplay();
-                    if (v == 'reset') _resetDisplay();
-                  },
-                  itemBuilder: (context) => [
-                    PopupMenuItem(value: 'configure', child: Text(tr('Настроить вид с ИИ'))),
-                    if (spec != null) PopupMenuItem(value: 'reset', child: Text(tr('Сбросить вид'))),
-                  ],
-                ),
-              ),
-            ),
           if (_aiBusy)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))),
+              child: Center(
+                  child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2))),
             ),
-          if (_rows != null)
-            GlassCircleButton(
-              icon: BoldIcon(_showRaw ? Icons.table_chart_outlined : Icons.code),
-              tooltip: _showRaw ? tr('Показать таблицей') : tr('Показать как есть'),
-              onTap: () => setState(() => _showRaw = !_showRaw),
-            ),
-          GlassCircleButton(
-            icon: const BoldIcon(Icons.open_in_new),
-            tooltip: tr('Открыть ссылку в браузере'),
-            onTap: () => launchUrl(Uri.parse(widget.service.url), mode: LaunchMode.externalApplication),
-          ),
           GlassCircleButton(
             icon: const BoldIcon(Icons.refresh),
+            tooltip: tr('Обновить'),
             onTap: _busy ? null : _runRequest,
+          ),
+          // Остальное — в одно меню «три точки» (раньше шапка была
+          // перегружена кнопками, решение пользователя).
+          GlassPill(
+            radius: 24,
+            child: SizedBox(
+              width: 48,
+              height: 48,
+              child: PopupMenuButton<String>(
+                icon: const BoldIcon(Icons.more_vert),
+                tooltip: tr('Меню'),
+                onSelected: (v) {
+                  switch (v) {
+                    case 'ask':
+                      _askAiFilter();
+                    case 'configure':
+                      _configureDisplay();
+                    case 'reset':
+                      _resetDisplay();
+                    case 'raw':
+                      setState(() => _showRaw = !_showRaw);
+                    case 'open':
+                      launchUrl(Uri.parse(widget.service.url),
+                          mode: LaunchMode.externalApplication);
+                  }
+                },
+                itemBuilder: (context) => [
+                  if (_rows != null && !_aiBusy)
+                    PopupMenuItem(value: 'ask', child: Text(tr('Спросить ИИ'))),
+                  if (_response != null && !_aiBusy)
+                    PopupMenuItem(
+                        value: 'configure',
+                        child: Text(tr('Настроить вид с ИИ'))),
+                  if (_response != null && !_aiBusy && spec != null)
+                    PopupMenuItem(
+                        value: 'reset', child: Text(tr('Сбросить вид'))),
+                  if (_rows != null)
+                    PopupMenuItem(
+                        value: 'raw',
+                        child: Text(_showRaw
+                            ? tr('Показать таблицей')
+                            : tr('Показать как есть'))),
+                  PopupMenuItem(
+                      value: 'open',
+                      child: Text(tr('Открыть ссылку в браузере'))),
+                ],
+              ),
+            ),
           ),
         ],
       ),
@@ -313,16 +355,22 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
             Material(
               color: Theme.of(context).colorScheme.primaryContainer,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
                   children: [
                     Expanded(
                       child: Text(
-                        tr('{p} · показано {p2} из {p3}', {'p': _filterReply ?? '', 'p2': _filteredRows!.length, 'p3': _rows?.length ?? 0}),
+                        tr('{p} · показано {p2} из {p3}', {
+                          'p': _filterReply ?? '',
+                          'p2': _filteredRows!.length,
+                          'p3': _rows?.length ?? 0
+                        }),
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ),
-                    TextButton(onPressed: _clearFilter, child: Text(tr('Сбросить'))),
+                    TextButton(
+                        onPressed: _clearFilter, child: Text(tr('Сбросить'))),
                   ],
                 ),
               ),
@@ -335,27 +383,35 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
           : FloatingActionButton.small(
               onPressed: () {
                 Clipboard.setData(ClipboardData(text: _response!));
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Ответ скопирован'))));
+                ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(tr('Ответ скопирован'))));
               },
               child: const Icon(Icons.copy),
             ),
     );
   }
 
-  Widget _buildContent(BuildContext context, Map<String, dynamic>? spec, List<Map<String, dynamic>>? displayRows) {
+  Widget _buildContent(BuildContext context, Map<String, dynamic>? spec,
+      List<Map<String, dynamic>>? displayRows) {
     return _busy
         ? const Center(child: CircularProgressIndicator())
         : _error != null
             ? Padding(
                 padding: const EdgeInsets.all(16),
-                child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                child: Text(_error!,
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error)),
               )
             : (displayRows != null && !_showRaw)
-                ? (spec != null ? _buildCards(displayRows, spec) : _buildTable(displayRows))
+                ? (spec != null
+                    ? _buildCards(displayRows, spec)
+                    : _buildTable(displayRows))
                 : ListView(
                     padding: const EdgeInsets.all(16),
                     children: [
-                      SelectableText(_response ?? '', style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+                      SelectableText(_response ?? '',
+                          style: const TextStyle(
+                              fontFamily: 'monospace', fontSize: 12)),
                     ],
                   );
   }
@@ -385,7 +441,8 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
                   DataCell(
                     ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 220),
-                      child: Text(ServiceDisplayAi.cell(r[c]), overflow: TextOverflow.ellipsis, maxLines: 2),
+                      child: Text(ServiceDisplayAi.cell(r[c]),
+                          overflow: TextOverflow.ellipsis, maxLines: 2),
                     ),
                     // Ячейка режется по ширине колонки — полный текст (не
                     // помещающаяся заметка и т.п.) смотрим по тапу в диалоге,
@@ -402,30 +459,38 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
   /// Вид по разметке ИИ — заголовок и краткая строка сразу видны,
   /// длинные поля (заметки, описания) читаются полностью в развороте
   /// карточки вместо обрезанной ячейки таблицы.
-  Widget _buildCards(List<Map<String, dynamic>> rows, Map<String, dynamic> spec) {
+  Widget _buildCards(
+      List<Map<String, dynamic>> rows, Map<String, dynamic> spec) {
     final title = spec['title'] as String?;
-    final subtitle = (spec['subtitle'] as List?)?.map((e) => '$e').toList() ?? const [];
-    final detail = (spec['detail'] as List?)?.map((e) => '$e').toList() ?? const [];
+    final subtitle =
+        (spec['subtitle'] as List?)?.map((e) => '$e').toList() ?? const [];
+    final detail =
+        (spec['detail'] as List?)?.map((e) => '$e').toList() ?? const [];
     return ListView.builder(
       padding: const EdgeInsets.all(12),
       itemCount: rows.length,
       itemBuilder: (context, i) {
         final r = rows[i];
-        final titleText =
-            title != null ? ServiceDisplayAi.cell(r[title]) : (r.values.isEmpty ? '' : ServiceDisplayAi.cell(r.values.first));
-        final subtitleText =
-            subtitle.map((k) => ServiceDisplayAi.cell(r[k]).trim()).where((v) => v.isNotEmpty).join(' · ');
+        final titleText = title != null
+            ? ServiceDisplayAi.cell(r[title])
+            : (r.values.isEmpty ? '' : ServiceDisplayAi.cell(r.values.first));
+        final subtitleText = subtitle
+            .map((k) => ServiceDisplayAi.cell(r[k]).trim())
+            .where((v) => v.isNotEmpty)
+            .join(' · ');
         // .trim() — поле может быть непустой строкой из одних пробелов/
         // переносов ("\n"), тогда лучше вовсе не показывать пустой на
         // вид пункт, чем строку без видимого содержания.
         final detailEntries = [
           for (final k in detail)
-            if (ServiceDisplayAi.cell(r[k]).trim().isNotEmpty) MapEntry(k, ServiceDisplayAi.cell(r[k]).trim()),
+            if (ServiceDisplayAi.cell(r[k]).trim().isNotEmpty)
+              MapEntry(k, ServiceDisplayAi.cell(r[k]).trim()),
         ];
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
           child: ExpansionTile(
-            title: Text(titleText.isEmpty ? '—' : titleText, style: const TextStyle(fontWeight: FontWeight.w600)),
+            title: Text(titleText.isEmpty ? '—' : titleText,
+                style: const TextStyle(fontWeight: FontWeight.w600)),
             subtitle: subtitleText.isEmpty ? null : Text(subtitleText),
             children: [
               for (final e in detailEntries)
@@ -434,7 +499,8 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(e.key, style: Theme.of(context).textTheme.labelSmall),
+                      Text(e.key,
+                          style: Theme.of(context).textTheme.labelSmall),
                       SelectableText(e.value),
                     ],
                   ),

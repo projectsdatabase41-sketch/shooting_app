@@ -10,13 +10,18 @@ import '../services/chat_sync_service.dart';
 import '../services/coach_chat_link.dart';
 import '../services/supabase_auth_service.dart';
 import '../state/app_data_store.dart';
-import 'chat_avatar.dart';
+import 'call_coach_button.dart';
+import 'coach_chat_view.dart';
 import '../i18n/i18n.dart';
 
-/// «Чат с тренером» у спортсмена: тот же мессенджер-контакт, что у
-/// «Позвать тренера» — полноценный чат с файлами, фото, push (решение
-/// пользователя, пункты 20/21/23 списка правок: раньше это был
-/// отдельный урезанный текстовый канал без вложений и уведомлений).
+/// Вкладка «Тренер» на тренировке — чат прямо с тренером.
+///
+/// Тренер подключён к мессенджеру (связал чат-аккаунт с токеном — см.
+/// `fetchLinkedCoachContacts`) — это полноценная переписка с вложениями и
+/// push, а колокольчик «Вызвать тренера» стоит в её шапке. Не подключён
+/// (или сам спортсмен не в мессенджере) — простой текстовый чат через
+/// базу спортсмена (sql/coach-chat.sql), колокольчик при этом подскажет,
+/// что для вызова нужен мессенджер.
 class AthleteCoachChat extends StatefulWidget {
   const AthleteCoachChat({super.key});
 
@@ -25,43 +30,43 @@ class AthleteCoachChat extends StatefulWidget {
 }
 
 class _AthleteCoachChatState extends State<AthleteCoachChat> {
-  late final ChatAuthService _chatAuth =
-      ChatAuthService(context.read<AppDataStore>().db);
-  late final SupabaseAuthService _main =
-      SupabaseAuthService(context.read<AppDataStore>().db);
-  late final ChatMessagesRepository _repo =
-      ChatMessagesRepository(context.read<AppDataStore>().db);
-  late final ChatPreferences _prefs =
-      ChatPreferences(context.read<AppDataStore>().db);
+  late final _db = context.read<AppDataStore>().db;
+  late final ChatAuthService _chatAuth = ChatAuthService(_db);
+  late final SupabaseAuthService _main = SupabaseAuthService(_db);
+  late final ChatMessagesRepository _repo = ChatMessagesRepository(_db);
+  late final ChatPreferences _prefs = ChatPreferences(_db);
+
   List<ChatContact>? _coaches;
+  List<({String grantId, String name})>? _simple;
   String? _error;
+  String? _selected;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    if (_main.isSignedIn) _load();
   }
 
   Future<void> _load() async {
-    if (!_chatAuth.isSignedIn || !_main.isSignedIn) return;
     try {
-      final list = await fetchLinkedCoachContacts(_main, _chatAuth, _repo);
-      if (mounted) setState(() => (_coaches = list, _error = null));
+      final contacts = _chatAuth.isSignedIn
+          ? await fetchLinkedCoachContacts(_main, _chatAuth, _repo)
+          : <ChatContact>[];
+      final simple = contacts.isEmpty
+          ? await _main.fetchChatCoaches()
+          : <({String grantId, String name})>[];
+      if (!mounted) return;
+      setState(() {
+        _coaches = contacts;
+        _simple = simple;
+        _error = null;
+        _selected ??= contacts.isNotEmpty
+            ? contacts.first.id
+            : (simple.isEmpty ? null : simple.first.grantId);
+      });
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     }
-  }
-
-  void _open(ChatContact c) {
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => ChatThreadScreen(
-        contact: c,
-        auth: _chatAuth,
-        repo: _repo,
-        sync: ChatSyncService(_chatAuth, _repo),
-        prefs: _prefs,
-      ),
-    ));
   }
 
   Widget _hint(String text) => Center(
@@ -70,15 +75,30 @@ class _AthleteCoachChatState extends State<AthleteCoachChat> {
             child: Text(text, textAlign: TextAlign.center)),
       );
 
+  Widget _chips(List<({String id, String name})> items, String current) =>
+      SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+        child: Row(
+          children: [
+            for (final c in items)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(c.name),
+                  selected: c.id == current,
+                  onSelected: (_) => setState(() => _selected = c.id),
+                ),
+              ),
+          ],
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
-    if (!_chatAuth.isSignedIn) {
-      return _hint(tr(
-          'Сначала войдите в мессенджер — через него идёт переписка с тренером'));
-    }
     if (!_main.isSignedIn) {
       return _hint(tr(
-          'Войдите в свою базу (Настройки → Данные и синхронизация) — там выданы токены тренерам'));
+          'Чтобы переписываться с тренером, войдите в свою базу: Настройки → Учётная запись.'));
     }
     final coaches = _coaches;
     if (coaches == null) {
@@ -86,22 +106,71 @@ class _AthleteCoachChatState extends State<AthleteCoachChat> {
           ? const Center(child: CircularProgressIndicator())
           : _hint(_error!);
     }
-    if (coaches.isEmpty) {
-      return _hint(tr(
-          'Тренер ещё не подключён: выдайте ему токен — он вводит его и открывает мессенджер'));
-    }
-    return ListView(
-      padding: const EdgeInsets.all(12),
-      children: [
-        for (final c in coaches)
-          Card(
-            child: ListTile(
-              leading: ChatAvatar(base64: c.avatarBase64, nickname: c.nickname),
-              title: Text(c.nickname),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => _open(c),
+
+    if (coaches.isNotEmpty) {
+      final current = coaches.firstWhere((c) => c.id == _selected,
+          orElse: () => coaches.first);
+      return Column(
+        children: [
+          if (coaches.length > 1)
+            _chips([for (final c in coaches) (id: c.id, name: c.nickname)],
+                current.id),
+          Expanded(
+            // Шапка переписки не должна добавлять отступ под строку состояния —
+            // он уже учтён шапкой тренировки выше.
+            child: MediaQuery.removePadding(
+              context: context,
+              removeTop: true,
+              child: ChatThreadScreen(
+                key: ValueKey(current.id),
+                embedded: true,
+                contact: current,
+                auth: _chatAuth,
+                repo: _repo,
+                sync: ChatSyncService(_chatAuth, _repo),
+                prefs: _prefs,
+              ),
             ),
           ),
+        ],
+      );
+    }
+
+    final simple = _simple ?? const [];
+    if (simple.isEmpty) {
+      return _hint(tr(
+          'Тренер ещё не подключён — выдайте ему токен доступа: Настройки → Данные и синхронизация.'));
+    }
+    final current = simple.firstWhere((c) => c.grantId == _selected,
+        orElse: () => simple.first);
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+          child: Row(
+            children: [
+              Expanded(
+                child: simple.length > 1
+                    ? _chips(
+                        [for (final c in simple) (id: c.grantId, name: c.name)],
+                        current.grantId)
+                    : Text(current.name,
+                        style: Theme.of(context).textTheme.titleSmall),
+              ),
+              CallCoachButton(db: _db),
+            ],
+          ),
+        ),
+        Expanded(
+          child: CoachChatView(
+            key: ValueKey(current.grantId),
+            myRole: 'athlete',
+            otherLabel: current.name,
+            load: () => _main.fetchCoachChat(current.grantId),
+            send: (text) => _main.sendCoachChat(current.grantId, text),
+            delete: _main.deleteCoachChat,
+          ),
+        ),
       ],
     );
   }
