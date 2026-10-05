@@ -42,7 +42,8 @@ class AiMemoryService {
   /// (решение пользователя: "чистка её, 1000 строк для хранения").
   static const int maxStoredRows = 1000;
 
-  Future<List<AiMemorySummary>> _fetchRecent({int limit = _recentWindow}) async {
+  Future<List<AiMemorySummary>> _fetchRecent(
+      {int limit = _recentWindow}) async {
     if (!auth.isSignedIn) return const [];
     final token = await auth.ensureFreshToken();
     if (token == null) return const [];
@@ -60,7 +61,10 @@ class AiMemoryService {
       if (res.statusCode >= 400) return const [];
       final decoded = jsonDecode(utf8.decode(res.bodyBytes));
       if (decoded is! List) return const [];
-      return decoded.cast<Map<String, dynamic>>().map(AiMemorySummary.fromJson).toList();
+      return decoded
+          .cast<Map<String, dynamic>>()
+          .map(AiMemorySummary.fromJson)
+          .toList();
     } catch (_) {
       // Сеть недоступна — молча без памяти о прошлом, не ошибка чата.
       return const [];
@@ -72,7 +76,8 @@ class AiMemoryService {
   /// Последние записи как есть, самые свежие первыми — например, для
   /// экрана "посмотреть память" (если такой появится). Большинству
   /// вызывающего кода нужен `search()`, не этот метод.
-  Future<List<AiMemorySummary>> recent({int limit = 20}) => _fetchRecent(limit: limit);
+  Future<List<AiMemorySummary>> recent({int limit = 20}) =>
+      _fetchRecent(limit: limit);
 
   /// Записи, релевантные вопросу — по ключевым словам (`TextSearch`,
   /// та же логика, что у `KnowledgeService.search`), а не слепые
@@ -91,9 +96,56 @@ class AiMemoryService {
     if (words.isEmpty) return const [];
 
     final pool = await _fetchRecent();
-    final ranked = pool.where((s) => TextSearch.relevance(s.summary, words) > 0).toList()
-      ..sort((a, b) => TextSearch.relevance(b.summary, words).compareTo(TextSearch.relevance(a.summary, words)));
+    final ranked = pool
+        .where((s) => TextSearch.relevance(s.summary, words) > 0)
+        .toList()
+      ..sort((a, b) => TextSearch.relevance(b.summary, words)
+          .compareTo(TextSearch.relevance(a.summary, words)));
     return ranked.take(limit).toList();
+  }
+
+  /// Просьба «вспомни/напомни/что ты говорил/подробно» — тогда нужен не
+  /// краткий пересказ, а полный текст прошлого обмена.
+  static bool isRecallQuestion(String q) => RegExp(
+          'вспомни|вспомнить|напомни|что ты (мне )?(говорил|писал|советовал|отвечал)|в прошлый раз|ранее мы|мы обсуждали|как мы (решили|договорились)|подробно (про|о том)',
+          caseSensitive: false)
+      .hasMatch(q);
+
+  /// Полные тексты прошлых обменов, подходящих по словам вопроса (поиск
+  /// по `detail` на стороне базы, до [limit] штук, свежие первыми). Пусто,
+  /// если вопрос не про воспоминание, облака нет или колонки `detail` ещё
+  /// нет (sql/ai-memory-detail.sql не выполнен).
+  Future<List<AiMemorySummary>> recallDetails(String question,
+      {int limit = 3}) async {
+    if (!auth.isSignedIn || !isRecallQuestion(question)) return const [];
+    final words = TextSearch.keywords(question, maxWords: 2);
+    if (words.isEmpty) return const [];
+    final token = await auth.ensureFreshToken();
+    if (token == null) return const [];
+    final client = clientFactory();
+    try {
+      final conds = words
+          .map((w) => 'detail.ilike.*${w.replaceAll(RegExp(r'[,()*]'), '')}*')
+          .join(',');
+      final res = await client.get(
+        Uri.parse('${auth.url}/rest/v1/ai_conversation_summaries'
+            '?select=id,period_start,period_end,summary,training_package_ids,detail'
+            '&or=($conds)&order=period_start.desc&limit=$limit'),
+        headers: {'apikey': auth.anonKey, 'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 20));
+      if (res.statusCode >= 400) return const [];
+      final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+      if (decoded is! List) return const [];
+      return decoded
+          .cast<Map<String, dynamic>>()
+          .map(AiMemorySummary.fromJson)
+          .where((s) => (s.detail ?? '').isNotEmpty)
+          .toList();
+    } catch (_) {
+      return const [];
+    } finally {
+      client.close();
+    }
   }
 
   /// Добавляет новую сводку. Молча ничего не делает без облака —
@@ -105,18 +157,22 @@ class AiMemoryService {
     if (token == null) return;
     final client = clientFactory();
     try {
-      await client
-          .post(
-            Uri.parse('${auth.url}/rest/v1/ai_conversation_summaries'),
-            headers: {
-              'apikey': auth.anonKey,
-              'Authorization': 'Bearer $token',
-              'Content-Type': 'application/json',
-              'Prefer': 'return=minimal',
-            },
-            body: jsonEncode([summary.toJson()]),
-          )
-          .timeout(const Duration(seconds: 20));
+      Future<int> post(bool withDetail) async => (await client
+              .post(
+                Uri.parse('${auth.url}/rest/v1/ai_conversation_summaries'),
+                headers: {
+                  'apikey': auth.anonKey,
+                  'Authorization': 'Bearer $token',
+                  'Content-Type': 'application/json',
+                  'Prefer': 'return=minimal',
+                },
+                body: jsonEncode([summary.toJson(withDetail: withDetail)]),
+              )
+              .timeout(const Duration(seconds: 20)))
+          .statusCode;
+      // Колонки detail в базе может ещё не быть (sql/ai-memory-detail.sql) —
+      // тогда пишем хотя бы краткую сводку, а не теряем память целиком.
+      if (await post(true) >= 400 && summary.detail != null) await post(false);
       await _trimOldRows(token, client);
     } catch (_) {
       // Best-effort — см. комментарий у метода.
@@ -135,10 +191,13 @@ class AiMemoryService {
       headers: {'apikey': auth.anonKey, 'Authorization': 'Bearer $token'},
     ).timeout(const Duration(seconds: 20));
     if (res.statusCode >= 400) return;
-    final ids = (jsonDecode(utf8.decode(res.bodyBytes)) as List).map((r) => '${r['id']}').toList();
+    final ids = (jsonDecode(utf8.decode(res.bodyBytes)) as List)
+        .map((r) => '${r['id']}')
+        .toList();
     if (ids.isEmpty) return;
     await client.delete(
-      Uri.parse('${auth.url}/rest/v1/ai_conversation_summaries?id=in.(${ids.join(',')})'),
+      Uri.parse(
+          '${auth.url}/rest/v1/ai_conversation_summaries?id=in.(${ids.join(',')})'),
       headers: {'apikey': auth.anonKey, 'Authorization': 'Bearer $token'},
     ).timeout(const Duration(seconds: 20));
   }

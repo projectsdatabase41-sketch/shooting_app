@@ -189,7 +189,24 @@ class AiChatViewModel extends ChangeNotifier {
       // По ключевым словам вопроса, а не слепые "последние 20" —
       // решение пользователя (пункт 10, уточнение того же дня):
       // старая версия тянула недавние сводки независимо от темы.
-      final pastSummaries = await memory.search(trimmed);
+      var pastSummaries = await memory.search(trimmed);
+      // Просьба вспомнить — подмешиваем ПОЛНЫЕ тексты подходящих обменов
+      // (до 3000 символов каждый) вместо кратких пересказов тех же записей.
+      final recalled = await memory.recallDetails(trimmed);
+      if (recalled.isNotEmpty) {
+        final ids = {for (final r in recalled) r.id};
+        pastSummaries = [
+          for (final r in recalled)
+            AiMemorySummary(
+              id: r.id,
+              periodStart: r.periodStart,
+              periodEnd: r.periodEnd,
+              summary: 'ПОДРОБНО: ${_gist(r.detail!, 3000)}',
+              trainingPackageIds: r.trainingPackageIds,
+            ),
+          ...pastSummaries.where((s) => !ids.contains(s.id)),
+        ];
+      }
       final ctx = pastSummaries.isEmpty
           ? rawCtx
           : rawCtx.withPastSummaries(pastSummaries);
@@ -241,8 +258,11 @@ class AiChatViewModel extends ChangeNotifier {
       unawaited(memory.append(AiMemorySummary(
         periodStart: askedAt,
         periodEnd: DateTime.now(),
+        // Краткая запись — вопрос и суть ответа, для понимания хода диалога.
         summary: tr('В: {trimmed}\nО: {p}',
-            {'trimmed': trimmed, 'p': _gist(reply.text)}),
+            {'trimmed': _gist(trimmed, 300), 'p': _gist(reply.text, 400)}),
+        // Развёрнутая — обмен целиком, чтобы потом вспомнить подробности.
+        detail: _fullRecord(trimmed, reply),
         trainingPackageIds:
             rawCtx.session != null ? [rawCtx.session!.id] : const [],
       )));
@@ -321,9 +341,19 @@ class AiChatViewModel extends ChangeNotifier {
 
   /// Обрезает ответ до короткой выдержки для памяти — полный текст там
   /// не нужен, только чтобы потом узнать, о чём был разговор.
-  static String _gist(String text) {
+  static String _gist(String text, [int max = 200]) {
     final oneLine = text.replaceAll(RegExp(r'\s+'), ' ').trim();
-    return oneLine.length <= 200 ? oneLine : '${oneLine.substring(0, 200)}…';
+    return oneLine.length <= max ? oneLine : '${oneLine.substring(0, max)}…';
+  }
+
+  /// Обмен целиком (вопрос + ответ + пометка о графике) — «развёрнутая»
+  /// память; предел защищает базу от огромных ответов.
+  static String _fullRecord(String question, AiReply reply) {
+    final chart = reply.chart == null
+        ? ''
+        : '\n[график: ${reply.chart!['title'] ?? reply.chart!['type'] ?? ''}]';
+    final full = 'Вопрос:\n$question\n\nОтвет:\n${reply.text}$chart';
+    return full.length <= 12000 ? full : '${full.substring(0, 12000)}…';
   }
 
   /// Отмечает, что упражнение из сообщения [index] уже создано —
