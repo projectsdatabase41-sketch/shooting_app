@@ -661,21 +661,29 @@ class _AiChatBodyState extends State<_AiChatBody> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                GlassCircleButton(
-                  size: 50,
-                  icon: const Icon(Icons.add_photo_alternate_outlined),
-                  tooltip: tr('Приложить фото (нужна модель со зрением)'),
-                  onTap:
-                      vm.busy ? null : () => _attachImage(vm.service.settings),
-                ),
-                const SizedBox(width: 8),
-                GlassCircleButton(
-                  size: 50,
-                  icon: const Icon(Icons.travel_explore_outlined),
-                  tooltip: tr('Найти в интернете (через браузер телефона)'),
-                  onTap: _searchWeb,
-                ),
-                const SizedBox(width: 8),
+                // Бесплатная авто-модель не читает фото, а без ключа Gemini
+                // поиск в чате не работает — такие кнопки только путают
+                // (решение пользователя, пункт 8 второго списка правок).
+                if (vm.service.settings.chatModelChoice != 'auto') ...[
+                  GlassCircleButton(
+                    size: 50,
+                    icon: const Icon(Icons.add_photo_alternate_outlined),
+                    tooltip: tr('Приложить фото (нужна модель со зрением)'),
+                    onTap: vm.busy
+                        ? null
+                        : () => _attachImage(vm.service.settings),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                if (vm.service.settings.geminiKey.isNotEmpty) ...[
+                  GlassCircleButton(
+                    size: 50,
+                    icon: const Icon(Icons.travel_explore_outlined),
+                    tooltip: tr('Найти в интернете'),
+                    onTap: vm.busy ? null : _searchWeb,
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 Expanded(
                   child: GlassPill(
                     radius: 25,
