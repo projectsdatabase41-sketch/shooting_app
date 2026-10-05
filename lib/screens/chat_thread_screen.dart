@@ -26,6 +26,7 @@ import '../services/chat_preferences.dart';
 import '../services/chat_presence.dart';
 import '../services/chat_sync_service.dart';
 import '../services/push_service.dart' show pendingCallAckContactId;
+import '../widgets/link_signal.dart';
 import '../services/chat_translation_service.dart';
 import '../services/group_live_session.dart';
 import '../services/live_chat_session.dart';
@@ -888,6 +889,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                   ],
                 ),
               ),
+              if (!_contact.isGroup)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: LinkSignal(
+                    level: linkLevel(
+                      direct: _live?.isDirect == true,
+                      live: _live?.peerOnline == true,
+                      online: online,
+                    ),
+                  ),
+                ),
               if (widget.prefs.mutedFor(_contact.id))
                 Icon(Icons.notifications_off_outlined,
                     size: 18, color: theme.hintColor),
