@@ -15,7 +15,6 @@ import 'services/chat_sync_service.dart';
 import 'services/firebase_settings.dart';
 import 'services/knowledge_service.dart';
 import 'services/local_db_service.dart';
-import 'services/display_rate.dart';
 import 'services/push_service.dart';
 import 'services/remote_config.dart';
 import 'local_ai/local_ai_platform.dart';
@@ -168,7 +167,6 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
       final c = CallSession.current;
       if (c != null && c.callId == callId) c.cancelledByCaller();
     };
-    DisplayRate.setTraining(widget.db, false);
     final chatAuth = ChatAuthService(widget.db);
     if (chatAuth.isSignedIn) PushService(chatAuth).init();
 

@@ -7,7 +7,6 @@ import '../models/comment.dart';
 import '../models/target_face.dart';
 import '../models/training_session.dart';
 import '../models/workspace_page.dart';
-import '../services/display_rate.dart';
 import '../state/app_data_store.dart';
 import '../state/target_view_model.dart';
 import '../state/workspace_view_model.dart';
@@ -125,17 +124,9 @@ class _WorkspaceBody extends StatefulWidget {
 class _WorkspaceBodyState extends State<_WorkspaceBody> {
   PageController? _pages;
   int _current = 0;
-  late final _db = context.read<AppDataStore>().db;
-
-  @override
-  void initState() {
-    super.initState();
-    DisplayRate.setTraining(_db, true);
-  }
 
   @override
   void dispose() {
-    DisplayRate.setTraining(_db, false);
     _pages?.dispose();
     super.dispose();
   }

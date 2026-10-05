@@ -1,7 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, kIsWeb, TargetPlatform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'
     show Clipboard, ClipboardData, rootBundle;
@@ -13,7 +12,6 @@ import '../models/home_tab_specs.dart';
 import '../services/ai_service.dart';
 import '../services/ai_settings.dart';
 import '../services/custom_services_repository.dart';
-import '../services/display_rate.dart';
 import '../services/app_update_service.dart';
 import '../services/knowledge_column_discovery.dart';
 import '../services/supabase_auth_service.dart';
@@ -148,7 +146,6 @@ class SettingsScreen extends StatelessWidget {
               Navigator.of(context).popUntil((r) => r.isFirst);
             },
           ),
-          const _AdaptiveFpsTile(),
           const _UpdateTile(),
           const Divider(height: 24),
           // Учётная запись — в самом низу, как просил пользователь:
@@ -157,35 +154,6 @@ class SettingsScreen extends StatelessWidget {
           const _AccountTile(),
         ],
       ),
-    );
-  }
-}
-
-/// Экономия заряда: ~60 Гц вне тренировки, максимум — на экране
-/// мишени (только Android — на остальных платформах плитки нет).
-class _AdaptiveFpsTile extends StatefulWidget {
-  const _AdaptiveFpsTile();
-
-  @override
-  State<_AdaptiveFpsTile> createState() => _AdaptiveFpsTileState();
-}
-
-class _AdaptiveFpsTileState extends State<_AdaptiveFpsTile> {
-  @override
-  Widget build(BuildContext context) {
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android)
-      return const SizedBox.shrink();
-    final db = context.read<AppDataStore>().db;
-    return SwitchListTile(
-      secondary: const Icon(Icons.battery_saver_outlined),
-      title: Text(tr('Экономия заряда')),
-      subtitle: Text(tr('Максимум частоты экрана везде, на тренировке ~60 Гц')),
-      value: DisplayRate.isEnabled(db),
-      onChanged: (v) {
-        DisplayRate.setEnabled(db, v);
-        if (v) DisplayRate.setTraining(db, false);
-        setState(() {});
-      },
     );
   }
 }
