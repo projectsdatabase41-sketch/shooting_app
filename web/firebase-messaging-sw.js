@@ -9,8 +9,10 @@
 // проекта shooting-app-chat, что и в lib/services/firebase_settings.dart,
 // только для веб-приложения отдельно (Firebase выдаёт свой apiKey/appId
 // на каждую платформу, см. комментарий в firebase_settings.dart).
-importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js');
+// Скрипты Firebase лежат рядом (web/vendor/, v10.14.1), а не на gstatic.com:
+// недоступный CDN ронял регистрацию воркера целиком — и push, и кеш.
+importScripts('vendor/firebase-app-compat.js');
+importScripts('vendor/firebase-messaging-compat.js');
 
 firebase.initializeApp({
   apiKey: 'AIzaSyBTqxnypR4_r36WcULRfyC67z48qtosGwg',

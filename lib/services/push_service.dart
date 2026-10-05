@@ -139,6 +139,42 @@ class PushService {
     }
   }
 
+  /// Включение push по нажатию кнопки — жест пользователя обязателен
+  /// (iOS Safari молча отклоняет запрос разрешения при автозапуске), и
+  /// человек видит причину, а не тишину. Возвращает готовый текст статуса.
+  Future<String> enableNow() async {
+    if (!FirebaseSettings.isConfigured || !_supportedPlatform) {
+      return tr('На этой платформе push не поддерживается');
+    }
+    if (!auth.isSignedIn) return tr('Сначала войдите в мессенджер');
+    try {
+      if (Firebase.apps.isEmpty)
+        await Firebase.initializeApp(options: _options);
+      if (_isAndroid) await _initLocalNotifications();
+      final messaging = FirebaseMessaging.instance;
+      final settings = await messaging.requestPermission();
+      if (settings.authorizationStatus != AuthorizationStatus.authorized &&
+          settings.authorizationStatus != AuthorizationStatus.provisional) {
+        return tr(
+            'Разрешение на уведомления не выдано — включите его в настройках браузера или телефона');
+      }
+      final token = kIsWeb
+          ? await messaging.getToken(vapidKey: FirebaseSettings.webVapidKey)
+          : await messaging.getToken();
+      if (token == null)
+        return tr('Не удалось получить адрес устройства для push');
+      await _saveToken(token);
+      await _registerListeners(messaging);
+      return tr('Уведомления включены');
+    } catch (e) {
+      final hint = kIsWeb
+          ? tr(
+              ' На iPhone push работает только у сайта, добавленного на домашний экран.')
+          : '';
+      return tr('Ошибка: {e}', {'e': e}) + hint;
+    }
+  }
+
   /// Адрес устройства для push ЗАДАНИЙ — без входа в мессенджер (задания
   /// идут своим каналом). null — push недоступен на этой платформе/сборке.
   static Future<String?> deviceToken() async {
