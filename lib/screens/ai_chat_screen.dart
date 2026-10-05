@@ -90,6 +90,7 @@ class AiChatScreen extends StatelessWidget {
           face: face,
           shot: shot,
           allSessions: sessionsOverride ?? store.sessions,
+          existingExercises: store.exercises,
           // Код в подпись обязательно: пользователь спрашивает
           // «а по упражнению 234», и это именно код, а не название.
           // Без него модель просто не находит, о чём речь.
@@ -463,6 +464,22 @@ class _AiChatBodyState extends State<_AiChatBody> {
     final spec = vm.messages[index].exercise;
     if (spec == null) return;
     final store = context.read<AppDataStore>();
+
+    // Дубль по названию и мишени не заводим, даже если ИИ его предложил:
+    // жалоба пользователя — копятся одноимённые упражнения.
+    final wantName = '${spec['name']}'.trim().toLowerCase();
+    final dup = store.exercises.where((e) =>
+        e.name.trim().toLowerCase() == wantName &&
+        e.targetFaceCode == '${spec['target_face_code']}');
+    if (dup.isNotEmpty) {
+      vm.markExerciseCreated(index);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+            content: Text(tr('Упражнение «{name}» уже есть — новое не создано',
+                {'name': dup.first.name}))));
+      return;
+    }
 
     final rawSeries = spec['series'];
     final series = rawSeries is List

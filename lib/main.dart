@@ -185,6 +185,7 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
       contextBuilder: () => AiContext(
         scope: AiScope.general,
         allSessions: _store.sessions,
+        existingExercises: _store.exercises,
         exerciseNameOf: (s) =>
             _store.exerciseFor(s)?.label ?? tr('без упражнения'),
       ),
