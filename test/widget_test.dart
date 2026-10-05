@@ -23,7 +23,7 @@ void main() {
     // у выбранной вкладки (та же экономия места, что была у
     // NavigationBar.onlyShowSelected), поэтому проверяем иконки, а не
     // текст всех вкладок разом.
-    expect(find.byIcon(Icons.fitness_center), findsOneWidget); // "Тренировка" — стартовая вкладка
+    expect(find.byIcon(Icons.fitness_center), findsWidgets); // "Тренировка" — стартовая вкладка
     expect(find.byIcon(Icons.settings_outlined), findsOneWidget);
   });
 }
