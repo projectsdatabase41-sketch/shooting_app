@@ -33,7 +33,8 @@ class CoachTasksScreen extends StatefulWidget {
 }
 
 class _CoachTasksScreenState extends State<CoachTasksScreen> {
-  late final CoachAccessService _access = CoachAccessService(context.read<AppDataStore>().db);
+  late final CoachAccessService _access =
+      CoachAccessService(context.read<AppDataStore>().db);
   late final CoachTaskService _service = CoachTaskService(_access);
   late final List<CoachAthlete> _athletes = _access.listAthletes();
   Map<String, List<_Copy>>? _groups;
@@ -58,7 +59,8 @@ class _CoachTasksScreenState extends State<CoachTasksScreen> {
       for (final a in _athletes)
         _service
             .list(a)
-            .then((list) => copies.addAll([for (final t in list) (athlete: a, task: t)]))
+            .then((list) =>
+                copies.addAll([for (final t in list) (athlete: a, task: t)]))
             .catchError((_) {}),
     ]);
     final groups = <String, List<_Copy>>{};
@@ -70,14 +72,17 @@ class _CoachTasksScreenState extends State<CoachTasksScreen> {
     final open = widget.openTaskId;
     if (open != null && !_openedFromPush) {
       _openedFromPush = true;
-      final g = groups.entries.where((e) => e.value.any((c) => c.task.id == open)).firstOrNull;
+      final g = groups.entries
+          .where((e) => e.value.any((c) => c.task.id == open))
+          .firstOrNull;
       if (g != null) _openGroup(g.value);
     }
   }
 
   Future<void> _openGroup(List<_Copy> copies) async {
     await Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => _CoachTaskGroupScreen(service: _service, athletes: _athletes, copies: copies),
+      builder: (_) => _CoachTaskGroupScreen(
+          service: _service, athletes: _athletes, copies: copies),
     ));
     _load();
   }
@@ -91,17 +96,39 @@ class _CoachTasksScreenState extends State<CoachTasksScreen> {
     try {
       await Future.wait([
         for (final c in copies)
-          if (c.task.id != null) _service.setStatus(c.athlete, c.task.id!, 'removed'),
+          if (c.task.id != null)
+            _service.setStatus(c.athlete, c.task.id!, 'removed'),
       ]);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+    }
+    _load();
+  }
+
+  /// Удаляет задание совсем у всех спортсменов группы.
+  Future<void> _deleteGroup(List<_Copy> copies) async {
+    try {
+      await Future.wait([
+        for (final c in copies)
+          if (c.task.id != null) _service.deleteForever(c.athlete, c.task.id!),
+      ]);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(tr(
+                'Не удалось удалить: {e}. Нужен sql/task-delete.sql в базе спортсмена.',
+                {'e': e}))));
+      }
     }
     _load();
   }
 
   Future<void> _create() async {
     final sent = await Navigator.of(context).push<bool>(MaterialPageRoute(
-      builder: (_) => _CoachTaskEditorScreen(service: _service, athletes: _athletes),
+      builder: (_) =>
+          _CoachTaskEditorScreen(service: _service, athletes: _athletes),
     ));
     if (sent == true) _load();
   }
@@ -112,48 +139,68 @@ class _CoachTasksScreenState extends State<CoachTasksScreen> {
     final groups = _groups;
     return Scaffold(
       appBar: GlassHeader(
-        title: Text(tr('Задания'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        title: Text(tr('Задания'),
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
       ),
       floatingActionButton: _athletes.isEmpty
           ? null
-          : FloatingActionButton.extended(onPressed: _create, icon: const Icon(Icons.add), label: Text(tr('Задание'))),
+          : FloatingActionButton.extended(
+              onPressed: _create,
+              icon: const Icon(Icons.add),
+              label: Text(tr('Задание'))),
       body: _athletes.isEmpty
-          ? Center(child: Text(tr('Сначала добавьте спортсмена'), style: TextStyle(color: theme.hintColor)))
+          ? Center(
+              child: Text(tr('Сначала добавьте спортсмена'),
+                  style: TextStyle(color: theme.hintColor)))
           : groups == null
               ? const Center(child: CircularProgressIndicator())
               : groups.isEmpty
-                  ? Center(child: Text(tr('Заданий пока нет'), style: TextStyle(color: theme.hintColor)))
+                  ? Center(
+                      child: Text(tr('Заданий пока нет'),
+                          style: TextStyle(color: theme.hintColor)))
                   : RefreshIndicator(
                       onRefresh: _load,
                       child: ListView(
                         padding: const EdgeInsets.fromLTRB(12, 12, 12, 88),
                         children: [
                           for (final g in (groups.values.toList()
-                            ..sort((a, b) => (b.first.task.createdAt ?? DateTime(0))
-                                .compareTo(a.first.task.createdAt ?? DateTime(0)))))
+                            ..sort((a, b) => (b.first.task.createdAt ??
+                                    DateTime(0))
+                                .compareTo(
+                                    a.first.task.createdAt ?? DateTime(0)))))
                             Padding(
                               padding: const EdgeInsets.only(bottom: 10),
                               child: SwipeToDelete(
                                 itemKey: g.first.task.id ?? g.first.task.title,
-                                title: tr('Снять задание?'),
+                                title: tr('Удалить задание?'),
                                 message: tr(
-                                  '«{title}» станет недоступно всем получателям ({names}). Отменить нельзя.',
-                                  {'title': g.first.task.title, 'names': g.map((c) => c.athlete.name).join(', ')},
+                                  '«{title}» ({names}). Удалить совсем — вместе с результатами, или только снять: останется в списке спортсмена как снятое.',
+                                  {
+                                    'title': g.first.task.title,
+                                    'names':
+                                        g.map((c) => c.athlete.name).join(', ')
+                                  },
                                 ),
-                                confirmLabel: tr('Снять'),
-                                onConfirmed: () => _removeGroup(g),
+                                confirmLabel: tr('Удалить совсем'),
+                                onConfirmed: () => _deleteGroup(g),
+                                localOnlyLabel: tr('Только снять'),
+                                onConfirmedLocalOnly: () => _removeGroup(g),
                                 child: Press3D(
                                   padding: EdgeInsets.zero,
                                   accent: theme.colorScheme.primary,
                                   onTap: () => _openGroup(g),
                                   child: ListTile(
-                                    leading: const Icon(Icons.assignment_outlined),
+                                    leading:
+                                        const Icon(Icons.assignment_outlined),
                                     title: Text(g.first.task.title),
                                     subtitle: Text([
                                       g.map((c) => c.athlete.name).join(', '),
                                       tr('выполнили: {n} из {m}', {
                                         'n': g.where((c) => c.task.done).length,
-                                        'm': g.where((c) => !c.task.removed).length,
+                                        'm': g
+                                            .where((c) => !c.task.removed)
+                                            .length,
                                       }),
                                     ].join(' · ')),
                                     trailing: const Icon(Icons.chevron_right),
@@ -189,7 +236,15 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
   /// (решение пользователя: "выбор дней недели"). Пусто — без повтора,
   /// все семь — то же самое, что 'daily'.
   final Set<String> _repeatDays = {};
-  static const _weekdayOrder = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+  static const _weekdayOrder = [
+    'mon',
+    'tue',
+    'wed',
+    'thu',
+    'fri',
+    'sat',
+    'sun'
+  ];
   static const _weekdayLabels = {
     'mon': 'Пн',
     'tue': 'Вт',
@@ -201,7 +256,9 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
   };
   String? get _repeat => _repeatDays.isEmpty
       ? null
-      : (_repeatDays.length == 7 ? 'daily' : _weekdayOrder.where(_repeatDays.contains).join(','));
+      : (_repeatDays.length == 7
+          ? 'daily'
+          : _weekdayOrder.where(_repeatDays.contains).join(','));
   TaskPlan? _plan;
   final List<({String question, String answer})> _answers = [];
   bool _busy = false;
@@ -222,7 +279,10 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
         final r = await ai.build(
           coachText: _text.text.trim(),
           answers: _answers,
-          athletesInfo: widget.athletes.where((a) => _to.contains(a.id)).map((a) => a.name).join(', '),
+          athletesInfo: widget.athletes
+              .where((a) => _to.contains(a.id))
+              .map((a) => a.name)
+              .join(', '),
         );
         if (r.plan != null) {
           setState(() {
@@ -238,7 +298,8 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('ИИ не ответил: {e}', {'e': e}))));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(tr('ИИ не ответил: {e}', {'e': e}))));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -248,7 +309,8 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
   /// Уточняющие вопросы ИИ — тренер отвечает текстом, по одному вопросу
   /// за раз со счётчиком (N/M) и стрелкой назад — жалоба пользователя:
   /// все вопросы сразу одним списком было толком не прочитать.
-  Future<List<({String question, String answer})>?> _askQuestions(List<String> questions) async {
+  Future<List<({String question, String answer})>?> _askQuestions(
+      List<String> questions) async {
     final ctrls = [for (final _ in questions) TextEditingController()];
     var index = 0;
     final ok = await showDialog<bool>(
@@ -267,11 +329,13 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
                   ),
                 Expanded(
                   child: Text(
-                    tr('ИИ уточняет ({i}/{n})', {'i': index + 1, 'n': questions.length}),
+                    tr('ИИ уточняет ({i}/{n})',
+                        {'i': index + 1, 'n': questions.length}),
                     textAlign: index > 0 ? TextAlign.center : TextAlign.start,
                   ),
                 ),
-                if (index > 0) const SizedBox(width: 48), // баланс под стрелку слева
+                if (index > 0)
+                  const SizedBox(width: 48), // баланс под стрелку слева
               ],
             ),
             content: TextField(
@@ -283,7 +347,9 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
               autofocus: true,
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr('Отмена'))),
+              TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(false),
+                  child: Text(tr('Отмена'))),
               FilledButton(
                 onPressed: () {
                   if (last) {
@@ -300,7 +366,10 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
       ),
     );
     if (ok != true) return null;
-    return [for (final (i, q) in questions.indexed) (question: q, answer: ctrls[i].text.trim())];
+    return [
+      for (final (i, q) in questions.indexed)
+        (question: q, answer: ctrls[i].text.trim())
+    ];
   }
 
   Future<void> _send() async {
@@ -328,7 +397,8 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
       Navigator.of(context).pop(true);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(tr('Не отправлено: {names}. Проверьте связь и что в базе спортсмена выполнен sql/tasks.sql.',
+        content: Text(tr(
+            'Не отправлено: {names}. Проверьте связь и что в базе спортсмена выполнен sql/tasks.sql.',
             {'names': failed.join(', ')})),
       ));
     }
@@ -341,10 +411,13 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
-        title: Text(tr('Новое задание'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        title: Text(tr('Новое задание'),
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
       ),
       body: ListView(
-        padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 4, 16, 100),
+        padding:
+            EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 4, 16, 100),
         children: [
           Text(tr('1. Кому'), style: theme.textTheme.titleMedium),
           Wrap(
@@ -354,7 +427,8 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
                 FilterChip(
                   label: Text(a.name),
                   selected: _to.contains(a.id),
-                  onSelected: (v) => setState(() => v ? _to.add(a.id) : _to.remove(a.id)),
+                  onSelected: (v) =>
+                      setState(() => v ? _to.add(a.id) : _to.remove(a.id)),
                 ),
             ],
           ),
@@ -367,26 +441,32 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
             maxLines: 12,
             decoration: InputDecoration(
               border: const OutlineInputBorder(),
-              hintText: tr('Например: сначала 20 лёжа с отметками по сериям, одновременно следить за дыханием; '
+              hintText: tr(
+                  'Например: сначала 20 лёжа с отметками по сериям, одновременно следить за дыханием; '
                   'потом смена на стоя с пристрелкой; затем стоя и с колена по 20 — в любом порядке.'),
             ),
           ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
             icon: const Icon(Icons.event),
-            label: Text(_due == null ? tr('Срок') : '${_due!.day}.${_due!.month.toString().padLeft(2, '0')}'),
+            label: Text(_due == null
+                ? tr('Срок')
+                : '${_due!.day}.${_due!.month.toString().padLeft(2, '0')}'),
             onPressed: () async {
               final d = await showDatePicker(
                 context: context,
                 firstDate: DateTime.now(),
                 lastDate: DateTime.now().add(const Duration(days: 365)),
-                initialDate: _due ?? DateTime.now().add(const Duration(days: 3)),
+                initialDate:
+                    _due ?? DateTime.now().add(const Duration(days: 3)),
               );
-              setState(() => _due = d == null ? null : DateTime(d.year, d.month, d.day, 23, 59));
+              setState(() => _due =
+                  d == null ? null : DateTime(d.year, d.month, d.day, 23, 59));
             },
           ),
           const SizedBox(height: 8),
-          Text(tr('Повторять по дням недели'), style: Theme.of(context).textTheme.labelMedium),
+          Text(tr('Повторять по дням недели'),
+              style: Theme.of(context).textTheme.labelMedium),
           const SizedBox(height: 4),
           Wrap(
             spacing: 6,
@@ -396,7 +476,8 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
                 FilterChip(
                   label: Text(tr(_weekdayLabels[d]!)),
                   selected: _repeatDays.contains(d),
-                  onSelected: (v) => setState(() => v ? _repeatDays.add(d) : _repeatDays.remove(d)),
+                  onSelected: (v) => setState(
+                      () => v ? _repeatDays.add(d) : _repeatDays.remove(d)),
                 ),
             ],
           ),
@@ -407,16 +488,20 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
                 child: FilledButton.icon(
                   onPressed: _busy ? null : _buildWithAi,
                   icon: _busy
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2))
                       : const Icon(Icons.auto_awesome),
                   label: Text(tr('Собрать с ИИ')),
                 ),
               ),
               const SizedBox(width: 8),
               OutlinedButton(
-                onPressed: () => setState(() => _plan ??= TaskPlan(title: _title.text, stages: [
-                      TaskStage(steps: [TaskStep(title: tr('Этап 1'))])
-                    ])),
+                onPressed: () => setState(
+                    () => _plan ??= TaskPlan(title: _title.text, stages: [
+                          TaskStage(steps: [TaskStep(title: tr('Этап 1'))])
+                        ])),
                 child: Text(tr('Вручную')),
               ),
             ],
@@ -425,7 +510,9 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
             const SizedBox(height: 20),
             Text(tr('3. Ступени и этапы'), style: theme.textTheme.titleMedium),
             const SizedBox(height: 6),
-            TextField(controller: _title, decoration: InputDecoration(labelText: tr('Название'))),
+            TextField(
+                controller: _title,
+                decoration: InputDecoration(labelText: tr('Название'))),
             const SizedBox(height: 8),
             _PlanEditor(plan: _plan!, onChanged: () => setState(() {})),
           ],
@@ -438,7 +525,9 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
                 padding: const EdgeInsets.all(12),
                 child: Raised3DButton(
                   icon: Icons.send,
-                  label: _to.isEmpty ? tr('Выберите спортсменов') : tr('Отправить ({n})', {'n': _to.length}),
+                  label: _to.isEmpty
+                      ? tr('Выберите спортсменов')
+                      : tr('Отправить ({n})', {'n': _to.length}),
                   baseColor: theme.colorScheme.primary,
                   onTap: _busy || _to.isEmpty ? null : _send,
                 ),
@@ -471,13 +560,16 @@ class _PlanEditor extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Text(tr('Ступень {n}', {'n': i + 1}), style: theme.textTheme.labelLarge),
+                      Text(tr('Ступень {n}', {'n': i + 1}),
+                          style: theme.textTheme.labelLarge),
                       const SizedBox(width: 8),
                       DropdownButton<StageMode>(
                         value: stage.mode,
                         underline: const SizedBox.shrink(),
                         items: [
-                          for (final m in StageMode.values) DropdownMenuItem(value: m, child: Text(stageModeLabel(m))),
+                          for (final m in StageMode.values)
+                            DropdownMenuItem(
+                                value: m, child: Text(stageModeLabel(m))),
                         ],
                         onChanged: (m) {
                           stage.mode = m ?? stage.mode;
@@ -490,7 +582,8 @@ class _PlanEditor extends StatelessWidget {
                         onPressed: i == 0
                             ? null
                             : () {
-                                plan.stages.insert(i - 1, plan.stages.removeAt(i));
+                                plan.stages
+                                    .insert(i - 1, plan.stages.removeAt(i));
                                 onChanged();
                               },
                       ),
@@ -507,12 +600,17 @@ class _PlanEditor extends StatelessWidget {
                     ListTile(
                       dense: true,
                       contentPadding: EdgeInsets.zero,
-                      leading: Icon(step.isShooting ? Icons.gps_fixed : Icons.self_improvement),
+                      leading: Icon(step.isShooting
+                          ? Icons.gps_fixed
+                          : Icons.self_improvement),
                       title: Text(step.title),
                       subtitle: Text(
                         [
-                          if (step.isShooting) tr('{n} выстр.', {'n': step.plannedShots}),
-                          if (step.timeLimitSec != null) tr('{m} мин', {'m': (step.timeLimitSec! / 60).round()}),
+                          if (step.isShooting)
+                            tr('{n} выстр.', {'n': step.plannedShots}),
+                          if (step.timeLimitSec != null)
+                            tr('{m} мин',
+                                {'m': (step.timeLimitSec! / 60).round()}),
                           noteModeLabel(step.noteMode),
                         ].join(' · '),
                       ),
@@ -524,15 +622,20 @@ class _PlanEditor extends StatelessWidget {
                         },
                       ),
                       onTap: () async {
-                        await showDialog(context: context, builder: (_) => _StepDialog(step: step));
+                        await showDialog(
+                            context: context,
+                            builder: (_) => _StepDialog(step: step));
                         onChanged();
                       },
                     ),
                   TextButton.icon(
                     onPressed: () async {
-                      final s = TaskStep(title: tr('Этап {n}', {'n': stage.steps.length + 1}));
+                      final s = TaskStep(
+                          title: tr('Этап {n}', {'n': stage.steps.length + 1}));
                       stage.steps.add(s);
-                      await showDialog(context: context, builder: (_) => _StepDialog(step: s));
+                      await showDialog(
+                          context: context,
+                          builder: (_) => _StepDialog(step: s));
                       onChanged();
                     },
                     icon: const Icon(Icons.add, size: 18),
@@ -567,11 +670,16 @@ class _StepDialogState extends State<_StepDialog> {
   TaskStep get s => widget.step;
   late final _title = TextEditingController(text: s.title);
   late final _instr = TextEditingController(text: s.instructions);
-  late final _shots = TextEditingController(text: s.isShooting ? '${s.plannedShots}' : '');
-  late final _series = TextEditingController(text: '${s.exercise?['series_size'] ?? 10}');
-  late final _position = TextEditingController(text: '${s.exercise?['position'] ?? ''}');
-  late final _minutes = TextEditingController(text: s.timeLimitSec == null ? '' : '${(s.timeLimitSec! / 60).round()}');
-  late final _sightMax = TextEditingController(text: '${s.sighting?['max_shots'] ?? ''}');
+  late final _shots =
+      TextEditingController(text: s.isShooting ? '${s.plannedShots}' : '');
+  late final _series =
+      TextEditingController(text: '${s.exercise?['series_size'] ?? 10}');
+  late final _position =
+      TextEditingController(text: '${s.exercise?['position'] ?? ''}');
+  late final _minutes = TextEditingController(
+      text: s.timeLimitSec == null ? '' : '${(s.timeLimitSec! / 60).round()}');
+  late final _sightMax =
+      TextEditingController(text: '${s.sighting?['max_shots'] ?? ''}');
   late bool _shooting = s.isShooting;
   late String _face = s.faceCode;
   late bool _sighting = s.sighting?['required'] == true;
@@ -587,12 +695,19 @@ class _StepDialogState extends State<_StepDialog> {
               'target_face_code': _face,
               'shots': int.tryParse(_shots.text) ?? 10,
               'series_size': int.tryParse(_series.text) ?? 10,
-              if (_position.text.trim().isNotEmpty) 'position': _position.text.trim(),
+              if (_position.text.trim().isNotEmpty)
+                'position': _position.text.trim(),
             }
           : null
-      ..timeLimitSec = int.tryParse(_minutes.text) == null ? null : int.parse(_minutes.text) * 60
+      ..timeLimitSec = int.tryParse(_minutes.text) == null
+          ? null
+          : int.parse(_minutes.text) * 60
       ..sighting = _sighting
-          ? {'required': true, if (int.tryParse(_sightMax.text) != null) 'max_shots': int.parse(_sightMax.text)}
+          ? {
+              'required': true,
+              if (int.tryParse(_sightMax.text) != null)
+                'max_shots': int.parse(_sightMax.text)
+            }
           : null
       ..noteMode = _note
       ..keepStats = _keep;
@@ -607,12 +722,15 @@ class _StepDialogState extends State<_StepDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: _title, decoration: InputDecoration(labelText: tr('Название'))),
+            TextField(
+                controller: _title,
+                decoration: InputDecoration(labelText: tr('Название'))),
             TextField(
               controller: _instr,
               minLines: 2,
               maxLines: 8,
-              decoration: InputDecoration(labelText: tr('Что делать (текст для спортсмена)')),
+              decoration: InputDecoration(
+                  labelText: tr('Что делать (текст для спортсмена)')),
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
@@ -622,8 +740,13 @@ class _StepDialogState extends State<_StepDialog> {
             ),
             if (_shooting) ...[
               DropdownButtonFormField<String>(
-                initialValue: TargetFace.all.any((f) => f.code == _face) ? _face : TargetFace.all.first.code,
-                items: [for (final f in TargetFace.all) DropdownMenuItem(value: f.code, child: Text(f.name))],
+                initialValue: TargetFace.all.any((f) => f.code == _face)
+                    ? _face
+                    : TargetFace.all.first.code,
+                items: [
+                  for (final f in TargetFace.all)
+                    DropdownMenuItem(value: f.code, child: Text(f.name))
+                ],
                 onChanged: (v) => setState(() => _face = v ?? _face),
               ),
               Row(
@@ -632,7 +755,8 @@ class _StepDialogState extends State<_StepDialog> {
                     child: TextField(
                         controller: _shots,
                         keyboardType: TextInputType.number,
-                        decoration: InputDecoration(labelText: tr('Выстрелов'))),
+                        decoration:
+                            InputDecoration(labelText: tr('Выстрелов'))),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -643,7 +767,9 @@ class _StepDialogState extends State<_StepDialog> {
                   ),
                 ],
               ),
-              TextField(controller: _position, decoration: InputDecoration(labelText: tr('Изготовка'))),
+              TextField(
+                  controller: _position,
+                  decoration: InputDecoration(labelText: tr('Изготовка'))),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text(tr('Пристрелка')),
@@ -654,7 +780,8 @@ class _StepDialogState extends State<_StepDialog> {
                 TextField(
                   controller: _sightMax,
                   keyboardType: TextInputType.number,
-                  decoration: InputDecoration(labelText: tr('Пробных не больше (необязательно)')),
+                  decoration: InputDecoration(
+                      labelText: tr('Пробных не больше (необязательно)')),
                 ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
@@ -666,7 +793,8 @@ class _StepDialogState extends State<_StepDialog> {
             TextField(
               controller: _minutes,
               keyboardType: TextInputType.number,
-              decoration: InputDecoration(labelText: tr('Ограничение, мин (необязательно)')),
+              decoration: InputDecoration(
+                  labelText: tr('Ограничение, мин (необязательно)')),
             ),
             DropdownButtonFormField<String>(
               initialValue: _note,
@@ -691,7 +819,8 @@ class _CoachTaskGroupScreen extends StatefulWidget {
   final CoachTaskService service;
   final List<CoachAthlete> athletes;
   final List<_Copy> copies;
-  const _CoachTaskGroupScreen({required this.service, required this.athletes, required this.copies});
+  const _CoachTaskGroupScreen(
+      {required this.service, required this.athletes, required this.copies});
 
   @override
   State<_CoachTaskGroupScreen> createState() => _CoachTaskGroupScreenState();
@@ -706,11 +835,15 @@ class _CoachTaskGroupScreenState extends State<_CoachTaskGroupScreen> {
   Future<void> _setRemoved(_Copy c, bool removed) async {
     setState(() => _busy = true);
     try {
-      await widget.service.setStatus(c.athlete, c.task.id!, removed ? 'removed' : 'active');
-      await widget.service.push(c.athlete, removed ? 'removed' : 'new', c.task.id!, c.task.title);
+      await widget.service
+          .setStatus(c.athlete, c.task.id!, removed ? 'removed' : 'active');
+      await widget.service.push(
+          c.athlete, removed ? 'removed' : 'new', c.task.id!, c.task.title);
       c.task.status = removed ? 'removed' : 'active';
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -733,13 +866,18 @@ class _CoachTaskGroupScreenState extends State<_CoachTaskGroupScreen> {
                 CheckboxListTile(
                   value: chosen.contains(a.id),
                   title: Text(a.name),
-                  onChanged: (v) => set(() => v == true ? chosen.add(a.id) : chosen.remove(a.id)),
+                  onChanged: (v) => set(
+                      () => v == true ? chosen.add(a.id) : chosen.remove(a.id)),
                 ),
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr('Отмена'))),
-            FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(tr('Добавить'))),
+            TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: Text(tr('Отмена'))),
+            FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: Text(tr('Добавить'))),
           ],
         ),
       ),
@@ -762,7 +900,9 @@ class _CoachTaskGroupScreenState extends State<_CoachTaskGroupScreen> {
         final fresh = await widget.service.list(a, taskId: id);
         if (fresh.isNotEmpty) _copies.add((athlete: a, task: fresh.first));
       } catch (e) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${a.name}: $e')));
+        if (mounted)
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text('${a.name}: $e')));
       }
     }
     if (mounted) setState(() => _busy = false);
@@ -776,7 +916,11 @@ class _CoachTaskGroupScreenState extends State<_CoachTaskGroupScreen> {
       builder: (_) => Scaffold(
         appBar: GlassHeader(
           title: Text('${c.athlete.name} · ${c.task.title}',
-              overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w600)),
         ),
         body: runs.isEmpty
             ? Center(child: Text(tr('Ещё не выполнял')))
@@ -786,11 +930,17 @@ class _CoachTaskGroupScreenState extends State<_CoachTaskGroupScreen> {
                     TaskReportsView(
                       runId: '${r['id']}',
                       reports: [
-                        for (final x in (r['reports'] as List? ?? const [])) (x as Map).cast<String, dynamic>()
+                        for (final x in (r['reports'] as List? ?? const []))
+                          (x as Map).cast<String, dynamic>()
                       ],
                       status: tr('Выполнено {d} · заметка: {n}', {
-                        'd': '${DateTime.tryParse('${r['finished_at']}')?.toLocal() ?? ''}'.split('.').first,
-                        'n': '${r['final_note'] ?? ''}'.isEmpty ? '—' : '${r['final_note']}',
+                        'd':
+                            '${DateTime.tryParse('${r['finished_at']}')?.toLocal() ?? ''}'
+                                .split('.')
+                                .first,
+                        'n': '${r['final_note'] ?? ''}'.isEmpty
+                            ? '—'
+                            : '${r['final_note']}',
                       }),
                     ),
                 ],
@@ -806,10 +956,14 @@ class _CoachTaskGroupScreenState extends State<_CoachTaskGroupScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
-        title: Text(_plan.title, overflow: TextOverflow.ellipsis, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        title: Text(_plan.title,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
       ),
       body: ListView(
-        padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 16),
+        padding:
+            EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 16),
         children: [
           if (_busy) const LinearProgressIndicator(),
           Row(
@@ -827,21 +981,34 @@ class _CoachTaskGroupScreenState extends State<_CoachTaskGroupScreen> {
               padding: const EdgeInsets.only(bottom: 8),
               child: Press3D(
                 padding: EdgeInsets.zero,
-                accent: c.task.removed ? theme.colorScheme.error : (c.task.done ? Colors.green : null),
+                accent: c.task.removed
+                    ? theme.colorScheme.error
+                    : (c.task.done ? Colors.green : null),
                 onTap: c.task.runs.isEmpty ? null : () => _openRuns(c),
                 child: ListTile(
                   leading: Icon(
-                    c.task.removed ? Icons.block : (c.task.done ? Icons.task_alt : Icons.hourglass_empty),
-                    color: c.task.removed ? theme.colorScheme.error : (c.task.done ? Colors.green : null),
+                    c.task.removed
+                        ? Icons.block
+                        : (c.task.done
+                            ? Icons.task_alt
+                            : Icons.hourglass_empty),
+                    color: c.task.removed
+                        ? theme.colorScheme.error
+                        : (c.task.done ? Colors.green : null),
                   ),
                   title: Text(c.athlete.name),
                   subtitle: Text(c.task.removed
                       ? tr('снято')
-                      : (c.task.done ? tr('выполнено: {n}', {'n': c.task.runs.length}) : tr('ещё не выполнял'))),
+                      : (c.task.done
+                          ? tr('выполнено: {n}', {'n': c.task.runs.length})
+                          : tr('ещё не выполнял'))),
                   trailing: IconButton(
                     tooltip: c.task.removed ? tr('Вернуть') : tr('Снять'),
-                    icon: Icon(c.task.removed ? Icons.undo : Icons.remove_circle_outline),
-                    onPressed: _busy ? null : () => _setRemoved(c, !c.task.removed),
+                    icon: Icon(c.task.removed
+                        ? Icons.undo
+                        : Icons.remove_circle_outline),
+                    onPressed:
+                        _busy ? null : () => _setRemoved(c, !c.task.removed),
                   ),
                 ),
               ),

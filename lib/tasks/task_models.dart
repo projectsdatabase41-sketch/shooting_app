@@ -17,7 +17,8 @@ enum StageMode {
   const StageMode(this.db);
   final String db;
 
-  static StageMode fromDb(String? v) => values.firstWhere((m) => m.db == v, orElse: () => single);
+  static StageMode fromDb(String? v) =>
+      values.firstWhere((m) => m.db == v, orElse: () => single);
 }
 
 /// Этап задания. [exercise] — {target_face_code, shots, series_size, position};
@@ -44,7 +45,8 @@ class TaskStep {
     this.keepStats = false,
   });
 
-  bool get isShooting => (exercise?['shots'] as num?) != null && (exercise?['shots'] as num) > 0;
+  bool get isShooting =>
+      (exercise?['shots'] as num?) != null && (exercise?['shots'] as num) > 0;
   int get plannedShots => (exercise?['shots'] as num?)?.toInt() ?? 0;
   String get faceCode => '${exercise?['target_face_code'] ?? 'rifle_10m'}';
 
@@ -84,12 +86,18 @@ class TaskStage {
   StageMode mode;
   final List<TaskStep> steps;
 
-  TaskStage({this.id, this.mode = StageMode.single, List<TaskStep>? steps}) : steps = steps ?? [];
+  TaskStage({this.id, this.mode = StageMode.single, List<TaskStep>? steps})
+      : steps = steps ?? [];
 
   factory TaskStage.fromJson(Map<String, dynamic> j) {
     final raw = (j['steps'] ?? j['task_steps'] ?? const []) as List;
-    final steps = [for (final s in raw) TaskStep.fromJson((s as Map).cast<String, dynamic>())];
-    return TaskStage(id: j['id'] as String?, mode: StageMode.fromDb(j['mode'] as String?), steps: steps);
+    final steps = [
+      for (final s in raw) TaskStep.fromJson((s as Map).cast<String, dynamic>())
+    ];
+    return TaskStage(
+        id: j['id'] as String?,
+        mode: StageMode.fromDb(j['mode'] as String?),
+        steps: steps);
   }
 
   Map<String, dynamic> toJson() => {
@@ -104,7 +112,11 @@ class TaskRunInfo {
   final DateTime? startedAt;
   final DateTime? finishedAt;
   final String status;
-  const TaskRunInfo({required this.id, this.startedAt, this.finishedAt, required this.status});
+  const TaskRunInfo(
+      {required this.id,
+      this.startedAt,
+      this.finishedAt,
+      required this.status});
 
   factory TaskRunInfo.fromJson(Map<String, dynamic> j) => TaskRunInfo(
         id: '${j['id']}',
@@ -160,9 +172,11 @@ class TaskPlan {
     final rawStages = (j['stages'] ?? t['task_stages'] ?? const []) as List;
     final stages = [
       for (final s in rawStages) (s as Map).cast<String, dynamic>(),
-    ]..sort((a, b) => ((a['position'] as num?) ?? 0).compareTo((b['position'] as num?) ?? 0));
+    ]..sort((a, b) =>
+        ((a['position'] as num?) ?? 0).compareTo((b['position'] as num?) ?? 0));
     final rawRuns = [
-      for (final r in (j['runs'] ?? t['task_runs'] ?? const []) as List) (r as Map).cast<String, dynamic>()
+      for (final r in (j['runs'] ?? t['task_runs'] ?? const []) as List)
+        (r as Map).cast<String, dynamic>()
     ];
     return TaskPlan(
       id: t['id'] as String?,
@@ -177,8 +191,9 @@ class TaskPlan {
         for (final s in stages)
           TaskStage.fromJson({
             ...s,
-            'steps': ([...((s['steps'] ?? s['task_steps'] ?? const []) as List)]..sort(
-                (a, b) => (((a as Map)['position'] as num?) ?? 0).compareTo(((b as Map)['position'] as num?) ?? 0))),
+            'steps': ([...((s['steps'] ?? s['task_steps'] ?? const []) as List)]
+              ..sort((a, b) => (((a as Map)['position'] as num?) ?? 0)
+                  .compareTo(((b as Map)['position'] as num?) ?? 0))),
           }),
       ],
       runs: [for (final r in rawRuns) TaskRunInfo.fromJson(r)],
@@ -194,7 +209,8 @@ class TaskPlan {
         if (groupKey != null) 'group_key': groupKey,
         'stages': [for (final s in stages) s.toJson()],
         'clarifications': [
-          for (final c in clarifications) {'question': c.question, 'answer': c.answer}
+          for (final c in clarifications)
+            {'question': c.question, 'answer': c.answer}
         ],
       };
 }

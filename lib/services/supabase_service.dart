@@ -37,7 +37,10 @@ class SyncResult {
   });
 
   bool get isEmpty =>
-      pushedSessions == 0 && pulledExercises == 0 && pulledSessions == 0 && pulledComments == 0;
+      pushedSessions == 0 &&
+      pulledExercises == 0 &&
+      pulledSessions == 0 &&
+      pulledComments == 0;
 }
 
 /// Мост между локальной моделью приложения и РЕАЛЬНОЙ схемой Supabase —
@@ -79,7 +82,8 @@ class SupabaseSyncService {
   Future<String> _requireToken() async {
     final token = await auth.ensureFreshToken();
     if (token == null) {
-      throw SupabaseSyncException(tr('Сначала войдите в базу — Настройки → Учётная запись'));
+      throw SupabaseSyncException(
+          tr('Сначала войдите в базу — Настройки → Учётная запись'));
     }
     return token;
   }
@@ -91,7 +95,8 @@ class SupabaseSyncService {
         if (upsert) 'Prefer': 'resolution=merge-duplicates,return=minimal',
       };
 
-  Future<void> _upsert(String token, String table, List<Map<String, dynamic>> rows) async {
+  Future<void> _upsert(
+      String token, String table, List<Map<String, dynamic>> rows) async {
     if (rows.isEmpty) return;
     final client = clientFactory();
     try {
@@ -103,21 +108,25 @@ class SupabaseSyncService {
           )
           .timeout(const Duration(seconds: 30));
       if (res.statusCode >= 400) {
-        throw SupabaseSyncException('$table: ${_errorMessage(res.body, res.statusCode)}');
+        throw SupabaseSyncException(
+            '$table: ${_errorMessage(res.body, res.statusCode)}');
       }
     } finally {
       client.close();
     }
   }
 
-  Future<void> _deleteWhere(String token, String table, String column, String value) async {
+  Future<void> _deleteWhere(
+      String token, String table, String column, String value) async {
     final client = clientFactory();
     try {
       final res = await client
-          .delete(Uri.parse('${auth.url}/rest/v1/$table?$column=eq.$value'), headers: _headers(token))
+          .delete(Uri.parse('${auth.url}/rest/v1/$table?$column=eq.$value'),
+              headers: _headers(token))
           .timeout(const Duration(seconds: 30));
       if (res.statusCode >= 400) {
-        throw SupabaseSyncException('$table: ${_errorMessage(res.body, res.statusCode)}');
+        throw SupabaseSyncException(
+            '$table: ${_errorMessage(res.body, res.statusCode)}');
       }
     } finally {
       client.close();
@@ -169,7 +178,9 @@ class SupabaseSyncService {
     try {
       final decoded = jsonDecode(body);
       if (decoded is Map) {
-        final msg = decoded['message'] ?? decoded['error_description'] ?? decoded['error'];
+        final msg = decoded['message'] ??
+            decoded['error_description'] ??
+            decoded['error'];
         if (msg is String && msg.isNotEmpty) return 'HTTP $status: $msg';
       }
     } catch (_) {
@@ -202,7 +213,9 @@ class SupabaseSyncService {
       final res = await client
           .post(
             Uri.parse('${auth.url}/rest/v1/target_faces?on_conflict=code'),
-            headers: _headers(token, upsert: true)..['Prefer'] = 'resolution=merge-duplicates,return=representation',
+            headers: _headers(token, upsert: true)
+              ..['Prefer'] =
+                  'resolution=merge-duplicates,return=representation',
             body: jsonEncode([
               {
                 'code': face.code,
@@ -219,7 +232,8 @@ class SupabaseSyncService {
           )
           .timeout(const Duration(seconds: 20));
       if (res.statusCode >= 400) {
-        throw SupabaseSyncException('target_faces: ${_errorMessage(res.body, res.statusCode)}');
+        throw SupabaseSyncException(
+            'target_faces: ${_errorMessage(res.body, res.statusCode)}');
       }
       final decoded = jsonDecode(utf8.decode(res.bodyBytes));
       final id = '${(decoded as List).first['id']}';
@@ -244,8 +258,10 @@ class SupabaseSyncService {
   Future<void> pushExerciseTemplate(Exercise exercise) async {
     final token = await _requireToken();
     final face = TargetFace.byCode(exercise.targetFaceCode);
-    final faceId = await _resolveTargetFaceId(token, exercise.targetFaceCode, await _targetFaceIdsByCode(token));
-    await _upsert(token, 'exercise_templates', [_exerciseTemplateJson(exercise, face, faceId)]);
+    final faceId = await _resolveTargetFaceId(
+        token, exercise.targetFaceCode, await _targetFaceIdsByCode(token));
+    await _upsert(token, 'exercise_templates',
+        [_exerciseTemplateJson(exercise, face, faceId)]);
   }
 
   Future<int> push(AppDataStore store) async {
@@ -255,18 +271,28 @@ class SupabaseSyncService {
     var count = 0;
     for (final session in store.unsyncedSessions) {
       final exercise = store.exerciseFor(session);
-      if (exercise == null) continue; // тренировка без упражнения — синхронизировать нечего
-      final faceId = await _resolveTargetFaceId(token, session.targetFaceCode, faceIds);
+      if (exercise == null)
+        continue; // тренировка без упражнения — синхронизировать нечего
+      final faceId =
+          await _resolveTargetFaceId(token, session.targetFaceCode, faceIds);
       final face = TargetFace.byCode(session.targetFaceCode);
 
-      await _upsert(token, 'exercise_templates', [_exerciseTemplateJson(exercise, face, faceId)]);
-      await _upsert(token, 'training_packages', [_trainingPackageJson(session)]);
-      await _upsert(token, 'exercises', [_exerciseSnapshotJson(session, exercise, face, faceId)]);
+      await _upsert(token, 'exercise_templates',
+          [_exerciseTemplateJson(exercise, face, faceId)]);
+      await _upsert(
+          token, 'training_packages', [_trainingPackageJson(session)]);
+      await _upsert(token, 'exercises',
+          [_exerciseSnapshotJson(session, exercise, face, faceId)]);
 
-      final shotRows = [for (final s in session.shots) _shotJson(s, session.id, face, session.startedAt)];
+      final shotRows = [
+        for (final s in session.shots)
+          _shotJson(s, session.id, face, session.startedAt)
+      ];
       await _upsert(token, 'shots', shotRows);
 
-      final commentRows = [for (final c in repo.forSessionAll(session.id)) _commentJson(c)];
+      final commentRows = [
+        for (final c in repo.forSessionAll(session.id)) _commentJson(c)
+      ];
       await _upsert(token, 'comments', commentRows);
 
       store.markSessionSynced(session.id);
@@ -275,7 +301,9 @@ class SupabaseSyncService {
     return count;
   }
 
-  Map<String, dynamic> _exerciseTemplateJson(Exercise ex, TargetFace face, String faceId) => {
+  Map<String, dynamic> _exerciseTemplateJson(
+          Exercise ex, TargetFace face, String faceId) =>
+      {
         'id': ex.id,
         // У приложения больше нет отдельного поля "код" (убрано — дублировало
         // название). Синтетическое значение только чтобы удовлетворить
@@ -337,7 +365,9 @@ class SupabaseSyncService {
         'extra': {'template_id': exercise.id},
       };
 
-  Map<String, dynamic> _shotJson(Shot shot, String sessionId, TargetFace face, DateTime? sessionStart) => {
+  Map<String, dynamic> _shotJson(Shot shot, String sessionId, TargetFace face,
+          DateTime? sessionStart) =>
+      {
         'id': shot.id,
         'exercise_id': sessionId,
         'shot_no': shot.shotNumber,
@@ -359,7 +389,9 @@ class SupabaseSyncService {
         // тренировки в миллисекундах, не эпоху — час стрельбы даёт
         // около 1 100 000, а epoch millis (~1.7×10¹²) вылетает за
         // границы integer (ошибка 22003). См. SUPABASE-CREATE.md.
-        'shot_time_ms': sessionStart == null ? 0 : shot.time.difference(sessionStart).inMilliseconds,
+        'shot_time_ms': sessionStart == null
+            ? 0
+            : shot.time.difference(sessionStart).inMilliseconds,
         'counts': shot.counts,
         'extra': shot.extra,
       };
@@ -388,14 +420,18 @@ class SupabaseSyncService {
 
     final templateRows = await _select(token, 'exercise_templates?select=*');
     final beforeExercises = store.exercises.length;
+    final forever = store.foreverDeletedExerciseIds;
     for (final row in templateRows) {
       if (store.exercises.any((e) => e.id == row['id'])) continue;
+      if (forever.contains('${row['id']}')) continue;
       store.upsertExerciseFromRemote(_exerciseFromTemplateRow(row, codeById));
     }
 
     final packageRows = await _select(token, 'training_packages?select=*');
     final exerciseChildRows = await _select(token, 'exercises?select=*');
-    final childByPackage = {for (final r in exerciseChildRows) '${r['package_id']}': r};
+    final childByPackage = {
+      for (final r in exerciseChildRows) '${r['package_id']}': r
+    };
 
     final shotRows = await _select(token, 'shots?select=*');
     final shotsByExercise = <String, List<Map<String, dynamic>>>{};
@@ -408,14 +444,17 @@ class SupabaseSyncService {
       final id = '${packageRow['id']}';
       if (store.sessions.any((s) => s.id == id)) continue;
       final child = childByPackage[id];
-      if (child == null) continue; // пакет без дочернего упражнения — испорченная строка, пропускаем
+      if (child == null)
+        continue; // пакет без дочернего упражнения — испорченная строка, пропускаем
       final faceCode = codeById['${child['target_face_id']}'];
-      if (faceCode == null) continue; // мишень не опознана — восстановить тренировку не из чего
+      if (faceCode == null)
+        continue; // мишень не опознана — восстановить тренировку не из чего
 
       final exerciseId = _resolveLocalExerciseId(store, child, faceCode);
       final sessionStart = _dateOrNull(packageRow['started_at']);
       final shots = [
-        for (final r in shotsByExercise[id] ?? const <Map<String, dynamic>>[]) _shotFromRow(r, sessionStart),
+        for (final r in shotsByExercise[id] ?? const <Map<String, dynamic>>[])
+          _shotFromRow(r, sessionStart),
       ]..sort((a, b) => a.shotNumber.compareTo(b.shotNumber));
 
       store.upsertSessionFromRemote(TrainingSession(
@@ -425,7 +464,9 @@ class SupabaseSyncService {
         // Реальная схема не знает 'finished' (см. push) — только
         // 'completed' синхронизируется мостом, но читаем терпимо к
         // строкам от стороннего источника (draft/active/archived).
-        status: packageRow['package_status'] == 'completed' ? SessionStatus.finished : SessionStatus.notStarted,
+        status: packageRow['package_status'] == 'completed'
+            ? SessionStatus.finished
+            : SessionStatus.notStarted,
         startedAt: sessionStart,
         finishedAt: _dateOrNull(packageRow['ended_at']),
         shots: shots,
@@ -437,7 +478,8 @@ class SupabaseSyncService {
     final commentRows = await _select(token, 'comments?select=*');
     final repo = CommentsRepository(store.db);
     final existingCommentIds = {
-      for (final row in store.db.db.select('SELECT id FROM comments')) row['id'] as String,
+      for (final row in store.db.db.select('SELECT id FROM comments'))
+        row['id'] as String,
     };
     var pulledComments = 0;
     for (final row in commentRows) {
@@ -448,7 +490,8 @@ class SupabaseSyncService {
         level: CommentLevel.values.firstWhere((l) => l.name == row['level']),
         shotId: row['shot_id'] as String?,
         seriesNo: row['series_no'] as int?,
-        authorRole: AuthorRole.values.firstWhere((r) => r.name == row['author_role']),
+        authorRole:
+            AuthorRole.values.firstWhere((r) => r.name == row['author_role']),
         text: row['text'] as String,
         createdAt: DateTime.parse(row['created_at'] as String),
       ));
@@ -463,8 +506,10 @@ class SupabaseSyncService {
     );
   }
 
-  Exercise _exerciseFromTemplateRow(Map<String, dynamic> row, Map<String, String> codeById) {
-    final faceCode = codeById['${row['target_face_id']}'] ?? TargetFace.rifle10m.code;
+  Exercise _exerciseFromTemplateRow(
+      Map<String, dynamic> row, Map<String, String> codeById) {
+    final faceCode =
+        codeById['${row['target_face_id']}'] ?? TargetFace.rifle10m.code;
     final shotsCount = (row['shots_count'] as num?)?.toInt() ?? 1;
     final perSeries = (row['shots_per_series'] as num?)?.toInt() ?? shotsCount;
     final isActive = row['is_active'] != false;
@@ -484,14 +529,17 @@ class SupabaseSyncService {
   /// же мостом при push (`extra.template_id`), а для строк из другого
   /// источника — тем же подбором по имени+мишени, что использует
   /// `SessionImport._findOrCreateExercise`.
-  String _resolveLocalExerciseId(AppDataStore store, Map<String, dynamic> child, String faceCode) {
+  String _resolveLocalExerciseId(
+      AppDataStore store, Map<String, dynamic> child, String faceCode) {
     final extra = extraFromJson(child['extra']);
     final templateId = extra?['template_id'] as String?;
     if (templateId != null && store.exercises.any((e) => e.id == templateId)) {
       return templateId;
     }
     final name = '${child['exercise_name'] ?? ''}';
-    final match = store.exercises.where((e) => e.name == name && e.targetFaceCode == faceCode).firstOrNull;
+    final match = store.exercises
+        .where((e) => e.name == name && e.targetFaceCode == faceCode)
+        .firstOrNull;
     if (match != null) return match.id;
     final expectedShots = (child['expected_shots'] as num?)?.toInt() ?? 1;
     return store
@@ -527,7 +575,8 @@ class SupabaseSyncService {
     );
   }
 
-  static DateTime? _dateOrNull(Object? v) => v is String ? DateTime.tryParse(v) : null;
+  static DateTime? _dateOrNull(Object? v) =>
+      v is String ? DateTime.tryParse(v) : null;
 
   // ---- Токены доступа тренеру ----
   //
@@ -541,7 +590,8 @@ class SupabaseSyncService {
   /// что использует `validate_share_token` на сервере) и сохраняет
   /// только хеш. Открытый вид токена возвращается вызывающему коду
   /// ОДИН РАЗ и нигде больше не сохраняется.
-  Future<String> createShareToken(AppDataStore store, {String athleteLabel = ''}) async {
+  Future<String> createShareToken(AppDataStore store,
+      {String athleteLabel = ''}) async {
     final token = await _requireToken();
     final plainToken = _randomToken();
     final client = clientFactory();
@@ -554,7 +604,8 @@ class SupabaseSyncService {
           )
           .timeout(const Duration(seconds: 20));
       if (hashRes.statusCode >= 400) {
-        throw SupabaseSyncException(_errorMessage(hashRes.body, hashRes.statusCode));
+        throw SupabaseSyncException(
+            _errorMessage(hashRes.body, hashRes.statusCode));
       }
       final tokenHash = jsonDecode(utf8.decode(hashRes.bodyBytes));
       await _upsert(token, 'share_grants', [
@@ -595,7 +646,8 @@ class SupabaseSyncService {
   /// локальная база: отозвать токен можно и с другого устройства.
   Future<void> refreshShareGrants(AppDataStore store) async {
     final token = await _requireToken();
-    final rows = await _select(token, 'share_grants?select=id,token_hash,label,created_at,revoked_at');
+    final rows = await _select(
+        token, 'share_grants?select=id,token_hash,label,created_at,revoked_at');
     store.replaceShareGrants([
       for (final row in rows)
         ShareGrant(

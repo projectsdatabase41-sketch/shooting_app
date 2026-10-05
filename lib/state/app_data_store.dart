@@ -36,7 +36,8 @@ class AppDataStore extends ChangeNotifier {
   }
 
   set workMode(WorkMode mode) {
-    if (!(isAthlete && isCoach)) return; // переключатель не рендерится/не действует
+    if (!(isAthlete && isCoach))
+      return; // переключатель не рендерится/не действует
     _workMode = mode;
     notifyListeners();
   }
@@ -44,6 +45,7 @@ class AppDataStore extends ChangeNotifier {
   List<Exercise> exercises = [];
   List<TrainingSession> sessions = [];
   List<ShareGrant> shareGrants = [];
+
   /// Сколько тренировок держать на устройстве.
   ///
   /// 0 — не держать вовсе (только облако), [keepAll] — держать всё.
@@ -95,22 +97,25 @@ class AppDataStore extends ChangeNotifier {
   }
 
   void _loadExercises() {
-    final rows = db.db.select('SELECT * FROM exercises ORDER BY created_at DESC');
-    exercises = rows.map((r) => Exercise(
-          id: r['id'] as String,
-          name: r['name'] as String,
-          targetFaceCode: r['target_face_code'] as String,
-          totalShots: r['total_shots'] as int,
-          seriesSize: r['series_size'] as int,
-          gender: ExerciseGender.values.firstWhere(
-            (g) => g.name == r['gender'],
-            orElse: () => ExerciseGender.mixed,
-          ),
-          deletedAt: r['deleted_at'] == null
-              ? null
-              : DateTime.tryParse('${r['deleted_at']}'),
-          series: seriesFromJson(r['series']),
-        )).toList();
+    final rows =
+        db.db.select('SELECT * FROM exercises ORDER BY created_at DESC');
+    exercises = rows
+        .map((r) => Exercise(
+              id: r['id'] as String,
+              name: r['name'] as String,
+              targetFaceCode: r['target_face_code'] as String,
+              totalShots: r['total_shots'] as int,
+              seriesSize: r['series_size'] as int,
+              gender: ExerciseGender.values.firstWhere(
+                (g) => g.name == r['gender'],
+                orElse: () => ExerciseGender.mixed,
+              ),
+              deletedAt: r['deleted_at'] == null
+                  ? null
+                  : DateTime.tryParse('${r['deleted_at']}'),
+              series: seriesFromJson(r['series']),
+            ))
+        .toList();
   }
 
   /// Упражнения для выбора при создании тренировки — без удалённых.
@@ -118,12 +123,14 @@ class AppDataStore extends ChangeNotifier {
   /// Сам список `exercises` остаётся полным: истории и ассистенту нужны
   /// названия удалённых упражнений, иначе прошлые тренировки станут
   /// безымянными — а пользователь просил их сохранить.
-  List<Exercise> get activeExercises => exercises.where((e) => !e.isDeleted).toList();
+  List<Exercise> get activeExercises =>
+      exercises.where((e) => !e.isDeleted).toList();
 
   /// Мягко удаляет упражнение. Тренировки не трогаются.
   void deleteExercise(String id) {
     final now = DateTime.now();
-    db.db.execute('UPDATE exercises SET deleted_at = ? WHERE id = ?', [now.toIso8601String(), id]);
+    db.db.execute('UPDATE exercises SET deleted_at = ? WHERE id = ?',
+        [now.toIso8601String(), id]);
     exercises = [
       for (final e in exercises) e.id == id ? e.copyWith(deletedAt: now) : e,
     ];
@@ -169,11 +176,15 @@ class AppDataStore extends ChangeNotifier {
   void deleteSession(String id) {
     final session = sessions.where((s) => s.id == id).firstOrNull;
     if (session != null && session.syncedToCloud) {
-      db.db.execute('UPDATE training_sessions SET pending_delete = 1 WHERE id = ?', [id]);
+      db.db.execute(
+          'UPDATE training_sessions SET pending_delete = 1 WHERE id = ?', [id]);
     } else {
       confirmSessionDeleted(id);
     }
-    sessions = [for (final s in sessions) if (s.id != id) s];
+    sessions = [
+      for (final s in sessions)
+        if (s.id != id) s
+    ];
     notifyListeners();
   }
 
@@ -184,11 +195,15 @@ class AppDataStore extends ChangeNotifier {
   void deleteSessionLocalOnly(String id) {
     final session = sessions.where((s) => s.id == id).firstOrNull;
     if (session != null && session.syncedToCloud) {
-      db.db.execute('UPDATE training_sessions SET local_hidden = 1 WHERE id = ?', [id]);
+      db.db.execute(
+          'UPDATE training_sessions SET local_hidden = 1 WHERE id = ?', [id]);
     } else {
       confirmSessionDeleted(id);
     }
-    sessions = [for (final s in sessions) if (s.id != id) s];
+    sessions = [
+      for (final s in sessions)
+        if (s.id != id) s
+    ];
     notifyListeners();
   }
 
@@ -208,7 +223,8 @@ class AppDataStore extends ChangeNotifier {
   /// пользователь попросил принудительный режим синхронизации вместо
   /// повторного разбора, как тромбстоуны вообще все проставились.
   void clearLocalTombstones() {
-    db.db.execute('UPDATE exercises SET deleted_at = NULL WHERE deleted_at IS NOT NULL');
+    db.db.execute(
+        'UPDATE exercises SET deleted_at = NULL WHERE deleted_at IS NOT NULL');
     db.db.execute(
       'UPDATE training_sessions SET local_hidden = 0, pending_delete = 0 WHERE local_hidden = 1 OR pending_delete = 1',
     );
@@ -229,8 +245,28 @@ class AppDataStore extends ChangeNotifier {
   /// sqlite выключен), просто перестанут находить имя упражнения.
   void deleteExerciseForever(String id) {
     db.db.execute('DELETE FROM exercises WHERE id = ?', [id]);
-    exercises = [for (final e in exercises) if (e.id != id) e];
+    // Без метки следующий pull() снова принёс бы этот шаблон из облака
+    // (жалоба пользователя: удалённые шаблоны «постоянно импортируются»).
+    final ids = foreverDeletedExerciseIds..add(id);
+    db.db.execute(
+      'INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex',
+      [_foreverKey, ids.join(',')],
+    );
+    exercises = [
+      for (final e in exercises)
+        if (e.id != id) e
+    ];
     notifyListeners();
+  }
+
+  static const _foreverKey = 'exercise_forever_deleted';
+
+  /// Id упражнений, стёртых «насовсем» — pull их не возвращает.
+  Set<String> get foreverDeletedExerciseIds {
+    final rows = db.db
+        .select('SELECT hex FROM color_prefs WHERE key = ?', [_foreverKey]);
+    if (rows.isEmpty) return <String>{};
+    return '${rows.first['hex']}'.split(',').where((e) => e.isNotEmpty).toSet();
   }
 
   void confirmSessionDeleted(String id) {
@@ -250,7 +286,8 @@ class AppDataStore extends ChangeNotifier {
   /// физически — список для push: их нужно удалить в облаке, а после
   /// подтверждения — стереть локально через `confirmSessionDeleted`.
   List<String> pendingDeletionIds() {
-    final rows = db.db.select('SELECT id FROM training_sessions WHERE pending_delete = 1');
+    final rows = db.db
+        .select('SELECT id FROM training_sessions WHERE pending_delete = 1');
     return [for (final r in rows) r['id'] as String];
   }
 
@@ -300,8 +337,8 @@ class AppDataStore extends ChangeNotifier {
     // синхронизация успеет подтвердить их удаление в облаке (пункт 6
     // списка правок). Сама строка при этом остаётся в базе — её видит
     // только sync через pendingDeletionIds().
-    final sessionRows =
-        db.db.select('SELECT * FROM training_sessions WHERE pending_delete = 0 AND local_hidden = 0 ORDER BY started_at DESC');
+    final sessionRows = db.db.select(
+        'SELECT * FROM training_sessions WHERE pending_delete = 0 AND local_hidden = 0 ORDER BY started_at DESC');
     sessions = sessionRows.map((r) {
       final id = r['id'] as String;
       final shotRows = db.db.select(
@@ -317,8 +354,12 @@ class AppDataStore extends ChangeNotifier {
         exerciseId: r['exercise_id'] as String,
         targetFaceCode: r['target_face_code'] as String,
         status: SessionStatus.values.firstWhere((s) => s.name == r['status']),
-        startedAt: r['started_at'] == null ? null : DateTime.parse(r['started_at'] as String),
-        finishedAt: r['finished_at'] == null ? null : DateTime.parse(r['finished_at'] as String),
+        startedAt: r['started_at'] == null
+            ? null
+            : DateTime.parse(r['started_at'] as String),
+        finishedAt: r['finished_at'] == null
+            ? null
+            : DateTime.parse(r['finished_at'] as String),
         shots: shotRows.map(_shotFromRow).toList(),
         trash: trashRows.map(_shotFromRow).toList(),
         syncedToCloud: r['synced_to_cloud'] == 1,
@@ -349,7 +390,13 @@ class AppDataStore extends ChangeNotifier {
     for (final g in grants) {
       db.db.execute(
         'INSERT INTO share_grants (id, token_hash, athlete_label, created_at, revoked_at) VALUES (?, ?, ?, ?, ?)',
-        [g.id, g.tokenHash, g.athleteLabel, g.createdAt.toIso8601String(), g.revokedAt?.toIso8601String()],
+        [
+          g.id,
+          g.tokenHash,
+          g.athleteLabel,
+          g.createdAt.toIso8601String(),
+          g.revokedAt?.toIso8601String()
+        ],
       );
     }
     _loadShareGrants();
@@ -359,7 +406,8 @@ class AppDataStore extends ChangeNotifier {
   void _loadShareGrants() {
     // UI спортсмена показывает только активные — не запрашиваем
     // отозванные вовсе (C.5), проще SQL без клиентской фильтрации.
-    final rows = db.db.select('SELECT * FROM share_grants WHERE revoked_at IS NULL');
+    final rows =
+        db.db.select('SELECT * FROM share_grants WHERE revoked_at IS NULL');
     shareGrants = rows
         .map((r) => ShareGrant(
               id: r['id'] as String,
@@ -461,16 +509,19 @@ class AppDataStore extends ChangeNotifier {
   /// класса (он читает их напрямую из БД, не через кеш в памяти).
   void refreshView() => notifyListeners();
 
-  List<TrainingSession> get unsyncedSessions =>
-      sessions.where((s) => !s.syncedToCloud && s.status == SessionStatus.finished).toList();
+  List<TrainingSession> get unsyncedSessions => sessions
+      .where((s) => !s.syncedToCloud && s.status == SessionStatus.finished)
+      .toList();
 
   /// Помечает тренировку отправленной — после успешного push, чтобы
   /// `unsyncedSessions` не пыталась отправить её ещё раз.
   void markSessionSynced(String id) {
-    db.db.execute('UPDATE training_sessions SET synced_to_cloud = 1 WHERE id = ?', [id]);
+    db.db.execute(
+        'UPDATE training_sessions SET synced_to_cloud = 1 WHERE id = ?', [id]);
     final idx = sessions.indexWhere((s) => s.id == id);
     if (idx != -1) {
-      sessions = [...sessions]..[idx] = sessions[idx].copyWith(syncedToCloud: true);
+      sessions = [...sessions]..[idx] =
+          sessions[idx].copyWith(syncedToCloud: true);
       notifyListeners();
     }
   }
@@ -492,8 +543,15 @@ class AppDataStore extends ChangeNotifier {
       'INSERT INTO exercises (id, code, name, target_face_code, total_shots, series_size, gender, series, deleted_at) '
       'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING',
       [
-        ex.id, ex.name, ex.name, ex.targetFaceCode, ex.totalShots, ex.seriesSize,
-        ex.gender.name, ex.series.isEmpty ? null : seriesToJson(ex.series), ex.deletedAt?.toIso8601String(),
+        ex.id,
+        ex.name,
+        ex.name,
+        ex.targetFaceCode,
+        ex.totalShots,
+        ex.seriesSize,
+        ex.gender.name,
+        ex.series.isEmpty ? null : seriesToJson(ex.series),
+        ex.deletedAt?.toIso8601String(),
       ],
     );
     if (db.db.updatedRows == 0) return; // уже есть в базе (например, удалено)
@@ -615,7 +673,8 @@ class AppDataStore extends ChangeNotifier {
   /// Вызывается `TargetViewModel` при каждом изменении, пока
   /// разблокирована завершённая тренировка — держит этот флаг и
   /// колбэк-резолвер синхронными с `TargetViewModel.hasUnsavedFinishedEdits`.
-  void setUnsavedFinishedEdit(bool value, {void Function({required bool keep})? resolver}) {
+  void setUnsavedFinishedEdit(bool value,
+      {void Function({required bool keep})? resolver}) {
     if (hasUnsavedFinishedEdit == value) return;
     hasUnsavedFinishedEdit = value;
     resolvePendingFinishedEdit = value ? resolver : null;

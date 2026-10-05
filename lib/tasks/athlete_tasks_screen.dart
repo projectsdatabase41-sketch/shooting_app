@@ -15,11 +15,13 @@ import 'task_ui.dart';
 
 /// Открыть задание по id (из push) — у спортсмена.
 Future<void> openAthleteTask(BuildContext context, String taskId) async {
-  final service = AthleteTaskService(SupabaseAuthService(context.read<AppDataStore>().db));
+  final service =
+      AthleteTaskService(SupabaseAuthService(context.read<AppDataStore>().db));
   if (!service.available) return;
   final task = await service.byId(taskId);
   if (task == null || !context.mounted) return;
-  await Navigator.of(context).push(MaterialPageRoute(builder: (_) => TaskRunScreen(task: task, service: service)));
+  await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => TaskRunScreen(task: task, service: service)));
 }
 
 enum _DoneSort { date, title }
@@ -37,7 +39,8 @@ class AthleteTasksScreen extends StatefulWidget {
 }
 
 class _AthleteTasksScreenState extends State<AthleteTasksScreen> {
-  late final AthleteTaskService _service = AthleteTaskService(SupabaseAuthService(context.read<AppDataStore>().db));
+  late final AthleteTaskService _service =
+      AthleteTaskService(SupabaseAuthService(context.read<AppDataStore>().db));
   List<TaskPlan>? _tasks;
   String? _error;
   _DoneSort _doneSort = _DoneSort.date;
@@ -63,7 +66,8 @@ class _AthleteTasksScreenState extends State<AthleteTasksScreen> {
   }
 
   Future<void> _open(TaskPlan t) async {
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => TaskRunScreen(task: t, service: _service)));
+    await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => TaskRunScreen(task: t, service: _service)));
     _load();
   }
 
@@ -71,9 +75,11 @@ class _AthleteTasksScreenState extends State<AthleteTasksScreen> {
     final id = t.id;
     if (id == null) return;
     try {
-      await _service.setStatus(id, 'removed');
+      await _service.deleteForever(id);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
     }
     _load();
   }
@@ -86,30 +92,41 @@ class _AthleteTasksScreenState extends State<AthleteTasksScreen> {
       body = Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Text(tr('Задания приходят в вашу базу — войдите в неё: Настройки → Учётная запись.'),
+          child: Text(
+              tr('Задания приходят в вашу базу — войдите в неё: Настройки → Учётная запись.'),
               textAlign: TextAlign.center),
         ),
       );
     } else if (_tasks == null) {
-      body = Center(child: _error == null ? const CircularProgressIndicator() : Text(_error!));
+      body = Center(
+          child: _error == null
+              ? const CircularProgressIndicator()
+              : Text(_error!));
     } else if (_tasks!.isEmpty) {
-      body = Center(child: Text(tr('Заданий пока нет'), style: TextStyle(color: theme.hintColor)));
+      body = Center(
+          child: Text(tr('Заданий пока нет'),
+              style: TextStyle(color: theme.hintColor)));
     } else {
       final active = [..._tasks!]..sort((a, b) {
-          int rank(TaskPlan t) => t.removed ? 2 : (t.done && (t.repeatRule ?? '').isEmpty ? 1 : 0);
+          int rank(TaskPlan t) =>
+              t.removed ? 2 : (t.done && (t.repeatRule ?? '').isEmpty ? 1 : 0);
           return rank(a).compareTo(rank(b));
         });
       final done = _tasks!.where((t) => t.done).toList()
         ..sort((a, b) => _doneSort == _DoneSort.title
             ? a.title.compareTo(b.title)
-            : (_lastDoneAt(b) ?? DateTime(0)).compareTo(_lastDoneAt(a) ?? DateTime(0)));
+            : (_lastDoneAt(b) ?? DateTime(0))
+                .compareTo(_lastDoneAt(a) ?? DateTime(0)));
 
       body = DefaultTabController(
         length: 2,
         child: Column(
           children: [
             TabBar(
-              tabs: [Tab(text: tr('Активные')), Tab(text: tr('Выполненные ({n})', {'n': done.length}))],
+              tabs: [
+                Tab(text: tr('Активные')),
+                Tab(text: tr('Выполненные ({n})', {'n': done.length}))
+              ],
             ),
             Expanded(
               child: TabBarView(
@@ -126,12 +143,17 @@ class _AthleteTasksScreenState extends State<AthleteTasksScreen> {
                           alignment: Alignment.centerRight,
                           child: SegmentedButton<_DoneSort>(
                             segments: [
-                              ButtonSegment(value: _DoneSort.date, label: Text(tr('По дате'))),
-                              ButtonSegment(value: _DoneSort.title, label: Text(tr('По названию'))),
+                              ButtonSegment(
+                                  value: _DoneSort.date,
+                                  label: Text(tr('По дате'))),
+                              ButtonSegment(
+                                  value: _DoneSort.title,
+                                  label: Text(tr('По названию'))),
                             ],
                             selected: {_doneSort},
                             showSelectedIcon: false,
-                            onSelectionChanged: (s) => setState(() => _doneSort = s.first),
+                            onSelectionChanged: (s) =>
+                                setState(() => _doneSort = s.first),
                           ),
                         ),
                       ),
@@ -140,13 +162,16 @@ class _AthleteTasksScreenState extends State<AthleteTasksScreen> {
                           onRefresh: _load,
                           child: done.isEmpty
                               ? ListView(
-                                  physics: const AlwaysScrollableScrollPhysics(),
+                                  physics:
+                                      const AlwaysScrollableScrollPhysics(),
                                   children: [
                                     Padding(
                                       padding: const EdgeInsets.all(32),
                                       child: Center(
-                                        child: Text(tr('Выполненных заданий пока нет'),
-                                            style: TextStyle(color: theme.hintColor)),
+                                        child: Text(
+                                            tr('Выполненных заданий пока нет'),
+                                            style: TextStyle(
+                                                color: theme.hintColor)),
                                       ),
                                     ),
                                   ],
@@ -165,8 +190,15 @@ class _AthleteTasksScreenState extends State<AthleteTasksScreen> {
     }
     return Scaffold(
       appBar: GlassHeader(
-        title: Text(tr('Задания'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-        actions: [GlassCircleButton(icon: const Icon(Icons.refresh), tooltip: tr('Обновить'), onTap: _load)],
+        title: Text(tr('Задания'),
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
+        actions: [
+          GlassCircleButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: tr('Обновить'),
+              onTap: _load)
+        ],
       ),
       body: body,
     );
@@ -175,12 +207,16 @@ class _AthleteTasksScreenState extends State<AthleteTasksScreen> {
   /// Дата последнего завершённого прохождения — для сортировки
   /// вкладки "Выполненные" по дате.
   DateTime? _lastDoneAt(TaskPlan t) {
-    final finished = [for (final r in t.runs) if (r.status == 'done' && r.finishedAt != null) r.finishedAt!];
+    final finished = [
+      for (final r in t.runs)
+        if (r.status == 'done' && r.finishedAt != null) r.finishedAt!
+    ];
     if (finished.isEmpty) return null;
     return finished.reduce((a, b) => a.isAfter(b) ? a : b);
   }
 
-  Widget _list(ThemeData theme, List<TaskPlan> items, {required bool showDoneBadge}) {
+  Widget _list(ThemeData theme, List<TaskPlan> items,
+      {required bool showDoneBadge}) {
     return ListView(
       padding: const EdgeInsets.all(12),
       physics: const AlwaysScrollableScrollPhysics(),
@@ -191,30 +227,44 @@ class _AthleteTasksScreenState extends State<AthleteTasksScreen> {
             child: SwipeToDelete(
               itemKey: '${showDoneBadge ? 'done-' : ''}${t.id ?? t.title}',
               title: tr('Удалить задание?'),
-              message: tr('«{title}» станет недоступно для выполнения. Останется в списке помеченным как снятое.',
+              message: tr(
+                  '«{title}» будет удалено вместе с результатами. Отменить нельзя.',
                   {'title': t.title}),
               confirmLabel: tr('Удалить'),
               onConfirmed: () => _remove(t),
               child: Press3D(
                 padding: EdgeInsets.zero,
-                accent: t.removed ? theme.colorScheme.error : (t.done ? Colors.green : theme.colorScheme.primary),
+                accent: t.removed
+                    ? theme.colorScheme.error
+                    : (t.done ? Colors.green : theme.colorScheme.primary),
                 onTap: () => _open(t),
                 child: ListTile(
                   leading: Icon(
-                    t.removed ? Icons.block : (t.done ? Icons.task_alt : Icons.assignment_outlined),
-                    color: t.removed ? theme.colorScheme.error : (t.done ? Colors.green : theme.colorScheme.primary),
+                    t.removed
+                        ? Icons.block
+                        : (t.done ? Icons.task_alt : Icons.assignment_outlined),
+                    color: t.removed
+                        ? theme.colorScheme.error
+                        : (t.done ? Colors.green : theme.colorScheme.primary),
                   ),
                   title: Text(t.title),
                   subtitle: Text([
-                    tr('{n} ступ., {m} этап.', {'n': t.stages.length, 'm': t.stepCount}),
+                    tr('{n} ступ., {m} этап.',
+                        {'n': t.stages.length, 'm': t.stepCount}),
                     if (t.removed) tr('снято тренером'),
                     if (showDoneBadge && _lastDoneAt(t) != null)
                       tr('выполнено {d}', {'d': _shortDate(_lastDoneAt(t)!)})
                     else if (t.done)
-                      tr('выполнено: {n}', {'n': t.runs.where((r) => r.status == 'done').length}),
+                      tr('выполнено: {n}', {
+                        'n': t.runs.where((r) => r.status == 'done').length
+                      }),
                     if (t.dueAt != null)
-                      tr('до {d}', {'d': '${t.dueAt!.day}.${t.dueAt!.month.toString().padLeft(2, '0')}'}),
-                    if ((t.repeatRule ?? '').isNotEmpty) repeatLabel(t.repeatRule),
+                      tr('до {d}', {
+                        'd':
+                            '${t.dueAt!.day}.${t.dueAt!.month.toString().padLeft(2, '0')}'
+                      }),
+                    if ((t.repeatRule ?? '').isNotEmpty)
+                      repeatLabel(t.repeatRule),
                   ].join(' · ')),
                   trailing: const Icon(Icons.chevron_right),
                 ),
@@ -225,5 +275,6 @@ class _AthleteTasksScreenState extends State<AthleteTasksScreen> {
     );
   }
 
-  static String _shortDate(DateTime d) => '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
+  static String _shortDate(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
 }

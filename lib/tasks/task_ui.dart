@@ -34,7 +34,15 @@ String noteModeLabel(String m) => switch (m) {
 String repeatLabel(String? rule) {
   if (rule == null || rule.isEmpty) return '';
   if (rule == 'daily') return tr('каждый день');
-  const names = {'mon': 'пн', 'tue': 'вт', 'wed': 'ср', 'thu': 'чт', 'fri': 'пт', 'sat': 'сб', 'sun': 'вс'};
+  const names = {
+    'mon': 'пн',
+    'tue': 'вт',
+    'wed': 'ср',
+    'thu': 'чт',
+    'fri': 'пт',
+    'sat': 'сб',
+    'sun': 'вс'
+  };
   return rule.split(',').map((d) => tr(names[d.trim()] ?? d)).join(', ');
 }
 
@@ -56,26 +64,33 @@ class TaskPlanView extends StatelessWidget {
           if (i > 0)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Icon(Icons.arrow_downward, size: 18, color: theme.hintColor),
+              child:
+                  Icon(Icons.arrow_downward, size: 18, color: theme.hintColor),
             ),
           Press3D(
             padding: const EdgeInsets.all(10),
-            accent: current == null || current == i ? stageModeColor(context, stage.mode) : null,
+            accent: current == null || current == i
+                ? stageModeColor(context, stage.mode)
+                : null,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Text(tr('Ступень {n}', {'n': i + 1}), style: theme.textTheme.labelLarge),
+                    Text(tr('Ступень {n}', {'n': i + 1}),
+                        style: theme.textTheme.labelLarge),
                     const Spacer(),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                        color: stageModeColor(context, stage.mode).withValues(alpha: 0.15),
+                        color: stageModeColor(context, stage.mode)
+                            .withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(stageModeLabel(stage.mode),
-                          style: theme.textTheme.labelSmall?.copyWith(color: stageModeColor(context, stage.mode))),
+                          style: theme.textTheme.labelSmall?.copyWith(
+                              color: stageModeColor(context, stage.mode))),
                     ),
                   ],
                 ),
@@ -87,8 +102,14 @@ class TaskPlanView extends StatelessWidget {
                     for (final s in stage.steps)
                       Chip(
                         visualDensity: VisualDensity.compact,
-                        avatar: Icon(s.isShooting ? Icons.gps_fixed : Icons.self_improvement, size: 16),
-                        label: Text(s.isShooting ? '${s.title} · ${s.plannedShots}' : s.title),
+                        avatar: Icon(
+                            s.isShooting
+                                ? Icons.gps_fixed
+                                : Icons.self_improvement,
+                            size: 16),
+                        label: Text(s.isShooting
+                            ? '${s.title} · ${s.plannedShots}'
+                            : s.title),
                       ),
                   ],
                 ),
@@ -108,7 +129,11 @@ class StageProgressPills extends StatelessWidget {
   /// Текущая ступень (null — обзор или итог).
   final int? current;
   final bool Function(int stage) isDone;
-  const StageProgressPills({super.key, required this.count, required this.current, required this.isDone});
+  const StageProgressPills(
+      {super.key,
+      required this.count,
+      required this.current,
+      required this.isDone});
 
   @override
   Widget build(BuildContext context) {
@@ -123,23 +148,37 @@ class StageProgressPills extends StatelessWidget {
             () {
               final done = isDone(i);
               final now = current == i;
-              final color = done ? Colors.green : (now ? cs.primary : cs.outline);
+              final color =
+                  done ? Colors.green : (now ? cs.primary : cs.outline);
               return AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: now ? 0.25 : 0.12),
                   borderRadius: BorderRadius.circular(999),
                   boxShadow: now
-                      ? [BoxShadow(color: color.withValues(alpha: 0.35), blurRadius: 8, offset: const Offset(0, 3))]
+                      ? [
+                          BoxShadow(
+                              color: color.withValues(alpha: 0.35),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3))
+                        ]
                       : null,
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(done ? Icons.check : (now ? Icons.play_arrow : Icons.lock_outline), size: 14, color: color),
+                    Icon(
+                        done
+                            ? Icons.check
+                            : (now ? Icons.play_arrow : Icons.lock_outline),
+                        size: 14,
+                        color: color),
                     const SizedBox(width: 4),
-                    Text('${i + 1}', style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+                    Text('${i + 1}',
+                        style: TextStyle(
+                            color: color, fontWeight: FontWeight.w600)),
                   ],
                 ),
               );
@@ -171,12 +210,14 @@ class TaskVisualReport extends StatelessWidget {
           if (b is Map && b['type'] == 'chart' && b['chart'] is Map)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 6),
-              child: AiChartView(spec: (b['chart'] as Map).cast<String, dynamic>()),
+              child: AiChartView(
+                  spec: (b['chart'] as Map).cast<String, dynamic>()),
             )
           else if (b is Map)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Text('${b['text'] ?? ''}', style: Theme.of(context).textTheme.bodyMedium),
+              child: Text('${b['text'] ?? ''}',
+                  style: Theme.of(context).textTheme.bodyMedium),
             ),
       ],
     );
