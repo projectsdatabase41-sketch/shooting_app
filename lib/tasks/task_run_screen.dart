@@ -714,8 +714,10 @@ class _StepViewState extends State<_StepView> {
     final exercise = step.sighting?['required'] == true
         ? base.copyWith(series: [
             SeriesSpec(
-                name: 'Пристрелка', shotCount: sightingShots, counts: false),
-            SeriesSpec(name: 'Зачёт', shotCount: step.plannedShots),
+                name: tr('Пристрелка'),
+                shotCount: sightingShots,
+                counts: false),
+            SeriesSpec(name: tr('Зачёт'), shotCount: step.plannedShots),
           ])
         : base;
     return SafeArea(

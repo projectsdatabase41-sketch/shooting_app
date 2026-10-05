@@ -120,7 +120,7 @@ class AppUpdateService {
     required void Function(double progress) onProgress,
   }) async {
     if (!Platform.isAndroid)
-      throw UnsupportedError('Обновление APK доступно только на Android');
+      throw UnsupportedError(tr('Обновление APK доступно только на Android'));
     final existing = await FileDownloader().database.recordForId(_taskId);
     if (existing != null &&
         (existing.status == TaskStatus.running ||

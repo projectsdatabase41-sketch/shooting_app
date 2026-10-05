@@ -64,10 +64,26 @@ class ChatPreferences extends ChangeNotifier {
   ChatPreferences(this.db);
 
   static const List<ChatBubblePreset> presets = [
-    ChatBubblePreset(id: 'classic', label: /*tr*/ 'Классика', mine: Color(0xFF3D6BF2), other: Color(0xFF3A3F4B)),
-    ChatBubblePreset(id: 'forest', label: /*tr*/ 'Лес', mine: Color(0xFF2F8F5B), other: Color(0xFF33403A)),
-    ChatBubblePreset(id: 'sunset', label: /*tr*/ 'Закат', mine: Color(0xFFD9633B), other: Color(0xFF40393F)),
-    ChatBubblePreset(id: 'violet', label: /*tr*/ 'Фиолет', mine: Color(0xFF8256D0), other: Color(0xFF3B3A45)),
+    ChatBubblePreset(
+        id: 'classic',
+        label: /*tr*/ 'Классика',
+        mine: Color(0xFF3D6BF2),
+        other: Color(0xFF3A3F4B)),
+    ChatBubblePreset(
+        id: 'forest',
+        label: /*tr*/ 'Лес',
+        mine: Color(0xFF2F8F5B),
+        other: Color(0xFF33403A)),
+    ChatBubblePreset(
+        id: 'sunset',
+        label: /*tr*/ 'Закат',
+        mine: Color(0xFFD9633B),
+        other: Color(0xFF40393F)),
+    ChatBubblePreset(
+        id: 'violet',
+        label: /*tr*/ 'Фиолет',
+        mine: Color(0xFF8256D0),
+        other: Color(0xFF3B3A45)),
     // Ночной — без синего и без чистого белого: меньше нагружает глаза
     // при чтении в темноте (перед стрельбой в помещении вечером и т.п.).
     ChatBubblePreset(
@@ -171,13 +187,15 @@ class ChatPreferences extends ChangeNotifier {
     notifyListeners();
   }
 
-  Color get mineBubbleColor => _readColor('chat_color_mine_bubble', _defaultMine);
+  Color get mineBubbleColor =>
+      _readColor('chat_color_mine_bubble', _defaultMine);
   set mineBubbleColor(Color c) {
     _writeColor('chat_color_mine_bubble', c);
     notifyListeners();
   }
 
-  Color get otherBubbleColor => _readColor('chat_color_other_bubble', _defaultOther);
+  Color get otherBubbleColor =>
+      _readColor('chat_color_other_bubble', _defaultOther);
   set otherBubbleColor(Color c) {
     _writeColor('chat_color_other_bubble', c);
     notifyListeners();
@@ -204,7 +222,9 @@ class ChatPreferences extends ChangeNotifier {
   /// 0..1 — насколько заметна тень под пузырём (пункт 7 списка правок).
   double get shadowIntensity {
     final raw = _read('chat_shadow_intensity');
-    return raw.isEmpty ? _defaultShadow : (double.tryParse(raw) ?? _defaultShadow);
+    return raw.isEmpty
+        ? _defaultShadow
+        : (double.tryParse(raw) ?? _defaultShadow);
   }
 
   set shadowIntensity(double v) {
@@ -221,7 +241,8 @@ class ChatPreferences extends ChangeNotifier {
 
   void setAutoTranslateFor(String contactId, bool on) {
     final map = _translateOverrides..[contactId] = on;
-    _write('chat_auto_translate_ids', [for (final e in map.entries) '${e.key}:${e.value ? 1 : 0}'].join(','));
+    _write('chat_auto_translate_ids',
+        [for (final e in map.entries) '${e.key}:${e.value ? 1 : 0}'].join(','));
     notifyListeners();
   }
 
@@ -229,34 +250,42 @@ class ChatPreferences extends ChangeNotifier {
     final raw = _read('chat_auto_translate_ids');
     return {
       for (final part in raw.split(','))
-        if (part.contains(':')) part.substring(0, part.lastIndexOf(':')): part.endsWith(':1'),
+        if (part.contains(':'))
+          part.substring(0, part.lastIndexOf(':')): part.endsWith(':1'),
     };
   }
 
   /// Беззвучный диалог — колокольчик в панели собеседника. Push-уведомление
   /// о сообщении из него не показывается (см. push_service.dart).
-  bool mutedFor(String contactId) => _read('chat_muted_ids').split(',').contains(contactId);
+  bool mutedFor(String contactId) =>
+      _read('chat_muted_ids').split(',').contains(contactId);
 
   void setMutedFor(String contactId, bool muted) {
-    final ids = _read('chat_muted_ids').split(',').where((e) => e.isNotEmpty && e != contactId).toList();
+    final ids = _read('chat_muted_ids')
+        .split(',')
+        .where((e) => e.isNotEmpty && e != contactId)
+        .toList();
     if (muted) ids.add(contactId);
     _write('chat_muted_ids', ids.join(','));
     notifyListeners();
   }
 
   /// Колонок в плитках фото панели собеседника (щипок 1–8, общее для всех чатов).
-  int get mediaColumns => (int.tryParse(_read('chat_media_columns')) ?? 4).clamp(1, 8);
+  int get mediaColumns =>
+      (int.tryParse(_read('chat_media_columns')) ?? 4).clamp(1, 8);
   set mediaColumns(int v) => _write('chat_media_columns', '${v.clamp(1, 8)}');
 
   /// Размер текста в переписке (множитель 0.85–1.3).
-  double get fontScale => (double.tryParse(_read('chat_font_scale')) ?? 1.0).clamp(0.85, 1.3);
+  double get fontScale =>
+      (double.tryParse(_read('chat_font_scale')) ?? 1.0).clamp(0.85, 1.3);
   set fontScale(double v) {
     _write('chat_font_scale', v.clamp(0.85, 1.3).toStringAsFixed(2));
     notifyListeners();
   }
 
   /// Скругление пузырей, px (4–28).
-  double get bubbleRadius => (double.tryParse(_read('chat_bubble_radius')) ?? 16).clamp(4, 28);
+  double get bubbleRadius =>
+      (double.tryParse(_read('chat_bubble_radius')) ?? 16).clamp(4, 28);
   set bubbleRadius(double v) {
     _write('chat_bubble_radius', v.clamp(4, 28).toStringAsFixed(0));
     notifyListeners();
@@ -271,12 +300,12 @@ class ChatPreferences extends ChangeNotifier {
 
   /// Готовые фоны (градиенты) — id: (название, цвета).
   static const Map<String, (String, List<Color>)> chatWallpapers = {
-    'dusk': ('Закат', [Color(0xFF2B1B3D), Color(0xFF6B3A5B)]),
-    'ocean': ('Океан', [Color(0xFF0F2A44), Color(0xFF1F5E7A)]),
-    'forest': ('Лес', [Color(0xFF16291E), Color(0xFF2F5238)]),
-    'sand': ('Песок', [Color(0xFFF3E7D3), Color(0xFFE2C9A6)]),
-    'mint': ('Мята', [Color(0xFFE3F4EE), Color(0xFFBFE3D6)]),
-    'graphite': ('Графит', [Color(0xFF1E2126), Color(0xFF34383F)]),
+    'dusk': (/*tr*/ 'Закат', [Color(0xFF2B1B3D), Color(0xFF6B3A5B)]),
+    'ocean': (/*tr*/ 'Океан', [Color(0xFF0F2A44), Color(0xFF1F5E7A)]),
+    'forest': (/*tr*/ 'Лес', [Color(0xFF16291E), Color(0xFF2F5238)]),
+    'sand': (/*tr*/ 'Песок', [Color(0xFFF3E7D3), Color(0xFFE2C9A6)]),
+    'mint': (/*tr*/ 'Мята', [Color(0xFFE3F4EE), Color(0xFFBFE3D6)]),
+    'graphite': (/*tr*/ 'Графит', [Color(0xFF1E2126), Color(0xFF34383F)]),
   };
 
   /// Декорация фона переписки; null — фон приложения.
@@ -286,10 +315,15 @@ class ChatPreferences extends ChangeNotifier {
     final preset = chatWallpapers[w];
     if (preset != null) {
       return BoxDecoration(
-        gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: preset.$2),
+        gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: preset.$2),
       );
     }
-    return TargetColorScheme.isValidHex(w) ? BoxDecoration(color: TargetColorScheme.hexToColor(w)) : null;
+    return TargetColorScheme.isValidHex(w)
+        ? BoxDecoration(color: TargetColorScheme.hexToColor(w))
+        : null;
   }
 
   /// Контакт-тренер для кнопки «Позвать тренера» на экране тренировки.
@@ -319,10 +353,12 @@ class ChatPreferences extends ChangeNotifier {
     }
   }
 
-  void _writeColor(String column, Color c) => _write(column, TargetColorScheme.colorToHex(c));
+  void _writeColor(String column, Color c) =>
+      _write(column, TargetColorScheme.colorToHex(c));
 
   String _read(String column) {
-    final rows = db.db.select('SELECT $column FROM project_settings WHERE id = 1');
+    final rows =
+        db.db.select('SELECT $column FROM project_settings WHERE id = 1');
     if (rows.isEmpty) return '';
     return '${rows.first[column] ?? ''}';
   }

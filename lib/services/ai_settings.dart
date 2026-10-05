@@ -280,8 +280,9 @@ class AiSettings {
   /// Таблицы общей базы, вшитые в приложение — всегда активны, нигде в
   /// настройках не показываются и не редактируются.
   static const List<KnowledgeTableConfig> builtInTables = [
-    KnowledgeTableConfig(name: 'shooting_rules', label: 'Правила стрельбы'),
-    KnowledgeTableConfig(name: 'books', label: 'Книги'),
+    KnowledgeTableConfig(
+        name: 'shooting_rules', label: /*tr*/ 'Правила стрельбы'),
+    KnowledgeTableConfig(name: 'books', label: /*tr*/ 'Книги'),
   ];
 
   /// Таблицы из ЛИЧНОЙ базы пользователя (та же, что хранит тренировки —

@@ -1,4 +1,6 @@
 /// Заглушка для веба — обновление одной кнопкой имеет смысл только для APK.
+import '../i18n/i18n.dart';
+
 class AppUpdateInfo {
   const AppUpdateInfo({required this.downloadUrl, required this.sha});
   final String downloadUrl;
@@ -18,12 +20,14 @@ class AppUpdateService {
 
   static Future<AppUpdateInfo?> check() async => null;
   static Future<bool> downloadActive() async => false;
-  static Future<bool> attachToActiveDownload({required void Function(double progress) onProgress}) async => false;
+  static Future<bool> attachToActiveDownload(
+          {required void Function(double progress) onProgress}) async =>
+      false;
 
   static Future<void> downloadAndInstall(
     AppUpdateInfo info, {
     required void Function(double progress) onProgress,
   }) async {
-    throw UnsupportedError('Обновление APK доступно только на Android');
+    throw UnsupportedError(tr('Обновление APK доступно только на Android'));
   }
 }

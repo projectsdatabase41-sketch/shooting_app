@@ -246,13 +246,13 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
     'sun'
   ];
   static const _weekdayLabels = {
-    'mon': 'Пн',
-    'tue': 'Вт',
-    'wed': 'Ср',
-    'thu': 'Чт',
-    'fri': 'Пт',
-    'sat': 'Сб',
-    'sun': 'Вс',
+    'mon': /*tr*/ 'Пн',
+    'tue': /*tr*/ 'Вт',
+    'wed': /*tr*/ 'Ср',
+    'thu': /*tr*/ 'Чт',
+    'fri': /*tr*/ 'Пт',
+    'sat': /*tr*/ 'Сб',
+    'sun': /*tr*/ 'Вс',
   };
   String? get _repeat => _repeatDays.isEmpty
       ? null

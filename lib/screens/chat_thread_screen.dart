@@ -1242,18 +1242,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   }
 
   static const _months = [
-    'января',
-    'февраля',
-    'марта',
-    'апреля',
-    'мая',
-    'июня',
-    'июля',
-    'августа',
-    'сентября',
-    'октября',
-    'ноября',
-    'декабря',
+    /*tr*/ 'января',
+    /*tr*/ 'февраля',
+    /*tr*/ 'марта',
+    /*tr*/ 'апреля',
+    /*tr*/ 'мая',
+    /*tr*/ 'июня',
+    /*tr*/ 'июля',
+    /*tr*/ 'августа',
+    /*tr*/ 'сентября',
+    /*tr*/ 'октября',
+    /*tr*/ 'ноября',
+    /*tr*/ 'декабря',
   ];
 
   /// «Сегодня» / «Вчера» / «26 сентября» (другой год — «26 сентября 2025»).
@@ -1263,7 +1263,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     final diff = today.difference(d).inDays;
     if (diff == 0) return tr('Сегодня');
     if (diff == 1) return tr('Вчера');
-    final base = '${t.day} ${_months[t.month - 1]}';
+    final base = '${t.day} ${tr(_months[t.month - 1])}';
     return t.year == now.year ? base : '$base ${t.year}';
   }
 
@@ -1468,7 +1468,7 @@ class _Bubble extends StatelessWidget {
               const SizedBox(width: 8),
               Flexible(
                 child: Builder(builder: (context) {
-                  final name = message.attachmentName ?? 'Файл';
+                  final name = message.attachmentName ?? tr('Файл');
                   final base64 = message.attachmentBase64;
                   final isPdf = message.attachmentMime == 'application/pdf' ||
                       name.toLowerCase().endsWith('.pdf');

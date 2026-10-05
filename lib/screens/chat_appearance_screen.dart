@@ -16,14 +16,16 @@ import '../i18n/i18n.dart';
 class ChatAppearanceScreen extends StatefulWidget {
   final ChatPreferences prefs;
   final LocalDbService db;
-  const ChatAppearanceScreen({super.key, required this.prefs, required this.db});
+  const ChatAppearanceScreen(
+      {super.key, required this.prefs, required this.db});
 
   @override
   State<ChatAppearanceScreen> createState() => _ChatAppearanceScreenState();
 }
 
 class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
-  Future<void> _pickColor(String title, Color current, ValueChanged<Color> onPicked) async {
+  Future<void> _pickColor(
+      String title, Color current, ValueChanged<Color> onPicked) async {
     final picked = await showDialog<Color>(
       context: context,
       builder: (_) => _ColorPickerDialog(title: title, initial: current),
@@ -37,7 +39,9 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
     // поменяться не только с этого экрана (например, из "Настроить с
     // ИИ", отдельный лист), и без подписки на notifyListeners() экран
     // не обновился бы сам.
-    return AnimatedBuilder(animation: widget.prefs, builder: (context, _) => _buildScaffold(context));
+    return AnimatedBuilder(
+        animation: widget.prefs,
+        builder: (context, _) => _buildScaffold(context));
   }
 
   Widget _buildScaffold(BuildContext context) {
@@ -47,14 +51,17 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
-        title: Text(tr('Персонализация'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        title: Text(tr('Персонализация'),
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
           GlassCircleButton(
             onTap: () => showModalBottomSheet(
               context: context,
               isScrollControlled: true,
               showDragHandle: true,
-              builder: (_) => _AiThemeAssistantSheet(prefs: prefs, db: widget.db),
+              builder: (_) =>
+                  _AiThemeAssistantSheet(prefs: prefs, db: widget.db),
             ),
             icon: const BoldIcon(Icons.auto_awesome_outlined),
             tooltip: tr('Настроить с ИИ'),
@@ -62,26 +69,34 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
         ],
       ),
       body: ListView(
-        padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 16),
+        padding:
+            EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 16),
         children: [
           _preview(),
           const SizedBox(height: 24),
           Text(tr('Оформление сообщений'), style: theme.textTheme.titleMedium),
           const SizedBox(height: 4),
-          Text(tr('Готовые сочетания цветов — заполняют поля ниже сразу.'), style: theme.textTheme.bodySmall),
+          Text(tr('Готовые сочетания цветов — заполняют поля ниже сразу.'),
+              style: theme.textTheme.bodySmall),
           const SizedBox(height: 12),
           Wrap(
             spacing: 12,
             runSpacing: 12,
-            children: [for (final preset in ChatPreferences.presets) _presetCard(preset)],
+            children: [
+              for (final preset in ChatPreferences.presets) _presetCard(preset)
+            ],
           ),
           const SizedBox(height: 20),
           Text(tr('Цвета вручную'), style: theme.textTheme.titleMedium),
           const SizedBox(height: 8),
-          _colorTile(tr('Фон моего сообщения'), prefs.mineBubbleColor, (c) => prefs.mineBubbleColor = c),
-          _colorTile(tr('Фон сообщений собеседника'), prefs.otherBubbleColor, (c) => prefs.otherBubbleColor = c),
-          _colorTile(tr('Мой текст'), prefs.mineTextColor, (c) => prefs.mineTextColor = c),
-          _colorTile(tr('Текст собеседника'), prefs.otherTextColor, (c) => prefs.otherTextColor = c),
+          _colorTile(tr('Фон моего сообщения'), prefs.mineBubbleColor,
+              (c) => prefs.mineBubbleColor = c),
+          _colorTile(tr('Фон сообщений собеседника'), prefs.otherBubbleColor,
+              (c) => prefs.otherBubbleColor = c),
+          _colorTile(tr('Мой текст'), prefs.mineTextColor,
+              (c) => prefs.mineTextColor = c),
+          _colorTile(tr('Текст собеседника'), prefs.otherTextColor,
+              (c) => prefs.otherTextColor = c),
           const SizedBox(height: 20),
           Text(tr('Тень'), style: theme.textTheme.titleMedium),
           SwitchListTile(
@@ -146,15 +161,20 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
               for (final e in ChatPreferences.chatWallpapers.entries)
                 _wallpaperTile(
                   e.key,
-                  e.value.$1,
+                  tr(e.value.$1),
                   BoxDecoration(
-                    gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: e.value.$2),
+                    gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: e.value.$2),
                   ),
                 ),
               _wallpaperTile(
                 prefs.wallpaper.startsWith('#') ? prefs.wallpaper : '#custom',
                 tr('Свой цвет'),
-                prefs.wallpaper.startsWith('#') ? prefs.wallpaperDecoration : null,
+                prefs.wallpaper.startsWith('#')
+                    ? prefs.wallpaperDecoration
+                    : null,
               ),
             ],
           ),
@@ -179,17 +199,27 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color.lerp(base, Colors.white, 0.08)!, Color.lerp(base, Colors.black, 0.10)!],
+              colors: [
+                Color.lerp(base, Colors.white, 0.08)!,
+                Color.lerp(base, Colors.black, 0.10)!
+              ],
             ),
             boxShadow: prefs.shadowEnabled
-                ? [BoxShadow(color: Colors.black.withValues(alpha: prefs.shadowIntensity), blurRadius: 10, offset: const Offset(0, 4))]
+                ? [
+                    BoxShadow(
+                        color: Colors.black
+                            .withValues(alpha: prefs.shadowIntensity),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4))
+                  ]
                 : null,
           ),
           child: Text(
             text,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: mine ? prefs.mineTextColor : prefs.otherTextColor,
-              fontSize: (theme.textTheme.bodyMedium?.fontSize ?? 14) * prefs.fontScale,
+              fontSize: (theme.textTheme.bodyMedium?.fontSize ?? 14) *
+                  prefs.fontScale,
             ),
           ),
         ),
@@ -201,7 +231,9 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: prefs.wallpaperDecoration ??
-            BoxDecoration(color: theme.colorScheme.surfaceContainerLow, border: Border.all(color: theme.dividerColor)),
+            BoxDecoration(
+                color: theme.colorScheme.surfaceContainerLow,
+                border: Border.all(color: theme.dividerColor)),
         child: Column(
           children: [
             bubble(tr('Как прошла тренировка?'), false),
@@ -234,17 +266,24 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
           Container(
             width: 64,
             height: 64,
-            decoration: (decoration ?? BoxDecoration(color: theme.colorScheme.surface)).copyWith(
+            decoration:
+                (decoration ?? BoxDecoration(color: theme.colorScheme.surface))
+                    .copyWith(
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: selected ? theme.colorScheme.primary : theme.dividerColor,
+                color:
+                    selected ? theme.colorScheme.primary : theme.dividerColor,
                 width: selected ? 3 : 1,
               ),
             ),
             child: id == '#custom' ? const Icon(Icons.colorize_outlined) : null,
           ),
           const SizedBox(height: 4),
-          SizedBox(width: 72, child: Text(label, textAlign: TextAlign.center, style: theme.textTheme.bodySmall)),
+          SizedBox(
+              width: 72,
+              child: Text(label,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall)),
         ],
       ),
     );
@@ -288,7 +327,11 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Row(
-              children: [_swatch(preset.mine), const SizedBox(width: 6), _swatch(preset.other)],
+              children: [
+                _swatch(preset.mine),
+                const SizedBox(width: 6),
+                _swatch(preset.other)
+              ],
             ),
             const SizedBox(height: 8),
             Text(tr(preset.label), style: theme.textTheme.bodyMedium),
@@ -304,7 +347,12 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
         decoration: BoxDecoration(
           color: color,
           shape: BoxShape.circle,
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 4, offset: const Offset(0, 2))],
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.25),
+                blurRadius: 4,
+                offset: const Offset(0, 2))
+          ],
         ),
       );
 }
@@ -322,7 +370,8 @@ class _ColorPickerDialog extends StatefulWidget {
   State<_ColorPickerDialog> createState() => _ColorPickerDialogState();
 }
 
-class _ColorPickerDialogState extends State<_ColorPickerDialog> with SingleTickerProviderStateMixin {
+class _ColorPickerDialogState extends State<_ColorPickerDialog>
+    with SingleTickerProviderStateMixin {
   late TabController _tab;
   late TextEditingController _hexController;
   late Color _color;
@@ -332,7 +381,8 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> with SingleTicke
     super.initState();
     _tab = TabController(length: 2, vsync: this);
     _color = widget.initial;
-    _hexController = TextEditingController(text: TargetColorScheme.colorToHex(_color, withAlpha: false));
+    _hexController = TextEditingController(
+        text: TargetColorScheme.colorToHex(_color, withAlpha: false));
   }
 
   @override
@@ -358,14 +408,23 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> with SingleTicke
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TabBar(controller: _tab, tabs: [Tab(text: tr('Палитра')), const Tab(text: 'HEX')]),
-            SizedBox(height: 220, child: TabBarView(controller: _tab, children: [_paletteTab(), _hexTab()])),
+            TabBar(
+                controller: _tab,
+                tabs: [Tab(text: tr('Палитра')), const Tab(text: 'HEX')]),
+            SizedBox(
+                height: 220,
+                child: TabBarView(
+                    controller: _tab, children: [_paletteTab(), _hexTab()])),
           ],
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(tr('Отмена'))),
-        FilledButton(onPressed: () => Navigator.of(context).pop(_color), child: Text(tr('Применить'))),
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(tr('Отмена'))),
+        FilledButton(
+            onPressed: () => Navigator.of(context).pop(_color),
+            child: Text(tr('Применить'))),
       ],
     );
   }
@@ -385,7 +444,11 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> with SingleTicke
                 onTap: () => _apply(c),
                 child: Container(
                   margin: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(color: c, border: c == _color ? Border.all(color: Colors.white, width: 3) : null),
+                  decoration: BoxDecoration(
+                      color: c,
+                      border: c == _color
+                          ? Border.all(color: Colors.white, width: 3)
+                          : null),
                 ),
               );
             }),
@@ -394,7 +457,10 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> with SingleTicke
         Row(
           children: [
             Text(tr('Яркость')),
-            Expanded(child: Slider(value: hsv.value, onChanged: (v) => _apply(hsv.withValue(v).toColor()))),
+            Expanded(
+                child: Slider(
+                    value: hsv.value,
+                    onChanged: (v) => _apply(hsv.withValue(v).toColor()))),
           ],
         ),
       ],
@@ -409,11 +475,14 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> with SingleTicke
           controller: _hexController,
           decoration: const InputDecoration(labelText: 'HEX (#RRGGBB)'),
           onChanged: (value) {
-            if (TargetColorScheme.isValidHex(value)) setState(() => _color = TargetColorScheme.hexToColor(value));
+            if (TargetColorScheme.isValidHex(value))
+              setState(() => _color = TargetColorScheme.hexToColor(value));
           },
         ),
         const SizedBox(height: 16),
-        ClipRRect(borderRadius: BorderRadius.circular(8), child: Container(height: 48, color: _color)),
+        ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Container(height: 48, color: _color)),
       ],
     );
   }
@@ -451,16 +520,22 @@ class _AiThemeAssistantSheetState extends State<_AiThemeAssistantSheet> {
       final ai = AiService(AiSettings(widget.db));
       final prefs = widget.prefs;
       final current = jsonEncode({
-        'mine_bubble': TargetColorScheme.colorToHex(prefs.mineBubbleColor, withAlpha: false),
-        'other_bubble': TargetColorScheme.colorToHex(prefs.otherBubbleColor, withAlpha: false),
-        'mine_text': TargetColorScheme.colorToHex(prefs.mineTextColor, withAlpha: false),
-        'other_text': TargetColorScheme.colorToHex(prefs.otherTextColor, withAlpha: false),
+        'mine_bubble': TargetColorScheme.colorToHex(prefs.mineBubbleColor,
+            withAlpha: false),
+        'other_bubble': TargetColorScheme.colorToHex(prefs.otherBubbleColor,
+            withAlpha: false),
+        'mine_text':
+            TargetColorScheme.colorToHex(prefs.mineTextColor, withAlpha: false),
+        'other_text': TargetColorScheme.colorToHex(prefs.otherTextColor,
+            withAlpha: false),
         'shadow_enabled': prefs.shadowEnabled,
         'shadow_intensity': prefs.shadowIntensity,
       });
       final reply = await ai.ask(
-        task: 'chat_colors', accept: (t) => t.contains('```chat_theme'),
-        systemPrompt: 'Ты помогаешь настроить ВНЕШНИЙ ВИД чата в приложении для стрелкового спорта: '
+        task: 'chat_colors',
+        accept: (t) => t.contains('```chat_theme'),
+        systemPrompt:
+            'Ты помогаешь настроить ВНЕШНИЙ ВИД чата в приложении для стрелкового спорта: '
             'только цвет "своих" и "чужих" пузырей сообщений, цвет текста в них, и тень под ними '
             '(включена ли и насколько сильная, от 0 до 1). У тебя НЕТ доступа ни к чему другому — '
             'ни к самим сообщениям, ни к контактам, ни к их удалению, поэтому никогда не предлагай '
@@ -512,7 +587,8 @@ class _AiThemeAssistantSheetState extends State<_AiThemeAssistantSheet> {
       final shadowEnabled = decoded['shadow_enabled'];
       if (shadowEnabled is bool) prefs.shadowEnabled = shadowEnabled;
       final shadowIntensity = decoded['shadow_intensity'];
-      if (shadowIntensity is num) prefs.shadowIntensity = shadowIntensity.toDouble();
+      if (shadowIntensity is num)
+        prefs.shadowIntensity = shadowIntensity.toDouble();
     } catch (_) {
       // Модель ответила не тем форматом — просто ничего не применяем,
       // текстовый ответ пользователь всё равно увидит.
@@ -532,7 +608,8 @@ class _AiThemeAssistantSheetState extends State<_AiThemeAssistantSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(tr('Настроить с ИИ'), style: Theme.of(context).textTheme.titleMedium),
+          Text(tr('Настроить с ИИ'),
+              style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 4),
           Text(
             tr('Например: "сделай мои сообщения зелёными" или "убери тень".'),
@@ -552,7 +629,10 @@ class _AiThemeAssistantSheetState extends State<_AiThemeAssistantSheet> {
             child: FilledButton(
               onPressed: _busy ? null : _ask,
               child: _busy
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2))
                   : Text(tr('Отправить')),
             ),
           ),
@@ -562,7 +642,8 @@ class _AiThemeAssistantSheetState extends State<_AiThemeAssistantSheet> {
           ],
           if (_error != null) ...[
             const SizedBox(height: 12),
-            Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            Text(_error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error)),
           ],
         ],
       ),

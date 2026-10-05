@@ -653,7 +653,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                   Expanded(
                     child: Text(
                       _books!.entries
-                          .map((e) => '${e.key}: ${e.value}')
+                          .map((e) => '${tr(e.key)}: ${e.value}')
                           .join(' · '),
                       style: theme.textTheme.bodySmall,
                     ),

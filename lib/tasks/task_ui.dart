@@ -35,13 +35,13 @@ String repeatLabel(String? rule) {
   if (rule == null || rule.isEmpty) return '';
   if (rule == 'daily') return tr('каждый день');
   const names = {
-    'mon': 'пн',
-    'tue': 'вт',
-    'wed': 'ср',
-    'thu': 'чт',
-    'fri': 'пт',
-    'sat': 'сб',
-    'sun': 'вс'
+    'mon': /*tr*/ 'пн',
+    'tue': /*tr*/ 'вт',
+    'wed': /*tr*/ 'ср',
+    'thu': /*tr*/ 'чт',
+    'fri': /*tr*/ 'пт',
+    'sat': /*tr*/ 'сб',
+    'sun': /*tr*/ 'вс'
   };
   return rule.split(',').map((d) => tr(names[d.trim()] ?? d)).join(', ');
 }
