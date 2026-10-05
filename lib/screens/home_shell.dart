@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/home_tab_specs.dart';
 import '../models/training_session.dart';
 import '../services/custom_services_repository.dart';
+import '../services/coach_access_service.dart';
 import '../state/app_data_store.dart';
 import '../state/home_tabs_view_model.dart';
 import '../state/personalization_view_model.dart';
@@ -38,7 +39,7 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
-  String _athleteTab = 'target';
+  String _athleteTab = 'exercises';
   String _coachTab = 'diary';
 
   /// Вкладка, открытая до мессенджера, — туда его «сворачивает» кнопка
@@ -109,6 +110,11 @@ class _HomeShellState extends State<HomeShell> {
     final store = context.watch<AppDataStore>();
     final isCoach = store.workMode == WorkMode.coach;
     final tabs = isCoach ? _coachTabs : _athleteTabs;
+    // Тренер без подключённых спортсменов: статистика и задания пусты и
+    // бессмысленны — прячем до появления первого спортсмена.
+    _coachTabs.suppressed = CoachAccessService(store.db).listAthletes().isEmpty
+        ? const {'statistics_coach', 'tasks'}
+        : <String>{};
 
     // Рубильник "Режим тренера" переключают со страницы настроек —
     // после смены роли логичнее увидеть домашнюю вкладку нового режима
@@ -118,7 +124,7 @@ class _HomeShellState extends State<HomeShell> {
       if (isCoach) {
         _coachTab = 'diary';
       } else {
-        _athleteTab = 'target';
+        _athleteTab = 'exercises';
       }
     }
     _lastMode = store.workMode;
@@ -170,7 +176,7 @@ class _HomeShellState extends State<HomeShell> {
         // оставшуюся видимую, а не оставляем экран без вкладки вовсе.
         final current =
             tabs.visible.contains(selected) ? selected : tabs.visible.first;
-        final homeTabId = isCoach ? 'diary' : 'target';
+        final homeTabId = isCoach ? 'diary' : 'exercises';
 
         // Вкладки в "страничном" режиме — не отдельные маршруты
         // Navigator (только один Scaffold на весь HomeShell, тело
@@ -234,8 +240,10 @@ class _HomeShellState extends State<HomeShell> {
       };
     }
     return switch (id) {
-      'exercises' => const ExercisesScreen(),
-      'target' => _ActiveTargetTab(key: ValueKey(_activeSessionKey(store))),
+      // Запущена тренировка — плитка открывает её (мишень), иначе список
+      // упражнений (решение пользователя: отдельная «Мишень» без
+      // тренировки бесполезна).
+      'exercises' => _ActiveTargetTab(key: ValueKey(_activeSessionKey(store))),
       'statistics' => const StatisticsScreen(),
       // Чат с ассистентом без привязки к тренировке (решение
       // пользователя: «чат с ИИ без выбора тренировок, на главный
@@ -252,9 +260,9 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   void _leaveMessenger(AppDataStore store, bool isCoach) {
-    final back = _beforeMessenger ?? (isCoach ? 'diary' : 'target');
+    final back = _beforeMessenger ?? (isCoach ? 'diary' : 'exercises');
     _onDestinationSelected(context, store, isCoach,
-        back == 'messenger' ? (isCoach ? 'diary' : 'target') : back);
+        back == 'messenger' ? (isCoach ? 'diary' : 'exercises') : back);
   }
 
   /// Переключение нижней вкладки — не Navigator.pop, поэтому PopScope
@@ -304,27 +312,7 @@ class _ActiveTargetTab extends StatelessWidget {
       (s) =>
           s.status == SessionStatus.running || s.status == SessionStatus.paused,
     );
-    if (active.isEmpty) {
-      return Scaffold(
-        extendBodyBehindAppBar: true,
-        appBar: GlassHeader(
-          title: Text(tr('Мишень'),
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w600)),
-        ),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text(
-              tr('Нет активной тренировки. Выберите упражнение на вкладке "Тренировка", чтобы начать.'),
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ),
-      );
-    }
+    if (active.isEmpty) return const ExercisesScreen();
     final session = active.first;
     final exercise = store.exerciseFor(session);
     if (exercise == null) {

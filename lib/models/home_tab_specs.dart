@@ -6,17 +6,33 @@ import '../widgets/home_tabs_bar.dart';
 /// id хранится в настройках (`HomeTabsViewModel`), порядок здесь — это
 /// порядок ПО УМОЛЧАНИЮ, до первой правки пользователем.
 ///
-/// "Мишень" и "Настройки" нельзя скрыть: без "Мишени" негде записывать
-/// выстрелы идущей тренировки, а без "Настроек" скрытые вкладки стало бы
+/// "Тренировка" и "Настройки" нельзя скрыть: без "Тренировки" негде записывать
+/// выстрелы идущей тренировки (плитка открывает запущенную, а без запущенной
+/// — список упражнений), а без "Настроек" скрытые вкладки стало бы
 /// неоткуда вернуть (см. `SettingsHomeTabsScreen`).
 // 'trainings' больше не отдельная вкладка — по решению пользователя
 // "Упражнения" и "Тренировки" объединены визуально в одну плитку: тап
 // по упражнению в `ExercisesScreen` открывает список ЕГО тренировок
 // (`TrainingsHistoryScreen(exercise: ...)`).
-const athleteTabIds = ['exercises', 'target', 'statistics', 'assistant', 'tasks', 'messenger', 'settings'];
-const athleteUnhidable = {'target', 'settings'};
+const athleteTabIds = [
+  'exercises',
+  'statistics',
+  'assistant',
+  'tasks',
+  'messenger',
+  'settings'
+];
+const athleteUnhidable = {'exercises', 'settings'};
 
-const coachTabIds = ['diary', 'athletes', 'statistics_coach', 'assistant_coach', 'tasks', 'messenger', 'settings'];
+const coachTabIds = [
+  'diary',
+  'athletes',
+  'statistics_coach',
+  'assistant_coach',
+  'tasks',
+  'messenger',
+  'settings'
+];
 const coachUnhidable = {'settings'};
 
 /// Префикс id вкладки сервиса в `HomeTabsViewModel.allIds` — плитки
@@ -26,15 +42,22 @@ const coachUnhidable = {'settings'};
 const serviceTabPrefix = 'service_';
 
 const Map<String, HomeTabSpec> homeTabSpecs = {
-  'exercises': HomeTabSpec(icon: Icons.fitness_center, label: /*tr*/ 'Упражнения'),
-  'target': HomeTabSpec(icon: Icons.gps_fixed, label: /*tr*/ 'Мишень'),
+  'exercises':
+      HomeTabSpec(icon: Icons.fitness_center, label: /*tr*/ 'Тренировка'),
   'statistics': HomeTabSpec(icon: Icons.bar_chart, label: /*tr*/ 'Статистика'),
-  'assistant': HomeTabSpec(icon: Icons.auto_awesome_outlined, label: /*tr*/ 'Ассистент'),
-  'messenger': HomeTabSpec(icon: Icons.forum_outlined, label: /*tr*/ 'Мессенджер'),
-  'settings': HomeTabSpec(icon: Icons.settings_outlined, label: /*tr*/ 'Настройки'),
+  'assistant':
+      HomeTabSpec(icon: Icons.auto_awesome_outlined, label: /*tr*/ 'Ассистент'),
+  'messenger':
+      HomeTabSpec(icon: Icons.forum_outlined, label: /*tr*/ 'Мессенджер'),
+  'settings':
+      HomeTabSpec(icon: Icons.settings_outlined, label: /*tr*/ 'Настройки'),
   'diary': HomeTabSpec(icon: Icons.menu_book_outlined, label: /*tr*/ 'Дневник'),
-  'athletes': HomeTabSpec(icon: Icons.groups_outlined, label: /*tr*/ 'Спортсмены'),
-  'statistics_coach': HomeTabSpec(icon: Icons.bar_chart, label: /*tr*/ 'Статистика'),
-  'assistant_coach': HomeTabSpec(icon: Icons.auto_awesome_outlined, label: /*tr*/ 'Ассистент'),
-  'tasks': HomeTabSpec(icon: Icons.assignment_outlined, label: /*tr*/ 'Задания'),
+  'athletes':
+      HomeTabSpec(icon: Icons.groups_outlined, label: /*tr*/ 'Спортсмены'),
+  'statistics_coach':
+      HomeTabSpec(icon: Icons.bar_chart, label: /*tr*/ 'Статистика'),
+  'assistant_coach':
+      HomeTabSpec(icon: Icons.auto_awesome_outlined, label: /*tr*/ 'Ассистент'),
+  'tasks':
+      HomeTabSpec(icon: Icons.assignment_outlined, label: /*tr*/ 'Задания'),
 };

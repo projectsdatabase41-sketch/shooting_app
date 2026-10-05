@@ -15,6 +15,7 @@ import '../logic/notification_avatar.dart';
 import 'chat_settings.dart';
 import 'db_opener.dart';
 import 'firebase_settings.dart';
+import 'web_push_token.dart';
 import '../i18n/i18n.dart';
 
 /// Куда открыть чат по тапу на уведомление — общий чат или переписка с
@@ -110,6 +111,15 @@ class PushService {
       defaultTargetPlatform == TargetPlatform.android ||
       defaultTargetPlatform == TargetPlatform.iOS;
 
+  /// Токен на вебе — через собственный мост (web/push-bridge.js), см. там причину.
+  static Future<String?> _webToken() => webPushToken({
+        'apiKey': FirebaseSettings.webApiKey,
+        'appId': FirebaseSettings.webAppId,
+        'messagingSenderId': FirebaseSettings.messagingSenderId,
+        'projectId': FirebaseSettings.projectId,
+        'authDomain': FirebaseSettings.webAuthDomain,
+      }, FirebaseSettings.webVapidKey);
+
   static bool get _isAndroid =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
@@ -127,9 +137,7 @@ class PushService {
       if (_isAndroid) await _initLocalNotifications();
       final messaging = FirebaseMessaging.instance;
       await messaging.requestPermission();
-      final token = kIsWeb
-          ? await messaging.getToken(vapidKey: FirebaseSettings.webVapidKey)
-          : await messaging.getToken();
+      final token = kIsWeb ? await _webToken() : await messaging.getToken();
       if (token != null) await _saveToken(token);
       messaging.onTokenRefresh.listen(_saveToken);
       await _registerListeners(messaging);
@@ -158,9 +166,7 @@ class PushService {
         return tr(
             'Разрешение на уведомления не выдано — включите его в настройках браузера или телефона');
       }
-      final token = kIsWeb
-          ? await messaging.getToken(vapidKey: FirebaseSettings.webVapidKey)
-          : await messaging.getToken();
+      final token = kIsWeb ? await _webToken() : await messaging.getToken();
       if (token == null)
         return tr('Не удалось получить адрес устройства для push');
       await _saveToken(token);
@@ -186,9 +192,7 @@ class PushService {
       final messaging = FirebaseMessaging.instance;
       await messaging.requestPermission();
       await _registerListeners(messaging);
-      return kIsWeb
-          ? await messaging.getToken(vapidKey: FirebaseSettings.webVapidKey)
-          : await messaging.getToken();
+      return kIsWeb ? await _webToken() : await messaging.getToken();
     } catch (_) {
       return null;
     }

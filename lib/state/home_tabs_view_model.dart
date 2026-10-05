@@ -30,7 +30,8 @@ class HomeTabsViewModel extends ChangeNotifier {
   /// стало бы неоткуда вернуть).
   final Set<String> unhidable;
 
-  HomeTabsViewModel(this.db, {required this.mode, required this.allIds, required this.unhidable}) {
+  HomeTabsViewModel(this.db,
+      {required this.mode, required this.allIds, required this.unhidable}) {
     _load();
   }
 
@@ -77,10 +78,20 @@ class HomeTabsViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  List<String> get visible => List.unmodifiable(_visible);
+  /// Вкладки, временно убранные из показа по состоянию данных (у тренера
+  /// без спортсменов нечего показывать в «Статистике» и «Заданиях»), —
+  /// без изменения сохранённых настроек: появились спортсмены — вкладки
+  /// сами возвращаются на прежние места.
+  Set<String> suppressed = {};
+
+  List<String> get visible =>
+      List.unmodifiable(_visible.where((id) => !suppressed.contains(id)));
 
   /// В каноническом порядке `allIds` — просто список, ничего не листают.
-  List<String> get hidden => [for (final id in allIds) if (_hidden.contains(id)) id];
+  List<String> get hidden => [
+        for (final id in allIds)
+          if (_hidden.contains(id)) id
+      ];
 
   bool isHidden(String id) => _hidden.contains(id);
   bool canHide(String id) => !unhidable.contains(id);
@@ -146,7 +157,8 @@ class HomeTabsViewModel extends ChangeNotifier {
 
     final savedVisible = _readRaw(_keyVisible);
     final savedHidden = _readRaw(_keyHidden);
-    if (savedVisible.isEmpty && savedHidden.isEmpty) return; // ничего не сохранено — умолчание уже стоит
+    if (savedVisible.isEmpty && savedHidden.isEmpty)
+      return; // ничего не сохранено — умолчание уже стоит
 
     final knownIds = allIds.toSet();
     // Только известные id — вкладка, убранная в более новой версии
@@ -155,7 +167,9 @@ class HomeTabsViewModel extends ChangeNotifier {
     final hiddenSet = (savedHidden.isEmpty || savedHidden == '-')
         ? <String>{}
         : savedHidden.split(',').where(knownIds.contains).toSet();
-    final visList = savedVisible.isEmpty ? <String>[] : savedVisible.split(',').where(knownIds.contains).toList();
+    final visList = savedVisible.isEmpty
+        ? <String>[]
+        : savedVisible.split(',').where(knownIds.contains).toList();
 
     // id, добавленный в более новой версии приложения — не встречается
     // ни там, ни там: по умолчанию видим, дописывается в конец.
@@ -174,7 +188,8 @@ class HomeTabsViewModel extends ChangeNotifier {
   }
 
   String _readRaw(String key) {
-    final rows = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [key]);
+    final rows =
+        db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [key]);
     if (rows.isEmpty) return '';
     return (rows.first['hex'] as String?) ?? '';
   }
