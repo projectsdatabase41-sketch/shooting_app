@@ -40,7 +40,11 @@ class KnowledgeChunk {
 /// искать — общая база разработчика (книги/правила) и личная база
 /// пользователя (его собственные таблицы) физически разные проекты
 /// Supabase, поэтому у каждой таблицы свой адрес.
-typedef _SourceTable = (KnowledgeTableConfig table, String baseUrl, String token);
+typedef _SourceTable = (
+  KnowledgeTableConfig table,
+  String baseUrl,
+  String token
+);
 
 /// Поиск по справочным таблицам (Supabase REST / PostgREST).
 ///
@@ -83,7 +87,7 @@ class KnowledgeService {
   static const Duration _timeout = Duration(seconds: 20);
 
   /// Сколько кусков берём из каждой таблицы.
-  static const int perTableLimit = 6;
+  static const int perTableLimit = 8;
 
   /// Предел на один кусок и на всю выдачу, символов.
   ///
@@ -94,12 +98,13 @@ class KnowledgeService {
   /// информации получает") — даже у самых скромных бесплатных моделей в
   /// цепочке контекст на порядки больше 14000 символов (~3500 токенов).
   static const int chunkCharLimit = 2000;
-  static const int totalCharLimit = 14000;
+  static const int totalCharLimit = 20000;
 
   /// Ключевые слова и «это болтовня, не вопрос» — общая логика,
   /// см. `TextSearch` (вынесена оттуда же, где раньше жила здесь одна,
   /// чтобы `AiMemoryService` не заводил тот же стоп-лист заново).
-  static List<String> keywords(String question) => TextSearch.keywords(question);
+  static List<String> keywords(String question) =>
+      TextSearch.keywords(question);
   static bool isSmallTalk(String question) => TextSearch.isSmallTalk(question);
 
   /// Короче этого вопрос считаем репликой, а не запросом к справочнику.
@@ -108,7 +113,54 @@ class KnowledgeService {
   /// Сколько строк тянем на КАЖДОЕ ключевое слово, прежде чем отбирать
   /// лучшие. Берём с запасом: выбрать два подходящих из десяти лучше,
   /// чем взять первые два, какие отдал сервер.
-  static const int perWordFetch = 4;
+  static const int perWordFetch = 15;
+
+  /// Названия файлов (книг/методичек) общей базы — кеш на сессию. В базе
+  /// около тысячи шестисот кусков, перечень уникальных названий дёшев, а
+  /// он нужен дважды: ИИ должен знать, какие материалы вообще есть, и
+  /// вопрос, где названа книга («методичка по изготовкам»), надо вести
+  /// прямо в эту книгу, а не искать слово по всей базе наугад.
+  static Map<String, List<String>>? _catalog;
+
+  Future<Map<String, List<String>>> _loadCatalog() async {
+    final cached = _catalog;
+    if (cached != null) return cached;
+    final out = <String, List<String>>{};
+    for (final (table, baseUrl, token) in await _allTables()) {
+      if (personalNames.contains(table.name)) continue;
+      try {
+        final res = await _client.get(
+          Uri.parse('$baseUrl/${table.name}').replace(
+              queryParameters: {'select': 'file_name', 'limit': '5000'}),
+          headers: {
+            'Accept': 'application/json',
+            if (token.isNotEmpty) 'apikey': token,
+            if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+          },
+        ).timeout(_timeout);
+        if (res.statusCode != 200) continue;
+        final data = jsonDecode(utf8.decode(res.bodyBytes));
+        if (data is! List) continue;
+        final names = <String>{
+          for (final r in data)
+            if (r is Map && '${r['file_name'] ?? ''}'.trim().isNotEmpty)
+              '${r['file_name']}'.trim(),
+        }.toList()
+          ..sort();
+        if (names.isNotEmpty) out[table.name] = names;
+      } catch (_) {
+        // каталог — необязательное усиление, поиск работает и без него
+      }
+    }
+    if (out.isNotEmpty) _catalog = out;
+    return out;
+  }
+
+  Set<String> get personalNames => {for (final t in settings.tables) t.name};
+
+  /// Все названия материалов общей базы одним списком — для подсказки модели.
+  Future<List<String>> catalogTitles() async =>
+      [for (final l in (await _loadCatalog()).values) ...l];
 
   /// Все подключённые таблицы вместе с адресом/ключом для запроса —
   /// вшитые (общая база) + личные пользователя, если она подключена.
@@ -120,21 +172,29 @@ class KnowledgeService {
   Future<List<_SourceTable>> _allTables() async {
     final out = <_SourceTable>[];
     for (final t in AiSettings.builtInTables) {
-      out.add((await _withDiscoveredColumn(t, AiSettings.booksUrl, AiSettings.booksToken), AiSettings.booksUrl, AiSettings.booksToken));
+      out.add((
+        await _withDiscoveredColumn(
+            t, AiSettings.booksUrl, AiSettings.booksToken),
+        AiSettings.booksUrl,
+        AiSettings.booksToken
+      ));
     }
     final auth = personalAuth;
     if (auth != null && auth.hasBase && settings.tables.isNotEmpty) {
       final token = await auth.ensureFreshToken() ?? auth.anonKey;
       final baseUrl = '${auth.url}/rest/v1';
       // Таблицы самого приложения ИИ не читает, даже если попали в список раньше.
-      for (final t in settings.tables.where((t) => !AiSettings.appOwnTables.contains(t.name))) {
-        out.add((await _withDiscoveredColumn(t, baseUrl, token), baseUrl, token));
+      for (final t in settings.tables
+          .where((t) => !AiSettings.appOwnTables.contains(t.name))) {
+        out.add(
+            (await _withDiscoveredColumn(t, baseUrl, token), baseUrl, token));
       }
     }
     return out;
   }
 
-  Future<KnowledgeTableConfig> _withDiscoveredColumn(KnowledgeTableConfig t, String baseUrl, String token) async {
+  Future<KnowledgeTableConfig> _withDiscoveredColumn(
+      KnowledgeTableConfig t, String baseUrl, String token) async {
     final column = await _discovery.discover(
       tableName: t.name,
       baseUrl: baseUrl,
@@ -142,7 +202,11 @@ class KnowledgeService {
       aiService: aiService,
     );
     if (column == null || column == t.contentColumn) return t;
-    return KnowledgeTableConfig(name: t.name, label: t.label, description: t.description, contentColumn: column);
+    return KnowledgeTableConfig(
+        name: t.name,
+        label: t.label,
+        description: t.description,
+        contentColumn: column);
   }
 
   /// Сколько записей в каждой подключённой таблице.
@@ -169,13 +233,15 @@ class KnowledgeService {
         }).timeout(_timeout);
 
         if (res.statusCode >= 400) {
-          out[table.label] = tr('ошибка {statusCode}', {'statusCode': res.statusCode});
+          out[table.label] =
+              tr('ошибка {statusCode}', {'statusCode': res.statusCode});
           continue;
         }
         // content-range приходит в виде «0-0/128» или «*/0».
         final range = res.headers['content-range'] ?? '';
         final total = range.contains('/') ? range.split('/').last : '?';
-        out[table.label] = total == '0' ? tr('пусто') : tr('{total} строк', {'total': total});
+        out[table.label] =
+            total == '0' ? tr('пусто') : tr('{total} строк', {'total': total});
       } catch (e) {
         out[table.label] = tr('недоступна');
       }
@@ -204,13 +270,26 @@ class KnowledgeService {
       // заметок не встречается): отдаём её последние записи, иначе ИИ
       // вообще не видит, что там лежит.
       if (words.isEmpty) {
-        if (personal.contains(table.name)) results.addAll(await _latest(table, baseUrl, token));
+        if (personal.contains(table.name))
+          results.addAll(await _latest(table, baseUrl, token));
         continue;
       }
       // Запросы по словам — параллельно: это одна и та же база, и
       // ждать их по очереди значит втрое затянуть ответ в чате.
+      final catalog = (await _loadCatalog())[table.name] ?? const <String>[];
+      // Книга названа в вопросе — берём куски прямо из неё.
+      final titled = [
+        for (final n in catalog)
+          if (words.any((w) => n.toLowerCase().contains(w))) n,
+      ].take(3).toList();
       final batches = await Future.wait([
         for (final w in words) _searchTable(table, w, baseUrl, token),
+        if (words.length >= 2)
+          _searchTable(table, null, baseUrl, token,
+              andWords: words.take(2).toList(), limit: perWordFetch),
+        for (final n in titled)
+          _searchTable(table, null, baseUrl, token,
+              fileName: n, anyWords: words, limit: 6),
       ]);
 
       // Дедупликация по тексту: одно и то же слово в разных запросах
@@ -237,7 +316,8 @@ class KnowledgeService {
   /// ничего не дал.
   static const int latestLimit = 5;
 
-  Future<List<KnowledgeChunk>> _latest(KnowledgeTableConfig table, String baseUrl, String token) =>
+  Future<List<KnowledgeChunk>> _latest(
+          KnowledgeTableConfig table, String baseUrl, String token) =>
       _searchTable(table, null, baseUrl, token, limit: latestLimit);
 
   /// Сколько разных ключевых слов встретилось в куске. Заголовок весит
@@ -254,6 +334,9 @@ class KnowledgeService {
     String baseUrl,
     String token, {
     int limit = perWordFetch,
+    List<String>? andWords,
+    String? fileName,
+    List<String>? anyWords,
   }) async {
     try {
       // select=* вместо конкретных имён — file_name/heading_path не
@@ -276,12 +359,34 @@ class KnowledgeService {
           ? const <String, String>{}
           : searchCols.length == 1
               ? {table.contentColumn: 'ilike.*$safeWord*'}
-              : {'or': '(${searchCols.map((c) => '$c.ilike.*$safeWord*').join(',')})'};
-      final dateCol = all == null ? null : _dateColumnNames.where(all.contains).firstOrNull;
+              : {
+                  'or':
+                      '(${searchCols.map((c) => '$c.ilike.*$safeWord*').join(',')})'
+                };
+      final dateCol =
+          all == null ? null : _dateColumnNames.where(all.contains).firstOrNull;
+      String orOf(String w) {
+        final sw = w.replaceAll(RegExp(r'[,()*]'), '');
+        return searchCols.length == 1
+            ? '${table.contentColumn}.ilike.*$sw*'
+            : 'or(${searchCols.map((c) => '$c.ilike.*$sw*').join(',')})';
+      }
+
+      final extra = <String, String>{
+        if (andWords != null && andWords.isNotEmpty)
+          'and': '(${andWords.map(orOf).join(',')})',
+        if (fileName != null) 'file_name': 'eq.$fileName',
+        if (anyWords != null && anyWords.isNotEmpty)
+          'or':
+              '(${anyWords.map((w) => searchCols.map((c) => '$c.ilike.*${w.replaceAll(RegExp(r'[,()*]'), '')}*').join(',')).join(',')})',
+      };
       final uri = Uri.parse('$baseUrl/${table.name}').replace(
         queryParameters: {
-          'select': all == null ? '*' : all.where((c) => !_heavyColumn.hasMatch(c)).join(','),
+          'select': all == null
+              ? '*'
+              : all.where((c) => !_heavyColumn.hasMatch(c)).join(','),
           ...filter,
+          ...extra,
           if (word == null && dateCol != null) 'order': '$dateCol.desc',
           'limit': '$limit',
         },
@@ -303,11 +408,14 @@ class KnowledgeService {
       final chunks = <KnowledgeChunk>[];
       for (final row in data) {
         if (row is! Map) continue;
-        final heading = '${row['heading_path'] ?? row['topic'] ?? row['title'] ?? ''}';
+        final heading =
+            '${row['heading_path'] ?? row['topic'] ?? row['title'] ?? ''}';
         final parts = <String>[
           for (final c in {'summary', 'description', table.contentColumn})
-            if (row[c] is String && (row[c] as String).trim().isNotEmpty) row[c] as String,
-          if (row['tags'] is List && (row['tags'] as List).isNotEmpty) tr('теги: {p}', {'p': (row['tags'] as List).join(', ')}),
+            if (row[c] is String && (row[c] as String).trim().isNotEmpty)
+              row[c] as String,
+          if (row['tags'] is List && (row['tags'] as List).isNotEmpty)
+            tr('теги: {p}', {'p': (row['tags'] as List).join(', ')}),
         ];
         final text = parts.isEmpty ? heading : parts.join('\n');
         if (text.trim().isEmpty) continue;
@@ -327,13 +435,27 @@ class KnowledgeService {
     }
   }
 
-  static const List<String> _searchColumnNames = ['content', 'topic', 'title', 'summary', 'description'];
+  static const List<String> _searchColumnNames = [
+    'content',
+    'topic',
+    'title',
+    'summary',
+    'description',
+    'file_name',
+    'heading_path'
+  ];
   static final RegExp _heavyColumn = RegExp(r'embedding|tsv|vector');
 
   /// Ищет дату самой записи в строке — сначала по обычным именам
   /// колонок, потом (для чужих таблиц с другими названиями) по первому
   /// строковому значению, которое парсится как дата.
-  static const List<String> _dateColumnNames = ['created_at', 'date', 'created', 'updated_at', 'timestamp'];
+  static const List<String> _dateColumnNames = [
+    'created_at',
+    'date',
+    'created',
+    'updated_at',
+    'timestamp'
+  ];
 
   static String? _findRecordDate(Map row, String contentColumn) {
     for (final key in _dateColumnNames) {
@@ -352,36 +474,62 @@ class KnowledgeService {
   /// внутри слов — как его вытащили из PDF. В таком виде он и читается
   /// плохо, и токенов ест больше нужного.
   static String _clean(String raw) {
-    final text = raw.replaceAll(RegExp(r'[\t\r\n]+'), ' ').replaceAll(RegExp(r' {2,}'), ' ').trim();
-    return text.length <= chunkCharLimit ? text : '${text.substring(0, chunkCharLimit)}…';
+    final text = raw
+        .replaceAll(RegExp(r'[\t\r\n]+'), ' ')
+        .replaceAll(RegExp(r' {2,}'), ' ')
+        .trim();
+    return text.length <= chunkCharLimit
+        ? text
+        : '${text.substring(0, chunkCharLimit)}…';
   }
 
   /// Собирает найденное в блок для системного промпта, соблюдая общий
   /// лимит символов.
-  static String? asPromptBlock(List<KnowledgeChunk> chunks, {List<KnowledgeTableConfig> tables = const []}) {
-    if (chunks.isEmpty && tables.isEmpty) return null;
+  static String? asPromptBlock(List<KnowledgeChunk> chunks,
+      {List<KnowledgeTableConfig> tables = const [],
+      List<String> catalog = const []}) {
+    if (chunks.isEmpty && tables.isEmpty && catalog.isEmpty) return null;
     // Текущие дата и время — отдельной строкой один раз, а не в каждом
     // куске: модель должна знать "сейчас", чтобы отличать "давно" от
     // "недавно" у дат самих записей (пункт: "какое сейчас время и дату
     // записи, чтобы лучше понимать пользователя").
-    final buf = StringBuffer(tr('Текущие дата и время: {p}\n\n', {'p': DateTime.now().toIso8601String()}));
+    final buf = StringBuffer(tr('Текущие дата и время: {p}\n\n',
+        {'p': DateTime.now().toIso8601String()}));
     // Какие свои таблицы подключил пользователь — ИИ должен знать о них,
     // даже если в этот раз ничего из них не нашлось.
     if (tables.isNotEmpty) {
-      buf.writeln(tr('Подключённые таблицы пользователя (его личные данные, их можно и нужно использовать):'));
+      buf.writeln(tr(
+          'Подключённые таблицы пользователя (его личные данные, их можно и нужно использовать):'));
       for (final t in tables) {
-        buf.writeln('- ${t.label}${t.description.isEmpty ? '' : ': ${t.description}'}');
+        buf.writeln(
+            '- ${t.label}${t.description.isEmpty ? '' : ': ${t.description}'}');
       }
-      buf.writeln(chunks.isEmpty ? tr('(по этому вопросу записей из них не найдено)') : '');
+      buf.writeln(chunks.isEmpty
+          ? tr('(по этому вопросу записей из них не найдено)')
+          : '');
+    }
+    if (catalog.isNotEmpty) {
+      // Перечень материалов — модель должна знать, что в базе вообще есть,
+      // и не говорить «такой книги нет», когда она просто не попала в выдачу.
+      buf.writeln(tr('Материалы общей базы знаний (названия файлов): {p}',
+          {'p': catalog.take(80).join('; ')}));
+      buf.writeln(tr(
+          'Если пользователь называет книгу из этого списка — она в базе есть; отрывки по вопросу приведены ниже (если их нет — скажи, что именно по этому вопросу отрывок не нашёлся, а не что книги нет).'));
+      buf.writeln();
     }
     for (final c in chunks) {
       // Название/описание таблицы — чтобы модель понимала, ЧТО за
       // источник перед ней (личный дневник — не то же самое, что
       // официальные правила ISSF, даже если оба совпали по слову),
       // а не только откуда файл (пункт 12 списка правок).
-      final tableTag = c.tableDescription.isEmpty ? c.tableLabel : '${c.tableLabel}: ${c.tableDescription}';
-      final dateTag = c.recordDate == null ? '' : tr(', запись от {recordDate}', {'recordDate': c.recordDate});
-      final piece = '[$tableTag — ${c.source}${c.heading.isEmpty ? '' : ', ${c.heading}'}$dateTag]\n${c.text}\n\n';
+      final tableTag = c.tableDescription.isEmpty
+          ? c.tableLabel
+          : '${c.tableLabel}: ${c.tableDescription}';
+      final dateTag = c.recordDate == null
+          ? ''
+          : tr(', запись от {recordDate}', {'recordDate': c.recordDate});
+      final piece =
+          '[$tableTag — ${c.source}${c.heading.isEmpty ? '' : ', ${c.heading}'}$dateTag]\n${c.text}\n\n';
       if (buf.length + piece.length > totalCharLimit) break;
       buf.write(piece);
     }
