@@ -223,7 +223,7 @@ class SupabaseSyncService {
                 'distance_m': face.distanceM,
                 'default_caliber_mm': face.caliberMm,
                 'scoring_type': face.integerScoring ? 'integer' : 'decimal',
-                'max_score': face.integerScoring ? 10 : 10.9,
+                'max_score': face.maxScore,
                 'ring_config': face.toJson(),
                 'is_system': true,
                 'is_active': true,
@@ -380,7 +380,7 @@ class SupabaseSyncService {
         // источника — приложение сейчас не различает тап/фото/камеру на
         // уровне модели выстрела, это ближайшее по смыслу из списка.
         'coordinate_source': 'tap',
-        'computed_score': scoreForRadius(shot.radiusMm, face),
+        'computed_score': scoreFor(shot, face),
         'final_score': shot.score,
         'source': 'manual',
         'is_manually_corrected': shot.isManuallyEdited,

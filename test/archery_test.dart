@@ -94,6 +94,50 @@ void main() {
     expect(TargetFace.selectable().any((e) => e.hitMiss), isFalse);
   });
 
+  group('IPSC (Shotgun Rules 2024, Appendix B2–B4)', () {
+    // Точки в см от центра габарита, y вверх.
+    double sc(String code, double xCm, double yCm) =>
+        scoreForPoint(xCm * 10, yCm * 10, f(code));
+
+    test('габариты и контур', () {
+      for (final (code, w, h) in [('ipsc', 45, 57), ('ipsc_mini', 30, 37.5), ('ipsc_universal', 45, 75)]) {
+        final o = f(code).outline!.poly;
+        final xs = o.map((p) => p[0]), ys = o.map((p) => p[1]);
+        expect((xs.reduce((a, b) => a > b ? a : b) - xs.reduce((a, b) => a < b ? a : b)) / 10, closeTo(w, 1e-9));
+        expect((ys.reduce((a, b) => a > b ? a : b) - ys.reduce((a, b) => a < b ? a : b)) / 10, closeTo(h, 1e-9));
+      }
+    });
+
+    test('стандартная: A=5, C=4, D=2, мимо/кромка=0', () {
+      expect(sc('ipsc', 0, 0), 5);
+      expect(sc('ipsc', 0, 26), 5); // верх A: 2.5 см от верха → y=28.5-2.5
+      expect(sc('ipsc', 0, 27), 4); // выше A, ещё C
+      expect(sc('ipsc', 8, 0), 4); // правее A (x до 7.5), в C
+      expect(sc('ipsc', 9, 0), 4); // C до 15 см от центра (37.5−22.5)
+      expect(sc('ipsc', 16, 0), 2); // между C и краем: D
+      expect(sc('ipsc', 21.9, 0), 2); // D до 0.5 см от края
+      expect(sc('ipsc', 22.1, 0), 0); // несчитаемая кромка
+      expect(sc('ipsc', 0, -16), 4); // C снизу до 45 см от верха
+      expect(sc('ipsc', 0, -17), 2);
+      expect(sc('ipsc', 30, 0), 0);
+    });
+
+    test('мини и универсальная: центр A, край — мимо', () {
+      expect(sc('ipsc_mini', 0, 0), 5);
+      expect(sc('ipsc_mini', 14.9, 0), 0);
+      expect(sc('ipsc_universal', 0, 0), 5);
+      expect(sc('ipsc_universal', 0, -20), 4);
+      expect(sc('ipsc_universal', 0, -34), 2);
+      expect(sc('ipsc_universal', 0, -40), 0);
+    });
+
+    test('JSON туда-обратно', () {
+      final r = TargetFace.fromJson(f('ipsc').toJson());
+      expect(r.zones.length, 3);
+      expect(scoreForPoint(0, 0, r), 5);
+    });
+  });
+
   test('коды уникальны и все знает справочник', () {
     final codes = TargetFace.all.map((e) => e.code).toSet();
     expect(codes.length, TargetFace.all.length);

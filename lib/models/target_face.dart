@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import '../i18n/i18n.dart';
 import '../logic/friendly_error.dart';
 /// Справочник мишеней ISSF (раздел 3 tech-spec-v2.md).
@@ -60,6 +62,71 @@ enum GaugingMethod {
   /// ДАЛЬНЕМУ от центра — пробоина должна целиком помещаться в зону.
   /// `R_calc = R_center + радиус_пули`.
   outward,
+}
+
+/// Зона очков многоугольной мишени (IPSC): выпуклый контур в мм относительно
+/// центра габарита мишени, y вверх (как у выстрела), и очки за попадание.
+class ScoreZone {
+  final int points;
+  final List<List<double>> poly; // [[x, y], ...]
+  const ScoreZone(this.points, this.poly);
+
+  /// Из чертежа: точки в см от левого верхнего угла габарита [w]×[h] см.
+  factory ScoreZone.cm(int points, List<List<double>> pts, double w, double h) =>
+      ScoreZone(points, [
+        for (final p in pts) [(p[0] - w / 2) * 10, (h / 2 - p[1]) * 10]
+      ]);
+
+  /// Контур, сдвинутый внутрь на [dMm] (выпуклый многоугольник).
+  ScoreZone inset(double dMm) {
+    final n = poly.length;
+    var area = 0.0;
+    for (var i = 0; i < n; i++) {
+      final a = poly[i], b = poly[(i + 1) % n];
+      area += a[0] * b[1] - b[0] * a[1];
+    }
+    final s = area > 0 ? 1.0 : -1.0; // + против часовой
+    // Линии рёбер, сдвинутые внутрь: n·p = c.
+    final lines = <List<double>>[];
+    for (var i = 0; i < n; i++) {
+      final a = poly[i], b = poly[(i + 1) % n];
+      final dx = b[0] - a[0], dy = b[1] - a[1];
+      final len = math.sqrt(dx * dx + dy * dy);
+      final nx = -dy / len * s, ny = dx / len * s; // внутрь
+      lines.add([nx, ny, nx * a[0] + ny * a[1] + dMm]);
+    }
+    final out = <List<double>>[];
+    for (var i = 0; i < n; i++) {
+      final l1 = lines[(i + n - 1) % n], l2 = lines[i];
+      final det = l1[0] * l2[1] - l1[1] * l2[0];
+      out.add([
+        (l1[2] * l2[1] - l1[1] * l2[2]) / det,
+        (l1[0] * l2[2] - l1[2] * l2[0]) / det,
+      ]);
+    }
+    return ScoreZone(points, out);
+  }
+
+  /// Точка внутри или на границе выпуклого контура.
+  bool contains(double x, double y) {
+    var pos = false, neg = false;
+    for (var i = 0; i < poly.length; i++) {
+      final a = poly[i], b = poly[(i + 1) % poly.length];
+      final c = (b[0] - a[0]) * (y - a[1]) - (b[1] - a[1]) * (x - a[0]);
+      if (c > 1e-9) pos = true;
+      if (c < -1e-9) neg = true;
+    }
+    return !(pos && neg);
+  }
+
+  Map<String, dynamic> toJson() => {'points': points, 'poly': poly};
+  factory ScoreZone.fromJson(Map<String, dynamic> j) => ScoreZone(
+        j['points'] as int,
+        [
+          for (final p in j['poly'] as List)
+            [for (final v in p as List) (v as num).toDouble()]
+        ],
+      );
 }
 
 class TargetFace {
@@ -138,6 +205,12 @@ class TargetFace {
   /// `inward`, а «калибр» мишени — диаметр древка стрелы.
   final bool integerScoring;
 
+  /// Многоугольные зоны (IPSC), от лучшей к худшей. Пусто — кольцевая мишень.
+  final List<ScoreZone> zones;
+
+  /// Внешний контур многоугольной мишени (для отрисовки).
+  final ScoreZone? outline;
+
   const TargetFace({
     required this.code,
     required String name,
@@ -149,6 +222,8 @@ class TargetFace {
     this.innerTenDiameterMm,
     this.gauging = GaugingMethod.inward,
     this.integerScoring = false,
+    this.zones = const [],
+    this.outline,
   }) : nameKey = name;
 
   double get caliberRadiusMm => caliberMm / 2;
@@ -200,10 +275,11 @@ class TargetFace {
   /// Выведено из кода, а не хранится отдельным полем: типов ровно два, и
   /// дублировать константу под каждую мишень незачем.
   bool get isArchery => code.startsWith('archery');
+  bool get isIpsc => code.startsWith('ipsc');
   bool get isBiathlon => code.startsWith('biathlon');
 
   /// Новые дисциплины, пока скрытые за режимом разработчика.
-  bool get devOnly => isArchery || isBiathlon || hitMiss;
+  bool get devOnly => isArchery || isBiathlon || hitMiss || isIpsc;
 
   /// Только «попал/мимо» — без точки на мишени (тарелки).
   bool get hitMiss => code == 'clay';
@@ -211,9 +287,15 @@ class TargetFace {
   /// Где записывать промах: за краем бланка, заведомо вне зоны попадания.
   double get missOffsetMm => faceRadiusMm * 0.9;
 
+  /// Максимум за выстрел (для базы).
+  double get maxScore =>
+      zones.isNotEmpty ? zones.first.points.toDouble() : (integerScoring ? 10 : 10.9);
+
   String get weaponRu => isArchery
       ? tr('лук')
-      : hitMiss
+      : isIpsc
+          ? tr('пистолет/ружьё')
+          : hitMiss
           ? tr('ружьё')
           : (isBiathlon || code.startsWith('rifle'))
           ? tr('винтовка')
@@ -246,6 +328,13 @@ class TargetFace {
             ? null
             : (json['inner_ten_diameter_mm'] as num).toDouble(),
         integerScoring: json['integer_scoring'] == true,
+        zones: [
+          for (final z in (json['zones'] as List? ?? const []))
+            ScoreZone.fromJson(z as Map<String, dynamic>)
+        ],
+        outline: json['outline'] == null
+            ? null
+            : ScoreZone.fromJson(json['outline'] as Map<String, dynamic>),
         gauging: GaugingMethod.values.firstWhere(
           (g) => g.name == json['gauging'],
           orElse: () => GaugingMethod.inward,
@@ -263,6 +352,8 @@ class TargetFace {
         'inner_ten_diameter_mm': innerTenDiameterMm,
         'gauging': gauging.name,
         'integer_scoring': integerScoring,
+        'zones': [for (final z in zones) z.toJson()],
+        'outline': outline?.toJson(),
       };
 
   // Раздел 3 tech-spec-v2.md — точные размеры, допуск ±0.1мм на реальных
@@ -452,8 +543,10 @@ class TargetFace {
     name: /*tr*/ 'Биатлон: лёжа, 45 мм (50 м)',
     distanceM: 50,
     caliberMm: 5.6,
-    bullseyeDiameterMm: 45,
-    blankSizeMm: 70,
+    // Чёрный круг для прицеливания 115 мм, поражение — только центральные
+    // 45 мм (Правила биатлона РФ 2025, IBU ECR).
+    bullseyeDiameterMm: 115,
+    blankSizeMm: 150,
     ringDiametersMm: [45],
     integerScoring: true,
   );
@@ -484,6 +577,75 @@ class TargetFace {
     integerScoring: true,
   );
 
+  // ---- IPSC ----------------------------------------------------------
+  // Источник: IPSC Shotgun Competition Rules, Jan 2024, Appendix B2–B4
+  // (чертежи с размерами в см). Очки — «Major»: A=5, C=4, D=2. Вокруг
+  // мишени несчитаемая кромка (0.5 см; у Mini 0.3 см): попадание в неё — 0.
+  // Угловые точки C у верхней кромки сняты с чертежа на глаз (±2 мм).
+  // Дырка считается точкой (центр попадания), касание линии не учитывается.
+  static TargetFace _ipsc({
+    required String code,
+    required String name,
+    required double w,
+    required double h,
+    required List<List<double>> outer,
+    required double border,
+    required List<List<double>> c,
+    required List<List<double>> a,
+  }) {
+    final out = ScoreZone.cm(0, outer, w, h);
+    return TargetFace(
+      code: code,
+      name: name,
+      distanceM: 10,
+      caliberMm: 0,
+      bullseyeDiameterMm: 0,
+      blankSizeMm: (w > h ? w : h) * 10,
+      ringDiametersMm: const [],
+      integerScoring: true,
+      outline: out,
+      zones: [
+        ScoreZone.cm(5, a, w, h),
+        ScoreZone.cm(4, c, w, h),
+        ScoreZone(2, out.inset(border * 10).poly),
+      ],
+    );
+  }
+
+  static final TargetFace ipsc = _ipsc(
+    code: 'ipsc',
+    name: /*tr*/ 'IPSC: стандартная мишень (45×57 см)',
+    w: 45,
+    h: 57,
+    border: 0.5,
+    outer: [[15, 0], [30, 0], [45, 19], [45, 38], [30, 57], [15, 57], [0, 38], [0, 19]],
+    c: [[15.2, .5], [29.8, .5], [37.5, 19], [37.5, 33.5], [27.5, 45], [17.5, 45], [7.5, 33.5], [7.5, 19]],
+    a: [[20, 2.5], [25, 2.5], [30, 19], [30, 27.5], [25, 35], [20, 35], [15, 27.5], [15, 19]],
+  );
+
+  static final TargetFace ipscMini = _ipsc(
+    code: 'ipsc_mini',
+    name: /*tr*/ 'IPSC: Mini (30×37.5 см)',
+    w: 30,
+    h: 37.5,
+    border: 0.3,
+    outer: [[10, 0], [20, 0], [30, 12.5], [30, 25], [20, 37.5], [10, 37.5], [0, 25], [0, 12.5]],
+    c: [[11.5, .3], [18.5, .3], [25, 12.5], [25, 22], [18.5, 30], [11.5, 30], [5, 22], [5, 12.5]],
+    a: [[13, 1.5], [17, 1.5], [20, 12.5], [20, 18], [17, 23], [13, 23], [10, 18], [10, 12.5]],
+  );
+
+  // Универсальная: размеры на чертеже даны от низа (v), здесь y = 75 − v.
+  static final TargetFace ipscUniversal = _ipsc(
+    code: 'ipsc_universal',
+    name: /*tr*/ 'IPSC: Universal (45×75 см)',
+    w: 45,
+    h: 75,
+    border: 0.5,
+    outer: [[15, 0], [30, 0], [45, 19], [45, 38], [30, 75], [15, 75], [0, 38], [0, 19]],
+    c: [[15.2, .5], [29.8, .5], [37.5, 21], [37.5, 33], [27.5, 58], [17.5, 58], [7.5, 33], [7.5, 21]],
+    a: [[20, 2.5], [25, 2.5], [30, 22], [30, 30.5], [25, 43], [20, 43], [15, 30.5], [15, 22]],
+  );
+
   static final List<TargetFace> all = [
     rifle10m,
     pistol10m,
@@ -501,6 +663,9 @@ class TargetFace {
     biathlonProne,
     biathlonStanding,
     clay,
+    ipsc,
+    ipscMini,
+    ipscUniversal,
   ];
 
   /// Мишени для выбора в редакторах. Лук пока только в режиме разработчика;

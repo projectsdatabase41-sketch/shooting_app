@@ -66,7 +66,38 @@ class TargetPainter extends CustomPainter {
     // половина его стороны. Круглая бумага была упрощением: она теряла
     // углы бланка, а именно на них теперь выводятся значения выстрела
     // (номер, оценка, X/Y, сумма) вместо прежней нижней панели.
-    if (face.isArchery) {
+    if (face.zones.isNotEmpty) {
+      // Многоугольная мишень (IPSC): картон по контуру, внутри зоны.
+      Path poly(List<List<double>> pts) {
+        final path = Path();
+        for (var i = 0; i < pts.length; i++) {
+          final o = center + Offset(pts[i][0], -pts[i][1]) * mmToPx;
+          i == 0 ? path.moveTo(o.dx, o.dy) : path.lineTo(o.dx, o.dy);
+        }
+        return path..close();
+      }
+
+      final line = Paint()
+        ..color = Colors.brown.shade900
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.0;
+      canvas.drawPath(poly(face.outline!.poly), Paint()..color = const Color(0xFFB98F5E));
+      canvas.drawPath(poly(face.outline!.poly), line);
+      for (var i = face.zones.length - 1; i >= 0; i--) {
+        final path = poly(face.zones[i].poly);
+        canvas.drawPath(path, Paint()..color = Color.lerp(const Color(0xFFD9B98A), const Color(0xFFB98F5E), i / face.zones.length)!);
+        canvas.drawPath(path, line);
+        // Подпись зоны: A — в центре, C — между низом A и низом C, D — слева.
+        double minY(int k) => face.zones[k].poly.map((p) => p[1]).reduce(math.min);
+        double maxY(int k) => face.zones[k].poly.map((p) => p[1]).reduce(math.max);
+        final pos = switch (i) {
+          0 => Offset(0, (minY(0) + maxY(0)) / 2),
+          1 => Offset(0, (minY(0) + minY(1)) / 2),
+          _ => Offset(face.zones[2].poly.map((p) => p[0]).reduce(math.min) * 0.9, 0),
+        };
+        _drawText(canvas, ['A', 'C', 'D'][i], center + Offset(pos.dx, -pos.dy) * mmToPx, Colors.brown.shade900, 14);
+      }
+    } else if (face.isArchery) {
       // Мишень лука круглая.
       canvas.drawCircle(center, radiusPx, Paint()..color = colors.targetPaper);
     } else {
@@ -80,7 +111,9 @@ class TargetPainter extends CustomPainter {
     }
 
     // 2. Чёрное яблоко (кольца 10..5 условно — см. scoring.dart)
-    if (face.isArchery) {
+    if (face.zones.isNotEmpty) {
+      // уже нарисовано выше
+    } else if (face.isArchery) {
       // Зоны лука окрашены (белая 1–2, чёрная 3–4, синяя 5–6, красная 7–8,
       // золотая 9–10) — от внешней к внутренней.
       final radii = face.ringRadiiMm;

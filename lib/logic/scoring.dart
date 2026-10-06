@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import '../models/shot.dart';
 import '../models/target_face.dart';
 
@@ -96,8 +98,18 @@ import '../models/target_face.dart';
 /// по дисциплине, относится к измерению бумаги калибромером (целые
 /// очки), а при сложении радиуса пули результат для пневматического
 /// пистолета упирается в 10.4 — 10.9 становится недостижимой.
-double scoreFor(Shot shot, TargetFace face) {
-  return scoreForRadius(shot.radiusMm, face);
+double scoreFor(Shot shot, TargetFace face) =>
+    scoreForPoint(shot.xMm, shot.yMm, face);
+
+/// Результат по точке (мм от центра, y вверх). Для многоугольных мишеней
+/// (IPSC) — очки первой зоны, куда попала точка, иначе 0; для кольцевых —
+/// по расстоянию до центра.
+double scoreForPoint(double xMm, double yMm, TargetFace face) {
+  if (face.zones.isEmpty) return scoreForRadius(math.sqrt(xMm * xMm + yMm * yMm), face);
+  for (final z in face.zones) {
+    if (z.contains(xMm, yMm)) return z.points.toDouble();
+  }
+  return 0.0;
 }
 
 /// Результат по РАССТОЯНИЮ от центра мишени до центра пробоины (мм) —

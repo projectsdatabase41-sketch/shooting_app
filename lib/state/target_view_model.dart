@@ -324,7 +324,7 @@ class TargetViewModel extends ChangeNotifier {
 
   double? get draftScore => _draftXMm == null
       ? null
-      : scoreForRadius(math.sqrt(_draftXMm! * _draftXMm! + _draftYMm! * _draftYMm!), face);
+      : scoreForPoint(_draftXMm!, _draftYMm!, face);
 
   int? get draftClockHour {
     if (_draftXMm == null) return null;
@@ -563,8 +563,7 @@ class TargetViewModel extends ChangeNotifier {
         final updated = shot.copyWith(
           xMm: _draftXMm,
           yMm: _draftYMm,
-          score: scoreForRadius(
-              math.sqrt(_draftXMm! * _draftXMm! + _draftYMm! * _draftYMm!), face),
+          score: scoreForPoint(_draftXMm!, _draftYMm!, face),
           isManuallyEdited: true,
         );
         final idx = session.shots.indexWhere((s) => s.id == shot.id);

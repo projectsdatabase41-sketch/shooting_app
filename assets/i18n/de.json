@@ -1185,5 +1185,9 @@
   "ружьё": "Flinte",
   "дробовое оружие, дробь": "Schrotflinte, Schrot",
   "Попал": "Treffer",
-  "Мимо": "Fehl"
+  "Мимо": "Fehl",
+  "IPSC: стандартная мишень (45×57 см)": "IPSC: Standardscheibe (45×57 cm)",
+  "IPSC: Mini (30×37.5 см)": "IPSC: Mini (30×37,5 cm)",
+  "IPSC: Universal (45×75 см)": "IPSC: Universal (45×75 cm)",
+  "пистолет/ружьё": "Pistole/Flinte"
 }
