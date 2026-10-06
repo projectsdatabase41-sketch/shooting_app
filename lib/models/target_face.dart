@@ -169,6 +169,7 @@ class TargetFace {
   /// уже девятки («внутренняя десятка»), а внешние зоны равны.
   double get ringWidthMm {
     final n = ringDiametersMm.length;
+    if (n == 1) return ringDiametersMm[0] / 2; // биатлон: единственная зона
     return n >= 2 ? (ringDiametersMm[n - 1] - ringDiametersMm[n - 2]).abs() / 2 : 0;
   }
 
@@ -199,10 +200,16 @@ class TargetFace {
   /// Выведено из кода, а не хранится отдельным полем: типов ровно два, и
   /// дублировать константу под каждую мишень незачем.
   bool get isArchery => code.startsWith('archery');
+  bool get isBiathlon => code.startsWith('biathlon');
+
+  /// Новые дисциплины, пока скрытые за режимом разработчика.
+  bool get devOnly => isArchery || isBiathlon;
 
   String get weaponRu => isArchery
       ? tr('лук')
-      : code.startsWith('rifle')
+      : isBiathlon
+          ? tr('винтовка')
+          : code.startsWith('rifle')
           ? tr('винтовка')
           : tr('пистолет');
 
@@ -211,7 +218,9 @@ class TargetFace {
   /// патрон .22 LR (других калибров в справочнике нет).
   String get ammoRu => isArchery
       ? tr('лук, стрелы')
-      : caliberMm <= 4.5 ? tr('пневматическое оружие (воздух/CO₂), пульки') : tr('малокалиберное оружие, патрон .22 LR');
+      : isBiathlon
+          ? tr('малокалиберное оружие, патрон .22 LR')
+          : caliberMm <= 4.5 ? tr('пневматическое оружие (воздух/CO₂), пульки') : tr('малокалиберное оружие, патрон .22 LR');
 
   factory TargetFace.fromJson(Map<String, dynamic> json) => TargetFace(
         code: json['code'] as String,
@@ -425,6 +434,33 @@ class TargetFace {
     integerScoring: true,
   );
 
+  // ---- Биатлон (IBU) --------------------------------------------------
+  // Одна круглая металлическая мишень на 50 м, малокалиберная винтовка:
+  // лёжа — зона попадания 45 мм, стоя — 115 мм (IBU; biathlonworld.com,
+  // deseret.com/2000/2/3/19489238). Попал = 10, мимо = 0; касание края
+  // пулей — попадание (inward).
+  static final TargetFace biathlonProne = TargetFace(
+    code: 'biathlon_prone',
+    name: /*tr*/ 'Биатлон: лёжа, 45 мм (50 м)',
+    distanceM: 50,
+    caliberMm: 5.6,
+    bullseyeDiameterMm: 45,
+    blankSizeMm: 70,
+    ringDiametersMm: [45],
+    integerScoring: true,
+  );
+
+  static final TargetFace biathlonStanding = TargetFace(
+    code: 'biathlon_standing',
+    name: /*tr*/ 'Биатлон: стоя, 115 мм (50 м)',
+    distanceM: 50,
+    caliberMm: 5.6,
+    bullseyeDiameterMm: 115,
+    blankSizeMm: 150,
+    ringDiametersMm: [115],
+    integerScoring: true,
+  );
+
   static final List<TargetFace> all = [
     rifle10m,
     pistol10m,
@@ -439,13 +475,15 @@ class TargetFace {
     archery40Compound,
     archery40Triple,
     archery40TripleCompound,
+    biathlonProne,
+    biathlonStanding,
   ];
 
   /// Мишени для выбора в редакторах. Лук пока только в режиме разработчика;
   /// [keep] — уже выбранная мишень остаётся в списке всегда.
   static List<TargetFace> selectable({String? keep}) => [
         for (final f in all)
-          if (!f.isArchery || friendlyErrorDevMode || f.code == keep) f
+          if (!f.devOnly || friendlyErrorDevMode || f.code == keep) f
       ];
 
   static TargetFace byCode(String code) =>

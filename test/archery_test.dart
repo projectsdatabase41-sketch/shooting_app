@@ -74,10 +74,21 @@ void main() {
     friendlyErrorDevMode = false;
   });
 
+  test('биатлон: одна зона, попал/мимо, скрыт вне режима разработчика', () {
+    final prone = f('biathlon_prone');
+    expect(prone.ringDiametersMm, [45]);
+    expect(f('biathlon_standing').ringDiametersMm, [115]);
+    expect(scoreForRadius(0, prone), 10);
+    expect(scoreForRadius(22.5 + 2.8, prone), 10); // край пули на кромке
+    expect(scoreForRadius(22.5 + 2.9, prone), 0);
+    friendlyErrorDevMode = false;
+    expect(TargetFace.selectable().any((e) => e.isBiathlon), isFalse);
+  });
+
   test('коды уникальны и все знает справочник', () {
     final codes = TargetFace.all.map((e) => e.code).toSet();
     expect(codes.length, TargetFace.all.length);
-    for (final face in TargetFace.all.where((e) => e.isArchery)) {
+    for (final face in TargetFace.all.where((e) => e.devOnly)) {
       expect(face.integerScoring, isTrue);
       expect(TargetFace.fromJson(face.toJson()).integerScoring, isTrue);
     }
