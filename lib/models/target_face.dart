@@ -413,6 +413,60 @@ class TargetFace {
     innerTenDiameterMm: 25,
   );
 
+  // ---- Ещё мишени ISSF (ISSF Rule Book 2026, 6.3.4.x) -------------------
+  // Кольца — диаметры границ 10..1 (мм) из таблиц правил. Подсчёт — как у
+  // остальных ISSF-мишеней (десятые, inward).
+
+  /// 6.3.4.1: 300 м, винтовка. Калибр правилами ограничен только сверху
+  /// (макс. 8 мм) — взят 7.62.
+  static const TargetFace rifle300m = TargetFace(
+    code: 'rifle_300m',
+    name: /*tr*/ 'ISSF: винтовка 300 м',
+    distanceM: 300,
+    caliberMm: 7.62,
+    bullseyeDiameterMm: 600,
+    blankSizeMm: 1300,
+    ringDiametersMm: [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000],
+    innerTenDiameterMm: 50,
+  );
+
+  /// 6.3.4.4: 25 м, скоростной пистолет — только кольца 10..5.
+  static const TargetFace pistolRapid25m = TargetFace(
+    code: 'pistol_25m_rapid',
+    name: /*tr*/ 'ISSF: скоростной пистолет 25 м',
+    distanceM: 25,
+    caliberMm: 5.6,
+    bullseyeDiameterMm: 500,
+    blankSizeMm: 550,
+    ringDiametersMm: [100, 180, 260, 340, 420, 500],
+    innerTenDiameterMm: 50,
+  );
+
+  /// 6.3.4.7: «бегущий кабан» 50 м. На карточке две зоны (±453 мм от
+  /// прицельной метки); здесь — одна зона.
+  static const TargetFace moving50m = TargetFace(
+    code: 'moving_50m',
+    name: /*tr*/ 'ISSF: бегущая мишень 50 м (одна зона)',
+    distanceM: 50,
+    caliberMm: 5.6,
+    bullseyeDiameterMm: 0,
+    blankSizeMm: 400,
+    ringDiametersMm: [60, 94, 128, 162, 196, 230, 264, 298, 332, 366],
+    innerTenDiameterMm: 30,
+  );
+
+  /// 6.3.4.8: бегущая мишень 10 м (пневматика), одна зона из двух.
+  static const TargetFace moving10m = TargetFace(
+    code: 'moving_10m',
+    name: /*tr*/ 'ISSF: бегущая мишень 10 м (одна зона)',
+    distanceM: 10,
+    caliberMm: 4.5,
+    bullseyeDiameterMm: 30.5,
+    blankSizeMm: 70,
+    ringDiametersMm: [5.5, 10.5, 15.5, 20.5, 25.5, 30.5, 35.5, 40.5, 45.5, 50.5],
+    innerTenDiameterMm: 0.5,
+  );
+
   // ---- Лук (World Archery) -------------------------------------------
   // Источники: World Archery Rulebook Book 3 (2026-01-27) и Bylaw 8.2.1
   // (Compound Indoor Target Face). Все лица — 10 равных зон; диаметры
@@ -651,6 +705,10 @@ class TargetFace {
     pistol10m,
     rifle50m,
     pistol25m,
+    rifle300m,
+    pistolRapid25m,
+    moving50m,
+    moving10m,
     archery122,
     archery80,
     archery80Six,

@@ -138,6 +138,22 @@ void main() {
     });
   });
 
+  test('ISSF 6.3.4: новые мишени — размеры из правил', () {
+    expect(f('rifle_300m').ringDiametersMm, [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]);
+    expect(f('rifle_300m').innerTenDiameterMm, 50);
+    expect(f('pistol_25m_rapid').ringDiametersMm, [100, 180, 260, 340, 420, 500]);
+    expect(f('moving_50m').ringDiametersMm.first, 60);
+    expect(f('moving_50m').ringDiametersMm.last, 366);
+    expect(f('moving_10m').ringDiametersMm.first, 5.5);
+    expect(f('moving_10m').ringDiametersMm.last, 50.5);
+    // скоростной: нет колец ниже 5 — за границей 500 мм промах
+    final r = f('pistol_25m_rapid');
+    expect(scoreForRadius(0, r), closeTo(10.9, 1e-9));
+    expect(scoreForRadius(300, r), 0);
+    // 300 м: центр в центре — 10.9, на 100 мм — 9.x
+    expect(scoreForRadius(0, f('rifle_300m')), closeTo(10.9, 1e-9));
+  });
+
   test('коды уникальны и все знает справочник', () {
     final codes = TargetFace.all.map((e) => e.code).toSet();
     expect(codes.length, TargetFace.all.length);

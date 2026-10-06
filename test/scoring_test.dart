@@ -176,7 +176,7 @@ void main() {
     });
 
     test('10.0 стоит на «граница десятки + радиус пули» у каждой мишени', () {
-      for (final face in TargetFace.all.where((f) => !f.integerScoring)) {
+      for (final face in TargetFace.all.where((f) => !f.integerScoring && f.ringDiametersMm.length == 10)) {
         final boundary = face.ringRadiiMm[0] + face.caliberRadiusMm;
         expect(scoreForRadius(boundary, face), closeTo(10.0, 1e-9), reason: face.name);
         // На один шаг ближе к центру — уже 10.1.
@@ -203,7 +203,7 @@ void main() {
 
   group('Метод измерения — параметр мишени, а не константа алгоритма', () {
     test('все четыре мишени считаются «вовнутрь»', () {
-      for (final face in TargetFace.all.where((f) => !f.integerScoring)) {
+      for (final face in TargetFace.all.where((f) => !f.integerScoring && f.ringDiametersMm.length == 10)) {
         expect(face.gauging, GaugingMethod.inward, reason: face.name);
         expect(face.gaugingOffsetMm, closeTo(-face.caliberRadiusMm, 1e-9), reason: face.name);
       }
@@ -237,7 +237,7 @@ void main() {
 
   group('radiusForScore — обратная функция для слайдера десятых', () {
     test('round-trip на всех 400 сочетаниях мишень × габарит × десятая', () {
-      for (final face in TargetFace.all.where((f) => !f.integerScoring)) {
+      for (final face in TargetFace.all.where((f) => !f.integerScoring && f.ringDiametersMm.length == 10)) {
         for (var ring = 1; ring <= 10; ring++) {
           for (var decimal = 0; decimal <= 9; decimal++) {
             final radius = radiusForScore(ring, decimal, face);

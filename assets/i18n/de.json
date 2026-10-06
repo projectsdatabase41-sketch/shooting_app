@@ -1189,5 +1189,9 @@
   "IPSC: стандартная мишень (45×57 см)": "IPSC: Standardscheibe (45×57 cm)",
   "IPSC: Mini (30×37.5 см)": "IPSC: Mini (30×37,5 cm)",
   "IPSC: Universal (45×75 см)": "IPSC: Universal (45×75 cm)",
-  "пистолет/ружьё": "Pistole/Flinte"
+  "пистолет/ружьё": "Pistole/Flinte",
+  "ISSF: винтовка 300 м": "ISSF: Gewehr 300 m",
+  "ISSF: скоростной пистолет 25 м": "ISSF: Schnellfeuerpistole 25 m",
+  "ISSF: бегущая мишень 50 м (одна зона)": "ISSF: Laufende Scheibe 50 m (eine Zone)",
+  "ISSF: бегущая мишень 10 м (одна зона)": "ISSF: Laufende Scheibe 10 m (eine Zone)"
 }
