@@ -131,13 +131,21 @@ class PushService {
       // init() вызывается из нескольких мест (корень приложения — ради
       // холодного старта по тапу на уведомление, и ChatHomeScreen — после
       // входа в чат), Firebase инициализируется только один раз.
+      if (kIsWeb) {
+        // Веб: токен берёт мост на JS (web/push-bridge.js) — Dart-обёртка
+        // Firebase на iPhone падает при инициализации (Null check).
+        if (await webRequestPermission() != 'granted') return;
+        final t = await _webToken();
+        if (t != null) await _saveToken(t);
+        return;
+      }
       if (Firebase.apps.isEmpty)
         await Firebase.initializeApp(options: _options);
       // Канал с рингтоном/вибрацией — только Android (см. showCallNotification).
       if (_isAndroid) await _initLocalNotifications();
       final messaging = FirebaseMessaging.instance;
       await messaging.requestPermission();
-      final token = kIsWeb ? await _webToken() : await messaging.getToken();
+      final token = await messaging.getToken();
       if (token != null) await _saveToken(token);
       messaging.onTokenRefresh.listen(_saveToken);
       await _registerListeners(messaging);
@@ -177,6 +185,14 @@ class PushService {
               'Разрешение на уведомления не выдано ({p}) — включите его: Настройки iPhone → Уведомления → Nexus', {'p': perm});
         }
       }
+      if (kIsWeb) {
+        step = 'получение адреса устройства';
+        final t = await _webToken();
+        if (t == null) return tr('Не удалось получить адрес устройства для push');
+        step = 'сохранение на сервере';
+        await _saveToken(t);
+        return tr('Уведомления включены');
+      }
       step = 'инициализация Firebase';
       if (Firebase.apps.isEmpty)
         await Firebase.initializeApp(options: _options);
@@ -190,7 +206,7 @@ class PushService {
             'Разрешение на уведомления не выдано — включите его в настройках браузера или телефона');
       }
       step = 'получение адреса устройства';
-      final token = kIsWeb ? await _webToken() : await messaging.getToken();
+      final token = await messaging.getToken();
       if (token == null)
         return tr('Не удалось получить адрес устройства для push');
       step = 'сохранение на сервере';
@@ -212,13 +228,16 @@ class PushService {
   static Future<String?> deviceToken() async {
     if (!FirebaseSettings.isConfigured || !_supportedPlatform) return null;
     try {
+      if (kIsWeb) {
+        return await webRequestPermission() == 'granted' ? await _webToken() : null;
+      }
       if (Firebase.apps.isEmpty)
         await Firebase.initializeApp(options: _options);
       if (_isAndroid) await _initLocalNotifications();
       final messaging = FirebaseMessaging.instance;
       await messaging.requestPermission();
       await _registerListeners(messaging);
-      return kIsWeb ? await _webToken() : await messaging.getToken();
+      return await messaging.getToken();
     } catch (_) {
       return null;
     }
