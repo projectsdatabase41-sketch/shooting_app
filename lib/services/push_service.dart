@@ -156,6 +156,17 @@ class PushService {
       return tr('На этой платформе push не поддерживается');
     }
     if (!auth.isSignedIn) return tr('Сначала войдите в мессенджер');
+    if (kIsWeb) {
+      final env = webPushEnv();
+      if (env == 'ios-not-installed') {
+        return tr(
+            'iPhone: push работает только у приложения с домашнего экрана. В Safari нажмите «Поделиться» → «На экран Домой», откройте Nexus с иконки и нажмите эту кнопку снова. Нужен iOS 16.4 или новее.');
+      }
+      if (env == 'unsupported') {
+        return tr(
+            'Этот браузер не поддерживает push. На iPhone нужен iOS 16.4+ и Safari; в других браузерах — обновите их.');
+      }
+    }
     try {
       if (Firebase.apps.isEmpty)
         await Firebase.initializeApp(options: _options);

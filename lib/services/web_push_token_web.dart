@@ -10,3 +10,9 @@ Future<String?> webPushToken(
   final r = await _nexusWebPushToken(config.jsify()!, vapidKey.toJS).toDart;
   return r?.toDart;
 }
+
+@JS('nexusPushEnv')
+external JSString _nexusPushEnv();
+
+/// 'ok' | 'ios-not-installed' | 'unsupported' — см. web/push-bridge.js.
+String webPushEnv() => _nexusPushEnv().toDart;

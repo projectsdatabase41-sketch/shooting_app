@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../models/chat_contact.dart';
 import '../models/chat_message.dart';
 import 'local_db_service.dart';
@@ -6,6 +8,9 @@ import 'local_db_service.dart';
 /// на устройстве (см. `chat_settings.dart`), сервер лишь передаёт
 /// сообщения транзитом.
 class ChatMessagesRepository {
+  /// Сколько всего непрочитанных входящих — для значка на вкладке мессенджера.
+  static final totalUnread = ValueNotifier<int>(0);
+
   final LocalDbService db;
   ChatMessagesRepository(this.db);
 
@@ -74,6 +79,7 @@ class ChatMessagesRepository {
   void deleteChat(String id) {
     db.db.execute('DELETE FROM chat_local_messages WHERE contact_id = ?', [id]);
     db.db.execute('DELETE FROM chat_contacts WHERE id = ?', [id]);
+    refreshTotalUnread();
   }
 
   void deleteContact(String id) {
@@ -134,6 +140,7 @@ class ChatMessagesRepository {
         m.createdAt.toUtc().toIso8601String(),
       ],
     );
+    if (m.direction == ChatMessageDirection.incoming) refreshTotalUnread();
   }
 
   void updateStatus(String id, ChatMessageStatus status) {
@@ -186,6 +193,14 @@ class ChatMessagesRepository {
 
   void deleteMessage(String id) {
     db.db.execute('DELETE FROM chat_local_messages WHERE id = ?', [id]);
+    refreshTotalUnread();
+  }
+
+  /// Пересчитывает [totalUnread]; зовётся после любого изменения сообщений.
+  void refreshTotalUnread() {
+    final rows = db.db.select(
+        "SELECT COUNT(*) AS n FROM chat_local_messages WHERE direction = 'incoming' AND seen = 0");
+    totalUnread.value = rows.isEmpty ? 0 : (rows.first['n'] as int);
   }
 
   /// Сколько непрочитанных входящих у контакта — бейдж в списке.
@@ -205,6 +220,7 @@ class ChatMessagesRepository {
       "UPDATE chat_local_messages SET seen = 1 WHERE contact_id = ? AND direction = 'incoming' AND seen = 0",
       [contactId],
     );
+    refreshTotalUnread();
   }
 
   /// Прочитанные входящие, о которых собеседник ещё не знает.

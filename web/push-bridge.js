@@ -12,3 +12,16 @@ window.nexusWebPushToken = async function (cfg, vapidKey) {
   try { app = firebase.app('nexus-push'); } catch (_) { app = firebase.initializeApp(cfg, 'nexus-push'); }
   return await firebase.messaging(app).getToken({ vapidKey: vapidKey, serviceWorkerRegistration: reg });
 };
+
+// Можно ли вообще получить push в этом браузере. На iPhone (iOS 16.4+) push
+// работает только у сайта, добавленного на домашний экран и открытого оттуда.
+window.nexusPushEnv = function () {
+  const ua = navigator.userAgent;
+  const ios = /iPhone|iPad|iPod/.test(ua) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const standalone = navigator.standalone === true ||
+    (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+  if (ios && !standalone) return 'ios-not-installed';
+  if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return 'unsupported';
+  return 'ok';
+};

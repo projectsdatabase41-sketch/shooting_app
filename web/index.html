@@ -34,6 +34,10 @@
        анимация здесь не ускоряет саму загрузку, только не даёт экрану
        выглядеть зависшим на время ожидания. */
     html, body { margin: 0; padding: 0; height: 100%; background: #1a202c; overscroll-behavior: none; }
+    /* iOS Safari: страница не должна прокручиваться и сворачивать адресную
+       строку — при смене высоты окна касания Flutter сдвигаются относительно
+       кнопок («нажимаю выше кнопки»). Фиксируем окно и отключаем двойной тап. */
+    html, body { position: fixed; inset: 0; width: 100%; overflow: hidden; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
     #loading {
       position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
       gap: 20px;

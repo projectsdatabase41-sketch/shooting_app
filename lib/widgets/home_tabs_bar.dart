@@ -4,8 +4,67 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../i18n/i18n.dart';
+import '../services/chat_messages_repository.dart';
+import '../state/app_data_store.dart';
 import '../state/home_tabs_view_model.dart';
 import '../state/personalization_view_model.dart';
+
+/// Значок вкладки; у мессенджера — красный кружок в углу, если есть
+/// непрочитанные сообщения.
+class TabIcon extends StatefulWidget {
+  final String id;
+  final IconData icon;
+  final Color? color;
+  final double? size;
+  const TabIcon({super.key, required this.id, required this.icon, this.color, this.size});
+
+  @override
+  State<TabIcon> createState() => _TabIconState();
+}
+
+class _TabIconState extends State<TabIcon> {
+  @override
+  void initState() {
+    super.initState();
+    if (widget.id == 'messenger') {
+      // Начальное значение — после первого кадра, чтобы не трогать базу в build.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ChatMessagesRepository(context.read<AppDataStore>().db).refreshTotalUnread();
+        }
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = Icon(widget.icon, color: widget.color, size: widget.size);
+    if (widget.id != 'messenger') return icon;
+    return ValueListenableBuilder<int>(
+      valueListenable: ChatMessagesRepository.totalUnread,
+      builder: (_, n, __) => Stack(
+        clipBehavior: Clip.none,
+        children: [
+          icon,
+          if (n > 0)
+            Positioned(
+              top: -2,
+              right: -3,
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Theme.of(context).colorScheme.surface, width: 1.5),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
 
 /// Значок + подпись одной вкладки нижней навигации.
 class HomeTabSpec {
@@ -166,7 +225,7 @@ class _HomeTabsBarState extends State<HomeTabsBar> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(spec.icon, color: color),
+            TabIcon(id: id, icon: spec.icon, color: color),
             // Подпись только у выбранной — так же, как было у
             // NavigationBar (onlyShowSelected): семь вкладок на узком
             // экране с подписью у каждой не помещаются.
@@ -478,7 +537,7 @@ class _HomeTileGridState extends State<HomeTileGrid> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(spec.icon, size: _tileIconSize, color: fg),
+                  TabIcon(id: id, icon: spec.icon, size: _tileIconSize, color: fg),
                   if (_showTileLabel) ...[
                     const SizedBox(height: 8),
                     Text(
