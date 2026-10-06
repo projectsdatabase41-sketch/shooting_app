@@ -259,6 +259,7 @@ class AiChatViewModel extends ChangeNotifier {
         contextBlock: contextBlock,
         history: history,
         booksExcerpt: books,
+        rotateKeys: service.settings.thinkingMode,
       );
       messages.add(AiMessage(
         fromUser: false,
@@ -310,6 +311,7 @@ class AiChatViewModel extends ChangeNotifier {
             'You are a planner. Split the user question about shooting into 2-4 short analysis steps (what to calculate or compare using the CONTEXT data). Answer with the steps only, one per line, no numbering and no explanations. Write the steps in the language of the question.',
         contextBlock: contextBlock,
         history: [(role: 'user', text: question)],
+        rotateKeys: true,
       );
       final steps = plan.text
           .split('\n')
@@ -326,6 +328,7 @@ class AiChatViewModel extends ChangeNotifier {
               'You execute one analysis step. Solve ONLY the given step using the CONTEXT data: give the numbers and a short conclusion (up to 80 words). Do not invent data that is not there. Write in the language of the question.',
           contextBlock: '$contextBlock\n\nALREADY DONE:\n$notes',
           history: [(role: 'user', text: 'Question: $question\nStep: $step')],
+          rotateKeys: true,
         );
         notes.writeln('Step "$step": ${r.text.trim()}');
       }

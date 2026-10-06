@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:http/http.dart' as http;
 
 import '../i18n/i18n.dart';
@@ -172,6 +173,10 @@ class AiService {
     bool json = false,
     bool Function(String text)? accept,
 
+    /// Начинать с очередного ключа по кругу (режим мышления: серия запросов
+    /// подряд не должна упираться в минутный лимит одного ключа).
+    bool rotateKeys = false,
+
     /// Фото к вопросу (чат) — только когда task == 'chat' и выбрана
     /// модель со зрением (кнопка в ai_chat_screen.dart сама решает,
     /// когда её показывать). Молча игнорируется остальными задачами.
@@ -233,7 +238,7 @@ class AiService {
       }
     } else if (chatChoice != 'auto') {
       final reply = await _askCloud(system.toString(), history,
-          onlyModel: chatChoice, image: image);
+          onlyModel: chatChoice, image: image, rotateKeys: rotateKeys);
       local.learn(settings, 'chat', history, reply.text);
       return reply;
     } else if (local.wants(settings, task)) {
@@ -254,10 +259,40 @@ class AiService {
       }
     }
 
-    final reply = await _askCloud(system.toString(), history, image: image);
+    final reply = await _askCloud(system.toString(), history,
+        image: image, rotateKeys: rotateKeys);
     if (task != null && check(reply.text))
       local.learn(settings, task, history, reply.text);
     return reply;
+  }
+
+  /// Ключи, получившие лимит, пока «остывают» минуту.
+  static final Map<String, DateTime> _coolUntil = {};
+  static int _cursor = 0;
+
+  @visibleForTesting
+  static void markLimited(String key) =>
+      _coolUntil[key] = DateTime.now().add(const Duration(seconds: 60));
+
+  @visibleForTesting
+  static void resetKeyState() {
+    _coolUntil.clear();
+    _cursor = 0;
+  }
+
+  /// Порядок перебора ключей: сначала не упиравшиеся в лимит, при [rotate] —
+  /// со сдвигом на каждый запрос, чтобы нагрузка шла по кругу.
+  @visibleForTesting
+  static List<String> orderKeys(List<String> keys, {required bool rotate}) {
+    if (keys.length < 2) return keys;
+    final now = DateTime.now();
+    var ordered = keys;
+    if (rotate) {
+      final k = _cursor++ % keys.length;
+      ordered = [...keys.sublist(k), ...keys.sublist(0, k)];
+    }
+    bool cool(String k) => (_coolUntil[k]?.isAfter(now)) ?? false;
+    return [...ordered.where((k) => !cool(k)), ...ordered.where(cool)];
   }
 
   static bool _looksLikeJson(String text) {
@@ -283,9 +318,11 @@ class AiService {
     List<({String role, String text})> history, {
     String? onlyModel,
     Uint8List? image,
+    bool rotateKeys = false,
   }) async {
-    final keys =
-        settings.hasOwnKey ? [settings.apiKey] : AiSettings.testApiKeys;
+    final keys = orderKeys(
+        settings.hasOwnKey ? [settings.apiKey] : AiSettings.testApiKeys,
+        rotate: rotateKeys);
     if (keys.isEmpty) {
       throw const AiException(
           'Не задан API Key — укажите его в настройках ассистента');
@@ -325,6 +362,7 @@ class AiService {
           // целиком (внешний for), а не сдаётся — на то запасные ключи
           // и нужны.
           anyRateLimited = true;
+          markLimited(key);
           errors.add('$model: лимит (${e.message})');
           break;
         } on AiException catch (e) {
