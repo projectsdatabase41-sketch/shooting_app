@@ -170,6 +170,10 @@ int clockDirection(Shot shot) {
   return hour == 0 ? 12 : hour;
 }
 
+/// Подпись результата: целое для лука/тарелок, одна десятая для ISSF.
+String formatScore(double v, TargetFace face) =>
+    face.integerScoring ? v.round().toString() : v.toStringAsFixed(1);
+
 /// Попала ли стрела во внутреннюю десятку (X) — только для мишеней, где она
 /// есть (лук). Меряется так же, как зона: по краю древка, ближайшему к центру.
 bool isInnerTen(double distanceMm, TargetFace face) {

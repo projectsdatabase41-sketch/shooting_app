@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../logic/scoring.dart';
 import '../models/shot.dart';
 import '../services/comments_repository.dart';
 import '../state/app_data_store.dart';
@@ -85,7 +86,7 @@ class _ShotListSheetState extends State<ShotListSheet> {
                         [
                           vm.exercise.specFor(seriesNo)?.name ?? tr('Серия {seriesNo}', {'seriesNo': seriesNo}),
                           tr('{length} выстр.', {'length': seriesShots.length}),
-                          'Σ ${sum.toStringAsFixed(1)}',
+                          'Σ ${formatScore(sum, vm.face)}',
                           if (!vm.exercise.countsSeries(seriesNo)) tr('без зачёта'),
                         ].join(' · '),
                         style: const TextStyle(fontWeight: FontWeight.bold),

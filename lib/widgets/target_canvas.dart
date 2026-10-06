@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import '../logic/scoring.dart';
 import '../models/shot.dart';
 import 'package:provider/provider.dart';
 import '../models/target_color_scheme.dart';
@@ -404,7 +405,7 @@ class _TargetCanvasState extends State<TargetCanvas> {
         left: left,
         top: top,
         child: _CornerText(
-          text: score == null ? '—' : score.toStringAsFixed(1),
+          text: score == null ? '—' : formatScore(score, vm.face),
           color: topLeft,
           big: true,
         ),
@@ -449,10 +450,10 @@ class _TargetCanvasState extends State<TargetCanvas> {
     if (vm.displayMode == DisplayMode.series) {
       final seriesNo = shots.last.seriesNo;
       final sum = shots.where((s) => s.seriesNo == seriesNo).fold(0.0, (a, s) => a + s.score);
-      return sum.toStringAsFixed(1);
+      return formatScore(sum, vm.face);
     }
     final sum = shots.fold(0.0, (a, s) => a + s.score);
-    return sum.toStringAsFixed(1);
+    return formatScore(sum, vm.face);
   }
 }
 
