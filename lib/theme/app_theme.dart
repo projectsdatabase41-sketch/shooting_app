@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../logic/contrast.dart';
+
 /// Единая визуальная тема приложения — светлая и тёмная.
 ///
 /// Появилась по запросу пользователя ("хорошо бы стили добавить, а то
@@ -40,19 +42,27 @@ class AppTheme {
   static const Color _slate = Color(0xFF2C4A63);
   static const Color _amber = Color(0xFFC98A15);
 
-  static ThemeData light({Color? background, Color? buttonColor, Color? buttonTextColor}) =>
-      _build(_scheme(Brightness.light), background: background, buttonColor: buttonColor, buttonTextColor: buttonTextColor);
+  static ThemeData light(
+          {Color? background, Color? buttonColor, Color? buttonTextColor}) =>
+      _build(_scheme(Brightness.light),
+          background: background,
+          buttonColor: buttonColor,
+          buttonTextColor: buttonTextColor);
 
   /// Фон по умолчанию — чистый чёрный (#000000), а не `cs.surface`: на
   /// OLED-экранах чёрный пиксель не светится вообще, экономит заряд
   /// (запрос пользователя — рабочий фон приложения по умолчанию). Любой
   /// пресет пользователя (`background`) всё равно переопределяет его.
-  static ThemeData dark({Color? background, Color? buttonColor, Color? buttonTextColor}) =>
+  static ThemeData dark(
+          {Color? background, Color? buttonColor, Color? buttonTextColor}) =>
       _build(_scheme(Brightness.dark),
-          background: background ?? Colors.black, buttonColor: buttonColor, buttonTextColor: buttonTextColor);
+          background: background ?? Colors.black,
+          buttonColor: buttonColor,
+          buttonTextColor: buttonTextColor);
 
   static ColorScheme _scheme(Brightness brightness) {
-    final base = ColorScheme.fromSeed(seedColor: _slate, brightness: brightness);
+    final base =
+        ColorScheme.fromSeed(seedColor: _slate, brightness: brightness);
     if (brightness == Brightness.light) {
       return base.copyWith(
         primary: _slate,
@@ -118,7 +128,8 @@ class AppTheme {
   /// пользователя (`PersonalizationViewModel.appBackgroundColor` и т.п.,
   /// решение пользователя: "в настройках цвета мало"), `null` — цвет по
   /// умолчанию из палитры выше, ничем не переопределён.
-  static ThemeData _build(ColorScheme cs, {Color? background, Color? buttonColor, Color? buttonTextColor}) {
+  static ThemeData _build(ColorScheme cs,
+      {Color? background, Color? buttonColor, Color? buttonTextColor}) {
     final base = ThemeData(colorScheme: cs);
     final t = base.textTheme;
 
@@ -142,21 +153,34 @@ class AppTheme {
         letterSpacing: -0.4,
         fontFeatures: tabular,
       ),
-      titleLarge: t.titleLarge?.copyWith(fontWeight: FontWeight.w600, letterSpacing: -0.2),
+      titleLarge: t.titleLarge
+          ?.copyWith(fontWeight: FontWeight.w600, letterSpacing: -0.2),
       titleMedium: t.titleMedium?.copyWith(fontWeight: FontWeight.w600),
       titleSmall: t.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-      labelLarge: t.labelLarge?.copyWith(fontWeight: FontWeight.w600, letterSpacing: 0.1),
+      labelLarge: t.labelLarge
+          ?.copyWith(fontWeight: FontWeight.w600, letterSpacing: 0.1),
       labelSmall: t.labelSmall?.copyWith(letterSpacing: 0.4),
       bodyMedium: t.bodyMedium?.copyWith(height: 1.35),
       bodySmall: t.bodySmall?.copyWith(color: cs.onSurfaceVariant, height: 1.3),
     );
+
+    // Читаемость кнопок при любых цветах (готовые и свои пресеты):
+    //  * текст на залитой кнопке — контраст с её цветом ≥ 4.5;
+    //  * контурные/текстовые кнопки лежат на ФОНЕ приложения, а не на цвете
+    //    кнопки — их текст не может быть «цветом текста на кнопке» (белый на
+    //    светлом фоне), берём цвет кнопки, если он читается на фоне, иначе
+    //    обычный цвет текста.
+    final appBg = background ?? cs.surface;
+    final filledBg = buttonColor ?? cs.primary;
+    final filledFg = readableOn(filledBg, buttonTextColor ?? cs.onPrimary);
+    final linkFg =
+        readableOn(appBg, buttonColor ?? cs.primary, fallback: cs.onSurface);
 
     return base.copyWith(
       textTheme: textTheme,
       scaffoldBackgroundColor: background ?? cs.surface,
       splashFactory: InkSparkle.splashFactory,
       visualDensity: VisualDensity.standard,
-
       appBarTheme: base.appBarTheme.copyWith(
         backgroundColor: background ?? cs.surface,
         foregroundColor: cs.onSurface,
@@ -164,13 +188,13 @@ class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
-        titleTextStyle: textTheme.titleLarge?.copyWith(fontSize: 20, color: cs.onSurface),
+        titleTextStyle:
+            textTheme.titleLarge?.copyWith(fontSize: 20, color: cs.onSurface),
         // Тонкая линия под шапкой вместо тени — тень на плоской теме
         // выглядит грязно, а граница нужна, иначе шапка сливается со
         // списком под ней.
         shape: Border(bottom: BorderSide(color: cs.outlineVariant, width: 1)),
       ),
-
       cardTheme: base.cardTheme.copyWith(
         // В светлой теме карточка светлее фона (белая на сером), в
         // тёмной — наоборот, чуть светлее почти чёрного фона. Один и тот
@@ -187,20 +211,20 @@ class AppTheme {
           side: BorderSide(color: cs.outlineVariant),
         ),
       ),
-
       dialogTheme: base.dialogTheme.copyWith(
         backgroundColor: cs.surfaceContainerLow,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radiusLarge + 4)),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(radiusLarge + 4)),
         titleTextStyle: textTheme.titleLarge?.copyWith(color: cs.onSurface),
       ),
-
       inputDecorationTheme: base.inputDecorationTheme.copyWith(
         filled: true,
         fillColor: cs.surfaceContainerLow,
         isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMedium),
           borderSide: BorderSide(color: cs.outlineVariant),
@@ -215,14 +239,14 @@ class AppTheme {
         ),
         labelStyle: TextStyle(color: cs.onSurfaceVariant),
       ),
-
       navigationBarTheme: NavigationBarThemeData(
         height: 72,
         backgroundColor: cs.surfaceContainerLow,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         indicatorColor: cs.primaryContainer,
-        indicatorShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radiusMedium)),
+        indicatorShape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(radiusMedium)),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
@@ -240,73 +264,75 @@ class AppTheme {
           );
         }),
       ),
-
-      filledButtonTheme: FilledButtonThemeData(style: _buttonStyle(buttonColor, buttonTextColor)),
-      elevatedButtonTheme: ElevatedButtonThemeData(style: _buttonStyle(buttonColor, buttonTextColor)),
+      filledButtonTheme:
+          FilledButtonThemeData(style: _buttonStyle(buttonColor, filledFg)),
+      elevatedButtonTheme:
+          ElevatedButtonThemeData(style: _buttonStyle(buttonColor, filledFg)),
       outlinedButtonTheme: OutlinedButtonThemeData(
-        style: _buttonStyle(null, buttonTextColor).copyWith(
+        style: _buttonStyle(null, linkFg).copyWith(
           side: WidgetStatePropertyAll(BorderSide(color: cs.outline)),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
+          foregroundColor: linkFg,
           minimumSize: const Size(0, 40),
           padding: const EdgeInsets.symmetric(horizontal: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radiusMedium)),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(radiusMedium)),
         ),
       ),
-
       floatingActionButtonTheme: FloatingActionButtonThemeData(
-        backgroundColor: buttonColor ?? cs.primary,
-        foregroundColor: buttonTextColor ?? cs.onPrimary,
+        backgroundColor: filledBg,
+        foregroundColor: filledFg,
         elevation: 2,
         highlightElevation: 4,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radiusLarge)),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(radiusLarge)),
       ),
-
       listTileTheme: ListTileThemeData(
         iconColor: cs.onSurfaceVariant,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        titleTextStyle: textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w500),
+        titleTextStyle:
+            textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w500),
         subtitleTextStyle: textTheme.bodySmall,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radiusMedium)),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(radiusMedium)),
       ),
-
       dividerTheme: DividerThemeData(
         color: cs.outlineVariant,
         thickness: 1,
         space: 1,
       ),
-
       chipTheme: base.chipTheme.copyWith(
         backgroundColor: cs.surfaceContainer,
         side: BorderSide(color: cs.outlineVariant),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radiusMedium)),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(radiusMedium)),
         labelStyle: textTheme.labelLarge,
       ),
-
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         backgroundColor: cs.inverseSurface,
-        contentTextStyle: textTheme.bodyMedium?.copyWith(color: cs.onInverseSurface),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radiusMedium)),
+        contentTextStyle:
+            textTheme.bodyMedium?.copyWith(color: cs.onInverseSurface),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(radiusMedium)),
       ),
-
       bottomSheetTheme: base.bottomSheetTheme.copyWith(
         backgroundColor: cs.surfaceContainerLow,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(radiusLarge + 4)),
+          borderRadius:
+              BorderRadius.vertical(top: Radius.circular(radiusLarge + 4)),
         ),
       ),
-
       sliderTheme: base.sliderTheme.copyWith(
         activeTrackColor: cs.primary,
         inactiveTrackColor: cs.surfaceContainerHighest,
         thumbColor: cs.primary,
       ),
-
       progressIndicatorTheme: ProgressIndicatorThemeData(
         color: cs.primary,
         linearTrackColor: cs.surfaceContainerHighest,
@@ -317,13 +343,17 @@ class AppTheme {
   /// `color`/`textColor` — переопределение из настроек пользователя;
   /// `null` — оставить цвет по умолчанию (тема сама решает через
   /// `ColorScheme`, `color`/`textColor` здесь ничего не трогают).
-  static ButtonStyle _buttonStyle([Color? color, Color? textColor]) => ButtonStyle(
+  static ButtonStyle _buttonStyle([Color? color, Color? textColor]) =>
+      ButtonStyle(
         backgroundColor: color == null ? null : WidgetStatePropertyAll(color),
-        foregroundColor: textColor == null ? null : WidgetStatePropertyAll(textColor),
+        foregroundColor:
+            textColor == null ? null : WidgetStatePropertyAll(textColor),
         minimumSize: const WidgetStatePropertyAll(Size(0, 44)),
-        padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 18)),
+        padding:
+            const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 18)),
         shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(radiusMedium)),
+          RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(radiusMedium)),
         ),
         textStyle: const WidgetStatePropertyAll(
           TextStyle(fontWeight: FontWeight.w600, letterSpacing: 0.1),
