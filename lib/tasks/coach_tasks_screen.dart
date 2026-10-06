@@ -741,11 +741,12 @@ class _StepDialogState extends State<_StepDialog> {
             ),
             if (_shooting) ...[
               DropdownButtonFormField<String>(
-                initialValue: TargetFace.all.any((f) => f.code == _face)
+                initialValue: TargetFace.selectable(keep: _face)
+                        .any((f) => f.code == _face)
                     ? _face
                     : TargetFace.all.first.code,
                 items: [
-                  for (final f in TargetFace.all)
+                  for (final f in TargetFace.selectable(keep: _face))
                     DropdownMenuItem(value: f.code, child: Text(f.name))
                 ],
                 onChanged: (v) => setState(() => _face = v ?? _face),

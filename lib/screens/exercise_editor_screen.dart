@@ -127,7 +127,7 @@ class _ExerciseEditorScreenState extends State<ExerciseEditorScreen> {
             isExpanded: true,
             decoration: InputDecoration(labelText: tr('Мишень')),
             items: [
-              for (final f in TargetFace.all)
+              for (final f in TargetFace.selectable(keep: _faceCode))
                 DropdownMenuItem(
                   value: f.code,
                   child: Text(f.name, overflow: TextOverflow.ellipsis, maxLines: 1),

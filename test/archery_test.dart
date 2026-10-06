@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shooting_app/logic/friendly_error.dart';
 import 'package:shooting_app/logic/scoring.dart';
 import 'package:shooting_app/models/target_face.dart';
 
@@ -62,6 +63,15 @@ void main() {
     expect(scoreForRadius(5, face), 10);
     expect(scoreForRadius(30, face), 9);
     expect(scoreForRadius(45, face), 8);
+  });
+
+  test('лук скрыт вне режима разработчика, выбранный остаётся', () {
+    friendlyErrorDevMode = false;
+    expect(TargetFace.selectable().any((e) => e.isArchery), isFalse);
+    expect(TargetFace.selectable(keep: 'archery_40').map((e) => e.code), contains('archery_40'));
+    friendlyErrorDevMode = true;
+    expect(TargetFace.selectable().any((e) => e.isArchery), isTrue);
+    friendlyErrorDevMode = false;
   });
 
   test('коды уникальны и все знает справочник', () {

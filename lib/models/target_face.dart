@@ -1,4 +1,5 @@
 import '../i18n/i18n.dart';
+import '../logic/friendly_error.dart';
 /// Справочник мишеней ISSF (раздел 3 tech-spec-v2.md).
 ///
 /// Калибр пробоины берётся из конкретной мишени, не общий на всё
@@ -439,6 +440,13 @@ class TargetFace {
     archery40Triple,
     archery40TripleCompound,
   ];
+
+  /// Мишени для выбора в редакторах. Лук пока только в режиме разработчика;
+  /// [keep] — уже выбранная мишень остаётся в списке всегда.
+  static List<TargetFace> selectable({String? keep}) => [
+        for (final f in all)
+          if (!f.isArchery || friendlyErrorDevMode || f.code == keep) f
+      ];
 
   static TargetFace byCode(String code) =>
       all.firstWhere((f) => f.code == code, orElse: () => rifle10m);
