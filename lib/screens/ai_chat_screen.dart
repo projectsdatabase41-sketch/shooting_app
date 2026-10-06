@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import '../logic/friendly_error.dart';
 import 'dart:typed_data';
 
@@ -423,7 +424,7 @@ class _AiChatBodyState extends State<_AiChatBody> {
           12),
       itemCount: vm.messages.length + (vm.busy ? 1 : 0),
       itemBuilder: (context, i) {
-        if (i >= vm.messages.length) return const _TypingBubble();
+        if (i >= vm.messages.length) return _TypingBubble(phase: vm.phase);
         final message = vm.messages[i];
         final charts = vm.chartMessages;
         return _Bubble(
@@ -1161,8 +1162,27 @@ class _FeedbackProposalCard extends StatelessWidget {
   }
 }
 
-class _TypingBubble extends StatelessWidget {
-  const _TypingBubble();
+/// Пузырь «ассистент работает»: пульсирующие точки и подпись текущего шага
+/// («Анализирую…», «Ищу информацию…», «Думаю…», «Формулирую ответ…»).
+class _TypingBubble extends StatefulWidget {
+  final String phase;
+  const _TypingBubble({required this.phase});
+
+  @override
+  State<_TypingBubble> createState() => _TypingBubbleState();
+}
+
+class _TypingBubbleState extends State<_TypingBubble>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 1200))
+    ..repeat();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1171,16 +1191,45 @@ class _TypingBubble extends StatelessWidget {
       alignment: Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: cs.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(14),
         ),
-        child: SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(
-              strokeWidth: 2, color: cs.onSurfaceVariant),
+        child: AnimatedBuilder(
+          animation: _c,
+          builder: (_, __) => Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Три точки по очереди «прыгают» по прозрачности.
+              for (var i = 0; i < 3; i++)
+                Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: Opacity(
+                    opacity: 0.3 +
+                        0.7 *
+                            (0.5 +
+                                0.5 *
+                                    math.sin((_c.value * 2 - i * 0.3) * math.pi)),
+                    child: Container(
+                      width: 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                          color: cs.primary, shape: BoxShape.circle),
+                    ),
+                  ),
+                ),
+              const SizedBox(width: 6),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 250),
+                child: Text(
+                  '${tr(widget.phase)}${'.' * (1 + (_c.value * 3).floor() % 3)}',
+                  key: ValueKey(widget.phase),
+                  style: TextStyle(color: cs.onSurfaceVariant),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

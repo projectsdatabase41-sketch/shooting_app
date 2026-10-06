@@ -136,6 +136,15 @@ class AiChatViewModel extends ChangeNotifier {
   bool _busy = false;
   bool get busy => _busy;
 
+  /// Что ассистент делает сейчас (русский ключ перевода) — для анимации в чате.
+  String _phase = /*tr*/ 'Ищу информацию';
+  String get phase => _phase;
+  void _setPhase(String p) {
+    if (_phase == p) return;
+    _phase = p;
+    notifyListeners();
+  }
+
   /// Все графики из ответов. Осталось для возможных сводок; отдельной
   /// панели графиков в чате больше нет — они рисуются в сообщениях.
   List<AiMessage> get chartMessages =>
@@ -183,6 +192,10 @@ class AiChatViewModel extends ChangeNotifier {
 
     messages.add(AiMessage(fromUser: true, text: trimmed, imageBytes: image));
     _busy = true;
+    // Режим мышления начинается с анализа вопроса, быстрый — сразу с поиска.
+    _phase = service.settings.thinkingMode
+        ? /*tr*/ 'Анализирую'
+        : /*tr*/ 'Ищу информацию';
     notifyListeners();
 
     try {
@@ -190,6 +203,10 @@ class AiChatViewModel extends ChangeNotifier {
       // По ключевым словам вопроса, а не слепые "последние 20" —
       // решение пользователя (пункт 10, уточнение того же дня):
       // старая версия тянула недавние сводки независимо от темы.
+      if (service.settings.thinkingMode) {
+        // Короткая пауза не нужна: фаза сменится сама, когда дойдём до поиска.
+        _setPhase(/*tr*/ 'Анализирую');
+      }
       var pastSummaries = await memory.search(trimmed);
       // Просьба вспомнить — подмешиваем ПОЛНЫЕ тексты подходящих обменов
       // (до 3000 символов каждый) вместо кратких пересказов тех же записей.
@@ -211,6 +228,7 @@ class AiChatViewModel extends ChangeNotifier {
       final ctx = pastSummaries.isEmpty
           ? rawCtx
           : rawCtx.withPastSummaries(pastSummaries);
+      _setPhase(/*tr*/ 'Ищу информацию');
       final chunks = await knowledge.search(trimmed);
       final books = KnowledgeService.asPromptBlock(chunks,
           tables: knowledge.settings.tables,
@@ -222,12 +240,14 @@ class AiChatViewModel extends ChangeNotifier {
       final askedAt = DateTime.now();
       var contextBlock = ctx.buildContextBlock(askedAt);
       if (service.settings.thinkingMode) {
+        _setPhase(/*tr*/ 'Думаю');
         final notes = await _think(trimmed, contextBlock, history);
         if (notes.isNotEmpty) {
           contextBlock +=
               '\n\nHELPER WORKING NOTES (a plan and intermediate calculations — check them and use them for the answer, do not retell them to the user as is):\n$notes';
         }
       }
+      _setPhase(/*tr*/ 'Формулирую ответ');
       final reply = await service.ask(
         task: 'chat',
         image: image,
