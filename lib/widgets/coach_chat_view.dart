@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -69,7 +70,7 @@ class _CoachChatViewState extends State<CoachChatView> {
         _error = null;
       });
     } catch (e) {
-      if (mounted) setState(() => _error = '$e');
+      if (mounted) setState(() => _error = friendlyError(e));
     }
   }
 
@@ -82,7 +83,9 @@ class _CoachChatViewState extends State<CoachChatView> {
       _input.clear();
       await _reload();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Не отправлено: {e}', {'e': e}))));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(tr('Не отправлено: {e}', {'e': friendlyError(e)}))));
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -105,8 +108,10 @@ class _CoachChatViewState extends State<CoachChatView> {
             ),
             if (mine)
               ListTile(
-                leading: Icon(Icons.delete_outline, color: Theme.of(ctx).colorScheme.error),
-                title: Text(tr('Удалить'), style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
+                leading: Icon(Icons.delete_outline,
+                    color: Theme.of(ctx).colorScheme.error),
+                title: Text(tr('Удалить'),
+                    style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
                 onTap: () async {
                   Navigator.of(ctx).pop();
                   final ok = await showDialog<bool>(
@@ -115,8 +120,12 @@ class _CoachChatViewState extends State<CoachChatView> {
                       title: Text(tr('Удалить сообщение?')),
                       content: Text(tr('Удалится и у собеседника.')),
                       actions: [
-                        TextButton(onPressed: () => Navigator.of(d).pop(false), child: Text(tr('Отмена'))),
-                        FilledButton(onPressed: () => Navigator.of(d).pop(true), child: Text(tr('Удалить'))),
+                        TextButton(
+                            onPressed: () => Navigator.of(d).pop(false),
+                            child: Text(tr('Отмена'))),
+                        FilledButton(
+                            onPressed: () => Navigator.of(d).pop(true),
+                            child: Text(tr('Удалить'))),
                       ],
                     ),
                   );
@@ -125,7 +134,9 @@ class _CoachChatViewState extends State<CoachChatView> {
                     await widget.delete(m.id);
                     await _reload();
                   } catch (e) {
-                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+                    if (mounted)
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(friendlyError(e))));
                   }
                 },
               ),
@@ -148,7 +159,9 @@ class _CoachChatViewState extends State<CoachChatView> {
               ? Center(
                   child: _error == null
                       ? const CircularProgressIndicator()
-                      : Padding(padding: const EdgeInsets.all(24), child: Text(_error!, textAlign: TextAlign.center)),
+                      : Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Text(_error!, textAlign: TextAlign.center)),
                 )
               : messages.isEmpty
                   ? Center(child: Text(tr('Сообщений пока нет')))
@@ -202,7 +215,10 @@ class _CoachChatViewState extends State<CoachChatView> {
                 onTap: _sending ? null : _send,
                 icon: _sending
                     ? SizedBox(
-                        width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: cs.onPrimary))
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: cs.onPrimary))
                     : Icon(Icons.send, color: cs.onPrimary),
               ),
             ],

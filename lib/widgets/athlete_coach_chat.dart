@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -65,7 +66,7 @@ class _AthleteCoachChatState extends State<AthleteCoachChat> {
             : (simple.isEmpty ? null : simple.first.grantId);
       });
     } catch (e) {
-      if (mounted) setState(() => _error = '$e');
+      if (mounted) setState(() => _error = friendlyError(e));
     }
   }
 

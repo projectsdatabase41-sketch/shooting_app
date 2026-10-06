@@ -364,6 +364,19 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
                 buttonColor: darkButton,
                 buttonTextColor: darkText),
             themeMode: themeMode,
+            // Размер текста: системный (настройка телефона) × выбор
+            // пользователя; потолок 1.8 — выше вёрстка уже не держится.
+            builder: (context, child) => Selector<PersonalizationViewModel, double>(
+              selector: (_, vm) => vm.fontScale,
+              builder: (ctx, user, _) {
+                final mq = MediaQuery.of(ctx);
+                final system = mq.textScaler.scale(100) / 100;
+                return MediaQuery(
+                  data: mq.copyWith(textScaler: TextScaler.linear((system * user).clamp(0.8, 1.8).toDouble())),
+                  child: child ?? const SizedBox.shrink(),
+                );
+              },
+            ),
             // null — системный язык устройства (по умолчанию). Сам текст
             // экранов при этом не переводится — см. комментарий у
             // `PersonalizationViewModel.locale`.

@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -47,7 +48,8 @@ class CoachExerciseDetailScreen extends StatefulWidget {
   });
 
   @override
-  State<CoachExerciseDetailScreen> createState() => _CoachExerciseDetailScreenState();
+  State<CoachExerciseDetailScreen> createState() =>
+      _CoachExerciseDetailScreenState();
 }
 
 class _CoachExerciseDetailScreenState extends State<CoachExerciseDetailScreen> {
@@ -68,7 +70,9 @@ class _CoachExerciseDetailScreenState extends State<CoachExerciseDetailScreen> {
     try {
       final shots = await widget.access.fetchShots(id);
       final comments = await widget.access.fetchComments(id);
-      final session = mapCoachSessions([widget.packageRow], widget.exercises, {id: shots}).firstOrNull;
+      final session =
+          mapCoachSessions([widget.packageRow], widget.exercises, {id: shots})
+              .firstOrNull;
       if (!mounted) return;
       if (session == null) {
         setState(() {
@@ -92,7 +96,7 @@ class _CoachExerciseDetailScreenState extends State<CoachExerciseDetailScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = '$e';
+        _error = friendlyError(e);
         _loading = false;
       });
     }
@@ -100,15 +104,22 @@ class _CoachExerciseDetailScreenState extends State<CoachExerciseDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (_loading)
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     final error = _error;
     if (error != null) {
       return Scaffold(
         extendBodyBehindAppBar: true,
         appBar: GlassHeader(
-          title: Text(widget.exerciseName, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+          title: Text(widget.exerciseName,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w600)),
         ),
-        body: Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(error))),
+        body: Center(
+            child:
+                Padding(padding: const EdgeInsets.all(24), child: Text(error))),
       );
     }
 
@@ -132,7 +143,11 @@ class _CoachExerciseDetailScreenState extends State<CoachExerciseDetailScreen> {
           create: (_) => ExerciseDetailViewModel(store.db),
         ),
       ],
-      child: _DetailBody(session: session, exercise: exercise, face: face, comments: _comments),
+      child: _DetailBody(
+          session: session,
+          exercise: exercise,
+          face: face,
+          comments: _comments),
     );
   }
 }
@@ -143,7 +158,11 @@ class _DetailBody extends StatelessWidget {
   final TargetFace face;
   final List<Map<String, dynamic>> comments;
 
-  const _DetailBody({required this.session, required this.exercise, required this.face, required this.comments});
+  const _DetailBody(
+      {required this.session,
+      required this.exercise,
+      required this.face,
+      required this.comments});
 
   @override
   Widget build(BuildContext context) {
@@ -160,7 +179,11 @@ class _DetailBody extends StatelessWidget {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
-        title: Text(exercise.label, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        title: Text(exercise.label,
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
           GlassCircleButton(
             icon: const BoldIcon(Icons.tune),
@@ -171,11 +194,13 @@ class _DetailBody extends StatelessWidget {
       ),
       body: ListView(
         physics: multiTouch ? const NeverScrollableScrollPhysics() : null,
-        padding: EdgeInsets.fromLTRB(12, topInset + GlassHeader.height + 4, 12, 24),
+        padding:
+            EdgeInsets.fromLTRB(12, topInset + GlassHeader.height + 4, 12, 24),
         children: [
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: Text(tr('{p} очка ({p2})', {'p': total.toStringAsFixed(1), 'p2': total.round()})),
+            child: Text(tr('{p} очка ({p2})',
+                {'p': total.toStringAsFixed(1), 'p2': total.round()})),
           ),
           for (final block in blocks.visible) ...[
             _buildBlock(context, block),
@@ -236,7 +261,8 @@ class _BlockSettingsSheet extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: Text(tr('Удержать и перетащить — поменять порядок блоков. Переключателем справа блок скрывается.')),
+            child: Text(tr(
+                'Удержать и перетащить — поменять порядок блоков. Переключателем справа блок скрывается.')),
           ),
           Expanded(
             child: ReorderableListView(
@@ -251,7 +277,8 @@ class _BlockSettingsSheet extends StatelessWidget {
                       subtitle: blocks.isHidden(b) ? Text(tr('скрыт')) : null,
                       trailing: Switch(
                         value: !blocks.isHidden(b),
-                        onChanged: b.canHide ? (v) => blocks.setHidden(b, !v) : null,
+                        onChanged:
+                            b.canHide ? (v) => blocks.setHidden(b, !v) : null,
                       ),
                     ),
                   ),
@@ -280,7 +307,10 @@ class _TargetBlock extends StatelessWidget {
     return Column(
       children: [
         Center(
-          child: SizedBox(width: side, height: side, child: const ClipRect(child: TargetCanvas(tapToSelect: true))),
+          child: SizedBox(
+              width: side,
+              height: side,
+              child: const ClipRect(child: TargetCanvas(tapToSelect: true))),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
@@ -308,7 +338,8 @@ class _SeriesBlock extends StatelessWidget {
   final TrainingSession session;
   final TargetFace face;
   final List<Map<String, dynamic>> comments;
-  const _SeriesBlock({required this.session, required this.face, required this.comments});
+  const _SeriesBlock(
+      {required this.session, required this.face, required this.comments});
 
   @override
   Widget build(BuildContext context) {
@@ -321,15 +352,21 @@ class _SeriesBlock extends StatelessWidget {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-              child: Text(tr('Серии'), style: const TextStyle(fontWeight: FontWeight.bold)),
+              child: Text(tr('Серии'),
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
             ),
             if (stats.isEmpty)
-              Padding(padding: const EdgeInsets.all(16), child: Text(tr('Серий нет')))
+              Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(tr('Серий нет')))
             else
               for (final s in stats)
                 ListTile(
                   title: Text(tr('Серия {seriesNo}', {'seriesNo': s.seriesNo})),
-                  subtitle: Text(tr('Сумма {p} · среднее {p2}', {'p': s.total.toStringAsFixed(1), 'p2': s.average.toStringAsFixed(1)})),
+                  subtitle: Text(tr('Сумма {p} · среднее {p2}', {
+                    'p': s.total.toStringAsFixed(1),
+                    'p2': s.average.toStringAsFixed(1)
+                  })),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(
                     builder: (_) => _SeriesShotsScreen(
@@ -368,13 +405,19 @@ class _SeriesShotsScreen extends StatelessWidget {
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
         title: Text(tr('Серия {seriesNo}', {'seriesNo': seriesNo}),
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
       ),
       body: shots.isEmpty
           ? ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: EdgeInsets.only(top: topInset + GlassHeader.height),
-              children: [EmptyState(icon: Icons.list_alt, text: tr('В серии нет выстрелов'))],
+              children: [
+                EmptyState(
+                    icon: Icons.list_alt, text: tr('В серии нет выстрелов'))
+              ],
             )
           : ListView.builder(
               padding: EdgeInsets.only(top: topInset + GlassHeader.height),
@@ -382,11 +425,16 @@ class _SeriesShotsScreen extends StatelessWidget {
               itemBuilder: (context, i) {
                 final shot = shots[i];
                 return ListTile(
-                  title: Text('№${shot.shotNumber} — ${shot.score.toStringAsFixed(1)}'),
-                  subtitle: Text(tr('X: {p} мм · Y: {p2} мм', {'p': shot.xMm.toStringAsFixed(1), 'p2': shot.yMm.toStringAsFixed(1)})),
+                  title: Text(
+                      '№${shot.shotNumber} — ${shot.score.toStringAsFixed(1)}'),
+                  subtitle: Text(tr('X: {p} мм · Y: {p2} мм', {
+                    'p': shot.xMm.toStringAsFixed(1),
+                    'p2': shot.yMm.toStringAsFixed(1)
+                  })),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => _SingleShotScreen(shot: shot, face: face, comments: comments),
+                    builder: (_) => _SingleShotScreen(
+                        shot: shot, face: face, comments: comments),
                   )),
                 );
               },
@@ -404,21 +452,29 @@ class _SingleShotScreen extends StatelessWidget {
   final TargetFace face;
   final List<Map<String, dynamic>> comments;
 
-  const _SingleShotScreen({required this.shot, required this.face, required this.comments});
+  const _SingleShotScreen(
+      {required this.shot, required this.face, required this.comments});
 
   @override
   Widget build(BuildContext context) {
     final colors = context.watch<PersonalizationViewModel>().scheme;
-    final notes = comments.where((c) => c['level'] == 'shot' && '${c['shot_id']}' == shot.id).toList()
+    final notes = comments
+        .where((c) => c['level'] == 'shot' && '${c['shot_id']}' == shot.id)
+        .toList()
       ..sort((a, b) => '${a['created_at']}'.compareTo('${b['created_at']}'));
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
-        title: Text(tr('Выстрел №{shotNumber}', {'shotNumber': shot.shotNumber}),
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        title: Text(
+            tr('Выстрел №{shotNumber}', {'shotNumber': shot.shotNumber}),
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
       ),
       body: ListView(
-        padding: EdgeInsets.fromLTRB(16, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 16, 16),
+        padding: EdgeInsets.fromLTRB(16,
+            MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 16, 16),
         children: [
           AspectRatio(
             aspectRatio: 1,
@@ -433,7 +489,8 @@ class _SingleShotScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          Text(tr('Результат: {p}', {'p': shot.score.toStringAsFixed(1)}), style: Theme.of(context).textTheme.titleMedium),
+          Text(tr('Результат: {p}', {'p': shot.score.toStringAsFixed(1)}),
+              style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 12),
           Text(tr('Заметки'), style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 6),

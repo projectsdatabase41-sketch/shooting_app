@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -177,7 +178,7 @@ class PushService {
           ? tr(
               ' На iPhone push работает только у сайта, добавленного на домашний экран.')
           : '';
-      return tr('Ошибка: {e}', {'e': e}) + hint;
+      return tr('Ошибка: {e}', {'e': friendlyError(e)}) + hint;
     }
   }
 

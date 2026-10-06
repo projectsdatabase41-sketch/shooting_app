@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -38,14 +39,18 @@ class TrainingsHistoryScreen extends StatelessWidget {
     final theme = Theme.of(context);
     final store = context.watch<AppDataStore>();
     final ex = exercise;
-    final sessions = ex == null ? store.sessions : store.sessions.where((s) => s.exerciseId == ex.id).toList();
+    final sessions = ex == null
+        ? store.sessions
+        : store.sessions.where((s) => s.exerciseId == ex.id).toList();
     final df = DateFormat('dd.MM.yyyy · HH:mm');
     final topInset = MediaQuery.paddingOf(context).top;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
-        title: Text(ex?.label ?? tr('Тренировки'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        title: Text(ex?.label ?? tr('Тренировки'),
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
           if (ex != null)
             GlassCircleButton(
@@ -58,85 +63,99 @@ class TrainingsHistoryScreen extends StatelessWidget {
       body: RefreshIndicator(
         onRefresh: () => _pullFromCloud(context),
         child: sessions.isEmpty
-          ? ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: EdgeInsets.only(top: topInset + GlassHeader.height),
-              children: [
-                EmptyState(
-                  icon: Icons.history,
-                  text: ex == null
-                      ? tr('Тренировок пока нет. Начните первую на вкладке «Упражнения».')
-                      : tr('У «{label}» пока нет тренировок.', {'label': ex.label}),
-                  action: ex == null
-                      ? null
-                      : FilledButton.icon(
-                          icon: const Icon(Icons.add),
-                          label: Text(tr('Создать первую')),
-                          onPressed: () => _startTraining(context, ex),
-                        ),
-                ),
-              ],
-            )
-          : ListView.separated(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 32),
-              itemCount: sessions.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (context, i) {
-                final s = sessions[i];
-                final exercise = store.exerciseFor(s);
-                final when = s.startedAt == null ? '' : tr(' от {p}', {'p': df.format(s.startedAt!)});
-                final empty = s.shots.isEmpty;
-                return SwipeToDelete(
-                  itemKey: s.id,
-                  // Пустую тренировку удалять не жалко, и длинное
-                  // предупреждение здесь только раздражает.
-                  title: empty ? tr('Зря создал?') : tr('Удалить тренировку?'),
-                  // Про необратимость — прямым текстом: тренировка
-                  // стирается из базы вместе с выстрелами, вернуть её
-                  // будет неоткуда.
-                  message: empty
-                      ? tr('В этой тренировке нет ни одного выстрела.')
-                      : tr('Тренировка{when} и все {length} выстрелов будут удалены из базы без возможности восстановить.', {'when': when, 'length': s.shots.length}),
-                  confirmLabel: empty ? tr('Да') : tr('Удалить навсегда'),
-                  cancelLabel: empty ? tr('Нет') : tr('Отмена'),
-                  // Помечает на удаление сразу и толкает в облако тут же —
-                  // иначе строка повисает pending_delete до следующей
-                  // синхронизации, а «Восстановить всё из облака» на
-                  // экране настроек снимает такие незавершённые отметки
-                  // как зависшие, воскрешая то, что человек только что
-                  // удалил (жалоба: "нажал удалить, потом восстановить —
-                  // и всё вернулось").
-                  onConfirmed: () {
-                    store.deleteSession(s.id);
-                    store.syncInBackground();
-                  },
-                  onConfirmedLocalOnly: empty ? null : () => store.deleteSessionLocalOnly(s.id),
-                  child: _SessionCard(
-                    title: exercise?.label ?? s.exerciseId,
-                    subtitle: s.startedAt == null ? tr('Не начата') : df.format(s.startedAt!),
-                    shots: s.shots.length,
-                    totalScore: s.totalScore,
-                    totalWhole: _wholeScore(s),
-                    status: s.status,
-                    // Завершённую тренировку открываем новым экраном
-                    // просмотра (раздел 8 ТЗ: перестраиваемые блоки —
-                    // мишень со слайдером, серии, статистика, чат),
-                    // незавершённую — рабочим столом тренировки как
-                    // раньше, там же и продолжают запись.
-                    onTap: exercise == null
+            ? ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.only(top: topInset + GlassHeader.height),
+                children: [
+                  EmptyState(
+                    icon: Icons.history,
+                    text: ex == null
+                        ? tr(
+                            'Тренировок пока нет. Начните первую на вкладке «Упражнения».')
+                        : tr('У «{label}» пока нет тренировок.',
+                            {'label': ex.label}),
+                    action: ex == null
                         ? null
-                        : () => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => s.status == SessionStatus.finished
-                                    ? ExerciseHistoryDetailScreen(session: s, exercise: exercise)
-                                    : TargetScreen(session: s, exercise: exercise),
-                              ),
-                            ),
+                        : FilledButton.icon(
+                            icon: const Icon(Icons.add),
+                            label: Text(tr('Создать первую')),
+                            onPressed: () => _startTraining(context, ex),
+                          ),
                   ),
-                );
-              },
-            ),
+                ],
+              )
+            : ListView.separated(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.fromLTRB(
+                    16, topInset + GlassHeader.height + 8, 16, 32),
+                itemCount: sessions.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                itemBuilder: (context, i) {
+                  final s = sessions[i];
+                  final exercise = store.exerciseFor(s);
+                  final when = s.startedAt == null
+                      ? ''
+                      : tr(' от {p}', {'p': df.format(s.startedAt!)});
+                  final empty = s.shots.isEmpty;
+                  return SwipeToDelete(
+                    itemKey: s.id,
+                    // Пустую тренировку удалять не жалко, и длинное
+                    // предупреждение здесь только раздражает.
+                    title:
+                        empty ? tr('Зря создал?') : tr('Удалить тренировку?'),
+                    // Про необратимость — прямым текстом: тренировка
+                    // стирается из базы вместе с выстрелами, вернуть её
+                    // будет неоткуда.
+                    message: empty
+                        ? tr('В этой тренировке нет ни одного выстрела.')
+                        : tr(
+                            'Тренировка{when} и все {length} выстрелов будут удалены из базы без возможности восстановить.',
+                            {'when': when, 'length': s.shots.length}),
+                    confirmLabel: empty ? tr('Да') : tr('Удалить навсегда'),
+                    cancelLabel: empty ? tr('Нет') : tr('Отмена'),
+                    // Помечает на удаление сразу и толкает в облако тут же —
+                    // иначе строка повисает pending_delete до следующей
+                    // синхронизации, а «Восстановить всё из облака» на
+                    // экране настроек снимает такие незавершённые отметки
+                    // как зависшие, воскрешая то, что человек только что
+                    // удалил (жалоба: "нажал удалить, потом восстановить —
+                    // и всё вернулось").
+                    onConfirmed: () {
+                      store.deleteSession(s.id);
+                      store.syncInBackground();
+                    },
+                    onConfirmedLocalOnly:
+                        empty ? null : () => store.deleteSessionLocalOnly(s.id),
+                    child: _SessionCard(
+                      title: exercise?.label ?? s.exerciseId,
+                      subtitle: s.startedAt == null
+                          ? tr('Не начата')
+                          : df.format(s.startedAt!),
+                      shots: s.shots.length,
+                      totalScore: s.totalScore,
+                      totalWhole: _wholeScore(s),
+                      status: s.status,
+                      // Завершённую тренировку открываем новым экраном
+                      // просмотра (раздел 8 ТЗ: перестраиваемые блоки —
+                      // мишень со слайдером, серии, статистика, чат),
+                      // незавершённую — рабочим столом тренировки как
+                      // раньше, там же и продолжают запись.
+                      onTap: exercise == null
+                          ? null
+                          : () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      s.status == SessionStatus.finished
+                                          ? ExerciseHistoryDetailScreen(
+                                              session: s, exercise: exercise)
+                                          : TargetScreen(
+                                              session: s, exercise: exercise),
+                                ),
+                              ),
+                    ),
+                  );
+                },
+              ),
       ),
     );
   }
@@ -147,7 +166,9 @@ class TrainingsHistoryScreen extends StatelessWidget {
     try {
       await sync.pull(store);
     } catch (e) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      if (context.mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(friendlyError(e))));
     }
   }
 
@@ -223,7 +244,10 @@ class _SessionCard extends StatelessWidget {
                       style: theme.textTheme.titleSmall,
                     ),
                     const SizedBox(height: 4),
-                    Text(tr('{subtitle} · {shots} выстр.', {'subtitle': subtitle, 'shots': shots}), style: theme.textTheme.bodySmall),
+                    Text(
+                        tr('{subtitle} · {shots} выстр.',
+                            {'subtitle': subtitle, 'shots': shots}),
+                        style: theme.textTheme.bodySmall),
                     const SizedBox(height: 8),
                     _StatusChip(status: status),
                   ],
@@ -240,11 +264,13 @@ class _SessionCard extends StatelessWidget {
                     // Слово «очков» убрано: подпись ниже и так говорит,
                     // что это за числа.
                     '${totalScore.toStringAsFixed(1)} / $totalWhole',
-                    style: theme.textTheme.titleLarge?.copyWith(color: AppTheme.accentFor(cs)),
+                    style: theme.textTheme.titleLarge
+                        ?.copyWith(color: AppTheme.accentFor(cs)),
                   ),
                   Text(
                     tr('с десятыми / целыми'),
-                    style: theme.textTheme.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+                    style: theme.textTheme.labelSmall
+                        ?.copyWith(color: cs.onSurfaceVariant),
                   ),
                 ],
               ),
@@ -271,18 +297,36 @@ class _StatusChip extends StatelessWidget {
     final cs = theme.colorScheme;
 
     final (String label, Color bg, Color fg) = switch (status) {
-      SessionStatus.notStarted => (tr('Не начата'), cs.surfaceContainerHigh, cs.onSurfaceVariant),
-      SessionStatus.running => (tr('Идёт'), cs.secondaryContainer, cs.onSecondaryContainer),
-      SessionStatus.paused => (tr('Пауза'), cs.surfaceContainerHighest, cs.onSurfaceVariant),
-      SessionStatus.finished => (tr('Завершена'), cs.primaryContainer, cs.onPrimaryContainer),
+      SessionStatus.notStarted => (
+          tr('Не начата'),
+          cs.surfaceContainerHigh,
+          cs.onSurfaceVariant
+        ),
+      SessionStatus.running => (
+          tr('Идёт'),
+          cs.secondaryContainer,
+          cs.onSecondaryContainer
+        ),
+      SessionStatus.paused => (
+          tr('Пауза'),
+          cs.surfaceContainerHighest,
+          cs.onSurfaceVariant
+        ),
+      SessionStatus.finished => (
+          tr('Завершена'),
+          cs.primaryContainer,
+          cs.onPrimaryContainer
+        ),
     };
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
+      decoration:
+          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
       child: Text(
         label,
-        style: theme.textTheme.labelSmall?.copyWith(color: fg, fontWeight: FontWeight.w600),
+        style: theme.textTheme.labelSmall
+            ?.copyWith(color: fg, fontWeight: FontWeight.w600),
       ),
     );
   }

@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -72,7 +73,8 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
       final sessions = mapCoachSessions(packages, exercises, shotsByPackageId)
           .where((s) => s.shots.isNotEmpty)
           .toList()
-        ..sort((a, b) => (b.startedAt ?? DateTime(0)).compareTo(a.startedAt ?? DateTime(0)));
+        ..sort((a, b) =>
+            (b.startedAt ?? DateTime(0)).compareTo(a.startedAt ?? DateTime(0)));
       if (!mounted) return;
       setState(() {
         _sessions = sessions;
@@ -82,7 +84,7 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = '$e');
+      setState(() => _error = friendlyError(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -94,21 +96,33 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
-        title: Text(tr('Статистика'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        title: Text(tr('Статистика'),
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
       ),
       body: _athletes.isEmpty
           ? ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: EdgeInsets.only(top: topInset + GlassHeader.height),
-              children: [EmptyState(icon: Icons.groups_outlined, text: tr('Сначала добавьте спортсмена'))],
+              children: [
+                EmptyState(
+                    icon: Icons.groups_outlined,
+                    text: tr('Сначала добавьте спортсмена'))
+              ],
             )
           : ListView(
-              padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 40),
+              padding: EdgeInsets.fromLTRB(
+                  16, topInset + GlassHeader.height + 8, 16, 40),
               children: [
                 _athletePicker(),
                 const SizedBox(height: 12),
                 if (_loading) const Center(child: CircularProgressIndicator()),
-                if (_error != null) Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                if (_error != null)
+                  Text(_error!,
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.error)),
                 if (!_loading && _error == null) ..._body(),
               ],
             ),
@@ -120,7 +134,10 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
       initialValue: _athlete?.id,
       isExpanded: true,
       decoration: InputDecoration(labelText: tr('Спортсмен')),
-      items: [for (final a in _athletes) DropdownMenuItem(value: a.id, child: Text(a.name))],
+      items: [
+        for (final a in _athletes)
+          DropdownMenuItem(value: a.id, child: Text(a.name))
+      ],
       onChanged: (v) {
         setState(() => _athlete = _athletes.firstWhere((a) => a.id == v));
         _load();
@@ -130,7 +147,11 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
 
   List<Widget> _body() {
     if (_sessions.isEmpty) {
-      return [EmptyState(icon: Icons.insights_outlined, text: tr('У спортсмена пока нет тренировок с выстрелами'))];
+      return [
+        EmptyState(
+            icon: Icons.insights_outlined,
+            text: tr('У спортсмена пока нет тренировок с выстрелами'))
+      ];
     }
 
     final selection = _resolveSelection();
@@ -140,7 +161,8 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
         child: SegmentedButton<_Scope>(
           segments: [
             ButtonSegment(value: _Scope.all, label: Text(tr('Всё'))),
-            ButtonSegment(value: _Scope.exercise, label: Text(tr('Упражнение'))),
+            ButtonSegment(
+                value: _Scope.exercise, label: Text(tr('Упражнение'))),
             ButtonSegment(value: _Scope.session, label: Text(tr('Тренировка'))),
           ],
           selected: {_scope},
@@ -172,7 +194,11 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
         initialValue: _currentExerciseName(names),
         isExpanded: true,
         decoration: InputDecoration(labelText: tr('Упражнение')),
-        items: [for (final n in names) DropdownMenuItem(value: n, child: Text(n, overflow: TextOverflow.ellipsis))],
+        items: [
+          for (final n in names)
+            DropdownMenuItem(
+                value: n, child: Text(n, overflow: TextOverflow.ellipsis))
+        ],
         onChanged: (v) => setState(() => _exerciseName = v),
       ),
       const SizedBox(height: 12),
@@ -190,7 +216,8 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
     final df = DateFormat('dd.MM.yyyy HH:mm');
     final currentId = _currentSessionId();
     final current = _sessions.firstWhere((s) => s.id == currentId);
-    final seriesNos = current.shots.map((s) => s.seriesNo).toSet().toList()..sort();
+    final seriesNos = current.shots.map((s) => s.seriesNo).toSet().toList()
+      ..sort();
     return [
       DropdownButtonFormField<String>(
         initialValue: currentId,
@@ -218,7 +245,9 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
           decoration: InputDecoration(labelText: tr('Серия')),
           items: [
             DropdownMenuItem<int>(value: null, child: Text(tr('Все серии'))),
-            for (final n in seriesNos) DropdownMenuItem(value: n, child: Text(tr('Серия {n}', {'n': n}))),
+            for (final n in seriesNos)
+              DropdownMenuItem(
+                  value: n, child: Text(tr('Серия {n}', {'n': n}))),
           ],
           onChanged: (v) => setState(() => _seriesNo = v),
         ),
@@ -236,12 +265,16 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
   _Selection _resolveSelection() {
     switch (_scope) {
       case _Scope.all:
-        return _sessionsSelection(_sessions, title: tr('Динамика тренировок'), subtitle: tr('Сумма очков за тренировку'));
+        return _sessionsSelection(_sessions,
+            title: tr('Динамика тренировок'),
+            subtitle: tr('Сумма очков за тренировку'));
 
       case _Scope.exercise:
         final names = _sessions.map(_nameOf).toSet().toList()..sort();
         final name = _currentExerciseName(names);
-        final filtered = name == null ? _sessions : _sessions.where((s) => _nameOf(s) == name).toList();
+        final filtered = name == null
+            ? _sessions
+            : _sessions.where((s) => _nameOf(s) == name).toList();
         return _sessionsSelection(
           filtered.isEmpty ? _sessions : filtered,
           title: tr('Динамика по упражнению'),
@@ -249,10 +282,13 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
         );
 
       case _Scope.session:
-        final session = _sessions.firstWhere((s) => s.id == _currentSessionId());
+        final session =
+            _sessions.firstWhere((s) => s.id == _currentSessionId());
         final face = TargetFace.byCode(session.targetFaceCode);
         final all = session.countingShots;
-        final shots = _seriesNo == null ? all : all.where((s) => s.seriesNo == _seriesNo).toList();
+        final shots = _seriesNo == null
+            ? all
+            : all.where((s) => s.seriesNo == _seriesNo).toList();
         return _Selection(
           shots: shots,
           face: face,
@@ -261,7 +297,10 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
               ? null
               : [
                   AnalyticsDynamics(
-                    title: _seriesNo == null ? tr('Динамика выстрелов') : tr('Динамика серии {seriesNo}', {'seriesNo': _seriesNo}),
+                    title: _seriesNo == null
+                        ? tr('Динамика выстрелов')
+                        : tr('Динамика серии {seriesNo}',
+                            {'seriesNo': _seriesNo}),
                     subtitle: '',
                     points: shots,
                     maxY: 10.9,
@@ -278,13 +317,17 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
   /// листается тапом внутри `AnalyticsPanel`.
   ///
   /// [sessions] — новые сначала (как их отдаёт `_load`).
-  _Selection _sessionsSelection(List<TrainingSession> sessions, {required String title, required String subtitle}) {
+  _Selection _sessionsSelection(List<TrainingSession> sessions,
+      {required String title, required String subtitle}) {
     final shots = [for (final s in sessions) ...s.countingShots];
     final faceCodes = sessions.map((s) => s.targetFaceCode).toSet();
-    final face = TargetFace.byCode(sessions.isEmpty ? '' : sessions.first.targetFaceCode);
+    final face = TargetFace.byCode(
+        sessions.isEmpty ? '' : sessions.first.targetFaceCode);
 
     final ascending = sessions.reversed.toList();
-    final lastSessions = ascending.length <= 20 ? ascending : ascending.sublist(ascending.length - 20);
+    final lastSessions = ascending.length <= 20
+        ? ascending
+        : ascending.sublist(ascending.length - 20);
     final totals = [
       for (var i = 0; i < lastSessions.length; i++)
         Shot(
@@ -297,16 +340,23 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
           time: lastSessions[i].startedAt ?? DateTime.now(),
         ),
     ];
-    final maxTotal = totals.isEmpty ? 0.0 : totals.map((s) => s.score).reduce((a, b) => a > b ? a : b);
+    final maxTotal = totals.isEmpty
+        ? 0.0
+        : totals.map((s) => s.score).reduce((a, b) => a > b ? a : b);
     final labelFormat = DateFormat('dd.MM.yy');
-    final dateLabels = [for (final t in lastSessions) t.startedAt == null ? '—' : labelFormat.format(t.startedAt!)];
+    final dateLabels = [
+      for (final t in lastSessions)
+        t.startedAt == null ? '—' : labelFormat.format(t.startedAt!)
+    ];
 
     return _Selection(
       shots: shots,
       face: face,
       showSeries: false,
       mixedFacesNote: faceCodes.length > 1
-          ? tr('В срез попали разные мишени ({length}), поэтому СТП, кучность и разброс не показаны.', {'length': faceCodes.length})
+          ? tr(
+              'В срез попали разные мишени ({length}), поэтому СТП, кучность и разброс не показаны.',
+              {'length': faceCodes.length})
           : null,
       dynamics: totals.isEmpty
           ? null
@@ -326,7 +376,8 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
 
   /// Дополнительные переключаемые режимы графика — средний выстрел,
   /// худшая и лучшая серия тренировки (см. `StatisticsScreen._sessionModes`).
-  List<AnalyticsDynamics> _sessionModes(List<TrainingSession> sessions, List<String> labels) {
+  List<AnalyticsDynamics> _sessionModes(
+      List<TrainingSession> sessions, List<String> labels) {
     Shot point(int i, double value, DateTime? when) => Shot(
           id: 'mode_$i',
           shotNumber: i + 1,
@@ -341,15 +392,18 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
     final worstSeries = <Shot>[];
     final bestSeries = <Shot>[];
 
-    List<String> labelsFor(List<Shot> row) =>
-        [for (final p in row) p.shotNumber - 1 < labels.length ? labels[p.shotNumber - 1] : '—'];
+    List<String> labelsFor(List<Shot> row) => [
+          for (final p in row)
+            p.shotNumber - 1 < labels.length ? labels[p.shotNumber - 1] : '—'
+        ];
 
     for (var i = 0; i < sessions.length; i++) {
       final s = sessions[i];
       if (s.shots.isEmpty) continue;
       averages.add(point(i, s.totalScore / s.shots.length, s.startedAt));
 
-      final stats = ShotAnalytics(s.shots, TargetFace.byCode(s.targetFaceCode)).seriesStats;
+      final stats = ShotAnalytics(s.shots, TargetFace.byCode(s.targetFaceCode))
+          .seriesStats;
       if (stats.isEmpty) continue;
       var lo = stats.first;
       var hi = stats.first;

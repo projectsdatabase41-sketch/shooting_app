@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -61,7 +62,7 @@ class _AthleteTasksScreenState extends State<AthleteTasksScreen> {
       final list = await _service.list();
       if (mounted) setState(() => (_tasks = list, _error = null));
     } catch (e) {
-      if (mounted) setState(() => _error = '$e');
+      if (mounted) setState(() => _error = friendlyError(e));
     }
   }
 
@@ -79,7 +80,7 @@ class _AthleteTasksScreenState extends State<AthleteTasksScreen> {
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+            .showSnackBar(SnackBar(content: Text(friendlyError(e))));
     }
     _load();
   }

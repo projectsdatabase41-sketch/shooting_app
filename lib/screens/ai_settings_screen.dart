@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import '../local_ai/local_ai_platform.dart';
 import '../local_ai/local_ai_screen.dart';
 import '../widgets/glass_pill.dart';
@@ -138,7 +139,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
       final list = await AiService(_settings).fetchFreeModels();
       setState(() => _available = list);
     } catch (e) {
-      setState(() => _message = '$e');
+      setState(() => _message = friendlyError(e));
     } finally {
       setState(() => _loading = false);
     }
@@ -246,7 +247,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
         _message = tr('Подобрано моделей: {length}', {'length': ranked.length});
       });
     } catch (e) {
-      setState(() => _message = '$e');
+      setState(() => _message = friendlyError(e));
     } finally {
       setState(() => _loading = false);
     }

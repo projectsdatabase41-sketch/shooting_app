@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../i18n/i18n.dart';
@@ -20,7 +21,8 @@ class SettingsAppearanceScreen extends StatelessWidget {
 
   /// Встроенные языки — сразу; остальные сначала скачиваются (словарь
   /// небольшой, из репозитория) и дальше живут на устройстве.
-  Future<void> _pickLanguage(BuildContext context, PersonalizationViewModel personalization) async {
+  Future<void> _pickLanguage(
+      BuildContext context, PersonalizationViewModel personalization) async {
     final db = context.read<AppDataStore>().db;
     final picked = await showModalBottomSheet<String?>(
       context: context,
@@ -33,19 +35,24 @@ class SettingsAppearanceScreen extends StatelessWidget {
             for (final code in <String?>[null, 'ru', ...I18n.builtIn.keys])
               ListTile(
                 title: Text(_label(code)),
-                trailing: personalization.localeCode == code ? const Icon(Icons.check) : null,
+                trailing: personalization.localeCode == code
+                    ? const Icon(Icons.check)
+                    : null,
                 onTap: () => Navigator.of(ctx).pop(code ?? ''),
               ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-              child: Text(tr('Ещё языки — скачиваются'), style: Theme.of(ctx).textTheme.labelMedium),
+              child: Text(tr('Ещё языки — скачиваются'),
+                  style: Theme.of(ctx).textTheme.labelMedium),
             ),
             for (final code in I18n.downloadable.keys)
               ListTile(
                 title: Text(_label(code)),
                 trailing: personalization.localeCode == code
                     ? const Icon(Icons.check)
-                    : (I18n.isDownloaded(db, code) ? null : const Icon(Icons.download_outlined)),
+                    : (I18n.isDownloaded(db, code)
+                        ? null
+                        : const Icon(Icons.download_outlined)),
                 onTap: () => Navigator.of(ctx).pop(code),
               ),
           ],
@@ -53,13 +60,16 @@ class SettingsAppearanceScreen extends StatelessWidget {
       ),
     );
     if (picked == null || !context.mounted) return;
-    if (I18n.downloadable.containsKey(picked) && !I18n.isDownloaded(db, picked)) {
+    if (I18n.downloadable.containsKey(picked) &&
+        !I18n.isDownloaded(db, picked)) {
       final messenger = ScaffoldMessenger.of(context);
       messenger.showSnackBar(SnackBar(content: Text(tr('Скачиваю перевод…'))));
       try {
         await I18n.download(db, picked);
       } catch (e) {
-        messenger.showSnackBar(SnackBar(content: Text(tr('Не удалось скачать перевод: {e}', {'e': e}))));
+        messenger.showSnackBar(SnackBar(
+            content: Text(tr(
+                'Не удалось скачать перевод: {e}', {'e': friendlyError(e)}))));
         return;
       }
     }
@@ -75,7 +85,11 @@ class SettingsAppearanceScreen extends StatelessWidget {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
-        title: Text(tr('Внешний вид'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        title: Text(tr('Внешний вид'),
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
       ),
       body: ListView(
         padding: EdgeInsets.only(top: topInset + GlassHeader.height),
@@ -89,12 +103,33 @@ class SettingsAppearanceScreen extends StatelessWidget {
           ),
           const Divider(height: 1),
           ListTile(
+            leading: const Icon(Icons.text_fields),
+            title: Text(tr('Размер шрифта')),
+            subtitle: Slider(
+              min: 0.8,
+              max: 1.4,
+              divisions: 6,
+              value: personalization.fontScale,
+              label: '${(personalization.fontScale * 100).round()}%',
+              onChanged: personalization.setFontScale,
+            ),
+            trailing: TextButton(
+              onPressed: personalization.fontScale == 1.0
+                  ? null
+                  : () => personalization.setFontScale(1.0),
+              child: Text(tr('Как в системе')),
+            ),
+          ),
+          const Divider(height: 1),
+          ListTile(
             leading: const Icon(Icons.palette_outlined),
             title: Text(tr('Цветовые настройки')),
-            subtitle: Text(tr('Тема интерфейса, бумага, яблоко, кольца, пробоины')),
+            subtitle:
+                Text(tr('Тема интерфейса, бумага, яблоко, кольца, пробоины')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ColorPersonalizationScreen()),
+              MaterialPageRoute(
+                  builder: (_) => const ColorPersonalizationScreen()),
             ),
           ),
         ],

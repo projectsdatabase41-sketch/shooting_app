@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'dart:convert';
 import 'dart:math';
 
@@ -41,7 +42,8 @@ class ChatAuthService {
     return raw.isEmpty ? null : DateTime.tryParse(raw);
   }
 
-  bool get isSignedIn => ChatSettings.isConfigured && accessToken.isNotEmpty && !_serverChanged;
+  bool get isSignedIn =>
+      ChatSettings.isConfigured && accessToken.isNotEmpty && !_serverChanged;
 
   /// Вход сделан на ДРУГОМ сервере мессенджера (сервер переехал, см.
   /// RemoteConfig chat.url) — старый токен тут не действует, нужен новый
@@ -49,19 +51,22 @@ class ChatAuthService {
   /// сервере frbptucrvmyikencyspu.
   bool get _serverChanged {
     final at = _read('chat_server_url');
-    final effective = at.isEmpty ? 'https://frbptucrvmyikencyspu.supabase.co' : at;
+    final effective =
+        at.isEmpty ? 'https://frbptucrvmyikencyspu.supabase.co' : at;
     return effective != ChatSettings.url;
   }
 
   Future<String?> ensureFreshToken() async {
     if (!isSignedIn) return null;
     final exp = expiresAt;
-    if (exp != null && exp.isAfter(DateTime.now().add(const Duration(minutes: 1)))) {
+    if (exp != null &&
+        exp.isAfter(DateTime.now().add(const Duration(minutes: 1)))) {
       return accessToken;
     }
     if (refreshToken.isEmpty) return null;
     try {
-      await _token(grant: 'refresh_token', body: {'refresh_token': refreshToken});
+      await _token(
+          grant: 'refresh_token', body: {'refresh_token': refreshToken});
       return accessToken;
     } on AuthException {
       signOutLocally();
@@ -93,7 +98,8 @@ class ChatAuthService {
 
   Future<void> signIn({required String email, required String password}) async {
     _requireConfigured();
-    await _token(grant: 'password', body: {'email': email.trim(), 'password': password});
+    await _token(
+        grant: 'password', body: {'email': email.trim(), 'password': password});
     await _loadOwnProfile();
     // Если проект требует подтверждение почты, `signUp` не успевает
     // завести профиль (RLS не даст вставить строку без настоящей сессии,
@@ -304,7 +310,8 @@ class ChatAuthService {
               'Content-Type': 'application/json',
               'Prefer': 'return=minimal,resolution=ignore-duplicates',
             },
-            body: jsonEncode({'requester_id': userId, 'addressee_id': contactId}),
+            body:
+                jsonEncode({'requester_id': userId, 'addressee_id': contactId}),
           )
           .timeout(const Duration(seconds: 20));
     } catch (_) {
@@ -322,16 +329,14 @@ class ChatAuthService {
     if (token == null) return null;
     final client = clientFactory();
     try {
-      final res = await client
-          .get(
-            Uri.parse('$url/rest/v1/chat_friends').replace(queryParameters: {
-              'select': 'status',
-              'or': '(and(requester_id.eq.$userId,addressee_id.eq.$otherId),'
-                  'and(requester_id.eq.$otherId,addressee_id.eq.$userId))',
-            }),
-            headers: {'apikey': anonKey, 'Authorization': 'Bearer $token'},
-          )
-          .timeout(const Duration(seconds: 20));
+      final res = await client.get(
+        Uri.parse('$url/rest/v1/chat_friends').replace(queryParameters: {
+          'select': 'status',
+          'or': '(and(requester_id.eq.$userId,addressee_id.eq.$otherId),'
+              'and(requester_id.eq.$otherId,addressee_id.eq.$userId))',
+        }),
+        headers: {'apikey': anonKey, 'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 20));
       if (res.statusCode >= 400) return null;
       final decoded = jsonDecode(utf8.decode(res.bodyBytes));
       if (decoded is! List || decoded.isEmpty) return null;
@@ -348,22 +353,26 @@ class ChatAuthService {
 
   /// Входящие заявки (я — адресат, статус ещё не принят) — экран
   /// "Приватность" (см. `ChatPrivacyScreen`).
-  Future<List<({String userId, String nickname, String? avatarBase64, DateTime createdAt})>>
-      fetchFriendRequests() async {
+  Future<
+      List<
+          ({
+            String userId,
+            String nickname,
+            String? avatarBase64,
+            DateTime createdAt
+          })>> fetchFriendRequests() async {
     final token = await ensureFreshToken();
     if (token == null) return const [];
     final client = clientFactory();
     try {
-      final res = await client
-          .get(
-            Uri.parse('$url/rest/v1/chat_friends').replace(queryParameters: {
-              'select': 'requester_id,created_at',
-              'addressee_id': 'eq.$userId',
-              'status': 'eq.pending',
-            }),
-            headers: {'apikey': anonKey, 'Authorization': 'Bearer $token'},
-          )
-          .timeout(const Duration(seconds: 20));
+      final res = await client.get(
+        Uri.parse('$url/rest/v1/chat_friends').replace(queryParameters: {
+          'select': 'requester_id,created_at',
+          'addressee_id': 'eq.$userId',
+          'status': 'eq.pending',
+        }),
+        headers: {'apikey': anonKey, 'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 20));
       if (res.statusCode >= 400) return const [];
       final decoded = jsonDecode(utf8.decode(res.bodyBytes));
       if (decoded is! List || decoded.isEmpty) return const [];
@@ -375,7 +384,8 @@ class ChatAuthService {
             userId: '${row['requester_id']}',
             nickname: profiles['${row['requester_id']}']?.nickname ?? '—',
             avatarBase64: profiles['${row['requester_id']}']?.avatarBase64,
-            createdAt: DateTime.tryParse('${row['created_at']}') ?? DateTime.now(),
+            createdAt:
+                DateTime.tryParse('${row['created_at']}') ?? DateTime.now(),
           ),
       ];
     } catch (_) {
@@ -420,25 +430,21 @@ class ChatAuthService {
     if (token == null) throw AuthException(tr('Сначала войдите в чат'));
     final client = clientFactory();
     try {
-      final res = await client
-          .delete(
-            Uri.parse('$url/rest/v1/chat_friends').replace(queryParameters: {
-              'requester_id': 'eq.$requesterId',
-              'addressee_id': 'eq.$userId',
-            }),
-            headers: {'apikey': anonKey, 'Authorization': 'Bearer $token'},
-          )
-          .timeout(const Duration(seconds: 20));
+      final res = await client.delete(
+        Uri.parse('$url/rest/v1/chat_friends').replace(queryParameters: {
+          'requester_id': 'eq.$requesterId',
+          'addressee_id': 'eq.$userId',
+        }),
+        headers: {'apikey': anonKey, 'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 20));
       if (res.statusCode >= 400) throw AuthException(_message(res.body));
-      await client
-          .delete(
-            Uri.parse('$url/rest/v1/chat_messages').replace(queryParameters: {
-              'sender_id': 'eq.$requesterId',
-              'recipient_id': 'eq.$userId',
-            }),
-            headers: {'apikey': anonKey, 'Authorization': 'Bearer $token'},
-          )
-          .timeout(const Duration(seconds: 20));
+      await client.delete(
+        Uri.parse('$url/rest/v1/chat_messages').replace(queryParameters: {
+          'sender_id': 'eq.$requesterId',
+          'recipient_id': 'eq.$userId',
+        }),
+        headers: {'apikey': anonKey, 'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 20));
     } finally {
       client.close();
     }
@@ -448,26 +454,33 @@ class ChatAuthService {
   /// приложения и смену телефона, в отличие от `chat_contacts` (только
   /// на устройстве): при входе на новом устройстве список подтягивается
   /// заново в локальные контакты (см. `_ChatHomeScreenState._syncFriends`).
-  Future<List<({String userId, String nickname, String? avatarBase64, String about})>> listFriends() async {
+  Future<
+      List<
+          ({
+            String userId,
+            String nickname,
+            String? avatarBase64,
+            String about
+          })>> listFriends() async {
     final token = await ensureFreshToken();
     if (token == null) return const [];
     final client = clientFactory();
     try {
-      final res = await client
-          .get(
-            Uri.parse('$url/rest/v1/chat_friends').replace(queryParameters: {
-              'select': 'requester_id,addressee_id',
-              'status': 'eq.accepted',
-              'or': '(requester_id.eq.$userId,addressee_id.eq.$userId)',
-            }),
-            headers: {'apikey': anonKey, 'Authorization': 'Bearer $token'},
-          )
-          .timeout(const Duration(seconds: 20));
+      final res = await client.get(
+        Uri.parse('$url/rest/v1/chat_friends').replace(queryParameters: {
+          'select': 'requester_id,addressee_id',
+          'status': 'eq.accepted',
+          'or': '(requester_id.eq.$userId,addressee_id.eq.$userId)',
+        }),
+        headers: {'apikey': anonKey, 'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 20));
       if (res.statusCode >= 400) return const [];
       final decoded = jsonDecode(utf8.decode(res.bodyBytes));
       if (decoded is! List || decoded.isEmpty) return const [];
       final otherIds = decoded
-          .map((r) => '${r['requester_id']}' == userId ? '${r['addressee_id']}' : '${r['requester_id']}')
+          .map((r) => '${r['requester_id']}' == userId
+              ? '${r['addressee_id']}'
+              : '${r['requester_id']}')
           .toSet()
           .toList();
       final profiles = await resolveProfiles(otherIds);
@@ -508,7 +521,9 @@ class ChatAuthService {
   /// раньше это проходило молча и ник «не сохранялся».
   Future<void> _patchProfile(Map<String, dynamic> body) async {
     final token = await ensureFreshToken();
-    if (token == null) throw AuthException(tr('Вход в чат устарел — выйдите из чата и войдите снова'));
+    if (token == null)
+      throw AuthException(
+          tr('Вход в чат устарел — выйдите из чата и войдите снова'));
     final client = clientFactory();
     try {
       final res = await client
@@ -526,7 +541,8 @@ class ChatAuthService {
       if (res.statusCode >= 400) throw AuthException(_message(res.body));
       final rows = jsonDecode(utf8.decode(res.bodyBytes));
       if (rows is List && rows.isEmpty) {
-        throw AuthException(tr('Профиль на сервере не найден — выйдите из чата и войдите снова'));
+        throw AuthException(tr(
+            'Профиль на сервере не найден — выйдите из чата и войдите снова'));
       }
     } finally {
       client.close();
@@ -535,8 +551,8 @@ class ChatAuthService {
 
   /// Профили по списку id (ник, аватар, «о себе») — RPC `resolve_profiles`
   /// не отдаёт chat_code. Ошибка сети — пустой результат.
-  Future<Map<String, ({String nickname, String? avatarBase64, String about})>> resolveProfiles(
-      List<String> ids) async {
+  Future<Map<String, ({String nickname, String? avatarBase64, String about})>>
+      resolveProfiles(List<String> ids) async {
     if (ids.isEmpty) return {};
     final token = await ensureFreshToken();
     if (token == null) return {};
@@ -545,7 +561,11 @@ class ChatAuthService {
       final res = await client
           .post(
             Uri.parse('$url/rest/v1/rpc/resolve_profiles'),
-            headers: {'apikey': anonKey, 'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
+            headers: {
+              'apikey': anonKey,
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json'
+            },
             body: jsonEncode({'p_ids': ids}),
           )
           .timeout(const Duration(seconds: 20));
@@ -576,7 +596,11 @@ class ChatAuthService {
       final res = await client
           .post(
             Uri.parse('$url/rest/v1/rpc/$name'),
-            headers: {'apikey': anonKey, 'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
+            headers: {
+              'apikey': anonKey,
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json'
+            },
             body: jsonEncode(body),
           )
           .timeout(const Duration(seconds: 20));
@@ -594,7 +618,8 @@ class ChatAuthService {
       if (rows is! List) return null;
       return {
         for (final r in rows)
-          if (DateTime.tryParse('${r['last_seen']}') case final t?) '${r['user_id']}': t,
+          if (DateTime.tryParse('${r['last_seen']}') case final t?)
+            '${r['user_id']}': t,
       };
     } catch (_) {
       return null;
@@ -620,7 +645,15 @@ class ChatAuthService {
   }
 
   /// Все связи: state — friend | incoming | outgoing.
-  Future<List<({String userId, String nickname, String? avatarBase64, String about, String state})>> friendOverview() async {
+  Future<
+      List<
+          ({
+            String userId,
+            String nickname,
+            String? avatarBase64,
+            String about,
+            String state
+          })>> friendOverview() async {
     final rows = await _rpc('friend_overview', {});
     final list = [
       for (final r in (rows as List? ?? const []))
@@ -632,7 +665,10 @@ class ChatAuthService {
           state: '${r['state']}',
         ),
     ];
-    friendIds = {for (final f in list) if (f.state == 'friend') f.userId};
+    friendIds = {
+      for (final f in list)
+        if (f.state == 'friend') f.userId
+    };
     return list;
   }
 
@@ -647,11 +683,16 @@ class ChatAuthService {
     blockedIds.remove(userId);
   }
 
-  Future<List<({String userId, String nickname, String? avatarBase64})>> myBlocks() async {
+  Future<List<({String userId, String nickname, String? avatarBase64})>>
+      myBlocks() async {
     final rows = await _rpc('my_blocks', {});
     final list = [
       for (final r in (rows as List? ?? const []))
-        (userId: '${r['user_id']}', nickname: '${r['nickname'] ?? '—'}', avatarBase64: r['avatar_base64'] as String?),
+        (
+          userId: '${r['user_id']}',
+          nickname: '${r['nickname'] ?? '—'}',
+          avatarBase64: r['avatar_base64'] as String?
+        ),
     ];
     blockedIds = {for (final b in list) b.userId};
     return list;
@@ -669,12 +710,20 @@ class ChatAuthService {
 
   /// Все участники мессенджера (кроме себя) — по имени, «о себе» или точному
   /// коду контакта; пустой запрос — все по алфавиту. Постранично по [limit].
-  Future<List<({String userId, String nickname, String? avatarBase64, String about})>> searchProfiles(
+  Future<
+      List<
+          ({
+            String userId,
+            String nickname,
+            String? avatarBase64,
+            String about
+          })>> searchProfiles(
     String query, {
     int offset = 0,
     int limit = 30,
   }) async {
-    final rows = await _rpc('search_profiles', {'p_query': query.trim(), 'p_limit': limit, 'p_offset': offset});
+    final rows = await _rpc('search_profiles',
+        {'p_query': query.trim(), 'p_limit': limit, 'p_offset': offset});
     if (rows is! List) return const [];
     return [
       for (final r in rows.cast<Map<String, dynamic>>())
@@ -730,8 +779,17 @@ class ChatAuthService {
           })}';
 
   Future<void> updateGroup(String groupId,
-          {required String name, String about = '', String color = '', String? avatarBase64}) =>
-      _rpc('update_group', {'p_group': groupId, 'p_name': name, 'p_about': about, 'p_color': color, 'p_avatar': avatarBase64});
+          {required String name,
+          String about = '',
+          String color = '',
+          String? avatarBase64}) =>
+      _rpc('update_group', {
+        'p_group': groupId,
+        'p_name': name,
+        'p_about': about,
+        'p_color': color,
+        'p_avatar': avatarBase64
+      });
 
   Future<void> addGroupMembers(String groupId, List<String> ids) =>
       _rpc('add_group_members', {'p_group': groupId, 'p_member_ids': ids});
@@ -740,8 +798,8 @@ class ChatAuthService {
   Future<void> removeGroupMember(String groupId, String userId) =>
       _rpc('remove_group_member', {'p_group': groupId, 'p_user': userId});
 
-  Future<void> setGroupRole(String groupId, String userId, String role) =>
-      _rpc('set_group_role', {'p_group': groupId, 'p_user': userId, 'p_role': role});
+  Future<void> setGroupRole(String groupId, String userId, String role) => _rpc(
+      'set_group_role', {'p_group': groupId, 'p_user': userId, 'p_role': role});
 
   void signOutLocally() {
     _write('chat_user_id', '');
@@ -784,7 +842,13 @@ class ChatAuthService {
   /// Ищет собеседника по коду контакта — через RPC (`security definer`),
   /// а не прямым чтением `chat_profiles`: обычная строка не должна давать
   /// читать чужие профили целиком, только находить один по точному коду.
-  Future<({String userId, String nickname, String? avatarBase64, String about})?> resolveChatCode(String code) async {
+  Future<
+      ({
+        String userId,
+        String nickname,
+        String? avatarBase64,
+        String about
+      })?> resolveChatCode(String code) async {
     final token = await ensureFreshToken();
     if (token == null) throw AuthException(tr('Сначала войдите в чат'));
     final client = clientFactory();
@@ -821,12 +885,12 @@ class ChatAuthService {
     _write('chat_avatar_base64', base64 ?? '');
   }
 
-
   // ---- Внутреннее ----
 
   void _requireConfigured() {
     if (!ChatSettings.isConfigured) {
-      throw AuthException(tr('Публичный чат ещё не подключён — попробуйте позже'));
+      throw AuthException(
+          tr('Публичный чат ещё не подключён — попробуйте позже'));
     }
   }
 
@@ -835,14 +899,16 @@ class ChatAuthService {
   static const String _codeAlphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
   static String _randomChatCode() {
     final rnd = Random.secure();
-    String group() => List.generate(4, (_) => _codeAlphabet[rnd.nextInt(_codeAlphabet.length)]).join();
+    String group() => List.generate(
+        4, (_) => _codeAlphabet[rnd.nextInt(_codeAlphabet.length)]).join();
     return '${group()}-${group()}';
   }
 
   /// Заводит строку в `chat_profiles` — при столкновении по уникальному
   /// `chat_code` (крайне маловероятно, но не исключено) пробует другой
   /// код заново, до нескольких попыток.
-  Future<void> _createProfile({required String nickname, String? avatarBase64}) async {
+  Future<void> _createProfile(
+      {required String nickname, String? avatarBase64}) async {
     final token = accessToken;
     for (var attempt = 0; attempt < 5; attempt++) {
       final code = _randomChatCode();
@@ -879,7 +945,8 @@ class ChatAuthService {
         client.close();
       }
     }
-    throw AuthException(tr('Не удалось создать код контакта, попробуйте ещё раз'));
+    throw AuthException(
+        tr('Не удалось создать код контакта, попробуйте ещё раз'));
   }
 
   Future<void> _loadOwnProfile() async {
@@ -887,13 +954,15 @@ class ChatAuthService {
     final client = clientFactory();
     try {
       Future<http.Response> load(String columns) => client.get(
-            Uri.parse('$url/rest/v1/chat_profiles?user_id=eq.$userId&select=$columns'),
+            Uri.parse(
+                '$url/rest/v1/chat_profiles?user_id=eq.$userId&select=$columns'),
             headers: {'apikey': anonKey, 'Authorization': 'Bearer $token'},
           ).timeout(const Duration(seconds: 20));
       var res = await load('nickname,chat_code,avatar_base64,about');
       // Колонки about на сервере ещё нет (sql/chat-schema.sql не накатан) —
       // профиль всё равно должен загрузиться.
-      if (res.statusCode >= 400) res = await load('nickname,chat_code,avatar_base64');
+      if (res.statusCode >= 400)
+        res = await load('nickname,chat_code,avatar_base64');
       if (res.statusCode >= 400) return;
       final decoded = jsonDecode(utf8.decode(res.bodyBytes));
       if (decoded is! List || decoded.isEmpty) return;
@@ -907,13 +976,16 @@ class ChatAuthService {
     }
   }
 
-  Future<void> _token({required String grant, required Map<String, String> body}) async {
+  Future<void> _token(
+      {required String grant, required Map<String, String> body}) async {
     final res = await _post('/auth/v1/token?grant_type=$grant', body);
-    if (res['access_token'] == null) throw AuthException(tr('Сервер не выдал токен'));
+    if (res['access_token'] == null)
+      throw AuthException(tr('Сервер не выдал токен'));
     _saveSession(res);
   }
 
-  Future<Map<String, dynamic>> _post(String path, Map<String, String> body) async {
+  Future<Map<String, dynamic>> _post(
+      String path, Map<String, String> body) async {
     final client = clientFactory();
     try {
       final res = await client
@@ -930,7 +1002,9 @@ class ChatAuthService {
     } on AuthException {
       rethrow;
     } catch (e) {
-      throw AuthException(tr('Сеть недоступна или чат временно недоступен ({e})', {'e': e}));
+      throw AuthException(tr(
+          'Сеть недоступна или чат временно недоступен ({e})',
+          {'e': friendlyError(e)}));
     } finally {
       client.close();
     }
@@ -941,10 +1015,15 @@ class ChatAuthService {
     _write('chat_server_url', ChatSettings.url);
     _write('chat_access_token', '${res['access_token'] ?? ''}');
     _write('chat_refresh_token', '${res['refresh_token'] ?? ''}');
-    if (user is Map && user['id'] != null) _write('chat_user_id', '${user['id']}');
+    if (user is Map && user['id'] != null)
+      _write('chat_user_id', '${user['id']}');
     final expiresIn = res['expires_in'];
     if (expiresIn is num) {
-      _write('chat_expires_at', DateTime.now().add(Duration(seconds: expiresIn.toInt())).toIso8601String());
+      _write(
+          'chat_expires_at',
+          DateTime.now()
+              .add(Duration(seconds: expiresIn.toInt()))
+              .toIso8601String());
     }
   }
 
@@ -964,7 +1043,8 @@ class ChatAuthService {
   }
 
   String _read(String column) {
-    final rows = db.db.select('SELECT $column FROM project_settings WHERE id = 1');
+    final rows =
+        db.db.select('SELECT $column FROM project_settings WHERE id = 1');
     if (rows.isEmpty) return '';
     return '${rows.first[column] ?? ''}';
   }

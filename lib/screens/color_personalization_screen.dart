@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -68,7 +69,8 @@ class ColorPersonalizationScreen extends StatefulWidget {
   const ColorPersonalizationScreen({super.key});
 
   @override
-  State<ColorPersonalizationScreen> createState() => _ColorPersonalizationScreenState();
+  State<ColorPersonalizationScreen> createState() =>
+      _ColorPersonalizationScreenState();
 }
 
 class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
@@ -77,8 +79,19 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
   bool _showPreviewOnNarrow = false;
 
   static const _sections = <String, List<String>>{
-    /*tr*/ 'МИШЕНЬ': ['target_paper', 'target_bullseye', 'ring_lines', 'ring_labels_on_paper', 'ring_labels_on_bullseye'],
-    /*tr*/ 'ПРОБОИНЫ': ['shot_selected', 'shot_current_series', 'shot_past_series', 'shot_number_text'],
+    /*tr*/ 'МИШЕНЬ': [
+      'target_paper',
+      'target_bullseye',
+      'ring_lines',
+      'ring_labels_on_paper',
+      'ring_labels_on_bullseye'
+    ],
+    /*tr*/ 'ПРОБОИНЫ': [
+      'shot_selected',
+      'shot_current_series',
+      'shot_past_series',
+      'shot_number_text'
+    ],
     /*tr*/ 'ПРАВКА': ['compass_ring', 'edit_result_badge', 'edit_angle_badge'],
     /*tr*/ 'ИНТЕРФЕЙС': ['bottom_panel_bg', 'bottom_panel_text'],
     /*tr*/ 'ПРОЧЕЕ': ['crosshair'],
@@ -119,7 +132,11 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
-        title: Text(tr('Цветовые настройки'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        title: Text(tr('Цветовые настройки'),
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
           GlassPill(
             radius: 24,
@@ -128,7 +145,8 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
               height: 48,
               child: PopupMenuButton<String>(
                 icon: const BoldIcon(Icons.more_vert),
-                onSelected: (v) => v == 'export' ? _export(context) : _import(context),
+                onSelected: (v) =>
+                    v == 'export' ? _export(context) : _import(context),
                 itemBuilder: (_) => [
                   PopupMenuItem(value: 'export', child: Text(tr('Экспорт'))),
                   PopupMenuItem(value: 'import', child: Text(tr('Импорт'))),
@@ -140,15 +158,21 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
       ),
       body: Column(
         children: [
-          SizedBox(height: MediaQuery.paddingOf(context).top + GlassHeader.height),
-          TabBar(controller: _tab, tabs: [Tab(text: tr('ЭЛЕМЕНТЫ')), Tab(text: tr('ПРЕСЕТЫ'))]),
+          SizedBox(
+              height: MediaQuery.paddingOf(context).top + GlassHeader.height),
+          TabBar(
+              controller: _tab,
+              tabs: [Tab(text: tr('ЭЛЕМЕНТЫ')), Tab(text: tr('ПРЕСЕТЫ'))]),
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final wide = constraints.maxWidth >= 700;
                 final list = TabBarView(
                   controller: _tab,
-                  children: [_buildElementsTab(context, wide), _buildPresetsTab(context)],
+                  children: [
+                    _buildElementsTab(context, wide),
+                    _buildPresetsTab(context)
+                  ],
                 );
                 if (wide) {
                   return Row(
@@ -171,8 +195,11 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
                               Expanded(child: _buildFullPreview(context)),
                               SafeArea(
                                 child: TextButton(
-                                  onPressed: () => setState(() => _showPreviewOnNarrow = false),
-                                  child: Text(tr('Скрыть мишень'), style: const TextStyle(color: Colors.white)),
+                                  onPressed: () => setState(
+                                      () => _showPreviewOnNarrow = false),
+                                  child: Text(tr('Скрыть мишень'),
+                                      style:
+                                          const TextStyle(color: Colors.white)),
                                 ),
                               ),
                             ],
@@ -244,7 +271,9 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
           child: Text(
-            brightness == Brightness.dark ? tr('Для тёмной темы') : tr('Для светлой темы'),
+            brightness == Brightness.dark
+                ? tr('Для тёмной темы')
+                : tr('Для светлой темы'),
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ),
@@ -287,7 +316,8 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
                   ),
             ),
           ),
-          for (final key in section.value) _ColorRow(colorKey: key, title: tr(_titles[key]!)),
+          for (final key in section.value)
+            _ColorRow(colorKey: key, title: tr(_titles[key]!)),
         ],
         const SizedBox(height: 16),
         Padding(
@@ -314,7 +344,10 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
           onTap: () => vm.applyPreset(preset),
           child: Card(
             shape: isActive
-                ? RoundedRectangleBorder(side: BorderSide(color: Theme.of(context).colorScheme.primary, width: 2), borderRadius: BorderRadius.circular(8))
+                ? RoundedRectangleBorder(
+                    side: BorderSide(
+                        color: Theme.of(context).colorScheme.primary, width: 2),
+                    borderRadius: BorderRadius.circular(8))
                 : null,
             child: Column(
               // ВАЖНО: без stretch Column даёт Expanded(CustomPaint) только
@@ -401,9 +434,12 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(tr('Сбросить все цвета?')),
-        content: Text(tr('Все настройки цвета будут удалены и восстановлены значения по умолчанию.')),
+        content: Text(tr(
+            'Все настройки цвета будут удалены и восстановлены значения по умолчанию.')),
         actions: [
-          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: Text(tr('Отмена'))),
+          TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(tr('Отмена'))),
           FilledButton(
             onPressed: () {
               vm.resetAll();
@@ -460,7 +496,9 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
           decoration: InputDecoration(hintText: tr('Вставьте JSON…')),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: Text(tr('Отмена'))),
+          TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(tr('Отмена'))),
           FilledButton(
             onPressed: () {
               try {
@@ -468,7 +506,9 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
                 Navigator.of(dialogContext).pop();
               } catch (e) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(tr('Файл повреждён — импорт отклонён целиком'))),
+                  SnackBar(
+                      content:
+                          Text(tr('Файл повреждён — импорт отклонён целиком'))),
                 );
               }
             },
@@ -512,12 +552,13 @@ class _ColorRow extends StatelessWidget {
         icon: Icon(
           Icons.replay,
           color: isDefault
-              ? Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.35)
+              ? Theme.of(context)
+                  .colorScheme
+                  .onSurfaceVariant
+                  .withValues(alpha: 0.35)
               : Theme.of(context).colorScheme.primary,
         ),
-        onPressed: isDefault
-            ? null
-            : () => _confirmReset(context, vm),
+        onPressed: isDefault ? null : () => _confirmReset(context, vm),
       ),
       onTap: () => ColorPickerDialog.showForTargetKey(context, colorKey, title),
     );
@@ -529,7 +570,9 @@ class _ColorRow extends StatelessWidget {
       builder: (dialogContext) => AlertDialog(
         title: Text(tr('Сбросить к умолчанию?')),
         actions: [
-          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: Text(tr('Отмена'))),
+          TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(tr('Отмена'))),
           FilledButton(
             onPressed: () {
               vm.resetKey(colorKey);
@@ -551,7 +594,8 @@ class _AppColorRow extends StatelessWidget {
   final Color? color;
   final ValueChanged<Color?> onChanged;
 
-  const _AppColorRow({required this.title, required this.color, required this.onChanged});
+  const _AppColorRow(
+      {required this.title, required this.color, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -603,7 +647,9 @@ class _AppColorPresetsRow extends StatelessWidget {
     final brightness = Theme.of(context).brightness;
     final dark = brightness == Brightness.dark;
     // Только пресеты текущей темы — тёмных на светлой нет и наоборот.
-    final presets = [...appColorPresets, ...vm.customPresets].where((p) => p.dark == dark).toList();
+    final presets = [...appColorPresets, ...vm.customPresets]
+        .where((p) => p.dark == dark)
+        .toList();
     return SizedBox(
       height: 72,
       child: ListView.separated(
@@ -630,11 +676,16 @@ class _AppColorPresetsRow extends StatelessWidget {
                   width: 64,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+                    border: Border.all(
+                        color: Theme.of(context).colorScheme.outlineVariant),
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: [const Icon(Icons.add), const SizedBox(height: 4), Text(tr('Создать'), style: const TextStyle(fontSize: 10))],
+                    children: [
+                      const Icon(Icons.add),
+                      const SizedBox(height: 4),
+                      Text(tr('Создать'), style: const TextStyle(fontSize: 10))
+                    ],
                   ),
                 ),
               ),
@@ -651,10 +702,15 @@ class _AppColorPresetsRow extends StatelessWidget {
                     final del = await showDialog<bool>(
                       context: context,
                       builder: (ctx) => AlertDialog(
-                        title: Text(tr('Удалить пресет «{label}»?', {'label': preset.label})),
+                        title: Text(tr('Удалить пресет «{label}»?',
+                            {'label': preset.label})),
                         actions: [
-                          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr('Отмена'))),
-                          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(tr('Удалить'))),
+                          TextButton(
+                              onPressed: () => Navigator.of(ctx).pop(false),
+                              child: Text(tr('Отмена'))),
+                          FilledButton(
+                              onPressed: () => Navigator.of(ctx).pop(true),
+                              child: Text(tr('Удалить'))),
                         ],
                       ),
                     );
@@ -682,7 +738,9 @@ class _PresetSwatch extends StatelessWidget {
         color: preset.background,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: active ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.outlineVariant,
+          color: active
+              ? Theme.of(context).colorScheme.primary
+              : Theme.of(context).colorScheme.outlineVariant,
           width: active ? 2 : 1,
         ),
       ),
@@ -692,14 +750,19 @@ class _PresetSwatch extends StatelessWidget {
           Container(
             width: 28,
             height: 18,
-            decoration: BoxDecoration(color: preset.button, borderRadius: BorderRadius.circular(4)),
+            decoration: BoxDecoration(
+                color: preset.button, borderRadius: BorderRadius.circular(4)),
             alignment: Alignment.center,
             child: Container(width: 14, height: 3, color: preset.buttonText),
           ),
           const SizedBox(height: 6),
           Text(
             tr(preset.label),
-            style: TextStyle(fontSize: 10, color: preset.background.computeLuminance() > 0.5 ? Colors.black87 : Colors.white70),
+            style: TextStyle(
+                fontSize: 10,
+                color: preset.background.computeLuminance() > 0.5
+                    ? Colors.black87
+                    : Colors.white70),
             overflow: TextOverflow.ellipsis,
           ),
         ],
@@ -765,7 +828,8 @@ class _CreatePresetSheetState extends State<_CreatePresetSheet> {
       final reply = await AiService(AiSettings(db)).ask(
         task: 'app_preset',
         json: true,
-        systemPrompt: 'Ты подбираешь цвета интерфейса приложения для ${_dark ? 'ТЁМНОЙ' : 'СВЕТЛОЙ'} темы по описанию. '
+        systemPrompt:
+            'Ты подбираешь цвета интерфейса приложения для ${_dark ? 'ТЁМНОЙ' : 'СВЕТЛОЙ'} темы по описанию. '
             'Ответь ТОЛЬКО JSON: {"label":"название 1-2 слова","background":"#RRGGBB","button":"#RRGGBB","buttonText":"#RRGGBB"}. '
             'Фон ${_dark ? 'тёмный (яркость ниже 25%)' : 'светлый (яркость выше 85%)'}, текст на кнопке хорошо читается на кнопке, '
             'кнопка заметна на фоне. Название — на языке описания.',
@@ -781,10 +845,12 @@ class _CreatePresetSheetState extends State<_CreatePresetSheet> {
       var buttonText = TargetColorScheme.hexToColor('${j['buttonText']}');
       // Страховка от нечитаемого сочетания и «чужой» темы.
       if (_contrast(button, buttonText) < 3) {
-        buttonText = button.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+        buttonText =
+            button.computeLuminance() > 0.5 ? Colors.black : Colors.white;
       }
       if ((bg.computeLuminance() > 0.5) == _dark) {
-        throw Exception(tr('ИИ подобрал фон не для той темы — попробуйте переформулировать'));
+        throw Exception(tr(
+            'ИИ подобрал фон не для той темы — попробуйте переформулировать'));
       }
       setState(() => _draft = AppColorPreset(
             label: '${j['label'] ?? 'ИИ'}'.trim(),
@@ -795,7 +861,7 @@ class _CreatePresetSheetState extends State<_CreatePresetSheet> {
             custom: true,
           ));
     } catch (e) {
-      setState(() => _error = '$e');
+      setState(() => _error = friendlyError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -823,14 +889,21 @@ class _CreatePresetSheetState extends State<_CreatePresetSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(16, 0, 16, 16 + MediaQuery.viewInsetsOf(context).bottom),
+      padding: EdgeInsets.fromLTRB(
+          16, 0, 16, 16 + MediaQuery.viewInsetsOf(context).bottom),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(tr('Новый пресет — {p} тема', {'p': _dark ? tr('тёмная') : tr('светлая')}), style: theme.textTheme.titleMedium),
+          Text(
+              tr('Новый пресет — {p} тема',
+                  {'p': _dark ? tr('тёмная') : tr('светлая')}),
+              style: theme.textTheme.titleMedium),
           const SizedBox(height: 12),
-          TextField(controller: _name, decoration: InputDecoration(labelText: tr('Название (необязательно)'))),
+          TextField(
+              controller: _name,
+              decoration:
+                  InputDecoration(labelText: tr('Название (необязательно)'))),
           const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: _fromCurrent,
@@ -846,8 +919,15 @@ class _CreatePresetSheetState extends State<_CreatePresetSheet> {
               labelText: tr('Или опишите — подберёт ИИ'),
               hintText: tr('например: «спокойный морской, акцент бирюзовый»'),
               suffixIcon: _busy
-                  ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)))
-                  : IconButton(icon: const Icon(Icons.auto_awesome_outlined), onPressed: _withAi),
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2)))
+                  : IconButton(
+                      icon: const Icon(Icons.auto_awesome_outlined),
+                      onPressed: _withAi),
             ),
             onSubmitted: (_) => _withAi(),
           ),
@@ -861,11 +941,17 @@ class _CreatePresetSheetState extends State<_CreatePresetSheet> {
               children: [
                 _PresetSwatch(preset: _draft!),
                 const SizedBox(width: 12),
-                Expanded(child: Text(tr('Так будет выглядеть «{p}»', {'p': _name.text.trim().isEmpty ? _draft!.label : _name.text.trim()}))),
+                Expanded(
+                    child: Text(tr('Так будет выглядеть «{p}»', {
+                  'p': _name.text.trim().isEmpty
+                      ? _draft!.label
+                      : _name.text.trim()
+                }))),
               ],
             ),
             const SizedBox(height: 12),
-            FilledButton(onPressed: _save, child: Text(tr('Сохранить и применить'))),
+            FilledButton(
+                onPressed: _save, child: Text(tr('Сохранить и применить'))),
           ],
         ],
       ),

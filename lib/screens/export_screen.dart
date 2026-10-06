@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -45,11 +46,17 @@ class _ExportScreenState extends State<ExportScreen> {
     // Сессии без даты начала экспортировать нечем — импорт такую
     // тренировку и сам не примет обратно (SessionImport требует
     // started_at), так что честнее не предлагать их вовсе.
-    final sessions = store.sessions.where((s) => s.shots.isNotEmpty && s.startedAt != null).toList();
+    final sessions = store.sessions
+        .where((s) => s.shots.isNotEmpty && s.startedAt != null)
+        .toList();
 
     final topInset = MediaQuery.paddingOf(context).top;
     final header = GlassHeader(
-      title: Text(tr('Экспорт тренировок'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+      title: Text(tr('Экспорт тренировок'),
+          style: Theme.of(context)
+              .textTheme
+              .titleMedium
+              ?.copyWith(fontWeight: FontWeight.w600)),
     );
 
     if (sessions.isEmpty) {
@@ -62,7 +69,8 @@ class _ExportScreenState extends State<ExportScreen> {
           children: [
             EmptyState(
               icon: Icons.ios_share_outlined,
-              text: tr('Экспортировать пока нечего — нет ни одной записанной тренировки.'),
+              text: tr(
+                  'Экспортировать пока нечего — нет ни одной записанной тренировки.'),
             ),
           ],
         ),
@@ -76,7 +84,8 @@ class _ExportScreenState extends State<ExportScreen> {
       extendBodyBehindAppBar: true,
       appBar: header,
       body: ListView(
-        padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 32),
+        padding:
+            EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 32),
         children: [
           Text(
             tr('Файл в формате приложения — тот же, что понимает импорт: подходит для резервной копии и переноса на другое устройство.'),
@@ -88,8 +97,10 @@ class _ExportScreenState extends State<ExportScreen> {
             child: SegmentedButton<_Scope>(
               segments: [
                 ButtonSegment(value: _Scope.all, label: Text(tr('Всё'))),
-                ButtonSegment(value: _Scope.exercise, label: Text(tr('Упражнение'))),
-                ButtonSegment(value: _Scope.session, label: Text(tr('Тренировка'))),
+                ButtonSegment(
+                    value: _Scope.exercise, label: Text(tr('Упражнение'))),
+                ButtonSegment(
+                    value: _Scope.session, label: Text(tr('Тренировка'))),
               ],
               selected: {_scope},
               showSelectedIcon: false,
@@ -103,14 +114,24 @@ class _ExportScreenState extends State<ExportScreen> {
           Text(
             selected.isEmpty
                 ? tr('Под условия ничего не подходит')
-                : tr('К экспорту: {length} {p}, {shotCount} {p2}', {'length': selected.length, 'p': _sessionsWord(selected.length), 'shotCount': shotCount, 'p2': _shotsWord(shotCount)}),
+                : tr('К экспорту: {length} {p}, {shotCount} {p2}', {
+                    'length': selected.length,
+                    'p': _sessionsWord(selected.length),
+                    'shotCount': shotCount,
+                    'p2': _shotsWord(shotCount)
+                  }),
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: selected.isEmpty || _busy ? null : () => _export(store, selected),
+            onPressed: selected.isEmpty || _busy
+                ? null
+                : () => _export(store, selected),
             icon: _busy
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.ios_share),
             label: Text(tr('Экспортировать')),
           ),
@@ -123,29 +144,38 @@ class _ExportScreenState extends State<ExportScreen> {
     );
   }
 
-  List<Widget> _scopePickers(AppDataStore store, List<TrainingSession> sessions) {
+  List<Widget> _scopePickers(
+      AppDataStore store, List<TrainingSession> sessions) {
     final df = DateFormat('dd.MM.yyyy HH:mm');
     switch (_scope) {
       case _Scope.all:
         return const [];
       case _Scope.exercise:
         final ids = sessions.map((s) => s.exerciseId).toSet();
-        final exercises = store.exercises.where((e) => ids.contains(e.id)).toList();
-        final current = exercises.any((e) => e.id == _exerciseId) ? _exerciseId : exercises.firstOrNull?.id;
+        final exercises =
+            store.exercises.where((e) => ids.contains(e.id)).toList();
+        final current = exercises.any((e) => e.id == _exerciseId)
+            ? _exerciseId
+            : exercises.firstOrNull?.id;
         return [
           DropdownButtonFormField<String>(
             initialValue: current,
             isExpanded: true,
             decoration: InputDecoration(labelText: tr('Упражнение')),
             items: [
-              for (final e in exercises) DropdownMenuItem(value: e.id, child: Text(e.label, overflow: TextOverflow.ellipsis)),
+              for (final e in exercises)
+                DropdownMenuItem(
+                    value: e.id,
+                    child: Text(e.label, overflow: TextOverflow.ellipsis)),
             ],
             onChanged: (v) => setState(() => _exerciseId = v),
           ),
           const SizedBox(height: 12),
         ];
       case _Scope.session:
-        final current = sessions.any((s) => s.id == _sessionId) ? _sessionId : sessions.first.id;
+        final current = sessions.any((s) => s.id == _sessionId)
+            ? _sessionId
+            : sessions.first.id;
         return [
           DropdownButtonFormField<String>(
             initialValue: current,
@@ -188,7 +218,8 @@ class _ExportScreenState extends State<ExportScreen> {
     );
   }
 
-  List<TrainingSession> _selectSessions(AppDataStore store, List<TrainingSession> sessions) {
+  List<TrainingSession> _selectSessions(
+      AppDataStore store, List<TrainingSession> sessions) {
     Iterable<TrainingSession> list = sessions;
     switch (_scope) {
       case _Scope.all:
@@ -198,7 +229,9 @@ class _ExportScreenState extends State<ExportScreen> {
         final id = ids.contains(_exerciseId) ? _exerciseId : ids.firstOrNull;
         list = list.where((s) => s.exerciseId == id);
       case _Scope.session:
-        final id = sessions.any((s) => s.id == _sessionId) ? _sessionId : sessions.first.id;
+        final id = sessions.any((s) => s.id == _sessionId)
+            ? _sessionId
+            : sessions.first.id;
         list = list.where((s) => s.id == id);
     }
     if (_periodDays != null) {
@@ -208,7 +241,8 @@ class _ExportScreenState extends State<ExportScreen> {
     return list.toList();
   }
 
-  Future<void> _export(AppDataStore store, List<TrainingSession> sessions) async {
+  Future<void> _export(
+      AppDataStore store, List<TrainingSession> sessions) async {
     setState(() {
       _busy = true;
       _message = null;
@@ -224,16 +258,19 @@ class _ExportScreenState extends State<ExportScreen> {
       };
       final jsonText = const JsonEncoder.withIndent('  ').convert(bundle);
       final bytes = Uint8List.fromList(utf8.encode(jsonText));
-      final name = 'shooting_export_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.json';
+      final name =
+          'shooting_export_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.json';
 
       await SharePlus.instance.share(
         ShareParams(
-          files: [XFile.fromData(bytes, mimeType: 'application/json', name: name)],
+          files: [
+            XFile.fromData(bytes, mimeType: 'application/json', name: name)
+          ],
           subject: tr('Экспорт тренировок'),
         ),
       );
     } catch (e) {
-      if (mounted) setState(() => _message = '$e');
+      if (mounted) setState(() => _message = friendlyError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

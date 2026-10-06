@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -78,7 +79,8 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
 
       final exercises = await _access.fetchExercises();
       final sessions = await _access.fetchSessions();
-      sessions.sort((a, b) => '${b['started_at']}'.compareTo('${a['started_at']}'));
+      sessions
+          .sort((a, b) => '${b['started_at']}'.compareTo('${a['started_at']}'));
       if (!mounted) return;
       setState(() {
         _exercises = exercises;
@@ -86,7 +88,7 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = '$e');
+      setState(() => _error = friendlyError(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -95,8 +97,12 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
   /// `_exercises` — снимки-упражнения (реальная таблица `exercises`),
   /// связаны с тренировкой по `package_id`, а не по `id`: отдельного
   /// `exercise_id` на самой тренировке в реальной схеме нет.
-  String _exerciseName(String packageId) => _exercises
-      .firstWhere((e) => e['package_id'] == packageId, orElse: () => {'exercise_name': tr('Упражнение')})['exercise_name'] as String? ?? tr('Упражнение');
+  String _exerciseName(String packageId) =>
+      _exercises.firstWhere((e) => e['package_id'] == packageId,
+          orElse: () => {
+                'exercise_name': tr('Упражнение')
+              })['exercise_name'] as String? ??
+      tr('Упражнение');
 
   /// Группировка тренировок по названию упражнения — сессии внутри
   /// каждой группы уже отсортированы по дате (новые сначала, см. `_load`),
@@ -109,8 +115,12 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
       final name = _exerciseName(s['id'] as String);
       (byName[name] ??= []).add(s);
     }
-    final groups = [for (final e in byName.entries) _ExerciseGroup(name: e.key, sessions: e.value)];
-    groups.sort((a, b) => '${b.sessions.first['started_at']}'.compareTo('${a.sessions.first['started_at']}'));
+    final groups = [
+      for (final e in byName.entries)
+        _ExerciseGroup(name: e.key, sessions: e.value)
+    ];
+    groups.sort((a, b) => '${b.sessions.first['started_at']}'
+        .compareTo('${a.sessions.first['started_at']}'));
     return groups;
   }
 
@@ -124,7 +134,11 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
       return Scaffold(
         extendBodyBehindAppBar: true,
         appBar: GlassHeader(
-          title: Text(widget.athleteName, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+          title: Text(widget.athleteName,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w600)),
         ),
         body: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -145,11 +159,18 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
-        title: Text(widget.athleteName, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        title: Text(widget.athleteName,
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
           GlassCircleButton(
             icon: _loading
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2))
                 : const BoldIcon(Icons.refresh),
             tooltip: tr('Обновить'),
             onTap: _loading ? null : _load,
@@ -179,14 +200,18 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
                   itemCount: groups.length,
                   itemBuilder: (context, i) {
                     final g = groups[i];
-                    final last = DateTime.tryParse('${g.sessions.first['started_at']}');
+                    final last =
+                        DateTime.tryParse('${g.sessions.first['started_at']}');
                     return ListTile(
                       title: Text(g.name),
                       subtitle: Text(
                         // Дата ВСЕГДА видна в строке упражнения — по ней
                         // видно, что тренировали последним (решение
                         // пользователя).
-                        tr('Последняя: {p} · тренировок: {length}', {'p': last == null ? '—' : df.format(last.toLocal()), 'length': g.sessions.length}),
+                        tr('Последняя: {p} · тренировок: {length}', {
+                          'p': last == null ? '—' : df.format(last.toLocal()),
+                          'length': g.sessions.length
+                        }),
                       ),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () => Navigator.of(context).push(MaterialPageRoute(
@@ -216,7 +241,8 @@ class _ExerciseTrainingsScreen extends StatelessWidget {
   final List<Map<String, dynamic>> exercises;
   final _ExerciseGroup group;
 
-  const _ExerciseTrainingsScreen({required this.access, required this.exercises, required this.group});
+  const _ExerciseTrainingsScreen(
+      {required this.access, required this.exercises, required this.group});
 
   @override
   Widget build(BuildContext context) {
@@ -224,10 +250,15 @@ class _ExerciseTrainingsScreen extends StatelessWidget {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
-        title: Text(group.name, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        title: Text(group.name,
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
       ),
       body: ListView.builder(
-        padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + GlassHeader.height),
+        padding: EdgeInsets.only(
+            top: MediaQuery.paddingOf(context).top + GlassHeader.height),
         itemCount: group.sessions.length,
         itemBuilder: (context, i) {
           final s = group.sessions[i];

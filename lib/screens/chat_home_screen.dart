@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
@@ -771,7 +772,7 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+            .showSnackBar(SnackBar(content: Text(friendlyError(e))));
     }
   }
 
@@ -818,7 +819,7 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
     } on AuthException catch (e) {
       setState(() => _error = e.message);
     } catch (e) {
-      setState(() => _error = '$e');
+      setState(() => _error = friendlyError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

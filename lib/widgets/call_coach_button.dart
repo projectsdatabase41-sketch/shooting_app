@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
 
 import '../models/chat_contact.dart';
@@ -103,8 +104,9 @@ class _CallCoachButtonState extends State<CallCoachButton> {
           content: Text(tr('{p} получит вызов',
               {'p': _repo.contactById(id)?.nickname ?? tr('Тренер')}))));
     } catch (e) {
-      messenger.showSnackBar(
-          SnackBar(content: Text(tr('Не удалось позвать: {e}', {'e': e}))));
+      messenger.showSnackBar(SnackBar(
+          content:
+              Text(tr('Не удалось позвать: {e}', {'e': friendlyError(e)}))));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

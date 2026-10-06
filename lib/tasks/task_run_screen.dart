@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -222,14 +223,15 @@ class _TaskRunScreenState extends State<TaskRunScreen> {
         if (mounted) setState(() => _status = null);
       } catch (e) {
         if (mounted)
-          setState(() => _status =
-              tr('Задание сохранено, но отчёт ИИ не получился: {e}', {'e': e}));
+          setState(() => _status = tr(
+              'Задание сохранено, но отчёт ИИ не получился: {e}',
+              {'e': friendlyError(e)}));
       }
     } catch (e) {
       if (mounted) {
         setState(() => _status = tr(
             'Не удалось сохранить: {e}. Данные на экране — попробуйте ещё раз.',
-            {'e': e}));
+            {'e': friendlyError(e)}));
       }
     } finally {
       if (mounted) setState(() => _submitting = false);

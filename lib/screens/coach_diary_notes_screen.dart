@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -207,7 +208,7 @@ class _AddNoteDialogState extends State<_AddNoteDialog> {
       ));
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = '$e');
+      setState(() => _error = friendlyError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -435,7 +436,7 @@ class _NoteScreenState extends State<_NoteScreen> {
       _save();
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = '$e');
+      setState(() => _error = friendlyError(e));
     } finally {
       if (mounted) setState(() => _aiBusy = false);
     }

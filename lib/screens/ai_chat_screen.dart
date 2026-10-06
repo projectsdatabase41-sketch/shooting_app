@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -609,7 +610,7 @@ class _AiChatBodyState extends State<_AiChatBody> {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text('$e')));
+        ..showSnackBar(SnackBar(content: Text(friendlyError(e))));
     }
   }
 

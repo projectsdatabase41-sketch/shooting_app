@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:provider/provider.dart';
@@ -33,7 +34,11 @@ class _SettingsDataScreenState extends State<SettingsDataScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
-        title: Text(tr('Данные и синхронизация'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        title: Text(tr('Данные и синхронизация'),
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
       ),
       body: ListView(
         padding: EdgeInsets.fromLTRB(0, topInset + GlassHeader.height, 0, 32),
@@ -48,7 +53,8 @@ class _SettingsDataScreenState extends State<SettingsDataScreen> {
           ListTile(
             leading: const Icon(Icons.ios_share_outlined),
             title: Text(tr('Экспорт тренировок')),
-            subtitle: Text(tr('В файл: для резервной копии или переноса на другое устройство')),
+            subtitle: Text(tr(
+                'В файл: для резервной копии или переноса на другое устройство')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const ExportScreen()),
@@ -75,14 +81,20 @@ class _SettingsDataScreenState extends State<SettingsDataScreen> {
                     OutlinedButton.icon(
                       onPressed: _syncing ? null : () => _pullNow(context),
                       icon: _syncing
-                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2))
                           : const Icon(Icons.cloud_download_outlined),
                       label: Text(tr('Загрузить из облака')),
                     ),
                     FilledButton.icon(
                       onPressed: _syncing ? null : () => _pushNow(context),
                       icon: _syncing
-                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2))
                           : const Icon(Icons.cloud_upload_outlined),
                       label: Text(tr('Отправить в облако')),
                     ),
@@ -101,7 +113,8 @@ class _SettingsDataScreenState extends State<SettingsDataScreen> {
                 ),
                 if (_syncMessage != null) ...[
                   const SizedBox(height: 8),
-                  Text(_syncMessage!, style: Theme.of(context).textTheme.bodySmall),
+                  Text(_syncMessage!,
+                      style: Theme.of(context).textTheme.bodySmall),
                 ],
               ],
             ),
@@ -127,12 +140,20 @@ class _SettingsDataScreenState extends State<SettingsDataScreen> {
     try {
       final result = await sync.pull(store);
       final parts = <String>[];
-      if (result.pulledSessions > 0) parts.add(tr('получено тренировок: {pulledSessions}', {'pulledSessions': result.pulledSessions}));
-      if (result.pulledExercises > 0) parts.add(tr('упражнений: {pulledExercises}', {'pulledExercises': result.pulledExercises}));
-      if (result.pulledComments > 0) parts.add(tr('комментариев: {pulledComments}', {'pulledComments': result.pulledComments}));
-      setState(() => _syncMessage = parts.isEmpty ? tr('Готово, новых данных не было') : tr('Готово — {p}', {'p': parts.join(', ')}));
+      if (result.pulledSessions > 0)
+        parts.add(tr('получено тренировок: {pulledSessions}',
+            {'pulledSessions': result.pulledSessions}));
+      if (result.pulledExercises > 0)
+        parts.add(tr('упражнений: {pulledExercises}',
+            {'pulledExercises': result.pulledExercises}));
+      if (result.pulledComments > 0)
+        parts.add(tr('комментариев: {pulledComments}',
+            {'pulledComments': result.pulledComments}));
+      setState(() => _syncMessage = parts.isEmpty
+          ? tr('Готово, новых данных не было')
+          : tr('Готово — {p}', {'p': parts.join(', ')}));
     } catch (e) {
-      setState(() => _syncMessage = '$e');
+      setState(() => _syncMessage = friendlyError(e));
     } finally {
       setState(() => _syncing = false);
     }
@@ -149,12 +170,20 @@ class _SettingsDataScreenState extends State<SettingsDataScreen> {
     try {
       final result = await sync.pull(store);
       final parts = <String>[];
-      if (result.pulledSessions > 0) parts.add(tr('получено тренировок: {pulledSessions}', {'pulledSessions': result.pulledSessions}));
-      if (result.pulledExercises > 0) parts.add(tr('упражнений: {pulledExercises}', {'pulledExercises': result.pulledExercises}));
-      if (result.pulledComments > 0) parts.add(tr('комментариев: {pulledComments}', {'pulledComments': result.pulledComments}));
-      setState(() => _syncMessage = parts.isEmpty ? tr('Готово, новых данных не было') : tr('Готово — {p}', {'p': parts.join(', ')}));
+      if (result.pulledSessions > 0)
+        parts.add(tr('получено тренировок: {pulledSessions}',
+            {'pulledSessions': result.pulledSessions}));
+      if (result.pulledExercises > 0)
+        parts.add(tr('упражнений: {pulledExercises}',
+            {'pulledExercises': result.pulledExercises}));
+      if (result.pulledComments > 0)
+        parts.add(tr('комментариев: {pulledComments}',
+            {'pulledComments': result.pulledComments}));
+      setState(() => _syncMessage = parts.isEmpty
+          ? tr('Готово, новых данных не было')
+          : tr('Готово — {p}', {'p': parts.join(', ')}));
     } catch (e) {
-      setState(() => _syncMessage = '$e');
+      setState(() => _syncMessage = friendlyError(e));
     } finally {
       setState(() => _syncing = false);
     }
@@ -171,11 +200,14 @@ class _SettingsDataScreenState extends State<SettingsDataScreen> {
       final deleted = await sync.pushDeletions(store);
       final pushed = await sync.push(store);
       final parts = <String>[];
-      if (deleted > 0) parts.add(tr('удалено: {deleted}', {'deleted': deleted}));
+      if (deleted > 0)
+        parts.add(tr('удалено: {deleted}', {'deleted': deleted}));
       if (pushed > 0) parts.add(tr('отправлено: {pushed}', {'pushed': pushed}));
-      setState(() => _syncMessage = parts.isEmpty ? tr('Готово, новых данных не было') : tr('Готово — {p}', {'p': parts.join(', ')}));
+      setState(() => _syncMessage = parts.isEmpty
+          ? tr('Готово, новых данных не было')
+          : tr('Готово — {p}', {'p': parts.join(', ')}));
     } catch (e) {
-      setState(() => _syncMessage = '$e');
+      setState(() => _syncMessage = friendlyError(e));
     } finally {
       setState(() => _syncing = false);
     }
@@ -204,7 +236,8 @@ void _showImportDialog(BuildContext context) {
         children: [
           for (final entry in links.entries) ...[
             OutlinedButton(
-              onPressed: () => launchUrl(Uri.parse(entry.value), mode: LaunchMode.externalApplication),
+              onPressed: () => launchUrl(Uri.parse(entry.value),
+                  mode: LaunchMode.externalApplication),
               child: Text(entry.key),
             ),
             const SizedBox(height: 8),
@@ -217,7 +250,9 @@ void _showImportDialog(BuildContext context) {
         ],
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr('Закрыть'))),
+        TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(tr('Закрыть'))),
       ],
     ),
   );
@@ -279,7 +314,9 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr('Отмена'))),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(tr('Отмена'))),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
             child: Text(tr('Создать')),
@@ -298,12 +335,13 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
       _error = null;
     });
     try {
-      final token = await _sync.createShareToken(context.read<AppDataStore>(), athleteLabel: label);
+      final token = await _sync.createShareToken(context.read<AppDataStore>(),
+          athleteLabel: label);
       if (!mounted) return;
       setState(() => _lastCreatedToken = token);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = '$e');
+      setState(() => _error = friendlyError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -318,7 +356,7 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
       await _sync.revokeShareToken(context.read<AppDataStore>(), grantId);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = '$e');
+      setState(() => _error = friendlyError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -353,7 +391,8 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
         if (_error != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            child: Text(_error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error)),
           ),
         if (_lastCreatedToken != null)
           Padding(
@@ -371,13 +410,21 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
                     Row(
                       children: [
                         Icon(Icons.warning_amber_rounded,
-                            size: 16, color: Theme.of(context).colorScheme.onSecondaryContainer),
+                            size: 16,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSecondaryContainer),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
                             tr('Токен показывается только один раз'),
-                            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSecondaryContainer,
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelMedium
+                                ?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSecondaryContainer,
                                 ),
                           ),
                         ),
@@ -390,10 +437,12 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
                     // а плечом подсмотреть — риск.
                     OutlinedButton.icon(
                       onPressed: () {
-                        Clipboard.setData(ClipboardData(text: _lastCreatedToken!));
+                        Clipboard.setData(
+                            ClipboardData(text: _lastCreatedToken!));
                         ScaffoldMessenger.of(context)
                           ..hideCurrentSnackBar()
-                          ..showSnackBar(SnackBar(content: Text(tr('Токен скопирован'))));
+                          ..showSnackBar(
+                              SnackBar(content: Text(tr('Токен скопирован'))));
                       },
                       icon: const Icon(Icons.copy, size: 16),
                       label: Text(tr('Скопировать токен')),
@@ -404,7 +453,9 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
             ),
           ),
         ...store.shareGrants.map((g) => ListTile(
-              title: Text(g.athleteLabel.isEmpty ? tr('Токен {p}', {'p': g.id.substring(0, 6)}) : g.athleteLabel),
+              title: Text(g.athleteLabel.isEmpty
+                  ? tr('Токен {p}', {'p': g.id.substring(0, 6)})
+                  : g.athleteLabel),
               subtitle: Text(tr('Создан {p}', {'p': g.createdAt.toLocal()})),
               trailing: TextButton(
                 onPressed: _busy ? null : () => _revoke(g.id),
@@ -415,7 +466,10 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
           padding: const EdgeInsets.all(16),
           child: OutlinedButton.icon(
             icon: _busy
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.add),
             label: Text(tr('Создать токен')),
             onPressed: (!signedIn || _busy) ? null : _create,

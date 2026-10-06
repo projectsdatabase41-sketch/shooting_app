@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
@@ -72,7 +73,7 @@ class _ImportScreenState extends State<ImportScreen> {
       });
     } catch (e) {
       setState(() {
-        _error = '$e';
+        _error = friendlyError(e);
         _bundle = null;
         _busy = false;
       });
@@ -101,20 +102,27 @@ class _ImportScreenState extends State<ImportScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
-        title: Text(tr('Импорт тренировок'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        title: Text(tr('Импорт тренировок'),
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
       ),
       body: ListView(
-        padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 32),
+        padding:
+            EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 32),
         children: [
           SectionHeader(
             title: tr('Файл'),
-            subtitle: tr('JSON с тренировками. Записывается только после подтверждения.'),
+            subtitle: tr(
+                'JSON с тренировками. Записывается только после подтверждения.'),
           ),
           const SizedBox(height: 12),
           FilledButton.icon(
             onPressed: _busy ? null : _pick,
             icon: _busy
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.folder_open),
             label: Text(_fileName ?? tr('Выбрать файл')),
           ),
@@ -127,12 +135,14 @@ class _ImportScreenState extends State<ImportScreen> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.error_outline, size: 18, color: cs.onErrorContainer),
+                    Icon(Icons.error_outline,
+                        size: 18, color: cs.onErrorContainer),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         _error!,
-                        style: theme.textTheme.bodyMedium?.copyWith(color: cs.onErrorContainer),
+                        style: theme.textTheme.bodyMedium
+                            ?.copyWith(color: cs.onErrorContainer),
                       ),
                     ),
                   ],
@@ -148,12 +158,15 @@ class _ImportScreenState extends State<ImportScreen> {
                 padding: const EdgeInsets.all(12),
                 child: Row(
                   children: [
-                    Icon(Icons.check_circle_outline, size: 18, color: cs.onSecondaryContainer),
+                    Icon(Icons.check_circle_outline,
+                        size: 18, color: cs.onSecondaryContainer),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        tr('Добавлено тренировок: {applied}. Смотрите на вкладке «История».', {'applied': _applied}),
-                        style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSecondaryContainer),
+                        tr('Добавлено тренировок: {applied}. Смотрите на вкладке «История».',
+                            {'applied': _applied}),
+                        style: theme.textTheme.bodyMedium
+                            ?.copyWith(color: cs.onSecondaryContainer),
                       ),
                     ),
                   ],
@@ -165,7 +178,13 @@ class _ImportScreenState extends State<ImportScreen> {
             const SizedBox(height: 24),
             SectionHeader(
               title: tr('Что будет добавлено'),
-              subtitle: tr('Источник: {source} · тренировок {length}, выстрелов {shotCount}', {'source': bundle.source, 'length': bundle.sessions.length, 'shotCount': bundle.shotCount}),
+              subtitle: tr(
+                  'Источник: {source} · тренировок {length}, выстрелов {shotCount}',
+                  {
+                    'source': bundle.source,
+                    'length': bundle.sessions.length,
+                    'shotCount': bundle.shotCount
+                  }),
             ),
             const SizedBox(height: 12),
             for (final s in bundle.sessions)
@@ -173,7 +192,14 @@ class _ImportScreenState extends State<ImportScreen> {
                 child: ListTile(
                   title: Text(s.label),
                   subtitle: Text(
-                    tr('{p} · {p2}\nвыстрелов {length}, сумма {p3}', {'p': s.session.startedAt == null ? '—' : df.format(s.session.startedAt!), 'p2': TargetFace.byCode(s.targetFaceCode).name, 'length': s.session.shots.length, 'p3': s.session.totalScore.toStringAsFixed(1)}),
+                    tr('{p} · {p2}\nвыстрелов {length}, сумма {p3}', {
+                      'p': s.session.startedAt == null
+                          ? '—'
+                          : df.format(s.session.startedAt!),
+                      'p2': TargetFace.byCode(s.targetFaceCode).name,
+                      'length': s.session.shots.length,
+                      'p3': s.session.totalScore.toStringAsFixed(1)
+                    }),
                   ),
                   isThreeLine: true,
                 ),
@@ -182,7 +208,8 @@ class _ImportScreenState extends State<ImportScreen> {
             FilledButton.icon(
               onPressed: _apply,
               icon: const Icon(Icons.download_done),
-              label: Text(tr('Добавить {length} в базу', {'length': bundle.sessions.length})),
+              label: Text(tr('Добавить {length} в базу',
+                  {'length': bundle.sessions.length})),
             ),
           ],
           const SizedBox(height: 24),

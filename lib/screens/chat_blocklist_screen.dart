@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
 
 import '../i18n/i18n.dart';
@@ -31,7 +32,7 @@ class _ChatBlocklistScreenState extends State<ChatBlocklistScreen> {
       final l = await widget.auth.myBlocks();
       if (mounted) setState(() => (_list = l, _error = null));
     } catch (e) {
-      if (mounted) setState(() => _error = '$e');
+      if (mounted) setState(() => _error = friendlyError(e));
     }
   }
 
@@ -39,7 +40,9 @@ class _ChatBlocklistScreenState extends State<ChatBlocklistScreen> {
     try {
       await widget.auth.unblockUser(id);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(friendlyError(e))));
     }
     await _load();
   }
@@ -51,24 +54,37 @@ class _ChatBlocklistScreenState extends State<ChatBlocklistScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
-        title: Text(tr('Чёрный список'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        title: Text(tr('Чёрный список'),
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
       ),
       body: list == null
-          ? Center(child: _error == null ? const CircularProgressIndicator() : Text(_error!))
+          ? Center(
+              child: _error == null
+                  ? const CircularProgressIndicator()
+                  : Text(_error!))
           : list.isEmpty
               ? ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: EdgeInsets.only(top: topInset + GlassHeader.height),
-                  children: [EmptyState(icon: Icons.block, text: tr('Чёрный список пуст'))],
+                  children: [
+                    EmptyState(
+                        icon: Icons.block, text: tr('Чёрный список пуст'))
+                  ],
                 )
               : ListView(
                   padding: EdgeInsets.only(top: topInset + GlassHeader.height),
                   children: [
                     for (final b in list)
                       ListTile(
-                        leading: ChatAvatar(base64: b.avatarBase64, nickname: b.nickname),
+                        leading: ChatAvatar(
+                            base64: b.avatarBase64, nickname: b.nickname),
                         title: Text(b.nickname),
-                        trailing: TextButton(onPressed: () => _unblock(b.userId), child: Text(tr('Разблокировать'))),
+                        trailing: TextButton(
+                            onPressed: () => _unblock(b.userId),
+                            child: Text(tr('Разблокировать'))),
                       ),
                   ],
                 ),

@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
 
 import '../services/chat_auth_service.dart';
@@ -253,7 +254,7 @@ class _ChatNotificationSettingsScreenState
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+            .showSnackBar(SnackBar(content: Text(friendlyError(e))));
     } finally {
       if (mounted) setState(() {});
     }
@@ -337,7 +338,7 @@ class ChatAccountSettingsScreen extends StatelessWidget {
     } catch (e) {
       if (context.mounted)
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+            .showSnackBar(SnackBar(content: Text(friendlyError(e))));
     }
   }
 

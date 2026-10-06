@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'dart:ui' show Color, Locale;
 import 'package:flutter/foundation.dart';
 import 'dart:convert';
@@ -39,6 +40,24 @@ class PersonalizationViewModel extends ChangeNotifier {
   /// 'system'/'light'/'dark' — там уже так хранится булев
   /// `shot_number_text_auto` ('1'/'0'), так что прецедент есть.
   static const String themeModeKey = 'app_theme_mode';
+  static const String fontScaleKey = 'app_font_scale';
+
+  /// Множитель размера текста ПОВЕРХ системного (настройка телефона
+  /// сохраняет силу) — 1.0 значит «как в системе».
+  double _fontScale = 1.0;
+  double get fontScale => _fontScale;
+
+  void setFontScale(double value) {
+    final v = value.clamp(0.8, 1.4).toDouble();
+    if (v == _fontScale) return;
+    _fontScale = v;
+    db.db.execute(
+      'INSERT INTO color_prefs (key, hex) VALUES (?, ?) '
+      'ON CONFLICT(key) DO UPDATE SET hex = excluded.hex',
+      [fontScaleKey, v.toString()],
+    );
+    notifyListeners();
+  }
 
   ThemeMode _themeMode = ThemeMode.system;
   ThemeMode get themeMode => _themeMode;
@@ -56,17 +75,21 @@ class PersonalizationViewModel extends ChangeNotifier {
 
   bool _devMode = false;
   bool get devMode => _devMode;
+  set _devFlag(bool v) {
+    _devMode = v;
+    friendlyErrorDevMode = v;
+  }
 
   bool tryEnableDevMode(String password) {
     if (password != devModePassword) return false;
-    _devMode = true;
+    _devFlag = true;
     _persistDevMode();
     notifyListeners();
     return true;
   }
 
   void disableDevMode() {
-    _devMode = false;
+    _devFlag = false;
     _persistDevMode();
     notifyListeners();
   }
@@ -140,17 +163,23 @@ class PersonalizationViewModel extends ChangeNotifier {
     customPresetsKey,
   ];
 
-  static String _key(String base, Brightness b) => b == Brightness.light ? '$base$_lightSuffix' : base;
+  static String _key(String base, Brightness b) =>
+      b == Brightness.light ? '$base$_lightSuffix' : base;
 
   final Map<String, Color?> _appColors = {};
 
-  Color? appBackgroundFor(Brightness b) => _appColors[_key(appBackgroundKey, b)];
+  Color? appBackgroundFor(Brightness b) =>
+      _appColors[_key(appBackgroundKey, b)];
   Color? appButtonFor(Brightness b) => _appColors[_key(appButtonKey, b)];
-  Color? appButtonTextFor(Brightness b) => _appColors[_key(appButtonTextKey, b)];
+  Color? appButtonTextFor(Brightness b) =>
+      _appColors[_key(appButtonTextKey, b)];
 
-  void setAppBackgroundColor(Color? c, Brightness b) => _setAppColor(_key(appBackgroundKey, b), c);
-  void setAppButtonColor(Color? c, Brightness b) => _setAppColor(_key(appButtonKey, b), c);
-  void setAppButtonTextColor(Color? c, Brightness b) => _setAppColor(_key(appButtonTextKey, b), c);
+  void setAppBackgroundColor(Color? c, Brightness b) =>
+      _setAppColor(_key(appBackgroundKey, b), c);
+  void setAppButtonColor(Color? c, Brightness b) =>
+      _setAppColor(_key(appButtonKey, b), c);
+  void setAppButtonTextColor(Color? c, Brightness b) =>
+      _setAppColor(_key(appButtonTextKey, b), c);
 
   void _setAppColor(String key, Color? c) {
     _appColors[key] = c;
@@ -178,7 +207,9 @@ class PersonalizationViewModel extends ChangeNotifier {
   }
 
   bool hasCustomAppColors(Brightness b) =>
-      appBackgroundFor(b) != null || appButtonFor(b) != null || appButtonTextFor(b) != null;
+      appBackgroundFor(b) != null ||
+      appButtonFor(b) != null ||
+      appButtonTextFor(b) != null;
 
   void resetAppColors(Brightness b) {
     for (final base in [appBackgroundKey, appButtonKey, appButtonTextKey]) {
@@ -190,11 +221,13 @@ class PersonalizationViewModel extends ChangeNotifier {
 
   /// Свои пресеты (сохранённые или созданные с ИИ).
   List<AppColorPreset> get customPresets {
-    final rows = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [customPresetsKey]);
+    final rows = db.db.select(
+        'SELECT hex FROM color_prefs WHERE key = ?', [customPresetsKey]);
     if (rows.isEmpty) return const [];
     try {
       return [
-        for (final j in (jsonDecode(rows.first['hex'] as String) as List).cast<Map<String, dynamic>>())
+        for (final j in (jsonDecode(rows.first['hex'] as String) as List)
+            .cast<Map<String, dynamic>>())
           AppColorPreset(
             label: '${j['label']}',
             background: TargetColorScheme.hexToColor('${j['bg']}'),
@@ -229,10 +262,12 @@ class PersonalizationViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void addCustomPreset(AppColorPreset p) => _saveCustomPresets([...customPresets, p]);
+  void addCustomPreset(AppColorPreset p) =>
+      _saveCustomPresets([...customPresets, p]);
 
-  void deleteCustomPreset(AppColorPreset p) =>
-      _saveCustomPresets(customPresets.where((e) => e.label != p.label || e.dark != p.dark).toList());
+  void deleteCustomPreset(AppColorPreset p) => _saveCustomPresets(customPresets
+      .where((e) => e.label != p.label || e.dark != p.dark)
+      .toList());
 
   static ThemeMode _themeModeFromString(String? value) {
     switch (value) {
@@ -265,17 +300,31 @@ class PersonalizationViewModel extends ChangeNotifier {
       'SELECT hex FROM color_prefs WHERE key = ?',
       [themeModeKey],
     );
-    _themeMode = _themeModeFromString(themeRow.isEmpty ? null : themeRow.first['hex'] as String?);
+    _themeMode = _themeModeFromString(
+        themeRow.isEmpty ? null : themeRow.first['hex'] as String?);
 
-    final localeRow = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [localeKey]);
-    final localeValue = localeRow.isEmpty ? 'system' : localeRow.first['hex'] as String;
+    final fontRow = db.db
+        .select('SELECT hex FROM color_prefs WHERE key = ?', [fontScaleKey]);
+    _fontScale =
+        (double.tryParse(fontRow.isEmpty ? '' : '${fontRow.first['hex']}') ??
+                1.0)
+            .clamp(0.8, 1.4)
+            .toDouble();
+
+    final localeRow =
+        db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [localeKey]);
+    final localeValue =
+        localeRow.isEmpty ? 'system' : localeRow.first['hex'] as String;
     _localeCode = localeValue == 'system' ? null : localeValue;
 
     Color? readAppColor(String key) {
-      final row = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [key]);
+      final row =
+          db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [key]);
       if (row.isEmpty) return null;
       final hex = row.first['hex'] as String?;
-      return (hex == null || !TargetColorScheme.isValidHex(hex)) ? null : TargetColorScheme.hexToColor(hex);
+      return (hex == null || !TargetColorScheme.isValidHex(hex))
+          ? null
+          : TargetColorScheme.hexToColor(hex);
     }
 
     _appColors.clear();
@@ -286,7 +335,9 @@ class PersonalizationViewModel extends ChangeNotifier {
     // Старые версии хранили один набор на обе темы: светлый фон уезжает
     // в светлый набор, чтобы не портить тёмную тему.
     final oldBg = _appColors[appBackgroundKey];
-    if (oldBg != null && oldBg.computeLuminance() > 0.5 && appBackgroundFor(Brightness.light) == null) {
+    if (oldBg != null &&
+        oldBg.computeLuminance() > 0.5 &&
+        appBackgroundFor(Brightness.light) == null) {
       for (final base in [appBackgroundKey, appButtonKey, appButtonTextKey]) {
         final c = _appColors.remove(base);
         db.db.execute('DELETE FROM color_prefs WHERE key = ?', [base]);
@@ -297,8 +348,9 @@ class PersonalizationViewModel extends ChangeNotifier {
       }
     }
 
-    final devModeRow = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [devModeKey]);
-    _devMode = devModeRow.isNotEmpty && devModeRow.first['hex'] == '1';
+    final devModeRow =
+        db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [devModeKey]);
+    _devFlag = devModeRow.isNotEmpty && devModeRow.first['hex'] == '1';
 
     notifyListeners();
   }
@@ -368,7 +420,8 @@ class PersonalizationViewModel extends ChangeNotifier {
       ...appColorKeys,
     ];
     final placeholders = List.filled(protected.length, '?').join(', ');
-    db.db.execute('DELETE FROM color_prefs WHERE key NOT IN ($placeholders)', protected);
+    db.db.execute(
+        'DELETE FROM color_prefs WHERE key NOT IN ($placeholders)', protected);
     notifyListeners();
   }
 
@@ -385,7 +438,8 @@ class PersonalizationViewModel extends ChangeNotifier {
       db.db.execute('ROLLBACK');
       rethrow;
     }
-    _scheme = preset.scheme.copyWith(shotNumberTextAuto: _scheme.shotNumberTextAuto);
+    _scheme =
+        preset.scheme.copyWith(shotNumberTextAuto: _scheme.shotNumberTextAuto);
     notifyListeners();
   }
 
@@ -393,7 +447,8 @@ class PersonalizationViewModel extends ChangeNotifier {
 
   /// Импорт — all-or-nothing (A.2.2), одна транзакция как и пресет.
   void importJson(String json) {
-    final imported = ColorSchemeIo.importFromJson(json, _scheme); // может бросить FormatException
+    final imported = ColorSchemeIo.importFromJson(
+        json, _scheme); // может бросить FormatException
     db.db.execute('BEGIN');
     try {
       for (final key in TargetColorScheme.allKeys) {

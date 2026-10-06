@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -67,12 +68,14 @@ class SupabaseAuthService {
     final exp = expiresAt;
     // Минутный запас: токен, живущий 30 секунд, до конца запроса может
     // и не дожить.
-    if (exp != null && exp.isAfter(DateTime.now().add(const Duration(minutes: 1)))) {
+    if (exp != null &&
+        exp.isAfter(DateTime.now().add(const Duration(minutes: 1)))) {
       return accessToken;
     }
     if (refreshToken.isEmpty) return null;
     try {
-      await _token(grant: 'refresh_token', body: {'refresh_token': refreshToken});
+      await _token(
+          grant: 'refresh_token', body: {'refresh_token': refreshToken});
       return accessToken;
     } on AuthException {
       // Refresh-токен протух или отозван — это не ошибка приложения, а
@@ -150,7 +153,8 @@ class SupabaseAuthService {
     try {
       await client
           .post(
-            Uri.parse('$url/rest/v1/project_settings?on_conflict=owner_user_id'),
+            Uri.parse(
+                '$url/rest/v1/project_settings?on_conflict=owner_user_id'),
             headers: {
               'apikey': anonKey,
               'Authorization': 'Bearer $token',
@@ -185,7 +189,8 @@ class SupabaseAuthService {
     final client = clientFactory();
     try {
       final res = await client.get(
-        Uri.parse('$url/rest/v1/project_settings?owner_user_id=eq.$userId&select=chat_password'),
+        Uri.parse(
+            '$url/rest/v1/project_settings?owner_user_id=eq.$userId&select=chat_password'),
         headers: {'apikey': anonKey, 'Authorization': 'Bearer $token'},
       ).timeout(const Duration(seconds: 20));
       if (res.statusCode >= 400) return null;
@@ -241,7 +246,8 @@ class SupabaseAuthService {
               'Content-Type': 'application/json',
               'Prefer': 'return=minimal',
             },
-            body: jsonEncode({'chat_user_id': chatUserId, 'chat_nickname': nickname}),
+            body: jsonEncode(
+                {'chat_user_id': chatUserId, 'chat_nickname': nickname}),
           )
           .timeout(const Duration(seconds: 20));
     } catch (_) {
@@ -253,13 +259,15 @@ class SupabaseAuthService {
 
   /// Тренеры, которым выданы ДЕЙСТВУЮЩИЕ токены и которые уже связали с
   /// ними свой чат-аккаунт.
-  Future<List<({String chatUserId, String nickname, String label})>> fetchLinkedCoaches() async {
+  Future<List<({String chatUserId, String nickname, String label})>>
+      fetchLinkedCoaches() async {
     final token = await ensureFreshToken();
     if (token == null) return const [];
     final client = clientFactory();
     try {
       final res = await client.get(
-        Uri.parse('$url/rest/v1/share_grants?select=coach_chat_user_id,coach_chat_nickname,label'
+        Uri.parse(
+            '$url/rest/v1/share_grants?select=coach_chat_user_id,coach_chat_nickname,label'
             '&revoked_at=is.null&coach_chat_user_id=not.is.null'),
         headers: {'apikey': anonKey, 'Authorization': 'Bearer $token'},
       ).timeout(const Duration(seconds: 20));
@@ -286,8 +294,8 @@ class SupabaseAuthService {
   /// Тренеры, которым выдан действующий токен, — для «Чата с тренером»
   /// (одна переписка на токен, sql/coach-chat.sql).
   Future<List<({String grantId, String name})>> fetchChatCoaches() async {
-    final rows =
-        await rest('GET', 'share_grants?select=id,label,coach_chat_nickname&revoked_at=is.null&order=created_at');
+    final rows = await rest('GET',
+        'share_grants?select=id,label,coach_chat_nickname&revoked_at=is.null&order=created_at');
     return [
       for (final r in rows)
         (
@@ -300,20 +308,25 @@ class SupabaseAuthService {
   }
 
   Future<List<CoachChatMessage>> fetchCoachChat(String grantId) async => [
-        for (final r in (await rest('GET', 'coach_chat?grant_id=eq.$grantId&order=created_at.desc&limit=500')) as List)
+        for (final r in (await rest('GET',
+                'coach_chat?grant_id=eq.$grantId&order=created_at.desc&limit=500'))
+            as List)
           coachChatFromRow((r as Map).cast<String, dynamic>()),
       ].reversed.toList();
 
   Future<void> sendCoachChat(String grantId, String text) =>
-      rest('POST', 'coach_chat', body: {'grant_id': grantId, 'author_role': 'athlete', 'text': text});
+      rest('POST', 'coach_chat',
+          body: {'grant_id': grantId, 'author_role': 'athlete', 'text': text});
 
-  Future<void> deleteCoachChat(String id) => rest('DELETE', 'coach_chat?id=eq.$id');
+  Future<void> deleteCoachChat(String id) =>
+      rest('DELETE', 'coach_chat?id=eq.$id');
 
   /// Запрос к своей базе от имени владельца (разобранный JSON); ошибка —
   /// исключение с текстом сервера.
   Future<dynamic> rest(String method, String path, {Object? body}) async {
     final token = await ensureFreshToken();
-    if (token == null) throw Exception(tr('Войдите в свою базу (Настройки → Учётная запись)'));
+    if (token == null)
+      throw Exception(tr('Войдите в свою базу (Настройки → Учётная запись)'));
     final client = clientFactory();
     try {
       final req = http.Request(method, Uri.parse('$url/rest/v1/$path'))
@@ -324,8 +337,11 @@ class SupabaseAuthService {
           'Prefer': 'return=minimal',
         });
       if (body != null) req.body = jsonEncode(body);
-      final res = await http.Response.fromStream(await client.send(req).timeout(const Duration(seconds: 20)));
-      if (res.statusCode >= 400) throw Exception(tr('Сервер ответил {statusCode}: {body}', {'statusCode': res.statusCode, 'body': res.body}));
+      final res = await http.Response.fromStream(
+          await client.send(req).timeout(const Duration(seconds: 20)));
+      if (res.statusCode >= 400)
+        throw Exception(tr('Сервер ответил {statusCode}: {body}',
+            {'statusCode': res.statusCode, 'body': res.body}));
       if (res.bodyBytes.isEmpty) return const [];
       return jsonDecode(utf8.decode(res.bodyBytes));
     } finally {
@@ -372,11 +388,13 @@ class SupabaseAuthService {
       ).timeout(const Duration(seconds: 20));
       if (res.statusCode == 200) return tr('База на месте, таблицы созданы');
       if (res.statusCode == 404 || res.body.contains('PGRST205')) {
-        return tr('База отвечает, но таблиц нет — примените схему (sql/schema.sql)');
+        return tr(
+            'База отвечает, но таблиц нет — примените схему (sql/schema.sql)');
       }
-      return tr('База ответила {statusCode}: {p}', {'statusCode': res.statusCode, 'p': _message(res.body)});
+      return tr('База ответила {statusCode}: {p}',
+          {'statusCode': res.statusCode, 'p': _message(res.body)});
     } catch (e) {
-      return tr('Не удалось достучаться до базы: {e}', {'e': e});
+      return tr('Не удалось достучаться до базы: {e}', {'e': friendlyError(e)});
     } finally {
       client.close();
     }
@@ -409,9 +427,11 @@ class SupabaseAuthService {
           )
           .timeout(const Duration(seconds: 20));
       if (res.statusCode >= 400) {
-        if (res.statusCode == 404 || res.body.contains('PGRST202') || res.body.contains('PGRST205')) {
-          throw AuthException(
-              tr('Функция list_public_tables не найдена — примените свежий sql/schema.sql к своей базе'));
+        if (res.statusCode == 404 ||
+            res.body.contains('PGRST202') ||
+            res.body.contains('PGRST205')) {
+          throw AuthException(tr(
+              'Функция list_public_tables не найдена — примените свежий sql/schema.sql к своей базе'));
         }
         throw AuthException(_message(res.body));
       }
@@ -419,13 +439,15 @@ class SupabaseAuthService {
       if (decoded is! List) return const [];
       final names = <String>{
         for (final row in decoded)
-          if (row is Map && row['table_name'] is String) row['table_name'] as String,
+          if (row is Map && row['table_name'] is String)
+            row['table_name'] as String,
       };
       return names.toList()..sort();
     } on AuthException {
       rethrow;
     } catch (e) {
-      throw AuthException(tr('Не удалось разобрать список таблиц: {e}', {'e': e}));
+      throw AuthException(tr(
+          'Не удалось разобрать список таблиц: {e}', {'e': friendlyError(e)}));
     } finally {
       client.close();
     }
@@ -451,7 +473,8 @@ class SupabaseAuthService {
     _saveSession(res, email: email);
   }
 
-  Future<Map<String, dynamic>> _post(String path, Map<String, String> body) async {
+  Future<Map<String, dynamic>> _post(
+      String path, Map<String, String> body) async {
     final client = clientFactory();
     try {
       final res = await client
@@ -473,7 +496,8 @@ class SupabaseAuthService {
     } on AuthException {
       rethrow;
     } catch (e) {
-      throw AuthException(tr('Сеть недоступна или адрес базы неверен ({e})', {'e': e}));
+      throw AuthException(tr('Сеть недоступна или адрес базы неверен ({e})',
+          {'e': friendlyError(e)}));
     } finally {
       client.close();
     }
@@ -483,12 +507,15 @@ class SupabaseAuthService {
     final user = res['user'];
     _write('auth_access_token', '${res['access_token'] ?? ''}');
     _write('auth_refresh_token', '${res['refresh_token'] ?? ''}');
-    if (user is Map && user['id'] != null) _write('auth_user_id', '${user['id']}');
+    if (user is Map && user['id'] != null)
+      _write('auth_user_id', '${user['id']}');
     final expiresIn = res['expires_in'];
     if (expiresIn is num) {
       _write(
         'auth_expires_at',
-        DateTime.now().add(Duration(seconds: expiresIn.toInt())).toIso8601String(),
+        DateTime.now()
+            .add(Duration(seconds: expiresIn.toInt()))
+            .toIso8601String(),
       );
     }
     final mail = email ?? (user is Map ? '${user['email'] ?? ''}' : '');
@@ -517,16 +544,22 @@ class SupabaseAuthService {
   /// оригинала.
   static String _translate(String raw) {
     final low = raw.toLowerCase();
-    if (low.contains('invalid login credentials')) return tr('Неверная почта или пароль');
-    if (low.contains('email not confirmed')) return tr('Почта не подтверждена — проверьте письмо');
-    if (low.contains('user already registered')) return tr('Такой пользователь уже есть — войдите');
-    if (low.contains('password should be')) return tr('Пароль слишком короткий (нужно не меньше 6 символов)');
-    if (low.contains('signups not allowed')) return tr('В этой базе регистрация выключена');
+    if (low.contains('invalid login credentials'))
+      return tr('Неверная почта или пароль');
+    if (low.contains('email not confirmed'))
+      return tr('Почта не подтверждена — проверьте письмо');
+    if (low.contains('user already registered'))
+      return tr('Такой пользователь уже есть — войдите');
+    if (low.contains('password should be'))
+      return tr('Пароль слишком короткий (нужно не меньше 6 символов)');
+    if (low.contains('signups not allowed'))
+      return tr('В этой базе регистрация выключена');
     return raw;
   }
 
   String _read(String column) {
-    final rows = db.db.select('SELECT $column FROM project_settings WHERE id = 1');
+    final rows =
+        db.db.select('SELECT $column FROM project_settings WHERE id = 1');
     if (rows.isEmpty) return '';
     return '${rows.first[column] ?? ''}';
   }

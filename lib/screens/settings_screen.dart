@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -204,7 +205,7 @@ class _UpdateTileState extends State<_UpdateTile> {
       if (mounted) {
         setState(() {
           _stage = _UpdateStage.error;
-          _error = '$e';
+          _error = friendlyError(e);
         });
       }
     }
@@ -263,7 +264,7 @@ class _UpdateTileState extends State<_UpdateTile> {
       if (mounted) {
         setState(() {
           _stage = _UpdateStage.error;
-          _error = '$e';
+          _error = friendlyError(e);
         });
       }
     }
@@ -434,7 +435,7 @@ class _AccountSheetState extends State<_AccountSheet> {
     } catch (e) {
       // Браузер иногда отказывает в доступе к буферу обмена (нет разрешения,
       // окно не в фокусе) — тогда честно сказать об этом, а не падать молча.
-      message = tr('Не удалось скопировать: {e}', {'e': e});
+      message = tr('Не удалось скопировать: {e}', {'e': friendlyError(e)});
     }
     if (!context.mounted) return;
     ScaffoldMessenger.of(context)
@@ -468,7 +469,7 @@ class _AccountSheetState extends State<_AccountSheet> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _message = '$e';
+        _message = friendlyError(e);
         _messageIsError = true;
       });
     } finally {
@@ -485,7 +486,7 @@ class _AccountSheetState extends State<_AccountSheet> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _message = '$e';
+        _message = friendlyError(e);
         _messageIsError = true;
       });
       return;

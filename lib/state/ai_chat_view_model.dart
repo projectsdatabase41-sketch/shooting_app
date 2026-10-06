@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -267,7 +268,8 @@ class AiChatViewModel extends ChangeNotifier {
             rawCtx.session != null ? [rawCtx.session!.id] : const [],
       )));
     } catch (e) {
-      messages.add(AiMessage(fromUser: false, text: '$e', isError: true));
+      messages.add(
+          AiMessage(fromUser: false, text: friendlyError(e), isError: true));
     } finally {
       _busy = false;
       notifyListeners();
@@ -332,7 +334,8 @@ class AiChatViewModel extends ChangeNotifier {
           text: '${r.text}$links',
           model: tr('Поиск в интернете')));
     } catch (e) {
-      messages.add(AiMessage(fromUser: false, text: '$e', isError: true));
+      messages.add(
+          AiMessage(fromUser: false, text: friendlyError(e), isError: true));
     } finally {
       _busy = false;
       notifyListeners();

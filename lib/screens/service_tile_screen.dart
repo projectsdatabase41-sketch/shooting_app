@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -86,7 +87,7 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
         _filterReply = null;
       });
     } catch (e) {
-      setState(() => _error = '$e');
+      setState(() => _error = friendlyError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -153,7 +154,8 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(tr('Не удалось настроить вид: {e}', {'e': e}))));
+            content: Text(
+                tr('Не удалось настроить вид: {e}', {'e': friendlyError(e)}))));
     } finally {
       if (mounted) setState(() => _aiBusy = false);
     }
@@ -218,7 +220,8 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(tr('Не удалось отфильтровать: {e}', {'e': e}))));
+            content: Text(
+                tr('Не удалось отфильтровать: {e}', {'e': friendlyError(e)}))));
     } finally {
       if (mounted) setState(() => _aiBusy = false);
     }

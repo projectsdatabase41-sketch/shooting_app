@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
@@ -171,8 +172,9 @@ class _LocalAiPanelState extends State<LocalAiPanel> {
       messenger
           .showSnackBar(SnackBar(content: Text(tr('Загрузка приостановлена'))));
     } catch (e) {
-      messenger.showSnackBar(
-          SnackBar(content: Text(tr('Не удалось скачать: {e}', {'e': e}))));
+      messenger.showSnackBar(SnackBar(
+          content:
+              Text(tr('Не удалось скачать: {e}', {'e': friendlyError(e)}))));
     } finally {
       _Downloads.progress.remove(m.id);
       _Downloads.stage.remove(m.id);
@@ -203,7 +205,7 @@ class _LocalAiPanelState extends State<LocalAiPanel> {
         'p': (r.took.inMilliseconds / 1000).toStringAsFixed(1)
       });
     } catch (e) {
-      _probe = tr('Ошибка: {e}', {'e': e});
+      _probe = tr('Ошибка: {e}', {'e': friendlyError(e)});
     } finally {
       if (mounted) setState(() => _probing = false);
     }

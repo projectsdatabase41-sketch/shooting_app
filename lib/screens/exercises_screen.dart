@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/exercise.dart';
@@ -33,7 +34,9 @@ class ExercisesScreen extends StatelessWidget {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
-        title: Text(tr('Упражнения'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        title: Text(tr('Упражнения'),
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
           GlassCircleButton(
             icon: const BoldIcon(Icons.add),
@@ -45,53 +48,68 @@ class ExercisesScreen extends StatelessWidget {
       body: RefreshIndicator(
         onRefresh: () => _pullFromCloud(context),
         child: list.isEmpty
-          ? ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: EdgeInsets.only(top: topInset + GlassHeader.height),
-              children: [
-                EmptyState(
-                  icon: Icons.fitness_center,
-                  text: tr('Упражнений пока нет — приложение стартует полностью пустым.'),
-                  action: FilledButton.icon(
-                    icon: const Icon(Icons.add),
-                    label: Text(tr('Создать первое')),
-                    onPressed: () => _showCreateExerciseDialog(context),
-                  ),
-                ),
-              ],
-            )
-          : ListView.separated(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 32),
-              itemCount: list.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (context, i) {
-                final ex = list[i];
-                final face = TargetFace.byCode(ex.targetFaceCode);
-                final used = store.sessions.where((s) => s.exerciseId == ex.id).length;
-                return SwipeToDelete(
-                  itemKey: ex.id,
-                  title: tr('Удалить упражнение?'),
-                  message: used == 0
-                      ? tr('«{name}» будет удалено насовсем — или можно просто скрыть его из списка.', {'name': ex.name})
-                      : tr('«{name}»: {used} {p} останутся в истории. «Скрыть» — можно вернуть кнопкой «Восстановить всё из облака»; «Удалить навсегда» — стирает упражнение без возможности восстановить, тренировки останутся без его названия.', {'name': ex.name, 'used': used, 'p': _sessionsWord(used)}),
-                  confirmLabel: tr('Удалить навсегда'),
-                  localOnlyLabel: tr('Скрыть'),
-                  onConfirmed: () => store.deleteExerciseForever(ex.id),
-                  onConfirmedLocalOnly: () => _deleteExercise(context, ex),
-                  child: _ExerciseCard(
-                    name: ex.name,
-                    faceName: face.name,
-                    totalShots: ex.totalShots,
-                    seriesSize: ex.seriesSize,
-                    series: ex.series,
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => TrainingsHistoryScreen(exercise: ex)),
+            ? ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.only(top: topInset + GlassHeader.height),
+                children: [
+                  EmptyState(
+                    icon: Icons.fitness_center,
+                    text: tr(
+                        'Упражнений пока нет — приложение стартует полностью пустым.'),
+                    action: FilledButton.icon(
+                      icon: const Icon(Icons.add),
+                      label: Text(tr('Создать первое')),
+                      onPressed: () => _showCreateExerciseDialog(context),
                     ),
                   ),
-                );
-              },
-            ),
+                ],
+              )
+            : ListView.separated(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.fromLTRB(
+                    16, topInset + GlassHeader.height + 8, 16, 32),
+                itemCount: list.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                itemBuilder: (context, i) {
+                  final ex = list[i];
+                  final face = TargetFace.byCode(ex.targetFaceCode);
+                  final used =
+                      store.sessions.where((s) => s.exerciseId == ex.id).length;
+                  return SwipeToDelete(
+                    itemKey: ex.id,
+                    title: tr('Удалить упражнение?'),
+                    message: used == 0
+                        ? tr(
+                            '«{name}» будет удалено насовсем — или можно просто скрыть его из списка.',
+                            {
+                                'name': ex.name
+                              })
+                        : tr(
+                            '«{name}»: {used} {p} останутся в истории. «Скрыть» — можно вернуть кнопкой «Восстановить всё из облака»; «Удалить навсегда» — стирает упражнение без возможности восстановить, тренировки останутся без его названия.',
+                            {
+                                'name': ex.name,
+                                'used': used,
+                                'p': _sessionsWord(used)
+                              }),
+                    confirmLabel: tr('Удалить навсегда'),
+                    localOnlyLabel: tr('Скрыть'),
+                    onConfirmed: () => store.deleteExerciseForever(ex.id),
+                    onConfirmedLocalOnly: () => _deleteExercise(context, ex),
+                    child: _ExerciseCard(
+                      name: ex.name,
+                      faceName: face.name,
+                      totalShots: ex.totalShots,
+                      seriesSize: ex.seriesSize,
+                      series: ex.series,
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) =>
+                                TrainingsHistoryScreen(exercise: ex)),
+                      ),
+                    ),
+                  );
+                },
+              ),
       ),
     );
   }
@@ -102,7 +120,9 @@ class ExercisesScreen extends StatelessWidget {
     try {
       await sync.pull(store);
     } catch (e) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      if (context.mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(friendlyError(e))));
     }
   }
 
@@ -190,7 +210,8 @@ class _ExerciseCard extends StatelessWidget {
                   color: cs.primaryContainer,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(Icons.gps_fixed, size: 20, color: cs.onPrimaryContainer),
+                child: Icon(Icons.gps_fixed,
+                    size: 20, color: cs.onPrimaryContainer),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -198,9 +219,15 @@ class _ExerciseCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: theme.textTheme.titleSmall),
+                    Text(name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall),
                     const SizedBox(height: 2),
-                    Text(faceName, maxLines: 1, overflow: TextOverflow.ellipsis, style: theme.textTheme.bodySmall),
+                    Text(faceName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 6,
@@ -208,8 +235,12 @@ class _ExerciseCard extends StatelessWidget {
                       children: series.isEmpty
                           // Старое упражнение описывается парой чисел.
                           ? [
-                              _MiniChip(text: tr('{totalShots} выстр.', {'totalShots': totalShots})),
-                              _MiniChip(text: tr('серия {seriesSize}', {'seriesSize': seriesSize})),
+                              _MiniChip(
+                                  text: tr('{totalShots} выстр.',
+                                      {'totalShots': totalShots})),
+                              _MiniChip(
+                                  text: tr('серия {seriesSize}',
+                                      {'seriesSize': seriesSize})),
                             ]
                           // У свободной структуры важны сами серии, а не
                           // сумма: «Пристрелка 15 мин · Лёжа 10 · Стоя
@@ -220,7 +251,10 @@ class _ExerciseCard extends StatelessWidget {
                                   text: spec.shotCount != null
                                       ? '${spec.name} ${spec.shotCount}'
                                       : spec.timeLimit != null
-                                          ? tr('{name} {p} мин', {'name': spec.name, 'p': spec.timeLimit!.inMinutes})
+                                          ? tr('{name} {p} мин', {
+                                              'name': spec.name,
+                                              'p': spec.timeLimit!.inMinutes
+                                            })
                                           : spec.name,
                                   muted: !spec.counts,
                                 ),

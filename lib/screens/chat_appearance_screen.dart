@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -551,7 +552,7 @@ class _AiThemeAssistantSheetState extends State<_AiThemeAssistantSheet> {
       _applyThemeBlock(reply.text);
       if (mounted) setState(() => _reply = _stripThemeBlock(reply.text));
     } catch (e) {
-      if (mounted) setState(() => _error = '$e');
+      if (mounted) setState(() => _error = friendlyError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

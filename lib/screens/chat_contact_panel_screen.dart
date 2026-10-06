@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -48,7 +49,8 @@ class ChatContactPanelScreen extends StatefulWidget {
 
 class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
   late ChatContact _contact = widget.contact;
-  late final List<ChatMessage> _messages = widget.repo.forContact(_contact.id).reversed.toList(); // новые сверху
+  late final List<ChatMessage> _messages =
+      widget.repo.forContact(_contact.id).reversed.toList(); // новые сверху
   String _code = '';
   String? _friend; // 'accepted' | 'pending' | null
   bool _friendLoaded = false;
@@ -60,7 +62,10 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
     super.initState();
     _code = _contact.chatCode;
     if (!_contact.isGroup) {
-      if (_code.isEmpty) widget.auth.codeOf(_contact.id).then((c) => mounted ? setState(() => _code = c) : null);
+      if (_code.isEmpty)
+        widget.auth
+            .codeOf(_contact.id)
+            .then((c) => mounted ? setState(() => _code = c) : null);
       widget.auth.friendStatusWith(_contact.id).then((s) {
         if (!mounted) return;
         setState(() {
@@ -71,25 +76,37 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
     }
   }
 
-  List<ChatMessage> get _photos =>
-      _messages.where((m) => m.type == ChatMessageType.image && m.attachmentBase64 != null).toList();
-  bool _isMusic(ChatMessage m) => m.type == ChatMessageType.file && ChatMediaUtils.looksLikeAudio(m.attachmentName ?? '');
-  List<ChatMessage> get _files =>
-      _messages.where((m) => (m.type == ChatMessageType.file || m.type == ChatMessageType.video) && !_isMusic(m)).toList();
+  List<ChatMessage> get _photos => _messages
+      .where(
+          (m) => m.type == ChatMessageType.image && m.attachmentBase64 != null)
+      .toList();
+  bool _isMusic(ChatMessage m) =>
+      m.type == ChatMessageType.file &&
+      ChatMediaUtils.looksLikeAudio(m.attachmentName ?? '');
+  List<ChatMessage> get _files => _messages
+      .where((m) =>
+          (m.type == ChatMessageType.file || m.type == ChatMessageType.video) &&
+          !_isMusic(m))
+      .toList();
   List<ChatMessage> get _music => _messages.where(_isMusic).toList();
-  List<ChatMessage> get _voice => _messages.where((m) => m.type == ChatMessageType.audio).toList();
+  List<ChatMessage> get _voice =>
+      _messages.where((m) => m.type == ChatMessageType.audio).toList();
   List<(String, ChatMessage)> get _links => [
         for (final m in _messages)
-          for (final match in _linkRe.allMatches(m.text ?? '')) (match.group(0)!, m),
+          for (final match in _linkRe.allMatches(m.text ?? ''))
+            (match.group(0)!, m),
       ];
 
   /// Явная заявка; встречная заявка сразу даёт дружбу (request_friend).
   Future<void> _addFriend() async {
     try {
       final r = await widget.auth.requestFriend(_contact.id);
-      if (mounted) setState(() => _friend = r == 'accepted' ? 'accepted' : 'pending');
+      if (mounted)
+        setState(() => _friend = r == 'accepted' ? 'accepted' : 'pending');
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(friendlyError(e))));
     }
   }
 
@@ -99,10 +116,15 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Заблокировать {name}?', {'name': _contact.nickname})),
-        content: Text(tr('Чат будет удалён, сообщения от него перестанут приходить. Разблокировать можно в «Чёрном списке».')),
+        content: Text(tr(
+            'Чат будет удалён, сообщения от него перестанут приходить. Разблокировать можно в «Чёрном списке».')),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr('Отмена'))),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(tr('Заблокировать'))),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text(tr('Отмена'))),
+          FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text(tr('Заблокировать'))),
         ],
       ),
     );
@@ -112,7 +134,9 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
       widget.repo.deleteChat(_contact.id);
       if (mounted) Navigator.of(context).pop('removed');
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(friendlyError(e))));
     }
   }
 
@@ -121,10 +145,16 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Удалить из контактов?')),
-        content: Text(tr('Переписка с {nickname} останется на устройстве, но сам контакт пропадёт из списка.', {'nickname': _contact.nickname})),
+        content: Text(tr(
+            'Переписка с {nickname} останется на устройстве, но сам контакт пропадёт из списка.',
+            {'nickname': _contact.nickname})),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr('Отмена'))),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(tr('Удалить'))),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text(tr('Отмена'))),
+          FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text(tr('Удалить'))),
         ],
       ),
     );
@@ -135,7 +165,11 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
 
   Future<void> _openGroupInfo() async {
     final result = await Navigator.of(context).push<String>(MaterialPageRoute(
-      builder: (_) => ChatGroupInfoScreen(auth: widget.auth, repo: widget.repo, sync: widget.sync, group: _contact),
+      builder: (_) => ChatGroupInfoScreen(
+          auth: widget.auth,
+          repo: widget.repo,
+          sync: widget.sync,
+          group: _contact),
     ));
     if (!mounted) return;
     if (result == 'left') {
@@ -147,9 +181,11 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
 
   void _share(ChatMessage m) {
     if (m.attachmentBase64 != null) {
-      ChatMediaUtils.shareAttachment(base64Decode(m.attachmentBase64!), m.attachmentName ?? 'file', m.attachmentMime);
+      ChatMediaUtils.shareAttachment(base64Decode(m.attachmentBase64!),
+          m.attachmentName ?? 'file', m.attachmentMime);
     } else if (m.attachmentLocalPath != null) {
-      ChatMediaUtils.shareAttachmentPath(m.attachmentLocalPath!, m.attachmentMime);
+      ChatMediaUtils.shareAttachmentPath(
+          m.attachmentLocalPath!, m.attachmentMime);
     }
   }
 
@@ -160,11 +196,14 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
   /// внешний просмотрщик и так открывает его отлично.
   void _open(ChatMessage m) {
     final name = m.attachmentName ?? '';
-    final isPdf = m.attachmentMime == 'application/pdf' || name.toLowerCase().endsWith('.pdf');
+    final isPdf = m.attachmentMime == 'application/pdf' ||
+        name.toLowerCase().endsWith('.pdf');
     final base64 = m.attachmentBase64;
     if (isPdf && base64 != null) {
       Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => PdfViewerScreen(bytes: base64Decode(base64), fileName: name.isEmpty ? tr('Файл') : name),
+        builder: (_) => PdfViewerScreen(
+            bytes: base64Decode(base64),
+            fileName: name.isEmpty ? tr('Файл') : name),
       ));
       return;
     }
@@ -182,10 +221,17 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
     final devMode = context.watch<PersonalizationViewModel>().devMode;
     final tiles = <Widget>[
       if (!_contact.isGroup && devMode) ...[
-        _Tile3D(icon: Icons.call, label: tr('Звонок'), onTap: () => Navigator.of(context).pop('call')),
-        _Tile3D(icon: Icons.videocam, label: tr('Видео'), onTap: () => Navigator.of(context).pop('video')),
+        _Tile3D(
+            icon: Icons.call,
+            label: tr('Звонок'),
+            onTap: () => Navigator.of(context).pop('call')),
+        _Tile3D(
+            icon: Icons.videocam,
+            label: tr('Видео'),
+            onTap: () => Navigator.of(context).pop('video')),
       ] else if (_contact.isGroup)
-        _Tile3D(icon: Icons.groups, label: tr('О группе'), onTap: _openGroupInfo),
+        _Tile3D(
+            icon: Icons.groups, label: tr('О группе'), onTap: _openGroupInfo),
       _Tile3D(
         icon: muted ? Icons.notifications_off : Icons.notifications_active,
         label: muted ? tr('Без звука') : tr('Звук'),
@@ -196,7 +242,8 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
         icon: Icons.translate,
         label: tr('Перевод'),
         active: translate,
-        onTap: () => setState(() => prefs.setAutoTranslateFor(_contact.id, !translate)),
+        onTap: () =>
+            setState(() => prefs.setAutoTranslateFor(_contact.id, !translate)),
       ),
     ];
 
@@ -206,19 +253,28 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
         DecoratedBox(
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.35), blurRadius: 18, offset: const Offset(0, 8))],
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.35),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8))
+            ],
           ),
           child: ChatAvatar(
             base64: _contact.avatarBase64,
             nickname: _contact.nickname,
             radius: 46,
-            background: _contact.isGroup ? chatGroupColor(_contact.color) : null,
+            background:
+                _contact.isGroup ? chatGroupColor(_contact.color) : null,
           ),
         ),
         const SizedBox(height: 12),
-        Text(_contact.nickname, style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+        Text(_contact.nickname,
+            style: theme.textTheme.titleLarge
+                ?.copyWith(fontWeight: FontWeight.w700)),
         if (_contact.isGroup)
-          Text(tr('Участников: {length}', {'length': _contact.members.length}), style: theme.textTheme.bodySmall),
+          Text(tr('Участников: {length}', {'length': _contact.members.length}),
+              style: theme.textTheme.bodySmall),
         const SizedBox(height: 16),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -234,7 +290,8 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
                 ? null
                 : () {
                     Clipboard.setData(ClipboardData(text: _code));
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Код скопирован'))));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(tr('Код скопирован'))));
                   },
           ),
         if (_contact.about.isNotEmpty)
@@ -245,7 +302,9 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
           ),
         if (!_contact.isGroup)
           ListTile(
-            leading: Icon(_friend == 'accepted' ? Icons.how_to_reg : Icons.person_add_alt_1),
+            leading: Icon(_friend == 'accepted'
+                ? Icons.how_to_reg
+                : Icons.person_add_alt_1),
             title: Text(switch (_friend) {
               'accepted' => tr('В друзьях'),
               'pending' => tr('Заявка в друзья отправлена'),
@@ -270,8 +329,10 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
                   icon: const BoldIcon(Icons.more_vert),
                   onSelected: (v) => v == 'block' ? _block() : _removeContact(),
                   itemBuilder: (_) => [
-                    PopupMenuItem(value: 'remove', child: Text(tr('Удалить чат'))),
-                    PopupMenuItem(value: 'block', child: Text(tr('Заблокировать'))),
+                    PopupMenuItem(
+                        value: 'remove', child: Text(tr('Удалить чат'))),
+                    PopupMenuItem(
+                        value: 'block', child: Text(tr('Заблокировать'))),
                   ],
                 ),
               ),
@@ -291,15 +352,23 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
               bottom: TabBar(
                 isScrollable: true,
                 tabAlignment: TabAlignment.start,
-                tabs: [Tab(text: tr('Фото')), Tab(text: tr('Файлы')), Tab(text: tr('Музыка')), Tab(text: tr('Ссылки')), Tab(text: tr('Голосовые'))],
+                tabs: [
+                  Tab(text: tr('Фото')),
+                  Tab(text: tr('Файлы')),
+                  Tab(text: tr('Музыка')),
+                  Tab(text: tr('Ссылки')),
+                  Tab(text: tr('Голосовые'))
+                ],
               ),
             ),
           ],
           body: TabBarView(
             children: [
               _PhotoGrid(photos: _photos, prefs: prefs),
-              _fileList(_files, Icons.insert_drive_file_outlined, tr('Файлов пока нет')),
-              _fileList(_music, Icons.music_note_outlined, tr('Музыки пока нет')),
+              _fileList(_files, Icons.insert_drive_file_outlined,
+                  tr('Файлов пока нет')),
+              _fileList(
+                  _music, Icons.music_note_outlined, tr('Музыки пока нет')),
               _linkList(),
               _fileList(_voice, Icons.mic_none, tr('Голосовых пока нет')),
             ],
@@ -309,9 +378,11 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
     );
   }
 
-  static String _date(ChatMessage m) => DateFormat('dd.MM.yy HH:mm').format(m.createdAt.toLocal());
+  static String _date(ChatMessage m) =>
+      DateFormat('dd.MM.yy HH:mm').format(m.createdAt.toLocal());
 
-  Widget _empty(String text) => Center(child: Text(text, style: TextStyle(color: Theme.of(context).hintColor)));
+  Widget _empty(String text) => Center(
+      child: Text(text, style: TextStyle(color: Theme.of(context).hintColor)));
 
   Widget _fileList(List<ChatMessage> items, IconData icon, String emptyText) {
     if (items.isEmpty) return _empty(emptyText);
@@ -322,8 +393,10 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
         final m = items[i];
         return ListTile(
           leading: Icon(icon),
-          title: Text(m.attachmentName ?? tr('Файл'), maxLines: 1, overflow: TextOverflow.ellipsis),
-          subtitle: Text('${ChatMediaUtils.formatSize(m.attachmentSize)} · ${_date(m)}'),
+          title: Text(m.attachmentName ?? tr('Файл'),
+              maxLines: 1, overflow: TextOverflow.ellipsis),
+          subtitle: Text(
+              '${ChatMediaUtils.formatSize(m.attachmentSize)} · ${_date(m)}'),
           onTap: () => _open(m),
         );
       },
@@ -342,10 +415,12 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
           leading: const Icon(Icons.link),
           title: Text(url, maxLines: 2, overflow: TextOverflow.ellipsis),
           subtitle: Text(_date(m)),
-          onTap: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+          onTap: () =>
+              launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
           onLongPress: () {
             Clipboard.setData(ClipboardData(text: url));
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Ссылка скопирована'))));
+            ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(tr('Ссылка скопирована'))));
           },
         );
       },
@@ -359,7 +434,11 @@ class _Tile3D extends StatefulWidget {
   final String label;
   final VoidCallback onTap;
   final bool active;
-  const _Tile3D({required this.icon, required this.label, required this.onTap, this.active = true});
+  const _Tile3D(
+      {required this.icon,
+      required this.label,
+      required this.onTap,
+      this.active = true});
 
   @override
   State<_Tile3D> createState() => _Tile3DState();
@@ -371,7 +450,8 @@ class _Tile3DState extends State<_Tile3D> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final base = widget.active ? cs.primaryContainer : cs.surfaceContainerHighest;
+    final base =
+        widget.active ? cs.primaryContainer : cs.surfaceContainerHighest;
     final fg = widget.active ? cs.onPrimaryContainer : cs.onSurfaceVariant;
     return GestureDetector(
       onTapDown: (_) => setState(() => _down = true),
@@ -395,7 +475,10 @@ class _Tile3DState extends State<_Tile3D> {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Color.lerp(base, Colors.white, 0.12)!, Color.lerp(base, Colors.black, 0.12)!],
+                colors: [
+                  Color.lerp(base, Colors.white, 0.12)!,
+                  Color.lerp(base, Colors.black, 0.12)!
+                ],
               ),
               boxShadow: [
                 BoxShadow(
@@ -412,7 +495,10 @@ class _Tile3DState extends State<_Tile3D> {
           children: [
             Icon(widget.icon, color: fg),
             const SizedBox(height: 4),
-            Text(widget.label, style: TextStyle(color: fg, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text(widget.label,
+                style: TextStyle(color: fg, fontSize: 12),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
           ],
         ),
       ),
@@ -443,7 +529,8 @@ class _PhotoGridState extends State<_PhotoGrid> {
 
   void _down(PointerDownEvent e) {
     _pointers[e.pointer] = e.position;
-    if (_pointers.length == 2) setState(() => _startDist = math.max(_dist(), 1));
+    if (_pointers.length == 2)
+      setState(() => _startDist = math.max(_dist(), 1));
   }
 
   void _move(PointerMoveEvent e) {
@@ -463,15 +550,19 @@ class _PhotoGridState extends State<_PhotoGrid> {
 
   void _up(PointerEvent e) {
     _pointers.remove(e.pointer);
-    if (_pointers.length < 2 && _startDist != null) setState(() => _startDist = null);
+    if (_pointers.length < 2 && _startDist != null)
+      setState(() => _startDist = null);
   }
 
   @override
   Widget build(BuildContext context) {
     if (widget.photos.isEmpty) {
-      return Center(child: Text(tr('Фото пока нет'), style: TextStyle(color: Theme.of(context).hintColor)));
+      return Center(
+          child: Text(tr('Фото пока нет'),
+              style: TextStyle(color: Theme.of(context).hintColor)));
     }
-    final physics = _startDist != null ? const NeverScrollableScrollPhysics() : null;
+    final physics =
+        _startDist != null ? const NeverScrollableScrollPhysics() : null;
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final width = MediaQuery.sizeOf(context).width;
     Widget image(ChatMessage m, BoxFit fit) {
@@ -479,7 +570,9 @@ class _PhotoGridState extends State<_PhotoGrid> {
       return GestureDetector(
         onTap: () => PhotoViewerScreen.open(context, provider),
         child: Image(
-          image: ResizeImage(provider, width: (width / _cols * dpr).round(), policy: ResizeImagePolicy.fit),
+          image: ResizeImage(provider,
+              width: (width / _cols * dpr).round(),
+              policy: ResizeImagePolicy.fit),
           fit: fit,
           gaplessPlayback: true,
         ),

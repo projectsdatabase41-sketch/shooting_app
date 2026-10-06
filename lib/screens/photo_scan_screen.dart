@@ -1,8 +1,10 @@
+import '../logic/friendly_error.dart';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart' show compute, defaultTargetPlatform, kIsWeb, TargetPlatform;
+import 'package:flutter/foundation.dart'
+    show compute, defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import 'package:provider/provider.dart';
@@ -38,8 +40,10 @@ List<HoleCandidate> _detectInIsolate(_DetectArgs args) {
   );
 }
 
-({PixelPoint center, double radiusPx, double radiusYPx, double angleRad})? _detectCircleInIsolate(_CalibArgs args) {
-  final auto = detectTargetCircle(args.image, bullseyeToFaceRatio: args.bullseyeToFaceRatio);
+({PixelPoint center, double radiusPx, double radiusYPx, double angleRad})?
+    _detectCircleInIsolate(_CalibArgs args) {
+  final auto = detectTargetCircle(args.image,
+      bullseyeToFaceRatio: args.bullseyeToFaceRatio);
   if (auto == null) return null;
   // Уточнение по печатным кольцам — поверх уже найденного центра и
   // грубого радиуса: точные, заранее известные расстояния до всех 10
@@ -56,7 +60,12 @@ List<HoleCandidate> _detectInIsolate(_DetectArgs args) {
     faceRadiusMm: args.faceRadiusMm,
   );
   final scale = avgRadius > 0 ? refinedAvg / avgRadius : 1.0;
-  return (center: auto.center, radiusPx: auto.radiusPx * scale, radiusYPx: auto.radiusYPx * scale, angleRad: auto.angleRad);
+  return (
+    center: auto.center,
+    radiusPx: auto.radiusPx * scale,
+    radiusYPx: auto.radiusYPx * scale,
+    angleRad: auto.angleRad
+  );
 }
 
 class _CalibArgs {
@@ -119,13 +128,15 @@ class PhotoScanScreen extends StatefulWidget {
   /// предлагать их повторно.
   final List<PixelPoint> knownHolesMm;
 
-  const PhotoScanScreen({super.key, required this.face, required this.knownHolesMm});
+  const PhotoScanScreen(
+      {super.key, required this.face, required this.knownHolesMm});
 
   @override
   State<PhotoScanScreen> createState() => _PhotoScanScreenState();
 }
 
-class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingObserver {
+class _PhotoScanScreenState extends State<PhotoScanScreen>
+    with WidgetsBindingObserver {
   /// ИИ смотрит на фото — «назад» и сворачивание прерывают, а не уходят.
   bool _visionRunning = false;
 
@@ -148,7 +159,9 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (_visionRunning && (state == AppLifecycleState.paused || state == AppLifecycleState.hidden)) {
+    if (_visionRunning &&
+        (state == AppLifecycleState.paused ||
+            state == AppLifecycleState.hidden)) {
       LocalAi.instance.cancel();
     }
   }
@@ -216,7 +229,8 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
   /// camera_scan_screen.dart, там же таймер+акселерометр вместо
   /// разбора пикселей). На Windows desktop `camera` не работает вовсе —
   /// остаётся привычный выбор файла.
-  bool get _cameraAvailable => kIsWeb || defaultTargetPlatform == TargetPlatform.android;
+  bool get _cameraAvailable =>
+      kIsWeb || defaultTargetPlatform == TargetPlatform.android;
 
   Future<void> _pick() async {
     setState(() {
@@ -224,16 +238,18 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
       _error = null;
     });
     try {
-      final result = await FilePicker.platform.pickFiles(type: FileType.image, withData: true);
+      final result = await FilePicker.platform
+          .pickFiles(type: FileType.image, withData: true);
       if (result == null || result.files.isEmpty) {
         setState(() => _busy = false);
         return;
       }
       final bytes = result.files.first.bytes;
-      if (bytes == null) throw ShotPhotoException(tr('Не удалось прочитать файл'));
+      if (bytes == null)
+        throw ShotPhotoException(tr('Не удалось прочитать файл'));
       await _loadPhoto(bytes);
     } catch (e) {
-      setState(() => _error = '$e');
+      setState(() => _error = friendlyError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -242,7 +258,8 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
   Future<void> _openCamera() async {
     final bytes = await Navigator.of(context).push<Uint8List>(
       MaterialPageRoute(
-        builder: (_) => CameraScanScreen(face: widget.face, knownHolesMm: _allKnownMm),
+        builder: (_) =>
+            CameraScanScreen(face: widget.face, knownHolesMm: _allKnownMm),
       ),
     );
     if (bytes == null || !mounted) return;
@@ -253,7 +270,7 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
     try {
       await _loadPhoto(bytes);
     } catch (e) {
-      setState(() => _error = '$e');
+      setState(() => _error = friendlyError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -269,7 +286,8 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
       _detectCircleInIsolate,
       _CalibArgs(
         image: analyzed.image,
-        bullseyeToFaceRatio: widget.face.faceRadiusMm / widget.face.bullseyeRadiusMm,
+        bullseyeToFaceRatio:
+            widget.face.faceRadiusMm / widget.face.bullseyeRadiusMm,
         ringRadiiMm: widget.face.ringRadiiMm,
         faceRadiusMm: widget.face.faceRadiusMm,
       ),
@@ -285,7 +303,9 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
       angle = autoCircle.angleRad;
     } else {
       center = Offset(decoded.width / 2, decoded.height / 2);
-      radiusX = radiusY = (decoded.width < decoded.height ? decoded.width : decoded.height) * 0.35;
+      radiusX = radiusY =
+          (decoded.width < decoded.height ? decoded.width : decoded.height) *
+              0.35;
       angle = 0;
     }
 
@@ -311,7 +331,8 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
   Future<bool> _confirmRamOk(LocalModelInfo vision) async {
     if (_ramWarned) return true;
     final ram = await totalRamBytes();
-    if (ram == null || vision.minRamGb <= ram / 1e9 + 0.5) return true; // хватает — не спрашиваем
+    if (ram == null || vision.minRamGb <= ram / 1e9 + 0.5)
+      return true; // хватает — не спрашиваем
     _ramWarned = true;
     if (!mounted) return true;
     final proceed = await showDialog<bool>(
@@ -320,11 +341,19 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
         title: Text(tr('Может не хватить памяти')),
         content: Text(tr(
           'Модели «{name}» нужно от {min} ГБ ОЗУ, у устройства примерно {have} ГБ — распознавание может надолго зависнуть или приложение закроется. Можно продолжить или воспользоваться обычным алгоритмом (быстрее, но менее точен на сложных фото).',
-          {'name': vision.name, 'min': vision.minRamGb, 'have': (ram / 1e9).toStringAsFixed(1)},
+          {
+            'name': vision.name,
+            'min': vision.minRamGb,
+            'have': (ram / 1e9).toStringAsFixed(1)
+          },
         )),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr('Обычный алгоритм'))),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(tr('Всё равно ИИ'))),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text(tr('Обычный алгоритм'))),
+          FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text(tr('Всё равно ИИ'))),
         ],
       ),
     );
@@ -341,8 +370,10 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
     });
     // Режим разработчика + скачанная модель «со зрением» — пробоины ищет она
     // (обычный алгоритм путает цифры колец с пробоинами). Сбой — алгоритм.
-    var vision = await LocalVision.active(AiSettings(context.read<AppDataStore>().db));
-    if (vision != null && !await _confirmRamOk(vision)) vision = null; // отказался — обычный алгоритм
+    var vision =
+        await LocalVision.active(AiSettings(context.read<AppDataStore>().db));
+    if (vision != null && !await _confirmRamOk(vision))
+      vision = null; // отказался — обычный алгоритм
     if (vision != null) {
       setState(() => _visionRunning = true);
       try {
@@ -353,14 +384,17 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
         if (mounted) {
           setState(() {
             _busy = false;
-            _error = tr('Распознавание прервано. Можно поставить точки вручную или снять новое фото.');
+            _error = tr(
+                'Распознавание прервано. Можно поставить точки вручную или снять новое фото.');
           });
         }
         return;
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text(tr('ИИ-зрение не сработало ({e}) — ищет обычный алгоритм', {'e': e}))));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(tr(
+                  'ИИ-зрение не сработало ({e}) — ищет обычный алгоритм',
+                  {'e': friendlyError(e)}))));
         }
       } finally {
         if (mounted) setState(() => _visionRunning = false);
@@ -379,10 +413,12 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
       // между полуосями небольшая, и отдельный калибр под каждую ось
       // усложнил бы формулы без заметной пользы.
       final avgRadiusPx = (scaledRx + scaledRy) / 2;
-      final caliberRadiusPx = avgRadiusPx * (widget.face.caliberMm / 2) / widget.face.faceRadiusMm;
+      final caliberRadiusPx =
+          avgRadiusPx * (widget.face.caliberMm / 2) / widget.face.faceRadiusMm;
       final knownPx = [
         for (final mm in _allKnownMm)
-          mmToPixelEllipse(mm, scaledCenter, scaledRx, scaledRy, _calibAngle, widget.face.faceRadiusMm),
+          mmToPixelEllipse(mm, scaledCenter, scaledRx, scaledRy, _calibAngle,
+              widget.face.faceRadiusMm),
       ];
 
       final candidates = await compute(
@@ -403,23 +439,27 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _candidates = [for (final c in candidates) Offset(c.center.x / s, c.center.y / s)];
+        _candidates = [
+          for (final c in candidates) Offset(c.center.x / s, c.center.y / s)
+        ];
         if (_candidates.isEmpty) {
-          _error = tr('Пробоин не нашли — либо на фото их не видно, либо круг откалиброван неточно. Можно подровнять круг или добавить точку вручную кнопкой ниже.');
+          _error = tr(
+              'Пробоин не нашли — либо на фото их не видно, либо круг откалиброван неточно. Можно подровнять круг или добавить точку вручную кнопкой ниже.');
         }
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _error = '$e';
+        _error = friendlyError(e);
       });
     }
   }
 
   /// Квадрат вокруг откалиброванного круга → модель → точки обратно в
   /// пиксели исходного фото. Вне круга мишени (с запасом 5%) — отбрасываем.
-  Future<void> _runVision(LocalModelInfo m, img.Image decoded, Offset center) async {
+  Future<void> _runVision(
+      LocalModelInfo m, img.Image decoded, Offset center) async {
     final half = math.max(_calibRx, _calibRy) * 1.1;
     final x0 = (center.dx - half).clamp(0, decoded.width - 1).floor();
     final y0 = (center.dy - half).clamp(0, decoded.height - 1).floor();
@@ -427,9 +467,12 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
     final y1 = (center.dy + half).clamp(1, decoded.height).ceil();
     // Видно, КАКОЙ участок фото сейчас смотрит модель — минуты ожидания на
     // слабом железе иначе выглядят как замёрзший экран (решение пользователя).
-    setState(() => _visionCropRect = Rect.fromLTRB(x0.toDouble(), y0.toDouble(), x1.toDouble(), y1.toDouble()));
-    final crop = img.copyCrop(decoded, x: x0, y: y0, width: x1 - x0, height: y1 - y0);
-    final square = img.copyResize(crop, width: LocalVision.side, height: LocalVision.side);
+    setState(() => _visionCropRect = Rect.fromLTRB(
+        x0.toDouble(), y0.toDouble(), x1.toDouble(), y1.toDouble()));
+    final crop =
+        img.copyCrop(decoded, x: x0, y: y0, width: x1 - x0, height: y1 - y0);
+    final square =
+        img.copyResize(crop, width: LocalVision.side, height: LocalVision.side);
     final jpeg = Uint8List.fromList(img.encodeJpg(square, quality: 90));
     final points = await LocalVision.findHoles(m, jpeg);
     final sx = (x1 - x0) / LocalVision.side, sy = (y1 - y0) / LocalVision.side;
@@ -440,11 +483,13 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
       _visionCropRect = null;
       _candidates = [
         for (final p in points)
-          if ((Offset(x0 + p.dx * sx, y0 + p.dy * sy) - center).distance <= maxR)
+          if ((Offset(x0 + p.dx * sx, y0 + p.dy * sy) - center).distance <=
+              maxR)
             Offset(x0 + p.dx * sx, y0 + p.dy * sy),
       ];
       if (_candidates.isEmpty) {
-        _error = tr('ИИ не нашёл пробоин. Можно подровнять круг или добавить точку вручную кнопкой ниже.');
+        _error = tr(
+            'ИИ не нашёл пробоин. Можно подровнять круг или добавить точку вручную кнопкой ниже.');
       }
     });
     if (_candidates.isNotEmpty) await _reviewOnTarget();
@@ -454,8 +499,10 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
   /// найден автоматически. «ОК» — в тренировку; «Отмена» — остаёмся на
   /// фото с кругом и точками, как в обычном режиме (поправить вручную).
   Future<void> _reviewOnTarget() async {
-    final result = await Navigator.of(context).push<List<PixelPoint>>(MaterialPageRoute(
-      builder: (_) => ShotReviewScreen(face: widget.face, shotsMm: _candidatesToConfirm.map(_toMm).toList()),
+    final result =
+        await Navigator.of(context).push<List<PixelPoint>>(MaterialPageRoute(
+      builder: (_) => ShotReviewScreen(
+          face: widget.face, shotsMm: _candidatesToConfirm.map(_toMm).toList()),
     ));
     if (result == null || !mounted) return;
     _confirmedMm.addAll(result);
@@ -484,7 +531,10 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
     if (count == null) return _candidates;
     if (_candidates.length > count) return _candidates.take(count).toList();
     if (_candidates.isEmpty || _candidates.length == count) return _candidates;
-    return [..._candidates, for (var i = _candidates.length; i < count; i++) _candidates.last];
+    return [
+      ..._candidates,
+      for (var i = _candidates.length; i < count; i++) _candidates.last
+    ];
   }
 
   void _confirmPhoto() {
@@ -517,21 +567,31 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
       },
       child: Scaffold(
         appBar: GlassHeader(
-          title: Text(_visionRunning ? tr('ИИ смотрит… (назад — прервать и выйти)') : tr('Фото мишени'),
+          title: Text(
+              _visionRunning
+                  ? tr('ИИ смотрит… (назад — прервать и выйти)')
+                  : tr('Фото мишени'),
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w600)),
           actions: [
             if (_confirmedMm.isNotEmpty)
               GlassCircleButton(
                 icon: const BoldIcon(Icons.check),
-                tooltip: tr('Готово ({length})', {'length': _confirmedMm.length}),
+                tooltip:
+                    tr('Готово ({length})', {'length': _confirmedMm.length}),
                 onTap: _finish,
               ),
           ],
         ),
         body: Column(
           children: [
-            Expanded(child: decoded == null ? _buildPickPrompt() : _buildReview(decoded)),
+            Expanded(
+                child: decoded == null
+                    ? _buildPickPrompt()
+                    : _buildReview(decoded)),
             if (_confirmedMm.isNotEmpty) _buildRunningList(),
           ],
         ),
@@ -541,7 +601,9 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
 
   Widget _buildRunningList() {
     final labels = [
-      for (final p in _confirmedMm) scoreForRadius(math.sqrt(p.x * p.x + p.y * p.y), widget.face).toStringAsFixed(1),
+      for (final p in _confirmedMm)
+        scoreForRadius(math.sqrt(p.x * p.x + p.y * p.y), widget.face)
+            .toStringAsFixed(1),
     ];
     return SafeArea(
       top: false,
@@ -550,9 +612,11 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(tr('Уже добавлено'), style: Theme.of(context).textTheme.labelMedium),
+            Text(tr('Уже добавлено'),
+                style: Theme.of(context).textTheme.labelMedium),
             const SizedBox(height: 4),
-            Text(labels.join(', '), style: Theme.of(context).textTheme.bodyMedium),
+            Text(labels.join(', '),
+                style: Theme.of(context).textTheme.bodyMedium),
           ],
         ),
       ),
@@ -566,14 +630,19 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.photo_camera_outlined, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            Icon(Icons.photo_camera_outlined,
+                size: 48,
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
             const SizedBox(height: 12),
             Text(
               _confirmedMm.isEmpty
                   ? (_cameraAvailable
-                      ? tr('Наведите камеру на мишень — приложение само найдёт пробоину и снимет кадр. Файл нигде не сохраняется и после разбора не хранится.')
-                      : tr('Сфотографируйте мишень и выберите снимок здесь — приложение само в галерею не пишет и файл после разбора не хранит.'))
-                  : tr('Можно снять ещё одно фото — или нажать «Готово» в шапке, если снимков достаточно.'),
+                      ? tr(
+                          'Наведите камеру на мишень — приложение само найдёт пробоину и снимет кадр. Файл нигде не сохраняется и после разбора не хранится.')
+                      : tr(
+                          'Сфотографируйте мишень и выберите снимок здесь — приложение само в галерею не пишет и файл после разбора не хранит.'))
+                  : tr(
+                      'Можно снять ещё одно фото — или нажать «Готово» в шапке, если снимков достаточно.'),
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium,
             ),
@@ -587,7 +656,10 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
               FilledButton.icon(
                 onPressed: _busy ? null : _openCamera,
                 icon: _busy
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.camera_alt_outlined),
                 label: Text(tr('Через камеру')),
               ),
@@ -601,13 +673,17 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
               FilledButton.icon(
                 onPressed: _busy ? null : _pick,
                 icon: _busy
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.image_outlined),
                 label: Text(tr('Выбрать фото')),
               ),
             if (_error != null) ...[
               const SizedBox(height: 12),
-              Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              Text(_error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ],
           ],
         ),
@@ -646,18 +722,23 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
                               // он был не крупнее настоящего отверстия
                               // (решение пользователя, иначе точную подгонку
                               // неудобно делать).
-                              holeRadiusPx:
-                                  (_calibRx + _calibRy) / 2 * widget.face.caliberRadiusMm / widget.face.faceRadiusMm,
+                              holeRadiusPx: (_calibRx + _calibRy) /
+                                  2 *
+                                  widget.face.caliberRadiusMm /
+                                  widget.face.faceRadiusMm,
                               candidates: _candidates,
                               addMode: _addMode,
-                              onCalibrationChanged: (c, rx, ry, angle) => setState(() {
+                              onCalibrationChanged: (c, rx, ry, angle) =>
+                                  setState(() {
                                 _calibCenter = c;
                                 _calibRx = rx;
                                 _calibRy = ry;
                                 _calibAngle = angle;
                               }),
-                              onCandidateMoved: (i, p) => setState(() => _candidates[i] = p),
-                              onCandidateRemoved: (i) => setState(() => _candidates.removeAt(i)),
+                              onCandidateMoved: (i, p) =>
+                                  setState(() => _candidates[i] = p),
+                              onCandidateRemoved: (i) =>
+                                  setState(() => _candidates.removeAt(i)),
                               onCandidateAdded: (p) => setState(() {
                                 _candidates.add(p);
                                 _addMode = false;
@@ -667,7 +748,9 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
                             ),
                             if (_visionRunning && _visionCropRect != null)
                               IgnorePointer(
-                                child: _ScanningOverlay(cropRect: _visionCropRect!, displayScale: _displayScale),
+                                child: _ScanningOverlay(
+                                    cropRect: _visionCropRect!,
+                                    displayScale: _displayScale),
                               ),
                           ],
                         );
@@ -690,7 +773,8 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
         if (_error != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            child: Text(_error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error)),
           ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -698,8 +782,10 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: _busy ? null : () => setState(() => _addMode = !_addMode),
-                  icon: Icon(_addMode ? Icons.close : Icons.add_location_alt_outlined),
+                  onPressed:
+                      _busy ? null : () => setState(() => _addMode = !_addMode),
+                  icon: Icon(
+                      _addMode ? Icons.close : Icons.add_location_alt_outlined),
                   label: Text(_addMode ? tr('Отмена') : tr('Точка')),
                 ),
               ),
@@ -714,10 +800,15 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
               Expanded(
                 flex: 2,
                 child: FilledButton(
-                  onPressed: _busy || _candidates.isEmpty ? null : _confirmPhoto,
+                  onPressed:
+                      _busy || _candidates.isEmpty ? null : _confirmPhoto,
                   child: _busy
-                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                      : Text(tr('Подтвердить ({length})', {'length': _candidatesToConfirm.length})),
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : Text(tr('Подтвердить ({length})',
+                          {'length': _candidatesToConfirm.length})),
                 ),
               ),
             ],
@@ -738,7 +829,8 @@ class _PhotoScanScreenState extends State<PhotoScanScreen> with WidgetsBindingOb
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       child: Row(
         children: [
-          Text(tr('Выстрелов:'), style: Theme.of(context).textTheme.labelMedium),
+          Text(tr('Выстрелов:'),
+              style: Theme.of(context).textTheme.labelMedium),
           const SizedBox(width: 8),
           Expanded(
             child: SingleChildScrollView(
@@ -782,7 +874,9 @@ class _ReviewOverlay extends StatelessWidget {
   final double holeRadiusPx;
   final List<Offset> candidates;
   final bool addMode;
-  final void Function(Offset center, double radiusX, double radiusY, double angle) onCalibrationChanged;
+  final void Function(
+          Offset center, double radiusX, double radiusY, double angle)
+      onCalibrationChanged;
   final void Function(int index, Offset newPos) onCandidateMoved;
   final void Function(int index) onCandidateRemoved;
   final void Function(Offset pos) onCandidateAdded;
@@ -825,7 +919,8 @@ class _ReviewOverlay extends StatelessWidget {
     // Два независимых маркера на краю эллипса — один растягивает/поворачивает
     // ось radiusX, второй только меняет длину radiusY (угол задаёт
     // ЕДИНСТВЕННО первый маркер, чтобы оба не спорили за поворот разом).
-    final handleA = displayCenter + Offset(displayRx * math.cos(angle), displayRx * math.sin(angle));
+    final handleA = displayCenter +
+        Offset(displayRx * math.cos(angle), displayRx * math.sin(angle));
     final perp = Offset(-math.sin(angle), math.cos(angle));
     final handleB = displayCenter + perp * displayRy;
 
@@ -846,7 +941,10 @@ class _ReviewOverlay extends StatelessWidget {
         children: [
           GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTapUp: addMode ? (details) => onCandidateAdded(details.localPosition / displayScale) : null,
+            onTapUp: addMode
+                ? (details) =>
+                    onCandidateAdded(details.localPosition / displayScale)
+                : null,
             onPanUpdate: addMode
                 ? null
                 : (details) {
@@ -856,14 +954,19 @@ class _ReviewOverlay extends StatelessWidget {
                     if (distA <= _handleHitRadius && distA <= distB) {
                       final v = (local - displayCenter) / displayScale;
                       final newRx = v.distance.clamp(10, 5000).toDouble();
-                      onCalibrationChanged(center, newRx, radiusY, math.atan2(v.dy, v.dx));
+                      onCalibrationChanged(
+                          center, newRx, radiusY, math.atan2(v.dy, v.dx));
                     } else if (distB <= _handleHitRadius) {
                       final v = (local - displayCenter) / displayScale;
                       final projected = v.dx * perp.dx + v.dy * perp.dy;
                       final newRy = projected.abs().clamp(10, 5000).toDouble();
                       onCalibrationChanged(center, radiusX, newRy, angle);
                     } else {
-                      onCalibrationChanged(center + details.delta / displayScale, radiusX, radiusY, angle);
+                      onCalibrationChanged(
+                          center + details.delta / displayScale,
+                          radiusX,
+                          radiusY,
+                          angle);
                     }
                   },
             child: Stack(
@@ -899,8 +1002,11 @@ class _ReviewOverlay extends StatelessWidget {
                   child: Image.memory(bytes, fit: BoxFit.fill),
                 ),
                 CustomPaint(
-                  painter:
-                      _CalibrationPainter(center: displayCenter, radiusX: displayRx, radiusY: displayRy, angle: angle),
+                  painter: _CalibrationPainter(
+                      center: displayCenter,
+                      radiusX: displayRx,
+                      radiusY: displayRy,
+                      angle: angle),
                 ),
               ],
             ),
@@ -964,15 +1070,20 @@ class _CalibrationPainter extends CustomPainter {
     canvas.save();
     canvas.translate(center.dx, center.dy);
     canvas.rotate(angle);
-    canvas.drawOval(Rect.fromCenter(center: Offset.zero, width: radiusX * 2, height: radiusY * 2), ring);
+    canvas.drawOval(
+        Rect.fromCenter(
+            center: Offset.zero, width: radiusX * 2, height: radiusY * 2),
+        ring);
     canvas.restore();
 
     final handle = Paint()..color = Colors.amberAccent;
     canvas.drawCircle(center, 6, handle);
     // Два независимых маркера — растянуть по каждой оси эллипса можно
     // отдельно (см. жесты в _ReviewOverlay), первый ещё и поворачивает.
-    final handleA = center + Offset(radiusX * math.cos(angle), radiusX * math.sin(angle));
-    final handleB = center + Offset(-radiusY * math.sin(angle), radiusY * math.cos(angle));
+    final handleA =
+        center + Offset(radiusX * math.cos(angle), radiusX * math.sin(angle));
+    final handleB =
+        center + Offset(-radiusY * math.sin(angle), radiusY * math.cos(angle));
     canvas.drawCircle(handleA, 8, handle);
     canvas.drawCircle(handleB, 8, handle);
   }
@@ -999,8 +1110,11 @@ class _ScanningOverlay extends StatefulWidget {
   State<_ScanningOverlay> createState() => _ScanningOverlayState();
 }
 
-class _ScanningOverlayState extends State<_ScanningOverlay> with SingleTickerProviderStateMixin {
-  late final _ctrl = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat();
+class _ScanningOverlayState extends State<_ScanningOverlay>
+    with SingleTickerProviderStateMixin {
+  late final _ctrl =
+      AnimationController(vsync: this, duration: const Duration(seconds: 2))
+        ..repeat();
 
   @override
   void dispose() {
@@ -1034,9 +1148,16 @@ class _ScanPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     // Снаружи участка — затемнение (тонкой рамкой обводим сам участок).
-    final outside = Path.combine(PathOperation.difference, Path()..addRect(Offset.zero & size), Path()..addRect(rect));
-    canvas.drawPath(outside, Paint()..color = Colors.black.withValues(alpha: 0.45));
-    canvas.drawRect(rect, Paint()..color = Colors.amberAccent..style = PaintingStyle.stroke..strokeWidth = 2);
+    final outside = Path.combine(PathOperation.difference,
+        Path()..addRect(Offset.zero & size), Path()..addRect(rect));
+    canvas.drawPath(
+        outside, Paint()..color = Colors.black.withValues(alpha: 0.45));
+    canvas.drawRect(
+        rect,
+        Paint()
+          ..color = Colors.amberAccent
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2);
 
     // Полоса — сама расширяется/гаснет по краям (градиент), а не жёсткая линия.
     final y = rect.top + rect.height * t;
@@ -1057,5 +1178,6 @@ class _ScanPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _ScanPainter oldDelegate) => oldDelegate.t != t || oldDelegate.rect != rect;
+  bool shouldRepaint(covariant _ScanPainter oldDelegate) =>
+      oldDelegate.t != t || oldDelegate.rect != rect;
 }

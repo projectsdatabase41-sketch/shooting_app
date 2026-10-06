@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -351,11 +352,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       if (!mounted) return;
       setState(() {
         _translating.remove(m.id);
-        _translationErrors[m.id] = '$e';
+        _translationErrors[m.id] = friendlyError(e);
       });
       if (!silent) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(tr('Не удалось перевести: {e}', {'e': e}))));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                tr('Не удалось перевести: {e}', {'e': friendlyError(e)}))));
       }
     }
   }
@@ -396,8 +398,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       // без единого следа для пользователя. Теперь ошибка видна и не
       // блокирует дальнейшую отправку.
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(tr('Не отправлено: {e}', {'e': e}))));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(tr('Не отправлено: {e}', {'e': friendlyError(e)}))));
       }
     } finally {
       // Всегда, а не только при успехе — иначе сообщение с красным
@@ -480,8 +482,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(tr('ИИ не ответил: {e}', {'e': e}))));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(tr('ИИ не ответил: {e}', {'e': friendlyError(e)}))));
       }
     } finally {
       if (mounted) setState(() => _aiBusy = false);
@@ -539,8 +541,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       await widget.sync.retry(m);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(tr('Не отправлено: {e}', {'e': e}))));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(tr('Не отправлено: {e}', {'e': friendlyError(e)}))));
       }
     } finally {
       _reload();
@@ -574,8 +576,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       _reload();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(tr('Не удалось скачать: {e}', {'e': e}))));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content:
+                Text(tr('Не удалось скачать: {e}', {'e': friendlyError(e)}))));
       }
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -776,8 +779,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       _scrollToEnd();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(tr('Не отправлено: {e}', {'e': e}))));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(tr('Не отправлено: {e}', {'e': friendlyError(e)}))));
       }
     } finally {
       if (mounted) {
@@ -813,8 +816,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       _scrollToEnd();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(tr('Не отправлено: {e}', {'e': e}))));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(tr('Не отправлено: {e}', {'e': friendlyError(e)}))));
       }
     } finally {
       if (mounted) {
@@ -843,8 +846,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
           content: Text(tr('{p} получит вызов', {'p': _contact.nickname}))));
       _reload();
     } catch (e) {
-      messenger.showSnackBar(
-          SnackBar(content: Text(tr('Не удалось позвать: {e}', {'e': e}))));
+      messenger.showSnackBar(SnackBar(
+          content:
+              Text(tr('Не удалось позвать: {e}', {'e': friendlyError(e)}))));
     }
   }
 

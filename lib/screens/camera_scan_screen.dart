@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'dart:async';
 import 'dart:io' show File;
 import 'dart:math' as math;
@@ -43,7 +44,8 @@ class CameraScanScreen extends StatefulWidget {
   final TargetFace face;
   final List<PixelPoint> knownHolesMm;
 
-  const CameraScanScreen({super.key, required this.face, required this.knownHolesMm});
+  const CameraScanScreen(
+      {super.key, required this.face, required this.knownHolesMm});
 
   @override
   State<CameraScanScreen> createState() => _CameraScanScreenState();
@@ -82,7 +84,8 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
   double _webProgress = 0; // 0..1 за _webCountdown
   static const Duration _webCountdown = Duration(seconds: 2);
   static const Duration _webTick = Duration(milliseconds: 40);
-  static const double _shakeThreshold = 0.6; // м/с², стандартное отклонение модуля ускорения
+  static const double _shakeThreshold =
+      0.6; // м/с², стандартное отклонение модуля ускорения
 
   // ---- Индикатор "держите камеру перпендикулярно мишени" (пункт 5) ----
   //
@@ -147,7 +150,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
         await controller.startImageStream(_onFrame);
       }
     } catch (e) {
-      if (mounted) setState(() => _error = '$e');
+      if (mounted) setState(() => _error = friendlyError(e));
     }
   }
 
@@ -191,8 +194,11 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
     if (_recentAccelMagnitudes.length > 12) _recentAccelMagnitudes.removeAt(0);
     var stableChanged = false;
     if (_recentAccelMagnitudes.length >= 4) {
-      final mean = _recentAccelMagnitudes.reduce((a, b) => a + b) / _recentAccelMagnitudes.length;
-      final variance = _recentAccelMagnitudes.map((m) => (m - mean) * (m - mean)).reduce((a, b) => a + b) /
+      final mean = _recentAccelMagnitudes.reduce((a, b) => a + b) /
+          _recentAccelMagnitudes.length;
+      final variance = _recentAccelMagnitudes
+              .map((m) => (m - mean) * (m - mean))
+              .reduce((a, b) => a + b) /
           _recentAccelMagnitudes.length;
       final stable = math.sqrt(variance) < _shakeThreshold;
       if (stable != _webStable) {
@@ -205,7 +211,8 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
     // секунду) — датчик шлёт события гораздо чаще, и вызывать setState на
     // каждое было бы лишней нагрузкой ради неразличимой на глаз разницы.
     final now = DateTime.now();
-    if (stableChanged || now.difference(_lastTiltUiUpdate) >= const Duration(milliseconds: 66)) {
+    if (stableChanged ||
+        now.difference(_lastTiltUiUpdate) >= const Duration(milliseconds: 66)) {
       _lastTiltUiUpdate = now;
       if (mounted) setState(() {});
     }
@@ -231,7 +238,8 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
   void _onFrame(CameraImage image) {
     if (_processing) return;
     final now = DateTime.now();
-    if (now.difference(_lastProcessed) < const Duration(milliseconds: 300)) return;
+    if (now.difference(_lastProcessed) < const Duration(milliseconds: 300))
+      return;
     _processing = true;
     _lastProcessed = now;
     try {
@@ -267,13 +275,15 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
     return GrayImage(gw, gh, out);
   }
 
-  double get _bullseyeToFaceRatio => widget.face.faceRadiusMm / widget.face.bullseyeRadiusMm;
+  double get _bullseyeToFaceRatio =>
+      widget.face.faceRadiusMm / widget.face.bullseyeRadiusMm;
 
   void _analyze(CameraImage image) {
     final gray = _grayFromYPlane(image);
 
     if (_lockedCenter == null) {
-      final circle = detectTargetCircle(gray, bullseyeToFaceRatio: _bullseyeToFaceRatio);
+      final circle =
+          detectTargetCircle(gray, bullseyeToFaceRatio: _bullseyeToFaceRatio);
       if (circle == null) {
         if (mounted) setState(() => _status = _Status.searchingTarget);
         return;
@@ -292,7 +302,8 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
     }
 
     final center = _lockedCenter!;
-    final caliberRadiusPx = _lockedRadius * (widget.face.caliberMm / 2) / widget.face.faceRadiusMm;
+    final caliberRadiusPx =
+        _lockedRadius * (widget.face.caliberMm / 2) / widget.face.faceRadiusMm;
     final knownPx = [
       for (final mm in widget.knownHolesMm)
         PixelPoint(
@@ -374,7 +385,8 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
       // платформе) это тоже единственная проверка вообще — нажатие само
       // по себе не подтверждает, что в кадре мишень.
       final analyzed = ShotPhotoService.analyze(decoded);
-      final found = detectTargetCircle(analyzed.image, bullseyeToFaceRatio: _bullseyeToFaceRatio);
+      final found = detectTargetCircle(analyzed.image,
+          bullseyeToFaceRatio: _bullseyeToFaceRatio);
       if (found == null) {
         await _resumeSearching();
         return;
@@ -385,7 +397,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
       if (mounted) Navigator.of(context).pop(bytes);
     } catch (e) {
       if (mounted) {
-        setState(() => _error = '$e');
+        setState(() => _error = friendlyError(e));
         await _resumeSearching();
       }
     }
@@ -458,13 +470,17 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
           tooltip: tr('Назад'),
           onTap: () => Navigator.of(context).maybePop(),
         ),
-        title: Text(tr('Наведите на мишень'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+        title: Text(tr('Наведите на мишень'),
+            style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.w600)),
       ),
       body: _error != null
           ? Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
-                child: Text(_error!, style: const TextStyle(color: Colors.white), textAlign: TextAlign.center),
+                child: Text(_error!,
+                    style: const TextStyle(color: Colors.white),
+                    textAlign: TextAlign.center),
               ),
             )
           : controller == null || !controller.value.isInitialized
@@ -490,10 +506,26 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
                         aspectRatio: controller.value.aspectRatio,
                         child: ColorFiltered(
                           colorFilter: const ColorFilter.matrix(<double>[
-                            0.2126, 0.7152, 0.0722, 0, 0,
-                            0.2126, 0.7152, 0.0722, 0, 0,
-                            0.2126, 0.7152, 0.0722, 0, 0,
-                            0, 0, 0, 1, 0,
+                            0.2126,
+                            0.7152,
+                            0.0722,
+                            0,
+                            0,
+                            0.2126,
+                            0.7152,
+                            0.0722,
+                            0,
+                            0,
+                            0.2126,
+                            0.7152,
+                            0.0722,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0,
+                            1,
+                            0,
                           ]),
                           child: CameraPreview(controller),
                         ),
@@ -508,13 +540,15 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
                     Center(
                       child: LayoutBuilder(
                         builder: (context, constraints) {
-                          final side = math.min(constraints.maxWidth, constraints.maxHeight);
+                          final side = math.min(
+                              constraints.maxWidth, constraints.maxHeight);
                           return Container(
                             width: side,
                             height: side,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white54, width: 1.5),
+                              border:
+                                  Border.all(color: Colors.white54, width: 1.5),
                             ),
                           );
                         },
@@ -525,12 +559,14 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
                       child: Padding(
                         padding: const EdgeInsets.only(top: 16),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 8),
                           decoration: BoxDecoration(
                             color: Colors.black.withValues(alpha: 0.55),
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: Text(_statusText, style: const TextStyle(color: Colors.white)),
+                          child: Text(_statusText,
+                              style: const TextStyle(color: Colors.white)),
                         ),
                       ),
                     ),
@@ -547,7 +583,8 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
                             value: _webProgress,
                             strokeWidth: 5,
                             backgroundColor: Colors.white24,
-                            valueColor: AlwaysStoppedAnimation(_webStable ? Colors.greenAccent : Colors.amber),
+                            valueColor: AlwaysStoppedAnimation(
+                                _webStable ? Colors.greenAccent : Colors.amber),
                           ),
                         ),
                       ),
@@ -555,7 +592,10 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
                       alignment: Alignment.bottomLeft,
                       child: Padding(
                         padding: const EdgeInsets.only(left: 16, bottom: 24),
-                        child: _TiltLevelIndicator(gravX: _gravX, gravZ: _gravZ, available: _tiltAvailable),
+                        child: _TiltLevelIndicator(
+                            gravX: _gravX,
+                            gravZ: _gravZ,
+                            available: _tiltAvailable),
                       ),
                     ),
                     Align(
@@ -589,7 +629,8 @@ class _TiltLevelIndicator extends StatelessWidget {
   /// неотличимы на глаз (см. `_CameraScanScreenState._tiltAvailable`).
   final bool available;
 
-  const _TiltLevelIndicator({required this.gravX, required this.gravZ, required this.available});
+  const _TiltLevelIndicator(
+      {required this.gravX, required this.gravZ, required this.available});
 
   static const double _size = 72;
   static const double _dotSize = 16;
@@ -600,7 +641,8 @@ class _TiltLevelIndicator extends StatelessWidget {
   Widget build(BuildContext context) {
     final dx = (gravX / 9.81).clamp(-1.0, 1.0) * _maxOffset;
     final dy = (gravZ / 9.81).clamp(-1.0, 1.0) * _maxOffset;
-    final level = math.sqrt(dx * dx + dy * dy) <= _maxOffset * _levelToleranceFraction;
+    final level =
+        math.sqrt(dx * dx + dy * dy) <= _maxOffset * _levelToleranceFraction;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -630,7 +672,9 @@ class _TiltLevelIndicator extends StatelessWidget {
                   height: _dotSize,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: !available ? Colors.grey : (level ? Colors.greenAccent : Colors.amber),
+                    color: !available
+                        ? Colors.grey
+                        : (level ? Colors.greenAccent : Colors.amber),
                   ),
                 ),
               ),

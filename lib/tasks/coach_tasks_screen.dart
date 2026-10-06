@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
@@ -102,7 +103,7 @@ class _CoachTasksScreenState extends State<CoachTasksScreen> {
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+            .showSnackBar(SnackBar(content: Text(friendlyError(e))));
     }
     _load();
   }
@@ -119,7 +120,7 @@ class _CoachTasksScreenState extends State<CoachTasksScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(tr(
                 'Не удалось удалить: {e}. Нужен sql/task-delete.sql в базе спортсмена.',
-                {'e': e}))));
+                {'e': friendlyError(e)}))));
       }
     }
     _load();
@@ -298,8 +299,8 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(tr('ИИ не ответил: {e}', {'e': e}))));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(tr('ИИ не ответил: {e}', {'e': friendlyError(e)}))));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -843,7 +844,7 @@ class _CoachTaskGroupScreenState extends State<_CoachTaskGroupScreen> {
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+            .showSnackBar(SnackBar(content: Text(friendlyError(e))));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

@@ -121,7 +121,9 @@ class _HomeTabsBarState extends State<HomeTabsBar> {
       child: SafeArea(
         top: false,
         child: SizedBox(
-          height: 80,
+          // Растёт вместе с размером текста, иначе подпись выбранной вкладки
+          // при крупном шрифте не помещается.
+          height: MediaQuery.textScalerOf(context).scale(80).clamp(80.0, 124.0),
           child: LayoutBuilder(
             builder: (context, constraints) {
               final tileWidth = constraints.maxWidth / visible.length;
@@ -171,6 +173,9 @@ class _HomeTabsBarState extends State<HomeTabsBar> {
             if (isSelected) ...[
               const SizedBox(height: 2),
               Text(tr(spec.label),
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.labelSmall?.copyWith(color: color)),
             ],
           ],
@@ -274,7 +279,8 @@ class _HomeTileGridState extends State<HomeTileGrid> {
   // Меньше плитка (больше колонок при зуме) — меньше значок, а подпись при
   // 4+ колонках вовсе не помещается разборчиво (решение пользователя:
   // убрать текст совсем, а не переносить его на две строки).
-  double get _tileIconSize => switch (_crossAxisCount) { <= 2 => 40.0, 3 => 32.0, _ => 26.0 };
+  double get _tileIconSize =>
+      switch (_crossAxisCount) { <= 2 => 40.0, 3 => 32.0, _ => 26.0 };
   bool get _showTileLabel => _crossAxisCount <= 3;
 
   /// Куда встанет каждая плитка, если отпустить ПРЯМО СЕЙЧАС — та же

@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
 
 import '../models/chat_contact.dart';
@@ -36,11 +37,22 @@ class ChatPrivacyScreen extends StatefulWidget {
   State<ChatPrivacyScreen> createState() => _ChatPrivacyScreenState();
 }
 
-typedef _Person = ({String userId, String nickname, String? avatarBase64, String about});
+typedef _Person = ({
+  String userId,
+  String nickname,
+  String? avatarBase64,
+  String about
+});
 
 class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
   bool _loading = true;
-  List<({String userId, String nickname, String? avatarBase64, DateTime createdAt})> _requests = [];
+  List<
+      ({
+        String userId,
+        String nickname,
+        String? avatarBase64,
+        DateTime createdAt
+      })> _requests = [];
   List<_Person> _friends = [];
 
   @override
@@ -72,13 +84,15 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
       await future;
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(friendlyError(e))));
         setState(() {});
       }
     }
   }
 
-  Future<void> _accept(String requesterId, String nickname, String? avatarBase64) async {
+  Future<void> _accept(
+      String requesterId, String nickname, String? avatarBase64) async {
     try {
       await widget.auth.acceptFriendRequest(requesterId);
       widget.repo.addContact(ChatContact(
@@ -88,11 +102,14 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
         avatarBase64: avatarBase64,
         addedAt: DateTime.now(),
       ));
-      await widget.sync.pollIncoming(); // сразу подтянуть их сообщения, ждавшие принятия
+      await widget.sync
+          .pollIncoming(); // сразу подтянуть их сообщения, ждавшие принятия
       widget.onChanged();
       await _reload();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(friendlyError(e))));
     }
   }
 
@@ -101,7 +118,9 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
       await widget.auth.declineFriendRequest(requesterId);
       await _reload();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(friendlyError(e))));
     }
   }
 
@@ -113,21 +132,27 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
-        title: Text(tr('Приватность'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        title: Text(tr('Приватность'),
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _reload,
               child: ListView(
-                padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 16),
+                padding: EdgeInsets.fromLTRB(
+                    16, topInset + GlassHeader.height + 8, 16, 16),
                 children: [
-                  Text(tr('Кто может написать'), style: theme.textTheme.titleMedium),
+                  Text(tr('Кто может написать'),
+                      style: theme.textTheme.titleMedium),
                   const SizedBox(height: 8),
                   SegmentedButton<String>(
                     segments: [
                       ButtonSegment(value: 'everyone', label: Text(tr('Все'))),
-                      ButtonSegment(value: 'friends_only', label: Text(tr('Только по заявке'))),
+                      ButtonSegment(
+                          value: 'friends_only',
+                          label: Text(tr('Только по заявке'))),
                     ],
                     selected: {mode},
                     onSelectionChanged: (s) => _setMode(s.first),
@@ -135,41 +160,52 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
                   const SizedBox(height: 8),
                   Text(
                     mode == 'friends_only'
-                        ? tr('Сообщение от незнакомого человека станет заявкой ниже — вы увидите переписку, только когда примете её.')
-                        : tr('Первое сообщение от кого угодно сразу добавляет его в контакты, как обычно.'),
+                        ? tr(
+                            'Сообщение от незнакомого человека станет заявкой ниже — вы увидите переписку, только когда примете её.')
+                        : tr(
+                            'Первое сообщение от кого угодно сразу добавляет его в контакты, как обычно.'),
                     style: theme.textTheme.bodySmall,
                   ),
                   if (widget.prefs case final prefs?) ...[
                     const SizedBox(height: 24),
-                    Text(tr('Мои фото и файлы'), style: theme.textTheme.titleMedium),
+                    Text(tr('Мои фото и файлы'),
+                        style: theme.textTheme.titleMedium),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       title: Text(tr('Разрешить собеседникам сохранять')),
-                      subtitle: Text(tr('Кнопка «Сохранить» у отправленных мной вложений')),
+                      subtitle: Text(tr(
+                          'Кнопка «Сохранить» у отправленных мной вложений')),
                       value: prefs.photoDownloadMode != 'off',
-                      onChanged: (v) => setState(() => prefs.photoDownloadMode = v ? 'all' : 'off'),
+                      onChanged: (v) => setState(
+                          () => prefs.photoDownloadMode = v ? 'all' : 'off'),
                     ),
                     if (prefs.photoDownloadMode != 'off')
                       SegmentedButton<String>(
                         segments: [
                           ButtonSegment(value: 'all', label: Text(tr('Везде'))),
-                          ButtonSegment(value: 'personal', label: Text(tr('Только в личных'))),
+                          ButtonSegment(
+                              value: 'personal',
+                              label: Text(tr('Только в личных'))),
                         ],
                         selected: {prefs.photoDownloadMode},
-                        onSelectionChanged: (v) => setState(() => prefs.photoDownloadMode = v.first),
+                        onSelectionChanged: (v) =>
+                            setState(() => prefs.photoDownloadMode = v.first),
                       ),
                   ],
                   const SizedBox(height: 24),
-                  Text(tr('Заявки в друзья'), style: theme.textTheme.titleMedium),
+                  Text(tr('Заявки в друзья'),
+                      style: theme.textTheme.titleMedium),
                   const SizedBox(height: 8),
                   if (_requests.isEmpty)
-                    Text(tr('Заявок пока нет'), style: theme.textTheme.bodySmall)
+                    Text(tr('Заявок пока нет'),
+                        style: theme.textTheme.bodySmall)
                   else
                     for (final r in _requests)
                       Card(
                         margin: const EdgeInsets.only(bottom: 8),
                         child: ListTile(
-                          leading: ChatAvatar(base64: r.avatarBase64, nickname: r.nickname),
+                          leading: ChatAvatar(
+                              base64: r.avatarBase64, nickname: r.nickname),
                           title: Text(r.nickname),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -177,7 +213,8 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
                               IconButton(
                                 icon: const Icon(Icons.check_circle_outline),
                                 tooltip: tr('Принять'),
-                                onPressed: () => _accept(r.userId, r.nickname, r.avatarBase64),
+                                onPressed: () => _accept(
+                                    r.userId, r.nickname, r.avatarBase64),
                               ),
                               IconButton(
                                 icon: const Icon(Icons.cancel_outlined),
@@ -199,13 +236,15 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
                   if (_friends.isEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: EmptyState(icon: Icons.people_outline, text: tr('Пока никого')),
+                      child: EmptyState(
+                          icon: Icons.people_outline, text: tr('Пока никого')),
                     )
                   else
                     for (final f in _friends)
                       ListTile(
                         contentPadding: EdgeInsets.zero,
-                        leading: ChatAvatar(base64: f.avatarBase64, nickname: f.nickname),
+                        leading: ChatAvatar(
+                            base64: f.avatarBase64, nickname: f.nickname),
                         title: Text(f.nickname),
                       ),
                 ],

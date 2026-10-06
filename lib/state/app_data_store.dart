@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -650,7 +651,7 @@ class AppDataStore extends ChangeNotifier {
       await sync.push(this);
       await sync.pull(this);
     } catch (e) {
-      backgroundSyncError = '$e';
+      backgroundSyncError = friendlyError(e);
     } finally {
       isBackgroundSyncing = false;
       notifyListeners();
