@@ -301,6 +301,9 @@ class KnowledgeService {
         }
       }
 
+      // Вопрос про пистолет — не подсовываем куски про винтовку (и наоборот).
+      unique.removeWhere((_, c) =>
+          weaponMismatch(trimmed, '${c.heading} ${c.text}'));
       final ranked = unique.values.toList()
         ..sort((a, b) => _relevance(b, words).compareTo(_relevance(a, words)));
       if (ranked.isEmpty && personal.contains(table.name)) {
@@ -310,6 +313,20 @@ class KnowledgeService {
       }
     }
     return results;
+  }
+
+  static final _pistolRe = RegExp(r'пистолет|револьвер|pistol', caseSensitive: false);
+  static final _rifleRe = RegExp(r'винтовк|карабин|rifle|приклад', caseSensitive: false);
+
+  /// Вопрос называет оружие (пистолет ИЛИ винтовка), а кусок — только про
+  /// другое. Такой кусок отбрасывается: стойка и прицеливание у пистолета
+  /// (рука вытянута) и винтовки (приклад в плечо) разные, подмена даёт
+  /// вредные советы.
+  static bool weaponMismatch(String question, String text) {
+    final qp = _pistolRe.hasMatch(question), qr = _rifleRe.hasMatch(question);
+    if (qp == qr) return false; // оружие не названо или названо оба
+    final tPistol = _pistolRe.hasMatch(text), tRifle = _rifleRe.hasMatch(text);
+    return qp ? (tRifle && !tPistol) : (tPistol && !tRifle);
   }
 
   /// Сколько последних записей своей таблицы отдаём, если поиск по словам
@@ -517,6 +534,9 @@ class KnowledgeService {
           'If the user names a book from this list, it is in the base; excerpts for the question are below (if there are none, say that no excerpt was found for this particular question, not that the book is missing).');
       buf.writeln();
     }
+    buf.writeln(
+        'If the question names a weapon or discipline (pistol, rifle, shotgun, bow), use ONLY excerpts about exactly that one. If the excerpts below are about another weapon or there are none, say plainly that the base has no material on this for that weapon — do NOT adapt rifle advice to a pistol or vice versa, and do not fill the gap from your own knowledge.');
+    buf.writeln();
     for (final c in chunks) {
       // Название/описание таблицы — чтобы модель понимала, ЧТО за
       // источник перед ней (личный дневник — не то же самое, что
