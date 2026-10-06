@@ -10,7 +10,19 @@ window.nexusWebPushToken = async function (cfg, vapidKey) {
   await navigator.serviceWorker.ready;
   let app;
   try { app = firebase.app('nexus-push'); } catch (_) { app = firebase.initializeApp(cfg, 'nexus-push'); }
-  return await firebase.messaging(app).getToken({ vapidKey: vapidKey, serviceWorkerRegistration: reg });
+  const messaging = firebase.messaging(app);
+  // Приложение открыто: FCM сам уведомление не показывает — рисуем его здесь.
+  if (!window.__nexusFgPush) {
+    window.__nexusFgPush = true;
+    messaging.onMessage(function (p) {
+      const n = p.notification || {};
+      const d = p.data || {};
+      const title = n.title || d.title || 'Nexus';
+      const body = n.body || d.body || '';
+      reg.showNotification(title, { body: body, icon: 'icons/Icon-192.png', data: d });
+    });
+  }
+  return await messaging.getToken({ vapidKey: vapidKey, serviceWorkerRegistration: reg });
 };
 
 // Можно ли вообще получить push в этом браузере. На iPhone (iOS 16.4+) push

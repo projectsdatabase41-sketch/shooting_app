@@ -1,5 +1,7 @@
 import 'dart:ui' show ImageFilter;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 import 'package:flutter/material.dart';
 import '../i18n/i18n.dart';
 
@@ -21,23 +23,28 @@ class GlassPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final body = Material(
+      // На вебе размытие отключено (тяжело для iPhone, касания «тупят») —
+      // фон плотнее, чтобы текст под панелью не просвечивал.
+      color: color ?? cs.surface.withValues(alpha: kIsWeb ? 0.9 : 0.55),
+      shape: radius == null
+          ? StadiumBorder(side: BorderSide(color: cs.onSurface.withValues(alpha: 0.08)))
+          : RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(radius!),
+              side: BorderSide(color: cs.onSurface.withValues(alpha: 0.08))),
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(padding: padding, child: child),
+      ),
+    );
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius ?? 999),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: Material(
-          color: color ?? cs.surface.withValues(alpha: 0.55),
-          shape: radius == null
-              ? StadiumBorder(side: BorderSide(color: cs.onSurface.withValues(alpha: 0.08)))
-              : RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(radius!),
-                  side: BorderSide(color: cs.onSurface.withValues(alpha: 0.08))),
-          child: InkWell(
-            onTap: onTap,
-            child: Padding(padding: padding, child: child),
-          ),
-        ),
-      ),
+      child: kIsWeb
+          ? body
+          : BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+              child: body,
+            ),
     );
   }
 }
