@@ -4,6 +4,7 @@ import '../models/home_tab_specs.dart';
 import '../models/training_session.dart';
 import '../services/custom_services_repository.dart';
 import '../services/coach_access_service.dart';
+import '../services/modules_settings.dart';
 import '../state/app_data_store.dart';
 import '../state/home_tabs_view_model.dart';
 import '../state/personalization_view_model.dart';
@@ -115,6 +116,18 @@ class _HomeShellState extends State<HomeShell> {
     _coachTabs.suppressed = CoachAccessService(store.db).listAthletes().isEmpty
         ? const {'statistics_coach', 'tasks'}
         : <String>{};
+    // Выключенные модули (Настройки → Модули) скрыты с главного экрана.
+    final hiddenModules = <String>{
+      if (!ModulesSettings.isOn(store.db, AppModule.messenger)) 'messenger',
+      if (!ModulesSettings.isOn(store.db, AppModule.assistant)) ...{
+        'assistant',
+        'assistant_coach'
+      },
+      if (!ModulesSettings.isOn(store.db, AppModule.services))
+        for (final s in _services.list()) '$serviceTabPrefix${s.id}',
+    };
+    _coachTabs.suppressed = {..._coachTabs.suppressed, ...hiddenModules};
+    _athleteTabs.suppressed = hiddenModules;
 
     // Рубильник "Режим тренера" переключают со страницы настроек —
     // после смены роли логичнее увидеть домашнюю вкладку нового режима
@@ -132,7 +145,7 @@ class _HomeShellState extends State<HomeShell> {
     return AnimatedBuilder(
       // И сервисы тоже: переименование не меняет набор вкладок (id те же),
       // а подпись плитки должна обновиться сразу.
-      animation: Listenable.merge([tabs, _services]),
+      animation: Listenable.merge([tabs, _services, ModulesSettings.revision]),
       builder: (context, _) {
         // Режим "плитки" (решение пользователя) — один рабочий стол,
         // вкладки открываются отдельным экраном по тапу, а не в этом же

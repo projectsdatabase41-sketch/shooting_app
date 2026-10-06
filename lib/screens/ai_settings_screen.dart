@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../logic/ai_context.dart';
 import '../services/ai_service.dart';
+import '../services/modules_settings.dart';
 import '../services/knowledge_service.dart';
 import '../services/ai_settings.dart';
 import '../services/local_db_service.dart';
@@ -318,7 +319,8 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             segments: [
               ButtonSegment(value: 'builtin', label: Text(tr('Бесплатный'))),
               ButtonSegment(value: 'ownKey', label: Text(tr('Свой ключ'))),
-              if (localAiSupported)
+              if (localAiSupported &&
+                  ModulesSettings.isOn(_db, AppModule.localAi))
                 ButtonSegment(value: 'local', label: Text(tr('На устройстве'))),
             ],
             selected: {_mode},

@@ -15,6 +15,7 @@ import 'services/chat_sync_service.dart';
 import 'services/firebase_settings.dart';
 import 'services/knowledge_service.dart';
 import 'services/local_db_service.dart';
+import 'services/modules_settings.dart';
 import 'services/push_service.dart';
 import 'services/remote_config.dart';
 import 'local_ai/local_ai_platform.dart';
@@ -168,7 +169,10 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
       if (c != null && c.callId == callId) c.cancelledByCaller();
     };
     final chatAuth = ChatAuthService(widget.db);
-    if (chatAuth.isSignedIn) PushService(chatAuth).init();
+    if (chatAuth.isSignedIn &&
+        ModulesSettings.isOn(widget.db, AppModule.messenger)) {
+      PushService(chatAuth).init();
+    }
 
     final aiSettings = AiSettings(widget.db);
     _aiChat = AiChatViewModel(
@@ -366,13 +370,16 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
             themeMode: themeMode,
             // Размер текста: системный (настройка телефона) × выбор
             // пользователя; потолок 1.8 — выше вёрстка уже не держится.
-            builder: (context, child) => Selector<PersonalizationViewModel, double>(
+            builder: (context, child) =>
+                Selector<PersonalizationViewModel, double>(
               selector: (_, vm) => vm.fontScale,
               builder: (ctx, user, _) {
                 final mq = MediaQuery.of(ctx);
                 final system = mq.textScaler.scale(100) / 100;
                 return MediaQuery(
-                  data: mq.copyWith(textScaler: TextScaler.linear((system * user).clamp(0.8, 1.8).toDouble())),
+                  data: mq.copyWith(
+                      textScaler: TextScaler.linear(
+                          (system * user).clamp(0.8, 1.8).toDouble())),
                   child: child ?? const SizedBox.shrink(),
                 );
               },

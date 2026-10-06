@@ -27,7 +27,9 @@ import 'ai_settings_screen.dart';
 import 'settings_appearance_screen.dart';
 import 'settings_data_screen.dart';
 import 'settings_home_tabs_screen.dart';
+import 'settings_modules_screen.dart';
 import 'settings_services_screen.dart';
+import '../services/modules_settings.dart';
 
 /// Настройки (раздел 9 ТЗ) — сгруппированы по назначению в отдельные
 /// "папки" (решение пользователя), вместо одного длинного списка:
@@ -103,16 +105,27 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
           ListTile(
-            leading: const Icon(Icons.extension_outlined),
-            title: Text(tr('Сервисы')),
-            subtitle:
-                Text(tr('Google Диск, Supabase, заметки и другие свои плитки')),
+            leading: const Icon(Icons.tune),
+            title: Text(tr('Модули')),
+            subtitle: Text(tr(
+                'Мессенджер, ИИ, локальный ИИ, сервисы — включить или скрыть')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                  builder: (_) => SettingsServicesScreen(repo: services)),
+              MaterialPageRoute(builder: (_) => const SettingsModulesScreen()),
             ),
           ),
+          if (ModulesSettings.isOn(store.db, AppModule.services))
+            ListTile(
+              leading: const Icon(Icons.extension_outlined),
+              title: Text(tr('Сервисы')),
+              subtitle: Text(
+                  tr('Google Диск, Supabase, заметки и другие свои плитки')),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                    builder: (_) => SettingsServicesScreen(repo: services)),
+              ),
+            ),
           const Divider(height: 24),
           // Рубильник, а не переключатель режима внутри уже включённой
           // тренерской роли: раньше эту роль вообще не было видно как
