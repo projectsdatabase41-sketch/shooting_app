@@ -8,4 +8,12 @@ void main() {
     expect(cyrillic, lessThan(40), reason: 'остались русские фразы в промпте');
     expect(text, contains('language the user writes in'));
   });
+
+  test('промпт компактен и содержит все форматы блоков', () {
+    final text = AiContext.systemPrompt(coachMode: true);
+    expect(text.length, lessThan(5600), reason: 'промпт разросся — токены на каждый запрос');
+    for (final k in ['```chart', '```exercise', '```feedback', '```note', '---ANSWER---', 'exercises_on_device', 'rifle_10m', 'pistol_25m', 'ПОДРОБНО']) {
+      expect(text, contains(k), reason: k);
+    }
+  });
 }

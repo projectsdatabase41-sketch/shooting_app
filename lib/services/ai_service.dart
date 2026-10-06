@@ -192,8 +192,7 @@ class AiService {
       system
         ..writeln()
         ..writeln(
-            'DATA FROM THE KNOWLEDGE BASE AND THE USER CONNECTED TABLES (books and rules — for questions '
-            'about shooting theory; the user personal tables, for example notes, — when the question is about their own affairs and records):')
+            'KNOWLEDGE BASE (books, rules; for theory) and the connected personal tables (the user own records):')
         ..writeln(booksExcerpt);
     }
     // Интерфейс не на русском — ответ на языке интерфейса (инструкции
@@ -202,8 +201,7 @@ class AiService {
       system
         ..writeln()
         ..writeln(
-            'The user interface language code is "${I18n.code}": reply to the user in that language '
-            'unless the user writes in another one (then follow the user). Do not translate JSON keys or service blocks.');
+            'UI language: "${I18n.code}" — reply in it unless the user writes in another language.');
     }
 
     // Сначала локальная модель (если включена для этой задачи); её ответ

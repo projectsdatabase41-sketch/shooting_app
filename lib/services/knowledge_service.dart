@@ -529,14 +529,9 @@ class KnowledgeService {
       // Перечень материалов — модель должна знать, что в базе вообще есть,
       // и не говорить «такой книги нет», когда она просто не попала в выдачу.
       buf.writeln(
-          'Materials in the shared knowledge base (file names): ${catalog.take(80).join('; ')}');
-      buf.writeln(
-          'If the user names a book from this list, it is in the base; excerpts for the question are below (if there are none, say that no excerpt was found for this particular question, not that the book is missing).');
+          'Knowledge-base materials (file names): ${catalog.take(80).join('; ')}. A listed book IS in the base; if no excerpt below, say none was found for this question, not that the book is missing.');
       buf.writeln();
     }
-    buf.writeln(
-        'If the question names a weapon or discipline (pistol, rifle, shotgun, bow), use ONLY excerpts about exactly that one. If the excerpts below are about another weapon or there are none, say plainly that the base has no material on this for that weapon — do NOT adapt rifle advice to a pistol or vice versa, and do not fill the gap from your own knowledge.');
-    buf.writeln();
     for (final c in chunks) {
       // Название/описание таблицы — чтобы модель понимала, ЧТО за
       // источник перед ней (личный дневник — не то же самое, что
