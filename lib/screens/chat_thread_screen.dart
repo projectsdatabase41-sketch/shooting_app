@@ -25,6 +25,7 @@ import '../services/chat_auth_service.dart';
 import '../services/chat_messages_repository.dart';
 import '../services/chat_preferences.dart';
 import '../services/chat_presence.dart';
+import '../services/web_push_token.dart';
 import '../services/chat_sync_service.dart';
 import '../services/push_service.dart' show pendingCallAckContactId;
 import '../widgets/link_signal.dart';
@@ -163,6 +164,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _lastTranslationLanguage = widget.prefs.translationLanguage;
     WidgetsBinding.instance.addObserver(this);
     widget.prefs.addListener(_onPrefsChanged);
+    webSetActiveChat(_contact.id);
     widget.repo.markThreadSeen(_contact.id);
     widget.sync.reportRead(_contact.id);
     // Открыли переписку — сразу спросить «в сети», не ждать общего тика
@@ -289,6 +291,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    webSetActiveChat(null);
     widget.prefs.removeListener(_onPrefsChanged);
     _pollLoop?.stop();
     _stopLive();

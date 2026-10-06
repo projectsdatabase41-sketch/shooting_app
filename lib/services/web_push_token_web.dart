@@ -24,3 +24,9 @@ external JSPromise<JSString> _nexusRequestPermission();
 /// обработчике нажатия.
 Future<String> webRequestPermission() async =>
     (await _nexusRequestPermission().toDart).toDart;
+
+@JS('nexusSetActiveChat')
+external void _nexusSetActiveChat(JSString? id);
+
+/// Открытый сейчас чат — для него уведомление при открытом приложении не нужно.
+void webSetActiveChat(String? contactId) => _nexusSetActiveChat(contactId?.toJS);

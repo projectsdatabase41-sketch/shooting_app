@@ -6,3 +6,5 @@ Future<String?> webPushToken(
 String webPushEnv() => 'ok';
 
 Future<String> webRequestPermission() async => 'granted';
+
+void webSetActiveChat(String? contactId) {}

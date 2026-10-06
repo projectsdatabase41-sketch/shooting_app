@@ -17,6 +17,7 @@ window.nexusWebPushToken = async function (cfg, vapidKey) {
     messaging.onMessage(function (p) {
       const n = p.notification || {};
       const d = p.data || {};
+      if (d.contact_id && d.contact_id === window.__nexusActiveChat) return;
       const title = n.title || d.title || 'Nexus';
       const body = n.body || d.body || '';
       reg.showNotification(title, { body: body, icon: 'icons/Icon-192.png', data: d });
@@ -43,3 +44,18 @@ window.nexusPushEnv = function () {
 window.nexusRequestPermission = function () {
   try { return Notification.requestPermission(); } catch (e) { return Promise.resolve('error: ' + e); }
 };
+
+window.nexusSetActiveChat = function (id) { window.__nexusActiveChat = id || null; };
+
+// iOS игнорирует user-scalable=no: случайный щипок/двойной тап приближает
+// страницу, и касания «уезжают» относительно кнопок. Гасим жесты масштаба
+// и возвращаем окно на место, если его сдвинуло.
+document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
+document.addEventListener('gesturechange', function (e) { e.preventDefault(); });
+if (window.visualViewport) {
+  const fix = function () {
+    if (window.visualViewport.offsetTop !== 0 || window.visualViewport.offsetLeft !== 0) window.scrollTo(0, 0);
+  };
+  window.visualViewport.addEventListener('resize', fix);
+  window.visualViewport.addEventListener('scroll', fix);
+}
