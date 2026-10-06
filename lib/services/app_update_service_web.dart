@@ -18,7 +18,7 @@ class AppUpdateService {
   /// полезно, чтобы свериться, что кеш не отдаёт старое.
   static const String buildTime = String.fromEnvironment('BUILD_TIME');
 
-  static Future<AppUpdateInfo?> check() async => null;
+  static Future<AppUpdateInfo?> check({bool strict = false}) async => null;
   static Future<bool> downloadActive() async => false;
   static Future<bool> attachToActiveDownload(
           {required void Function(double progress) onProgress}) async =>

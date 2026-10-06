@@ -35,17 +35,25 @@ class AppUpdateService {
 
   /// `null` — обновлений нет (или сверить не с чем: локальная сборка без
   /// GIT_SHA, либо сеть недоступна — молчим, не тревожим ложной тревогой).
-  static Future<AppUpdateInfo?> check() async {
+  ///
+  /// [strict] — для кнопки «Проверить»: сбой сети/сервера НЕ должен
+  /// выглядеть как «у вас последняя версия» (жалоба: после обрыва связи
+  /// приложение писало «новых нет»), поэтому бросаем исключение.
+  static Future<AppUpdateInfo?> check({bool strict = false}) async {
     if (!Platform.isAndroid || currentSha.isEmpty) return null;
     try {
       final res = await http
           .get(Uri.parse(
               'https://api.github.com/repos/$_repo/releases/tags/latest-apk'))
           .timeout(const Duration(seconds: 15));
-      if (res.statusCode != 200) return null;
+      if (res.statusCode != 200) {
+        if (strict) throw HttpException('HTTP ${res.statusCode}');
+        return null;
+      }
       return parseRelease(
           jsonDecode(res.body) as Map<String, dynamic>, currentSha);
     } catch (_) {
+      if (strict) rethrow;
       return null;
     }
   }
@@ -98,6 +106,15 @@ class AppUpdateService {
     } catch (_) {}
   }
 
+  static Future<void> cleanupAfterFailure() async {
+    try {
+      await FileDownloader().cancelTaskWithId(_taskId);
+      await FileDownloader().database.deleteRecordWithId(_taskId);
+      final f = File(p.join((await _dir()).path, 'pusl-update.apk'));
+      if (await f.exists()) await f.delete();
+    } catch (_) {}
+  }
+
   /// Уже идёт (в том числе начатая до пересборки экрана — свернули
   /// приложение во время загрузки, вернулись, а виджет «забыл» про неё и
   /// без этой проверки запустил бы вторую загрузку поверх первой,
@@ -139,6 +156,10 @@ class AppUpdateService {
       // local_ai_platform_io.dart), displayName — что показать в нём.
       group: 'app-update',
       displayName: tr('Обновление Nexus'),
+      // Обрыв связи — до 5 автоповторов, догрузка с места остановки
+      // (сервер релизов отдаёт Range); пауза нужна для докачки.
+      retries: 5,
+      allowPause: true,
     );
     final result = await FileDownloader()
         .download(task, onProgress: (p) => onProgress(p < 0 ? 0 : p));
@@ -159,6 +180,9 @@ class AppUpdateService {
 
   static Future<void> _finishDownload(TaskStatusUpdate result) async {
     if (result.status != TaskStatus.complete) {
+      // Недокачанный файл и запись о задаче не оставляем: иначе следующая
+      // попытка может упереться в «битый» остаток.
+      await cleanupAfterFailure();
       throw HttpException(result.exception?.description ??
           tr('загрузка не удалась ({name})', {'name': result.status.name}));
     }

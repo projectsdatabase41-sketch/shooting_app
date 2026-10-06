@@ -226,12 +226,20 @@ class _UpdateTileState extends State<_UpdateTile> {
 
   Future<void> _check() async {
     setState(() => _stage = _UpdateStage.checking);
-    final info = await AppUpdateService.check();
-    if (!mounted) return;
-    setState(() {
-      _info = info;
-      _stage = info == null ? _UpdateStage.upToDate : _UpdateStage.available;
-    });
+    try {
+      final info = await AppUpdateService.check(strict: true);
+      if (!mounted) return;
+      setState(() {
+        _info = info;
+        _stage = info == null ? _UpdateStage.upToDate : _UpdateStage.available;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _stage = _UpdateStage.error;
+        _error = friendlyError(e);
+      });
+    }
   }
 
   Future<void> _install() async {
@@ -341,7 +349,9 @@ class _UpdateTileState extends State<_UpdateTile> {
           leading: const Icon(Icons.error_outline, color: Colors.red),
           title: Text(tr('Не удалось обновить')),
           subtitle: Text(_error ?? ''),
-          onTap: _check,
+          // Обновление уже найдено, но скачать не вышло — повторяем скачивание,
+          // а не перепроверяем (перепроверка при плохой связи врала «новых нет»).
+          onTap: _info != null ? _install : _check,
         ),
     };
   }
