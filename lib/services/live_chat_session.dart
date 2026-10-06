@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/widgets.dart' show AppLifecycleState, WidgetsBinding, WidgetsBindingObserver;
+
 import 'package:uuid/uuid.dart';
 
 import '../models/chat_message.dart';
@@ -45,11 +47,11 @@ class LiveChatSession {
   final String contactId;
 
   /// Пришло сообщение по живому каналу (уже сохранено в `repo`).
-  final void Function()? onIncoming;
+  void Function()? onIncoming;
 
   /// Собеседник прочитал наши сообщения (уже отмечено в `repo`) — та же
   /// мгновенная доставка, что у сообщений, только для галочки «прочитано».
-  final void Function()? onPeerRead;
+  void Function()? onPeerRead;
   final Duration ackTimeout;
   final RealtimeChannelClient Function(String topic)? clientFactory;
 
@@ -300,5 +302,68 @@ class LiveChatSession {
     _client?.close();
     _client = null;
     _failPending();
+  }
+}
+
+/// Живые соединения открытых переписок: выход из чата в список мессенджера
+/// НЕ рвёт соединение сразу (особенно P2P — заново поднимать его долго), оно
+/// живёт ещё [grace], пока пользователь не вернётся. Закрывается целиком, когда
+/// мессенджер закрыт (`closeAll`) и когда приложение свёрнуто — иначе собеседник
+/// получал бы «доставлено» без push, а пользователь не видел сообщения.
+class LiveSessions {
+  LiveSessions._();
+
+  static final _sessions = <String, LiveChatSession>{};
+  static final _timers = <String, Timer>{};
+  static bool _observing = false;
+
+  static LiveChatSession acquire(String contactId, LiveChatSession Function() create) {
+    _observe();
+    _timers.remove(contactId)?.cancel();
+    return _sessions.putIfAbsent(contactId, () {
+      final s = create();
+      s.open();
+      return s;
+    });
+  }
+
+  /// Экран закрыт: отцепляем его обработчики, соединение оставляем на [grace].
+  static void release(String contactId, {Duration grace = const Duration(minutes: 3)}) {
+    final s = _sessions[contactId];
+    if (s == null) return;
+    s.onIncoming = null;
+    s.onPeerRead = null;
+    _timers.remove(contactId)?.cancel();
+    _timers[contactId] = Timer(grace, () => close(contactId));
+  }
+
+  static void close(String contactId) {
+    _timers.remove(contactId)?.cancel();
+    _sessions.remove(contactId)?.close();
+  }
+
+  static void closeAll() {
+    for (final t in _timers.values) {
+      t.cancel();
+    }
+    _timers.clear();
+    final all = _sessions.values.toList();
+    _sessions.clear();
+    for (final s in all) {
+      s.close();
+    }
+  }
+
+  static void _observe() {
+    if (_observing) return;
+    _observing = true;
+    WidgetsBinding.instance.addObserver(_LifecycleObserver());
+  }
+}
+
+class _LifecycleObserver with WidgetsBindingObserver {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) LiveSessions.closeAll();
   }
 }

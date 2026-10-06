@@ -78,7 +78,8 @@ class ChatThreadScreen extends StatefulWidget {
   State<ChatThreadScreen> createState() => _ChatThreadScreenState();
 }
 
-class _ChatThreadScreenState extends State<ChatThreadScreen> {
+class _ChatThreadScreenState extends State<ChatThreadScreen>
+    with WidgetsBindingObserver {
   late ChatContact _contact = widget.contact;
   final _input = TextEditingController();
   final _scroll = ScrollController();
@@ -160,6 +161,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   void initState() {
     super.initState();
     _lastTranslationLanguage = widget.prefs.translationLanguage;
+    WidgetsBinding.instance.addObserver(this);
     widget.prefs.addListener(_onPrefsChanged);
     widget.repo.markThreadSeen(_contact.id);
     widget.sync.reportRead(_contact.id);
@@ -173,47 +175,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       if (_inputFocus.hasFocus && _emojiOpen)
         setState(() => _emojiOpen = false);
     });
-    // Живой канал (WebSocket) — включается удалённо, по умолчанию выключен.
-    if (!_contact.isGroup) {
-      _live = LiveChatSession(
-        auth: widget.auth,
-        repo: widget.repo,
-        contactId: _contact.id,
-        linkFactory: WebRtcPeerLink.new,
-        onIncoming: () {
-          if (!mounted) return;
-          SystemSound.play(
-              SystemSoundType.click); // лёгкий «щелчок» — переписка уже открыта
-          widget.repo.markThreadSeen(_contact.id);
-          widget.sync.reportRead(_contact.id);
-          _reload();
-          _scrollToEnd();
-        },
-        onPeerRead: () {
-          if (mounted) _reload();
-        },
-      );
-      widget.sync.live = _live;
-      _live!.open();
-    } else {
-      _groupLive = GroupLiveSession(
-        auth: widget.auth,
-        repo: widget.repo,
-        groupId: _contact.id,
-        onIncoming: () {
-          if (!mounted) return;
-          SystemSound.play(SystemSoundType.click);
-          widget.repo.markThreadSeen(_contact.id);
-          _reload();
-          _scrollToEnd();
-        },
-        onPresenceChanged: () {
-          if (mounted) setState(() {});
-        },
-      );
-      widget.sync.groupLive = _groupLive;
-      _groupLive!.open();
-    }
+    // Живой канал (WebSocket/WebRTC) — включается удалённо, по умолчанию выключен.
+    _startLive();
     // Адаптивный опрос: пока собеседник пишет — каждые 2-3 секунды, в тишине
     // растёт до 15 (см. AdaptivePoller). Отправка своего сообщения возвращает
     // частый режим — ответ обычно приходит скоро.
@@ -229,8 +192,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       tick: () async {
         final added = await widget.sync.pollIncoming();
         if (added > 0 && mounted) {
-          widget.repo.markThreadSeen(_contact.id);
-          widget.sync.reportRead(_contact.id);
+          _markRead();
           _reload();
           _scrollToEnd();
         }
@@ -240,14 +202,96 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     _pollLoop!.poke(); // открыли диалог — сразу забираем то, что лежит в базе
   }
 
-  @override
-  void dispose() {
-    widget.prefs.removeListener(_onPrefsChanged);
-    _pollLoop?.stop();
+  /// Приложение на переднем плане. Свёрнутое НЕ должно «читать» сообщения:
+  /// иначе собеседник видит «прочитано», а push пользователю не приходит
+  /// (жалоба: «читал, не читая»).
+  bool _foreground = true;
+
+  void _markRead() {
+    if (!_foreground) return;
+    widget.repo.markThreadSeen(_contact.id);
+    if (!_contact.isGroup) widget.sync.reportRead(_contact.id);
+  }
+
+  /// Личный чат — через общий реестр (соединение переживает выход из чата в
+  /// список мессенджера, см. `LiveSessions`); группа — своё на экран.
+  void _startLive() {
+    if (!_contact.isGroup) {
+      _live = LiveSessions.acquire(
+        _contact.id,
+        () => LiveChatSession(
+          auth: widget.auth,
+          repo: widget.repo,
+          contactId: _contact.id,
+          linkFactory: WebRtcPeerLink.new,
+        ),
+      )
+        ..onIncoming = () {
+          if (!mounted) return;
+          SystemSound.play(SystemSoundType.click);
+          _markRead();
+          _reload();
+          _scrollToEnd();
+        }
+        ..onPeerRead = () {
+          if (mounted) _reload();
+        };
+      widget.sync.live = _live;
+    } else {
+      _groupLive = GroupLiveSession(
+        auth: widget.auth,
+        repo: widget.repo,
+        groupId: _contact.id,
+        onIncoming: () {
+          if (!mounted) return;
+          SystemSound.play(SystemSoundType.click);
+          _markRead();
+          _reload();
+          _scrollToEnd();
+        },
+        onPresenceChanged: () {
+          if (mounted) setState(() {});
+        },
+      );
+      widget.sync.groupLive = _groupLive;
+      _groupLive!.open();
+    }
+  }
+
+  void _stopLive() {
     if (widget.sync.live == _live) widget.sync.live = null;
-    _live?.close();
+    if (_live != null) LiveSessions.release(_contact.id);
+    _live = null;
     if (widget.sync.groupLive == _groupLive) widget.sync.groupLive = null;
     _groupLive?.close();
+    _groupLive = null;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (_foreground) return;
+      _foreground = true;
+      _startLive();
+      _pollLoop?.start();
+      _pollLoop?.poke();
+      _markRead();
+      if (mounted) _reload();
+    } else if (_foreground) {
+      // Свёрнули: рвём живой канал (сообщения пойдут через базу и дадут push)
+      // и не опрашиваем сервер, пока не вернулись.
+      _foreground = false;
+      _pollLoop?.stop();
+      _stopLive();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    widget.prefs.removeListener(_onPrefsChanged);
+    _pollLoop?.stop();
+    _stopLive();
     _input.dispose();
     _scroll.dispose();
     _showJumpToEnd.dispose();

@@ -18,6 +18,7 @@ import '../services/chat_messages_repository.dart';
 import '../services/chat_preferences.dart';
 import '../services/chat_settings.dart';
 import '../services/chat_sync_service.dart';
+import '../services/live_chat_session.dart';
 import '../services/coach_access_service.dart';
 import '../services/local_db_service.dart';
 import '../services/push_service.dart';
@@ -118,6 +119,8 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
   void dispose() {
     ChatHomeScreen._closeActive = null;
     _pollLoop?.stop();
+    // Мессенджер закрыт (ушли на главную) — прямые соединения рвём.
+    LiveSessions.closeAll();
     super.dispose();
   }
 
