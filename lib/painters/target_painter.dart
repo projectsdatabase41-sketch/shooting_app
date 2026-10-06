@@ -66,17 +66,31 @@ class TargetPainter extends CustomPainter {
     // половина его стороны. Круглая бумага была упрощением: она теряла
     // углы бланка, а именно на них теперь выводятся значения выстрела
     // (номер, оценка, X/Y, сумма) вместо прежней нижней панели.
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromCenter(center: center, width: radiusPx * 2, height: radiusPx * 2),
-        Radius.circular(radiusPx * 0.06),
-      ),
-      Paint()..color = colors.targetPaper,
-    );
+    if (face.isArchery) {
+      // Мишень лука круглая.
+      canvas.drawCircle(center, radiusPx, Paint()..color = colors.targetPaper);
+    } else {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(center: center, width: radiusPx * 2, height: radiusPx * 2),
+          Radius.circular(radiusPx * 0.06),
+        ),
+        Paint()..color = colors.targetPaper,
+      );
+    }
 
     // 2. Чёрное яблоко (кольца 10..5 условно — см. scoring.dart)
-    final bullseyeRadiusPx = face.bullseyeRadiusMm * mmToPx;
-    canvas.drawCircle(center, bullseyeRadiusPx, Paint()..color = colors.targetBullseye);
+    if (face.isArchery) {
+      // Зоны лука окрашены (белая 1–2, чёрная 3–4, синяя 5–6, красная 7–8,
+      // золотая 9–10) — от внешней к внутренней.
+      final radii = face.ringRadiiMm;
+      for (var i = radii.length - 1; i >= 0; i--) {
+        canvas.drawCircle(center, radii[i] * mmToPx, Paint()..color = archeryZoneColor(10 - i));
+      }
+    } else {
+      final bullseyeRadiusPx = face.bullseyeRadiusMm * mmToPx;
+      canvas.drawCircle(center, bullseyeRadiusPx, Paint()..color = colors.targetBullseye);
+    }
 
     // 3. Линии колец
     _paintRings(canvas, center, mmToPx);
@@ -111,6 +125,10 @@ class TargetPainter extends CustomPainter {
       ..strokeWidth = 1.0;
 
     for (var i = 0; i < radii.length; i++) {
+      if (face.isArchery) {
+        // Линия на фоне окрашенной зоны: светлая на тёмных, тёмная на светлых.
+        ringPaint.color = _isDark(archeryZoneColor(10 - i)) ? Colors.white : Colors.black;
+      }
       canvas.drawCircle(center, radii[i] * mmToPx, ringPaint);
     }
 
@@ -156,6 +174,8 @@ class TargetPainter extends CustomPainter {
     final radii = face.ringRadiiMm;
 
     for (var ring = 1; ring <= 8; ring++) {
+      // У мишеней с неполным набором колец (лук: 6 или 5) внешних нет.
+      if (10 - ring >= radii.length) continue;
       final outerMm = radii[10 - ring]; // граница самого габарита N
       final innerMm = radii[9 - ring]; // граница габарита N+1
       final bandPx = (outerMm - innerMm) * mmToPx;
@@ -167,7 +187,11 @@ class TargetPainter extends CustomPainter {
       final rPx = midMm * mmToPx;
       final fontSize = (bandPx * 0.7).clamp(8.0, 15.0);
       final onBullseye = midMm <= face.bullseyeRadiusMm;
-      final color = onBullseye ? colors.ringLabelsOnBullseye : colors.ringLabelsOnPaper;
+      final color = face.isArchery
+          ? (_isDark(archeryZoneColor(ring)) ? Colors.white : Colors.black)
+          : onBullseye
+              ? colors.ringLabelsOnBullseye
+              : colors.ringLabelsOnPaper;
 
       for (final dir in directions) {
         final pos = center + dir * rPx;
@@ -178,6 +202,8 @@ class TargetPainter extends CustomPainter {
       }
     }
   }
+
+  static bool _isDark(Color c) => c.computeLuminance() < 0.35;
 
   void _drawText(Canvas canvas, String text, Offset pos, Color color, double fontSize) {
     final tp = TextPainter(
@@ -329,4 +355,14 @@ class TargetPainter extends CustomPainter {
         oldDelegate.zoom != zoom ||
         oldDelegate.pan != pan;
   }
+}
+
+/// Цвет зоны мишени лука (World Archery): 1–2 белая, 3–4 чёрная, 5–6 синяя,
+/// 7–8 красная, 9–10 золотая.
+Color archeryZoneColor(int ring) {
+  if (ring >= 9) return const Color(0xFFFFD84A);
+  if (ring >= 7) return const Color(0xFFE53935);
+  if (ring >= 5) return const Color(0xFF3FA7E0);
+  if (ring >= 3) return const Color(0xFF1B1B1B);
+  return const Color(0xFFFFFFFF);
 }

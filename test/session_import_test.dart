@@ -135,7 +135,7 @@ void main() {
     test('результат + направление: приложение само считает координаты, и они дают тот же результат', () {
       // Все 4 мишени × кольца 1..10 × десятые 0..9 — обратная задача
       // должна возвращать ровно тот результат, что был во входе.
-      for (final face in TargetFace.all) {
+      for (final face in TargetFace.all.where((f) => !f.integerScoring)) {
         for (var ring = 1; ring <= 10; ring++) {
           for (var dec = 0; dec <= 9; dec++) {
             final score = ring + dec / 10;
@@ -213,7 +213,7 @@ void main() {
       'rifle_50m': (5.2, 8.0, 2.8),
       'pistol_25m': (25.0, 25.0, 2.8),
     };
-    for (final face in TargetFace.all) {
+    for (final face in TargetFace.all.where((f) => !f.integerScoring)) {
       final (r10, w, k) = table[face.code]!;
       for (var ring = 1; ring <= 10; ring++) {
         for (var dec = 0; dec <= 9; dec++) {

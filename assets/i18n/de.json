@@ -1167,5 +1167,16 @@
   "📞 {kind} — нет ответа": "📞 {kind} — keine Antwort",
   "📵 Вы отклонили {p}": "📵 Du hast {p} abgelehnt",
   "📵 Пропущенный {p}": "📵 Verpasst: {p}",
-  "📷 Фото": "📷 Foto"
+  "📷 Фото": "📷 Foto",
+  "Лук: мишень 122 см (70 м)": "Bogen: 122-cm-Auflage (70 m)",
+  "Лук: мишень 80 см (50 м)": "Bogen: 80-cm-Auflage (50 m)",
+  "Лук: 80 см, 6 колец (компаунд, 50 м)": "Bogen: 80 cm, 6 Ringe (Compound, 50 m)",
+  "Лук: мишень 60 см (25 м)": "Bogen: 60-cm-Auflage (25 m)",
+  "Лук: 60 см, компаунд (25 м)": "Bogen: 60 cm, Compound (25 m)",
+  "Лук: мишень 40 см (18 м)": "Bogen: 40-cm-Auflage (18 m)",
+  "Лук: 40 см, компаунд (18 м)": "Bogen: 40 cm, Compound (18 m)",
+  "Лук: 40 см, тройная (18 м)": "Bogen: 40 cm Dreifach (18 m)",
+  "Лук: 40 см, тройная, компаунд (18 м)": "Bogen: 40 cm Dreifach, Compound (18 m)",
+  "лук": "Bogen",
+  "лук, стрелы": "Bogen, Pfeile"
 }

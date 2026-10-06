@@ -1167,5 +1167,16 @@
   "📞 {kind} — нет ответа": "📞 {kind} — no answer",
   "📵 Вы отклонили {p}": "📵 You declined {p}",
   "📵 Пропущенный {p}": "📵 Missed {p}",
-  "📷 Фото": "📷 Photo"
+  "📷 Фото": "📷 Photo",
+  "Лук: мишень 122 см (70 м)": "Archery: 122 cm face (70 m)",
+  "Лук: мишень 80 см (50 м)": "Archery: 80 cm face (50 m)",
+  "Лук: 80 см, 6 колец (компаунд, 50 м)": "Archery: 80 cm, 6-ring (compound, 50 m)",
+  "Лук: мишень 60 см (25 м)": "Archery: 60 cm face (25 m)",
+  "Лук: 60 см, компаунд (25 м)": "Archery: 60 cm, compound (25 m)",
+  "Лук: мишень 40 см (18 м)": "Archery: 40 cm face (18 m)",
+  "Лук: 40 см, компаунд (18 м)": "Archery: 40 cm, compound (18 m)",
+  "Лук: 40 см, тройная (18 м)": "Archery: 40 cm triple spot (18 m)",
+  "Лук: 40 см, тройная, компаунд (18 м)": "Archery: 40 cm triple spot, compound (18 m)",
+  "лук": "bow",
+  "лук, стрелы": "bow, arrows"
 }

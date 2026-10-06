@@ -132,6 +132,11 @@ class TargetFace {
   /// оба варианта уже умеет.
   final GaugingMethod gauging;
 
+  /// Целочисленный подсчёт (стрельба из лука): десятых долей нет, результат
+  /// — номер зоны. Касание линии стрелой даёт высшую зону — это тот же
+  /// `inward`, а «калибр» мишени — диаметр древка стрелы.
+  final bool integerScoring;
+
   const TargetFace({
     required this.code,
     required String name,
@@ -142,6 +147,7 @@ class TargetFace {
     this.blankSizeMm,
     this.innerTenDiameterMm,
     this.gauging = GaugingMethod.inward,
+    this.integerScoring = false,
   }) : nameKey = name;
 
   double get caliberRadiusMm => caliberMm / 2;
@@ -158,8 +164,12 @@ class TargetFace {
 
   /// Ширина одного кольца, мм (у всех четырёх мишеней шаг между
   /// соседними кольцами официально постоянный — см. источники выше).
-  double get ringWidthMm =>
-      ringDiametersMm.length >= 2 ? (ringDiametersMm[1] - ringDiametersMm[0]).abs() / 2 : 0;
+  /// Берётся по двум внешним кольцам: у компаундных мишеней лука десятка
+  /// уже девятки («внутренняя десятка»), а внешние зоны равны.
+  double get ringWidthMm {
+    final n = ringDiametersMm.length;
+    return n >= 2 ? (ringDiametersMm[n - 1] - ringDiametersMm[n - 2]).abs() / 2 : 0;
+  }
 
   /// Цена одной десятой доли очка, мм — одна десятая ширины кольца.
   ///
@@ -187,13 +197,20 @@ class TargetFace {
   /// не всегда это вытаскивал и путал, из чего стреляет пользователь.
   /// Выведено из кода, а не хранится отдельным полем: типов ровно два, и
   /// дублировать константу под каждую мишень незачем.
-  String get weaponRu => code.startsWith('rifle') ? tr('винтовка') : tr('пистолет');
+  bool get isArchery => code.startsWith('archery');
+
+  String get weaponRu => isArchery
+      ? tr('лук')
+      : code.startsWith('rifle')
+          ? tr('винтовка')
+          : tr('пистолет');
 
   /// Боеприпас — тем же способом и по той же причине, что `weaponRu`.
   /// Выведено из калибра: 4.5 мм — пневматика, 5.6 мм — малокалиберный
   /// патрон .22 LR (других калибров в справочнике нет).
-  String get ammoRu =>
-      caliberMm <= 4.5 ? tr('пневматическое оружие (воздух/CO₂), пульки') : tr('малокалиберное оружие, патрон .22 LR');
+  String get ammoRu => isArchery
+      ? tr('лук, стрелы')
+      : caliberMm <= 4.5 ? tr('пневматическое оружие (воздух/CO₂), пульки') : tr('малокалиберное оружие, патрон .22 LR');
 
   factory TargetFace.fromJson(Map<String, dynamic> json) => TargetFace(
         code: json['code'] as String,
@@ -210,6 +227,7 @@ class TargetFace {
         innerTenDiameterMm: json['inner_ten_diameter_mm'] == null
             ? null
             : (json['inner_ten_diameter_mm'] as num).toDouble(),
+        integerScoring: json['integer_scoring'] == true,
         gauging: GaugingMethod.values.firstWhere(
           (g) => g.name == json['gauging'],
           orElse: () => GaugingMethod.inward,
@@ -226,6 +244,7 @@ class TargetFace {
         'blank_size_mm': blankSizeMm,
         'inner_ten_diameter_mm': innerTenDiameterMm,
         'gauging': gauging.name,
+        'integer_scoring': integerScoring,
       };
 
   // Раздел 3 tech-spec-v2.md — точные размеры, допуск ±0.1мм на реальных
@@ -285,11 +304,140 @@ class TargetFace {
     innerTenDiameterMm: 25,
   );
 
-  static const List<TargetFace> all = [
+  // ---- Лук (World Archery) -------------------------------------------
+  // Источники: World Archery Rulebook Book 3 (2026-01-27) и Bylaw 8.2.1
+  // (Compound Indoor Target Face). Все лица — 10 равных зон; диаметры
+  // границ — в мм, от десятки к единице. Внутренняя десятка (X) — половина
+  // десятки (122 см: 61 мм, 80 см: 40 мм, 60 см: 30 мм, 40 см: 20 мм).
+  // Касание линии = высшая зона (inward), древко ~5.5 мм. Компаундные
+  // мишени 60/40 см: десяткой считается ТОЛЬКО внутренняя десятка (3/2 см),
+  // остальное кольцо десятки — девятка. Тройная мишень 40 см — 5 колец
+  // (10..6), у компаунда десятка тоже внутренняя (20 мм).
+  static List<double> _rings(double tenMm, int n) =>
+      [for (var i = 1; i <= n; i++) tenMm * i];
+
+  static final TargetFace archery122 = TargetFace(
+    code: 'archery_122',
+    name: /*tr*/ 'Лук: мишень 122 см (70 м)',
+    distanceM: 70,
+    caliberMm: 5.5,
+    bullseyeDiameterMm: 244,
+    blankSizeMm: 1220,
+    ringDiametersMm: _rings(122, 10),
+    innerTenDiameterMm: 61,
+    integerScoring: true,
+  );
+
+  static final TargetFace archery80 = TargetFace(
+    code: 'archery_80',
+    name: /*tr*/ 'Лук: мишень 80 см (50 м)',
+    distanceM: 50,
+    caliberMm: 5.5,
+    bullseyeDiameterMm: 160,
+    blankSizeMm: 800,
+    ringDiametersMm: _rings(80, 10),
+    innerTenDiameterMm: 40,
+    integerScoring: true,
+  );
+
+  /// 80 см, только 6 внутренних колец (10..5) — компаунд 50 м.
+  static final TargetFace archery80Six = TargetFace(
+    code: 'archery_80_6',
+    name: /*tr*/ 'Лук: 80 см, 6 колец (компаунд, 50 м)',
+    distanceM: 50,
+    caliberMm: 5.5,
+    bullseyeDiameterMm: 160,
+    blankSizeMm: 480,
+    ringDiametersMm: _rings(80, 6),
+    innerTenDiameterMm: 40,
+    integerScoring: true,
+  );
+
+  static final TargetFace archery60 = TargetFace(
+    code: 'archery_60',
+    name: /*tr*/ 'Лук: мишень 60 см (25 м)',
+    distanceM: 25,
+    caliberMm: 5.5,
+    bullseyeDiameterMm: 120,
+    blankSizeMm: 600,
+    ringDiametersMm: _rings(60, 10),
+    innerTenDiameterMm: 30,
+    integerScoring: true,
+  );
+
+  static final TargetFace archery60Compound = TargetFace(
+    code: 'archery_60_c',
+    name: /*tr*/ 'Лук: 60 см, компаунд (25 м)',
+    distanceM: 25,
+    caliberMm: 5.5,
+    bullseyeDiameterMm: 120,
+    blankSizeMm: 600,
+    ringDiametersMm: [30, ..._rings(60, 10).skip(1)],
+    innerTenDiameterMm: null,
+    integerScoring: true,
+  );
+
+  static final TargetFace archery40 = TargetFace(
+    code: 'archery_40',
+    name: /*tr*/ 'Лук: мишень 40 см (18 м)',
+    distanceM: 18,
+    caliberMm: 5.5,
+    bullseyeDiameterMm: 80,
+    blankSizeMm: 400,
+    ringDiametersMm: _rings(40, 10),
+    innerTenDiameterMm: 20,
+    integerScoring: true,
+  );
+
+  static final TargetFace archery40Compound = TargetFace(
+    code: 'archery_40_c',
+    name: /*tr*/ 'Лук: 40 см, компаунд (18 м)',
+    distanceM: 18,
+    caliberMm: 5.5,
+    bullseyeDiameterMm: 80,
+    blankSizeMm: 400,
+    ringDiametersMm: [20, ..._rings(40, 10).skip(1)],
+    integerScoring: true,
+  );
+
+  /// Одна из трёх мишеней вертикальной «тройки» 40 см: 5 колец (10..6).
+  static final TargetFace archery40Triple = TargetFace(
+    code: 'archery_40_3',
+    name: /*tr*/ 'Лук: 40 см, тройная (18 м)',
+    distanceM: 18,
+    caliberMm: 5.5,
+    bullseyeDiameterMm: 80,
+    blankSizeMm: 200,
+    ringDiametersMm: _rings(40, 5),
+    innerTenDiameterMm: 20,
+    integerScoring: true,
+  );
+
+  static final TargetFace archery40TripleCompound = TargetFace(
+    code: 'archery_40_3_c',
+    name: /*tr*/ 'Лук: 40 см, тройная, компаунд (18 м)',
+    distanceM: 18,
+    caliberMm: 5.5,
+    bullseyeDiameterMm: 80,
+    blankSizeMm: 200,
+    ringDiametersMm: [20, ..._rings(40, 5).skip(1)],
+    integerScoring: true,
+  );
+
+  static final List<TargetFace> all = [
     rifle10m,
     pistol10m,
     rifle50m,
     pistol25m,
+    archery122,
+    archery80,
+    archery80Six,
+    archery60,
+    archery60Compound,
+    archery40,
+    archery40Compound,
+    archery40Triple,
+    archery40TripleCompound,
   ];
 
   static TargetFace byCode(String code) =>

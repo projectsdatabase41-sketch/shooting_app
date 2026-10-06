@@ -127,6 +127,7 @@ double scoreForEffectiveRadius(double effectiveRadius, TargetFace face) {
     // (8.0 − 2.8 = 5.200000000000000178…).
     if (effectiveRadius <= radii[i] + 1e-9) {
       final ring = 10 - i;
+      if (face.integerScoring) return ring.toDouble();
       // Границы без clamp() намеренно: `int.clamp()` статически возвращает
       // `num`, и выражение `ring + k / 10` тогда рискует получить тип
       // `num` вместо `double`. Явные проверки оставляют k строго `int`.
@@ -167,4 +168,12 @@ int clockDirection(Shot shot) {
   final deg = shot.angleDeg; // 0 = 12 часов
   final hour = (deg / 30).round() % 12;
   return hour == 0 ? 12 : hour;
+}
+
+/// Попала ли стрела во внутреннюю десятку (X) — только для мишеней, где она
+/// есть (лук). Меряется так же, как зона: по краю древка, ближайшему к центру.
+bool isInnerTen(double distanceMm, TargetFace face) {
+  final inner = face.innerTenRadiusMm;
+  if (inner == null) return false;
+  return distanceMm + face.gaugingOffsetMm <= inner + 1e-9;
 }
