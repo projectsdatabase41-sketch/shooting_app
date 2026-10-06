@@ -390,13 +390,15 @@ class AppDataStore extends ChangeNotifier {
     db.db.execute('DELETE FROM share_grants');
     for (final g in grants) {
       db.db.execute(
-        'INSERT INTO share_grants (id, token_hash, athlete_label, created_at, revoked_at) VALUES (?, ?, ?, ?, ?)',
+        'INSERT INTO share_grants (id, token_hash, athlete_label, created_at, revoked_at, policy, shared_tables) VALUES (?, ?, ?, ?, ?, ?, ?)',
         [
           g.id,
           g.tokenHash,
           g.athleteLabel,
           g.createdAt.toIso8601String(),
-          g.revokedAt?.toIso8601String()
+          g.revokedAt?.toIso8601String(),
+          g.policy,
+          g.tables.join(',')
         ],
       );
     }
@@ -416,6 +418,11 @@ class AppDataStore extends ChangeNotifier {
               athleteLabel: r['athlete_label'] as String? ?? '',
               createdAt: DateTime.parse(r['created_at'] as String),
               revokedAt: null,
+              policy: r['policy'] as String? ?? 'basic',
+              tables: [
+                for (final t in '${r['shared_tables'] ?? ''}'.split(','))
+                  if (t.isNotEmpty) t
+              ],
             ))
         .toList();
   }

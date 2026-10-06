@@ -591,7 +591,9 @@ class SupabaseSyncService {
   /// только хеш. Открытый вид токена возвращается вызывающему коду
   /// ОДИН РАЗ и нигде больше не сохраняется.
   Future<String> createShareToken(AppDataStore store,
-      {String athleteLabel = ''}) async {
+      {String athleteLabel = '',
+      String policy = 'basic',
+      List<String> tables = const []}) async {
     final token = await _requireToken();
     final plainToken = _randomToken();
     final client = clientFactory();
@@ -613,6 +615,9 @@ class SupabaseSyncService {
           'token_hash': tokenHash is String ? tokenHash : '$tokenHash',
           'label': athleteLabel,
           'permissions': ['read'],
+          // Только для расширенного: у базового работает значение по умолчанию
+          // в базе, и токен создаётся даже без sql/share-policy.sql.
+          if (policy == 'extended') ...{'policy': 'extended', 'shared_tables': tables},
         }
       ]);
       await refreshShareGrants(store);
@@ -646,8 +651,14 @@ class SupabaseSyncService {
   /// локальная база: отозвать токен можно и с другого устройства.
   Future<void> refreshShareGrants(AppDataStore store) async {
     final token = await _requireToken();
-    final rows = await _select(
-        token, 'share_grants?select=id,token_hash,label,created_at,revoked_at');
+    List<Map<String, dynamic>> rows;
+    try {
+      rows = await _select(token,
+          'share_grants?select=id,token_hash,label,created_at,revoked_at,policy,shared_tables');
+    } catch (_) {
+      // sql/share-policy.sql ещё не выполнен — колонок политики нет.
+      rows = await _select(token, 'share_grants?select=id,token_hash,label,created_at,revoked_at');
+    }
     store.replaceShareGrants([
       for (final row in rows)
         ShareGrant(
@@ -656,6 +667,8 @@ class SupabaseSyncService {
           athleteLabel: '${row['label'] ?? ''}',
           createdAt: DateTime.parse(row['created_at'] as String),
           revokedAt: _dateOrNull(row['revoked_at']),
+          policy: '${row['policy'] ?? 'basic'}',
+          tables: [for (final t in (row['shared_tables'] as List? ?? const [])) '$t'],
         ),
     ]);
   }

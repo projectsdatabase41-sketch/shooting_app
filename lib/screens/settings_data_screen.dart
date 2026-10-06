@@ -295,40 +295,134 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
     }
   }
 
-  /// Спрашивает, кому предназначен токен, ДО создания — само поле уже
-  /// давно поддержано на сервере (`athleteLabel`/`share_grants.label`),
-  /// не хватало только запроса имени в интерфейсе (пункт 13 списка
-  /// правок). Пустое имя — тоже валидный ответ, просто без подписи.
-  Future<String?> _askTokenLabel() {
+  /// Имя токена и политика доступа: «Базовый» — тренировки, результаты,
+  /// комментарии; «Расширенный» — плюс таблицы на выбор из личной базы.
+  /// Пустое имя — тоже валидный ответ, просто без подписи.
+  Future<({String label, String policy, List<String> tables})?>
+      _askTokenSettings() async {
     final controller = TextEditingController();
-    return showDialog<String>(
+    var extended = false;
+    final selected = <String>{};
+    List<String>? available;
+    String? tablesError;
+    final db = context.read<AppDataStore>().db;
+    const blocked = {
+      'share_grants',
+      'share_events',
+      'project_settings',
+      'chat_push_tokens',
+      'task_devices'
+    };
+
+    return showDialog<({String label, String policy, List<String> tables})>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(tr('Название токена')),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: InputDecoration(
-            labelText: tr('Имя, кому предназначен'),
-            hintText: tr('например «Тренер Иванов»'),
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: Text(tr('Отмена'))),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
-            child: Text(tr('Создать')),
-          ),
-        ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          Future<void> loadTables() async {
+            try {
+              final names = await SupabaseAuthService(db).fetchTableNames();
+              setLocal(() => available = [
+                    for (final n in names)
+                      if (!blocked.contains(n)) n
+                  ]);
+            } catch (e) {
+              setLocal(() => tablesError = friendlyError(e));
+            }
+          }
+
+          return AlertDialog(
+            title: Text(tr('Название токена')),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      labelText: tr('Имя, кому предназначен'),
+                      hintText: tr('например «Тренер Иванов»'),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(tr('Что увидит тренер'),
+                      style: Theme.of(ctx).textTheme.labelMedium),
+                  const SizedBox(height: 6),
+                  SegmentedButton<bool>(
+                    segments: [
+                      ButtonSegment(value: false, label: Text(tr('Базовый'))),
+                      ButtonSegment(
+                          value: true, label: Text(tr('Расширенный'))),
+                    ],
+                    selected: {extended},
+                    showSelectedIcon: false,
+                    onSelectionChanged: (v) {
+                      setLocal(() => extended = v.first);
+                      if (extended && available == null && tablesError == null)
+                        loadTables();
+                    },
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    extended
+                        ? tr(
+                            'Тренировки, результаты, комментарии и выбранные ниже таблицы.')
+                        : tr(
+                            'Только тренировки, результаты и комментарии к ним.'),
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                  if (extended) ...[
+                    const SizedBox(height: 10),
+                    if (tablesError != null)
+                      Text(tablesError!,
+                          style:
+                              TextStyle(color: Theme.of(ctx).colorScheme.error))
+                    else if (available == null)
+                      const Center(
+                          child: Padding(
+                              padding: EdgeInsets.all(8),
+                              child: CircularProgressIndicator()))
+                    else
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          for (final t in available!)
+                            FilterChip(
+                              label: Text(t),
+                              selected: selected.contains(t),
+                              onSelected: (v) => setLocal(() =>
+                                  v ? selected.add(t) : selected.remove(t)),
+                            ),
+                        ],
+                      ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: Text(tr('Отмена'))),
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop((
+                  label: controller.text.trim(),
+                  policy: extended ? 'extended' : 'basic',
+                  tables: selected.toList()..sort(),
+                )),
+                child: Text(tr('Создать')),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
   Future<void> _create() async {
-    final label = await _askTokenLabel();
-    if (label == null) return; // отменили в диалоге
+    final settings = await _askTokenSettings();
+    if (settings == null) return; // отменили в диалоге
     if (!mounted) return;
     setState(() {
       _busy = true;
@@ -336,7 +430,9 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
     });
     try {
       final token = await _sync.createShareToken(context.read<AppDataStore>(),
-          athleteLabel: label);
+          athleteLabel: settings.label,
+          policy: settings.policy,
+          tables: settings.tables);
       if (!mounted) return;
       setState(() => _lastCreatedToken = token);
     } catch (e) {
@@ -456,7 +552,14 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
               title: Text(g.athleteLabel.isEmpty
                   ? tr('Токен {p}', {'p': g.id.substring(0, 6)})
                   : g.athleteLabel),
-              subtitle: Text(tr('Создан {p}', {'p': g.createdAt.toLocal()})),
+              subtitle: Text([
+                tr('Создан {p}', {'p': g.createdAt.toLocal()}),
+                g.isExtended
+                    ? tr('Расширенный: {t}',
+                        {'t': g.tables.isEmpty ? '—' : g.tables.join(', ')})
+                    : tr('Базовый'),
+              ].join('\n')),
+              isThreeLine: g.isExtended,
               trailing: TextButton(
                 onPressed: _busy ? null : () => _revoke(g.id),
                 child: Text(tr('Отозвать')),

@@ -87,9 +87,11 @@ class CoachAccessService {
   String get anonKey => _read('coach_supabase_anon_key');
   String get token => _read('coach_share_token');
 
-  bool get hasConnection => url.isNotEmpty && anonKey.isNotEmpty && token.isNotEmpty;
+  bool get hasConnection =>
+      url.isNotEmpty && anonKey.isNotEmpty && token.isNotEmpty;
 
-  void setConnection({required String url, required String anonKey, required String token}) {
+  void setConnection(
+      {required String url, required String anonKey, required String token}) {
     _write('coach_supabase_url', url.trim().replaceAll(RegExp(r'/+$'), ''));
     _write('coach_supabase_anon_key', anonKey.trim());
     _write('coach_share_token', token.trim());
@@ -110,7 +112,8 @@ class CoachAccessService {
   }
 
   List<CoachAthlete> listAthletes() {
-    final rows = db.db.select('SELECT * FROM coach_athletes ORDER BY sort_order, created_at');
+    final rows = db.db
+        .select('SELECT * FROM coach_athletes ORDER BY sort_order, created_at');
     return [
       for (final r in rows)
         CoachAthlete(
@@ -148,7 +151,8 @@ class CoachAccessService {
 
   void reorderAthletes(List<String> orderedIds) {
     for (var i = 0; i < orderedIds.length; i++) {
-      db.db.execute('UPDATE coach_athletes SET sort_order = ? WHERE id = ?', [i, orderedIds[i]]);
+      db.db.execute('UPDATE coach_athletes SET sort_order = ? WHERE id = ?',
+          [i, orderedIds[i]]);
     }
   }
 
@@ -157,7 +161,8 @@ class CoachAccessService {
   /// ниже. Остальной код тренера (CoachDiaryScreen) не знает о списке
   /// спортсменов вовсе, работает с "текущим подключением" как раньше.
   void selectAthlete(CoachAthlete athlete) {
-    setConnection(url: athlete.url, anonKey: athlete.anonKey, token: athlete.token);
+    setConnection(
+        url: athlete.url, anonKey: athlete.anonKey, token: athlete.token);
     _write('coach_active_athlete_id', athlete.id);
   }
 
@@ -169,21 +174,59 @@ class CoachAccessService {
   /// "Статистика"/"Чат с ИИ" — там выбор спортсмена временный, для
   /// одного просмотра, а не постоянная смена текущего в списке).
   Future<List<Map<String, dynamic>>> fetchExercises({CoachAthlete? athlete}) =>
-      _rpc('get_shared_exercises', {'p_token': athlete?.token ?? token}, athlete: athlete);
+      _rpc('get_shared_exercises', {'p_token': athlete?.token ?? token},
+          athlete: athlete);
+
+  /// Что разрешено токену: политика и список открытых таблиц. `null` —
+  /// функции ещё нет в базе спортсмена (sql/share-policy.sql не выполнен)
+  /// или токен недействителен: считаем доступ базовым.
+  Future<({String policy, List<String> tables})?> fetchPolicy(
+      {CoachAthlete? athlete}) async {
+    try {
+      final r = await rawRpc(
+          'get_share_policy', {'p_token': athlete?.token ?? token},
+          athlete: athlete);
+      if (r is! Map) return null;
+      return (
+        policy: '${r['policy']}',
+        tables: [for (final t in (r['tables'] as List? ?? const [])) '$t']
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Строки одной из таблиц, открытых спортсменом (расширенный токен).
+  Future<List<Map<String, dynamic>>> fetchSharedTable(String table,
+      {int limit = 200, CoachAthlete? athlete}) async {
+    final r = await rawRpc(
+        'get_shared_table',
+        {
+          'p_token': athlete?.token ?? token,
+          'p_table': table,
+          'p_limit': limit
+        },
+        athlete: athlete);
+    return r is List ? r.cast<Map<String, dynamic>>() : const [];
+  }
 
   /// Тренировки спортсмена (`training_packages`).
   Future<List<Map<String, dynamic>>> fetchSessions({CoachAthlete? athlete}) =>
-      _rpc('get_shared_packages', {'p_token': athlete?.token ?? token}, athlete: athlete);
+      _rpc('get_shared_packages', {'p_token': athlete?.token ?? token},
+          athlete: athlete);
 
   /// `sessionId` здесь — id тренировки (`training_packages.id`), он же
   /// id её единственного снимка-упражнения (`exercises.id`): один на
   /// тренировку, отдельным id не заводится — то же самое значение,
   /// которое `shots.exercise_id` и ждёт.
-  Future<List<Map<String, dynamic>>> fetchShots(String sessionId, {CoachAthlete? athlete}) =>
-      _rpc('get_shared_shots', {'p_token': athlete?.token ?? token, 'p_exercise_id': sessionId}, athlete: athlete);
+  Future<List<Map<String, dynamic>>> fetchShots(String sessionId,
+          {CoachAthlete? athlete}) =>
+      _rpc('get_shared_shots',
+          {'p_token': athlete?.token ?? token, 'p_exercise_id': sessionId},
+          athlete: athlete);
 
-  Future<List<Map<String, dynamic>>> fetchComments(String sessionId) =>
-      _rpc('get_shared_comments', {'p_token': token, 'p_package_id': sessionId});
+  Future<List<Map<String, dynamic>>> fetchComments(String sessionId) => _rpc(
+      'get_shared_comments', {'p_token': token, 'p_package_id': sessionId});
 
   Future<void> addComment({
     required String sessionId,
@@ -204,14 +247,18 @@ class CoachAccessService {
 
   /// «Чат со спортсменами» (sql/coach-chat.sql) — по токену конкретного спортсмена.
   Future<List<CoachChatMessage>> fetchCoachChat(CoachAthlete athlete) async => [
-        for (final r in await _rpc('get_coach_chat', {'p_token': athlete.token}, athlete: athlete)) coachChatFromRow(r),
+        for (final r in await _rpc('get_coach_chat', {'p_token': athlete.token},
+            athlete: athlete))
+          coachChatFromRow(r),
       ];
 
   Future<void> sendCoachChat(CoachAthlete athlete, String text) =>
-      _rpc('add_coach_chat', {'p_token': athlete.token, 'p_text': text}, athlete: athlete);
+      _rpc('add_coach_chat', {'p_token': athlete.token, 'p_text': text},
+          athlete: athlete);
 
   Future<void> deleteCoachChat(CoachAthlete athlete, String id) =>
-      _rpc('delete_coach_chat', {'p_token': athlete.token, 'p_id': id}, athlete: athlete);
+      _rpc('delete_coach_chat', {'p_token': athlete.token, 'p_id': id},
+          athlete: athlete);
 
   /// Явная проверка токена — вызывает уже существующую
   /// `validate_share_token` НАПРЯМУЮ (не переопределяет её, просто
@@ -235,7 +282,9 @@ class CoachAccessService {
       if (res.statusCode >= 400) return ShareTokenStatus.unknown;
       if (res.bodyBytes.isEmpty) return ShareTokenStatus.revoked;
       final decoded = jsonDecode(utf8.decode(res.bodyBytes));
-      return decoded == null ? ShareTokenStatus.revoked : ShareTokenStatus.valid;
+      return decoded == null
+          ? ShareTokenStatus.revoked
+          : ShareTokenStatus.valid;
     } catch (_) {
       return ShareTokenStatus.unknown;
     } finally {
@@ -251,28 +300,42 @@ class CoachAccessService {
     try {
       final rows = await _rpc(
         'link_coach_chat',
-        {'p_token': athlete.token, 'p_chat_user_id': chatUserId, 'p_nickname': nickname},
+        {
+          'p_token': athlete.token,
+          'p_chat_user_id': chatUserId,
+          'p_nickname': nickname
+        },
         athlete: athlete,
       );
       if (rows.isEmpty) return null;
       final id = '${rows.first['athlete_chat_user_id'] ?? ''}';
-      return id.isEmpty ? null : (chatUserId: id, nickname: '${rows.first['athlete_nickname'] ?? ''}');
+      return id.isEmpty
+          ? null
+          : (
+              chatUserId: id,
+              nickname: '${rows.first['athlete_nickname'] ?? ''}'
+            );
     } catch (_) {
       return null;
     }
   }
 
-  Future<List<Map<String, dynamic>>> _rpc(String fn, Map<String, dynamic> args, {CoachAthlete? athlete}) async {
+  Future<List<Map<String, dynamic>>> _rpc(String fn, Map<String, dynamic> args,
+      {CoachAthlete? athlete}) async {
     final decoded = await rawRpc(fn, args, athlete: athlete);
     return decoded is List ? decoded.cast<Map<String, dynamic>>() : const [];
   }
 
   /// То же, но ответ как есть (например, id созданного задания — строка).
-  Future<dynamic> rawRpc(String fn, Map<String, dynamic> args, {CoachAthlete? athlete}) async {
+  Future<dynamic> rawRpc(String fn, Map<String, dynamic> args,
+      {CoachAthlete? athlete}) async {
     final effectiveUrl = athlete?.url ?? url;
     final effectiveKey = athlete?.anonKey ?? anonKey;
-    if (effectiveUrl.isEmpty || effectiveKey.isEmpty || (args['p_token'] as String? ?? '').isEmpty) {
-      throw CoachAccessException(tr('Не указаны адрес базы, ключ или токен спортсмена'));
+    if (effectiveUrl.isEmpty ||
+        effectiveKey.isEmpty ||
+        (args['p_token'] as String? ?? '').isEmpty) {
+      throw CoachAccessException(
+          tr('Не указаны адрес базы, ключ или токен спортсмена'));
     }
     final client = clientFactory();
     try {
@@ -304,7 +367,9 @@ class CoachAccessService {
     try {
       final decoded = jsonDecode(body);
       if (decoded is Map) {
-        final msg = decoded['message'] ?? decoded['error_description'] ?? decoded['error'];
+        final msg = decoded['message'] ??
+            decoded['error_description'] ??
+            decoded['error'];
         if (msg is String && msg.isNotEmpty) return 'HTTP $status: $msg';
       }
     } catch (_) {
@@ -314,7 +379,8 @@ class CoachAccessService {
   }
 
   String _read(String column) {
-    final rows = db.db.select('SELECT $column FROM project_settings WHERE id = 1');
+    final rows =
+        db.db.select('SELECT $column FROM project_settings WHERE id = 1');
     if (rows.isEmpty) return '';
     return '${rows.first[column] ?? ''}';
   }

@@ -68,6 +68,7 @@ class LocalDbService {
   /// Всё, что было изначально, приезжает обычным CREATE TABLE.
   void _addMissingColumns() {
     const additions = <String, Map<String, String>>{
+      'share_grants': {'policy': "TEXT NOT NULL DEFAULT 'basic'", 'shared_tables': "TEXT NOT NULL DEFAULT ''"},
       'exercises': {'deleted_at': 'TEXT', 'series': 'TEXT', 'updated_at': 'TEXT'},
       'shots': {
         'extra': 'TEXT',

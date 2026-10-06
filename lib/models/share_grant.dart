@@ -8,12 +8,21 @@ class ShareGrant {
   final DateTime createdAt;
   final DateTime? revokedAt;
 
+  /// Политика доступа тренера: 'basic' — тренировки, результаты, комментарии;
+  /// 'extended' — плюс таблицы из [tables] (см. sql/share-policy.sql).
+  final String policy;
+  final List<String> tables;
+
+  bool get isExtended => policy == 'extended';
+
   const ShareGrant({
     required this.id,
     required this.tokenHash,
     required this.athleteLabel,
     required this.createdAt,
     this.revokedAt,
+    this.policy = 'basic',
+    this.tables = const [],
   });
 
   bool get isActive => revokedAt == null;
@@ -24,6 +33,8 @@ class ShareGrant {
     String? athleteLabel,
     DateTime? createdAt,
     DateTime? revokedAt,
+    String? policy,
+    List<String>? tables,
   }) {
     return ShareGrant(
       id: id ?? this.id,
@@ -31,6 +42,8 @@ class ShareGrant {
       athleteLabel: athleteLabel ?? this.athleteLabel,
       createdAt: createdAt ?? this.createdAt,
       revokedAt: revokedAt ?? this.revokedAt,
+      policy: policy ?? this.policy,
+      tables: tables ?? this.tables,
     );
   }
 

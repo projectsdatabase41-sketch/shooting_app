@@ -1,5 +1,6 @@
 import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
+import 'coach_shared_tables_screen.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -39,6 +40,9 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
   List<Map<String, dynamic>> _exercises = [];
   List<Map<String, dynamic>> _sessions = [];
 
+  /// Таблицы, открытые спортсменом сверх тренировок (расширенный токен).
+  List<String> _sharedTables = const [];
+
   @override
   void initState() {
     super.initState();
@@ -77,6 +81,10 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
         return;
       }
 
+      final policy = await _access.fetchPolicy();
+      _sharedTables = policy != null && policy.policy == 'extended'
+          ? policy.tables
+          : const [];
       final exercises = await _access.fetchExercises();
       final sessions = await _access.fetchSessions();
       sessions
@@ -165,6 +173,17 @@ class _CoachDiaryScreenState extends State<CoachDiaryScreen> {
                 .titleMedium
                 ?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
+          if (_sharedTables.isNotEmpty)
+            GlassCircleButton(
+              icon: const BoldIcon(Icons.table_chart_outlined),
+              tooltip: tr('Таблицы спортсмена'),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => CoachSharedTablesScreen(
+                    access: _access,
+                    tables: _sharedTables,
+                    athleteName: widget.athleteName),
+              )),
+            ),
           GlassCircleButton(
             icon: _loading
                 ? const SizedBox(
