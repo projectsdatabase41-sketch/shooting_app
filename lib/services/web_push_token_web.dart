@@ -16,3 +16,11 @@ external JSString _nexusPushEnv();
 
 /// 'ok' | 'ios-not-installed' | 'unsupported' — см. web/push-bridge.js.
 String webPushEnv() => _nexusPushEnv().toDart;
+
+@JS('nexusRequestPermission')
+external JSPromise<JSString> _nexusRequestPermission();
+
+/// 'granted' | 'denied' | 'default' | 'error: …'. Звать первым делом в
+/// обработчике нажатия.
+Future<String> webRequestPermission() async =>
+    (await _nexusRequestPermission().toDart).toDart;

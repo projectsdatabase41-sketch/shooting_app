@@ -4,3 +4,5 @@ Future<String?> webPushToken(
 
 /// 'ok' вне веба — проверять нечего.
 String webPushEnv() => 'ok';
+
+Future<String> webRequestPermission() async => 'granted';

@@ -1,4 +1,3 @@
-import '../logic/friendly_error.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -156,6 +155,7 @@ class PushService {
       return tr('На этой платформе push не поддерживается');
     }
     if (!auth.isSignedIn) return tr('Сначала войдите в мессенджер');
+    String step = 'старт';
     if (kIsWeb) {
       final env = webPushEnv();
       if (env == 'ios-not-installed') {
@@ -168,28 +168,42 @@ class PushService {
       }
     }
     try {
+      if (kIsWeb) {
+        // Первым делом, без await до этого: iOS требует запрос в жесте нажатия.
+        step = 'запрос разрешения';
+        final perm = await webRequestPermission();
+        if (perm != 'granted') {
+          return tr(
+              'Разрешение на уведомления не выдано ({p}) — включите его: Настройки iPhone → Уведомления → Nexus', {'p': perm});
+        }
+      }
+      step = 'инициализация Firebase';
       if (Firebase.apps.isEmpty)
         await Firebase.initializeApp(options: _options);
       if (_isAndroid) await _initLocalNotifications();
       final messaging = FirebaseMessaging.instance;
+      step = 'разрешение';
       final settings = await messaging.requestPermission();
       if (settings.authorizationStatus != AuthorizationStatus.authorized &&
           settings.authorizationStatus != AuthorizationStatus.provisional) {
         return tr(
             'Разрешение на уведомления не выдано — включите его в настройках браузера или телефона');
       }
+      step = 'получение адреса устройства';
       final token = kIsWeb ? await _webToken() : await messaging.getToken();
       if (token == null)
         return tr('Не удалось получить адрес устройства для push');
+      step = 'сохранение на сервере';
       await _saveToken(token);
       await _registerListeners(messaging);
       return tr('Уведомления включены');
     } catch (e) {
-      final hint = kIsWeb
-          ? tr(
-              ' На iPhone push работает только у сайта, добавленного на домашний экран.')
-          : '';
-      return tr('Ошибка: {e}', {'e': friendlyError(e)}) + hint;
+      // Кнопка диагностическая: показываем шаг и исходный текст ошибки.
+      final raw = e.toString();
+      return tr('Ошибка на шаге «{s}»: {e}', {
+        's': step,
+        'e': raw.length > 220 ? '${raw.substring(0, 220)}…' : raw
+      });
     }
   }
 

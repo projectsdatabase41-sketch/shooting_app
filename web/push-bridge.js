@@ -25,3 +25,9 @@ window.nexusPushEnv = function () {
   if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return 'unsupported';
   return 'ok';
 };
+
+// Запрос разрешения прямо в обработчике нажатия: iOS отклоняет его, если
+// между нажатием и запросом были await'ы (Firebase init и т.п.).
+window.nexusRequestPermission = function () {
+  try { return Notification.requestPermission(); } catch (e) { return Promise.resolve('error: ' + e); }
+};

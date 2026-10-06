@@ -1195,5 +1195,7 @@
   "ISSF: бегущая мишень 50 м (одна зона)": "ISSF: Laufende Scheibe 50 m (eine Zone)",
   "ISSF: бегущая мишень 10 м (одна зона)": "ISSF: Laufende Scheibe 10 m (eine Zone)",
   "iPhone: push работает только у приложения с домашнего экрана. В Safari нажмите «Поделиться» → «На экран Домой», откройте Nexus с иконки и нажмите эту кнопку снова. Нужен iOS 16.4 или новее.": "iPhone: Push funktioniert nur für die App auf dem Home-Bildschirm. In Safari auf Teilen → Zum Home-Bildschirm tippen, Nexus über das Symbol öffnen und diese Taste erneut drücken. iOS 16.4 oder neuer erforderlich.",
-  "Этот браузер не поддерживает push. На iPhone нужен iOS 16.4+ и Safari; в других браузерах — обновите их.": "Dieser Browser unterstützt keine Push-Mitteilungen. Auf dem iPhone werden iOS 16.4+ und Safari benötigt; andere Browser bitte aktualisieren."
+  "Этот браузер не поддерживает push. На iPhone нужен iOS 16.4+ и Safari; в других браузерах — обновите их.": "Dieser Browser unterstützt keine Push-Mitteilungen. Auf dem iPhone werden iOS 16.4+ und Safari benötigt; andere Browser bitte aktualisieren.",
+  "Разрешение на уведомления не выдано ({p}) — включите его: Настройки iPhone → Уведомления → Nexus": "Benachrichtigungen nicht erlaubt ({p}) — aktivieren unter: iPhone-Einstellungen → Mitteilungen → Nexus",
+  "Ошибка на шаге «{s}»: {e}": "Fehler bei Schritt „{s}“: {e}"
 }
