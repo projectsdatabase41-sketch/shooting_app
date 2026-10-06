@@ -85,6 +85,15 @@ void main() {
     expect(TargetFace.selectable().any((e) => e.isBiathlon), isFalse);
   });
 
+  test('тарелки: попал = 10, мимо = 0, скрыты вне режима разработчика', () {
+    final c = f('clay');
+    expect(c.ringDiametersMm, [110]);
+    expect(scoreForRadius(0, c), 10);
+    expect(scoreForRadius(c.missOffsetMm, c), 0);
+    friendlyErrorDevMode = false;
+    expect(TargetFace.selectable().any((e) => e.hitMiss), isFalse);
+  });
+
   test('коды уникальны и все знает справочник', () {
     final codes = TargetFace.all.map((e) => e.code).toSet();
     expect(codes.length, TargetFace.all.length);

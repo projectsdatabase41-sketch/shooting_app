@@ -888,6 +888,26 @@ class _ShotActionBarState extends State<_ShotActionBar> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (vm.face.hitMiss) ...[
+                Raised3DButton(
+                  icon: Icons.check_circle_outline,
+                  label: tr('Попал'),
+                  baseColor: Colors.green.shade700,
+                  onTap: () => vm.canAddShotNow
+                      ? vm.addHitMiss(true)
+                      : showPauseAddHint(context),
+                ),
+                const SizedBox(width: 16),
+                Raised3DButton(
+                  icon: Icons.highlight_off,
+                  label: tr('Мимо'),
+                  baseColor: Colors.red.shade700,
+                  onTap: () => vm.canAddShotNow
+                      ? vm.addHitMiss(false)
+                      : showPauseAddHint(context),
+                ),
+                const SizedBox(width: 16),
+              ] else
               Raised3DButton(
                 icon: Icons.add_circle_outline,
                 label: tr('Выстрел'),

@@ -476,6 +476,24 @@ class TargetViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Тарелки: «попал» — выстрел в центр, «мимо» — за краем зоны.
+  void addHitMiss(bool hit) {
+    if (!canAddShotNow) return;
+    session = SessionLogic.addShot(
+      session,
+      exercise,
+      face,
+      hit ? 0 : face.missOffsetMm,
+      0,
+      DateTime.now(),
+      idGenerator: () => _uuid.v4(),
+      allowDuringPause: canAddShotNow,
+    );
+    _selectedIndex = session.shots.length - 1;
+    notifyListeners();
+    _persist();
+  }
+
   /// Добавляет разом все пробоины, подтверждённые пользователем на фото
   /// (`PhotoScanScreen`) — их положение уже совмещено с фактическим
   /// отверстием ТАМ, на фото, поэтому повторная правка на самой мишени

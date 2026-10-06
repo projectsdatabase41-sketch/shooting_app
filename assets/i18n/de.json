@@ -1180,5 +1180,10 @@
   "лук": "Bogen",
   "лук, стрелы": "Bogen, Pfeile",
   "Биатлон: лёжа, 45 мм (50 м)": "Biathlon: liegend, 45 mm (50 m)",
-  "Биатлон: стоя, 115 мм (50 м)": "Biathlon: stehend, 115 mm (50 m)"
+  "Биатлон: стоя, 115 мм (50 м)": "Biathlon: stehend, 115 mm (50 m)",
+  "Трап / скит: тарелка 110 мм (попал/мимо)": "Trap / Skeet: Tontaube 110 mm (Treffer/Fehl)",
+  "ружьё": "Flinte",
+  "дробовое оружие, дробь": "Schrotflinte, Schrot",
+  "Попал": "Treffer",
+  "Мимо": "Fehl"
 }

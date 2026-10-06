@@ -203,13 +203,19 @@ class TargetFace {
   bool get isBiathlon => code.startsWith('biathlon');
 
   /// Новые дисциплины, пока скрытые за режимом разработчика.
-  bool get devOnly => isArchery || isBiathlon;
+  bool get devOnly => isArchery || isBiathlon || hitMiss;
+
+  /// Только «попал/мимо» — без точки на мишени (тарелки).
+  bool get hitMiss => code == 'clay';
+
+  /// Где записывать промах: за краем бланка, заведомо вне зоны попадания.
+  double get missOffsetMm => faceRadiusMm * 0.9;
 
   String get weaponRu => isArchery
       ? tr('лук')
-      : isBiathlon
-          ? tr('винтовка')
-          : code.startsWith('rifle')
+      : hitMiss
+          ? tr('ружьё')
+          : (isBiathlon || code.startsWith('rifle'))
           ? tr('винтовка')
           : tr('пистолет');
 
@@ -218,7 +224,9 @@ class TargetFace {
   /// патрон .22 LR (других калибров в справочнике нет).
   String get ammoRu => isArchery
       ? tr('лук, стрелы')
-      : isBiathlon
+      : hitMiss
+          ? tr('дробовое оружие, дробь')
+          : isBiathlon
           ? tr('малокалиберное оружие, патрон .22 LR')
           : caliberMm <= 4.5 ? tr('пневматическое оружие (воздух/CO₂), пульки') : tr('малокалиберное оружие, патрон .22 LR');
 
@@ -461,6 +469,21 @@ class TargetFace {
     integerScoring: true,
   );
 
+  // ---- Трап / скит ------------------------------------------------------
+  // Геометрии мишени нет: тарелка ISSF диаметром 110 мм (±1) разбита или
+  // нет (ISSF General Technical Rules, 6.x clay targets). Записывается как
+  // «попал» (центр, 10) и «мимо» (за краем, 0) — см. [hitMiss].
+  static final TargetFace clay = TargetFace(
+    code: 'clay',
+    name: /*tr*/ 'Трап / скит: тарелка 110 мм (попал/мимо)',
+    distanceM: 20,
+    caliberMm: 2.5,
+    bullseyeDiameterMm: 110,
+    blankSizeMm: 150,
+    ringDiametersMm: [110],
+    integerScoring: true,
+  );
+
   static final List<TargetFace> all = [
     rifle10m,
     pistol10m,
@@ -477,6 +500,7 @@ class TargetFace {
     archery40TripleCompound,
     biathlonProne,
     biathlonStanding,
+    clay,
   ];
 
   /// Мишени для выбора в редакторах. Лук пока только в режиме разработчика;
