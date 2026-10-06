@@ -40,8 +40,8 @@ class WebSearchService {
                 'systemInstruction': {
                   'parts': [
                     {
-                      'text': 'Ты ищешь в интернете и отвечаешь на вопрос пользователя по найденному. '
-                          'Отвечай на языке вопроса, по делу, без воды; если данные расходятся — скажи об этом.',
+                      'text': 'You search the web and answer the user question based on what you find. '
+                          'Answer in the language of the question, to the point, without padding; if the sources disagree — say so.',
                     }
                   ],
                 },

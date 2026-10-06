@@ -136,11 +136,10 @@ class AiService {
   /// которая на «привет» отвечает, а здесь уходит в рассуждения, для
   /// ассистента бесполезна, и узнать это лучше заранее.
   Future<String> probeModel(String model) async {
-    const system =
-        'Ты — ассистент по спортивной стрельбе. Отвечай коротко, по-русски, '
-        'не рассуждай вслух. Выстрелы: (0.4, -1.2), (-0.8, 0.3), (1.1, 0.9) мм от центра.';
+    const system = 'You are a sport shooting assistant. Answer briefly, '
+        'do not reason out loud. Shots: (0.4, -1.2), (-0.8, 0.3), (1.1, 0.9) mm from the centre.';
     const question =
-        'Посчитай СТП по этим трём выстрелам и добавь блок ```chart с типом bar.';
+        'Calculate the mean point of impact for these three shots and add a ```chart block of type bar.';
 
     final started = DateTime.now();
     try {
@@ -188,8 +187,8 @@ class AiService {
       system
         ..writeln()
         ..writeln(
-            'ДАННЫЕ ИЗ БАЗЫ ЗНАНИЙ И ПОДКЛЮЧЁННЫХ ТАБЛИЦ ПОЛЬЗОВАТЕЛЯ (книги и правила — для вопросов '
-            'о теории стрельбы; личные таблицы пользователя, например заметки, — когда вопрос о его делах и записях):')
+            'DATA FROM THE KNOWLEDGE BASE AND THE USER CONNECTED TABLES (books and rules — for questions '
+            'about shooting theory; the user personal tables, for example notes, — when the question is about their own affairs and records):')
         ..writeln(booksExcerpt);
     }
     // Интерфейс не на русском — ответ на языке интерфейса (инструкции
@@ -198,8 +197,8 @@ class AiService {
       system
         ..writeln()
         ..writeln(
-            'Отвечай пользователю на языке с кодом «${I18n.code}» (язык его интерфейса), '
-            'даже если инструкции выше написаны по-русски. JSON-ключи и служебные блоки не переводи.');
+            'The user interface language code is "${I18n.code}": reply to the user in that language '
+            'unless the user writes in another one (then follow the user). Do not translate JSON keys or service blocks.');
     }
 
     // Сначала локальная модель (если включена для этой задачи); её ответ

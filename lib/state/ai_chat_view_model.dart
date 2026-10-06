@@ -225,7 +225,7 @@ class AiChatViewModel extends ChangeNotifier {
         final notes = await _think(trimmed, contextBlock, history);
         if (notes.isNotEmpty) {
           contextBlock +=
-              '\n\nРАБОЧИЕ ЗАМЕТКИ ПОМОЩНИКОВ (план и промежуточные расчёты — проверь их и используй для ответа, не пересказывай пользователю как есть):\n$notes';
+              '\n\nHELPER WORKING NOTES (a plan and intermediate calculations — check them and use them for the answer, do not retell them to the user as is):\n$notes';
         }
       }
       final reply = await service.ask(
@@ -260,8 +260,7 @@ class AiChatViewModel extends ChangeNotifier {
         periodStart: askedAt,
         periodEnd: DateTime.now(),
         // Краткая запись — вопрос и суть ответа, для понимания хода диалога.
-        summary: tr('В: {trimmed}\nО: {p}',
-            {'trimmed': _gist(trimmed, 300), 'p': _gist(reply.text, 400)}),
+        summary: 'Q: ${_gist(trimmed, 300)}\nA: ${_gist(reply.text, 400)}',
         // Развёрнутая — обмен целиком, чтобы потом вспомнить подробности.
         detail: _fullRecord(trimmed, reply),
         trainingPackageIds:
@@ -288,7 +287,7 @@ class AiChatViewModel extends ChangeNotifier {
     try {
       final plan = await service.ask(
         systemPrompt:
-            'Ты планировщик. Разбей вопрос пользователя про стрельбу на 2–4 коротких шага анализа (что посчитать или сравнить по данным КОНТЕКСТА). Ответ — только шаги, по одному в строке, без нумерации и пояснений.',
+            'You are a planner. Split the user question about shooting into 2-4 short analysis steps (what to calculate or compare using the CONTEXT data). Answer with the steps only, one per line, no numbering and no explanations. Write the steps in the language of the question.',
         contextBlock: contextBlock,
         history: [(role: 'user', text: question)],
       );
@@ -300,15 +299,15 @@ class AiChatViewModel extends ChangeNotifier {
           .toList();
       if (steps.isEmpty) return '';
       final notes =
-          StringBuffer('План:\n${steps.map((s) => '- $s').join('\n')}\n');
+          StringBuffer('Plan:\n${steps.map((s) => '- $s').join('\n')}\n');
       for (final step in steps) {
         final r = await service.ask(
           systemPrompt:
-              'Ты исполнитель одного шага анализа. Реши ТОЛЬКО указанный шаг по данным КОНТЕКСТА: приведи числа и короткий вывод (до 80 слов). Не выдумывай данных, которых нет.',
-          contextBlock: '$contextBlock\n\nУЖЕ СДЕЛАНО:\n$notes',
-          history: [(role: 'user', text: 'Вопрос: $question\nШаг: $step')],
+              'You execute one analysis step. Solve ONLY the given step using the CONTEXT data: give the numbers and a short conclusion (up to 80 words). Do not invent data that is not there. Write in the language of the question.',
+          contextBlock: '$contextBlock\n\nALREADY DONE:\n$notes',
+          history: [(role: 'user', text: 'Question: $question\nStep: $step')],
         );
-        notes.writeln('Шаг «$step»: ${r.text.trim()}');
+        notes.writeln('Step "$step": ${r.text.trim()}');
       }
       return notes.toString();
     } catch (_) {
@@ -355,7 +354,7 @@ class AiChatViewModel extends ChangeNotifier {
     final chart = reply.chart == null
         ? ''
         : '\n[график: ${reply.chart!['title'] ?? reply.chart!['type'] ?? ''}]';
-    final full = 'Вопрос:\n$question\n\nОтвет:\n${reply.text}$chart';
+    final full = 'Question:\n$question\n\nAnswer:\n${reply.text}$chart';
     return full.length <= 12000 ? full : '${full.substring(0, 12000)}…';
   }
 

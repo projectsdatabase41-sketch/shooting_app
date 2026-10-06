@@ -25,18 +25,19 @@ class TaskAi {
   }) async {
     final reply = await AiService(settings).ask(
       systemPrompt:
-          'Ты помогаешь тренеру по пулевой стрельбе собрать задание для спортсмена в приложении. '
-          'Ниже справочник, как устроены задания. Прочитай описание тренера и ответы на уточнения.\n'
-          'Если без уточнения нельзя правильно собрать СТРУКТУРУ — верни JSON {"questions": ["…", "…"]} '
-          '(1–4 коротких вопроса, только о структуре и неясном). Иначе верни JSON {"task": {…}} строго по '
-          'формату справочника. coach_text — исходный текст тренера целиком. Отвечай только JSON.\n\n'
+          'You help a rifle/pistol shooting coach compose a task for an athlete in the app. '
+          'Below is a reference on how tasks are structured. Read the coach description and the answers to clarifying questions.\n'
+          'If the STRUCTURE cannot be built correctly without clarification — return JSON {"questions": ["…", "…"]} '
+          '(1-4 short questions, only about the structure and what is unclear). Otherwise return JSON {"task": {…}} strictly in '
+          'the reference format. coach_text is the coach text in full, as written. Answer with JSON only. '
+          'Write every human-readable value (titles, instructions, questions) in the language of the coach description.\n\n'
           '${await guide()}',
-      contextBlock: athletesInfo.isEmpty ? '' : 'Спортсмены: $athletesInfo',
+      contextBlock: athletesInfo.isEmpty ? '' : 'Athletes: $athletesInfo',
       history: [
         (
           role: 'user',
-          text: 'Описание тренера:\n$coachText'
-              '${answers.isEmpty ? '' : '\n\nУточнения:\n${answers.map((a) => 'В: ${a.question}\nО: ${a.answer}').join('\n')}'}',
+          text: 'Coach description:\n$coachText'
+              '${answers.isEmpty ? '' : '\n\nClarifications:\n${answers.map((a) => 'Q: ${a.question}\nA: ${a.answer}').join('\n')}'}',
         ),
       ],
       json: true,
@@ -69,23 +70,25 @@ class TaskAi {
     final ai = AiService(settings);
     final structured = await ai.ask(
       systemPrompt:
-          'Составь отчёт о выполнении задания стрелком — для хранения в базе и чтения другим ИИ. '
-          'Структурированный текст с разделами: План; Факт по каждому этапу (результат, время, выстрелы, '
-          'отметки спортсмена своими словами); Отклонения (с цифрами план/факт и возможной причиной); '
-          'Итоговая заметка спортсмена; Выводы и рекомендации тренеру. Ничего не выдумывай — только из данных.\n\n'
+          'Write a report on the athlete completing the task — for storage in a database and for another AI to read. '
+          'Structured text with sections: Plan; Actual result for every step (result, time, shots, '
+          'the athlete notes in their own words); Deviations (with plan/actual figures and a possible cause); '
+          'The athlete final note; Conclusions and recommendations for the coach. Invent nothing — use only the data. '
+          'Write in the language of the task text.\n\n'
           '${await guide()}',
-      contextBlock: 'ДАННЫЕ:\n$data',
-      history: const [(role: 'user', text: 'Составь отчёт.')],
+      contextBlock: 'DATA:\n$data',
+      history: const [(role: 'user', text: 'Write the report.')],
     );
     final visual = await ai.ask(
       systemPrompt:
-          'Сделай наглядный отчёт о выполнении задания стрелком. Ответ — ТОЛЬКО JSON '
-          '{"blocks": [ … ]}, где блок — {"type":"text","text":"…"} или {"type":"chart","chart":{…}}. '
+          'Make a visual report on the athlete completing the task. Answer with JSON ONLY '
+          '{"blocks": [ … ]}, where a block is {"type":"text","text":"…"} or {"type":"chart","chart":{…}}. '
           'chart: {"type":"line"|"bar"|"pie"|"table","title":"…","x":[…],"series":[{"name":"…","values":[…]}]}; '
-          'для таблицы — "columns":[…],"rows":[[…]]. Сочетай короткие тексты, графики по сериям/этапам и '
-          'таблицы. Только настоящие данные. ${request.isEmpty ? '' : 'Пожелание к формату: $request'}',
-      contextBlock: 'ДАННЫЕ:\n$data',
-      history: const [(role: 'user', text: 'Сделай наглядный отчёт.')],
+          'for a table — "columns":[…],"rows":[[…]]. Combine short texts, charts by series/steps and '
+          'tables. Real data only. Write texts and titles in the language of the task text. '
+          '${request.isEmpty ? '' : 'Format request: $request'}',
+      contextBlock: 'DATA:\n$data',
+      history: const [(role: 'user', text: 'Make the visual report.')],
       json: true,
       accept: (t) => t.contains('"blocks"'),
     );

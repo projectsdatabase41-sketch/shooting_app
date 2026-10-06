@@ -113,14 +113,14 @@ class ServiceDisplayAi {
       task: 'service_display',
       json: true,
       systemPrompt:
-          'Ты раскладываешь поля записей стороннего API по ролям отображения в карточке списка. '
-          'Тебе дан только список названий полей и по паре обрезанных примеров значений — не вся таблица. '
-          'Ответь ТОЛЬКО JSON-объектом без пояснений, без markdown, без ```: '
-          '{"title": "одно поле для заголовка карточки", '
-          '"subtitle": ["1-3 поля для краткой строки под заголовком"], '
-          '"detail": ["остальные значимые поля — показываются полностью в развороте карточки"]}. '
-          'Названия полей бери СТРОГО из списка "fields" — не придумывай новых. '
-          'Поле с самым длинным текстом (описание, заметка, комментарий) — всегда в detail, не в title/subtitle.',
+          'You assign the fields of a third-party API record to display roles in a list card. '
+          'You get only the list of field names and a couple of truncated example values — not the whole table. '
+          'Answer with a JSON object ONLY, no explanations, no markdown, no ```: '
+          '{"title": "one field for the card title", '
+          '"subtitle": ["1-3 fields for a short line under the title"], '
+          '"detail": ["the other meaningful fields — shown in full when the card is expanded"]}. '
+          'Take the field names STRICTLY from the "fields" list — do not invent new ones. '
+          'The field with the longest text (description, note, comment) always goes to detail, not to title/subtitle.',
       contextBlock: '',
       history: [
         (
@@ -128,7 +128,7 @@ class ServiceDisplayAi {
           text: jsonEncode({
             'fields': columns,
             'examples': samples,
-            if (note.trim().isNotEmpty) 'пожелание': note.trim(),
+            if (note.trim().isNotEmpty) 'note': note.trim(),
           }),
         ),
       ],
@@ -205,23 +205,23 @@ class ServiceDisplayAi {
       task: 'service_discover',
       json: true,
       systemPrompt:
-          'Тебе дан обрезанный пример ответа стороннего API (JSON), в котором обычная эвристика не '
-          'нашла список записей по стандартным ключам (records/items/data/results/rows). '
-          'Найди сама путь к списку записей и разложи поля по ролям отображения в карточке списка. '
-          'Ответь ТОЛЬКО JSON-объектом без пояснений, без markdown, без ```: '
-          '{"listPath": "путь через точку до массива записей внутри ответа, например data.items или result.rows; '
-          'пусто, если сам корень ответа — уже список или одна запись", '
-          '"title": "поле для заголовка карточки", '
-          '"subtitle": ["1-3 поля для краткой строки под заголовком"], '
-          '"detail": ["остальные значимые поля — показываются полностью в развороте карточки"]}. '
-          'Путь и названия полей бери СТРОГО из данного JSON, не придумывай.',
+          'You get a truncated sample of a third-party API response (JSON) in which the usual heuristic did not '
+          'find a list of records under the standard keys (records/items/data/results/rows). '
+          'Find the path to the list of records yourself and assign the fields to display roles in a list card. '
+          'Answer with a JSON object ONLY, no explanations, no markdown, no ```: '
+          '{"listPath": "dot-separated path to the array of records inside the response, e.g. data.items or result.rows; '
+          'empty if the response root is already the list or a single record", '
+          '"title": "field for the card title", '
+          '"subtitle": ["1-3 fields for a short line under the title"], '
+          '"detail": ["the other meaningful fields — shown in full when the card is expanded"]}. '
+          'Take the path and field names STRICTLY from the given JSON, do not invent them.',
       contextBlock: '',
       history: [
         (
           role: 'user',
           text: jsonEncode({
             'response_preview': preview,
-            if (note.trim().isNotEmpty) 'пожелание': note.trim(),
+            if (note.trim().isNotEmpty) 'note': note.trim(),
           }),
         ),
       ],
@@ -267,21 +267,21 @@ class ServiceDisplayAi {
       task: 'service_discover_text',
       json: true,
       systemPrompt:
-          'Тебе дан обрезанный ответ стороннего API НЕ в формате JSON (может быть XML, CSV, '
-          'произвольный текст, таблица — что угодно). Извлеки из него записи (строки таблицы) и разложи поля '
-          'по ролям отображения в карточке списка. Ответь ТОЛЬКО JSON-объектом без пояснений, без markdown, '
-          'без ```: {"rows": [{"поле": "значение", …}, …], "title": "поле для заголовка карточки", '
-          '"subtitle": ["1-3 поля для краткой строки под заголовком"], '
-          '"detail": ["остальные значимые поля — показываются полностью в развороте карточки"]}. '
-          'Названия полей придумай сам по смыслу содержимого (атрибуты XML, заголовки CSV, подписи в тексте). '
-          'Если записей несколько — верни их все, не только первую.',
+          'You get a truncated third-party API response that is NOT JSON (it may be XML, CSV, '
+          'free text, a table — anything). Extract the records (table rows) from it and assign the fields '
+          'to display roles in a list card. Answer with a JSON object ONLY, no explanations, no markdown, '
+          'no ```: {"rows": [{"field": "value", …}, …], "title": "field for the card title", '
+          '"subtitle": ["1-3 fields for a short line under the title"], '
+          '"detail": ["the other meaningful fields — shown in full when the card is expanded"]}. '
+          'Invent the field names yourself from the meaning of the content (XML attributes, CSV headers, labels in the text). '
+          'If there are several records, return all of them, not only the first. Keep values in the original language.',
       contextBlock: '',
       history: [
         (
           role: 'user',
           text: jsonEncode({
             'response_preview': preview,
-            if (note.trim().isNotEmpty) 'пожелание': note.trim()
+            if (note.trim().isNotEmpty) 'note': note.trim()
           }),
         ),
       ],
@@ -344,22 +344,22 @@ class ServiceDisplayAi {
       task: 'service_filter',
       json: true,
       systemPrompt:
-          'Ты помогаешь отобрать нужные записи из таблицы стороннего сервиса по свободному запросу '
-          'пользователя. Тебе НЕ дана сама таблица — только список полей и уникальные значения по каждому '
-          '(могут быть обрезаны). Выбери РОВНО ОДНО поле для фильтра и подходящие значения СТРОГО из данного '
-          'набора (не придумывай новых, не исправляй их). Ответь ТОЛЬКО JSON-объектом без пояснений, без '
-          'markdown, без ```: {"field": "название поля из списка или пусто", '
-          '"values": ["подходящие значения строго из набора"], '
-          '"reply": "короткий ответ пользователю о том, что будет показано, 1 предложение, на языке запроса"}. '
-          'Если запрос не про отбор по конкретному полю (общий вопрос, не про фильтр) — "field" и "values" пустые.',
+          'You help select the needed records from a third-party service table by the free-form request of '
+          'the user. You are NOT given the table itself — only the list of fields and the unique values of each '
+          '(they may be truncated). Choose EXACTLY ONE field for the filter and the matching values STRICTLY from the given '
+          'set (do not invent new ones, do not correct them). Answer with a JSON object ONLY, no explanations, no '
+          'markdown, no ```: {"field": "field name from the list, or empty", '
+          '"values": ["matching values strictly from the set"], '
+          '"reply": "a short answer to the user about what will be shown, 1 sentence, in the language of the request"}. '
+          'If the request is not about selecting by a specific field (a general question, not a filter) — "field" and "values" are empty.',
       contextBlock: '',
       history: [
         (
           role: 'user',
           text: jsonEncode({
             'fields': columns,
-            'значения_по_полю': valuesByField,
-            'запрос': query
+            'values_by_field': valuesByField,
+            'query': query
           })
         ),
       ],

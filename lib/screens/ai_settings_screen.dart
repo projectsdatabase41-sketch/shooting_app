@@ -212,24 +212,24 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
       final preferSpeed = _settings.modelPriority == 'speed';
       final reply = await service.ask(
         systemPrompt: preferSpeed
-            ? 'Ты помогаешь настроить цепочку ИИ-моделей для ассистента по спортивной '
-                'стрельбе. Приоритет — скорость и краткость ответа: модель не должна '
-                'подолгу рассуждать вслух, даже если это немного снижает точность '
-                'арифметики.'
-            : 'Ты помогаешь настроить цепочку ИИ-моделей для ассистента по '
-                'спортивной стрельбе. Нужны модели, которые точно считают арифметику '
-                '(например, среднюю точку попадания и кучность по координатам выстрелов) '
-                'и не рассуждают вслух подолгу — ответ должен быть коротким и по делу, а не '
-                'дорогим и медленным.',
+            ? 'You help configure a chain of AI models for a sport shooting assistant. '
+                'The priority is the speed and brevity of the answer: the model must not '
+                'reason out loud for long, even if that lowers the accuracy of '
+                'arithmetic a little.'
+            : 'You help configure a chain of AI models for a sport shooting '
+                'assistant. We need models that calculate arithmetic accurately '
+                '(for example the mean point of impact and group size from shot coordinates) '
+                'and do not reason out loud for long — the answer must be short and to the point, not '
+                'expensive and slow.',
         contextBlock:
-            'Доступные бесплатные модели OpenRouter прямо сейчас, по одной в строке:\n'
+            'Free OpenRouter models available right now, one per line:\n'
             '${free.join('\n')}',
         history: const [
           (
             role: 'user',
-            text: 'Распредели эти модели по приоритету для описанной задачи и дай мне '
-                'список без лишнего текста — по одной модели в строке, в этом же формате '
-                'id, что и во входном списке, от самой подходящей к наименее подходящей.',
+            text: 'Rank these models by priority for the described task and give me '
+                'a list with no extra text — one model per line, in the same id format '
+                'as the input list, from the most suitable to the least suitable.',
           ),
         ],
       );

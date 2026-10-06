@@ -829,10 +829,10 @@ class _CreatePresetSheetState extends State<_CreatePresetSheet> {
         task: 'app_preset',
         json: true,
         systemPrompt:
-            'Ты подбираешь цвета интерфейса приложения для ${_dark ? 'ТЁМНОЙ' : 'СВЕТЛОЙ'} темы по описанию. '
-            'Ответь ТОЛЬКО JSON: {"label":"название 1-2 слова","background":"#RRGGBB","button":"#RRGGBB","buttonText":"#RRGGBB"}. '
-            'Фон ${_dark ? 'тёмный (яркость ниже 25%)' : 'светлый (яркость выше 85%)'}, текст на кнопке хорошо читается на кнопке, '
-            'кнопка заметна на фоне. Название — на языке описания.',
+            'You pick the app interface colours for the ${_dark ? 'DARK' : 'LIGHT'} theme from a description. '
+            'Answer with JSON ONLY: {"label":"a 1-2 word name","background":"#RRGGBB","button":"#RRGGBB","buttonText":"#RRGGBB"}. '
+            'The background is ${_dark ? 'dark (lightness below 25%)' : 'light (lightness above 85%)'}, the button text is clearly readable on the button (contrast at least 4.5:1), '
+            'the button stands out against the background. The name is in the language of the description.',
         contextBlock: '',
         history: [(role: 'user', text: text)],
       );

@@ -1,63 +1,65 @@
-# Задания тренера в приложении Nexus — справочник для ИИ
+# Coach tasks in the Nexus app — reference for the AI
 
-Задание — план тренировки, который тренер отправляет спортсмену. Оно НЕ попадает
-в обычные тренировки: выстрелы, отметки и отчёты хранятся в самом задании.
+A task is a training plan the coach sends to an athlete. It does NOT go into ordinary
+trainings: the shots, notes and reports are stored in the task itself.
+All human-readable text (titles, instructions, questions, reports) is written in the
+language of the coach description.
 
-## Структура
-Задание → ступени → этапы.
-- Ступени идут СТРОГО по очереди: следующая открывается, когда закончена предыдущая.
-- Внутри ступени — режим (`mode`):
-  - `single` — один этап, спортсмен сразу видит, что делать;
-  - `together` — несколько этапов делаются одновременно / в одной сессии; показываются
-    одной страницей, в записи разделены только для порядка;
-  - `any_order` — нужно сделать ВСЕ этапы ступени, порядок выбирает спортсмен;
-  - `pick_one` — спортсмен выбирает ОДИН этап из предложенных.
-- Пример «два одновременно, потом обязательный, потом два на выбор порядка»:
-  ступень 1 `together` [A, B] → ступень 2 `single` [C] → ступень 3 `any_order` [D, E].
+## Structure
+Task → stages → steps.
+- Stages go STRICTLY in order: the next one opens when the previous one is finished.
+- Inside a stage there is a mode (`mode`):
+  - `single` — one step, the athlete sees at once what to do;
+  - `together` — several steps are done at the same time / in one session; shown
+    as one page, separated in the record only for order;
+  - `any_order` — ALL steps of the stage must be done, the athlete chooses the order;
+  - `pick_one` — the athlete chooses ONE step from those offered.
+- Example "two at once, then a mandatory one, then two in any order":
+  stage 1 `together` [A, B] → stage 2 `single` [C] → stage 3 `any_order` [D, E].
 
-## Этап (step)
-- `title` — коротко, 2–6 слов.
-- `instructions` — полный текст для спортсмена: что и как делать. Переносить слова
-  тренера целиком, ничего не выкидывать.
-- `exercise` — только для этапов со стрельбой:
-  `{"target_face_code": "rifle_10m", "shots": 20, "series_size": 10, "position": "лёжа"}`.
-  Коды мишеней: `rifle_10m` (пневм. винтовка 10 м), `pistol_10m` (пневм. пистолет 10 м),
-  `rifle_50m` (МВ 50 м), `pistol_25m` (пистолет 25 м). Без стрельбы — `exercise` не указывать.
-- `time_limit_sec` — ограничение времени этапа, если тренер его назвал.
-- `sighting` — пристрелка: `{"required": true, "max_shots": 10, "time_sec": 300}`
-  (указывать только то, что известно). Пристрелка никогда не идёт в зачёт.
-- `note_mode` — где просить отметку спортсмена, по ТЕКСТУ тренера:
-  `shot` — по каждому выстрелу; `series` — после каждой серии; `step` — отчёт в конце
-  этапа (по умолчанию); `none` — отметки не нужны.
-- `keep_stats` — true, если тренер просит вести общую статистику с предыдущим этапом
-  (не обнулять мишень). По умолчанию false — мишень на новом этапе чистая.
+## Step
+- `title` — short, 2-6 words.
+- `instructions` — the full text for the athlete: what and how to do. Carry over the
+  coach words in full, leave nothing out.
+- `exercise` — only for steps with shooting:
+  `{"target_face_code": "rifle_10m", "shots": 20, "series_size": 10, "position": "prone"}`.
+  Target codes: `rifle_10m` (10 m air rifle), `pistol_10m` (10 m air pistol),
+  `rifle_50m` (50 m small-bore rifle), `pistol_25m` (25 m pistol). No shooting — do not set `exercise`.
+- `time_limit_sec` — the step time limit, if the coach named one.
+- `sighting` — sighters: `{"required": true, "max_shots": 10, "time_sec": 300}`
+  (include only what is known). Sighters never count towards the score.
+- `note_mode` — where to ask for the athlete note, based on the coach TEXT:
+  `shot` — for every shot; `series` — after every series; `step` — a report at the end of
+  the step (default); `none` — no notes needed.
+- `keep_stats` — true if the coach asks to keep shared statistics with the previous step
+  (do not reset the target). Default false — the target is clean on a new step.
 
-## Задание целиком (JSON)
+## The whole task (JSON)
 ```
-{"title": "…", "coach_text": "исходный текст тренера целиком",
+{"title": "…", "coach_text": "the coach text in full, as written",
  "due_at": "2026-10-03T18:00:00Z" | null, "repeat_rule": "daily" | "mon,wed,fri" | null,
- "stages": [{"mode": "single", "steps": [ {этап}, … ]}, …]}
+ "stages": [{"mode": "single", "steps": [ {step}, … ]}, …]}
 ```
 
-## Правила выполнения (знать при отчётах)
-- Шаг со стрельбой засчитывается автоматически по результату; лишний выстрел разрешён.
-- Отклонения от плана (время вышло, лишние выстрелы, нет пристрелки) не останавливают
-  спортсмена — только записываются фактами (`task_events`), с цифрами план/факт.
-- Время на отметки — законная причина выхода за лимит, это стоит учитывать в выводах.
+## Execution rules (know them when writing reports)
+- A step with shooting is counted automatically from the result; an extra shot is allowed.
+- Deviations from the plan (time is up, extra shots, no sighters) do not stop the
+  athlete — they are only recorded as facts (`task_events`), with plan/actual figures.
+- Time spent on notes is a legitimate reason for exceeding the limit; take it into account in conclusions.
 
-## Частые ошибки разбора
-- НЕ схлопывай повторяющиеся блоки в один этап/ступень. Если тренер словами
-  перечислил последовательность несколько раз подряд — это отдельные ступени
-  по порядку, даже если текст одинаковый или почти одинаковый. Считай элементы
-  через разделители («+», «-», «,», «затем», «потом») буквально, не пытайся
-  найти в них повтор и сократить.
-- НЕ добавляй `exercise` этапу, где тренер не упомянул стрельбу (разминка,
-  отжимания, приседания, растяжка, бег). Мишень не подразумевается по
-  умолчанию — только когда явно сказано «стрельба», «выстрелы», «серия» и т.п.
-- Пример разбора: тренер написал
-  «Отжимания + присед — стрельба без костюма — в костюме — отжимания —
-  стрельба без костюма — в костюме». Это ШЕСТЬ последовательных ступеней
-  (не три с повтором и не одна с «x2»):
+## Common parsing mistakes
+- Do NOT collapse repeated blocks into one step/stage. If the coach listed a sequence
+  in words several times in a row, these are separate stages in order, even if the text
+  is identical or almost identical. Count the elements by the separators ("+", "-", ",",
+  "then", "after that") literally; do not try to find a repetition in them and shorten it.
+- Do NOT add `exercise` to a step where the coach did not mention shooting (warm-up,
+  push-ups, squats, stretching, running). A target is not implied by default — only when it
+  is explicitly said "shooting", "shots", "series" and so on.
+- Parsing example: the coach wrote (in Russian)
+  "Отжимания + присед — стрельба без костюма — в костюме — отжимания —
+  стрельба без костюма — в костюме" (push-ups + squats — shooting without the suit —
+  in the suit — push-ups — shooting without the suit — in the suit). This is SIX
+  consecutive stages (not three with a repeat and not one with "x2"):
   ```
   {"stages": [
     {"mode": "together", "steps": [{"title": "Отжимания"}, {"title": "Присед"}]},
@@ -68,11 +70,11 @@
     {"mode": "single", "steps": [{"title": "Стрельба в костюме", "exercise": {…}}]}
   ]}
   ```
-  (параметры `exercise` — по тому, что тренер сказал про мишень/серии; если не
-  сказал, не указывай вовсе, а спроси уточнение, если это важно для структуры).
+  (the `exercise` parameters follow what the coach said about the target/series; if the
+  coach did not say, omit them and ask a clarifying question if it matters for the structure).
 
-## Уточняющие вопросы
-Задавать ТОЛЬКО если без ответа нельзя правильно собрать структуру, коротко, по делу.
-Примеры: «Нужна пристрелка при смене изготовки?», «Есть ограничение времени на смену
-положения?», «Ограничение на число пробных при смене положения?», «Отметки по каждому
-выстрелу или по сериям?». Не спрашивать то, что уже сказано.
+## Clarifying questions
+Ask ONLY if the structure cannot be built correctly without the answer; briefly, to the point.
+Examples: "Are sighters needed when changing position?", "Is there a time limit for changing
+position?", "A limit on the number of sighters when changing position?", "Notes for every shot
+or for series?". Do not ask what has already been said.

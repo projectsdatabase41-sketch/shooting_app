@@ -616,14 +616,14 @@ class _AccountSheetState extends State<_AccountSheet> {
       final reply = await aiService.ask(
         task: 'table_describe',
         systemPrompt:
-            'Ты помогаешь приложению для стрельбы понять смысл ЧУЖОЙ таблицы базы данных, '
-            'которую подключил пользователь. Дан список колонок и примеры строк. Опиши ОДНИМ коротким '
-            'предложением, что это за таблица и как её содержимое использовать при ответах пользователю. '
-            'Без markdown, без кавычек, только суть.',
+            'You help a shooting app understand the meaning of a FOREIGN database table '
+            'the user has connected. You get a list of columns and example rows. Describe in ONE short '
+            'sentence what this table is and how its content should be used when answering the user. '
+            'No markdown, no quotes, just the essence. Write the sentence in the language of the table content.',
         contextBlock:
-            'Таблица "${t.name}". Колонки: ${firstRow.keys.join(", ")}. '
-            'Примеры строк: ${jsonEncode(rows.take(2).toList())}',
-        history: const [(role: 'user', text: 'Что это за таблица?')],
+            'Table "${t.name}". Columns: ${firstRow.keys.join(", ")}. '
+            'Example rows: ${jsonEncode(rows.take(2).toList())}',
+        history: const [(role: 'user', text: 'What is this table?')],
       );
       final desc = reply.text.trim();
       return desc.isEmpty ? null : desc;

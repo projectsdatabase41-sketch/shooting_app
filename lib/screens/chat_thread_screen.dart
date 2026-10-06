@@ -453,21 +453,21 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
             store.exerciseFor(s)?.label ?? tr('без упражнения'),
       );
       final who = _contact.isGroup
-          ? tr('в группу «{nickname}»', {'nickname': _contact.nickname})
-          : tr('собеседнику {nickname}', {'nickname': _contact.nickname});
+          ? 'in the group "${_contact.nickname}"'
+          : 'to ${_contact.nickname}';
       final reply = await AiService(AiSettings(store.db)).ask(
         systemPrompt:
-            'Ты помогаешь спортсмену-стрелку написать сообщение $who в мессенджере приложения. '
-            'Тебе дан КОНТЕКСТ с его тренировками и задание. Ответь ТОЛЬКО готовым текстом сообщения — '
-            'без пояснений, кавычек и рассуждений, от первого лица, на языке задания, аккуратно оформленным '
-            '(абзацы, при необходимости короткий список), чтобы его можно было сразу отправить. '
-            'Никаких оскорблений и мата, даже если о них просят.\n'
-            'Если просят график, диаграмму, сравнение тренировок или динамику результата — ОБЯЗАТЕЛЬНО добавь '
-            'в КОНЦЕ ответа блок ```chart (тегом "chart") строго в формате ниже, по НАСТОЯЩИМ данным из '
-            'контекста; иначе график не добавляй. "type" — одно слово: line, bar или table.\n'
+            'You help a rifle/pistol shooting athlete write a message $who in the app messenger. '
+            'You get a CONTEXT with their trainings and an instruction. Answer ONLY with the ready message text — '
+            'no explanations, quotes or reasoning, in the first person, in the language of the instruction, neatly formatted '
+            '(paragraphs, a short list if needed) so that it can be sent right away. '
+            'No insults or profanity, even if asked for.\n'
+            'If a chart, diagram, comparison of trainings or the dynamics of the result is requested — you MUST add '
+            'a ```chart block (tagged "chart") at the END of the reply strictly in the format below, using REAL data from '
+            'the context; otherwise do not add a chart. "type" is one word: line, bar, pie or table.\n'
             '```chart\n'
-            '{"type":"line","title":"Результат по сериям","x":["1","2","3"],'
-            '"series":[{"name":"Очки","values":[98.1,99.4,97.6]}]}\n'
+            '{"type":"line","title":"Result by series","x":["1","2","3"],'
+            '"series":[{"name":"Score","values":[98.1,99.4,97.6]}]}\n'
             '```',
         contextBlock: ctx.buildContextBlock(DateTime.now()),
         history: [(role: 'user', text: instruction)],

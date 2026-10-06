@@ -536,17 +536,17 @@ class _AiThemeAssistantSheetState extends State<_AiThemeAssistantSheet> {
         task: 'chat_colors',
         accept: (t) => t.contains('```chat_theme'),
         systemPrompt:
-            'Ты помогаешь настроить ВНЕШНИЙ ВИД чата в приложении для стрелкового спорта: '
-            'только цвет "своих" и "чужих" пузырей сообщений, цвет текста в них, и тень под ними '
-            '(включена ли и насколько сильная, от 0 до 1). У тебя НЕТ доступа ни к чему другому — '
-            'ни к самим сообщениям, ни к контактам, ни к их удалению, поэтому никогда не предлагай '
-            'ничего, кроме этих настроек, и не делай вид, что сделал что-то ещё.\n'
-            'Если пользователь просит что-то изменить — коротко подтверди своими словами (на том же языке, '
-            'на котором он написал) что делаешь, и в конце ответа добавь блок ```chat_theme с ТОЛЬКО теми полями, которые нужно поменять '
-            '(остальные не пиши): {"mine_bubble":"#RRGGBB","other_bubble":"#RRGGBB","mine_text":"#RRGGBB",'
+            'You help configure the APPEARANCE of the chat in a sport shooting app: '
+            'only the colour of "own" and "other" message bubbles, the text colour in them, and the shadow under them '
+            '(on or off and how strong, from 0 to 1). You have NO access to anything else — '
+            'not to the messages themselves, not to contacts, not to deleting them, so never suggest '
+            'anything but these settings and do not pretend you did anything else.\n'
+            'If the user asks to change something — briefly confirm in your own words (in the same language '
+            'the user wrote in) what you are doing, and at the end of the reply add a ```chat_theme block with ONLY the fields that need changing '
+            '(do not write the others): {"mine_bubble":"#RRGGBB","other_bubble":"#RRGGBB","mine_text":"#RRGGBB",'
             '"other_text":"#RRGGBB","shadow_enabled":true,"shadow_intensity":0.3}. '
-            'Цвета — только HEX. Если просьба не про оформление — вежливо объясни, что умеешь только это.',
-        contextBlock: 'ТЕКУЩИЕ НАСТРОЙКИ:\n$current',
+            'Colours — HEX only. If the request is not about appearance — politely explain that this is all you can do.',
+        contextBlock: 'CURRENT SETTINGS:\n$current',
         history: [(role: 'user', text: text)],
       );
       _applyThemeBlock(reply.text);

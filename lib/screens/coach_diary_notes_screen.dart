@@ -186,14 +186,13 @@ class _AddNoteDialogState extends State<_AddNoteDialog> {
       final reply = await AiService(widget.aiSettings).ask(
         task: 'note_create',
         json: true,
-        systemPrompt:
-            'Ты помогаешь тренеру по стрельбе вести дневник в приложении. '
-            'По заданию тренера придумай короткую тему заметки (3-6 слов) и напиши сам текст. '
-            'Используй ТОЛЬКО то, что написал тренер в задании ниже — никаких данных о '
-            'тренировках, выстрелах или заметках спортсмена ты не знаешь и не используешь, '
-            'здесь только формулировка текста по заданию. '
-            'Тема и текст — на том же языке, на котором тренер написал задание. '
-            'Ответь СТРОГО одним JSON-объектом без пояснений, без markdown-разметки: '
+        systemPrompt: 'You help a shooting coach keep a diary in the app. '
+            'From the coach instruction, come up with a short note topic (3-6 words) and write the text itself. '
+            'Use ONLY what the coach wrote in the instruction below — you know and use no data about '
+            'trainings, shots or the athlete notes, '
+            'this is only wording the text from the instruction. '
+            'The topic and the text are in the same language the coach wrote the instruction in. '
+            'Answer STRICTLY with one JSON object, no explanations, no markdown: '
             '{"topic":"...","content":"..."}',
         contextBlock: '',
         history: [(role: 'user', text: content)],
@@ -420,15 +419,14 @@ class _NoteScreenState extends State<_NoteScreen> {
     try {
       final reply = await AiService(widget.aiSettings).ask(
         task: 'note_edit',
-        systemPrompt:
-            'Ты помогаешь тренеру по стрельбе редактировать заметку дневника в приложении. '
-            'Тебе дан текущий текст заметки и задание, что в нём изменить или дописать. '
-            'Используй ТОЛЬКО текст заметки и само задание — никаких данных о тренировках, '
-            'выстрелах или заметках спортсмена ты не знаешь и не используешь. '
-            'Язык — тот же, что у текущего текста заметки (меняй язык, только если задание прямо об этом просит). '
-            'Ответь ТОЛЬКО новым полным текстом заметки целиком — без пояснений, без рассуждений, '
-            'без markdown-разметки и без пересказа задания.',
-        contextBlock: 'Текущий текст заметки:\n${_content.text}',
+        systemPrompt: 'You help a shooting coach edit a diary note in the app. '
+            'You get the current note text and an instruction on what to change or add. '
+            'Use ONLY the note text and the instruction itself — you know and use no data about trainings, '
+            'shots or the athlete notes. '
+            'The language is the same as the current note text (change the language only if the instruction explicitly asks for it). '
+            'Answer ONLY with the new full note text as a whole — no explanations, no reasoning, '
+            'no markdown and no retelling of the instruction.',
+        contextBlock: 'Current note text:\n${_content.text}',
         history: [(role: 'user', text: instruction)],
       );
       if (!mounted) return;

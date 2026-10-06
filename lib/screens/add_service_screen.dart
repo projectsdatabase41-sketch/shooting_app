@@ -218,18 +218,18 @@ class _AddServiceScreenState extends State<AddServiceScreen>
         task: 'service_parse',
         json: true,
         systemPrompt:
-            'Ты помогаешь разобрать описание стороннего сервиса/API на структурированные поля. '
-            'Тебе дан произвольный текст — обычно вперемешку название, ссылка и ключ доступа. '
-            'Ответь ТОЛЬКО JSON-объектом без пояснений, без markdown, без ```: '
-            '{"name": "короткое название сервиса", "url": "адрес API или сайта", '
-            '"method": "GET или POST, по умолчанию GET", '
-            '"headers": {"Authorization": "Bearer ключ, если он есть в тексте"}}. '
-            'Поле url — скопируй ссылку из текста СИМВОЛ В СИМВОЛ, целиком, вместе с путём, '
-            'ID таблицы/базы/ресурса и query-параметрами. Никогда не сокращай её до домена и не убирай '
-            'из неё ничего "лишнего" на свой вкус — то, что тебе кажется идентификатором записи или '
-            'мусором, обычно и есть то самое поле/таблица, к которому идёт обращение. '
-            'Поле headers — объект, пустой {} если ключа/заголовков в тексте нет. '
-            'Если явного названия сервиса нет — придумай короткое по домену ссылки, на том же языке, что и вставленный текст.',
+            'You help break a description of a third-party service/API into structured fields. '
+            'You get free text — usually a mix of a name, a link and an access key. '
+            'Answer with a JSON object ONLY, no explanations, no markdown, no ```: '
+            '{"name": "a short service name", "url": "the API or site address", '
+            '"method": "GET or POST, GET by default", '
+            '"headers": {"Authorization": "Bearer key, if there is one in the text"}}. '
+            'For the url field copy the link from the text CHARACTER FOR CHARACTER, in full, with the path, '
+            'the table/base/resource ID and the query parameters. Never shorten it to the domain and do not remove '
+            'anything from it that seems "unnecessary" to you — what looks like a record identifier or '
+            'junk is usually exactly the field/table that is being addressed. '
+            'The headers field is an object, empty {} if there is no key/headers in the text. '
+            'If there is no explicit service name, make up a short one from the link domain, in the same language as the pasted text.',
         contextBlock: '',
         history: [(role: 'user', text: pasted)],
       );

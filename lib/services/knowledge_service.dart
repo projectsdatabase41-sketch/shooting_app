@@ -415,7 +415,7 @@ class KnowledgeService {
             if (row[c] is String && (row[c] as String).trim().isNotEmpty)
               row[c] as String,
           if (row['tags'] is List && (row['tags'] as List).isNotEmpty)
-            tr('теги: {p}', {'p': (row['tags'] as List).join(', ')}),
+            'tags: ${(row['tags'] as List).join(', ')}',
         ];
         final text = parts.isEmpty ? heading : parts.join('\n');
         if (text.trim().isEmpty) continue;
@@ -493,28 +493,28 @@ class KnowledgeService {
     // куске: модель должна знать "сейчас", чтобы отличать "давно" от
     // "недавно" у дат самих записей (пункт: "какое сейчас время и дату
     // записи, чтобы лучше понимать пользователя").
-    final buf = StringBuffer(tr('Текущие дата и время: {p}\n\n',
-        {'p': DateTime.now().toIso8601String()}));
+    final buf = StringBuffer(
+        'Current date and time: ${DateTime.now().toIso8601String()}\n\n');
     // Какие свои таблицы подключил пользователь — ИИ должен знать о них,
     // даже если в этот раз ничего из них не нашлось.
     if (tables.isNotEmpty) {
-      buf.writeln(tr(
-          'Подключённые таблицы пользователя (его личные данные, их можно и нужно использовать):'));
+      buf.writeln(
+          'Tables connected by the user (their personal data — you can and should use them):');
       for (final t in tables) {
         buf.writeln(
             '- ${t.label}${t.description.isEmpty ? '' : ': ${t.description}'}');
       }
       buf.writeln(chunks.isEmpty
-          ? tr('(по этому вопросу записей из них не найдено)')
+          ? '(no records from them were found for this question)'
           : '');
     }
     if (catalog.isNotEmpty) {
       // Перечень материалов — модель должна знать, что в базе вообще есть,
       // и не говорить «такой книги нет», когда она просто не попала в выдачу.
-      buf.writeln(tr('Материалы общей базы знаний (названия файлов): {p}',
-          {'p': catalog.take(80).join('; ')}));
-      buf.writeln(tr(
-          'Если пользователь называет книгу из этого списка — она в базе есть; отрывки по вопросу приведены ниже (если их нет — скажи, что именно по этому вопросу отрывок не нашёлся, а не что книги нет).'));
+      buf.writeln(
+          'Materials in the shared knowledge base (file names): ${catalog.take(80).join('; ')}');
+      buf.writeln(
+          'If the user names a book from this list, it is in the base; excerpts for the question are below (if there are none, say that no excerpt was found for this particular question, not that the book is missing).');
       buf.writeln();
     }
     for (final c in chunks) {
@@ -525,9 +525,8 @@ class KnowledgeService {
       final tableTag = c.tableDescription.isEmpty
           ? c.tableLabel
           : '${c.tableLabel}: ${c.tableDescription}';
-      final dateTag = c.recordDate == null
-          ? ''
-          : tr(', запись от {recordDate}', {'recordDate': c.recordDate});
+      final dateTag =
+          c.recordDate == null ? '' : ', record from ${c.recordDate}';
       final piece =
           '[$tableTag — ${c.source}${c.heading.isEmpty ? '' : ', ${c.heading}'}$dateTag]\n${c.text}\n\n';
       if (buf.length + piece.length > totalCharLimit) break;

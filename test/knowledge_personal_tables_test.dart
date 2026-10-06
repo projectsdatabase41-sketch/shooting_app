@@ -51,7 +51,7 @@ void main() {
     expect(latest.queryParameters['order'], 'created_at.desc');
 
     final block = KnowledgeService.asPromptBlock(chunks, tables: settings.tables)!;
-    expect(block, contains('Подключённые таблицы пользователя'));
+    expect(block, contains('Tables connected by the user'));
     expect(block, contains('Заметки: личные заметки'));
     expect(block, contains('Держать кисть мягче'));
 
