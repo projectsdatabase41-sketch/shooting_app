@@ -64,7 +64,7 @@ void main() {
   });
 
   test('имя: скрытые символы и путь', () {
-    expect(AttachmentGuard.checkName('invoice‮fdp.exe').ok, isFalse);
+    expect(AttachmentGuard.checkName('invoice\u202Efdp.exe').ok, isFalse);
     expect(AttachmentGuard.checkName('../../etc/passwd').ok, isFalse);
     expect(AttachmentGuard.checkName(r'a\b.txt').ok, isFalse);
     expect(AttachmentGuard.checkName('').ok, isFalse);
