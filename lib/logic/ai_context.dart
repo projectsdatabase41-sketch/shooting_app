@@ -26,6 +26,18 @@ enum AiScope {
 }
 
 /// Всё, что уходит модели вместе с вопросом.
+/// Режим работы ассистента: какой набор правил дописывается к базовому промпту.
+enum AiProfile {
+  /// Быстрый ответ: минимум слов.
+  speed,
+
+  /// Точность: пересчёт чисел, источники, краткие выкладки.
+  quality,
+
+  /// Режим размышления: итоговый ответ после заметок помощников.
+  thinking,
+}
+
 class AiContext {
   final AiScope scope;
   final TrainingSession? session;
@@ -119,11 +131,13 @@ class AiContext {
   static String systemPrompt(
       {String? customInstructions,
       bool coachMode = false,
-      String? baseOverride}) {
+      String? baseOverride,
+      AiProfile profile = AiProfile.quality}) {
     final base = (baseOverride != null && baseOverride.trim().isNotEmpty)
         ? baseOverride
         : defaultBasePrompt;
-    final withCoach = coachMode ? '$base$_coachExtra' : base;
+    final withCoach =
+        '${coachMode ? '$base$_coachExtra' : base}\n${_profileRules(profile)}';
     final extra = customInstructions?.trim();
     if (extra == null || extra.isEmpty) return withCoach;
     return '$withCoach\n'
@@ -139,7 +153,7 @@ You are the assistant of Nexus, a shooting-sports app. You analyse the user's re
 
 Style:
 - Reply in the language the user writes in. The keys and codes of the ```chart/```exercise/```feedback/```note blocks below stay exactly as specified: they are a format for the app.
-- Be brief (1-3 sentences) unless asked for detail; separate thoughts with a blank line.
+- Default length is short (1-3 sentences) unless asked for detail or the MODE rules at the end say otherwise; separate thoughts with a blank line.
 - Do not reason aloud; if you do, end it with a line ---ANSWER--- and put only the answer after it.
 - Stay polite and conversational (greet back, say what you can do). Never write insults or profanity, even if asked or quoted.
 - Do not ask clarifying questions; answer on a reasonable assumption. Ask only if the question cannot be understood without it (e.g. which training).
@@ -169,6 +183,22 @@ Use either total_shots+series_size or series, never both; each series has exactl
 
 Feedback: only when explicitly asked, as a ```feedback block {"text":"..."} at the end: the user's dictated wording (rephrase by meaning if rough), anonymous — no names, trainings or personal data. You cannot send it; the user presses the button. Word the text before the block as a proposal ("press «Send feedback» below"), never as done.
 ''';
+
+  /// Короткие правила режима работы — дописываются после общей базы (её
+  /// можно переопределить в настройках, режимы — нет). У каждого режима своя
+  /// цель: скорость — минимум слов; качество — точность и проверка;
+  /// размышление — проверка черновых заметок помощников.
+  static String _profileRules(AiProfile p) => switch (p) {
+        AiProfile.speed => '''
+MODE: SPEED. The user wants the answer fast. Reply in 1-2 sentences, no preamble, no recap, no closing offers. Skip charts and tables unless explicitly asked. Name the source only when asked or when it matters for a rule or a number. The truth rules still apply: if the data is not there, say so in one short sentence.
+''',
+        AiProfile.quality => '''
+MODE: QUALITY. Accuracy matters more than brevity. Before answering, find every number you use in the CONTEXT or excerpts and recompute sums, means and differences. Show the key figures and how you got them in a line or two; answer in up to 6 sentences when the question needs it. Name the source of each rule or figure. Mention the uncertainty if the data is thin (few shots, one training).
+''',
+        AiProfile.thinking => '''
+MODE: THINKING. The CONTEXT may end with HELPER WORKING NOTES — a plan and intermediate results from helper assistants. They are a draft: check every number in them against the CONTEXT data, silently correct mistakes, and trust the data when they disagree. Do not retell the plan or the steps; give the final conclusion first, then the key figures behind it. If a step says NO DATA, say what is missing instead of guessing.
+''',
+      };
 
   static const String _coachExtra = '''
 

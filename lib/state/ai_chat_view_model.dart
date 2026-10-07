@@ -239,7 +239,11 @@ class AiChatViewModel extends ChangeNotifier {
       ];
       final askedAt = DateTime.now();
       var contextBlock = ctx.buildContextBlock(askedAt);
-      if (service.settings.thinkingMode) {
+      // Размышление нужно не на болтовню и не на совсем короткие вопросы.
+      final thinking = service.settings.thinkingMode &&
+          !KnowledgeService.isSmallTalk(trimmed) &&
+          trimmed.length >= 12;
+      if (thinking) {
         _setPhase(/*tr*/ 'Думаю');
         final notes = await _think(trimmed, contextBlock, history);
         if (notes.isNotEmpty) {
@@ -255,6 +259,11 @@ class AiChatViewModel extends ChangeNotifier {
           customInstructions: service.settings.customInstructions,
           coachMode: rawCtx.coachMode,
           baseOverride: service.settings.baseInstructionsOverride,
+          profile: thinking
+              ? AiProfile.thinking
+              : service.settings.modelPriority == 'speed'
+                  ? AiProfile.speed
+                  : AiProfile.quality,
         ),
         contextBlock: contextBlock,
         history: history,
@@ -308,7 +317,7 @@ class AiChatViewModel extends ChangeNotifier {
     try {
       final plan = await service.ask(
         systemPrompt:
-            'You are a planner. Split the user question about shooting into 2-4 short analysis steps (what to calculate or compare using the CONTEXT data). Answer with the steps only, one per line, no numbering and no explanations. Write the steps in the language of the question.',
+            'You are a planner. Split the user question about shooting into 1-4 short analysis steps, each one a calculation or comparison that can be done from the CONTEXT data or the excerpts (a simple lookup is ONE step). Put data gathering first, comparison or conclusion last. Answer with the steps only, one per line, no numbering and no explanations. Write the steps in the language of the question.',
         contextBlock: contextBlock,
         history: [(role: 'user', text: question)],
         rotateKeys: true,
@@ -325,7 +334,7 @@ class AiChatViewModel extends ChangeNotifier {
       for (final step in steps) {
         final r = await service.ask(
           systemPrompt:
-              'You execute one analysis step. Solve ONLY the given step using the CONTEXT data: give the numbers and a short conclusion (up to 80 words). Do not invent data that is not there. Write in the language of the question.',
+              'You execute one analysis step. Solve ONLY the given step using the CONTEXT data and ALREADY DONE results: give the numbers with the calculation in one line, then a one-sentence conclusion (up to 80 words). If the data for the step is missing, answer exactly "NO DATA: <what is missing>". Never invent data. Write in the language of the question.',
           contextBlock: '$contextBlock\n\nALREADY DONE:\n$notes',
           history: [(role: 'user', text: 'Question: $question\nStep: $step')],
           rotateKeys: true,
