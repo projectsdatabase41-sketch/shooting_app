@@ -177,7 +177,23 @@ class LiveChatSession {
     _emit('delete', {'delete_of_client_message_id': clientMessageId});
   }
 
+  /// Реакция на сообщение собеседнику, пока он в сети (рядом с отправкой
+  /// через базу, не вместо неё). `emoji == null` — снять.
+  void sendReaction(String clientMessageId, String? emoji) {
+    if (!peerOnline) return;
+    _emit('reaction', {'target_client_message_id': clientMessageId, 'emoji': emoji ?? ''});
+  }
+
   void _onBroadcast(String event, Map<String, dynamic> p) {
+    if (event == 'reaction') {
+      final id = p['target_client_message_id'];
+      final emoji = p['emoji'];
+      if (id is String && id.isNotEmpty && emoji is String && emoji.length <= 16) {
+        repo.setReaction(id, contactId, emoji.isEmpty ? null : emoji);
+        onPeerRead?.call();
+      }
+      return;
+    }
     if (event == 'read') {
       final ids = p['ids'];
       if (ids is List) {

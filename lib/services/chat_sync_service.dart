@@ -176,6 +176,44 @@ class ChatSyncService {
     }
   }
 
+  /// Ставит или снимает свою реакцию. Локально — сразу; собеседнику — через
+  /// живой канал (если он в сети) и строкой msg_type = 'reaction' в базе
+  /// (нужен sql/chat-reactions.sql; без него база отклонит строку, и реакция
+  /// останется только у вас — ничего не ломается).
+  Future<void> react(ChatMessage m, String? emoji) async {
+    repo.setReaction(m.clientMessageId, auth.userId, emoji);
+    if (!ChatSettings.isConfigured) return;
+    final l = live;
+    if (l != null && l.contactId == m.contactId) l.sendReaction(m.clientMessageId, emoji);
+    final token = await auth.ensureFreshToken();
+    if (token == null) return;
+    final client = clientFactory();
+    try {
+      await client
+          .post(
+            Uri.parse('${ChatSettings.url}/rest/v1/chat_messages'),
+            headers: {
+              'apikey': ChatSettings.anonKey,
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal',
+            },
+            body: jsonEncode(_fanOut(m.contactId, {
+              'client_message_id': _uuid.v4(),
+              'sender_id': auth.userId,
+              'text': emoji ?? '-',
+              'msg_type': 'reaction',
+              'edit_of_client_message_id': m.clientMessageId,
+            })),
+          )
+          .timeout(_timeout);
+    } catch (_) {
+      // как и правка — необязательное усиление
+    } finally {
+      client.close();
+    }
+  }
+
   /// Удаляет сообщение. [alsoRemote] — только для СВОИХ (outgoing)
   /// сообщений: шлёт собеседнику delete-сигнал, чтобы оно исчезло и у
   /// него. Чужое входящее можно удалить только у себя.
@@ -630,6 +668,14 @@ class ChatSyncService {
           final target = repo.byClientId(threadId, '${row['edit_of_client_message_id']}');
           if (target != null) repo.updateText(target.id, '${row['text'] ?? ''}');
           added++; // экран открытой ветки должен перерисоваться
+          doneIds.add('${row['id']}');
+          continue;
+        }
+        if (rawType == 'reaction') {
+          final text = '${row['text'] ?? ''}';
+          repo.setReaction('${row['edit_of_client_message_id']}', senderId,
+              text == '-' || text.isEmpty || text.length > 16 ? null : text);
+          added++;
           doneIds.add('${row['id']}');
           continue;
         }

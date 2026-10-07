@@ -444,4 +444,34 @@ void main() {
     sa.close();
     sb.close();
   });
+
+  test('реакции: хранятся по человеку, заменяются, снимаются и доходят по живому каналу', () async {
+    final (authA, repoA) = await _user('uA', 'uB');
+    final (authB, repoB) = await _user('uB', 'uA');
+    final sa = LiveChatSession(auth: authA, repo: repoA, contactId: 'uB', clientFactory: factoryFor('uA'));
+    final sb = LiveChatSession(auth: authB, repo: repoB, contactId: 'uA', clientFactory: factoryFor('uB'));
+    await sa.open();
+    await sb.open();
+    await _until(() => sa.peerOnline);
+    final m = _out('uB', 'привет', clientId: 'r1');
+    repoA.addMessage(m);
+    repoB.addMessage(ChatMessage(
+        id: 'b-r1', clientMessageId: 'r1', contactId: 'uA', direction: ChatMessageDirection.incoming, text: 'привет',
+        status: ChatMessageStatus.delivered, createdAt: DateTime.now()));
+
+    sa.sendReaction('r1', '👍');
+    await _until(() => repoB.reactionsForContact('uA').isNotEmpty);
+    expect(repoB.reactionsForContact('uA')['r1'], {'uA': '👍'});
+
+    sa.sendReaction('r1', '❤️'); // замена
+    await _until(() => repoB.reactionsForContact('uA')['r1']?['uA'] == '❤️');
+    repoB.setReaction('r1', 'uB', '🔥'); // вторая реакция от другого человека
+    expect(repoB.reactionsForContact('uA')['r1'], {'uA': '❤️', 'uB': '🔥'});
+
+    sa.sendReaction('r1', null); // снять
+    await _until(() => repoB.reactionsForContact('uA')['r1']?.containsKey('uA') != true);
+    expect(repoB.reactionsForContact('uA')['r1'], {'uB': '🔥'});
+    sa.close();
+    sb.close();
+  });
 }

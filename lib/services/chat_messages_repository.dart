@@ -196,6 +196,32 @@ class ChatMessagesRepository {
     refreshTotalUnread();
   }
 
+  /// Ставит реакцию человека на сообщение; [emoji] == null — снять.
+  void setReaction(String clientMessageId, String userId, String? emoji) {
+    if (emoji == null || emoji.isEmpty) {
+      db.db.execute('DELETE FROM chat_reactions WHERE client_message_id = ? AND user_id = ?',
+          [clientMessageId, userId]);
+    } else {
+      db.db.execute(
+          'INSERT INTO chat_reactions (client_message_id, user_id, emoji) VALUES (?, ?, ?) '
+          'ON CONFLICT(client_message_id, user_id) DO UPDATE SET emoji = excluded.emoji',
+          [clientMessageId, userId, emoji]);
+    }
+  }
+
+  /// Реакции сообщений диалога: client_message_id -> (user_id -> emoji).
+  Map<String, Map<String, String>> reactionsForContact(String contactId) {
+    final rows = db.db.select(
+        'SELECT r.client_message_id AS m, r.user_id AS u, r.emoji AS e FROM chat_reactions r '
+        'JOIN chat_local_messages x ON x.client_message_id = r.client_message_id WHERE x.contact_id = ?',
+        [contactId]);
+    final out = <String, Map<String, String>>{};
+    for (final r in rows) {
+      (out[r['m'] as String] ??= {})[r['u'] as String] = r['e'] as String;
+    }
+    return out;
+  }
+
   /// Пересчитывает [totalUnread]; зовётся после любого изменения сообщений.
   void refreshTotalUnread() {
     final rows = db.db.select(

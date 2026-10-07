@@ -5,8 +5,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
-import 'package:flutter/services.dart'
-    show Clipboard, ClipboardData;
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -116,6 +115,136 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   /// Копировать/перевести/удалить работают на весь набор; ответить/
   /// редактировать/повторить — только когда выбрано ровно одно (один
   /// reply на сообщение в модели данных, не список).
+  /// client_message_id -> (user_id -> смайлик).
+  Map<String, Map<String, String>> _reactions = {};
+
+  static const _quickReactions = [
+    '👍',
+    '❤️',
+    '😂',
+    '😮',
+    '😢',
+    '🙏',
+    '🔥',
+    '👎'
+  ];
+  static const _moreReactions = [
+    '🎯',
+    '💪',
+    '👏',
+    '🙌',
+    '😊',
+    '😁',
+    '😅',
+    '🤔',
+    '😎',
+    '🥳',
+    '😴',
+    '😡',
+    '🤝',
+    '✅',
+    '❌',
+    '⭐',
+    '🏆',
+    '👌',
+    '🤞',
+    '💯',
+    '😬',
+    '🫡',
+    '😇',
+    '🤩',
+  ];
+
+  Future<void> _react(ChatMessage m, String emoji) async {
+    final mine = _reactions[m.clientMessageId]?[widget.auth.userId];
+    final next = mine == emoji ? null : emoji; // тот же смайлик — снять
+    setState(() {
+      final map = _reactions[m.clientMessageId] ??= {};
+      if (next == null) {
+        map.remove(widget.auth.userId);
+      } else {
+        map[widget.auth.userId] = next;
+      }
+    });
+    await widget.sync.react(m, next);
+  }
+
+  /// Долгое нажатие: список реакций (и само сообщение выделяется — действия
+  /// в шапке остаются доступны).
+  Future<void> _pickReaction(ChatMessage m) async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        Widget cell(String e) => InkResponse(
+              onTap: () => Navigator.pop(ctx, e),
+              radius: 24,
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Text(e, style: const TextStyle(fontSize: 28)),
+              ),
+            );
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Wrap(
+                    alignment: WrapAlignment.center,
+                    children: [for (final e in _quickReactions) cell(e)]),
+                const Divider(),
+                Wrap(
+                    alignment: WrapAlignment.center,
+                    children: [for (final e in _moreReactions) cell(e)]),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (picked != null && mounted) {
+      setState(() => _selected.clear());
+      _react(m, picked);
+    }
+  }
+
+  Widget _reactionChips(ChatMessage m) {
+    final map = _reactions[m.clientMessageId];
+    if (map == null || map.isEmpty) return const SizedBox.shrink();
+    final counts = <String, int>{};
+    for (final e in map.values) {
+      counts[e] = (counts[e] ?? 0) + 1;
+    }
+    final mine = map[widget.auth.userId];
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 2, bottom: 2),
+      child: Wrap(
+        spacing: 4,
+        children: [
+          for (final e in counts.entries)
+            GestureDetector(
+              onTap: () => _react(m, e.key),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: e.key == mine
+                      ? cs.primary.withValues(alpha: 0.25)
+                      : cs.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                      color: e.key == mine ? cs.primary : Colors.transparent),
+                ),
+                child: Text(e.value > 1 ? '${e.key} ${e.value}' : e.key,
+                    style: const TextStyle(fontSize: 14)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   final Set<String> _selected = {};
   bool get _selecting => _selected.isNotEmpty;
   void _toggleSelect(String id) => setState(() {
@@ -167,6 +296,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     WidgetsBinding.instance.addObserver(this);
     widget.prefs.addListener(_onPrefsChanged);
     webSetActiveChat(_contact.id);
+    _reactions = widget.repo.reactionsForContact(_contact.id);
     widget.repo.markThreadSeen(_contact.id);
     widget.sync.reportRead(_contact.id);
     // Открыли переписку — сразу спросить «в сети», не ждать общего тика
@@ -231,7 +361,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           auth: widget.auth,
           repo: widget.repo,
           contactId: _contact.id,
-          linkFactory: () => WebRtcPeerLink(iceServers: CallService(widget.auth).iceServers),
+          linkFactory: () =>
+              WebRtcPeerLink(iceServers: CallService(widget.auth).iceServers),
         ),
       )
         ..onIncoming = () {
@@ -340,7 +471,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   void _reload() {
-    setState(() => _messages = widget.repo.forContact(_contact.id));
+    setState(() {
+      _messages = widget.repo.forContact(_contact.id);
+      _reactions = widget.repo.reactionsForContact(_contact.id);
+    });
     if (_autoOn) _autoTranslateIncoming();
     _autoAckCall();
   }
@@ -1385,26 +1519,38 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         ),
         child: GestureDetector(
           onTap: _selecting ? () => _toggleSelect(m.id) : null,
-          onLongPress: () => _toggleSelect(m.id),
+          onLongPress: () {
+            _toggleSelect(m.id);
+            if (_selected.length != 1) return;
+            _pickReaction(m);
+          },
           child: Container(
             color: selected
                 ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)
                 : null,
-            child: _Bubble(
-              message: m,
-              prefs: widget.prefs,
-              senderName: _contact.isGroup &&
-                      m.direction == ChatMessageDirection.incoming
-                  ? (_contact.member(m.senderId ?? '')?.nickname ?? '—')
-                  : null,
-              translation: _translations[m.id],
-              masked: _isMasked(m),
-              translating: _translating.contains(m.id),
-              translationError: _translationErrors[m.id],
-              onRetry: () => _retry(m),
-              onAckCall: () => _ackCall(m),
-              onCancelCall: () => _cancelCall(m),
-              onDownloadLarge: () => _downloadLarge(m),
+            child: Column(
+              crossAxisAlignment:
+                  mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _Bubble(
+                  message: m,
+                  prefs: widget.prefs,
+                  senderName: _contact.isGroup &&
+                          m.direction == ChatMessageDirection.incoming
+                      ? (_contact.member(m.senderId ?? '')?.nickname ?? '—')
+                      : null,
+                  translation: _translations[m.id],
+                  masked: _isMasked(m),
+                  translating: _translating.contains(m.id),
+                  translationError: _translationErrors[m.id],
+                  onRetry: () => _retry(m),
+                  onAckCall: () => _ackCall(m),
+                  onCancelCall: () => _cancelCall(m),
+                  onDownloadLarge: () => _downloadLarge(m),
+                ),
+                _reactionChips(m),
+              ],
             ),
           ),
         ),

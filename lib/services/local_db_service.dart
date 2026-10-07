@@ -448,6 +448,13 @@ CREATE TABLE IF NOT EXISTS chat_local_messages (
 
 CREATE INDEX IF NOT EXISTS idx_chat_local_messages_contact ON chat_local_messages(contact_id);
 
+CREATE TABLE IF NOT EXISTS chat_reactions (
+  client_message_id TEXT NOT NULL,
+  user_id           TEXT NOT NULL,
+  emoji             TEXT NOT NULL,
+  PRIMARY KEY (client_message_id, user_id)
+);
+
 CREATE TABLE IF NOT EXISTS shots (
   id                  TEXT PRIMARY KEY,
   session_id          TEXT NOT NULL REFERENCES training_sessions(id) ON DELETE CASCADE,

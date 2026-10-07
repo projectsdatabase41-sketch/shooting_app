@@ -191,6 +191,14 @@ CREATE TABLE IF NOT EXISTS chat_local_messages (
 
 CREATE INDEX IF NOT EXISTS idx_chat_local_messages_contact ON chat_local_messages(contact_id);
 
+-- Реакции (смайлики) на сообщения: не больше одной от человека на сообщение.
+CREATE TABLE IF NOT EXISTS chat_reactions (
+  client_message_id TEXT NOT NULL,
+  user_id           TEXT NOT NULL,
+  emoji             TEXT NOT NULL,
+  PRIMARY KEY (client_message_id, user_id)
+);
+
 -- Кэш последней загруженной ленты общего чата — сам общий чат хранится
 -- на сервере (chat_global_messages), но экран раньше перечитывал его
 -- заново при КАЖДОМ открытии, показывая пустой экран с крутилкой на
