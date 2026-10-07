@@ -5,7 +5,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'
-    show Clipboard, ClipboardData, SystemSound, SystemSoundType;
+    show Clipboard, ClipboardData;
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -30,6 +30,7 @@ import '../widgets/empty_state.dart';
 import '../widgets/glass_pill.dart';
 import '../widgets/emoji_warmup.dart';
 import '../services/chat_presence.dart';
+import '../services/message_sound.dart';
 import 'chat_blocklist_screen.dart';
 import 'chat_group_screen.dart';
 import 'chat_people_screen.dart';
@@ -291,7 +292,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
           // Лёгкий «щелчок» — мессенджер уже открыт (список чатов), значит
           // пользователь «в сети»; системный пуш в этот момент обычно и не
           // приходит (экран уже открыт), так что это единственный сигнал.
-          SystemSound.play(SystemSoundType.click);
+          MessageSound.play();
           _reload();
         }
         return added > 0;

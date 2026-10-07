@@ -10,6 +10,34 @@ import 'remote_config.dart';
 /// пар (жёсткий мобильный NAT, примерно каждая пятая) не соединится и
 /// останется на Broadcast/базе, что нормально.
 class WebRtcPeerLink implements PeerLink {
+  /// Источник ICE-серверов (STUN+TURN от сервера звонков). Без него или при
+  /// сбое — только STUN из конфига. TURN поднимает долю пар, у которых
+  /// прямой путь закрыт NAT оператора.
+  WebRtcPeerLink({this.iceServers});
+
+  final Future<List<Map<String, dynamic>>> Function()? iceServers;
+
+  static List<Map<String, dynamic>>? _iceCache;
+  static DateTime _iceAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  Future<List<Map<String, dynamic>>> _ice() async {
+    final fallback = [
+      {'urls': RemoteConfig.stunServers},
+    ];
+    final get = iceServers;
+    if (get == null) return fallback;
+    if (_iceCache != null && DateTime.now().difference(_iceAt) < const Duration(minutes: 10)) return _iceCache!;
+    try {
+      final r = await get().timeout(const Duration(seconds: 4));
+      if (r.isNotEmpty) {
+        _iceCache = r;
+        _iceAt = DateTime.now();
+        return r;
+      }
+    } catch (_) {}
+    return fallback;
+  }
+
   RTCPeerConnection? _pc;
   RTCDataChannel? _dc;
   final List<RTCIceCandidate> _early = [];
@@ -36,9 +64,7 @@ class WebRtcPeerLink implements PeerLink {
   Future<void> start({required bool initiator}) async {
     try {
       final pc = await createPeerConnection({
-        'iceServers': [
-          {'urls': RemoteConfig.stunServers},
-        ],
+        'iceServers': await _ice(),
       });
       _pc = pc;
       pc.onIceCandidate = (c) {
@@ -53,7 +79,7 @@ class WebRtcPeerLink implements PeerLink {
         }
       };
       // Не поднялось за 15 с — сдаёмся, остаёмся на Broadcast.
-      _timeout = Timer(const Duration(seconds: 15), () {
+      _timeout = Timer(const Duration(seconds: 20), () {
         if (!isOpen) close();
       });
       if (initiator) {

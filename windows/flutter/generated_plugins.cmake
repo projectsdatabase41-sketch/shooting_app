@@ -3,6 +3,8 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  audioplayers_windows
+  emoji_picker_flutter
   file_selector_windows
   firebase_core
   flutter_webrtc
@@ -12,6 +14,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
   jni
+  pdfrx
 )
 
 set(PLUGIN_BUNDLED_LIBRARIES)

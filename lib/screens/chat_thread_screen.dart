@@ -6,7 +6,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:flutter/services.dart'
-    show Clipboard, ClipboardData, SystemSound, SystemSoundType;
+    show Clipboard, ClipboardData;
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -25,6 +25,8 @@ import '../services/chat_auth_service.dart';
 import '../services/chat_messages_repository.dart';
 import '../services/chat_preferences.dart';
 import '../services/chat_presence.dart';
+import '../services/call_service.dart';
+import '../services/message_sound.dart';
 import '../services/web_push_token.dart';
 import '../services/chat_sync_service.dart';
 import '../services/push_service.dart' show pendingCallAckContactId;
@@ -188,8 +190,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           max: const Duration(seconds: 15),
           scale: () =>
               RemoteConfig.pollScale *
+              // Живой канал не гарантирует доставку: сообщение, не получившее
+              // ack за 3 с, уходит только в базу, и получатель найдёт его
+              // лишь опросом. Раньше при онлайне опрос замедлялся вчетверо
+              // (до минуты) — отсюда «сообщение приходит, когда сам напишу».
               (_live?.peerOnline == true || (_groupLive?.onlineCount ?? 0) > 1
-                  ? 4
+                  ? 2
                   : 1)),
       tick: () async {
         final added = await widget.sync.pollIncoming();
@@ -225,12 +231,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           auth: widget.auth,
           repo: widget.repo,
           contactId: _contact.id,
-          linkFactory: WebRtcPeerLink.new,
+          linkFactory: () => WebRtcPeerLink(iceServers: CallService(widget.auth).iceServers),
         ),
       )
         ..onIncoming = () {
           if (!mounted) return;
-          SystemSound.play(SystemSoundType.click);
+          MessageSound.play();
           _markRead();
           _reload();
           _scrollToEnd();
@@ -246,7 +252,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         groupId: _contact.id,
         onIncoming: () {
           if (!mounted) return;
-          SystemSound.play(SystemSoundType.click);
+          MessageSound.play();
           _markRead();
           _reload();
           _scrollToEnd();
@@ -295,6 +301,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     widget.prefs.removeListener(_onPrefsChanged);
     _pollLoop?.stop();
     _stopLive();
+    _flushTranslations?.cancel();
     _input.dispose();
     _scroll.dispose();
     _showJumpToEnd.dispose();
@@ -380,21 +387,44 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
+  // Автоперевод приходит пачкой: каждое сообщение раньше перерисовывало ленту
+  // дважды (начало и конец) — отсюда «дёргание». Теперь результаты копятся и
+  // применяются одним setState раз в ~150 мс, а пока перевод идёт, оригинал
+  // остаётся на месте (без спиннера вместо текста — высота не прыгает).
+  final Map<String, String> _pendingTranslations = {};
+  Timer? _flushTranslations;
+
+  void _queueTranslation(String id, String text) {
+    _pendingTranslations[id] = text;
+    _flushTranslations ??= Timer(const Duration(milliseconds: 150), () {
+      _flushTranslations = null;
+      if (!mounted) return;
+      setState(() {
+        _translations.addAll(_pendingTranslations);
+        _translating.removeAll(_pendingTranslations.keys);
+        _pendingTranslations.clear();
+      });
+    });
+  }
+
   Future<void> _translate(ChatMessage m, {bool silent = false}) async {
     if (m.text == null || m.text!.isEmpty) return;
-    setState(() {
-      _translating.add(m.id);
-      _translationErrors.remove(m.id);
-    });
+    _translationErrors.remove(m.id);
+    if (silent) {
+      _translating.add(m.id); // без перерисовки: для ленты ничего не меняется
+    } else {
+      setState(() => _translating.add(m.id));
+    }
     try {
       final translated = await _translator.translateIfNeeded(
           AiService.splitChart(m.text!).$1,
           targetLanguage: widget.prefs.translationLanguage);
       if (!mounted) return;
-      setState(() {
-        if (translated != null) _translations[m.id] = translated;
-        _translating.remove(m.id);
-      });
+      if (translated != null) {
+        _queueTranslation(m.id, translated);
+      } else {
+        setState(() => _translating.remove(m.id));
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -1630,14 +1660,7 @@ class _Bubble extends StatelessWidget {
         // "Маска" — перевод показывается ВМЕСТО оригинала, не вместе с
         // ним (решение пользователя): либо/либо, с маленькой
         // иконкой-подсказкой, что это перевод.
-        if (translating) ...[
-          SizedBox(
-            height: 14,
-            width: 14,
-            child: CircularProgressIndicator(
-                strokeWidth: 1.5, color: fg.withValues(alpha: 0.7)),
-          ),
-        ] else if (masked && translation != null) ...[
+        if (masked && translation != null) ...[
           Row(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1656,7 +1679,10 @@ class _Bubble extends StatelessWidget {
           // Text, не SelectableText — своё выделение перехватывало долгое
           // нажатие раньше меню действий (мешало открыть его на
           // Android). Копирование теперь только через меню.
-          Text(captionText, style: textStyle),
+          // Пока идёт перевод — оригинал чуть бледнее, высота не меняется.
+          Opacity(
+              opacity: translating ? 0.6 : 1,
+              child: Text(captionText, style: textStyle)),
       ],
     );
 

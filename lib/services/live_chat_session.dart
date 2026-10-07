@@ -70,7 +70,7 @@ class LiveChatSession {
   bool _closed = false;
   PeerLink? _link;
   int _rtcTries = 0;
-  static const int _maxRtcTries = 2;
+  static const int _maxRtcTries = 4;
 
   /// Пауза после неудачного входа (лимит соединений, отказ RLS): не
   /// долбим канал, пока экран открыт, — просто остаёмся на базе.

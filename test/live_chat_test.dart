@@ -402,13 +402,22 @@ void main() {
     // close()), поэтому закрываются оба фейковых линка.
     _FakeLink.created[0].close();
     _FakeLink.created[1].close();
-    await _until(() => sa.isDirect && sb.isDirect); // 2-я (последняя) попытка удалась
+    await _until(() => sa.isDirect && sb.isDirect); // 2-я попытка удалась
     expect(_FakeLink.created, hasLength(4));
 
-    // Попытки исчерпаны (макс. 2) — следующий разрыв уже не переподключается
-    // по P2P, диалог остаётся на Broadcast.
-    _FakeLink.created[2].close();
-    _FakeLink.created[3].close();
+    // Попыток 4 на диалог (на каждую сторону): рвём ещё дважды — ещё два
+    // успешных переподключения, затем лимит исчерпан.
+    for (var round = 1; round <= 2; round++) {
+      _FakeLink.created[round * 2].close();
+      _FakeLink.created[round * 2 + 1].close();
+      await _until(() => sa.isDirect && sb.isDirect);
+      expect(_FakeLink.created, hasLength(4 + round * 2));
+    }
+
+    // Попытки исчерпаны — следующий разрыв уже не переподключается по P2P,
+    // диалог остаётся на Broadcast.
+    _FakeLink.created[6].close();
+    _FakeLink.created[7].close();
     final m2 = _out('uB', 'через сервер', clientId: 'c2');
     repoA.addMessage(m2);
     await _until(() => sa.peerOnline && !sa.isDirect);
