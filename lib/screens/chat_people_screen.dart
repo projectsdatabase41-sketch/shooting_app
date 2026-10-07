@@ -17,6 +17,27 @@ import '../i18n/i18n.dart';
 /// Друзья: входящие заявки (принять/отклонить), друзья (тап — чат, долгое
 /// нажатие — выделение: в группу, звук, убрать из друзей) и свои заявки,
 /// ждущие ответа. «+» — поиск по нику среди всех участников.
+/// Подтверждение «Убрать из друзей» для одного человека.
+Future<bool> confirmRemoveFriend(BuildContext context, String nickname) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(tr('Убрать {name} из друзей?', {'name': nickname})),
+      content: Text(tr(
+          'Переписка останется, просто он больше не будет у вас в друзьях.')),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(tr('Отмена'))),
+        FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(tr('Убрать'))),
+      ],
+    ),
+  );
+  return ok == true;
+}
+
 class ChatContactsScreen extends StatefulWidget {
   final ChatAuthService auth;
   final ChatMessagesRepository repo;
@@ -354,11 +375,36 @@ class _ChatContactsScreenState extends State<ChatContactsScreen> {
                                           nickname: p.nickname),
                                   title: Text(p.nickname,
                                       overflow: TextOverflow.ellipsis),
-                                  trailing: widget.prefs.mutedFor(p.userId)
-                                      ? const Icon(
-                                          Icons.notifications_off_outlined,
-                                          size: 18)
-                                      : null,
+                                  trailing: selecting
+                                      ? null
+                                      : Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            if (widget.prefs.mutedFor(p.userId))
+                                              const Icon(
+                                                  Icons
+                                                      .notifications_off_outlined,
+                                                  size: 18),
+                                            PopupMenuButton<String>(
+                                              tooltip: tr('Ещё'),
+                                              onSelected: (v) async {
+                                                if (v != 'remove') return;
+                                                if (await confirmRemoveFriend(
+                                                    context, p.nickname)) {
+                                                  await _run(() => widget.auth
+                                                      .removeFriend(p.userId));
+                                                }
+                                              },
+                                              itemBuilder: (_) => [
+                                                PopupMenuItem(
+                                                  value: 'remove',
+                                                  child: Text(
+                                                      tr('Убрать из друзей')),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
                                   onTap: selecting
                                       ? () => _toggle(p.userId)
                                       : () {

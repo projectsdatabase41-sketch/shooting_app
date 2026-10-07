@@ -1,4 +1,5 @@
 import '../logic/friendly_error.dart';
+import 'chat_people_screen.dart' show confirmRemoveFriend;
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -103,6 +104,19 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
       final r = await widget.auth.requestFriend(_contact.id);
       if (mounted)
         setState(() => _friend = r == 'accepted' ? 'accepted' : 'pending');
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(friendlyError(e))));
+    }
+  }
+
+  /// Убрать из друзей (переписка остаётся).
+  Future<void> _removeFriend() async {
+    if (!await confirmRemoveFriend(context, _contact.nickname)) return;
+    try {
+      await widget.auth.removeFriend(_contact.id);
+      if (mounted) setState(() => _friend = null);
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(context)
@@ -310,6 +324,12 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
               'pending' => tr('Заявка в друзья отправлена'),
               _ => _friendLoaded ? tr('Добавить в друзья') : '…',
             }),
+            trailing: _friend == 'accepted'
+                ? TextButton(
+                    onPressed: _removeFriend,
+                    child: Text(tr('Убрать')),
+                  )
+                : null,
             onTap: _friendLoaded && _friend == null ? _addFriend : null,
           ),
       ],

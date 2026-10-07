@@ -10,6 +10,7 @@ import '../widgets/chat_avatar.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/glass_pill.dart';
 import '../i18n/i18n.dart';
+import 'chat_people_screen.dart' show confirmRemoveFriend;
 
 /// "Приватность" — режим "все могут написать" (как раньше) или "только
 /// по заявке" (первое сообщение от незнакомца видно только после
@@ -246,6 +247,24 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
                         leading: ChatAvatar(
                             base64: f.avatarBase64, nickname: f.nickname),
                         title: Text(f.nickname),
+                        trailing: IconButton(
+                          tooltip: tr('Убрать из друзей'),
+                          icon: const Icon(Icons.person_remove_outlined),
+                          onPressed: () async {
+                            if (!await confirmRemoveFriend(context, f.nickname)) {
+                              return;
+                            }
+                            try {
+                              await widget.auth.removeFriend(f.userId);
+                              await _reload();
+                            } catch (e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text(friendlyError(e))));
+                              }
+                            }
+                          },
+                        ),
                       ),
                 ],
               ),
