@@ -345,27 +345,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
           if (_mode == 'local') ...[
             const SizedBox(height: 12),
             LocalAiPanel(settings: _settings),
-          ] else ...[
-            const SizedBox(height: 12),
-            SegmentedButton<String>(
-              segments: [
-                ButtonSegment(value: 'quality', label: Text(tr('Качество'))),
-                ButtonSegment(value: 'speed', label: Text(tr('Скорость'))),
-              ],
-              selected: {_settings.modelPriority},
-              showSelectedIcon: false,
-              onSelectionChanged: (v) =>
-                  setState(() => _settings.modelPriority = v.first),
-            ),
           ],
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(tr('Режим мышления')),
-            subtitle: Text(tr(
-                'Несколько ИИ по очереди: план → решение по шагам → ответ. Точнее на сложных вопросах, но медленнее и тратит больше запросов. По умолчанию — быстрый режим.')),
-            value: _settings.thinkingMode,
-            onChanged: (v) => setState(() => _settings.thinkingMode = v),
-          ),
           if (_ownKey) ...[
             const SizedBox(height: 12),
             TextField(

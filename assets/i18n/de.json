@@ -1234,5 +1234,9 @@
   "Автоперевод включается в карточке собеседника. Переводятся последние 15 сообщений; листаете выше — ещё 20, дальше по 30. Одно сообщение можно перевести вручную: долгое нажатие → «Перевести».": "Die automatische Übersetzung wird in der Kontaktkarte aktiviert. Die letzten 15 Nachrichten werden übersetzt, beim Hochscrollen 20 weitere, dann je 30. Eine einzelne Nachricht lässt sich manuell übersetzen: lange drücken → „Übersetzen“.",
   "Убрать {name} из друзей?": "{name} aus den Freunden entfernen?",
   "Переписка останется, просто он больше не будет у вас в друзьях.": "Der Chat bleibt erhalten, die Person ist nur nicht mehr in deinen Freunden.",
-  "Ещё": "Mehr"
+  "Ещё": "Mehr",
+  "Проверяю": "Prüfe",
+  "Быстрый ответ: короткий простой запрос": "Schnelle Antwort: kurze, einfache Anfrage",
+  "Точный ответ: числа пересчитываются и проверяются": "Genaue Antwort: Zahlen werden nachgerechnet und geprüft",
+  "Три помощника: план, решение, проверка — дольше, но точнее": "Drei Helfer: Plan, Lösung, Prüfung — langsamer, aber genauer"
 }

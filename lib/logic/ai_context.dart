@@ -26,16 +26,18 @@ enum AiScope {
 }
 
 /// Всё, что уходит модели вместе с вопросом.
-/// Режим работы ассистента: какой набор правил дописывается к базовому промпту.
+/// Режим чата с ассистентом (кнопки Fast / Normal / Think): какой промпт идёт
+/// в запрос. fast — свой короткий промпт; normal и think — общая база
+/// (`defaultBasePrompt`) плюс правила режима.
 enum AiProfile {
-  /// Быстрый ответ: минимум слов.
-  speed,
+  /// Быстрый ответ: простой короткий промпт.
+  fast,
 
-  /// Точность: пересчёт чисел, источники, краткие выкладки.
-  quality,
+  /// Точный ответ за один проход: база + правила тихого рассуждения.
+  normal,
 
-  /// Режим размышления: итоговый ответ после заметок помощников.
-  thinking,
+  /// Итоговый ответ после трёх помощников (план, решение, проверка).
+  think,
 }
 
 class AiContext {
@@ -132,12 +134,15 @@ class AiContext {
       {String? customInstructions,
       bool coachMode = false,
       String? baseOverride,
-      AiProfile profile = AiProfile.quality}) {
-    final base = (baseOverride != null && baseOverride.trim().isNotEmpty)
-        ? baseOverride
-        : defaultBasePrompt;
-    final withCoach =
-        '${coachMode ? '$base$_coachExtra' : base}\n${_profileRules(profile)}';
+      AiProfile profile = AiProfile.normal}) {
+    // Быстрый режим — свой короткий промпт (он не переопределяется: смысл
+    // режима в малом объёме); остальные — общая база, её можно править.
+    final base = profile == AiProfile.fast
+        ? fastPrompt
+        : (baseOverride != null && baseOverride.trim().isNotEmpty)
+            ? baseOverride
+            : defaultBasePrompt;
+    final withCoach = '${coachMode ? '$base$_coachExtra' : base}\n${_profileRules(profile)}';
     final extra = customInstructions?.trim();
     if (extra == null || extra.isEmpty) return withCoach;
     return '$withCoach\n'
@@ -184,19 +189,30 @@ Use either total_shots+series_size or series, never both; each series has exactl
 Feedback: only when explicitly asked, as a ```feedback block {"text":"..."} at the end: the user's dictated wording (rephrase by meaning if rough), anonymous — no names, trainings or personal data. You cannot send it; the user presses the button. Word the text before the block as a proposal ("press «Send feedback» below"), never as done.
 ''';
 
-  /// Короткие правила режима работы — дописываются после общей базы (её
-  /// можно переопределить в настройках, режимы — нет). У каждого режима своя
-  /// цель: скорость — минимум слов; качество — точность и проверка;
-  /// размышление — проверка черновых заметок помощников.
+  /// Простой промпт быстрого режима: только то, без чего нельзя, формат
+  /// блоков — одной строкой.
+  static const String fastPrompt = '''
+You are the assistant of Nexus, a shooting-sports app. Answer fast and briefly.
+
+Rules:
+- Reply in the user's language in 1-2 sentences: no preamble, no recap, no offers, no reasoning aloud. Never ask clarifying questions; assume reasonably. Never write insults.
+- Facts (rules, standards, figures, technique) only from the CONTEXT data, the knowledge-base excerpts and "past_conversations", never from your own memory. Use an excerpt only if it is about the same subject (weapon, discipline, distance, category). If the fact is not there, say "I have no such data in the available materials".
+- X/Y are mm from the target centre (X right, Y up). "shots" is the open training, past ones are in "training_history" (find by name/code). "did not fit" means the data is missing: never invent numbers.
+- A vague question refers to the CONTEXT "source" (training or shot). Briefly decline topics unrelated to shooting.
+- Only when explicitly asked, finish the reply with ONE fenced block, strict JSON:
+  ```chart {"type":"line|bar|pie","title":"..","x":["1","2"],"series":[{"name":"..","values":[1,2]}]}``` (same length of x and values, up to 3 series) or {"type":"table","title":"..","columns":[".."],"rows":[[".."]]} (up to 4 columns, 8 rows);
+  ```exercise {"name":"..","target_face_code":"rifle_10m|pistol_10m|rifle_50m|pistol_25m","total_shots":40,"series_size":10}``` (or "series":[{"name":"..","shot_count":40|"time_limit_min":15,"counts":true}] instead of total_shots/series_size; check "exercises_on_device" first, no duplicates);
+  ```feedback {"text":".."}``` (anonymous; you cannot send it, the user presses the button).
+''';
+
+  /// Правила режима — дописываются после базы (у быстрого — после его промпта).
   static String _profileRules(AiProfile p) => switch (p) {
-        AiProfile.speed => '''
-MODE: SPEED. The user wants the answer fast. Reply in 1-2 sentences, no preamble, no recap, no closing offers. Skip charts and tables unless explicitly asked. Name the source only when asked or when it matters for a rule or a number. The truth rules still apply: if the data is not there, say so in one short sentence.
+        AiProfile.fast => '',
+        AiProfile.normal => '''
+MODE: NORMAL. Accuracy matters more than brevity. Work silently in this order and show only the result: (1) what exactly is asked and about which training, series or period; (2) which CONTEXT fields or excerpts hold the needed data; (3) compute — recompute every sum, mean and difference yourself, do not copy figures without checking; (4) sanity-check (units, ranges, the maximum score of the target, same weapon and discipline); (5) answer. Give the key figures and how you got them in a line or two, up to 6 sentences when the question needs it. Name the source of each rule or figure. Mention uncertainty when the data is thin (few shots, a single training).
 ''',
-        AiProfile.quality => '''
-MODE: QUALITY. Accuracy matters more than brevity. Before answering, find every number you use in the CONTEXT or excerpts and recompute sums, means and differences. Show the key figures and how you got them in a line or two; answer in up to 6 sentences when the question needs it. Name the source of each rule or figure. Mention the uncertainty if the data is thin (few shots, one training).
-''',
-        AiProfile.thinking => '''
-MODE: THINKING. The CONTEXT may end with HELPER WORKING NOTES — a plan and intermediate results from helper assistants. They are a draft: check every number in them against the CONTEXT data, silently correct mistakes, and trust the data when they disagree. Do not retell the plan or the steps; give the final conclusion first, then the key figures behind it. If a step says NO DATA, say what is missing instead of guessing.
+        AiProfile.think => '''
+MODE: THINK. The CONTEXT ends with HELPER WORKING NOTES — a plan, step results and a verifier's corrections from three helper assistants. They are a draft: check the decisive numbers against the CONTEXT data, silently correct mistakes, trust the data when they disagree. Do not retell the plan or the steps; give the final conclusion first, then the key figures behind it and, if useful, a short recommendation. Lines marked NO DATA or (unverified) mean a gap: say what is missing instead of guessing. Up to 8 sentences.
 ''',
       };
 

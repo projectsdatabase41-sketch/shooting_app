@@ -17,19 +17,29 @@ void main() {
     }
   });
 
-  test('у каждого режима свои правила; общая база не меняется', () {
-    final speed = AiContext.systemPrompt(profile: AiProfile.speed);
-    final quality = AiContext.systemPrompt(profile: AiProfile.quality);
-    final thinking = AiContext.systemPrompt(profile: AiProfile.thinking);
-    expect(speed, contains('MODE: SPEED'));
-    expect(quality, contains('MODE: QUALITY'));
-    expect(thinking, contains('MODE: THINKING'));
-    for (final t in [speed, quality, thinking]) {
+  test('у каждого режима свой промпт', () {
+    final fast = AiContext.systemPrompt(profile: AiProfile.fast);
+    final normal = AiContext.systemPrompt(profile: AiProfile.normal);
+    final think = AiContext.systemPrompt(profile: AiProfile.think);
+    // Fast — простой короткий промпт, не общая база.
+    expect(fast, contains('Answer fast and briefly'));
+    expect(fast, isNot(contains(AiContext.defaultBasePrompt)));
+    expect(fast.length, lessThan(3000));
+    for (final k in ['```chart', '```exercise', '```feedback', 'rifle_10m', 'exercises_on_device']) {
+      expect(fast, contains(k), reason: 'fast: $k');
+    }
+    // Normal и Think — общая база + свои правила (ровно одни).
+    for (final t in [normal, think]) {
       expect(t, contains(AiContext.defaultBasePrompt));
       expect('MODE:'.allMatches(t).length, 1);
     }
-    expect(thinking, contains('HELPER WORKING NOTES'));
-    expect(speed.length, lessThan(quality.length));
-    expect(AiContext.systemPrompt(), contains('MODE: QUALITY')); // по умолчанию
+    expect(normal, contains('MODE: NORMAL'));
+    expect(think, contains('MODE: THINK'));
+    expect(think, contains('HELPER WORKING NOTES'));
+    expect(fast.length, lessThan(normal.length));
+    expect(AiContext.systemPrompt(), contains('MODE: NORMAL')); // по умолчанию
+    // Правка базы не трогает Fast.
+    expect(AiContext.systemPrompt(profile: AiProfile.fast, baseOverride: 'X' * 50), isNot(contains('XXXXX')));
+    expect(AiContext.systemPrompt(profile: AiProfile.normal, baseOverride: 'X' * 50), contains('XXXXX'));
   });
 }

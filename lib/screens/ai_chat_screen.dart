@@ -615,6 +615,68 @@ class _AiChatBodyState extends State<_AiChatBody> {
     }
   }
 
+  /// Кнопки режима над строкой ввода: Fast / Normal / Think. Тот же
+  /// «стеклянный» стиль, что у остальных кнопок чата (веб и Android);
+  /// выбранный режим залит основным цветом. Пока идёт ответ — недоступны.
+  Widget _modeSelector(AiChatViewModel vm) {
+    final cs = Theme.of(context).colorScheme;
+    final settings = vm.service.settings;
+    final items = <(String, IconData, String, String)>[
+      ('fast', Icons.bolt, 'Fast', tr('Быстрый ответ: короткий простой запрос')),
+      ('normal', Icons.tune, 'Normal', tr('Точный ответ: числа пересчитываются и проверяются')),
+      (
+        'think',
+        Icons.psychology_outlined,
+        'Think',
+        tr('Три помощника: план, решение, проверка — дольше, но точнее')
+      ),
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8, left: 2),
+      child: Row(
+        children: [
+          for (final it in items)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Tooltip(
+                message: it.$4,
+                child: SizedBox(
+                  height: 36,
+                  child: GlassPill(
+                    onTap: vm.busy
+                        ? null
+                        : () => setState(() => settings.chatMode = it.$1),
+                    color: settings.chatMode == it.$1
+                        ? cs.primary.withValues(alpha: 0.85)
+                        : null,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(it.$2,
+                            size: 18,
+                            color: settings.chatMode == it.$1
+                                ? cs.onPrimary
+                                : cs.onSurface),
+                        const SizedBox(width: 6),
+                        Text(it.$3,
+                            style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                                color: settings.chatMode == it.$1
+                                    ? cs.onPrimary
+                                    : cs.onSurface)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildInput(AiChatViewModel vm) {
     // embedded: true — экран живёт внутри PageView мишени, а не под
     // своим Scaffold, и не подвигается под клавиатуру сам (жалоба
@@ -660,6 +722,7 @@ class _AiChatBodyState extends State<_AiChatBody> {
                   ],
                 ),
               ),
+            _modeSelector(vm),
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [

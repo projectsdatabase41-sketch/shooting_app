@@ -64,6 +64,7 @@ class AiSettings {
   static const String keyBaseInstructions = 'ai_base_instructions';
   static const String keyGeminiKey = 'ai_gemini_key';
   static const String keyThinkingMode = 'ai_thinking_mode';
+  static const String keyChatMode = 'ai_chat_mode';
 
   /// Все ключи ИИ — чтобы «сбросить все цвета» их не снесло.
   static const List<String> allKeys = [
@@ -97,15 +98,28 @@ class AiSettings {
   String get chatModelChoice => _read(keyChatModelChoice, fallback: 'auto');
   set chatModelChoice(String v) => _write(keyChatModelChoice, v);
 
-  /// 'quality' (по умолчанию) — цепочка/подбор моделей как раньше, по
-  /// точности. 'speed' — цепочка переворачивается (хвост, который
-  /// меньше рассуждает и быстрее отвечает, идёт первым), а «Подобрать
-  /// модели» просит ИИ ранжировать по скорости ответа, а не по точности
-  /// арифметики (решение пользователя, пункт 13 списка правок).
+  /// Режим чата с ассистентом (кнопки над строкой ввода):
+  /// 'fast' — быстрый ответ и простой промпт; 'normal' (по умолчанию) —
+  /// подробный промпт для точных ответов; 'think' — подробный промпт и три
+  /// помощника (план → решение по шагам → проверка) перед ответом.
+  /// У тех, кто раньше включал «Скорость» или «Режим мышления», режим
+  /// определяется по старым настройкам.
+  String get chatMode {
+    final v = _read(keyChatMode);
+    if (v == 'fast' || v == 'normal' || v == 'think') return v;
+    if (_read(keyThinkingMode) == '1') return 'think';
+    if (_read(keyModelPriority) == 'speed') return 'fast';
+    return 'normal';
+  }
+
+  set chatMode(String v) => _write(keyChatMode, v);
+
+  /// Порядок цепочки моделей: в быстром режиме она переворачивается (хвост,
+  /// который меньше рассуждает и быстрее отвечает, идёт первым), а «Подобрать
+  /// модели» просит ИИ ранжировать по скорости ответа. 'speed' | 'quality'.
   /// ponytail: грубая эвристика (разворот списка), не замер реальной
   /// скорости моделей — апгрейд, если понадобится точнее.
-  String get modelPriority => _read(keyModelPriority, fallback: 'quality');
-  set modelPriority(String v) => _write(keyModelPriority, v);
+  String get modelPriority => chatMode == 'fast' ? 'speed' : 'quality';
 
   /// Пользователь переписал встроенные правила ассистента целиком —
   /// пусто, если правила не трогали (тогда действует дефолтный текст
@@ -113,10 +127,8 @@ class AiSettings {
   /// правок: сначала правила стали видимыми, теперь — редактируемыми.
   /// Формат ```chart/```exercise/```note/```feedback в своём тексте
   /// нужно сохранить самостоятельно — приложение его не проверяет.
-  /// «Режим мышления»: несколько проходов (план → решение по шагам →
-  /// ответ) вместо одного запроса. По умолчанию выключен — быстрый режим.
-  bool get thinkingMode => _read(keyThinkingMode) == '1';
-  set thinkingMode(bool v) => _write(keyThinkingMode, v ? '1' : '0');
+  /// Режим «Think» (три помощника перед ответом).
+  bool get thinkingMode => chatMode == 'think';
 
   /// Ключ Google Gemini для поиска в интернете (aistudio.google.com).
   String get geminiKey => _read(keyGeminiKey);

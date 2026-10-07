@@ -192,10 +192,10 @@ class AiChatViewModel extends ChangeNotifier {
 
     messages.add(AiMessage(fromUser: true, text: trimmed, imageBytes: image));
     _busy = true;
-    // Режим мышления начинается с анализа вопроса, быстрый — сразу с поиска.
-    _phase = service.settings.thinkingMode
-        ? /*tr*/ 'Анализирую'
-        : /*tr*/ 'Ищу информацию';
+    // Режим чата выбирается кнопками Fast / Normal / Think. Think начинается
+    // с анализа вопроса, остальные — сразу с поиска.
+    final mode = service.settings.chatMode;
+    _phase = mode == 'think' ? /*tr*/ 'Анализирую' : /*tr*/ 'Ищу информацию';
     notifyListeners();
 
     try {
@@ -203,10 +203,6 @@ class AiChatViewModel extends ChangeNotifier {
       // По ключевым словам вопроса, а не слепые "последние 20" —
       // решение пользователя (пункт 10, уточнение того же дня):
       // старая версия тянула недавние сводки независимо от темы.
-      if (service.settings.thinkingMode) {
-        // Короткая пауза не нужна: фаза сменится сама, когда дойдём до поиска.
-        _setPhase(/*tr*/ 'Анализирую');
-      }
       var pastSummaries = await memory.search(trimmed);
       // Просьба вспомнить — подмешиваем ПОЛНЫЕ тексты подходящих обменов
       // (до 3000 символов каждый) вместо кратких пересказов тех же записей.
@@ -232,23 +228,22 @@ class AiChatViewModel extends ChangeNotifier {
       final chunks = await knowledge.search(trimmed);
       final books = KnowledgeService.asPromptBlock(chunks,
           tables: knowledge.settings.tables,
-          catalog: await knowledge.catalogTitles());
+          catalog: mode == 'fast' ? const [] : await knowledge.catalogTitles());
       final history = <({String role, String text})>[
         for (final m in _recent())
           (role: m.fromUser ? 'user' : 'assistant', text: m.text),
       ];
       final askedAt = DateTime.now();
       var contextBlock = ctx.buildContextBlock(askedAt);
-      // Размышление нужно не на болтовню и не на совсем короткие вопросы.
-      final thinking = service.settings.thinkingMode &&
+      // Think нужен не на болтовню и не на совсем короткие вопросы.
+      var notes = '';
+      if (mode == 'think' &&
           !KnowledgeService.isSmallTalk(trimmed) &&
-          trimmed.length >= 12;
-      if (thinking) {
-        _setPhase(/*tr*/ 'Думаю');
-        final notes = await _think(trimmed, contextBlock, history);
+          trimmed.length >= 12) {
+        notes = await _think(trimmed, contextBlock, history);
         if (notes.isNotEmpty) {
           contextBlock +=
-              '\n\nHELPER WORKING NOTES (a plan and intermediate calculations — check them and use them for the answer, do not retell them to the user as is):\n$notes';
+              '\n\nHELPER WORKING NOTES (a plan, step results and verifier corrections — check them and use them for the answer, do not retell them to the user as is):\n$notes';
         }
       }
       _setPhase(/*tr*/ 'Формулирую ответ');
@@ -259,16 +254,16 @@ class AiChatViewModel extends ChangeNotifier {
           customInstructions: service.settings.customInstructions,
           coachMode: rawCtx.coachMode,
           baseOverride: service.settings.baseInstructionsOverride,
-          profile: thinking
-              ? AiProfile.thinking
-              : service.settings.modelPriority == 'speed'
-                  ? AiProfile.speed
-                  : AiProfile.quality,
+          profile: notes.isNotEmpty
+              ? AiProfile.think
+              : mode == 'fast'
+                  ? AiProfile.fast
+                  : AiProfile.normal,
         ),
         contextBlock: contextBlock,
         history: history,
         booksExcerpt: books,
-        rotateKeys: service.settings.thinkingMode,
+        rotateKeys: mode == 'think',
       );
       messages.add(AiMessage(
         fromUser: false,
@@ -305,16 +300,18 @@ class AiChatViewModel extends ChangeNotifier {
     }
   }
 
-  /// «Режим мышления» — несколько ИИ-помощников по очереди: первый
-  /// составляет план из 2–4 шагов, второй решает каждый шаг по данным
-  /// контекста, а итоговый ответ потом пишет обычный чатовый запрос,
-  /// видя эти заметки. Любой сбой — тихо возвращаем пусто и отвечаем в
-  /// быстром режиме (качество не должно упасть из-за лишнего шага).
+  /// Режим Think — три помощника по очереди: планировщик составляет шаги,
+  /// решатель считает каждый шаг по данным контекста, проверяющий сверяет
+  /// числа и выводы с данными. Итоговый ответ потом пишет обычный чатовый
+  /// запрос, видя проверенные заметки. Сбой планировщика или решателя —
+  /// тихо возвращаем пусто (ответит как Normal); сбой проверяющего — остаются
+  /// заметки решателя.
   /// ponytail: шаги идут последовательно, не параллельно — бесплатные
   /// ключи не любят пачки запросов.
   Future<String> _think(String question, String contextBlock,
       List<({String role, String text})> history) async {
     try {
+      _setPhase(/*tr*/ 'Анализирую');
       final plan = await service.ask(
         systemPrompt:
             'You are a planner. Split the user question about shooting into 1-4 short analysis steps, each one a calculation or comparison that can be done from the CONTEXT data or the excerpts (a simple lookup is ONE step). Put data gathering first, comparison or conclusion last. Answer with the steps only, one per line, no numbering and no explanations. Write the steps in the language of the question.',
@@ -329,6 +326,7 @@ class AiChatViewModel extends ChangeNotifier {
           .take(4)
           .toList();
       if (steps.isEmpty) return '';
+      _setPhase(/*tr*/ 'Думаю');
       final notes =
           StringBuffer('Plan:\n${steps.map((s) => '- $s').join('\n')}\n');
       for (final step in steps) {
@@ -341,6 +339,17 @@ class AiChatViewModel extends ChangeNotifier {
         );
         notes.writeln('Step "$step": ${r.text.trim()}');
       }
+      _setPhase(/*tr*/ 'Проверяю');
+      try {
+        final v = await service.ask(
+          systemPrompt:
+              'You are a strict verifier. Check every number and conclusion in the NOTES against the CONTEXT data. Recompute sums, means and differences. Output the corrected NOTES in the same format (the Plan line and the Step lines). If a step is right, copy it unchanged; if wrong, fix it; if it cannot be verified from the data, append "(unverified)". Add no new analysis and no comments. Write in the language of the question.',
+          contextBlock: '$contextBlock\n\nNOTES:\n$notes',
+          history: [(role: 'user', text: 'Question: $question')],
+          rotateKeys: true,
+        );
+        if (v.text.trim().length > 20) return v.text.trim();
+      } catch (_) {}
       return notes.toString();
     } catch (_) {
       return '';
