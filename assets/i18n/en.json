@@ -1228,5 +1228,6 @@
   "файл не является PDF": "the file is not a PDF",
   "Файл заблокирован: {reason}": "File blocked: {reason}",
   "Файл «{name}» заблокирован: {reason}": "File “{name}” blocked: {reason}",
-  "Файл «{name}» не отправлен: {reason}": "File “{name}” was not sent: {reason}"
+  "Файл «{name}» не отправлен: {reason}": "File “{name}” was not sent: {reason}",
+  "Подпись": "Caption"
 }

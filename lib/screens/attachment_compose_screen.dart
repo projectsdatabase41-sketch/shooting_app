@@ -110,7 +110,7 @@ class _AttachmentComposeScreenState extends State<AttachmentComposeScreen> {
                       minLines: 1,
                       maxLines: 4,
                       autofocus: widget.isImage,
-                      decoration: InputDecoration(hintText: tr('Подпись (необязательно)'), isDense: true),
+                      decoration: InputDecoration(hintText: tr('Подпись'), isDense: true),
                     ),
                   ),
                   const SizedBox(width: 8),
