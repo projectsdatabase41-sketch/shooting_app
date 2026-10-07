@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show File;
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 
+import '../logic/attachment_guard.dart';
 import '../logic/chat_media_utils.dart';
 import '../models/chat_contact.dart';
 import '../models/chat_message.dart';
@@ -585,6 +588,14 @@ class ChatSyncService {
     final fileId = message.driveFileId;
     if (fileId == null) throw Exception(tr('Нечего скачивать'));
     await drive.download(fileId: fileId, destPath: destPath, onProgress: onProgress);
+    final verdict = await AttachmentGuard.checkFile(destPath, message.attachmentName);
+    if (!verdict.ok) {
+      try {
+        await File(destPath).delete();
+      } catch (_) {}
+      unawaited(drive.deleteFile(fileId));
+      throw Exception(tr('Файл заблокирован: {reason}', {'reason': verdict.reason}));
+    }
     repo.updateAttachmentLocalPath(message.id, destPath);
     unawaited(drive.deleteFile(fileId));
   }
@@ -723,6 +734,7 @@ class ChatSyncService {
           orElse: () => ChatMessageType.text,
         );
         String? attachmentBase64;
+        String? blockedNote;
         final path = row['attachment_path'] as String?;
         // drive_file_id — большое вложение: строка приезжает сразу, а
         // сам файл получатель скачивает позже вручную (кнопка
@@ -732,7 +744,15 @@ class ChatSyncService {
         if (type != ChatMessageType.text && path != null) {
           final bytes = await _downloadAttachment(path, token, client);
           if (bytes == null) continue; // не скачалось — попробуем в следующий опрос, строку не трогаем
-          attachmentBase64 = base64Encode(bytes);
+          // Защитный фильтр: опасный файл не сохраняем, вместо него — пометка.
+          final verdict = AttachmentGuard.check(
+              Uint8List.fromList(bytes), '${row['attachment_name'] ?? 'file'}');
+          if (!verdict.ok) {
+            blockedNote = tr('Файл «{name}» заблокирован: {reason}',
+                {'name': row['attachment_name'] ?? 'file', 'reason': verdict.reason});
+          } else {
+            attachmentBase64 = base64Encode(bytes);
+          }
           // ponytail: файл группы нужен всем участникам — не удаляем его после
           // первого получателя; чистка хранилища по сроку — когда начнёт копиться.
           if (groupId == null) await _deleteAttachment(path, token, client);
@@ -750,13 +770,15 @@ class ChatSyncService {
           contactId: threadId,
           senderId: groupId == null ? null : senderId,
           direction: ChatMessageDirection.incoming,
-          text: row['text'] as String?,
+          text: blockedNote != null
+              ? '⚠️ $blockedNote'
+              : row['text'] as String?,
           status: ChatMessageStatus.delivered,
-          type: type,
+          type: blockedNote == null ? type : ChatMessageType.text,
           attachmentBase64: attachmentBase64,
-          attachmentName: row['attachment_name'] as String?,
-          attachmentMime: row['attachment_mime'] as String?,
-          attachmentSize: (row['attachment_size'] as num?)?.toInt(),
+          attachmentName: blockedNote == null ? row['attachment_name'] as String? : null,
+          attachmentMime: blockedNote == null ? row['attachment_mime'] as String? : null,
+          attachmentSize: blockedNote == null ? (row['attachment_size'] as num?)?.toInt() : null,
           driveFileId: driveFileId,
           replyToClientMessageId: row['reply_to_client_message_id'] as String?,
           replyToPreview: row['reply_to_preview'] as String?,

@@ -25,6 +25,9 @@
          не переспрашивает. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
 
+    <!-- Сохранение принятых файлов в папку Nexus (Android 9 и ниже; новее — через MediaStore без разрешений). -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>
+
     <application
         android:label="Nexus"
         android:name="${applicationName}"

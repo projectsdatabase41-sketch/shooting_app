@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/target_color_scheme.dart' show TargetColorScheme;
 import 'local_db_service.dart';
+import 'message_sound.dart';
 
 /// Язык, на который переводить сообщения — список для экрана настроек,
 /// системный язык устройства всегда показывается первым (см.
@@ -61,7 +62,38 @@ class ChatBubblePreset {
 /// как и все остальные настройки приложения, в `project_settings`.
 class ChatPreferences extends ChangeNotifier {
   final LocalDbService db;
-  ChatPreferences(this.db);
+  ChatPreferences(this.db) {
+    _applySound();
+  }
+
+  /// Звук нового сообщения (в открытом чате): включён ли, мелодия, громкость 0..1.
+  bool get soundEnabled => _read('chat_sound_enabled') != '0';
+  String get soundName {
+    final v = _read('chat_sound_name');
+    return MessageSound.melodies.any((m) => m.$1 == v) ? v : MessageSound.melodies.first.$1;
+  }
+
+  double get soundVolume => (double.tryParse(_read('chat_sound_volume')) ?? 0.6).clamp(0.0, 1.0);
+
+  set soundEnabled(bool v) {
+    _write('chat_sound_enabled', v ? '1' : '0');
+    _applySound();
+    notifyListeners();
+  }
+
+  set soundName(String v) {
+    _write('chat_sound_name', v);
+    _applySound();
+    notifyListeners();
+  }
+
+  set soundVolume(double v) {
+    _write('chat_sound_volume', v.toStringAsFixed(2));
+    _applySound();
+    notifyListeners();
+  }
+
+  void _applySound() => MessageSound.apply(enabled: soundEnabled, name: soundName, volume: soundVolume);
 
   static const List<ChatBubblePreset> presets = [
     ChatBubblePreset(

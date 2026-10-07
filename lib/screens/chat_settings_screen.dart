@@ -8,6 +8,7 @@ import '../services/chat_sync_service.dart';
 import '../services/chat_translation_service.dart';
 import '../services/push_service.dart';
 import '../services/local_db_service.dart';
+import '../services/message_sound.dart';
 import '../widgets/glass_pill.dart';
 import 'chat_appearance_screen.dart';
 import 'chat_privacy_screen.dart';
@@ -260,6 +261,51 @@ class _ChatNotificationSettingsScreenState
     }
   }
 
+  late final ChatPreferences _sound = ChatPreferences(widget.auth.db);
+
+  /// Звук нового сообщения в открытом чате: переключатель, громкость, мелодии.
+  List<Widget> _soundTiles() => [
+        SwitchListTile(
+          secondary: const Icon(Icons.volume_up_outlined),
+          title: Text(tr('Звук нового сообщения')),
+          subtitle: Text(tr('Когда сообщение приходит в открытый чат')),
+          value: _sound.soundEnabled,
+          onChanged: (v) => setState(() => _sound.soundEnabled = v),
+        ),
+        if (_sound.soundEnabled) ...[
+          ListTile(
+            leading: const Icon(Icons.graphic_eq),
+            title: Text(tr('Громкость')),
+            subtitle: Slider(
+              value: _sound.soundVolume,
+              onChanged: (v) => setState(() => _sound.soundVolume = v),
+              onChangeEnd: (v) => MessageSound.preview(_sound.soundName, v),
+            ),
+          ),
+          RadioGroup<String>(
+            groupValue: _sound.soundName,
+            onChanged: (v) {
+              if (v == null) return;
+              setState(() => _sound.soundName = v);
+              MessageSound.preview(v, _sound.soundVolume);
+            },
+            child: Column(children: [
+              for (final m in MessageSound.melodies)
+                RadioListTile<String>(
+                  value: m.$1,
+                  title: Text(tr(m.$2)),
+                  secondary: IconButton(
+                    icon: const Icon(Icons.play_arrow),
+                    onPressed: () =>
+                        MessageSound.preview(m.$1, _sound.soundVolume),
+                  ),
+                ),
+            ]),
+          ),
+          const Divider(),
+        ],
+      ];
+
   @override
   Widget build(BuildContext context) {
     final auth = widget.auth;
@@ -284,6 +330,7 @@ class _ChatNotificationSettingsScreenState
             onChanged: (v) =>
                 _apply(() => auth.updatePersonalPushMode(v ? 'all' : 'none')),
           ),
+          ..._soundTiles(),
           ListTile(
             leading: const Icon(Icons.notification_add_outlined),
             title: Text(tr('Включить push на этом устройстве')),

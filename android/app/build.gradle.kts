@@ -56,6 +56,8 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName(if (releaseKeystore != null) "release" else "debug")
+            // Правила для gson (его использует media_store_plus — сохранение файлов чата).
+            proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro")
         }
     }
 }

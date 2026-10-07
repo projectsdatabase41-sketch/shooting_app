@@ -145,6 +145,10 @@ class LocalDbService {
         // Диалоги со включённым автопереводом (id через запятую).
         'chat_auto_translate_ids': 'TEXT',
         'chat_photo_download': 'TEXT',
+        // Звук нового сообщения в открытом чате: вкл/выкл, мелодия, громкость.
+        'chat_sound_enabled': 'TEXT',
+        'chat_sound_name': 'TEXT',
+        'chat_sound_volume': 'TEXT',
       },
       // На части устройств chat_local_messages создалась ещё САМОЙ
       // первой версией чата (только текст, без вложений) — CREATE

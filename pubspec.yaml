@@ -83,6 +83,8 @@ dependencies:
   # тот же принцип, внешних зависимостей на сайте не прибавляем).
   pdfrx: ^1.3.5
   audioplayers: ^6.7.1
+  gal: ^2.3.3
+  media_store_plus: ^0.1.3
 
 dev_dependencies:
   flutter_test:

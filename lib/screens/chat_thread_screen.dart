@@ -14,7 +14,6 @@ import 'package:provider/provider.dart';
 import '../logic/adaptive_poller.dart';
 import '../logic/ai_context.dart';
 import '../logic/chat_media_utils.dart';
-import '../logic/save_file.dart';
 import '../models/chat_contact.dart';
 import '../models/chat_message.dart';
 import '../services/ai_service.dart';
@@ -24,6 +23,8 @@ import '../services/chat_auth_service.dart';
 import '../services/chat_messages_repository.dart';
 import '../services/chat_preferences.dart';
 import '../services/chat_presence.dart';
+import '../logic/attachment_guard.dart';
+import '../logic/save_to_app_folder.dart';
 import '../services/call_service.dart';
 import '../services/message_sound.dart';
 import '../services/web_push_token.dart';
@@ -812,22 +813,108 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           .showSnackBar(SnackBar(content: Text(tr('Скопировано'))));
   }
 
-  /// Переводит и сразу показывает перевод ВМЕСТО оригинала (та же
-  /// "маска", что и у автоперевода) — иначе при включённом "по кнопке"
-  /// перевод бы тихо загрузился в память и никак не отобразился.
+  /// Кнопка «Перевести» — переключатель: перевод показывается под оригиналом;
+  /// нажатие на уже включённый перевод выключает его. Выбор не сбрасывается,
+  /// чтобы было видно состояние кнопки (активна — перевод включён).
   Future<void> _translateSelected() async {
-    final ids = Set<String>.from(_selected);
-    setState(() => _selected.clear());
+    final msgs = [
+      for (final m in _messages)
+        if (_selected.contains(m.id) && m.text != null && m.text!.isNotEmpty) m
+    ];
+    if (msgs.isEmpty) return;
+    if (_selectionTranslated) {
+      setState(() {
+        for (final m in msgs) {
+          _maskOverride[m.id] = false;
+        }
+      });
+      return;
+    }
     await Future.wait([
-      for (final m in _messages.where((m) => ids.contains(m.id)))
-        if (m.text != null && m.text!.isNotEmpty) _translate(m),
+      for (final m in msgs)
+        if (!_translations.containsKey(m.id)) _translate(m),
     ]);
     if (!mounted) return;
     setState(() {
-      for (final id in ids) {
-        if (_translations.containsKey(id)) _maskOverride[id] = true;
+      for (final m in msgs) {
+        _maskOverride[m.id] = true;
       }
     });
+  }
+
+  /// Перевод включён у всех выбранных сообщений (состояние кнопки).
+  bool get _selectionTranslated {
+    final msgs = [
+      for (final m in _messages)
+        if (_selected.contains(m.id) && m.text != null && m.text!.isNotEmpty) m
+    ];
+    return msgs.isNotEmpty &&
+        msgs.every((m) => _isMasked(m) && _translations.containsKey(m.id));
+  }
+
+  /// Кнопки действий над выбранным: вертикальный столбик круглых кнопок справа,
+  /// выезжающих сверху вниз; тень едет вместе с кнопкой и падает вверх и вправо.
+  Widget _selectionActions(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final single = _singleSelectedMessage();
+    final items = <({IconData icon, String tip, VoidCallback onTap, bool active, bool danger})>[
+      (icon: Icons.copy_outlined, tip: tr('Копировать'), onTap: _copySelected, active: false, danger: false),
+      (icon: Icons.translate_outlined, tip: tr('Перевести'), onTap: _translateSelected, active: _selectionTranslated, danger: false),
+      if (single != null) ...[
+        (icon: Icons.reply_outlined, tip: tr('Ответить'), onTap: _replySelected, active: false, danger: false),
+        if (single.direction == ChatMessageDirection.outgoing && single.type == ChatMessageType.text)
+          (icon: Icons.edit_outlined, tip: tr('Редактировать'), onTap: _editSelected, active: false, danger: false),
+        if (single.direction == ChatMessageDirection.outgoing && single.status == ChatMessageStatus.error)
+          (icon: Icons.refresh, tip: tr('Отправить ещё раз'), onTap: _retrySelected, active: false, danger: false),
+      ],
+      (icon: Icons.delete_outline, tip: tr('Удалить'), onTap: _deleteSelected, active: false, danger: true),
+    ];
+    return Positioned(
+      right: 12,
+      top: MediaQuery.paddingOf(context).top + kToolbarHeight + 12,
+      child: Column(
+        key: const ValueKey('selection-actions'),
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final (i, it) in items.indexed)
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: 1),
+              duration: Duration(milliseconds: 220 + i * 60),
+              curve: Curves.easeOutCubic,
+              builder: (_, v, child) => Opacity(
+                opacity: v.clamp(0.0, 1.0),
+                // Кнопка и её тень — один виджет: тень выезжает вместе с ней.
+                child: Transform.translate(offset: Offset(0, -28 * (1 - v)), child: child),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.38),
+                          blurRadius: 10,
+                          offset: const Offset(4, -3)),
+                    ],
+                  ),
+                  child: GlassCircleButton(
+                    tooltip: it.tip,
+                    onTap: it.onTap,
+                    color: it.active ? cs.primary.withValues(alpha: 0.9) : null,
+                    icon: Icon(it.icon,
+                        color: it.active
+                            ? cs.onPrimary
+                            : it.danger
+                                ? cs.error
+                                : null),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   ChatMessage? _singleSelectedMessage() {
@@ -946,6 +1033,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final picked = await ChatMediaUtils.pickAttachment(context);
     if (!mounted || picked == null) return;
     final bytes = picked.bytes;
+    final verdict = AttachmentGuard.check(bytes, picked.name);
+    if (!verdict.ok) {
+      _showBlocked(picked.name, verdict.reason);
+      return;
+    }
     if (bytes.length > ChatMediaUtils.maxAttachmentBytes) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -1001,6 +1093,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
+  void _showBlocked(String name, String? reason) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(tr('Файл «{name}» не отправлен: {reason}',
+          {'name': name, 'reason': reason ?? ''})),
+      duration: const Duration(seconds: 6),
+    ));
+  }
+
   /// Большой файл (видео, архив...) — минуя Storage (лимит 50 МБ), через
   /// Google Drive (см. `ChatDriveService`). Долгое нажатие на скрепку, а
   /// не отдельная видимая кнопка (пока это редкий случай) — без
@@ -1009,6 +1110,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<void> _attachLarge() async {
     final picked = await ChatMediaUtils.pickLargeFile();
     if (!mounted || picked == null) return;
+    final verdict = await AttachmentGuard.checkFile(picked.path, picked.name);
+    if (!verdict.ok) {
+      _showBlocked(picked.name, verdict.reason);
+      return;
+    }
 
     setState(() => _sending = true);
     try {
@@ -1310,38 +1416,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                       icon: const Icon(Icons.close),
                       onPressed: () => setState(() => _selected.clear())),
                   title: Text('${_selected.length}'),
-                  actions: [
-                    IconButton(
-                        icon: const Icon(Icons.copy_outlined),
-                        tooltip: tr('Копировать'),
-                        onPressed: _copySelected),
-                    IconButton(
-                        icon: const Icon(Icons.translate_outlined),
-                        tooltip: tr('Перевести'),
-                        onPressed: _translateSelected),
-                    if (_singleSelectedMessage() case final single?) ...[
-                      IconButton(
-                          icon: const Icon(Icons.reply_outlined),
-                          tooltip: tr('Ответить'),
-                          onPressed: _replySelected),
-                      if (single.direction == ChatMessageDirection.outgoing &&
-                          single.type == ChatMessageType.text)
-                        IconButton(
-                            icon: const Icon(Icons.edit_outlined),
-                            tooltip: tr('Редактировать'),
-                            onPressed: _editSelected),
-                      if (single.direction == ChatMessageDirection.outgoing &&
-                          single.status == ChatMessageStatus.error)
-                        IconButton(
-                            icon: const Icon(Icons.refresh),
-                            tooltip: tr('Отправить ещё раз'),
-                            onPressed: _retrySelected),
-                    ],
-                    IconButton(
-                        icon: const Icon(Icons.delete_outline),
-                        tooltip: tr('Удалить'),
-                        onPressed: _deleteSelected),
-                  ],
                 )
               : _glassHeader(context),
           // resizeToAvoidBottomInset выключен намеренно — Scaffold сам иногда
@@ -1408,6 +1482,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                 : const SizedBox.shrink(),
                           ),
                         ),
+                        if (_selecting) _selectionActions(context),
                         Positioned(
                             left: 0,
                             right: 0,
@@ -1557,6 +1632,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ),
     );
   }
+}
+
+void _toastSaved(BuildContext context, bool ok) {
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(ok
+          ? tr('Сохранено в папку Nexus')
+          : tr('Не удалось сохранить файл'))));
 }
 
 class _Bubble extends StatelessWidget {
@@ -1732,9 +1814,13 @@ class _Bubble extends StatelessWidget {
                 if (!mine) ...[
                   const SizedBox(width: 6),
                   InkWell(
-                    onTap: () => saveBytes(
-                        base64Decode(message.attachmentBase64!),
-                        message.attachmentName ?? 'file'),
+                    onTap: () async {
+                      final ok = await saveToAppFolder(
+                          base64Decode(message.attachmentBase64!),
+                          message.attachmentName ?? 'file',
+                          message.attachmentMime);
+                      if (context.mounted) _toastSaved(context, ok);
+                    },
                     child: Tooltip(
                         message: tr('Скачать'),
                         child:
@@ -1749,8 +1835,13 @@ class _Bubble extends StatelessWidget {
                 // делимся по пути на диске.
                 const SizedBox(width: 4),
                 InkWell(
-                  onTap: () => ChatMediaUtils.shareAttachmentPath(
-                      message.attachmentLocalPath!, message.attachmentMime),
+                  onTap: () async {
+                    final ok = await saveFileToAppFolder(
+                        message.attachmentLocalPath!,
+                        message.attachmentName ?? 'file',
+                        message.attachmentMime);
+                    if (context.mounted) _toastSaved(context, ok);
+                  },
                   child: Icon(Icons.folder_open_outlined, color: fg, size: 20),
                 ),
               ] else if (!mine &&
@@ -1803,10 +1894,23 @@ class _Bubble extends StatelessWidget {
             ),
           ],
         ],
-        // "Маска" — перевод показывается ВМЕСТО оригинала, не вместе с
-        // ним (решение пользователя): либо/либо, с маленькой
-        // иконкой-подсказкой, что это перевод.
-        if (masked && translation != null) ...[
+        // Перевод показывается ПОД оригиналом (если он отличается от него:
+        // совпавший текст — тот же язык — не дублируем).
+        if (hasCaption)
+          // Text, не SelectableText — своё выделение перехватывало долгое
+          // нажатие раньше меню действий (мешало открыть его на
+          // Android). Копирование теперь только через меню.
+          // Пока идёт перевод — оригинал чуть бледнее, высота не меняется.
+          Opacity(
+              opacity: translating ? 0.6 : 1,
+              child: Text(captionText, style: textStyle)),
+        if (masked &&
+            translation != null &&
+            translation!.trim().isNotEmpty &&
+            translation!.trim() != captionText.trim()) ...[
+          const SizedBox(height: 4),
+          Divider(height: 1, thickness: 0.6, color: fg.withValues(alpha: 0.25)),
+          const SizedBox(height: 4),
           Row(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1821,14 +1925,7 @@ class _Bubble extends StatelessWidget {
               ),
             ],
           ),
-        ] else if (hasCaption)
-          // Text, не SelectableText — своё выделение перехватывало долгое
-          // нажатие раньше меню действий (мешало открыть его на
-          // Android). Копирование теперь только через меню.
-          // Пока идёт перевод — оригинал чуть бледнее, высота не меняется.
-          Opacity(
-              opacity: translating ? 0.6 : 1,
-              child: Text(captionText, style: textStyle)),
+        ],
       ],
     );
 
@@ -1877,12 +1974,11 @@ class _Bubble extends StatelessWidget {
                           message.attachmentMime)),
                 if (canDownload)
                   roundAction(Icons.download_outlined, tr('Скачать'), () async {
-                    final ok = await saveBytes(
-                        base64Decode(message.attachmentBase64!), name);
-                    if (ok && context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(tr('Сохранено'))));
-                    }
+                    final ok = await saveToAppFolder(
+                        base64Decode(message.attachmentBase64!),
+                        name,
+                        message.attachmentMime);
+                    if (context.mounted) _toastSaved(context, ok);
                   }),
               ],
             ),
