@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../i18n/i18n.dart';
+import '../services/chat_auth_service.dart';
 import '../services/chat_messages_repository.dart';
 import '../state/app_data_store.dart';
 import '../state/home_tabs_view_model.dart';
@@ -40,9 +41,13 @@ class _TabIconState extends State<TabIcon> {
   Widget build(BuildContext context) {
     final icon = Icon(widget.icon, color: widget.color, size: widget.size);
     if (widget.id != 'messenger') return icon;
-    return ValueListenableBuilder<int>(
-      valueListenable: ChatMessagesRepository.totalUnread,
-      builder: (_, n, __) => Stack(
+    return ListenableBuilder(
+      listenable: Listenable.merge(
+          [ChatMessagesRepository.totalUnread, ChatAuthService.pendingFriends]),
+      builder: (_, __) {
+        final n = ChatMessagesRepository.totalUnread.value +
+            ChatAuthService.pendingFriends.value;
+        return Stack(
         clipBehavior: Clip.none,
         children: [
           icon,
@@ -61,7 +66,8 @@ class _TabIconState extends State<TabIcon> {
               ),
             ),
         ],
-      ),
+        );
+      },
     );
   }
 }

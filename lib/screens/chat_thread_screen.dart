@@ -24,6 +24,7 @@ import '../services/chat_messages_repository.dart';
 import '../services/chat_preferences.dart';
 import '../services/chat_presence.dart';
 import '../logic/attachment_guard.dart';
+import '../widgets/reaction_bar.dart';
 import '../logic/save_to_app_folder.dart';
 import '../services/call_service.dart';
 import '../services/message_sound.dart';
@@ -119,43 +120,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   /// client_message_id -> (user_id -> смайлик).
   Map<String, Map<String, String>> _reactions = {};
 
-  static const _quickReactions = [
-    '👍',
-    '❤️',
-    '😂',
-    '😮',
-    '😢',
-    '🙏',
-    '🔥',
-    '👎'
-  ];
-  static const _moreReactions = [
-    '🎯',
-    '💪',
-    '👏',
-    '🙌',
-    '😊',
-    '😁',
-    '😅',
-    '🤔',
-    '😎',
-    '🥳',
-    '😴',
-    '😡',
-    '🤝',
-    '✅',
-    '❌',
-    '⭐',
-    '🏆',
-    '👌',
-    '🤞',
-    '💯',
-    '😬',
-    '🫡',
-    '😇',
-    '🤩',
-  ];
-
   Future<void> _react(ChatMessage m, String emoji) async {
     final mine = _reactions[m.clientMessageId]?[widget.auth.userId];
     final next = mine == emoji ? null : emoji; // тот же смайлик — снять
@@ -168,46 +132,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       }
     });
     await widget.sync.react(m, next);
-  }
-
-  /// Долгое нажатие: список реакций (и само сообщение выделяется — действия
-  /// в шапке остаются доступны).
-  Future<void> _pickReaction(ChatMessage m) async {
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) {
-        Widget cell(String e) => InkResponse(
-              onTap: () => Navigator.pop(ctx, e),
-              radius: 24,
-              child: Padding(
-                padding: const EdgeInsets.all(8),
-                child: Text(e, style: const TextStyle(fontSize: 28)),
-              ),
-            );
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Wrap(
-                    alignment: WrapAlignment.center,
-                    children: [for (final e in _quickReactions) cell(e)]),
-                const Divider(),
-                Wrap(
-                    alignment: WrapAlignment.center,
-                    children: [for (final e in _moreReactions) cell(e)]),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-    if (picked != null && mounted) {
-      setState(() => _selected.clear());
-      _react(m, picked);
-    }
   }
 
   Widget _reactionChips(ChatMessage m) {
@@ -1594,15 +1518,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         ),
         child: GestureDetector(
           onTap: _selecting ? () => _toggleSelect(m.id) : null,
-          onLongPress: () {
-            _toggleSelect(m.id);
-            if (_selected.length != 1) return;
-            _pickReaction(m);
-          },
+          onLongPress: () => _toggleSelect(m.id),
           child: Container(
-            color: selected
-                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)
-                : null,
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: selected
+                  ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)
+                  : null,
+              borderRadius: BorderRadius.circular(16),
+            ),
             child: Column(
               crossAxisAlignment:
                   mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
@@ -1625,6 +1549,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   onDownloadLarge: () => _downloadLarge(m),
                 ),
                 _reactionChips(m),
+                // Выбрано одно сообщение — панель реакций прямо под ним.
+                if (_selected.length == 1 && selected)
+                  ReactionBar(
+                    key: ValueKey('react-${m.id}'),
+                    recent: widget.prefs.recentReactions,
+                    mine: _reactions[m.clientMessageId]?[widget.auth.userId],
+                    onPick: (e) {
+                      widget.prefs.addRecentReaction(e);
+                      setState(() => _selected.clear());
+                      _react(m, e);
+                    },
+                  ),
               ],
             ),
           ),

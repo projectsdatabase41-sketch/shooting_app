@@ -1229,5 +1229,7 @@
   "Файл заблокирован: {reason}": "File blocked: {reason}",
   "Файл «{name}» заблокирован: {reason}": "File “{name}” blocked: {reason}",
   "Файл «{name}» не отправлен: {reason}": "File “{name}” was not sent: {reason}",
-  "Подпись": "Caption"
+  "Подпись": "Caption",
+  "SB — через базу сервера мессенджера": "SB — via the messenger server database",
+  "Автоперевод включается в карточке собеседника. Переводятся последние 15 сообщений; листаете выше — ещё 20, дальше по 30. Одно сообщение можно перевести вручную: долгое нажатие → «Перевести».": "Auto-translation is turned on in the contact card. The last 15 messages are translated; scroll up for 20 more, then 30. A single message can be translated by hand: long press → “Translate”."
 }

@@ -304,7 +304,8 @@ class PushService {
       if (id.isNotEmpty) pushTaskTapHandler?.call(id);
       return;
     }
-    if (type == 'global') {
+    if (type == 'global' || type == 'friend') {
+      // Заявка в друзья: открываем мессенджер — красный кружок у меню ведёт к «Друзьям».
       pushChatTapHandler?.call(const PushChatTarget.global());
     } else {
       final contactId = message.data['contact_id'];

@@ -165,6 +165,33 @@ Deno.serve(async (req: Request) => {
 
   const payload = await req.json();
   const row = payload.record;
+
+  // Заявка в друзья (триггер chat_friend_push, sql/chat-friend-push.sql):
+  // получателю — push «хочет добавить вас в друзья».
+  if (payload.table === 'chat_friends') {
+    const requester = row?.requester_id as string | undefined;
+    const addressee = row?.addressee_id as string | undefined;
+    if (!requester || !addressee) return new Response('ok');
+    const HF = { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` };
+    const [nickRes, modeRes, tokRes] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/chat_profiles?select=nickname&user_id=eq.${requester}`, { headers: HF }),
+      fetch(`${SUPABASE_URL}/rest/v1/chat_profiles?select=personal_push_mode&user_id=eq.${addressee}`, { headers: HF }),
+      fetch(`${SUPABASE_URL}/rest/v1/chat_push_tokens?select=token&user_id=eq.${addressee}`, { headers: HF }),
+    ]);
+    const nick = ((await nickRes.json()) as { nickname?: string }[])[0]?.nickname;
+    const mode = ((await modeRes.json()) as { personal_push_mode?: string }[])[0]?.personal_push_mode ?? 'all';
+    if (mode === 'none') return new Response('ok');
+    const toks = ((await tokRes.json()) as { token: string }[]).map((t) => t.token);
+    if (toks.length === 0) return new Response('ok');
+    return resultsBody(
+      await Promise.all(
+        toks.map((t) =>
+          sendPush(t, nick ?? 'Заявка в друзья', 'хочет добавить вас в друзья', { type: 'friend', contact_id: requester })
+        ),
+      ),
+    );
+  }
+
   // Общий чат убран — только личные сообщения (chat_messages).
   if (!row || payload.table === 'chat_global_messages') return new Response('ok');
 

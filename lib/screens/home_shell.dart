@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../models/home_tab_specs.dart';
 import '../models/training_session.dart';
 import '../services/custom_services_repository.dart';
+import '../services/chat_auth_service.dart';
+import '../services/chat_background_poll.dart';
 import '../services/coach_access_service.dart';
 import '../services/modules_settings.dart';
 import '../state/app_data_store.dart';
@@ -52,6 +54,7 @@ class _HomeShellState extends State<HomeShell> {
   late final HomeTabsViewModel _coachTabs;
   late final CustomServicesRepository _services;
   late final PersonalizationViewModel _personalization;
+  ChatBackgroundPoll? _chatPoll;
 
   /// Вкладки недоделанных функций — скрыты от обычных пользователей,
   /// пока не включён "режим разработчика". Не про удаление функции,
@@ -74,10 +77,28 @@ class _HomeShellState extends State<HomeShell> {
     _services.addListener(_onServicesChanged);
     _personalization.addListener(_onServicesChanged);
     _onServicesChanged(); // сервисы, добавленные в прошлой сессии
+    _chatPoll = ChatBackgroundPoll(db, shouldPoll: () {
+      if (!ModulesSettings.isOn(db, AppModule.messenger) || ChatHomeScreen.isOpen) return false;
+      final coach = context.read<AppDataStore>().workMode == WorkMode.coach;
+      return (coach ? _coachTab : _athleteTab) != 'messenger';
+    });
+    _syncChatPoll();
+    ModulesSettings.revision.addListener(_syncChatPoll);
+  }
+
+  /// Фоновый опрос нужен только при включённом мессенджере и входе в него
+  /// (новые установки и тесты таймеров не создают).
+  void _syncChatPoll() {
+    final db = context.read<AppDataStore>().db;
+    final on = ModulesSettings.isOn(db, AppModule.messenger) &&
+        ChatAuthService(db).isSignedIn;
+    on ? _chatPoll?.start() : _chatPoll?.stop();
   }
 
   @override
   void dispose() {
+    ModulesSettings.revision.removeListener(_syncChatPoll);
+    _chatPoll?.stop();
     _services.removeListener(_onServicesChanged);
     _personalization.removeListener(_onServicesChanged);
     super.dispose();

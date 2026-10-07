@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../i18n/i18n.dart';
 
 /// Как сейчас идут сообщения этой переписки:
-/// SB — через базу Supabase (записываются и читаются по опросу);
+/// SB — через базу сервера мессенджера (записываются и читаются по опросу);
 /// RT — Realtime: живой канал через сервер, в базу не пишутся;
 /// P2P — прямое соединение WebRTC между устройствами, сервер не видит текст.
 enum LinkMode { sb, rt, p2p }
@@ -34,7 +34,7 @@ extension LinkModeInfo on LinkMode {
       };
 
   String get title => switch (this) {
-        LinkMode.sb => tr('SB — через базу Supabase'),
+        LinkMode.sb => tr('SB — через базу сервера мессенджера'),
         LinkMode.rt => tr('RT — Realtime через сервер'),
         LinkMode.p2p => tr('P2P — напрямую между устройствами'),
       };

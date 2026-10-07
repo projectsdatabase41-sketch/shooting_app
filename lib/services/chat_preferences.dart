@@ -93,6 +93,15 @@ class ChatPreferences extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Недавно использованные реакции (новые первыми).
+  List<String> get recentReactions =>
+      _read('chat_recent_reactions').split(' ').where((e) => e.isNotEmpty).toList();
+
+  void addRecentReaction(String emoji) {
+    final list = [emoji, ...recentReactions.where((e) => e != emoji)].take(30).toList();
+    _write('chat_recent_reactions', list.join(' '));
+  }
+
   void _applySound() => MessageSound.apply(enabled: soundEnabled, name: soundName, volume: soundVolume);
 
   static const List<ChatBubblePreset> presets = [
@@ -268,7 +277,8 @@ class ChatPreferences extends ChangeNotifier {
   /// диалога важнее общей настройки [autoTranslate].
   bool autoTranslateFor(String contactId) {
     final v = _translateOverrides[contactId];
-    return v ?? autoTranslate;
+    // Общего автоперевода больше нет — только настройка конкретного чата.
+    return v ?? false;
   }
 
   void setAutoTranslateFor(String contactId, bool on) {

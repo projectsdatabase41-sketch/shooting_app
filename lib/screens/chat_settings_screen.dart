@@ -74,12 +74,7 @@ class _ChatSettingsScreenState extends State<ChatSettingsScreen> {
           folder(
             Icons.translate_outlined,
             tr('Язык и перевод'),
-            tr('{lang} · автоперевод {p}', {
-              'lang': lang,
-              'p': prefs.autoTranslate
-                  ? tr('во всех чатах')
-                  : tr('по выбору в чате')
-            }),
+            lang,
             ChatTranslationSettingsScreen(prefs: prefs),
           ),
           folder(
@@ -212,18 +207,9 @@ class ChatTranslationSettingsScreen extends StatelessWidget {
                 onTap: () => _pickLanguage(context),
               ),
             ),
-            const SizedBox(height: 16),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(tr('Автоперевод во всех чатах')),
-              subtitle: Text(tr(
-                  'Входящие переводятся сразу. В отдельном чате можно включить или выключить в меню ⋮')),
-              value: prefs.autoTranslate,
-              onChanged: (v) => prefs.autoTranslate = v,
-            ),
             const SizedBox(height: 8),
             Text(
-              tr('Переводятся последние 15 сообщений; листаете выше — ещё 20, дальше по 30. Одно сообщение можно перевести вручную: долгое нажатие → «Перевести».'),
+              tr('Автоперевод включается в карточке собеседника. Переводятся последние 15 сообщений; листаете выше — ещё 20, дальше по 30. Одно сообщение можно перевести вручную: долгое нажатие → «Перевести».'),
               style: theme.textTheme.bodySmall,
             ),
           ],

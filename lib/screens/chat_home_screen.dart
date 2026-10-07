@@ -49,6 +49,9 @@ class ChatHomeScreen extends StatefulWidget {
 
   static VoidCallback? _closeActive;
 
+  /// Экран мессенджера сейчас открыт (его собственный опрос уже идёт).
+  static bool get isOpen => _closeActive != null;
+
   /// Кнопка «свернуть мессенджер» (в списке чатов и в переписке): закрыть
   /// все его экраны и вернуться туда, откуда его открыли.
   static void close(BuildContext context) {
@@ -150,6 +153,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
         ));
       }
       _incoming = people.where((f) => f.state == 'incoming').length;
+      ChatAuthService.pendingFriends.value = _incoming;
     } catch (_) {
       // сеть — обновим при следующем открытии
     }
@@ -270,6 +274,16 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
     return base64UrlEncode(bytes);
   }
 
+  int _pollTicks = 0;
+
+  Future<void> _refreshFriendCount() async {
+    try {
+      final n = (await _auth.fetchFriendRequests()).length;
+      ChatAuthService.pendingFriends.value = n;
+      if (mounted && n != _incoming) setState(() => _incoming = n);
+    } catch (_) {}
+  }
+
   void _startPolling() {
     _pollLoop?.stop();
     // Адаптивный опрос вместо фиксированных 20 секунд (решение
@@ -283,6 +297,8 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
           scale: () => RemoteConfig.pollScale),
       tick: () async {
         ChatPresence.tick(_auth);
+        // Заявки в друзья — раз в ~6 опросов, не на каждом.
+        if (_pollTicks++ % 6 == 0) _refreshFriendCount();
         final added = await _sync.pollIncoming();
         // _reload(), а не голый setState — новое входящее от ещё не
         // добавленного отправителя заводит контакт автоматически (см.
@@ -484,10 +500,28 @@ class _ChatContactsView extends StatelessWidget {
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
         leading: Builder(
-          builder: (ctx) => GlassCircleButton(
-            icon: const Icon(Icons.menu),
-            tooltip: tr('Меню'),
-            onTap: () => Scaffold.of(ctx).openDrawer(),
+          builder: (ctx) => Stack(
+            clipBehavior: Clip.none,
+            children: [
+              GlassCircleButton(
+                icon: const Icon(Icons.menu),
+                tooltip: tr('Меню'),
+                onTap: () => Scaffold.of(ctx).openDrawer(),
+              ),
+              // Красный кружок: есть заявки в друзья — они в меню → «Друзья».
+              if (incomingRequests > 0)
+                const Positioned(
+                  top: 2,
+                  right: 2,
+                  child: SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: DecoratedBox(
+                        decoration: BoxDecoration(
+                            color: Colors.red, shape: BoxShape.circle)),
+                  ),
+                ),
+            ],
           ),
         ),
         title: Text(tr('Мессенджер'),

@@ -149,6 +149,8 @@ class LocalDbService {
         'chat_sound_enabled': 'TEXT',
         'chat_sound_name': 'TEXT',
         'chat_sound_volume': 'TEXT',
+        // Недавние реакции-смайлики через пробел (новые первыми).
+        'chat_recent_reactions': 'TEXT',
       },
       // На части устройств chat_local_messages создалась ещё САМОЙ
       // первой версией чата (только текст, без вложений) — CREATE

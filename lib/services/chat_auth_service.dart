@@ -2,6 +2,7 @@ import '../logic/friendly_error.dart';
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:http/http.dart' as http;
 
 import '../models/chat_contact.dart';
@@ -629,6 +630,9 @@ class ChatAuthService {
   /// Друзья и заблокированные — последний известный список (для списка
   /// чатов без лишних запросов). Обновляет [friendOverview] / [myBlocks].
   static Set<String> friendIds = {};
+
+  /// Сколько входящих заявок в друзья ждёт ответа — для красных индикаторов.
+  static final ValueNotifier<int> pendingFriends = ValueNotifier<int>(0);
   static Set<String> blockedIds = {};
 
   /// Добавить в друзья: 'accepted' (встречная заявка — сразу дружба),

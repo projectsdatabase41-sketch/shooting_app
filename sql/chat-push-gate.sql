@@ -28,7 +28,7 @@ alter table chat_push_config enable row level security;
 revoke all on chat_push_config from anon, authenticated;
 
 insert into chat_push_config (id, function_url, secret)
-values (1, 'https://frbptucrvmyikencyspu.supabase.co/functions/v1/send-chat-push', '<ТА-ЖЕ-СТРОКА>')
+values (1, 'https://frbptucrvmyikencyspu.supabase.co/functions/v1/send-chat-push', 'nseiuncwh9w8fnwfnuuw93bfwjbf9w3unjsdbfw983fbw3')
 on conflict (id) do update set function_url = excluded.function_url, secret = excluded.secret;
 
 create table if not exists chat_push_last (
