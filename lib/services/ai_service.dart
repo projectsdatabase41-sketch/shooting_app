@@ -272,8 +272,24 @@ class AiService {
   static void markLimited(String key) =>
       _coolUntil[key] = DateTime.now().add(const Duration(seconds: 60));
 
+  static final Map<String, DateTime> _modelCoolUntil = {};
+
+  @visibleForTesting
+  static void markModelLimited(String key, String model) =>
+      _modelCoolUntil['$key|$model'] =
+          DateTime.now().add(const Duration(seconds: 60));
+
+  /// Модели в порядке перебора: сначала не получавшие лимит за последнюю минуту.
+  @visibleForTesting
+  static List<String> orderModels(String key, List<String> models) {
+    final now = DateTime.now();
+    bool cool(String m) => _modelCoolUntil['$key|$m']?.isAfter(now) ?? false;
+    return [...models.where((m) => !cool(m)), ...models.where(cool)];
+  }
+
   @visibleForTesting
   static void resetKeyState() {
+    _modelCoolUntil.clear();
     _coolUntil.clear();
     _cursor = 0;
   }
@@ -349,20 +365,31 @@ class AiService {
     final errors = <String>[];
     var anyRateLimited = false;
     for (final key in keys) {
-      for (final model in onlyModel != null ? [onlyModel] : settings.models) {
+      final models = onlyModel != null
+          ? [onlyModel]
+          : orderModels(key, settings.models);
+      var limitedHere = 0;
+      for (final model in models) {
         try {
           return await _askModel(model, messages, key);
         } on RateLimitedException catch (e) {
-          // Лимит бесплатных моделей общий на ВЕСЬ КЛЮЧ, а не на
-          // конкретную модель — пробовать оставшиеся модели ЭТИМ ЖЕ
-          // ключом бессмысленно (упрутся в тот же лимит) и только
-          // быстрее его исчерпывает. `break` уходит к СЛЕДУЮЩЕМУ КЛЮЧУ
-          // целиком (внешний for), а не сдаётся — на то запасные ключи
-          // и нужны.
+          // Лимит бывает и у ОДНОЙ модели (провайдер модели, минутный лимит
+          // бесплатной), и у всего ключа (суточный). Поэтому модель с
+          // лимитом просто «остывает» минуту и идём к следующей модели;
+          // суточный лимит ключа (в тексте «per day»/«daily») — сразу
+          // к следующему ключу. Раньше первый же 429 бросал весь ключ, и
+          // в режиме мышления (много запросов подряд) цепочка обрывалась,
+          // хотя другие модели работали.
           anyRateLimited = true;
-          markLimited(key);
+          limitedHere++;
+          markModelLimited(key, model);
           errors.add('$model: лимит (${e.message})');
-          break;
+          if (RegExp(r'per.?day|daily|в сутки', caseSensitive: false)
+              .hasMatch(e.message)) {
+            markLimited(key);
+            break;
+          }
+          if (limitedHere == models.length) markLimited(key);
         } on AiException catch (e) {
           errors.add('$model: ${e.message}');
         } catch (e) {

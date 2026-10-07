@@ -26,4 +26,10 @@ void main() {
   test('один ключ — без изменений', () {
     expect(AiService.orderKeys(['a'], rotate: true), ['a']);
   });
+
+  test('модель с лимитом остывает, остальные пробуются первыми', () {
+    AiService.markModelLimited('k', 'm1');
+    expect(AiService.orderModels('k', ['m1', 'm2', 'm3']), ['m2', 'm3', 'm1']);
+    expect(AiService.orderModels('other', ['m1', 'm2']), ['m1', 'm2']);
+  });
 }
