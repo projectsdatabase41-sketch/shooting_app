@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- Обязательно для РЕЛИЗНОЙ сборки.
          Flutter добавляет это разрешение сам, но только в debug и
          profile (см. src/debug/AndroidManifest.xml). В release-сборке
@@ -26,7 +27,7 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
 
     <!-- Сохранение принятых файлов в папку Nexus (Android 9 и ниже; новее — через MediaStore без разрешений). -->
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" tools:replace="android:maxSdkVersion"/>
 
     <application
         android:label="Nexus"

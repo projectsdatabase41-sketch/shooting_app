@@ -23,7 +23,6 @@ import '../services/chat_auth_service.dart';
 import '../services/chat_messages_repository.dart';
 import '../services/chat_preferences.dart';
 import '../services/chat_presence.dart';
-import '../logic/attachment_guard.dart';
 import '../widgets/reaction_bar.dart';
 import '../logic/save_to_app_folder.dart';
 import '../services/call_service.dart';
@@ -957,11 +956,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final picked = await ChatMediaUtils.pickAttachment(context);
     if (!mounted || picked == null) return;
     final bytes = picked.bytes;
-    final verdict = AttachmentGuard.check(bytes, picked.name);
-    if (!verdict.ok) {
-      _showBlocked(picked.name, verdict.reason);
-      return;
-    }
     if (bytes.length > ChatMediaUtils.maxAttachmentBytes) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -1017,15 +1011,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
-  void _showBlocked(String name, String? reason) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(tr('Файл «{name}» не отправлен: {reason}',
-          {'name': name, 'reason': reason ?? ''})),
-      duration: const Duration(seconds: 6),
-    ));
-  }
-
   /// Большой файл (видео, архив...) — минуя Storage (лимит 50 МБ), через
   /// Google Drive (см. `ChatDriveService`). Долгое нажатие на скрепку, а
   /// не отдельная видимая кнопка (пока это редкий случай) — без
@@ -1034,11 +1019,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<void> _attachLarge() async {
     final picked = await ChatMediaUtils.pickLargeFile();
     if (!mounted || picked == null) return;
-    final verdict = await AttachmentGuard.checkFile(picked.path, picked.name);
-    if (!verdict.ok) {
-      _showBlocked(picked.name, verdict.reason);
-      return;
-    }
 
     setState(() => _sending = true);
     try {
