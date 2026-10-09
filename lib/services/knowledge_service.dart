@@ -105,6 +105,24 @@ class KnowledgeService {
   /// чтобы `AiMemoryService` не заводил тот же стоп-лист заново).
   static List<String> keywords(String question) =>
       TextSearch.keywords(question);
+
+  /// Дополнительные поисковые слова от модели (синонимы, короткие термины
+  /// вроде «ISSF», «10м»): в основу берутся первые 6 букв, слова от 3 букв,
+  /// всего не больше 8 слов вместе с ключевыми словами вопроса.
+  static List<String> withExtraTerms(List<String> base, List<String> extra) {
+    final out = [...base];
+    for (final raw in extra) {
+      final w = raw
+          .toLowerCase()
+          .replaceAll(RegExp(r'[^\wа-яё\s]', unicode: true), '')
+          .trim();
+      if (w.length < 3 || w.contains(' ')) continue;
+      final stem = w.length > 6 ? w.substring(0, 6) : w;
+      if (!out.contains(stem)) out.add(stem);
+      if (out.length >= 8) break;
+    }
+    return out;
+  }
   static bool isSmallTalk(String question) => TextSearch.isSmallTalk(question);
 
   /// Короче этого вопрос считаем репликой, а не запросом к справочнику.
@@ -256,11 +274,12 @@ class KnowledgeService {
   /// Схема поиска: на каждое ключевое слово — свой запрос, потом все
   /// найденные куски ранжируются по тому, сколько РАЗНЫХ слов вопроса
   /// в них встречается.
-  Future<List<KnowledgeChunk>> search(String question) async {
+  Future<List<KnowledgeChunk>> search(String question,
+      {List<String> extraTerms = const []}) async {
     final trimmed = question.trim();
     if (trimmed.length < minQuestionLength) return const [];
     if (isSmallTalk(trimmed)) return const [];
-    final words = keywords(trimmed);
+    final words = withExtraTerms(keywords(trimmed), extraTerms);
     final personal = {for (final t in settings.tables) t.name};
 
     final results = <KnowledgeChunk>[];

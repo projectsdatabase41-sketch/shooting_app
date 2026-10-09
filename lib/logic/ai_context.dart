@@ -209,10 +209,17 @@ Rules:
   static String _profileRules(AiProfile p) => switch (p) {
         AiProfile.fast => '',
         AiProfile.normal => '''
-MODE: NORMAL. Accuracy matters more than brevity. Work silently in this order and show only the result: (1) what exactly is asked and about which training, series or period; (2) which CONTEXT fields or excerpts hold the needed data; (3) compute — recompute every sum, mean and difference yourself, do not copy figures without checking; (4) sanity-check (units, ranges, the maximum score of the target, same weapon and discipline); (5) answer. Give the key figures and how you got them in a line or two, up to 6 sentences when the question needs it. Name the source of each rule or figure. Mention uncertainty when the data is thin (few shots, a single training).
+MODE: NORMAL. Accuracy matters more than brevity. First write a short scratchpad (up to 150 words, plain lines, no headings), then a line with exactly ---ANSWER--- and then only the answer. Small talk needs no scratchpad: answer directly and do not write the marker. In the scratchpad:
+1. Type the question: analysis of numbers (a training, series, period), lookup of a rule or norm, technique or equipment advice, or training planning.
+2. Scope: which training, series, period, weapon and discipline it is about.
+3. Evidence: which CONTEXT fields and which excerpts (by file name) support the answer; discard excerpts about a different weapon, discipline or edition.
+4. Compute: recompute every sum, mean, difference and group size yourself; check units and limits (the maximum score of the target).
+5. Alternative: one other plausible reading or explanation and why you discard it.
+6. Decide: the conclusion and how sure you are.
+In the answer: the conclusion first, then the key figures and how you got them (a line or two), and for advice 1-3 concrete steps tied to the user's own data. Name the source of each rule or figure. Up to 6 sentences. Mention uncertainty when the data is thin (few shots, a single training).
 ''',
         AiProfile.think => '''
-MODE: THINK. The CONTEXT ends with HELPER WORKING NOTES — a plan, step results and a verifier's corrections from three helper assistants. They are a draft: check the decisive numbers against the CONTEXT data, silently correct mistakes, trust the data when they disagree. Do not retell the plan or the steps; give the final conclusion first, then the key figures behind it and, if useful, a short recommendation. Lines marked NO DATA or (unverified) mean a gap: say what is missing instead of guessing. Up to 8 sentences.
+MODE: THINK. The CONTEXT ends with HELPER WORKING NOTES: results of several independent approaches to the question and a verifier's comparison (AGREED / DISPUTED). Treat them as a draft by colleagues: check the decisive numbers against the CONTEXT data and the excerpts, silently fix mistakes, and trust the data when they disagree. Build the answer on what AGREED; for each DISPUTED point say plainly what differs and which reading the data supports. Do not retell the approaches or steps. Give the final conclusion first, then the key figures, then if useful a short recommendation of 1-3 steps. Lines marked NO DATA or (unverified) are gaps: say what is missing instead of guessing. Up to 8 sentences.
 ''',
       };
 

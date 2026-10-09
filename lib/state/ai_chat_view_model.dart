@@ -139,9 +139,14 @@ class AiChatViewModel extends ChangeNotifier {
   /// Что ассистент делает сейчас (русский ключ перевода) — для анимации в чате.
   String _phase = /*tr*/ 'Ищу информацию';
   String get phase => _phase;
-  void _setPhase(String p) {
-    if (_phase == p) return;
+
+  /// Номер подхода в режиме Think («2/3») — дописывается к подписи шага.
+  String _phaseProgress = '';
+  String get phaseProgress => _phaseProgress;
+  void _setPhase(String p, {String progress = ''}) {
+    if (_phase == p && _phaseProgress == progress) return;
     _phase = p;
+    _phaseProgress = progress;
     notifyListeners();
   }
 
@@ -225,7 +230,22 @@ class AiChatViewModel extends ChangeNotifier {
           ? rawCtx
           : rawCtx.withPastSummaries(pastSummaries);
       _setPhase(/*tr*/ 'Ищу информацию');
-      final chunks = await knowledge.search(trimmed);
+      var chunks = await knowledge.search(trimmed);
+      // Normal и Think: если поиск по словам вопроса нашёл мало (короткие
+      // термины вроде «ISSF», другие словоформы), модель подсказывает
+      // синонимы, и поиск повторяется с ними. Fast этого не делает — он
+      // должен отвечать сразу.
+      if (mode != 'fast' &&
+          chunks.length < 3 &&
+          trimmed.length >= 12 &&
+          !KnowledgeService.isSmallTalk(trimmed)) {
+        final terms = await _expandQuery(trimmed);
+        if (terms.isNotEmpty) {
+          final more = await knowledge.search(trimmed, extraTerms: terms);
+          final seen = {for (final c in chunks) c.text};
+          chunks = [...chunks, ...more.where((c) => !seen.contains(c.text))];
+        }
+      }
       final books = KnowledgeService.asPromptBlock(chunks,
           tables: knowledge.settings.tables,
           catalog: mode == 'fast' ? const [] : await knowledge.catalogTitles());
@@ -240,7 +260,7 @@ class AiChatViewModel extends ChangeNotifier {
       if (mode == 'think' &&
           !KnowledgeService.isSmallTalk(trimmed) &&
           trimmed.length >= 12) {
-        notes = await _think(trimmed, contextBlock, history);
+        notes = await _think(trimmed, contextBlock, history, books);
         if (notes.isNotEmpty) {
           contextBlock +=
               '\n\nHELPER WORKING NOTES (a plan, step results and verifier corrections — check them and use them for the answer, do not retell them to the user as is):\n$notes';
@@ -300,57 +320,90 @@ class AiChatViewModel extends ChangeNotifier {
     }
   }
 
-  /// Режим Think — три помощника по очереди: планировщик составляет шаги,
-  /// решатель считает каждый шаг по данным контекста, проверяющий сверяет
-  /// числа и выводы с данными. Итоговый ответ потом пишет обычный чатовый
-  /// запрос, видя проверенные заметки. Сбой планировщика или решателя —
-  /// тихо возвращаем пусто (ответит как Normal); сбой проверяющего — остаются
-  /// заметки решателя.
-  /// ponytail: шаги идут последовательно, не параллельно — бесплатные
+  /// Подсказка поиску: синонимы и короткие термины, которых нет среди
+  /// «длинных» слов вопроса. Сбой — пусто (останется обычный поиск).
+  Future<List<String>> _expandQuery(String question) async {
+    try {
+      final r = await service.ask(
+        systemPrompt:
+            'You prepare search terms for a shooting-sports knowledge base written mostly in Russian. From the question output 4-8 single words (stems, synonyms, abbreviations such as ISSF, numbers with units such as 10м) that would appear in a relevant passage. Output the words separated by commas and nothing else.',
+        contextBlock: '',
+        history: [(role: 'user', text: question)],
+        rotateKeys: true,
+      );
+      return r.text
+          .split(RegExp(r'[,;\n]'))
+          .map((w) => w.trim())
+          .where((w) => w.isNotEmpty && w.length <= 24)
+          .take(8)
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Режим Think — несколько помощников и несколько независимых подходов к
+  /// одному вопросу:
+  /// 1. планировщик предлагает 2–3 РАЗНЫХ подхода (например, по выстрелам
+  ///    тренировки, по истории, по правилам из базы);
+  /// 2. решатель отдельно проходит каждый подход до результата;
+  /// 3. проверяющий сводит результаты: где подходы сошлись, где нет, сверяет
+  ///    числа с данными и выдаёт итоговые заметки.
+  /// Итоговый ответ потом пишет обычный чатовый запрос, видя эти заметки.
+  /// Помощники видят и данные пользователя, и найденные куски базы знаний.
+  /// Сбой планировщика или решателя — тихо возвращаем пусто (ответит как
+  /// Normal); сбой проверяющего — остаются результаты подходов.
+  /// ponytail: подходы идут последовательно, не параллельно — бесплатные
   /// ключи не любят пачки запросов.
   Future<String> _think(String question, String contextBlock,
-      List<({String role, String text})> history) async {
+      List<({String role, String text})> history, String? books) async {
     try {
       _setPhase(/*tr*/ 'Анализирую');
       final plan = await service.ask(
         systemPrompt:
-            'You are a planner. Split the user question about shooting into 1-4 short analysis steps, each one a calculation or comparison that can be done from the CONTEXT data or the excerpts (a simple lookup is ONE step). Put data gathering first, comparison or conclusion last. Answer with the steps only, one per line, no numbering and no explanations. Write the steps in the language of the question.',
+            'You are a planner. Propose 1-3 genuinely DIFFERENT approaches to answer the user question about shooting, each using a different angle or different data (for example: the shots of the open training; the history of past trainings; a rule or norm from the knowledge-base excerpts; a direct calculation versus a comparison). A simple lookup needs ONE approach. Each approach is one line: a short name, a colon, and what exactly to compute or check. No numbering, no explanations. Write in the language of the question.',
         contextBlock: contextBlock,
+        booksExcerpt: books,
         history: [(role: 'user', text: question)],
         rotateKeys: true,
       );
-      final steps = plan.text
+      final approaches = plan.text
           .split('\n')
           .map((l) => l.replaceFirst(RegExp(r'^[\s\-\d.)•]+'), '').trim())
           .where((l) => l.length > 3)
-          .take(4)
+          .take(3)
           .toList();
-      if (steps.isEmpty) return '';
-      _setPhase(/*tr*/ 'Думаю');
-      final notes =
-          StringBuffer('Plan:\n${steps.map((s) => '- $s').join('\n')}\n');
-      for (final step in steps) {
+      if (approaches.isEmpty) return '';
+
+      final results = <String>[];
+      for (final (i, approach) in approaches.indexed) {
+        _setPhase(/*tr*/ 'Думаю', progress: '${i + 1}/${approaches.length}');
         final r = await service.ask(
           systemPrompt:
-              'You execute one analysis step. Solve ONLY the given step using the CONTEXT data and ALREADY DONE results: give the numbers with the calculation in one line, then a one-sentence conclusion (up to 80 words). If the data for the step is missing, answer exactly "NO DATA: <what is missing>". Never invent data. Write in the language of the question.',
-          contextBlock: '$contextBlock\n\nALREADY DONE:\n$notes',
-          history: [(role: 'user', text: 'Question: $question\nStep: $step')],
+              'You solve the user question using ONLY the given approach, independently of any other approach. Use the CONTEXT data and the excerpts; give the numbers with the calculation in one or two lines, then the conclusion in one sentence and your confidence (high / medium / low). If the data for the approach is missing, answer exactly "NO DATA: <what is missing>". Never invent data. Up to 120 words. Write in the language of the question.',
+          contextBlock: contextBlock,
+          booksExcerpt: books,
+          history: [(role: 'user', text: 'Question: $question\nApproach: $approach')],
           rotateKeys: true,
         );
-        notes.writeln('Step "$step": ${r.text.trim()}');
+        results.add('Approach ${i + 1} "$approach": ${r.text.trim()}');
       }
+      final draft = results.join('\n');
+      if (approaches.length == 1) return draft;
+
       _setPhase(/*tr*/ 'Проверяю');
       try {
         final v = await service.ask(
           systemPrompt:
-              'You are a strict verifier. Check every number and conclusion in the NOTES against the CONTEXT data. Recompute sums, means and differences. Output the corrected NOTES in the same format (the Plan line and the Step lines). If a step is right, copy it unchanged; if wrong, fix it; if it cannot be verified from the data, append "(unverified)". Add no new analysis and no comments. Write in the language of the question.',
-          contextBlock: '$contextBlock\n\nNOTES:\n$notes',
+              'You are a strict verifier and judge. You get results of several independent approaches to one question. (1) Check every number against the CONTEXT data and recompute sums, means and differences. (2) Compare the approaches: say where they AGREE and where they CONTRADICT, and which one is more reliable and why. (3) Output the corrected approach results unchanged where right, then two lines: "AGREED: <what all reliable approaches support>" and "DISPUTED: <what differs or is unverified, or none>". Mark unverifiable statements with "(unverified)". No new analysis. Write in the language of the question.',
+          contextBlock: '$contextBlock\n\nAPPROACH RESULTS:\n$draft',
+          booksExcerpt: books,
           history: [(role: 'user', text: 'Question: $question')],
           rotateKeys: true,
         );
         if (v.text.trim().length > 20) return v.text.trim();
       } catch (_) {}
-      return notes.toString();
+      return draft;
     } catch (_) {
       return '';
     }

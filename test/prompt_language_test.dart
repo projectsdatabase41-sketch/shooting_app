@@ -11,7 +11,7 @@ void main() {
 
   test('промпт компактен и содержит все форматы блоков', () {
     final text = AiContext.systemPrompt(coachMode: true);
-    expect(text.length, lessThan(6200), reason: 'промпт разросся — токены на каждый запрос');
+    expect(text.length, lessThan(7000), reason: 'промпт разросся — токены на каждый запрос');
     for (final k in ['```chart', '```exercise', '```feedback', '```note', '---ANSWER---', 'exercises_on_device', 'rifle_10m', 'pistol_25m', 'ПОДРОБНО']) {
       expect(text, contains(k), reason: k);
     }
@@ -34,8 +34,11 @@ void main() {
       expect('MODE:'.allMatches(t).length, 1);
     }
     expect(normal, contains('MODE: NORMAL'));
+    expect(normal, contains('---ANSWER---'));
+    expect(normal, contains('scratchpad'));
     expect(think, contains('MODE: THINK'));
     expect(think, contains('HELPER WORKING NOTES'));
+    expect(think, contains('DISPUTED'));
     expect(fast.length, lessThan(normal.length));
     expect(AiContext.systemPrompt(), contains('MODE: NORMAL')); // по умолчанию
     // Правка базы не трогает Fast.

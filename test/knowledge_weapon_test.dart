@@ -15,4 +15,14 @@ void main() {
     expect(KnowledgeService.weaponMismatch('как целиться', 'хват пистолета'), isFalse);
     expect(KnowledgeService.weaponMismatch('пистолет или винтовка', 'хват пистолета'), isFalse);
   });
+
+  test('дополнительные термины от модели: основа 6 букв, от 3 символов, не больше 8, без дублей', () {
+    final base = ['прицел', 'пистол'];
+    final w = KnowledgeService.withExtraTerms(base, ['ISSF', 'прицеливание', 'ab', '10м', 'два слова', 'ПИСТОЛЕТ', 'a', 'х', 'мишень', 'винтовка', 'стойка', 'дыхание', 'спуск']);
+    expect(w.take(2), base);
+    expect(w, containsAll(['issf', 'мишень']));
+    expect(w.where((e) => e == 'пистол').length, 1);
+    expect(w.length, lessThanOrEqualTo(8));
+    expect(w.any((e) => e.contains(' ') || e.length < 3), isFalse);
+  });
 }

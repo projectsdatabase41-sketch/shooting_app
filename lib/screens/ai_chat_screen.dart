@@ -424,7 +424,7 @@ class _AiChatBodyState extends State<_AiChatBody> {
           12),
       itemCount: vm.messages.length + (vm.busy ? 1 : 0),
       itemBuilder: (context, i) {
-        if (i >= vm.messages.length) return _TypingBubble(phase: vm.phase);
+        if (i >= vm.messages.length) return _TypingBubble(phase: vm.phase, progress: vm.phaseProgress);
         final message = vm.messages[i];
         final charts = vm.chartMessages;
         return _Bubble(
@@ -1229,7 +1229,10 @@ class _FeedbackProposalCard extends StatelessWidget {
 /// («Анализирую…», «Ищу информацию…», «Думаю…», «Формулирую ответ…»).
 class _TypingBubble extends StatefulWidget {
   final String phase;
-  const _TypingBubble({required this.phase});
+
+  /// «2/3» в режиме Think — номер подхода.
+  final String progress;
+  const _TypingBubble({required this.phase, this.progress = ''});
 
   @override
   State<_TypingBubble> createState() => _TypingBubbleState();
@@ -1286,8 +1289,8 @@ class _TypingBubbleState extends State<_TypingBubble>
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 250),
                 child: Text(
-                  '${tr(widget.phase)}${'.' * (1 + (_c.value * 3).floor() % 3)}',
-                  key: ValueKey(widget.phase),
+                  '${tr(widget.phase)}${widget.progress.isEmpty ? '' : ' ${widget.progress}'}${'.' * (1 + (_c.value * 3).floor() % 3)}',
+                  key: ValueKey('${widget.phase}${widget.progress}'),
                   style: TextStyle(color: cs.onSurfaceVariant),
                 ),
               ),
