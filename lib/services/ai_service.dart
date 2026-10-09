@@ -177,6 +177,10 @@ class AiService {
     /// подряд не должна упираться в минутный лимит одного ключа).
     bool rotateKeys = false,
 
+    /// Режим Think: сначала модели, у которых есть встроенное «мышление»
+    /// (reasoning), потом остальные из цепочки; ответ ждём дольше.
+    bool preferReasoning = false,
+
     /// Фото к вопросу (чат) — только когда task == 'chat' и выбрана
     /// модель со зрением (кнопка в ai_chat_screen.dart сама решает,
     /// когда её показывать). Молча игнорируется остальными задачами.
@@ -258,10 +262,58 @@ class AiService {
     }
 
     final reply = await _askCloud(system.toString(), history,
-        image: image, rotateKeys: rotateKeys);
+        image: image,
+        rotateKeys: rotateKeys,
+        preferReasoning: preferReasoning);
     if (task != null && check(reply.text))
       local.learn(settings, task, history, reply.text);
     return reply;
+  }
+
+  static final RegExp _reasoningId = RegExp(
+      r'reasoning|thinking|think|(^|[/\-])r1([\-:]|$)|qwq|gpt-oss|magistral|cogito|(^|[/\-])o[134]([\-:]|$)|qwen3|deepseek-v3\.[12]|gemini-2\.5|glm-4\.[56]',
+      caseSensitive: false);
+
+  /// По названию модели: есть ли у неё встроенное «мышление».
+  @visibleForTesting
+  static bool looksReasoning(String id) => _reasoningId.hasMatch(id);
+
+  static Set<String>? _reasoningIds;
+  static DateTime _reasoningAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// Модели, которые сам сервер помечает как умеющие reasoning (поле
+  /// supported_parameters списка моделей). Кеш на 6 часов; сбой — пусто, тогда
+  /// работает только догадка по названию.
+  Future<Set<String>> _reasoningModels() async {
+    final cached = _reasoningIds;
+    if (cached != null && DateTime.now().difference(_reasoningAt) < const Duration(hours: 6)) {
+      return cached;
+    }
+    final found = <String>{};
+    try {
+      final res = await _client
+          .get(Uri.parse('$_base/models'), headers: _headers())
+          .timeout(const Duration(seconds: 12));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+        for (final m in (data['data'] as List?) ?? const []) {
+          if (m is! Map || m['id'] is! String) continue;
+          final params = m['supported_parameters'];
+          if (params is List && params.contains('reasoning')) found.add(m['id'] as String);
+        }
+      }
+    } catch (_) {}
+    _reasoningIds = found;
+    _reasoningAt = DateTime.now();
+    return found;
+  }
+
+  /// Цепочка моделей для Think: сначала умеющие рассуждать, потом остальные
+  /// (порядок внутри групп сохраняется).
+  Future<List<String>> _reasoningFirst(List<String> models) async {
+    final known = await _reasoningModels();
+    bool r(String m) => known.contains(m) || looksReasoning(m);
+    return [...models.where(r), ...models.where((m) => !r(m))];
   }
 
   /// Ключи, получившие лимит, пока «остывают» минуту.
@@ -333,7 +385,11 @@ class AiService {
     String? onlyModel,
     Uint8List? image,
     bool rotateKeys = false,
+    bool preferReasoning = false,
   }) async {
+    final chain = onlyModel == null && preferReasoning
+        ? await _reasoningFirst(settings.models)
+        : settings.models;
     final keys = orderKeys(
         settings.hasOwnKey ? [settings.apiKey] : AiSettings.testApiKeys,
         rotate: rotateKeys);
@@ -367,11 +423,12 @@ class AiService {
     for (final key in keys) {
       final models = onlyModel != null
           ? [onlyModel]
-          : orderModels(key, settings.models);
+          : orderModels(key, chain);
       var limitedHere = 0;
       for (final model in models) {
         try {
-          return await _askModel(model, messages, key);
+          return await _askModel(model, messages, key,
+              timeout: preferReasoning ? const Duration(seconds: 100) : null);
         } on RateLimitedException catch (e) {
           // Лимит бывает и у ОДНОЙ модели (провайдер модели, минутный лимит
           // бесплатной), и у всего ключа (суточный). Поэтому модель с
@@ -410,8 +467,9 @@ class AiService {
   Future<AiReply> _askModel(
     String model,
     List<Map<String, dynamic>> messages,
-    String key,
-  ) async {
+    String key, {
+    Duration? timeout,
+  }) async {
     final res = await _client
         .post(
           Uri.parse('$_base/chat/completions'),
@@ -436,7 +494,7 @@ class AiService {
             'reasoning': {'exclude': false},
           }),
         )
-        .timeout(_timeout);
+        .timeout(timeout ?? _timeout);
 
     // 403 бывает и НЕ про лимит (например, провайдер не разрешён в
     // настройках аккаунта) — ложно останавливать всю цепочку из-за

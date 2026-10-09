@@ -56,25 +56,54 @@ class TextSearch {
     'должно',
   };
 
+  /// Короткие, но значимые слова предметной области (меньше minWordLength).
+  static const Set<String> _shortTerms = {
+    'лук', 'вдох', 'цель', 'пуля', 'упор', 'руки', 'рука', 'глаз', 'темп',
+    'ствол', 'мушка', 'спуск', 'нерв',
+  };
+
   /// Ключевые слова текста.
   ///
   /// Морфологии нет, поэтому у длинных слов берём только основу —
   /// первые 6 букв. «стрельбе», «стрельбы», «стрельбой» превращаются в
   /// «стрель» и находят друг друга. Грубо, но для подстрочного поиска
   /// работает лучше, чем точное совпадение словоформы.
+  ///
+  /// Кроме длинных слов в поиск идут и значимые короткие: аббревиатуры
+  /// (ISSF, IPSC, МВ, ПП), слова с цифрами («10м», «3х20», «50m») и
+  /// несколько терминов предметной области (вдох, цель, лук…) — раньше они
+  /// отбрасывались по длине, и вопрос про них искал не то.
   static List<String> keywords(String text, {int maxWords = 4}) {
-    final words = text
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^\wа-яё\s]', unicode: true), ' ')
+    final tokens = text
+        .replaceAll(RegExp(r'[^\wа-яёА-ЯЁ\s]', unicode: true), ' ')
         .split(RegExp(r'\s+'))
-        .where((w) => w.length >= minWordLength && !_stopWords.contains(w))
-        .toList();
+        .where((w) => w.isNotEmpty);
+
+    final special = <String>[]; // аббревиатуры, слова с цифрами, термины
+    final words = <String>[];
+    for (final t in tokens) {
+      final lw = t.toLowerCase();
+      if (_stopWords.contains(lw)) continue;
+      final hasDigit = RegExp(r'\d').hasMatch(lw);
+      final hasLetter = RegExp(r'[a-zа-яё]').hasMatch(lw);
+      final isAcronym = t.length >= 2 &&
+          t.length <= 6 &&
+          t == t.toUpperCase() &&
+          RegExp(r'^[A-ZА-ЯЁ]+$').hasMatch(t);
+      if (_shortTerms.contains(lw) ||
+          isAcronym ||
+          (hasDigit && hasLetter && lw.length >= 2)) {
+        special.add(lw);
+      } else if (lw.length >= minWordLength && !hasDigit) {
+        words.add(lw);
+      }
+    }
 
     // Длинные слова информативнее коротких — берём их первыми.
     words.sort((a, b) => b.length.compareTo(a.length));
 
     final stems = <String>[];
-    for (final w in words) {
+    for (final w in [...special, ...words]) {
       final stem = w.length > 6 ? w.substring(0, 6) : w;
       if (!stems.contains(stem)) stems.add(stem);
       if (stems.length >= maxWords) break;

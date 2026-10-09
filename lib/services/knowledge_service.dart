@@ -104,7 +104,47 @@ class KnowledgeService {
   /// см. `TextSearch` (вынесена оттуда же, где раньше жила здесь одна,
   /// чтобы `AiMemoryService` не заводил тот же стоп-лист заново).
   static List<String> keywords(String question) =>
-      TextSearch.keywords(question);
+      TextSearch.keywords(question, maxWords: 6);
+
+  /// Близкие по смыслу основы (6 букв) предметной области: вопрос про
+  /// «прицеливание» находит и места, где написано «мушка» или «диоптр».
+  /// Работает в любом режиме чата и без запросов к модели.
+  static const Map<String, List<String>> synonyms = {
+    'прицел': ['мушка', 'диопт', 'целик'],
+    'мушка': ['прицел', 'целик'],
+    'спуск': ['курок', 'нажим'],
+    'дыхани': ['вдох', 'выдох', 'пауза'],
+    'вдох': ['дыхани', 'выдох'],
+    'стойка': ['положе', 'позиц'],
+    'положе': ['стойка', 'позиц'],
+    'хват': ['рукоят', 'ладонь'],
+    'рукоят': ['хват'],
+    'кучнос': ['группа', 'рассеи'],
+    'группа': ['кучнос', 'рассеи'],
+    'волнен': ['нервы', 'стресс', 'психол'],
+    'нервы': ['волнен', 'стресс'],
+    'стресс': ['волнен', 'нервы', 'психол'],
+    'разминк': ['подгото'],
+    'патрон': ['боепри', 'пулька'],
+    'пулька': ['пули', 'боепри'],
+    'тренир': ['занят', 'подгото'],
+    'отдача': ['откат'],
+    'ремень': ['погон'],
+    'мишень': ['мишен', 'бланк'],
+  };
+
+  /// К ключевым словам вопроса добавляются синонимы (после самих слов и
+  /// слов от модели), всего не больше 10.
+  static List<String> withSynonyms(List<String> words) {
+    final out = [...words];
+    for (final w in words) {
+      for (final s in synonyms[w] ?? const <String>[]) {
+        if (out.length >= 10) return out;
+        if (!out.contains(s)) out.add(s);
+      }
+    }
+    return out;
+  }
 
   /// Дополнительные поисковые слова от модели (синонимы, короткие термины
   /// вроде «ISSF», «10м»): в основу берутся первые 6 букв, слова от 3 букв,
@@ -279,7 +319,7 @@ class KnowledgeService {
     final trimmed = question.trim();
     if (trimmed.length < minQuestionLength) return const [];
     if (isSmallTalk(trimmed)) return const [];
-    final words = withExtraTerms(keywords(trimmed), extraTerms);
+    final words = withSynonyms(withExtraTerms(keywords(trimmed), extraTerms));
     final personal = {for (final t in settings.tables) t.name};
 
     final results = <KnowledgeChunk>[];

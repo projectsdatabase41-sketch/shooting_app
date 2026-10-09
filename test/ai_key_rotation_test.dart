@@ -32,4 +32,13 @@ void main() {
     expect(AiService.orderModels('k', ['m1', 'm2', 'm3']), ['m2', 'm3', 'm1']);
     expect(AiService.orderModels('other', ['m1', 'm2']), ['m1', 'm2']);
   });
+
+  test('модели с встроенным мышлением определяются по названию', () {
+    for (final id in ['nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free', 'deepseek/deepseek-r1:free', 'qwen/qwq-32b:free', 'openai/gpt-oss-120b:free', 'qwen/qwen3-235b-a22b:free', 'some/model-thinking']) {
+      expect(AiService.looksReasoning(id), isTrue, reason: id);
+    }
+    for (final id in ['inclusionai/ling-3.0-flash-fin:free', 'liquid/lfm-2.5-2.6b:free', 'cohere/north-mini-code:free', 'dots-studio/dots-3-note-preview:free']) {
+      expect(AiService.looksReasoning(id), isFalse, reason: id);
+    }
+  });
 }

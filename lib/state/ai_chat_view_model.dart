@@ -231,12 +231,10 @@ class AiChatViewModel extends ChangeNotifier {
           : rawCtx.withPastSummaries(pastSummaries);
       _setPhase(/*tr*/ 'Ищу информацию');
       var chunks = await knowledge.search(trimmed);
-      // Normal и Think: если поиск по словам вопроса нашёл мало (короткие
-      // термины вроде «ISSF», другие словоформы), модель подсказывает
-      // синонимы, и поиск повторяется с ними. Fast этого не делает — он
-      // должен отвечать сразу.
-      if (mode != 'fast' &&
-          chunks.length < 3 &&
+      // Поиск по базе одинаков во всех режимах (режимы — про рассуждение, а
+      // не про поиск). Если по словам вопроса и синонимам нашлось мало,
+      // модель подсказывает ещё термины, и поиск повторяется с ними.
+      if (chunks.length < 3 &&
           trimmed.length >= 12 &&
           !KnowledgeService.isSmallTalk(trimmed)) {
         final terms = await _expandQuery(trimmed);
@@ -284,6 +282,7 @@ class AiChatViewModel extends ChangeNotifier {
         history: history,
         booksExcerpt: books,
         rotateKeys: mode == 'think',
+        preferReasoning: mode == 'think',
       );
       messages.add(AiMessage(
         fromUser: false,
@@ -366,6 +365,7 @@ class AiChatViewModel extends ChangeNotifier {
         booksExcerpt: books,
         history: [(role: 'user', text: question)],
         rotateKeys: true,
+        preferReasoning: true,
       );
       final approaches = plan.text
           .split('\n')
@@ -385,6 +385,7 @@ class AiChatViewModel extends ChangeNotifier {
           booksExcerpt: books,
           history: [(role: 'user', text: 'Question: $question\nApproach: $approach')],
           rotateKeys: true,
+          preferReasoning: true,
         );
         results.add('Approach ${i + 1} "$approach": ${r.text.trim()}');
       }
@@ -400,6 +401,7 @@ class AiChatViewModel extends ChangeNotifier {
           booksExcerpt: books,
           history: [(role: 'user', text: 'Question: $question')],
           rotateKeys: true,
+          preferReasoning: true,
         );
         if (v.text.trim().length > 20) return v.text.trim();
       } catch (_) {}
