@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:intl/intl.dart';
@@ -23,7 +24,9 @@ import '../services/chat_auth_service.dart';
 import '../services/chat_messages_repository.dart';
 import '../services/chat_preferences.dart';
 import '../services/chat_presence.dart';
+import '../widgets/file_chip.dart';
 import '../widgets/reaction_bar.dart';
+import 'attachment_viewer.dart';
 import '../logic/save_to_app_folder.dart';
 import '../services/call_service.dart';
 import '../services/message_sound.dart';
@@ -47,7 +50,7 @@ import 'attachment_compose_screen.dart';
 import 'call_screen.dart';
 import 'chat_contact_panel_screen.dart';
 import 'chat_home_screen.dart';
-import 'pdf_viewer_screen.dart';
+import 'dart:typed_data' show Uint8List;
 import 'photo_viewer_screen.dart';
 import '../i18n/i18n.dart';
 import '../widgets/messenger_bubble.dart';
@@ -85,7 +88,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     with WidgetsBindingObserver {
   late ChatContact _contact = widget.contact;
   final _input = TextEditingController();
-  final _scroll = ScrollController();
+  // Лента на scrollable_positioned_list: умеет прыгать к сообщению по
+  // номеру (поиск по чату) при сообщениях разной высоты.
+  final _itemCtl = ItemScrollController();
+  final _itemPos = ItemPositionsListener.create();
   PollLoop? _pollLoop;
   LiveChatSession? _live;
   GroupLiveSession? _groupLive;
@@ -221,6 +227,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     widget.prefs.addListener(_onPrefsChanged);
     webSetActiveChat(_contact.id);
     _reactions = widget.repo.reactionsForContact(_contact.id);
+    _saved = widget.repo.savedFor(_contact.id);
     widget.repo.markThreadSeen(_contact.id);
     widget.sync.reportRead(_contact.id);
     // Открыли переписку — сразу спросить «в сети», не ждать общего тика
@@ -228,7 +235,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     // мгновенный статус и без этого опроса.
     if (!_contact.isGroup) ChatPresence.tick(widget.auth, force: true);
     _reload();
-    _scroll.addListener(_onScroll);
+    _itemPos.itemPositions.addListener(_onScroll);
     _inputFocus.addListener(() {
       if (_inputFocus.hasFocus && _emojiOpen)
         setState(() => _emojiOpen = false);
@@ -358,7 +365,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _stopLive();
     _flushTranslations?.cancel();
     _input.dispose();
-    _scroll.dispose();
+    _itemPos.itemPositions.removeListener(_onScroll);
+    _searchCtl.dispose();
     _showJumpToEnd.dispose();
     _inputFocus.dispose();
     super.dispose();
@@ -383,12 +391,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   void _onScroll() {
-    if (!_scroll.hasClients) return;
-    // Лента перевёрнута (reverse): 0 — самые новые внизу экрана.
-    _showJumpToEnd.value = _scroll.position.pixels > 400;
+    final pos = _itemPos.itemPositions.value;
+    if (pos.isEmpty) return;
+    var lo = pos.first.index, hi = pos.first.index;
+    for (final p in pos) {
+      if (p.index < lo) lo = p.index;
+      if (p.index > hi) hi = p.index;
+    }
+    // Лента перевёрнута (reverse): индекс 0 — самое новое сообщение внизу.
+    _showJumpToEnd.value = lo > 2;
     if (_translateVisibleCount >= _messages.length) return;
-    if (_scroll.position.pixels >= _scroll.position.maxScrollExtent - 200) {
-      // Последние 15, листаем выше — ещё 20, дальше — по 30 (решение пользователя).
+    if (hi >= _messages.length - 4) {
+      // Последние 15, листаем выше — ещё 20, дальше по 30 (решение пользователя).
       _translateVisibleCount += _translateLoads++ == 0 ? 20 : 30;
       if (_autoOn) _autoTranslateIncoming();
     }
@@ -398,6 +412,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     setState(() {
       _messages = widget.repo.forContact(_contact.id);
       _reactions = widget.repo.reactionsForContact(_contact.id);
+      _saved = widget.repo.savedFor(_contact.id);
     });
     if (_autoOn) _autoTranslateIncoming();
     _autoAckCall();
@@ -499,11 +514,121 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   void _scrollToEnd() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scroll.hasClients) {
-        _scroll.animateTo(0,
-            duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+      if (_itemCtl.isAttached) {
+        _itemCtl.scrollTo(
+            index: 0,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut);
       }
     });
+  }
+
+  // ---- Поиск по переписке ----
+  bool _searching = false;
+  final _searchCtl = TextEditingController();
+  List<int> _hits = []; // индексы в _messages, от новых к старым
+  int _hitPos = 0;
+
+  static String _norm(String t) => t.toLowerCase().replaceAll('ё', 'е');
+
+  void _openSearch() => setState(() => _searching = true);
+
+  void _closeSearch() => setState(() {
+        _searching = false;
+        _searchQuery = '';
+        _searchCtl.clear();
+        _hits = [];
+        _hitPos = 0;
+      });
+
+  /// Ищет слово в тексте сообщений, названиях файлов и переводах.
+  void _runSearch(String q) {
+    final needle = _norm(q.trim());
+    final hits = <int>[];
+    if (needle.isNotEmpty) {
+      for (var i = _messages.length - 1; i >= 0; i--) {
+        final m = _messages[i];
+        final hay = _norm([
+          if (m.text != null) AiService.splitChart(m.text!).$1,
+          if (m.attachmentName != null) m.attachmentName!,
+          if (_translations[m.id] != null) _translations[m.id]!,
+        ].join(' '));
+        if (hay.contains(needle)) hits.add(i);
+      }
+    }
+    setState(() {
+      _searchQuery = q.trim();
+      _hits = hits;
+      _hitPos = 0;
+    });
+    if (hits.isNotEmpty) _jumpToHit();
+  }
+
+  void _jumpToHit() {
+    if (_hits.isEmpty || !_itemCtl.isAttached) return;
+    final idx = _hits[_hitPos];
+    _itemCtl.scrollTo(
+        index: _messages.length - 1 - idx,
+        alignment: 0.3,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut);
+  }
+
+  /// Листание вариантов: [older] — к более старому совпадению.
+  void _stepHit({required bool older}) {
+    if (_hits.isEmpty) return;
+    setState(() => _hitPos = (_hitPos + (older ? 1 : -1)) % _hits.length);
+    _jumpToHit();
+  }
+
+  PreferredSizeWidget _searchHeader(BuildContext context) {
+    final theme = Theme.of(context);
+    return GlassHeader(
+      leading: GlassCircleButton(
+        icon: const BoldIcon(Icons.arrow_back),
+        tooltip: tr('Закрыть поиск'),
+        onTap: _closeSearch,
+      ),
+      titlePadding: const EdgeInsets.fromLTRB(4, 4, 8, 4),
+      actions: [
+        GlassCircleButton(
+          icon: const Icon(Icons.keyboard_arrow_up),
+          tooltip: tr('Предыдущее (старее)'),
+          onTap: _hits.isEmpty ? null : () => _stepHit(older: true),
+        ),
+        const SizedBox(width: 6),
+        GlassCircleButton(
+          icon: const Icon(Icons.keyboard_arrow_down),
+          tooltip: tr('Следующее (новее)'),
+          onTap: _hits.isEmpty ? null : () => _stepHit(older: false),
+        ),
+      ],
+      title: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _searchCtl,
+              autofocus: true,
+              textInputAction: TextInputAction.search,
+              onChanged: _runSearch,
+              onSubmitted: (_) => _stepHit(older: true),
+              decoration: InputDecoration(
+                hintText: tr('Поиск по переписке'),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                filled: false,
+              ),
+            ),
+          ),
+          if (_searchQuery.isNotEmpty)
+            Text(
+              _hits.isEmpty ? tr('нет') : '${_hitPos + 1}/${_hits.length}',
+              style: theme.textTheme.labelMedium,
+            ),
+        ],
+      ),
+    );
   }
 
   Future<void> _send() async {
@@ -696,27 +821,78 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _reload();
   }
 
-  /// Скачивание большого вложения (кнопка на пузыре) — в папку документов
-  /// приложения, потоково (см. `ChatSyncService.downloadLargeAttachment`).
-  /// Прогресс не показываем отдельным индикатором (ponytail: сначала
-  /// самое простое) — только "идёт загрузка" на время ожидания.
-  Future<void> _downloadLarge(ChatMessage m) async {
-    setState(() => _sending = true);
+  /// Строка поиска по чату (пусто — поиск не идёт); подсвечивается в тексте.
+  String _searchQuery = '';
+
+  /// Вложения, уже сохранённые в папку Nexus (кнопка «Загрузить» — один раз).
+  Set<String> _saved = {};
+
+  /// Большие вложения, которые сейчас скачиваются с сервера.
+  final Set<String> _downloading = {};
+
+  /// Нажатие на ярлык файла: открывает его внутри приложения. Файл с
+  /// сервера (большой) при первом нажатии скачивается незаметно — без
+  /// уведомлений, только крутится индикатор на ярлыке, — дальше только
+  /// открывается.
+  Future<void> _openAttachment(ChatMessage m) async {
+    if (_downloading.contains(m.id)) return;
     try {
-      final dir = await getApplicationDocumentsDirectory();
-      final destPath = p.join(dir.path, 'chat_downloads',
-          '${m.clientMessageId}_${m.attachmentName ?? 'file'}');
-      await Directory(p.dirname(destPath)).create(recursive: true);
-      await widget.sync.downloadLargeAttachment(m, destPath: destPath);
-      _reload();
+      var msg = m;
+      if (msg.attachmentBase64 == null &&
+          !(msg.attachmentLocalPath != null &&
+              File(msg.attachmentLocalPath!).existsSync()) &&
+          msg.driveFileId != null) {
+        setState(() => _downloading.add(m.id));
+        try {
+          final dir = await getApplicationDocumentsDirectory();
+          final destPath = p.join(dir.path, 'chat_downloads',
+              '${m.clientMessageId}_${m.attachmentName ?? 'file'}');
+          await Directory(p.dirname(destPath)).create(recursive: true);
+          await widget.sync.downloadLargeAttachment(m, destPath: destPath);
+        } finally {
+          if (mounted) setState(() => _downloading.remove(m.id));
+        }
+        _reload();
+        msg = widget.repo.forContact(_contact.id).firstWhere((x) => x.id == m.id, orElse: () => m);
+      }
+      final bytes = await _attachmentBytes(msg);
+      if (bytes == null || !mounted) return;
+      await AttachmentViewer.open(context,
+          name: msg.attachmentName ?? 'file', bytes: bytes, mime: msg.attachmentMime);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content:
-                Text(tr('Не удалось скачать: {e}', {'e': friendlyError(e)}))));
+            content: Text(tr('Не удалось открыть файл: {e}', {'e': friendlyError(e)}))));
       }
-    } finally {
-      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<Uint8List?> _attachmentBytes(ChatMessage m) async {
+    if (m.attachmentBase64 != null) return base64Decode(m.attachmentBase64!);
+    final path = m.attachmentLocalPath;
+    if (path != null && File(path).existsSync()) return File(path).readAsBytes();
+    return null;
+  }
+
+  /// «Загрузить»: переносит вложение в папку Nexus (галерея или «Загрузки»)
+  /// без вопросов и без уведомления; кнопка после этого исчезает.
+  Future<void> _saveAttachment(ChatMessage m) async {
+    final name = m.attachmentName ?? 'file';
+    bool ok;
+    final path = m.attachmentLocalPath;
+    if (m.attachmentBase64 == null && path != null) {
+      ok = await saveFileToAppFolder(path, name, m.attachmentMime);
+    } else if (m.attachmentBase64 != null) {
+      ok = await saveToAppFolder(base64Decode(m.attachmentBase64!), name, m.attachmentMime);
+    } else {
+      return;
+    }
+    if (!mounted) return;
+    if (ok) {
+      widget.repo.markSaved(m.clientMessageId);
+      setState(() => _saved = widget.repo.savedFor(_contact.id));
+    } else {
+      _toastSaved(context, false);
     }
   }
 
@@ -1080,6 +1256,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       onTitleTap: _openPanel,
       leading: widget.embedded ? const SizedBox.shrink() : null,
       actions: [
+        GlassCircleButton(
+          icon: const Icon(Icons.search),
+          tooltip: tr('Поиск по переписке'),
+          onTap: _openSearch,
+        ),
+        const SizedBox(width: 6),
         if (widget.embedded)
           GlassCircleButton(
             icon: const BoldIcon(Icons.notifications_active_outlined),
@@ -1321,7 +1503,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                       onPressed: () => setState(() => _selected.clear())),
                   title: Text('${_selected.length}'),
                 )
-              : _glassHeader(context),
+              : (_searching ? _searchHeader(context) : _glassHeader(context)),
           // resizeToAvoidBottomInset выключен намеренно — Scaffold сам иногда
           // не отыгрывает обратное схлопывание после закрытия клавиатуры
           // системным жестом "назад" (а не тапом), оставляя пустой отступ.
@@ -1346,8 +1528,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                             // Перевёрнутая лента: низ (новые) закреплён — при
                             // открытии клавиатуры последние сообщения остаются
                             // видны, а подгрузка картинок выше не сдвигает экран.
-                            : ListView.builder(
-                                controller: _scroll,
+                            : ScrollablePositionedList.builder(
+                                itemScrollController: _itemCtl,
+                                itemPositionsListener: _itemPos,
                                 reverse: true,
                                 padding: EdgeInsets.fromLTRB(
                                     12,
@@ -1526,7 +1709,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   onRetry: () => _retry(m),
                   onAckCall: () => _ackCall(m),
                   onCancelCall: () => _cancelCall(m),
-                  onDownloadLarge: () => _downloadLarge(m),
+                  onOpenFile: () => _openAttachment(m),
+                  onSave: () => _saveAttachment(m),
+                  saved: _saved.contains(m.clientMessageId),
+                  downloading: _downloading.contains(m.id),
+                  highlight: _searchQuery,
                 ),
                 _reactionChips(m),
                 // Выбрано одно сообщение — панель реакций прямо под ним.
@@ -1550,11 +1737,36 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 }
 
+/// Текст с подсвеченными совпадениями со словом поиска по чату (без учёта
+/// регистра и ё/е).
+Widget _highlightedText(String text, TextStyle? style, String query) {
+  if (query.isEmpty) return Text(text, style: style);
+  String norm(String t) => t.toLowerCase().replaceAll('ё', 'е');
+  final hay = norm(text), needle = norm(query);
+  if (hay.length != text.length || needle.isEmpty || !hay.contains(needle)) {
+    return Text(text, style: style);
+  }
+  final spans = <TextSpan>[];
+  var from = 0;
+  while (true) {
+    final i = hay.indexOf(needle, from);
+    if (i < 0) break;
+    if (i > from) spans.add(TextSpan(text: text.substring(from, i)));
+    spans.add(TextSpan(
+        text: text.substring(i, i + needle.length),
+        style: const TextStyle(
+            backgroundColor: Color(0xAAFFC107), color: Colors.black)));
+    from = i + needle.length;
+  }
+  if (from < text.length) spans.add(TextSpan(text: text.substring(from)));
+  return Text.rich(TextSpan(style: style, children: spans));
+}
+
+/// Сохранение в папку Nexus идёт без уведомления; сообщаем только о неудаче.
 void _toastSaved(BuildContext context, bool ok) {
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(ok
-          ? tr('Сохранено в папку Nexus')
-          : tr('Не удалось сохранить файл'))));
+  if (ok) return;
+  ScaffoldMessenger.of(context)
+      .showSnackBar(SnackBar(content: Text(tr('Не удалось сохранить файл'))));
 }
 
 class _Bubble extends StatelessWidget {
@@ -1567,7 +1779,19 @@ class _Bubble extends StatelessWidget {
   final VoidCallback onRetry;
   final VoidCallback onAckCall;
   final VoidCallback onCancelCall;
-  final VoidCallback onDownloadLarge;
+  final VoidCallback onOpenFile;
+
+  /// Сохранить вложение в папку Nexus (кнопка «Загрузить», один раз).
+  final VoidCallback onSave;
+
+  /// Вложение уже сохранено — кнопка «Загрузить» больше не показывается.
+  final bool saved;
+
+  /// Большой файл сейчас скачивается с сервера.
+  final bool downloading;
+
+  /// Слово поиска по чату — подсвечивается в тексте.
+  final String highlight;
 
   /// Автор входящего в группе (в личном чате — null).
   final String? senderName;
@@ -1582,7 +1806,11 @@ class _Bubble extends StatelessWidget {
     required this.onRetry,
     required this.onAckCall,
     required this.onCancelCall,
-    required this.onDownloadLarge,
+    required this.onOpenFile,
+    required this.onSave,
+    required this.saved,
+    required this.downloading,
+    required this.highlight,
   });
 
   static const double _imageMaxWidth = 260;
@@ -1686,94 +1914,28 @@ class _Bubble extends StatelessWidget {
           ),
         ],
         if (!isImage && message.type == ChatMessageType.file) ...[
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.insert_drive_file_outlined, color: fg),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Builder(builder: (context) {
-                  final name = message.attachmentName ?? tr('Файл');
-                  final base64 = message.attachmentBase64;
-                  final isPdf = message.attachmentMime == 'application/pdf' ||
-                      name.toLowerCase().endsWith('.pdf');
-                  final text = Text(
-                    '$name · ${ChatMediaUtils.formatSize(message.attachmentSize)}',
-                    style: theme.textTheme.bodyMedium?.copyWith(color: fg),
-                    overflow: TextOverflow.ellipsis,
-                  );
-                  // PDF — сразу в приложении, а не наружу (решение
-                  // пользователя): та же логика, что в панели контакта.
-                  if (!isPdf || base64 == null) return text;
-                  return InkWell(
-                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => PdfViewerScreen(
-                          bytes: base64Decode(base64), fileName: name),
-                    )),
-                    child: text,
-                  );
-                }),
-              ),
-              if ((mine || message.downloadAllowed) &&
-                  message.attachmentBase64 != null) ...[
-                const SizedBox(width: 6),
-                InkWell(
-                  onTap: () => ChatMediaUtils.shareAttachment(
-                    base64Decode(message.attachmentBase64!),
-                    message.attachmentName ?? 'file',
-                    message.attachmentMime,
-                  ),
-                  child: Tooltip(
-                      message: tr('Поделиться'),
-                      child: Icon(Icons.share_outlined, color: fg, size: 20)),
-                ),
-                if (!mine) ...[
-                  const SizedBox(width: 6),
-                  InkWell(
-                    onTap: () async {
-                      final ok = await saveToAppFolder(
-                          base64Decode(message.attachmentBase64!),
-                          message.attachmentName ?? 'file',
-                          message.attachmentMime);
-                      if (context.mounted) _toastSaved(context, ok);
-                    },
-                    child: Tooltip(
-                        message: tr('Скачать'),
-                        child:
-                            Icon(Icons.download_outlined, color: fg, size: 20)),
-                  ),
-                ],
-              ] else if (!mine &&
-                  message.downloadAllowed &&
-                  message.attachmentLocalPath != null) ...[
-                // Большое вложение уже скачано (или это своя же
-                // исходная копия у отправителя) — байты не в SQLite,
-                // делимся по пути на диске.
-                const SizedBox(width: 4),
-                InkWell(
-                  onTap: () async {
-                    final ok = await saveFileToAppFolder(
-                        message.attachmentLocalPath!,
-                        message.attachmentName ?? 'file',
-                        message.attachmentMime);
-                    if (context.mounted) _toastSaved(context, ok);
-                  },
-                  child: Icon(Icons.folder_open_outlined, color: fg, size: 20),
-                ),
-              ] else if (!mine &&
-                  message.downloadAllowed &&
-                  message.driveFileId != null) ...[
-                // Большое вложение ещё лежит на Диске — сама передача
-                // начинается только по явному тапу, не сама по себе при
-                // получении сообщения (см. `ChatSyncService.pollIncoming`).
-                const SizedBox(width: 4),
-                InkWell(
-                  onTap: onDownloadLarge,
-                  child:
-                      Icon(Icons.cloud_download_outlined, color: fg, size: 20),
-                ),
-              ],
-            ],
+          // Ярлык файла: расширение на кнопке, название снизу. Нажатие
+          // открывает файл внутри приложения (большой файл с сервера при
+          // первом нажатии скачивается незаметно). Кнопка «Загрузить»
+          // (сохранить в папку Nexus) показывается один раз.
+          FileChip(
+            name: message.attachmentName ?? tr('Файл'),
+            size: message.attachmentSize,
+            fg: fg,
+            remote: message.attachmentBase64 == null &&
+                message.attachmentLocalPath == null &&
+                message.driveFileId != null,
+            busy: downloading,
+            onSave: !mine &&
+                    message.downloadAllowed &&
+                    !saved &&
+                    (message.attachmentBase64 != null ||
+                        message.attachmentLocalPath != null)
+                ? onSave
+                : null,
+            onTap: (mine || message.downloadAllowed || message.attachmentBase64 != null)
+                ? onOpenFile
+                : null,
           ),
           const SizedBox(height: 6),
         ] else if (!isImage && message.type == ChatMessageType.call) ...[
@@ -1819,7 +1981,7 @@ class _Bubble extends StatelessWidget {
           // Пока идёт перевод — оригинал чуть бледнее, высота не меняется.
           Opacity(
               opacity: translating ? 0.6 : 1,
-              child: Text(captionText, style: textStyle)),
+              child: _highlightedText(captionText, textStyle, highlight)),
         if (masked &&
             translation != null &&
             translation!.trim().isNotEmpty &&
@@ -1888,14 +2050,8 @@ class _Bubble extends StatelessWidget {
                           base64Decode(message.attachmentBase64!),
                           name,
                           message.attachmentMime)),
-                if (canDownload)
-                  roundAction(Icons.download_outlined, tr('Скачать'), () async {
-                    final ok = await saveToAppFolder(
-                        base64Decode(message.attachmentBase64!),
-                        name,
-                        message.attachmentMime);
-                    if (context.mounted) _toastSaved(context, ok);
-                  }),
+                if (canDownload && !saved)
+                  roundAction(Icons.download_outlined, tr('Скачать'), onSave),
               ],
             ),
           ),

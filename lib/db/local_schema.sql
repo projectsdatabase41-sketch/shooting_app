@@ -199,6 +199,13 @@ CREATE TABLE IF NOT EXISTS chat_reactions (
   PRIMARY KEY (client_message_id, user_id)
 );
 
+-- Вложения, которые пользователь уже сохранил в папку Nexus (кнопка «Загрузить»
+-- показывается один раз).
+CREATE TABLE IF NOT EXISTS chat_saved_attachments (
+  client_message_id TEXT PRIMARY KEY
+);
+
+
 -- Кэш последней загруженной ленты общего чата — сам общий чат хранится
 -- на сервере (chat_global_messages), но экран раньше перечитывал его
 -- заново при КАЖДОМ открытии, показывая пустой экран с крутилкой на

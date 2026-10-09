@@ -1238,5 +1238,13 @@
   "Проверяю": "Prüfe",
   "Быстрый ответ: короткий простой запрос": "Schnelle Antwort: kurze, einfache Anfrage",
   "Точный ответ: числа пересчитываются и проверяются": "Genaue Antwort: Zahlen werden nachgerechnet und geprüft",
-  "Три помощника: план, решение, проверка — дольше, но точнее": "Drei Helfer: Plan, Lösung, Prüfung — langsamer, aber genauer"
+  "Три помощника: план, решение, проверка — дольше, но точнее": "Drei Helfer: Plan, Lösung, Prüfung — langsamer, aber genauer",
+  "Не удалось открыть файл: {e}": "Datei konnte nicht geöffnet werden: {e}",
+  "Этот тип файла нельзя показать внутри приложения.": "Dieser Dateityp kann nicht in der App angezeigt werden.",
+  "Открыть в другом приложении": "In anderer App öffnen",
+  "Закрыть поиск": "Suche schließen",
+  "Предыдущее (старее)": "Vorheriger (älter)",
+  "Следующее (новее)": "Nächster (neuer)",
+  "Поиск по переписке": "In der Unterhaltung suchen",
+  "нет": "keine"
 }

@@ -1238,5 +1238,13 @@
   "Проверяю": "Verifying",
   "Быстрый ответ: короткий простой запрос": "Fast answer: a short, simple prompt",
   "Точный ответ: числа пересчитываются и проверяются": "Accurate answer: numbers are recomputed and checked",
-  "Три помощника: план, решение, проверка — дольше, но точнее": "Three helpers: plan, solve, verify — slower but more accurate"
+  "Три помощника: план, решение, проверка — дольше, но точнее": "Three helpers: plan, solve, verify — slower but more accurate",
+  "Не удалось открыть файл: {e}": "Could not open the file: {e}",
+  "Этот тип файла нельзя показать внутри приложения.": "This file type cannot be shown inside the app.",
+  "Открыть в другом приложении": "Open in another app",
+  "Закрыть поиск": "Close search",
+  "Предыдущее (старее)": "Previous (older)",
+  "Следующее (новее)": "Next (newer)",
+  "Поиск по переписке": "Search in the chat",
+  "нет": "none"
 }

@@ -461,6 +461,13 @@ CREATE TABLE IF NOT EXISTS chat_reactions (
   PRIMARY KEY (client_message_id, user_id)
 );
 
+-- Вложения, которые пользователь уже сохранил в папку Nexus (кнопка «Загрузить»
+-- показывается один раз).
+CREATE TABLE IF NOT EXISTS chat_saved_attachments (
+  client_message_id TEXT PRIMARY KEY
+);
+
+
 CREATE TABLE IF NOT EXISTS shots (
   id                  TEXT PRIMARY KEY,
   session_id          TEXT NOT NULL REFERENCES training_sessions(id) ON DELETE CASCADE,

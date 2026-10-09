@@ -209,6 +209,18 @@ class ChatMessagesRepository {
     }
   }
 
+  /// Сообщения диалога, вложение которых уже сохранено в папку Nexus.
+  Set<String> savedFor(String contactId) => {
+        for (final r in db.db.select(
+            'SELECT s.client_message_id AS id FROM chat_saved_attachments s '
+            'JOIN chat_local_messages m ON m.client_message_id = s.client_message_id WHERE m.contact_id = ?',
+            [contactId]))
+          r['id'] as String
+      };
+
+  void markSaved(String clientMessageId) => db.db.execute(
+      'INSERT OR IGNORE INTO chat_saved_attachments (client_message_id) VALUES (?)', [clientMessageId]);
+
   /// Реакции сообщений диалога: client_message_id -> (user_id -> emoji).
   Map<String, Map<String, String>> reactionsForContact(String contactId) {
     final rows = db.db.select(
