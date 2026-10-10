@@ -1246,5 +1246,15 @@
   "Предыдущее (старее)": "Previous (older)",
   "Следующее (новее)": "Next (newer)",
   "Поиск по переписке": "Search in the chat",
-  "нет": "none"
+  "нет": "none",
+  "Нет доступа к микрофону — разрешите его в настройках": "No microphone access — allow it in the settings",
+  "Не удалось записать: {e}": "Could not record: {e}",
+  "Кружок (видео до 2 минут)": "Video note (up to 2 minutes)",
+  "Голосовое сообщение": "Voice message",
+  "Отменить запись": "Cancel recording",
+  "Идёт запись…": "Recording…",
+  "Запись слишком большая для отправки из браузера": "The recording is too large to send from the browser",
+  "Камера не найдена": "Camera not found",
+  "Кружок до {m} мин": "Video note up to {m} min",
+  "Сменить камеру": "Switch camera"
 }

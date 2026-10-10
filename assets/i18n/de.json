@@ -1246,5 +1246,15 @@
   "Предыдущее (старее)": "Vorheriger (älter)",
   "Следующее (новее)": "Nächster (neuer)",
   "Поиск по переписке": "In der Unterhaltung suchen",
-  "нет": "keine"
+  "нет": "keine",
+  "Нет доступа к микрофону — разрешите его в настройках": "Kein Zugriff auf das Mikrofon — in den Einstellungen erlauben",
+  "Не удалось записать: {e}": "Aufnahme fehlgeschlagen: {e}",
+  "Кружок (видео до 2 минут)": "Videonachricht (bis 2 Minuten)",
+  "Голосовое сообщение": "Sprachnachricht",
+  "Отменить запись": "Aufnahme abbrechen",
+  "Идёт запись…": "Aufnahme läuft…",
+  "Запись слишком большая для отправки из браузера": "Die Aufnahme ist zu groß für den Versand aus dem Browser",
+  "Камера не найдена": "Kamera nicht gefunden",
+  "Кружок до {m} мин": "Videonachricht bis {m} Min.",
+  "Сменить камеру": "Kamera wechseln"
 }

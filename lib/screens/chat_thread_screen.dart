@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
@@ -24,7 +25,11 @@ import '../services/chat_auth_service.dart';
 import '../services/chat_messages_repository.dart';
 import '../services/chat_preferences.dart';
 import '../services/chat_presence.dart';
+import '../services/voice_recorder.dart';
+import '../widgets/circle_video.dart';
 import '../widgets/file_chip.dart';
+import '../widgets/voice_bubble.dart';
+import 'circle_recorder_screen.dart';
 import '../widgets/reaction_bar.dart';
 import 'attachment_viewer.dart';
 import '../logic/save_to_app_folder.dart';
@@ -364,6 +369,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _pollLoop?.stop();
     _stopLive();
     _flushTranslations?.cancel();
+    _voiceTimer?.cancel();
+    _voice.dispose();
     _input.dispose();
     _itemPos.itemPositions.removeListener(_onScroll);
     _searchCtl.dispose();
@@ -1346,6 +1353,223 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   /// Низ — отдельные поля: стеклянная таблетка ввода и круглая кнопка отправки.
+  // ---- Голосовые и кружки ----
+  final _voice = VoiceRecorder();
+  bool _voiceRecording = false;
+  int _voiceSecs = 0;
+  Timer? _voiceTimer;
+
+  /// Секунды из имени вложения: voice-42.m4a / circle-75.mp4.
+  static int _secondsFromName(String? name) {
+    final m = RegExp(r'-(\d+)\.').firstMatch(name ?? '');
+    return m == null ? 0 : int.parse(m.group(1)!);
+  }
+
+  Future<void> _startVoice() async {
+    try {
+      if (!await _voice.start()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(tr('Нет доступа к микрофону — разрешите его в настройках'))));
+        }
+        return;
+      }
+      setState(() {
+        _voiceRecording = true;
+        _voiceSecs = 0;
+      });
+      _voiceTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() => _voiceSecs = _voice.elapsedSeconds);
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(tr('Не удалось записать: {e}', {'e': friendlyError(e)}))));
+      }
+    }
+  }
+
+  Future<void> _finishVoice({required bool send}) async {
+    _voiceTimer?.cancel();
+    if (!send) {
+      await _voice.cancel();
+      if (mounted) setState(() => _voiceRecording = false);
+      return;
+    }
+    final clip = await _voice.stop();
+    if (mounted) setState(() => _voiceRecording = false);
+    if (clip == null) return;
+    final ext = clip.path.toLowerCase().endsWith('.webm') ? 'webm' : 'm4a';
+    await _sendRecorded(
+      type: ChatMessageType.audio,
+      name: 'voice-${clip.seconds}.$ext',
+      mime: ext == 'webm' ? 'audio/webm' : 'audio/mp4',
+      bytes: kIsWeb ? await clip.readBytes() : null,
+      path: kIsWeb ? null : clip.path,
+    );
+  }
+
+  /// «Кружок»: полноэкранная запись видео в круге до 2 минут.
+  Future<void> _recordCircle() async {
+    final r = await Navigator.of(context).push<CircleResult>(
+        MaterialPageRoute(builder: (_) => const CircleRecorderScreen()));
+    if (r == null || !mounted) return;
+    final isWebm = r.file.name.toLowerCase().endsWith('.webm');
+    await _sendRecorded(
+      type: ChatMessageType.video,
+      name: 'circle-${r.seconds}.${isWebm ? 'webm' : 'mp4'}',
+      mime: isWebm ? 'video/webm' : 'video/mp4',
+      bytes: kIsWeb ? await r.file.readAsBytes() : null,
+      path: kIsWeb ? null : r.file.path,
+    );
+  }
+
+  /// Отправка записи: небольшую (до 8 МБ) — обычным вложением, большую — файлом
+  /// через Google Drive (как большие файлы). Из базы получатель её удаляет
+  /// после скачивания — тот же алгоритм, что у остальных вложений.
+  Future<void> _sendRecorded({
+    required ChatMessageType type,
+    required String name,
+    required String mime,
+    Uint8List? bytes,
+    String? path,
+  }) async {
+    setState(() => _sending = true);
+    try {
+      final allowed =
+          widget.prefs.downloadAllowedFor(isPersonal: !_contact.isGroup);
+      var data = bytes;
+      var size = bytes?.length ?? 0;
+      if (path != null) size = await File(path).length();
+      if (size <= 8 * 1024 * 1024) {
+        data ??= await File(path!).readAsBytes();
+        await widget.sync.sendAttachment(
+          contactId: _contact.id,
+          bytes: data,
+          fileName: name,
+          mime: mime,
+          type: type,
+          downloadAllowed: allowed,
+        );
+      } else if (path != null) {
+        // Копия в папке приложения — временную систему может очистить.
+        final dir = await getApplicationDocumentsDirectory();
+        final keep = p.join(dir.path, 'chat_media',
+            '${DateTime.now().millisecondsSinceEpoch}_$name');
+        await Directory(p.dirname(keep)).create(recursive: true);
+        await File(path).copy(keep);
+        await widget.sync.sendLargeAttachment(
+          contactId: _contact.id,
+          filePath: keep,
+          fileName: name,
+          mime: mime,
+          type: type,
+          fileSize: size,
+          downloadAllowed: allowed,
+        );
+      } else if (size <= ChatMediaUtils.maxAttachmentBytes) {
+        await widget.sync.sendAttachment(
+          contactId: _contact.id,
+          bytes: data!,
+          fileName: name,
+          mime: mime,
+          type: type,
+          downloadAllowed: allowed,
+        );
+      } else {
+        throw Exception(tr('Запись слишком большая для отправки из браузера'));
+      }
+      _scrollToEnd();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(tr('Не отправлено: {e}', {'e': friendlyError(e)}))));
+      }
+    } finally {
+      if (mounted) {
+        _reload();
+        setState(() => _sending = false);
+      }
+    }
+  }
+
+  /// Источник для воспроизведения голосового или кружка: файл с сервера
+  /// при первом обращении скачивается незаметно.
+  Future<MediaSource?> _mediaSource(ChatMessage m) async {
+    try {
+      var msg = m;
+      if (msg.attachmentBase64 == null &&
+          !(msg.attachmentLocalPath != null &&
+              File(msg.attachmentLocalPath!).existsSync()) &&
+          msg.driveFileId != null) {
+        final dir = await getApplicationDocumentsDirectory();
+        final destPath = p.join(dir.path, 'chat_downloads',
+            '${m.clientMessageId}_${m.attachmentName ?? 'file'}');
+        await Directory(p.dirname(destPath)).create(recursive: true);
+        await widget.sync.downloadLargeAttachment(m, destPath: destPath);
+        _reload();
+        msg = widget.repo
+            .forContact(_contact.id)
+            .firstWhere((x) => x.id == m.id, orElse: () => m);
+      }
+      final mime = msg.attachmentMime ?? 'application/octet-stream';
+      if (msg.attachmentBase64 != null) {
+        return MediaSource(bytes: base64Decode(msg.attachmentBase64!), mime: mime);
+      }
+      final path = msg.attachmentLocalPath;
+      if (path != null && File(path).existsSync()) {
+        return MediaSource(path: path, mime: mime);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(tr('Не удалось открыть файл: {e}', {'e': friendlyError(e)}))));
+      }
+    }
+    return null;
+  }
+
+  /// Панель записи голосового вместо строки ввода: отмена, время, отправка.
+  Widget _voiceBar(ColorScheme cs) => Row(
+        children: [
+          GlassCircleButton(
+            size: 50,
+            icon: const Icon(Icons.delete_outline),
+            tooltip: tr('Отменить запись'),
+            onTap: () => _finishVoice(send: false),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: GlassPill(
+              radius: 25,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                children: [
+                  const Icon(Icons.fiber_manual_record, color: Colors.red, size: 14),
+                  const SizedBox(width: 8),
+                  Text(formatClock(_voiceSecs),
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(tr('Идёт запись…'),
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GlassCircleButton(
+            size: 50,
+            color: cs.primary.withValues(alpha: 0.85),
+            icon: Icon(Icons.send, color: cs.onPrimary),
+            tooltip: tr('Отправить'),
+            onTap: () => _finishVoice(send: true),
+          ),
+        ],
+      );
+
   Widget _glassComposer(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Column(
@@ -1398,7 +1622,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           bottom: !_emojiOpen && MediaQuery.viewInsetsOf(context).bottom == 0,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-            child: Row(
+            child: _voiceRecording
+                ? _voiceBar(cs)
+                : Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Expanded(
@@ -1447,6 +1673,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                       CircularProgressIndicator(strokeWidth: 2))
                               : const Icon(Icons.auto_awesome_outlined),
                         ),
+                        IconButton(
+                          onPressed: _sending ? null : _recordCircle,
+                          tooltip: tr('Кружок (видео до 2 минут)'),
+                          icon: const Icon(Icons.videocam_outlined),
+                        ),
                         GestureDetector(
                           // Долгое нажатие — большой файл через Google Drive,
                           // в обход лимита обычных вложений (см. `_attachLarge`).
@@ -1463,11 +1694,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   ),
                 ),
                 const SizedBox(width: 8),
-                GlassCircleButton(
-                  size: 50,
-                  color: cs.primary.withValues(alpha: 0.85),
-                  onTap: _sending ? null : _send,
-                  icon: Icon(Icons.send, color: cs.onPrimary),
+                // Пустое поле — микрофон (голосовое), есть текст — отправка.
+                ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: _input,
+                  builder: (_, v, __) {
+                    final empty = v.text.trim().isEmpty && _pendingChart == null;
+                    return GlassCircleButton(
+                      size: 50,
+                      color: cs.primary.withValues(alpha: 0.85),
+                      tooltip: empty ? tr('Голосовое сообщение') : null,
+                      onTap: _sending ? null : (empty ? _startVoice : _send),
+                      icon: Icon(empty ? Icons.mic : Icons.send,
+                          color: cs.onPrimary),
+                    );
+                  },
                 ),
               ],
             ),
@@ -1710,6 +1950,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   onAckCall: () => _ackCall(m),
                   onCancelCall: () => _cancelCall(m),
                   onOpenFile: () => _openAttachment(m),
+                  onLoadMedia: () => _mediaSource(m),
                   onSave: () => _saveAttachment(m),
                   saved: _saved.contains(m.clientMessageId),
                   downloading: _downloading.contains(m.id),
@@ -1781,6 +2022,9 @@ class _Bubble extends StatelessWidget {
   final VoidCallback onCancelCall;
   final VoidCallback onOpenFile;
 
+  /// Источник для голосового/кружка (скачивает с сервера при первом обращении).
+  final Future<MediaSource?> Function() onLoadMedia;
+
   /// Сохранить вложение в папку Nexus (кнопка «Загрузить», один раз).
   final VoidCallback onSave;
 
@@ -1807,6 +2051,7 @@ class _Bubble extends StatelessWidget {
     required this.onAckCall,
     required this.onCancelCall,
     required this.onOpenFile,
+    required this.onLoadMedia,
     required this.onSave,
     required this.saved,
     required this.downloading,
@@ -1913,7 +2158,22 @@ class _Bubble extends StatelessWidget {
             ),
           ),
         ],
-        if (!isImage && message.type == ChatMessageType.file) ...[
+        if (message.type == ChatMessageType.audio) ...[
+          VoicePlayerBar(
+            durationSec:
+                _ChatThreadScreenState._secondsFromName(message.attachmentName),
+            fg: fg,
+            load: onLoadMedia,
+          ),
+          const SizedBox(height: 4),
+        ] else if (message.type == ChatMessageType.video) ...[
+          CircleVideo(
+            durationSec:
+                _ChatThreadScreenState._secondsFromName(message.attachmentName),
+            load: onLoadMedia,
+          ),
+          const SizedBox(height: 4),
+        ] else if (!isImage && message.type == ChatMessageType.file) ...[
           // Ярлык файла: расширение на кнопке, название снизу. Нажатие
           // открывает файл внутри приложения (большой файл с сервера при
           // первом нажатии скачивается незаметно). Кнопка «Загрузить»
