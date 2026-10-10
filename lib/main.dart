@@ -15,7 +15,9 @@ import 'services/chat_sync_service.dart';
 import 'services/firebase_settings.dart';
 import 'services/knowledge_service.dart';
 import 'services/local_db_service.dart';
+import 'screens/onboarding_screen.dart';
 import 'services/modules_settings.dart';
+import 'services/user_profile.dart';
 import 'services/push_service.dart';
 import 'services/remote_config.dart';
 import 'local_ai/local_ai_platform.dart';
@@ -114,7 +116,10 @@ class _DbOpenFailedApp extends StatelessWidget {
 class ShootingApp extends StatefulWidget {
   final LocalDbService db;
 
-  const ShootingApp({super.key, required this.db});
+  /// Показывать ли обязательную анкету при первом открытии (в тестах выключают).
+  final bool requireProfile;
+
+  const ShootingApp({super.key, required this.db, this.requireProfile = true});
 
   @override
   State<ShootingApp> createState() => _ShootingAppState();
@@ -397,10 +402,41 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
             // работает локально, и требовать вход при каждом запуске ради
             // необязательной возможности — значит запирать дверь, за
             // которой ничего нет. Подключение к базе живёт в настройках.
-            home: const HomeShell(),
+            home: _ProfileGate(db: widget.db, require: widget.requireProfile),
           );
         },
       ),
+    );
+  }
+}
+
+/// При первом открытии — обязательная анкета, после неё один раз
+/// предложение синхронизации с облаком; дальше — главный экран.
+class _ProfileGate extends StatefulWidget {
+  final LocalDbService db;
+  final bool require;
+  const _ProfileGate({required this.db, required this.require});
+
+  @override
+  State<_ProfileGate> createState() => _ProfileGateState();
+}
+
+class _ProfileGateState extends State<_ProfileGate> {
+  late bool _needs = widget.require && UserProfile.needsOnboarding(widget.db);
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_needs) return const HomeShell();
+    return OnboardingScreen(
+      db: widget.db,
+      onDone: () {
+        setState(() => _needs = false);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || UserProfile.syncOffered(widget.db)) return;
+          UserProfile.markSyncOffered(widget.db);
+          showSyncOffer(context);
+        });
+      },
     );
   }
 }

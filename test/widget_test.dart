@@ -15,7 +15,7 @@ void main() {
     final db = LocalDbService();
     await db.open(overridePath: ':memory:');
 
-    await tester.pumpWidget(ShootingApp(db: db));
+    await tester.pumpWidget(ShootingApp(db: db, requireProfile: false));
     await tester.pump();
 
     // Нижняя навигация (HomeTabsBar) — то, что есть на любом стартовом

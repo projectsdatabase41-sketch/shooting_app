@@ -27,6 +27,7 @@ import 'ai_settings_screen.dart';
 import 'settings_appearance_screen.dart';
 import 'settings_data_screen.dart';
 import 'settings_home_tabs_screen.dart';
+import 'onboarding_screen.dart';
 import 'settings_modules_screen.dart';
 import 'settings_services_screen.dart';
 import '../services/modules_settings.dart';
@@ -103,6 +104,19 @@ class SettingsScreen extends StatelessWidget {
                   builder: (_) =>
                       SettingsHomeTabsScreen(specs: specs, tabs: homeTabs)),
             ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.badge_outlined),
+            title: Text(tr('Профиль спортсмена')),
+            subtitle: Text(tr('Вид стрельбы, пол, год рождения, разряд, регион')),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              final db = store.db;
+              Navigator.of(context).push(MaterialPageRoute(
+                builder: (ctx) => OnboardingScreen(
+                    db: db, editing: true, onDone: () => Navigator.of(ctx).pop()),
+              ));
+            },
           ),
           ListTile(
             leading: const Icon(Icons.tune),

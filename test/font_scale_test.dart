@@ -11,7 +11,7 @@ void main() {
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     final db = LocalDbService();
     await db.open(overridePath: ':memory:');
-    await tester.pumpWidget(ShootingApp(db: db));
+    await tester.pumpWidget(ShootingApp(db: db, requireProfile: false));
     await tester.pump();
     final ex = tester.takeException();
     if (ex != null) {
