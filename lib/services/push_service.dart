@@ -255,6 +255,8 @@ class PushService {
   static void _handleForegroundMessage(RemoteMessage message) {
     if (message.data['type'] == 'task' && _isAndroid)
       showTaskNotification(message.data);
+    if (message.data['type'] == 'coach_call' && _isAndroid)
+      showCoachCallNotification(message.data);
     // На вебе/iOS усиленного канала нет (см. showCallNotification) —
     // пока приложение открыто, новое "Позвать" и так почти сразу
     // покажет опрос (10-20с), отдельно тут его не дублируем.
@@ -600,7 +602,10 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: PushService._options);
   if (!PushService._isAndroid) return;
   final type = message.data['type'];
-  if (type == 'task') {
+  if (type == 'coach_call') {
+    await _initLocalNotifications();
+    await showCoachCallNotification(message.data);
+  } else if (type == 'task') {
     await _initLocalNotifications();
     await showTaskNotification(message.data);
   } else if (type == 'call') {
@@ -638,6 +643,29 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 /// Уведомление о задании (новое / снято / выполнено) — тап открывает задание.
 /// В фоновом изоляте словарь перевода не загружен, поэтому текст по-русски.
+/// Вызов тренера без мессенджера (Android): громкое уведомление с повтором
+/// сигнала, пока не откроют или не смахнут.
+Future<void> showCoachCallNotification(Map<String, dynamic> data) async {
+  final who = '${data['who'] ?? ''}';
+  await _localNotifications.show(
+    PushService._callNotificationId,
+    '${who.isEmpty ? 'Спортсмен' : who}: вызывает вас',
+    'Нужна помощь тренера',
+    NotificationDetails(
+      android: AndroidNotificationDetails(
+        PushService.callChannelId,
+        tr('Позвать'),
+        importance: Importance.max,
+        priority: Priority.max,
+        category: AndroidNotificationCategory.call,
+        additionalFlags: Int32List.fromList([4]),
+        timeoutAfter: 120000,
+      ),
+    ),
+    payload: 'coach_call',
+  );
+}
+
 Future<void> showTaskNotification(Map<String, dynamic> data) async {
   final taskId = '${data['task_id'] ?? ''}';
   final who = '${data['who'] ?? ''}';

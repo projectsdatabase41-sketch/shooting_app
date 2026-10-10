@@ -6,6 +6,7 @@
 //   POST /register        {token}                  — FCM-токен устройства (для входящих)
 //   GET  /ice                                      — STUN/TURN для WebRTC (временные доступы)
 //   POST /call            {callId, to, name, video} — позвонить: push «входящий звонок»
+//   POST /task-push       {kind: 'call'|'done'|'new'|…} — вызов тренера и push заданий (без мессенджера)
 //   POST /cancel          {callId, to}             — отменить исходящий
 //   GET  /room/<callId>?token=…  (WebSocket)       — обмен offer/answer/ice/hangup
 //
@@ -196,16 +197,27 @@ export default {
       const kind = String(b.kind ?? '');
       const taskId = String(b.taskId ?? '');
       if (!/^https:\/\/[a-z0-9]{8,40}\.supabase\.co$/.test(db) || !key || key.length > 2000) return json({ error: 'bad db' }, 400);
-      if (!/^[0-9a-f-]{36}$/.test(taskId)) return json({ error: 'bad task' }, 400);
+      // 'call' — вызов тренера без мессенджера (задания не нужны).
+      if (kind !== 'call' && !/^[0-9a-f-]{36}$/.test(taskId)) return json({ error: 'bad task' }, 400);
       const title = String(b.title ?? '').slice(0, 120);
       const who = String(b.who ?? '').slice(0, 60);
       let tokens: string[];
-      if (kind === 'done') {
+      if (kind === 'done' || kind === 'call') {
+        // Вход спортсмена в СВОЮ базу проверяет она сама: чужой проект
+        // получит только тренеров, зарегистрированных в нём.
         tokens = await rpcTokens(db, key, String(b.jwt ?? ''), 'task_coach_targets', {});
       } else if (kind === 'new' || kind === 'removed' || kind === 'reminder') {
         tokens = await rpcTokens(db, key, key, 'task_push_targets', { p_token: String(b.token ?? '') });
       } else {
         return json({ error: 'bad kind' }, 400);
+      }
+      if (kind === 'call') {
+        let sentCall = 0;
+        for (const t of tokens.slice(0, 10)) {
+          const ok = await sendTask(env, t, { type: 'coach_call', who }, `${who || 'Спортсмен'}: вызывает вас`, 'Нужна помощь тренера');
+          if (ok) sentCall++;
+        }
+        return json({ sent: sentCall });
       }
       const heading = kind === 'done' ? `${who || 'Спортсмен'}: задание выполнено` : kind === 'removed' ? 'Задание снято тренером' : 'Новое задание';
       let sent = 0;

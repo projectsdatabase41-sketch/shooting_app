@@ -1296,5 +1296,7 @@
   "Подключите в приложении": "Connect in the app",
   "Настройки → «Данные и синхронизация»: вставьте адрес проекта и ключ, затем нажмите «Отправить в облако».": "Settings > \"Data and sync\": paste the project address and key, then press \"Send to cloud\".",
   "Позже": "Later",
-  "Открыть настройки": "Open settings"
+  "Открыть настройки": "Open settings",
+  "Тренер получит вызов": "The coach will get the call",
+  "Вызов не доставлен: тренер ещё не открывал приложение с вашим токеном или нет связи": "Not delivered: the coach has not opened the app with your token yet, or there is no connection"
 }

@@ -1296,5 +1296,7 @@
   "Подключите в приложении": "In der App verbinden",
   "Настройки → «Данные и синхронизация»: вставьте адрес проекта и ключ, затем нажмите «Отправить в облако».": "Einstellungen > \"Daten und Synchronisierung\": Projektadresse und Schlüssel einfügen, dann \"In die Cloud senden\" drücken.",
   "Позже": "Später",
-  "Открыть настройки": "Einstellungen öffnen"
+  "Открыть настройки": "Einstellungen öffnen",
+  "Тренер получит вызов": "Der Trainer erhält den Ruf",
+  "Вызов не доставлен: тренер ещё не открывал приложение с вашим токеном или нет связи": "Nicht zugestellt: Der Trainer hat die App mit Ihrem Token noch nicht geöffnet oder es gibt keine Verbindung"
 }

@@ -6,6 +6,7 @@ import '../services/chat_auth_service.dart';
 import '../services/chat_messages_repository.dart';
 import '../services/chat_preferences.dart';
 import '../services/chat_sync_service.dart';
+import '../services/coach_call.dart';
 import '../services/coach_chat_link.dart';
 import '../services/local_db_service.dart';
 import '../services/supabase_auth_service.dart';
@@ -67,18 +68,26 @@ class _CallCoachButtonState extends State<CallCoachButton> {
 
   Future<void> _call({bool choose = false}) async {
     final messenger = ScaffoldMessenger.of(context);
-    if (!_auth.isSignedIn) {
-      messenger.showSnackBar(SnackBar(
-        content: Text(tr(
-            'Сначала войдите в мессенджер — через него тренер получит вызов')),
-      ));
-      return;
-    }
     if (!_main.isSignedIn) {
       messenger.showSnackBar(SnackBar(
         content: Text(tr(
             'Войдите в свою базу (Настройки → Данные и синхронизация) — там выданы токены тренерам')),
       ));
+      return;
+    }
+    // Без мессенджера — вызов через сервер звонков: push тренерам, которых
+    // тренер зарегистрировал в базе спортсмена.
+    if (!_auth.isSignedIn) {
+      setState(() => _busy = true);
+      try {
+        final sent = await CoachCall.send(_main, who: _main.email.split('@').first);
+        messenger.showSnackBar(SnackBar(
+            content: Text(sent > 0
+                ? tr('Тренер получит вызов')
+                : tr('Вызов не доставлен: тренер ещё не открывал приложение с вашим токеном или нет связи'))));
+      } finally {
+        if (mounted) setState(() => _busy = false);
+      }
       return;
     }
     setState(() => _busy = true);
