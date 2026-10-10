@@ -39,6 +39,12 @@ class _SettingsModulesScreenState extends State<SettingsModulesScreen> {
         tr('Модель на самом устройстве, без интернета')
       ),
       (
+        AppModule.finals,
+        Icons.emoji_events_outlined,
+        tr('Финалы'),
+        tr('Финалы по правилам ISSF с ботами и таблицей результатов')
+      ),
+      (
         AppModule.services,
         Icons.extension_outlined,
         tr('Сервисы'),

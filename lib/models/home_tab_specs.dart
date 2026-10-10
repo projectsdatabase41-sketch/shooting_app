@@ -19,6 +19,7 @@ const athleteTabIds = [
   'statistics',
   'assistant',
   'tasks',
+  'finals',
   'messenger',
   'settings'
 ];
@@ -60,4 +61,6 @@ const Map<String, HomeTabSpec> homeTabSpecs = {
       HomeTabSpec(icon: Icons.auto_awesome_outlined, label: /*tr*/ 'Ассистент'),
   'tasks':
       HomeTabSpec(icon: Icons.assignment_outlined, label: /*tr*/ 'Задания'),
+  'finals':
+      HomeTabSpec(icon: Icons.emoji_events_outlined, label: /*tr*/ 'Финалы'),
 };

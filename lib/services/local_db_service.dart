@@ -467,6 +467,17 @@ CREATE TABLE IF NOT EXISTS chat_saved_attachments (
   client_message_id TEXT PRIMARY KEY
 );
 
+-- Финалы по правилам ISSF: сохранённый ход (выстрелы, паузы, места).
+CREATE TABLE IF NOT EXISTS finals_runs (
+  id           TEXT PRIMARY KEY,
+  format_id    TEXT NOT NULL,
+  finished_at  TEXT NOT NULL,
+  user_place   INTEGER,
+  user_total   REAL NOT NULL DEFAULT 0,
+  json         TEXT NOT NULL
+);
+
+
 
 CREATE TABLE IF NOT EXISTS shots (
   id                  TEXT PRIMARY KEY,

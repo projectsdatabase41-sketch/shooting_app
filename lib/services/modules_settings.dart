@@ -9,7 +9,8 @@ enum AppModule {
   messenger('module_messenger'),
   assistant('module_assistant'),
   localAi('module_local_ai'),
-  services('module_services');
+  services('module_services'),
+  finals('module_finals');
 
   final String key;
   const AppModule(this.key);

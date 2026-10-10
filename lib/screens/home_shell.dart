@@ -23,6 +23,7 @@ import '../tasks/athlete_tasks_screen.dart';
 import '../tasks/coach_tasks_screen.dart';
 import 'chat_home_screen.dart';
 import 'exercises_screen.dart';
+import 'finals_screen.dart';
 import 'service_tile_screen.dart';
 import 'settings_screen.dart';
 import 'statistics_screen.dart';
@@ -140,6 +141,7 @@ class _HomeShellState extends State<HomeShell> {
     // Выключенные модули (Настройки → Модули) скрыты с главного экрана.
     final hiddenModules = <String>{
       if (!ModulesSettings.isOn(store.db, AppModule.messenger)) 'messenger',
+      if (!ModulesSettings.isOn(store.db, AppModule.finals)) 'finals',
       if (!ModulesSettings.isOn(store.db, AppModule.assistant)) ...{
         'assistant',
         'assistant_coach'
@@ -289,6 +291,7 @@ class _HomeShellState extends State<HomeShell> {
               ? null
               : () => _leaveMessenger(store, isCoach)),
       'tasks' => const AthleteTasksScreen(),
+      'finals' => const FinalsScreen(),
       _ => SettingsScreen(homeTabs: tabs, services: _services),
     };
   }
