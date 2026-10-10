@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shooting_app/main.dart';
-import 'package:shooting_app/services/user_profile.dart';
 import 'package:shooting_app/services/local_db_service.dart';
 import 'package:shooting_app/services/user_profile.dart';
 
