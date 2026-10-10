@@ -1298,5 +1298,10 @@
   "Позже": "Later",
   "Открыть настройки": "Open settings",
   "Тренер получит вызов": "The coach will get the call",
-  "Вызов не доставлен: тренер ещё не открывал приложение с вашим токеном или нет связи": "Not delivered: the coach has not opened the app with your token yet, or there is no connection"
+  "Вызов не доставлен: тренер ещё не открывал приложение с вашим токеном или нет связи": "Not delivered: the coach has not opened the app with your token yet, or there is no connection",
+  "Отправить в чат": "Send to chat",
+  "Отправлено: {name}": "Sent to {name}",
+  "Чтобы отправлять файлы, войдите в мессенджер: Настройки → Модули → Мессенджер.": "To send files, sign in to the messenger: Settings > Modules > Messenger.",
+  "Пока нет собеседников — добавьте их в мессенджере.": "No contacts yet — add them in the messenger.",
+  "Группа": "Group"
 }

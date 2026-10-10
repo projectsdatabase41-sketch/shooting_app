@@ -1298,5 +1298,10 @@
   "Позже": "Später",
   "Открыть настройки": "Einstellungen öffnen",
   "Тренер получит вызов": "Der Trainer erhält den Ruf",
-  "Вызов не доставлен: тренер ещё не открывал приложение с вашим токеном или нет связи": "Nicht zugestellt: Der Trainer hat die App mit Ihrem Token noch nicht geöffnet oder es gibt keine Verbindung"
+  "Вызов не доставлен: тренер ещё не открывал приложение с вашим токеном или нет связи": "Nicht zugestellt: Der Trainer hat die App mit Ihrem Token noch nicht geöffnet oder es gibt keine Verbindung",
+  "Отправить в чат": "In den Chat senden",
+  "Отправлено: {name}": "Gesendet an {name}",
+  "Чтобы отправлять файлы, войдите в мессенджер: Настройки → Модули → Мессенджер.": "Um Dateien zu senden, melden Sie sich im Messenger an: Einstellungen > Module > Messenger.",
+  "Пока нет собеседников — добавьте их в мессенджере.": "Noch keine Kontakte — im Messenger hinzufügen.",
+  "Группа": "Gruppe"
 }

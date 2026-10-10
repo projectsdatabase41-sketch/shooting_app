@@ -17,6 +17,7 @@ import 'services/knowledge_service.dart';
 import 'services/local_db_service.dart';
 import 'screens/onboarding_screen.dart';
 import 'services/modules_settings.dart';
+import 'services/share_receiver.dart';
 import 'services/user_profile.dart';
 import 'services/push_service.dart';
 import 'services/remote_config.dart';
@@ -164,6 +165,7 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
     // ChatHomeScreen мог ещё ни разу не открыться в этой сессии, значит
     // и getInitialMessage() внутри PushService.init() тоже. Если чат ещё
     // не настроен или пользователь не входил — init() сам ничего не делает.
+    ShareReceiver.start(navigatorKey, widget.db);
     pushChatTapHandler = _openChatFromPush;
     // Push заданий открывает само задание (у тренера — группу с ним).
     pushTaskTapHandler = _openTaskFromPush;
