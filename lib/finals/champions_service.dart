@@ -37,6 +37,9 @@ class ChampionsService {
           'consent': true,
         }),
       ).timeout(const Duration(seconds: 20));
+      if (res.statusCode == 401 || res.statusCode == 403) {
+        return 'Публикация недоступна: аккаунт заблокирован за жалобы или нет прав';
+      }
       return res.statusCode < 300 ? null : 'Сервер: ${res.statusCode}';
     } catch (_) {
       return 'Нет сети';
