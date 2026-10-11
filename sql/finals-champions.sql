@@ -20,3 +20,7 @@ create policy champions_insert on finals_champions for insert
 -- Подпись тренера ставит только он (coach_id = его uid), владелец не может.
 create policy champions_coach_sign on finals_champions for update
   using (coach_id = auth.uid()) with check (coach_id = auth.uid());
+-- Тренер видит записи, ждущие его подписи; владелец видит свои.
+create policy champions_coach_read on finals_champions for select using (coach_id = auth.uid());
+create policy champions_owner_read on finals_champions for select using (user_id = auth.uid());
+-- Подписать можно только неподписанную запись и только проставив подпись.

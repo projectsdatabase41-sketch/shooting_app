@@ -11,6 +11,9 @@ import '../i18n/i18n.dart';
 import '../models/target_face.dart';
 import '../state/app_data_store.dart';
 import '../widgets/glass_pill.dart';
+import '../finals/champions_service.dart';
+import '../services/chat_auth_service.dart';
+import 'champions_screen.dart';
 import 'final_run_screen.dart';
 
 /// Вкладка «Финалы»: форматы по правилам ISSF и история своих финалов.
@@ -58,6 +61,15 @@ class _FinalsScreenState extends State<FinalsScreen> {
                 },
               ),
             ),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.military_tech_outlined),
+              title: Text(tr('Чемпионы')),
+              subtitle: Text(tr('Опубликованные результаты и подпись тренера')),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChampionsScreen())),
+            ),
+          ),
           const SizedBox(height: 12),
           Text(tr('Мои финалы'), style: theme.textTheme.titleSmall),
           const SizedBox(height: 8),
@@ -121,7 +133,7 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
       ? const ShotStats(0, 0, 9.0, 9.0, 0)
       : const ShotStats(0, 0, 3.5, 3.5, 0);
 
-  void _start(AppDataStore store) {
+  Future<void> _start(AppDataStore store) async {
     final face = TargetFace.byCode(widget.format.faceCode);
     final h = _history(store);
     final enough = h.all.length >= 20;
@@ -136,12 +148,24 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
       BotDifficulty.hard,
       BotDifficulty.unpredictable,
     ];
-    final levels = _level == 'mixed'
+    final levels = _level == 'mixed' || _level == 'champions'
         ? ([...mixed]..shuffle(rng))
         : List.filled(7, BotDifficulty.values.firstWhere((d) => d.name == _level));
+    // Чемпионы: боты стреляют по их опубликованной статистике.
+    final champs = <String, (String, ShotStats)>{};
+    if (_level == 'champions') {
+      final list = await ChampionsService(ChatAuthService(store.db)).champions(widget.format.id);
+      list.shuffle(rng);
+      for (final r in list.take(7)) {
+        final st = r['stats'] as Map<String, dynamic>;
+        double n(String k) => (st[k] as num).toDouble();
+        champs['b${champs.length}'] = ('${r['display_name']}', ShotStats(n('mx'), n('my'), n('sx'), n('sy'), (st['n'] as num).toInt()));
+      }
+    }
+    if (!mounted) return;
     final competitors = [
       FinalCompetitor('me', tr('Вы'), isUser: true),
-      for (var i = 0; i < 7; i++) FinalCompetitor('b$i', _names[i]),
+      for (var i = 0; i < 7; i++) FinalCompetitor('b$i', champs['b$i']?.$1 ?? _names[i]),
     ];
     final controller = FinalRunController(
       format: widget.format,
@@ -150,7 +174,7 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
       userId: 'me',
       bots: {
         for (var i = 0; i < 7; i++)
-          'b$i': BotShooter(stats, levels[i], face, math.Random(rng.nextInt(1 << 30)), sessions: h.sessions),
+          'b$i': BotShooter(champs['b$i']?.$2 ?? stats, champs.containsKey('b$i') ? BotDifficulty.medium : levels[i], face, math.Random(rng.nextInt(1 << 30)), sessions: h.sessions),
       },
       rng: rng,
     );
@@ -209,6 +233,7 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
                   ('medium', tr('Средние')),
                   ('hard', tr('Сложные')),
                   ('unpredictable', tr('Непредсказуемые')),
+                  ('champions', tr('Чемпионы (недостающих заменят боты)')),
                 ], _level, (v) => _level = v),
                 const SizedBox(height: 18),
                 // 3. Скорость.
