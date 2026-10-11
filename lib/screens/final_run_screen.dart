@@ -3,7 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../finals/final_run.dart';
+import '../finals/bot.dart';
+import '../finals/champions_service.dart';
 import '../finals/finals_repository.dart';
+import '../finals/plausibility.dart';
+import '../services/chat_auth_service.dart';
+import '../services/supabase_auth_service.dart';
+import 'package:provider/provider.dart';
 import '../i18n/i18n.dart';
 import '../logic/scoring.dart';
 import '../models/target_color_scheme.dart';
@@ -299,6 +305,46 @@ class FinalResultScreen extends StatelessWidget {
   final Map<String, dynamic> record;
   const FinalResultScreen({super.key, required this.record});
 
+  Future<void> _publish(BuildContext context) async {
+    final store = context.read<AppDataStore>();
+    final msg = ScaffoldMessenger.of(context);
+    void say(String t) => msg.showSnackBar(SnackBar(content: Text(t)));
+    final auth = ChatAuthService(store.db);
+    if (!auth.isSignedIn) return say(tr('Войдите в мессенджер — публикация идёт через него'));
+    final face = record['face'] as String;
+    final shots = (record['shots'] as List).cast<Map<String, dynamic>>();
+    final myId = (record['standings'] as List).cast<Map<String, dynamic>>().firstWhere((e) => e['user'] == true)['id'];
+    final mine = [for (final s in shots) if (s['who'] == myId && s['so'] != true) s];
+    final training = [
+      for (final se in store.sessions)
+        if (se.targetFaceCode == face) for (final sh in se.countingShots) sh.score
+    ];
+    if (checkPlausibility(training, [for (final s in mine) (s['s'] as num).toDouble()]) == Plausibility.suspicious) {
+      return say(tr('Результат намного выше ваших тренировок — публикация невозможна без подтверждения тренера на месте'));
+    }
+    final coaches = await SupabaseAuthService(store.db).fetchLinkedCoaches();
+    if (!context.mounted) return;
+    if (coaches.isEmpty) return say(tr('Для публикации нужен связанный тренер: он подписывает результат'));
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('Публикация')),
+        content: Text(tr('Ваше имя, результат и статистика стрельбы станут видны другим после подписи тренера {c}. Продолжить?', {'c': coaches.first.nickname.isNotEmpty ? coaches.first.nickname : coaches.first.label})),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Отмена'))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Опубликовать'))),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final st = ShotStats.fromPoints([for (final s in mine) ((s['x'] as num).toDouble(), (s['y'] as num).toDouble())]);
+    final err = await ChampionsService(auth).publish(record,
+        name: auth.nickname,
+        coachId: coaches.first.chatUserId,
+        stats: {'mx': st.mx, 'my': st.my, 'sx': st.sx, 'sy': st.sy, 'n': st.n, 'face': face});
+    say(err ?? tr('Отправлено тренеру на подпись'));
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -333,9 +379,10 @@ class FinalResultScreen extends StatelessWidget {
             for (final v in mine) Chip(label: Text(v.toStringAsFixed(1)), visualDensity: VisualDensity.compact),
           ]),
           const SizedBox(height: 20),
-          const Opacity(
-            opacity: 0.5,
-            child: FilledButton(onPressed: null, child: Text('Опубликовать (скоро)')),
+          FilledButton.icon(
+            onPressed: () => _publish(context),
+            icon: const Icon(Icons.public),
+            label: Text(tr('Опубликовать среди чемпионов')),
           ),
         ],
       ),
