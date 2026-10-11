@@ -5,6 +5,7 @@ import '../finals/champions_service.dart';
 import '../finals/final_engine.dart';
 import '../i18n/i18n.dart';
 import '../services/chat_auth_service.dart';
+import '../services/coach_access_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/glass_pill.dart';
 
@@ -21,6 +22,7 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
   List<Map<String, dynamic>> _pending = [];
   final Map<String, List<Map<String, dynamic>>> _champs = {};
   bool _loading = true;
+  Set<String> _myAthletes = {}; // chat-id спортсменов, подключённых к этому тренеру
 
   @override
   void initState() {
@@ -31,12 +33,23 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
 
   Future<void> _load() async {
     final pending = await _svc.pendingForMe();
+    final db = context.read<AppDataStore>().db;
+    final auth = ChatAuthService(db);
+    final access = CoachAccessService(db);
+    final mine = <String>{};
+    if (pending.isNotEmpty) {
+      for (final a in access.listAthletes()) {
+        final link = await access.linkChat(a, chatUserId: auth.userId, nickname: auth.nickname);
+        if (link != null) mine.add(link.chatUserId);
+      }
+    }
     for (final f in FinalFormat.all) {
       _champs[f.id] = await _svc.champions(f.id);
     }
     if (mounted) {
       setState(() {
         _pending = pending;
+        _myAthletes = mine;
         _loading = false;
       });
     }
@@ -67,7 +80,9 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
                       child: ListTile(
                         title: Text('${r['display_name']} · ${(r['total'] as num).toStringAsFixed(1)}'),
                         subtitle: Text(tr(FinalFormat.all.firstWhere((f) => f.id == r['format_id'], orElse: () => FinalFormat.airRifle10m).nameKey)),
-                        trailing: FilledButton(onPressed: () => _sign(r), child: Text(tr('Подписать'))),
+                        trailing: _myAthletes.contains(r['user_id'])
+                            ? FilledButton(onPressed: () => _sign(r), child: Text(tr('Подписать')))
+                            : Text(tr('Не ваш спортсмен'), style: theme.textTheme.bodySmall),
                       ),
                     ),
                   const SizedBox(height: 16),

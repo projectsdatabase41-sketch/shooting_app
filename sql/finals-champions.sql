@@ -24,3 +24,6 @@ create policy champions_coach_sign on finals_champions for update
 create policy champions_coach_read on finals_champions for select using (coach_id = auth.uid());
 create policy champions_owner_read on finals_champions for select using (user_id = auth.uid());
 -- Подписать можно только неподписанную запись и только проставив подпись.
+-- Нельзя назначить тренером самого себя.
+alter table finals_champions drop constraint if exists champions_no_self_coach;
+alter table finals_champions add constraint champions_no_self_coach check (coach_id is distinct from user_id);
