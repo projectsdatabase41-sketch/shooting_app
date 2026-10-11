@@ -62,6 +62,23 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
     if (err == null) _load();
   }
 
+  Future<void> _report(Map<String, dynamic> r) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('Пожаловаться на результат?')),
+        content: Text(tr('Используйте только если результат нечестный. При нескольких жалобах от разных людей публикация скрывается на 30 дней.')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Отмена'))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Пожаловаться'))),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final err = await _svc.report(r['id'] as String);
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err ?? tr('Жалоба отправлена'))));
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -95,7 +112,14 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
                     ListTile(
                       dense: true,
                       title: Text('${r['display_name']}'),
-                      trailing: Text((r['total'] as num).toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.w800)),
+                      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Text((r['total'] as num).toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.w800)),
+                        IconButton(
+                          tooltip: tr('Пожаловаться'),
+                          icon: const Icon(Icons.flag_outlined, size: 20),
+                          onPressed: () => _report(r),
+                        ),
+                      ]),
                     ),
                   const SizedBox(height: 12),
                 ],

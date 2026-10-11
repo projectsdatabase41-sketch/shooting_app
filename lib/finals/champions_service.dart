@@ -94,4 +94,29 @@ class ChampionsService {
       client.close();
     }
   }
+
+  /// Жалоба на результат (один голос на пользователя). Ошибка или `null`.
+  Future<String?> report(String championId) async {
+    final token = await auth.ensureFreshToken();
+    if (token == null) return 'Нет входа в мессенджер';
+    final client = http.Client();
+    try {
+      final res = await client.post(
+        Uri.parse('${auth.url}/rest/v1/finals_flags'),
+        headers: {
+          'apikey': auth.anonKey,
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: jsonEncode({'champion_id': championId}),
+      ).timeout(const Duration(seconds: 20));
+      if (res.statusCode == 409) return 'Вы уже отправляли жалобу';
+      return res.statusCode < 300 ? null : 'Сервер: ${res.statusCode}';
+    } catch (_) {
+      return 'Нет сети';
+    } finally {
+      client.close();
+    }
+  }
 }

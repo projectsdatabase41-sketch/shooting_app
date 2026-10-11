@@ -27,3 +27,29 @@ create policy champions_owner_read on finals_champions for select using (user_id
 -- Нельзя назначить тренером самого себя.
 alter table finals_champions drop constraint if exists champions_no_self_coach;
 alter table finals_champions add constraint champions_no_self_coach check (coach_id is distinct from user_id);
+
+-- Жалобы: по одной от пользователя; порог голосов даёт бан публикации на 30 дней.
+create table if not exists finals_flags (
+  champion_id uuid not null references finals_champions(id) on delete cascade,
+  voter_id uuid not null default auth.uid(),
+  created_at timestamptz not null default now(),
+  primary key (champion_id, voter_id)
+);
+alter table finals_flags enable row level security;
+create policy flags_insert on finals_flags for insert with check (voter_id = auth.uid());
+create policy flags_read_own on finals_flags for select using (voter_id = auth.uid());
+
+create or replace function finals_flag_check() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare owner uuid; n int;
+begin
+  select user_id into owner from finals_champions where id = new.champion_id;
+  if owner = new.voter_id then raise exception 'cannot flag own result'; end if;
+  select count(*) into n from finals_flags where champion_id = new.champion_id;
+  if n >= 5 then  -- порог голосов (с учётом новой строки BEFORE-триггером не считается)
+    update finals_champions set banned_until = now() + interval '30 days' where id = new.champion_id;
+  end if;
+  return new;
+end $$;
+drop trigger if exists finals_flag_trg on finals_flags;
+create trigger finals_flag_trg after insert on finals_flags for each row execute function finals_flag_check();
