@@ -1,3 +1,4 @@
+-- Безопасно запускать повторно целиком.
 -- Таблица чемпионов (публичная база yirvom). Запускать вручную в SQL editor.
 create table if not exists finals_champions (
   id uuid primary key default gen_random_uuid(),
@@ -13,15 +14,20 @@ create table if not exists finals_champions (
   created_at timestamptz not null default now()
 );
 alter table finals_champions enable row level security;
+drop policy if exists champions_read on finals_champions;
 create policy champions_read on finals_champions for select
   using (consent and coach_signed_at is not null and (banned_until is null or banned_until < now()));
+drop policy if exists champions_insert on finals_champions;
 create policy champions_insert on finals_champions for insert
   with check (user_id = auth.uid() and consent and coach_signed_at is null);
 -- Подпись тренера ставит только он (coach_id = его uid), владелец не может.
+drop policy if exists champions_coach_sign on finals_champions;
 create policy champions_coach_sign on finals_champions for update
   using (coach_id = auth.uid()) with check (coach_id = auth.uid());
 -- Тренер видит записи, ждущие его подписи; владелец видит свои.
+drop policy if exists champions_coach_read on finals_champions;
 create policy champions_coach_read on finals_champions for select using (coach_id = auth.uid());
+drop policy if exists champions_owner_read on finals_champions;
 create policy champions_owner_read on finals_champions for select using (user_id = auth.uid());
 -- Подписать можно только неподписанную запись и только проставив подпись.
 -- Нельзя назначить тренером самого себя.
@@ -36,7 +42,9 @@ create table if not exists finals_flags (
   primary key (champion_id, voter_id)
 );
 alter table finals_flags enable row level security;
+drop policy if exists flags_insert on finals_flags;
 create policy flags_insert on finals_flags for insert with check (voter_id = auth.uid());
+drop policy if exists flags_read_own on finals_flags;
 create policy flags_read_own on finals_flags for select using (voter_id = auth.uid());
 
 create or replace function finals_flag_check() returns trigger
