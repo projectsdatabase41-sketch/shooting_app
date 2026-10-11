@@ -119,4 +119,39 @@ class ChampionsService {
       client.close();
     }
   }
+
+  /// Мои забаненные записи.
+  Future<List<Map<String, dynamic>>> myBanned() =>
+      _get('user_id=eq.${auth.userId}&banned_until=not.is.null');
+
+  /// Забаненные записи с поданной апелляцией (за них голосуют другие).
+  Future<List<Map<String, dynamic>>> appeals() =>
+      _get('appeal_requested=eq.true&banned_until=not.is.null&user_id=neq.${auth.userId}');
+
+  Future<String?> _post(String path, Map<String, dynamic> body, {String conflict = 'Уже отправлено'}) async {
+    final token = await auth.ensureFreshToken();
+    if (token == null) return 'Нет входа в мессенджер';
+    final client = http.Client();
+    try {
+      final res = await client.post(
+        Uri.parse('${auth.url}/rest/v1/$path'),
+        headers: {
+          'apikey': auth.anonKey,
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: jsonEncode(body),
+      ).timeout(const Duration(seconds: 20));
+      if (res.statusCode == 409) return conflict;
+      return res.statusCode < 300 ? null : 'Сервер: ${res.statusCode}';
+    } catch (_) {
+      return 'Нет сети';
+    } finally {
+      client.close();
+    }
+  }
+
+  Future<String?> requestAppeal(String id) => _post('rpc/finals_request_appeal', {'p_id': id});
+  Future<String?> voteAppeal(String id) => _post('finals_appeals', {'champion_id': id}, conflict: 'Вы уже голосовали');
 }

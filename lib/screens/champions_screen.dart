@@ -21,6 +21,8 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
   late final ChampionsService _svc;
   List<Map<String, dynamic>> _pending = [];
   final Map<String, List<Map<String, dynamic>>> _champs = {};
+  List<Map<String, dynamic>> _banned = [];
+  List<Map<String, dynamic>> _appeals = [];
   bool _loading = true;
   Set<String> _myAthletes = {}; // chat-id спортсменов, подключённых к этому тренеру
 
@@ -33,6 +35,8 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
 
   Future<void> _load() async {
     final pending = await _svc.pendingForMe();
+    final banned = await _svc.myBanned();
+    final appeals = await _svc.appeals();
     final db = context.read<AppDataStore>().db;
     final auth = ChatAuthService(db);
     final access = CoachAccessService(db);
@@ -49,6 +53,8 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
     if (mounted) {
       setState(() {
         _pending = pending;
+        _banned = banned;
+        _appeals = appeals;
         _myAthletes = mine;
         _loading = false;
       });
@@ -79,6 +85,18 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err ?? tr('Жалоба отправлена'))));
   }
 
+  Future<void> _act(Future<String?> f, String ok) async {
+    final err = await f;
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err ?? ok)));
+    if (err == null) _load();
+  }
+
+  String _until(Map<String, dynamic> r) {
+    final v = '${r['banned_until']}';
+    return v.contains('infinity') ? tr('навсегда') : tr('до {d}', {'d': v.substring(0, 10)});
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -104,6 +122,32 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
                     ),
                   const SizedBox(height: 16),
                 ],
+                if (_banned.isNotEmpty) ...[
+                  Text(tr('Мои скрытые результаты'), style: theme.textTheme.titleSmall),
+                  for (final r in _banned)
+                    Card(
+                      child: ListTile(
+                        title: Text('${(r['total'] as num).toStringAsFixed(1)} · ${_until(r)}'),
+                        subtitle: Text(tr('Жалоб: {n}', {'n': r['flag_count']})),
+                        trailing: r['appeal_requested'] == true
+                            ? Text(tr('Апелляция подана'), style: theme.textTheme.bodySmall)
+                            : TextButton(onPressed: () => _act(_svc.requestAppeal(r['id'] as String), tr('Апелляция подана')), child: Text(tr('Обжаловать'))),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                ],
+                if (_appeals.isNotEmpty) ...[
+                  Text(tr('Апелляции: поддержать возврат?'), style: theme.textTheme.titleSmall),
+                  for (final r in _appeals)
+                    Card(
+                      child: ListTile(
+                        title: Text('${r['display_name']} · ${(r['total'] as num).toStringAsFixed(1)}'),
+                        subtitle: Text(tr('Жалоб: {n} · {u}', {'n': r['flag_count'], 'u': _until(r)})),
+                        trailing: TextButton(onPressed: () => _act(_svc.voteAppeal(r['id'] as String), tr('Голос принят')), child: Text(tr('Вернуть'))),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                ],
                 for (final f in FinalFormat.all) ...[
                   Text(tr(f.nameKey), style: theme.textTheme.titleSmall),
                   if ((_champs[f.id] ?? []).isEmpty)
@@ -112,6 +156,7 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
                     ListTile(
                       dense: true,
                       title: Text('${r['display_name']}'),
+                      subtitle: ((r['flag_count'] as int?) ?? 0) > 0 ? Text(tr('Жалоб: {n}', {'n': r['flag_count']})) : null,
                       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                         Text((r['total'] as num).toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.w800)),
                         IconButton(

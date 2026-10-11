@@ -61,3 +61,71 @@ begin
 end $$;
 drop trigger if exists finals_flag_trg on finals_flags;
 create trigger finals_flag_trg after insert on finals_flags for each row execute function finals_flag_check();
+
+-- ===== Счётчик жалоб, постоянный бан («чёрная фишка») и апелляция =====
+alter table finals_champions add column if not exists flag_count int not null default 0;
+alter table finals_champions add column if not exists ban_count int not null default 0;
+alter table finals_champions add column if not exists appeal_requested boolean not null default false;
+
+create table if not exists finals_appeals (
+  champion_id uuid not null references finals_champions(id) on delete cascade,
+  voter_id uuid not null default auth.uid(),
+  created_at timestamptz not null default now(),
+  primary key (champion_id, voter_id)
+);
+alter table finals_appeals enable row level security;
+drop policy if exists appeals_insert on finals_appeals;
+create policy appeals_insert on finals_appeals for insert with check (voter_id = auth.uid());
+
+-- Забаненные записи с поданной апелляцией видны всем вошедшим (для голосования).
+drop policy if exists champions_appeal_read on finals_champions;
+create policy champions_appeal_read on finals_champions for select
+  using (appeal_requested and banned_until >= now() and auth.uid() is not null);
+
+-- Жалоба: 5 голосов → бан 30 дней; третий бан → навсегда.
+create or replace function finals_flag_check() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare owner uuid; n int; cur timestamptz; bans int;
+begin
+  select user_id, banned_until, ban_count into owner, cur, bans from finals_champions where id = new.champion_id;
+  if owner = new.voter_id then raise exception 'cannot flag own result'; end if;
+  select count(*) into n from finals_flags where champion_id = new.champion_id;
+  update finals_champions set flag_count = n where id = new.champion_id;
+  if n >= 5 and (cur is null or cur < now()) then
+    update finals_champions
+       set ban_count = bans + 1,
+           banned_until = case when bans + 1 >= 3 then 'infinity'::timestamptz else now() + interval '30 days' end
+     where id = new.champion_id;
+  end if;
+  return new;
+end $$;
+
+-- Владелец подаёт апелляцию на свой бан.
+create or replace function finals_request_appeal(p_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  update finals_champions set appeal_requested = true
+   where id = p_id and user_id = auth.uid() and banned_until >= now();
+end $$;
+grant execute on function finals_request_appeal(uuid) to authenticated;
+
+-- Апелляция: 5 голосов (не от жаловавшихся и не от владельца) снимают бан и жалобы.
+create or replace function finals_appeal_check() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare owner uuid; n int;
+begin
+  select user_id into owner from finals_champions where id = new.champion_id and appeal_requested and banned_until >= now();
+  if owner is null or owner = new.voter_id
+     or exists (select 1 from finals_flags where champion_id = new.champion_id and voter_id = new.voter_id) then
+    raise exception 'cannot vote';
+  end if;
+  select count(*) into n from finals_appeals where champion_id = new.champion_id;
+  if n >= 5 then
+    delete from finals_flags where champion_id = new.champion_id;
+    delete from finals_appeals where champion_id = new.champion_id;
+    update finals_champions set banned_until = null, flag_count = 0, appeal_requested = false where id = new.champion_id;
+  end if;
+  return new;
+end $$;
+drop trigger if exists finals_appeal_trg on finals_appeals;
+create trigger finals_appeal_trg after insert on finals_appeals for each row execute function finals_appeal_check();
