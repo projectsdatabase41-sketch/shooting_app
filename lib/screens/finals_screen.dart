@@ -13,7 +13,9 @@ import '../state/app_data_store.dart';
 import '../widgets/glass_pill.dart';
 import '../finals/champions_service.dart';
 import '../services/chat_auth_service.dart';
+import '../finals/finals_session_service.dart';
 import 'champions_screen.dart';
+import 'final_room_screens.dart';
 import 'final_run_screen.dart';
 
 /// Вкладка «Финалы»: форматы по правилам ISSF и история своих финалов.
@@ -61,6 +63,20 @@ class _FinalsScreenState extends State<FinalsScreen> {
                 },
               ),
             ),
+          // Совместные финалы: провести самому (тренер) или войти по приглашению.
+          const SizedBox(height: 4),
+          Text(tr('Финалы с участниками'), style: theme.textTheme.titleSmall),
+          const SizedBox(height: 8),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.groups_outlined),
+              title: Text(tr('Провести финал (тренер)')),
+              subtitle: Text(tr('Пригласите спортсменов и помощников, подавайте команды кнопкой «Далее»')),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _hostFinal(context),
+            ),
+          ),
+          _Invites(store: store),
           Card(
             child: ListTile(
               leading: const Icon(Icons.military_tech_outlined),
@@ -373,4 +389,76 @@ class _Opp {
   final String name;
   final ShotStats? stats; // null — обычный бот по вашим тренировкам
   _Opp(this.name, {this.stats});
+}
+
+extension on _FinalsScreenState {
+  Future<void> _hostFinal(BuildContext context) async {
+    final f = await showModalBottomSheet<FinalFormat>(
+      context: context,
+      builder: (ctx) => ListView(children: [
+        for (final f in FinalFormat.all) ListTile(title: Text(tr(f.nameKey)), onTap: () => Navigator.pop(ctx, f)),
+      ]),
+    );
+    if (f == null || !context.mounted) return;
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => FinalsLobbyScreen(format: f)));
+  }
+}
+
+/// Приглашения в чужие финалы и вход в идущие.
+class _Invites extends StatefulWidget {
+  final AppDataStore store;
+  const _Invites({required this.store});
+
+  @override
+  State<_Invites> createState() => _InvitesState();
+}
+
+class _InvitesState extends State<_Invites> {
+  late final FinalsSessionService _svc = FinalsSessionService(ChatAuthService(widget.store.db));
+  List<FinalsMember> _list = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final l = await _svc.myInvitations();
+    if (mounted) setState(() => _list = l);
+  }
+
+  Future<void> _open(FinalsMember m, {required bool accept}) async {
+    if (m.status == 'invited' && !await _svc.answer(m, accept: accept)) return;
+    if (!accept) {
+      _load();
+      return;
+    }
+    if (!mounted) return;
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => FinalGuestScreen(member: m, service: _svc)));
+    _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_list.isEmpty) return const SizedBox.shrink();
+    return Column(children: [
+      for (final m in _list)
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.mail_outline),
+            title: Text(m.status == 'invited' ? tr('Приглашение в финал') : tr('Идёт финал')),
+            subtitle: Text(switch (m.role) {
+              FinalsRole.athlete => tr('Вы — финалист'),
+              FinalsRole.helper => tr('Вы — помощник'),
+              FinalsRole.coach => tr('Вы — тренер'),
+            }),
+            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+              if (m.status == 'invited') TextButton(onPressed: () => _open(m, accept: false), child: Text(tr('Отказ'))),
+              FilledButton(onPressed: () => _open(m, accept: true), child: Text(m.status == 'invited' ? tr('Принять') : tr('Войти'))),
+            ]),
+          ),
+        ),
+    ]);
+  }
 }

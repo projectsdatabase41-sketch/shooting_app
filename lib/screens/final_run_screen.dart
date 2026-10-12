@@ -214,7 +214,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
       padding: const EdgeInsets.fromLTRB(8, 2, 8, 2),
       child: Stack(children: [
         Positioned.fill(
-          child: _UserPad(
+          child: ShotPad(
             face: c.face,
             marks: marks,
             enabled: _canPlace && !c.paused,
@@ -320,19 +320,19 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
 /// Мишень спортсмена. Удержание пальца показывает над пальцем окошко-лупу с
 /// увеличенной мишенью и пробоиной (как при выделении текста): палец двигается —
 /// пробоина смещается; отпускание сохраняет выстрел.
-class _UserPad extends StatefulWidget {
+class ShotPad extends StatefulWidget {
   final TargetFace face;
   final List<Offset> marks;
   final bool enabled;
   final ValueChanged<bool> onHold;
   final ValueChanged<Offset> onShot;
-  const _UserPad({required this.face, required this.marks, required this.enabled, required this.onHold, required this.onShot});
+  const ShotPad({required this.face, required this.marks, required this.enabled, required this.onHold, required this.onShot});
 
   @override
-  State<_UserPad> createState() => _UserPadState();
+  State<ShotPad> createState() => _ShotPadState();
 }
 
-class _UserPadState extends State<_UserPad> {
+class _ShotPadState extends State<ShotPad> {
   static const double _zoom = 6; // увеличение в лупе
   static const double _loupe = 140; // диаметр лупы, px
   static const double _gap = 100; // от пальца до центра лупы
@@ -406,7 +406,7 @@ class _UserPadState extends State<_UserPad> {
                     ),
                     Positioned.fill(
                       child: CustomPaint(
-                        painter: _MarkerPainter(widget.marks, k: kz, center: lc, finger: Offset(_loupe / 2, _loupe / 2), holeR: 2.25 * kz),
+                        painter: ShotMarkerPainter(widget.marks, k: kz, center: lc, finger: Offset(_loupe / 2, _loupe / 2), holeR: 2.25 * kz),
                       ),
                     ),
                   ]),
@@ -452,7 +452,7 @@ class _UserPadState extends State<_UserPad> {
           ),
           Positioned.fill(
             child: CustomPaint(
-              painter: _MarkerPainter(widget.marks, k: k, center: Offset(size.width / 2, size.height / 2), finger: f, holeR: 4),
+              painter: ShotMarkerPainter(widget.marks, k: k, center: Offset(size.width / 2, size.height / 2), finger: f, holeR: 4),
             ),
           ),
           if (loupe != null) loupe,
@@ -494,7 +494,7 @@ class _BotCard extends StatelessWidget {
               ),
               Positioned.fill(
                 child: CustomPaint(
-                  painter: _MarkerPainter(
+                  painter: ShotMarkerPainter(
                     last == null ? const [] : [Offset(last.x, last.y)],
                     k: k,
                     center: Offset(box.maxWidth / 2, box.maxHeight / 2),
@@ -522,13 +522,13 @@ class _BotCard extends StatelessWidget {
   }
 }
 
-class _MarkerPainter extends CustomPainter {
+class ShotMarkerPainter extends CustomPainter {
   final List<Offset> placed; // мм
   final double k; // px на мм
   final Offset center;
   final Offset? finger; // px: где сейчас пробоина-кандидат
   final double holeR; // радиус кандидата, px
-  _MarkerPainter(this.placed, {required this.k, required this.center, this.finger, this.holeR = 4});
+  ShotMarkerPainter(this.placed, {required this.k, required this.center, this.finger, this.holeR = 4});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -557,7 +557,7 @@ class _MarkerPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_MarkerPainter old) => true;
+  bool shouldRepaint(ShotMarkerPainter old) => true;
 }
 
 /// Итог финала: места, суммы, выстрелы человека.

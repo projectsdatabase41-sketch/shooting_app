@@ -95,9 +95,10 @@ class FinalsSessionService {
     return r is List ? [for (final j in r.cast<Map<String, dynamic>>()) FinalsMember.fromJson(j)] : const [];
   }
 
-  /// Приглашения, ожидающие моего ответа (для входа в финал и push-уведомления).
+  /// Мои приглашения и принятые участия в ещё идущих финалах.
   Future<List<FinalsMember>> myInvitations() async {
-    final r = await _call('GET', 'finals_session_members?user_id=eq.${auth.userId}&status=eq.invited');
+    final r = await _call('GET',
+        'finals_session_members?user_id=eq.${auth.userId}&status=in.(invited,accepted)&select=*,finals_sessions!inner(ended_at)&finals_sessions.ended_at=is.null');
     return r is List ? [for (final j in r.cast<Map<String, dynamic>>()) FinalsMember.fromJson(j)] : const [];
   }
 
