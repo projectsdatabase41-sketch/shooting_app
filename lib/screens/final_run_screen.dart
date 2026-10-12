@@ -24,10 +24,9 @@ import '../widgets/glass_pill.dart';
 /// свайпом вправо — таблица результатов.
 class FinalRunScreen extends StatefulWidget {
   final FinalRunController controller;
-  final int speed;
   final AppDataStore store;
   final bool custom; // «свой финал» — не публикуется
-  const FinalRunScreen({super.key, required this.controller, required this.speed, required this.store, this.custom = false});
+  const FinalRunScreen({super.key, required this.controller, required this.store, this.custom = false});
 
   @override
   State<FinalRunScreen> createState() => _FinalRunScreenState();
@@ -46,7 +45,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
   void initState() {
     super.initState();
     c.addListener(_onChange);
-    _timer = Timer.periodic(Duration(milliseconds: 1000 ~/ widget.speed), (_) => c.tick());
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) => c.tick());
   }
 
   void _onChange() {
@@ -282,8 +281,9 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
   }
 }
 
-/// Мишень спортсмена: удержание увеличивает место нажатия, пробоина — размером
-/// с палец, вокруг кольцо и значение над ним; отпускание сохраняет выстрел.
+/// Мишень спортсмена. Удержание пальца показывает над пальцем окошко-лупу с
+/// увеличенной мишенью и пробоиной (как при выделении текста): палец двигается —
+/// пробоина смещается; отпускание сохраняет выстрел.
 class _UserPad extends StatefulWidget {
   final TargetFace face;
   final List<Offset> marks;
@@ -297,31 +297,20 @@ class _UserPad extends StatefulWidget {
 }
 
 class _UserPadState extends State<_UserPad> {
-  static const double _zoom = 5;
+  static const double _zoom = 6; // увеличение в лупе
+  static const double _loupe = 140; // диаметр лупы, px
+  static const double _gap = 100; // от пальца до центра лупы
   Offset? _finger; // px
-  Offset _pan = Offset.zero;
-  double _z = 1;
 
-  double _k(Size s) => s.shortestSide / 2 * _z / widget.face.faceRadiusMm;
+  double _k(Size s) => s.shortestSide / 2 / widget.face.faceRadiusMm;
 
   Offset _toMm(Offset p, Size s) {
     final k = _k(s);
-    final c = Offset(s.width / 2, s.height / 2) + _pan;
-    return Offset((p.dx - c.dx) / k, -(p.dy - c.dy) / k);
-  }
-
-  void _reset() {
-    _finger = null;
-    _z = 1;
-    _pan = Offset.zero;
+    return Offset((p.dx - s.width / 2) / k, -(p.dy - s.height / 2) / k);
   }
 
   void _down(Offset f, Size s) {
     if (!widget.enabled) return;
-    final p = _toMm(f, s); // пока zoom = 1, pan = 0
-    _z = _zoom;
-    final k = _k(s);
-    _pan = f - Offset(s.width / 2, s.height / 2) - Offset(p.dx * k, -p.dy * k);
     setState(() => _finger = f);
     widget.onHold(true);
   }
@@ -330,7 +319,7 @@ class _UserPadState extends State<_UserPad> {
     final f = _finger;
     if (f == null) return;
     final mm = _toMm(f, s);
-    setState(_reset);
+    setState(() => _finger = null);
     widget.onHold(false);
     widget.onShot(mm);
   }
@@ -339,11 +328,69 @@ class _UserPadState extends State<_UserPad> {
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (ctx, box) {
       final size = Size(box.maxWidth, box.maxHeight);
+      final k = _k(size);
       final f = _finger;
-      String? score;
+      Widget? loupe;
       if (f != null) {
         final mm = _toMm(f, size);
-        score = formatScore(scoreForPoint(mm.dx, mm.dy, widget.face), widget.face);
+        final score = formatScore(scoreForPoint(mm.dx, mm.dy, widget.face), widget.face);
+        // Лупа над пальцем; у верхнего края — под пальцем.
+        var cy = f.dy - _gap;
+        if (cy - _loupe / 2 < 0) cy = f.dy + _gap;
+        final cx = f.dx.clamp(_loupe / 2, size.width - _loupe / 2);
+        final kz = _loupe / 2 * _zoom / widget.face.faceRadiusMm;
+        final pan = Offset(-mm.dx * kz, mm.dy * kz); // точка выстрела — в центре лупы
+        final lc = Offset(_loupe / 2, _loupe / 2) + pan;
+        loupe = Positioned(
+          left: cx - _loupe / 2,
+          top: cy - _loupe / 2,
+          width: _loupe,
+          height: _loupe,
+          child: IgnorePointer(
+            child: Stack(clipBehavior: Clip.none, children: [
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Theme.of(context).colorScheme.primary, width: 3),
+                ),
+                child: ClipOval(
+                  child: Stack(children: [
+                    Positioned.fill(
+                      child: CustomPaint(
+                        painter: TargetPainter(
+                          face: widget.face,
+                          colors: TargetColorScheme.defaultScheme,
+                          visibleShots: const [],
+                          selectedShot: null,
+                          currentSeriesNo: 1,
+                          zoom: _zoom,
+                          pan: pan,
+                        ),
+                      ),
+                    ),
+                    Positioned.fill(
+                      child: CustomPaint(
+                        painter: _MarkerPainter(widget.marks, k: kz, center: lc, finger: Offset(_loupe / 2, _loupe / 2), holeR: 2.25 * kz),
+                      ),
+                    ),
+                  ]),
+                ),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                top: -30,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                    decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(12)),
+                    child: Text(score, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
+                  ),
+                ),
+              ),
+            ]),
+          ),
+        );
       }
       return Listener(
         onPointerDown: (e) => _down(e.localPosition, size),
@@ -352,38 +399,28 @@ class _UserPadState extends State<_UserPad> {
         },
         onPointerUp: (_) => _up(size),
         onPointerCancel: (_) {
-          setState(_reset);
+          setState(() => _finger = null);
           widget.onHold(false);
         },
-        child: ClipRect(
-          child: Stack(children: [
-            Positioned.fill(
-              child: CustomPaint(
-                painter: TargetPainter(
-                  face: widget.face,
-                  colors: TargetColorScheme.defaultScheme,
-                  visibleShots: const [],
-                  selectedShot: null,
-                  currentSeriesNo: 1,
-                  zoom: _z,
-                  pan: _pan,
-                ),
+        child: Stack(clipBehavior: Clip.none, children: [
+          Positioned.fill(
+            child: CustomPaint(
+              painter: TargetPainter(
+                face: widget.face,
+                colors: TargetColorScheme.defaultScheme,
+                visibleShots: const [],
+                selectedShot: null,
+                currentSeriesNo: 1,
               ),
             ),
-            Positioned.fill(
-              child: CustomPaint(
-                painter: _MarkerPainter(
-                  widget.marks,
-                  k: _k(size),
-                  center: Offset(size.width / 2, size.height / 2) + _pan,
-                  finger: f,
-                  score: score,
-                  ring: Theme.of(context).colorScheme.primary,
-                ),
-              ),
+          ),
+          Positioned.fill(
+            child: CustomPaint(
+              painter: _MarkerPainter(widget.marks, k: k, center: Offset(size.width / 2, size.height / 2), finger: f, holeR: 4),
             ),
-          ]),
-        ),
+          ),
+          if (loupe != null) loupe,
+        ]),
       );
     });
   }
@@ -453,10 +490,9 @@ class _MarkerPainter extends CustomPainter {
   final List<Offset> placed; // мм
   final double k; // px на мм
   final Offset center;
-  final Offset? finger;
-  final String? score;
-  final Color ring;
-  _MarkerPainter(this.placed, {required this.k, required this.center, this.finger, this.score, this.ring = Colors.blue});
+  final Offset? finger; // px: где сейчас пробоина-кандидат
+  final double holeR; // радиус кандидата, px
+  _MarkerPainter(this.placed, {required this.k, required this.center, this.finger, this.holeR = 4});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -473,25 +509,14 @@ class _MarkerPainter extends CustomPainter {
     }
     final f = finger;
     if (f != null) {
-      // Пробоина — размером с палец, кольцо больше, значение над кольцом.
-      canvas.drawCircle(f, 20, Paint()..color = Colors.orange.withValues(alpha: 0.7));
-      canvas.drawCircle(f, 20, edge);
-      canvas.drawCircle(
-          f,
-          34,
-          Paint()
-            ..color = ring
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 3);
-      if (score != null) {
-        final tp = TextPainter(
-          text: TextSpan(
-              text: score,
-              style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800, shadows: [Shadow(blurRadius: 4)])),
-          textDirection: TextDirection.ltr,
-        )..layout();
-        tp.paint(canvas, Offset(f.dx - tp.width / 2, f.dy - 34 - 8 - tp.height));
-      }
+      final rr = holeR < 3 ? 3.0 : holeR;
+      canvas.drawCircle(f, rr, Paint()..color = Colors.red.withValues(alpha: 0.8));
+      canvas.drawCircle(f, rr, edge);
+      final cross = Paint()
+        ..color = Colors.red
+        ..strokeWidth = 1;
+      canvas.drawLine(f - Offset(rr + 6, 0), f + Offset(rr + 6, 0), cross);
+      canvas.drawLine(f - Offset(0, rr + 6), f + Offset(0, rr + 6), cross);
     }
   }
 

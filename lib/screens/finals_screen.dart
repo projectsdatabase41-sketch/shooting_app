@@ -111,7 +111,6 @@ class FinalSetupScreen extends StatefulWidget {
 
 class _FinalSetupScreenState extends State<FinalSetupScreen> {
   String _level = 'mixed'; // mixed | easy | medium | hard | unpredictable
-  int _speed = 1;
   bool _custom = false; // свой финал: не публикуется
 
   // Семь соперников: обычные боты или чемпионы (по их статистике).
@@ -175,7 +174,7 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
       rng: rng,
     );
     Navigator.of(context).pushReplacement(MaterialPageRoute(
-      builder: (_) => FinalRunScreen(controller: controller, speed: _speed, store: store, custom: _custom),
+      builder: (_) => FinalRunScreen(controller: controller, store: store, custom: _custom),
     ));
   }
 
@@ -313,11 +312,6 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
                   value: _custom,
                   onChanged: (v) => setState(() => _custom = v),
                 ),
-                const SizedBox(height: 18),
-                // 3. Скорость.
-                Text(tr('Скорость'), style: theme.textTheme.titleSmall),
-                const SizedBox(height: 8),
-                chips<int>([(1, tr('Как в жизни')), (5, tr('Быстрее ×5')), (20, tr('Очень быстро ×20'))], _speed, (v) => _speed = v),
                 const SizedBox(height: 18),
                 // 4. Откуда данные ботов.
                 Container(
