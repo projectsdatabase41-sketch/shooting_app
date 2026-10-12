@@ -132,7 +132,7 @@ class FinalRunController extends ChangeNotifier {
   /// Пропустить пристрелку (человек готов).
   void skipSighting() {
     if (phase != RunPhase.sighting) return;
-    _beginLoading();
+    _beginLoading(5);
     notifyListeners();
   }
 
@@ -155,14 +155,20 @@ class FinalRunController extends ChangeNotifier {
     if (paused || phase == RunPhase.finished) return;
     switch (phase) {
       case RunPhase.sighting:
-        if (--secondsLeft <= 0) _beginLoading();
+        if (--secondsLeft <= 0) _beginLoading(pauseAfterSighting + 5);
       case RunPhase.loading:
         if (--secondsLeft <= 0) _beginRound();
       case RunPhase.shooting:
         clock++;
         roundSeconds++;
         _fireDueBots();
-        if (roundSeconds >= roundLimit) _stopRound();
+        if (roundSeconds >= roundLimit) {
+          _stopRound();
+        } else if (_allDone()) {
+          if (++_doneTicks >= doneHoldSeconds) _stopRound();
+        } else {
+          _doneTicks = 0;
+        }
       case RunPhase.grace:
         clock++;
         if (--secondsLeft <= 0 || staged.length >= shotsPerShooter) _endRound();
@@ -172,9 +178,22 @@ class FinalRunController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _beginLoading() {
+  /// ISSF 6.17.2: после пристрелки 60 с до первой серии.
+  static const pauseAfterSighting = 60;
+
+  /// После «Стоп» диктор 15–20 с комментирует рейтинг, потом «Заряжай» (5 с).
+  static const announcerSeconds = 18;
+
+  /// Идёт комментарий диктора (до команды «Заряжай»).
+  bool get announcing => phase == RunPhase.loading && secondsLeft > 5;
+
+  /// Раунд заканчивается досрочно, когда все отстреляли и спокойно подождали.
+  static const doneHoldSeconds = 3;
+  int _doneTicks = 0;
+
+  void _beginLoading(int seconds) {
     phase = RunPhase.loading;
-    secondsLeft = 5;
+    secondsLeft = seconds;
   }
 
   List<String> _currentShooters() => inShootOff
@@ -188,6 +207,7 @@ class FinalRunController extends ChangeNotifier {
     _roundFired.clear();
     _botTimes.clear();
     staged.clear();
+    _doneTicks = 0;
     if (inShootOff) {
       shotsPerShooter = 1;
       roundLimit = format.singleSeconds;
@@ -259,6 +279,17 @@ class FinalRunController extends ChangeNotifier {
     }
   }
 
+  bool _allDone() {
+    for (final id in _shooters) {
+      if (id == userId) {
+        if (staged.length < shotsPerShooter) return false;
+      } else if ((_botTimes[id] ?? const []).isNotEmpty) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   /// Время раунда вышло («Стоп»): если человек отметил не всё — короткое окно.
   void _stopRound() {
     if (_shooters.contains(userId) && staged.length < shotsPerShooter) {
@@ -299,10 +330,7 @@ class FinalRunController extends ChangeNotifier {
       ? engine.phase == FinalPhase.shootOff && engine.shootOffShooters.any((c) => c.id == userId)
       : engine.phase == FinalPhase.match && user.active;
 
-  void _beginLoadingForNextRound() {
-    phase = RunPhase.loading;
-    secondsLeft = 5;
-  }
+  void _beginLoadingForNextRound() => _beginLoading(announcerSeconds + 5);
 
   /// Итоговые данные для записи в базу.
   Map<String, dynamic> toRecord() => {

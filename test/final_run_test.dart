@@ -151,4 +151,24 @@ void main() {
     expect(c.user.shots.where((v) => v == 0.0).length, 3);
     expect(c.staged, isEmpty);
   });
+
+  test('все отстреляли — «Стоп» раньше срока; диктор перед следующей командой', () {
+    final c = _make(13);
+    c.skipSighting();
+    for (var i = 0; i < 5; i++) {
+      c.tick();
+    }
+    for (var i = 0; i < 5; i++) {
+      c.submitUserShot(0, 0);
+    }
+    var t = 0;
+    while (c.phase == RunPhase.shooting && t < 300) {
+      c.tick();
+      t++;
+    }
+    expect(t, lessThan(250));
+    expect(c.phase, RunPhase.loading);
+    expect(c.announcing, isTrue);
+    expect(c.secondsLeft, FinalRunController.announcerSeconds + 5);
+  });
 }

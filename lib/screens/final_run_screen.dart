@@ -79,7 +79,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
       case RunPhase.sighting:
         return tr('Подготовка и пристрелка');
       case RunPhase.loading:
-        return tr('Заряжай… старт через {n} с', {'n': c.secondsLeft});
+        return c.announcing ? tr('Комментарий диктора') : tr('Заряжай… старт через {n} с', {'n': c.secondsLeft});
       case RunPhase.finished:
         return tr('Финал окончен');
       case RunPhase.grace:
