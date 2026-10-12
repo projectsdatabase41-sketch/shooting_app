@@ -63,6 +63,9 @@ class FinalRoomView extends StatelessWidget {
   final VoidCallback? onPause;
   final VoidCallback? onLeave;
 
+  /// Нет связи: показываем последнее состояние и предупреждение.
+  final bool offline;
+
   const FinalRoomView({
     super.key,
     required this.snapshot,
@@ -73,6 +76,7 @@ class FinalRoomView extends StatelessWidget {
     this.onNext,
     this.onPause,
     this.onLeave,
+    this.offline = false,
   });
 
   Future<void> _openInput(BuildContext context, Map<String, dynamic> row) async {
@@ -106,6 +110,17 @@ class FinalRoomView extends StatelessWidget {
       body: ListView(
         padding: EdgeInsets.fromLTRB(12, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 12, 24),
         children: [
+          if (offline)
+            Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: cs.errorContainer, borderRadius: BorderRadius.circular(12)),
+              child: Row(children: [
+                Icon(Icons.wifi_off, color: cs.onErrorContainer, size: 18),
+                const SizedBox(width: 8),
+                Expanded(child: Text(tr('Нет связи — подключаемся снова'), style: TextStyle(color: cs.onErrorContainer))),
+              ]),
+            ),
           if (onNext != null && s.phase != 'finished')
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
@@ -472,14 +487,39 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
     });
   }
 
+  Timer? _retry;
+  int _attempt = 0;
+  bool _online = false;
+
+  /// Связь оборвалась: финал идёт дальше на этом телефоне, канал поднимаем заново.
+  void _scheduleReconnect() {
+    if (!mounted || _retry != null) return;
+    setState(() => _online = false);
+    final secs = math.min(2 << math.min(_attempt, 3), 15);
+    _attempt++;
+    _retry = Timer(Duration(seconds: secs), () {
+      _retry = null;
+      _connect();
+    });
+    // Таймер уже взведён — повторный onClosed при закрытии канала ничего не удвоит.
+    _host?.dispose();
+    _host = null;
+  }
+
   Future<void> _connect() async {
     final ch = widget.service.channel(widget.sessionId);
+    ch.onClosed = _scheduleReconnect;
     final ok = await ch.join();
     if (!mounted) return;
     if (!ok) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Нет связи с участниками — финал идёт только на этом телефоне'))));
+      if (_attempt == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Нет связи с участниками — финал идёт только на этом телефоне'))));
+      }
+      _scheduleReconnect();
       return;
     }
+    _attempt = 0;
+    setState(() => _online = true);
     _host = FinalsHost(
       controller: c,
       channel: ch,
@@ -530,6 +570,7 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
   void dispose() {
     _timer?.cancel();
     _refresh?.cancel();
+    _retry?.cancel();
     c.removeListener(_onChange);
     _host?.dispose();
     super.dispose();
@@ -550,6 +591,7 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
         onNext: c.advance,
         onPause: c.paused ? c.resume : c.pause,
         onLeave: _leave,
+        offline: !_online,
       ),
     );
   }
@@ -569,8 +611,11 @@ class FinalGuestScreen extends StatefulWidget {
 
 class _FinalGuestScreenState extends State<FinalGuestScreen> {
   FinalsGuest? _guest;
+  FinalsSnapshot? _last; // последнее известное состояние (показываем при обрыве)
   Timer? _hello;
-  bool _failed = false;
+  Timer? _retry;
+  int _attempt = 0;
+  bool _online = false;
 
   @override
   void initState() {
@@ -578,29 +623,48 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
     _join();
   }
 
+  void _scheduleReconnect() {
+    if (!mounted || _retry != null) return;
+    setState(() => _online = false);
+    final secs = math.min(2 << math.min(_attempt, 3), 15);
+    _attempt++;
+    _retry = Timer(Duration(seconds: secs), () {
+      _retry = null;
+      _join();
+    });
+    // Таймер уже взведён — повторный onClosed при закрытии канала ничего не удвоит.
+    _guest?.dispose();
+    _guest = null;
+  }
+
   Future<void> _join() async {
     final ch = widget.service.channel(widget.member.sessionId);
+    ch.onClosed = _scheduleReconnect;
     final ok = await ch.join();
     if (!mounted) return;
     if (!ok) {
-      setState(() => _failed = true);
+      _scheduleReconnect();
       return;
     }
-    final g = FinalsGuest(channel: ch, userId: widget.service.auth.userId)..addListener(() {
-        if (mounted) setState(() {});
+    _attempt = 0;
+    final g = FinalsGuest(channel: ch, userId: widget.service.auth.userId)
+      ..addListener(() {
+        if (mounted) setState(() => _last = _guest?.snapshot ?? _last);
       });
     _guest = g;
     g.hello();
     // Пока состояния нет (хозяин ещё не в сети) — повторяем запрос.
+    _hello?.cancel();
     _hello = Timer.periodic(const Duration(seconds: 3), (_) {
       if (g.snapshot == null) g.hello();
     });
-    setState(() {});
+    setState(() => _online = true);
   }
 
   @override
   void dispose() {
     _hello?.cancel();
+    _retry?.cancel();
     _guest?.dispose();
     super.dispose();
   }
@@ -608,14 +672,17 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
   @override
   Widget build(BuildContext context) {
     final g = _guest;
-    final snap = g?.snapshot;
-    if (_failed) {
-      return Scaffold(appBar: GlassHeader(title: Text(tr('Финал'))), body: Center(child: Text(tr('Не удалось подключиться к финалу'))));
-    }
-    if (g == null || snap == null) {
+    final snap = g?.snapshot ?? _last;
+    if (snap == null) {
       return Scaffold(
         appBar: GlassHeader(title: Text(tr('Финал'))),
-        body: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [const CircularProgressIndicator(), const SizedBox(height: 12), Text(tr('Ждём ведущего…'))])),
+        body: Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 12),
+            Text(_attempt > 2 ? tr('Нет связи, пробуем снова…') : tr('Ждём ведущего…')),
+          ]),
+        ),
       );
     }
     final role = widget.member.role;
@@ -623,9 +690,10 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
       snapshot: snap,
       role: role,
       ownId: widget.member.targetId,
-      onShoot: (who, mm) => g.shoot(who, mm.dx, mm.dy),
-      onUndo: g.undo,
-      onNext: role == FinalsRole.coach ? g.next : null,
+      onShoot: (who, mm) => g?.shoot(who, mm.dx, mm.dy),
+      onUndo: (who) => g?.undo(who),
+      onNext: role == FinalsRole.coach ? () => g?.next() : null,
+      offline: !_online,
     );
   }
 }
