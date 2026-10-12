@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../finals/announcer.dart';
 import '../finals/bot.dart';
 import '../finals/final_engine.dart';
 import '../finals/final_run.dart';
@@ -552,8 +553,17 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
     _host!.broadcast();
   }
 
+  final _tracker = AnnounceTracker();
+
   void _onChange() {
     if (!mounted) return;
+    if (FinalsPrefs.voice(widget.store.db)) {
+      final text = _tracker.update(
+        [for (final r in c.live) AnnounceRow(r.c.name, r.total, r.c.active)],
+        announcing: c.announcing,
+      );
+      if (text != null) FinalsAnnouncer.speak(text);
+    }
     if (c.phase == RunPhase.finished && !_saved) {
       _saved = true;
       _timer?.cancel();
@@ -635,6 +645,7 @@ class FinalGuestScreen extends StatefulWidget {
 
 class _FinalGuestScreenState extends State<FinalGuestScreen> {
   FinalsGuest? _guest;
+  final _tracker = AnnounceTracker();
   FinalsSnapshot? _last; // последнее известное состояние (показываем при обрыве)
   Timer? _hello;
   Timer? _retry;
@@ -673,7 +684,16 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
     _attempt = 0;
     final g = FinalsGuest(channel: ch, userId: widget.service.auth.userId)
       ..addListener(() {
-        if (mounted) setState(() => _last = _guest?.snapshot ?? _last);
+        if (!mounted) return;
+        final snap = _guest?.snapshot;
+        if (snap != null) {
+          final text = _tracker.update(
+            [for (final r in snap.rows) AnnounceRow('${r['name']}', (r['total'] as num).toDouble(), r['active'] == true, isMe: r['id'] == widget.member.targetId)],
+            announcing: snap.phase == 'loading' && snap.secondsLeft > 5,
+          );
+          if (text != null) FinalsAnnouncer.speak(text);
+        }
+        setState(() => _last = snap ?? _last);
       });
     _guest = g;
     g.hello();

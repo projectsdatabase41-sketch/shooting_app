@@ -63,6 +63,19 @@ class FinalsPrefs {
     return v == 'side' ? 'side' : 'classic';
   }
 
+  static const _kVoice = 'finals_voice';
+
+  /// Озвучка рейтингов диктором (по умолчанию включена).
+  static bool voice(LocalDbService db) {
+    final rows = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [_kVoice]);
+    return rows.isEmpty || '${rows.first['hex']}' != '0';
+  }
+
+  static void setVoice(LocalDbService db, bool v) => db.db.execute(
+        'INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex',
+        [_kVoice, v ? '1' : '0'],
+      );
+
   static void setLayout(LocalDbService db, String v) => db.db.execute(
         'INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex',
         [_kLayout, v],

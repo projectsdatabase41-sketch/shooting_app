@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../finals/announcer.dart';
 import '../finals/final_engine.dart';
 import '../finals/final_run.dart';
 import '../finals/bot.dart';
@@ -39,6 +40,8 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
   bool _saved = false;
   bool _holding = false;
   late final String _layout = FinalsPrefs.layout(widget.store.db);
+  late final bool _voice = FinalsPrefs.voice(widget.store.db);
+  final _tracker = AnnounceTracker();
 
   FinalRunController get c => widget.controller;
 
@@ -63,11 +66,19 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
       });
       return;
     }
+    if (_voice) {
+      final text = _tracker.update(
+        [for (final r in c.live) AnnounceRow(r.c.name, r.total, r.c.active, isMe: r.c.id == c.userId)],
+        announcing: c.announcing,
+      );
+      if (text != null) FinalsAnnouncer.speak(text);
+    }
     setState(() {});
   }
 
   @override
   void dispose() {
+    FinalsAnnouncer.stop();
     _timer?.cancel();
     _page.dispose();
     c.removeListener(_onChange);

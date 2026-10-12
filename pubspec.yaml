@@ -89,6 +89,7 @@ dependencies:
   record: ^6.2.1
   video_player: ^2.11.1
   share_handler: ^0.0.25
+  flutter_tts: ^4.2.5
 
 dev_dependencies:
   flutter_test:

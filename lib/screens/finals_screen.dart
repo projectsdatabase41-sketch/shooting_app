@@ -128,6 +128,7 @@ class FinalSetupScreen extends StatefulWidget {
 class _FinalSetupScreenState extends State<FinalSetupScreen> {
   String _level = 'mixed'; // mixed | easy | medium | hard | unpredictable
   bool _custom = false; // свой финал: не публикуется
+  late bool _voice = FinalsPrefs.voice(context.read<AppDataStore>().db);
   late String _layout = FinalsPrefs.layout(context.read<AppDataStore>().db);
 
   // Семь соперников: обычные боты или чемпионы (по их статистике).
@@ -330,6 +331,16 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
                   onChanged: (v) => setState(() => _custom = v),
                 ),
                 const SizedBox(height: 18),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(tr('Озвучка рейтингов')),
+                  subtitle: Text(tr('Диктор голосом телефона после каждой серии и выстрела')),
+                  value: _voice,
+                  onChanged: (v) {
+                    setState(() => _voice = v);
+                    FinalsPrefs.setVoice(store.db, v);
+                  },
+                ),
                 // Вид экрана.
                 Text(tr('Вид экрана финала'), style: theme.textTheme.titleSmall),
                 const SizedBox(height: 8),
