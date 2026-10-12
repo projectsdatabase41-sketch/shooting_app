@@ -15,6 +15,7 @@ import '../models/chat_contact.dart';
 import '../models/target_face.dart';
 import '../services/chat_auth_service.dart';
 import '../services/chat_messages_repository.dart';
+import '../services/chat_sync_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/glass_pill.dart';
 import 'final_run_screen.dart';
@@ -337,6 +338,11 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
     for (final p in _picks) {
       await _svc.invite(sid,
           userId: p.contact.id, role: p.role, targetId: p.role == FinalsRole.athlete ? p.targetId : null, name: p.contact.nickname);
+      // Приглашение дублируем сообщением в мессенджере — оно приходит push-уведомлением.
+      try {
+        await ChatSyncService(_auth, ChatMessagesRepository(_store.db))
+            .send(p.contact.id, tr('Приглашаю в финал: откройте вкладку «Финалы» в приложении и примите приглашение.'));
+      } catch (_) {}
     }
     _sessionId = sid;
     _poll = Timer.periodic(const Duration(seconds: 2), (_) async {
