@@ -78,7 +78,37 @@ create policy fe_insert on finals_events for insert with check (
     or exists (
       select 1 from finals_session_members m
       where m.session_id = finals_events.session_id and m.user_id = auth.uid() and m.status = 'accepted'
-        and (m.role = 'coach' or m.target_id = finals_events.who)
+        and (m.role in ('coach', 'helper') or m.target_id = finals_events.who)
     )
   )
 );
+
+-- ===== Realtime (приватный Broadcast `final:<session_id>`) =====
+-- Войти в канал и писать в него могут хозяин и участники сессии.
+create or replace function is_finals_realtime_member(p_topic text, p_user uuid)
+returns boolean
+language plpgsql stable security definer set search_path = public as $$
+declare sid uuid;
+begin
+  if p_topic !~ '^final:' then
+    return false;
+  end if;
+  begin
+    sid := substr(p_topic, 7)::uuid;
+  exception when others then
+    return false;
+  end;
+  return exists (select 1 from finals_sessions s where s.id = sid and s.host_id = p_user)
+      or exists (select 1 from finals_session_members m
+                 where m.session_id = sid and m.user_id = p_user and m.status = 'accepted');
+end $$;
+
+drop policy if exists finals_realtime_read on realtime.messages;
+create policy finals_realtime_read on realtime.messages
+  for select to authenticated
+  using (is_finals_realtime_member(realtime.topic(), auth.uid()));
+
+drop policy if exists finals_realtime_write on realtime.messages;
+create policy finals_realtime_write on realtime.messages
+  for insert to authenticated
+  with check (is_finals_realtime_member(realtime.topic(), auth.uid()));

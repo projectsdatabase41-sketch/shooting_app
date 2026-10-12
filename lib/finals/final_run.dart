@@ -63,6 +63,11 @@ class FinalRunController extends ChangeNotifier {
   /// Все люди-участники (спортсмен и, в финале с несколькими спортсменами,
   /// остальные). Боты — все прочие.
   final Set<String> humans;
+
+  /// Ручной режим (финал ведёт тренер): подготовка, «Заряжай» и «Старт» не идут
+  /// по таймеру, а подаются кнопкой «Далее» ([advance]). Время выстрелов
+  /// засекается с «Старта»; «Стоп» тренер может подать раньше срока.
+  final bool manual;
   final math.Random rng;
   final Map<String, BotShooter> bots;
 
@@ -105,6 +110,7 @@ class FinalRunController extends ChangeNotifier {
     required this.bots,
     required this.rng,
     Set<String> otherHumans = const {},
+    this.manual = false,
   })  : humans = {userId, ...otherHumans},
         secondsLeft = format.sightingSeconds;
 
@@ -170,9 +176,9 @@ class FinalRunController extends ChangeNotifier {
     if (paused || phase == RunPhase.finished) return;
     switch (phase) {
       case RunPhase.sighting:
-        if (--secondsLeft <= 0) _beginLoading(pauseAfterSighting + 5);
+        if (--secondsLeft <= 0 && !manual) _beginLoading(pauseAfterSighting + 5);
       case RunPhase.loading:
-        if (--secondsLeft <= 0) _beginRound();
+        if (--secondsLeft <= 0 && !manual) _beginRound();
       case RunPhase.shooting:
         clock++;
         roundSeconds++;
@@ -192,6 +198,34 @@ class FinalRunController extends ChangeNotifier {
     }
     notifyListeners();
   }
+
+  /// Кнопка тренера «Далее»: подготовка → «Заряжай» → «Старт» (пошёл отсчёт
+  /// времени) → «Стоп». Работает в любом режиме, в обычном — как «пропустить».
+  void advance() {
+    if (paused) return;
+    switch (phase) {
+      case RunPhase.sighting:
+        _beginLoading(5);
+      case RunPhase.loading:
+        _beginRound();
+      case RunPhase.shooting:
+        _stopRound();
+      case RunPhase.grace:
+        _endRound();
+      case RunPhase.finished:
+        return;
+    }
+    notifyListeners();
+  }
+
+  /// Что сделает «Далее» сейчас (для подписи кнопки): load / start / stop / next.
+  String get nextCommand => switch (phase) {
+        RunPhase.sighting => 'load',
+        RunPhase.loading => 'start',
+        RunPhase.shooting => 'stop',
+        RunPhase.grace => 'next',
+        RunPhase.finished => '',
+      };
 
   /// ISSF 6.17.2: после пристрелки 60 с до первой серии.
   static const pauseAfterSighting = 60;
