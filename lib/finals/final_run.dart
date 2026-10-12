@@ -348,6 +348,43 @@ class FinalRunController extends ChangeNotifier {
 
   void _beginLoadingForNextRound() => _beginLoading(announcerSeconds + 5);
 
+  /// Живая таблица: активные — по среднему выстрелу (у всех разное число
+  /// выстрелов, пока раунд идёт), включая уже отмеченные, но ещё не закрытые
+  /// выстрелы спортсмена; выбывшие — ниже по местам. Пересчитывается после
+  /// каждого выстрела.
+  List<LiveRow> get live {
+    final rows = <LiveRow>[];
+    for (final c in engine.competitors) {
+      final shots = [...c.shots];
+      if (c.isUser && c.active) {
+        for (final st in staged) {
+          shots.add(scoreForPoint(st.x, st.y, face));
+        }
+      }
+      rows.add(LiveRow(c, shots));
+    }
+    final act = [for (final r in rows) if (r.c.active) r]
+      ..sort((a, b) {
+        final byAvg = b.avg.compareTo(a.avg);
+        return byAvg != 0 ? byAvg : b.total.compareTo(a.total);
+      });
+    final out = [for (final r in rows) if (!r.c.active) r]..sort((a, b) => a.c.place!.compareTo(b.c.place!));
+    return [...act, ...out];
+  }
+
+  /// Спортсмен выбыл и фиксирует результат: остаток финала (выстрелы ботов,
+  /// выбывания, перестрелки) досчитывается сразу. Для активного спортсмена
+  /// недоступно — его оставшиеся выстрелы пришлось бы обнулить.
+  bool fastForward() {
+    if (user.active || phase == RunPhase.finished) return false;
+    paused = false;
+    var guard = 0;
+    while (phase != RunPhase.finished && guard++ < 200000) {
+      tick();
+    }
+    return phase == RunPhase.finished;
+  }
+
   /// Итоговые данные для записи в базу.
   Map<String, dynamic> toRecord() => {
         'format': format.id,
@@ -360,4 +397,14 @@ class FinalRunController extends ChangeNotifier {
         'shots': [for (final s in shots) s.toJson()],
         'log': log,
       };
+}
+
+/// Строка живой таблицы финала.
+class LiveRow {
+  final FinalCompetitor c;
+  final List<double> shots;
+  LiveRow(this.c, this.shots);
+
+  double get total => (shots.fold<double>(0, (a, b) => a + b) * 10).round() / 10;
+  double get avg => shots.isEmpty ? 0 : total / shots.length;
 }

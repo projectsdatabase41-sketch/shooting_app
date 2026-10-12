@@ -67,8 +67,13 @@ class ChampionsService {
   }
 
   /// Опубликованные (подписанные) чемпионы формата, лучшие сверху.
-  Future<List<Map<String, dynamic>>> champions(String formatId) =>
-      _get('format_id=eq.$formatId&coach_signed_at=not.is.null&order=total.desc&limit=50');
+  /// Постранично ([offset]) и с поиском по имени ([q]).
+  Future<List<Map<String, dynamic>>> champions(String formatId, {String q = '', int offset = 0}) {
+    final name = q.trim().isEmpty ? '' : '&display_name=ilike.*${Uri.encodeQueryComponent(q.trim())}*';
+    return _get('format_id=eq.$formatId&coach_signed_at=not.is.null$name&order=total.desc&limit=$pageSize&offset=$offset');
+  }
+
+  static const pageSize = 50;
 
   /// Записи, ждущие подписи этого тренера.
   Future<List<Map<String, dynamic>>> pendingForMe() =>

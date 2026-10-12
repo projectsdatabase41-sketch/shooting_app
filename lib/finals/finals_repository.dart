@@ -49,3 +49,22 @@ class FinalsRepository {
           )
       ];
 }
+
+/// Настройки финалов (в локальной базе).
+class FinalsPrefs {
+  FinalsPrefs._();
+  static const _kLayout = 'finals_layout';
+
+  /// 'classic' — мишень сверху, боты сеткой; 'side' — рядом с большой мишенью
+  /// три мишени ботов, остальные рядами по три.
+  static String layout(LocalDbService db) {
+    final rows = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [_kLayout]);
+    final v = rows.isEmpty ? '' : '${rows.first['hex']}';
+    return v == 'side' ? 'side' : 'classic';
+  }
+
+  static void setLayout(LocalDbService db, String v) => db.db.execute(
+        'INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex',
+        [_kLayout, v],
+      );
+}

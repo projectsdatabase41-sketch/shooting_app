@@ -38,6 +38,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
   final _page = PageController(initialPage: 1);
   bool _saved = false;
   bool _holding = false;
+  late final String _layout = FinalsPrefs.layout(widget.store.db);
 
   FinalRunController get c => widget.controller;
 
@@ -127,7 +128,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Выйти из финала?')),
-        content: Text(tr('Результат не будет сохранён.')),
+        content: Text(tr('Финал будет прекращён, результаты не сохранятся.')),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Остаться'))),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Выйти'))),
@@ -138,6 +139,15 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
     return leave == true;
   }
 
+  /// Покинуть финал без сохранения результата.
+  Future<void> _leave() async {
+    if (await _confirmLeave()) {
+      _saved = true;
+      _timer?.cancel();
+      if (mounted) Navigator.of(context).pop();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -145,16 +155,23 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
-        if (await _confirmLeave()) {
-          _saved = true;
-          _timer?.cancel();
-          if (mounted) Navigator.of(context).pop();
-        }
+        await _leave();
       },
       child: Scaffold(
         extendBodyBehindAppBar: true,
         appBar: GlassHeader(
-          leading: const SizedBox.shrink(),
+          // «Назад»: с таблицы — на главный экран финала, оттуда — выход из финала.
+          leading: IconButton(
+            tooltip: tr('Назад'),
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () {
+              if (_page.hasClients && (_page.page ?? 1) < 0.5) {
+                _page.animateToPage(1, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+              } else {
+                _leave();
+              }
+            },
+          ),
           title: Row(children: [
             Expanded(
                 child: Text(_banner(),
@@ -168,6 +185,11 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
               tooltip: c.paused ? tr('Продолжить') : tr('Пауза'),
               icon: Icon(c.paused ? Icons.play_arrow : Icons.pause),
               onPressed: c.paused ? c.resume : c.pause,
+            ),
+            IconButton(
+              tooltip: tr('Покинуть финал'),
+              icon: const Icon(Icons.logout),
+              onPressed: _leave,
             ),
           ],
         ),
@@ -188,32 +210,45 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
     final bots = [for (final x in c.engine.competitors) if (!x.isUser) x];
     final sighting = c.phase == RunPhase.sighting;
     final marks = _myMarks;
+    final pad = Padding(
+      padding: const EdgeInsets.fromLTRB(8, 2, 8, 2),
+      child: Stack(children: [
+        Positioned.fill(
+          child: _UserPad(
+            face: c.face,
+            marks: marks,
+            enabled: _canPlace && !c.paused,
+            onHold: (v) => setState(() => _holding = v),
+            onShot: _onShot,
+          ),
+        ),
+        if (c.paused)
+          Positioned.fill(
+            child: ColoredBox(
+              color: Colors.black54,
+              child: Center(child: Text(tr('Пауза'), style: theme.textTheme.headlineMedium?.copyWith(color: Colors.white))),
+            ),
+          ),
+      ]),
+    );
+    final side = _layout == 'side';
+    final rest = side ? bots.skip(3).toList() : bots;
     return Column(children: [
       SizedBox(height: top),
       Text(c.user.name, style: theme.textTheme.titleSmall),
       SizedBox(
         height: h * 0.40,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 2, 8, 2),
-          child: Stack(children: [
-            Positioned.fill(
-              child: _UserPad(
-                face: c.face,
-                marks: marks,
-                enabled: _canPlace && !c.paused,
-                onHold: (v) => setState(() => _holding = v),
-                onShot: _onShot,
-              ),
-            ),
-            if (c.paused)
-              Positioned.fill(
-                child: ColoredBox(
-                  color: Colors.black54,
-                  child: Center(child: Text(tr('Пауза'), style: theme.textTheme.headlineMedium?.copyWith(color: Colors.white))),
+        child: side
+            ? Row(children: [
+                Expanded(flex: 5, child: pad),
+                Expanded(
+                  flex: 3,
+                  child: Column(children: [
+                    for (final b in bots.take(3)) Expanded(child: _BotCard(c: c, bot: b)),
+                  ]),
                 ),
-              ),
-          ]),
-        ),
+              ])
+            : pad,
       ),
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 8, 4),
@@ -224,11 +259,13 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
                   ? tr('Пристрелка: выстрелы не идут в зачёт')
                   : c.userCanShoot
                       ? tr('Осталось выстрелов: {n}', {'n': c.userShotsLeft})
-                      : (c.user.active ? tr('Ждите команды') : tr('Вы выбыли')),
+                      : (c.user.active ? tr('Ждите команды') : tr('Вы выбыли — боты продолжают')),
               style: theme.textTheme.bodyMedium,
             ),
           ),
           if (sighting) TextButton(onPressed: c.skipSighting, child: Text(tr('Готов'))),
+          if (!c.user.active && c.phase != RunPhase.finished)
+            TextButton(onPressed: c.fastForward, child: Text(tr('Завершить результат'))),
           TextButton.icon(
             onPressed: marks.isEmpty ? null : _undo,
             icon: const Icon(Icons.undo),
@@ -238,10 +275,10 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
       ),
       Expanded(
         child: GridView.count(
-          crossAxisCount: 4,
-          childAspectRatio: 0.72,
+          crossAxisCount: side ? 3 : 4,
+          childAspectRatio: side ? 0.9 : 0.72,
           padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-          children: [for (final b in bots) _BotCard(c: c, bot: b)],
+          children: [for (final b in rest) _BotCard(c: c, bot: b)],
         ),
       ),
     ]);
@@ -250,29 +287,28 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
   Widget _table(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final rows = c.engine.standings;
+    final rows = c.live;
     return ListView(
       padding: EdgeInsets.fromLTRB(12, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 12, 16),
       children: [
-        for (final r in rows)
+        for (var i = 0; i < rows.length; i++)
           Opacity(
-            opacity: r.active ? 1 : 0.5,
+            opacity: rows[i].c.active ? 1 : 0.5,
             child: Container(
               margin: const EdgeInsets.only(bottom: 4),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: r.isUser ? cs.primary.withValues(alpha: 0.16) : cs.surfaceContainerHigh,
+                color: rows[i].c.isUser ? cs.primary.withValues(alpha: 0.16) : cs.surfaceContainerHigh,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(children: [
                 SizedBox(
                     width: 26,
-                    child: Text('${r.place ?? (rows.indexOf(r) + 1)}', style: const TextStyle(fontWeight: FontWeight.w800))),
-                Expanded(child: Text(r.name, overflow: TextOverflow.ellipsis)),
-                Text(r.shots.isEmpty ? '' : '${r.shots.last.toStringAsFixed(1)}  ', style: theme.textTheme.bodySmall),
-                Text(r.shots.isEmpty ? '' : '${tr('ср')} ${(r.total / r.shots.length).toStringAsFixed(2)}  ',
-                    style: theme.textTheme.bodySmall),
-                Text(r.total.toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.w700)),
+                    child: Text('${rows[i].c.place ?? (i + 1)}', style: const TextStyle(fontWeight: FontWeight.w800))),
+                Expanded(child: Text(rows[i].c.name, overflow: TextOverflow.ellipsis)),
+                Text(rows[i].shots.isEmpty ? '' : '${rows[i].shots.last.toStringAsFixed(1)}  ', style: theme.textTheme.bodySmall),
+                Text(rows[i].shots.isEmpty ? '' : '${tr('ср')} ${rows[i].avg.toStringAsFixed(2)}  ', style: theme.textTheme.bodySmall),
+                Text(rows[i].total.toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.w700)),
               ]),
             ),
           ),
@@ -529,6 +565,58 @@ class FinalResultScreen extends StatelessWidget {
   final Map<String, dynamic> record;
   const FinalResultScreen({super.key, required this.record});
 
+  /// Протокол финала: по каждому участнику суммы серий, одиночные выстрелы
+  /// и итог (как в ведомости финалистов).
+  Widget _protocol(BuildContext context, List<Map<String, dynamic>> st) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final fmt = FinalFormat.all.firstWhere((f) => f.id == record['format'], orElse: () => FinalFormat.airRifle10m);
+    final shots = (record['shots'] as List).cast<Map<String, dynamic>>();
+    List<double> of(String id) => [
+          for (final x in shots)
+            if (x['who'] == id && x['so'] != true) (x['s'] as num).toDouble()
+        ];
+    String f1(double v) => v.toStringAsFixed(1);
+    final seriesCols = fmt.seriesShots.length;
+    final cols = <String>[
+      '#',
+      tr('Участник'),
+      for (var i = 0; i < seriesCols; i++) (i == 0 && fmt.hasOpenStage) ? tr('Откр.') : 'C${i + 1 - (fmt.hasOpenStage ? 1 : 0)}',
+      for (var i = 0; i < fmt.singleShots; i++) '${fmt.seriesShots.fold<int>(0, (a, b) => a + b) + i + 1}',
+      'Σ',
+    ];
+    final rows = <DataRow>[];
+    for (final p in st) {
+      final v = of('${p['id']}');
+      var at = 0;
+      final cells = <DataCell>[
+        DataCell(Text('${p['place'] ?? '—'}', style: const TextStyle(fontWeight: FontWeight.w800))),
+        DataCell(Text('${p['name']}')),
+      ];
+      for (final n in fmt.seriesShots) {
+        final part = v.skip(at).take(n).toList();
+        cells.add(DataCell(Text(part.length == n ? f1(part.fold(0.0, (a, b) => a + b)) : '—')));
+        at += n;
+      }
+      for (var i = 0; i < fmt.singleShots; i++) {
+        cells.add(DataCell(Text(at + i < v.length ? f1(v[at + i]) : '')));
+      }
+      cells.add(DataCell(Text(f1((p['total'] as num).toDouble()), style: const TextStyle(fontWeight: FontWeight.w800))));
+      rows.add(DataRow(color: p['user'] == true ? WidgetStatePropertyAll(cs.primary.withValues(alpha: 0.16)) : null, cells: cells));
+    }
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        columnSpacing: 14,
+        headingRowHeight: 36,
+        dataRowMinHeight: 34,
+        dataRowMaxHeight: 34,
+        columns: [for (final c in cols) DataColumn(label: Text(c, style: theme.textTheme.labelMedium))],
+        rows: rows,
+      ),
+    );
+  }
+
   Future<void> _publish(BuildContext context) async {
     final store = context.read<AppDataStore>();
     final msg = ScaffoldMessenger.of(context);
@@ -572,7 +660,6 @@ class FinalResultScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
     final st = (record['standings'] as List).cast<Map<String, dynamic>>();
     final mine = [
       for (final s in (record['shots'] as List).cast<Map<String, dynamic>>())
@@ -584,24 +671,25 @@ class FinalResultScreen extends StatelessWidget {
       body: ListView(
         padding: EdgeInsets.fromLTRB(16, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 16, 24),
         children: [
-          for (final s in st)
-            Card(
-              color: s['user'] == true ? cs.primary.withValues(alpha: 0.16) : null,
-              child: ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: ((s['place'] as int?) ?? 9) <= 3 ? const Color(0xFFD9A441) : cs.surfaceContainerHigh,
-                  child: Text('${s['place'] ?? '—'}', style: const TextStyle(fontWeight: FontWeight.w800)),
-                ),
-                title: Text('${s['name']}'),
-                trailing: Text((s['total'] as num).toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-              ),
-            ),
+          _protocol(context, st),
           const SizedBox(height: 12),
           Text(tr('Ваши выстрелы'), style: theme.textTheme.titleSmall),
           const SizedBox(height: 8),
           Wrap(spacing: 6, runSpacing: 6, children: [
             for (final v in mine) Chip(label: Text(v.toStringAsFixed(1)), visualDensity: VisualDensity.compact),
           ]),
+          if (mine.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              tr('Средний выстрел {a} · лучший {b} · худший {c} · десяток от 10.0: {d}', {
+                'a': (mine.fold(0.0, (a, b) => a + b) / mine.length).toStringAsFixed(2),
+                'b': mine.reduce((a, b) => a > b ? a : b).toStringAsFixed(1),
+                'c': mine.reduce((a, b) => a < b ? a : b).toStringAsFixed(1),
+                'd': mine.where((v) => v >= 10.0).length,
+              }),
+              style: theme.textTheme.bodyMedium,
+            ),
+          ],
           const SizedBox(height: 20),
           if (record['custom'] == true)
             Text(tr('Свой финал: в общий рейтинг не попадает'), textAlign: TextAlign.center)

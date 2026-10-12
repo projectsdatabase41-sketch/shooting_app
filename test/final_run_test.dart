@@ -187,4 +187,38 @@ void main() {
     expect(places.toSet(), {1, 2, 3, 4, 5, 6, 7, 8});
     expect(c.engine.competitors.firstWhere((x) => x.place == 1).shots.length, 35);
   });
+
+  test('выбыл — боты стреляют дальше; «Завершить результат» доигрывает остаток', () {
+    final c = _make(5);
+    c.skipSighting();
+    // Человек не стреляет, выбывает 8-м после 12 выстрелов; ждём выбывания.
+    var guard = 0;
+    while (c.user.active && guard++ < 5000) {
+      c.tick();
+    }
+    expect(c.user.active, isFalse);
+    expect(c.phase, isNot(RunPhase.finished));
+    final before = c.shots.length;
+    for (var i = 0; i < 120; i++) {
+      c.tick();
+    }
+    expect(c.shots.length, greaterThan(before)); // боты продолжают
+    expect(c.fastForward(), isTrue);
+    expect(c.phase, RunPhase.finished);
+    expect({for (final x in c.engine.competitors) x.place}, {1, 2, 3, 4, 5, 6, 7, 8});
+  });
+
+  test('живая таблица: отмеченный выстрел спортсмена сразу меняет его место', () {
+    final c = _make(31);
+    c.skipSighting();
+    for (var i = 0; i < 5; i++) {
+      c.tick();
+    }
+    // Пока никто не стрелял, у всех 0; десятка в центр — спортсмен на первом месте.
+    c.submitUserShot(0, 0);
+    expect(c.live.first.c.isUser, isTrue);
+    expect(c.live.first.avg, greaterThan(10));
+    c.undoUserShot();
+    expect(c.live.first.avg, 0);
+  });
 }

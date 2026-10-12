@@ -20,7 +20,11 @@ class ChampionsScreen extends StatefulWidget {
 class _ChampionsScreenState extends State<ChampionsScreen> {
   late final ChampionsService _svc;
   List<Map<String, dynamic>> _pending = [];
-  final Map<String, List<Map<String, dynamic>>> _champs = {};
+  String _fmt = FinalFormat.all.first.id;
+  String _q = '';
+  List<Map<String, dynamic>> _rows = [];
+  bool _more = false;
+  bool _busy = false;
   List<Map<String, dynamic>> _banned = [];
   List<Map<String, dynamic>> _appeals = [];
   bool _loading = true;
@@ -47,9 +51,7 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
         if (link != null) mine.add(link.chatUserId);
       }
     }
-    for (final f in FinalFormat.all) {
-      _champs[f.id] = await _svc.champions(f.id);
-    }
+    await _loadChamps();
     if (mounted) {
       setState(() {
         _pending = pending;
@@ -59,6 +61,19 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
         _loading = false;
       });
     }
+  }
+
+  /// Загрузка чемпионов выбранного упражнения (с нуля или следующей страницей).
+  Future<void> _loadChamps({bool more = false}) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    final page = await _svc.champions(_fmt, q: _q, offset: more ? _rows.length : 0);
+    if (!mounted) return;
+    setState(() {
+      _rows = more ? [..._rows, ...page] : page;
+      _more = page.length >= ChampionsService.pageSize;
+      _busy = false;
+    });
   }
 
   Future<void> _sign(Map<String, dynamic> r) async {
@@ -148,26 +163,46 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
                     ),
                   const SizedBox(height: 16),
                 ],
-                for (final f in FinalFormat.all) ...[
-                  Text(tr(f.nameKey), style: theme.textTheme.titleSmall),
-                  if ((_champs[f.id] ?? []).isEmpty)
-                    Padding(padding: const EdgeInsets.all(12), child: Text(tr('Пока никого'))),
-                  for (final r in _champs[f.id] ?? [])
-                    ListTile(
-                      dense: true,
-                      title: Text('${r['display_name']}'),
-                      subtitle: ((r['flag_count'] as int?) ?? 0) > 0 ? Text(tr('Жалоб: {n}', {'n': r['flag_count']})) : null,
-                      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Text((r['total'] as num).toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.w800)),
-                        IconButton(
-                          tooltip: tr('Пожаловаться'),
-                          icon: const Icon(Icons.flag_outlined, size: 20),
-                          onPressed: () => _report(r),
-                        ),
-                      ]),
+                Text(tr('Упражнение'), style: theme.textTheme.titleSmall),
+                const SizedBox(height: 8),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  for (final f in FinalFormat.all)
+                    ChoiceChip(
+                      label: Text(tr(f.nameKey)),
+                      selected: _fmt == f.id,
+                      onSelected: (_) {
+                        _fmt = f.id;
+                        _loadChamps();
+                      },
                     ),
-                  const SizedBox(height: 12),
-                ],
+                ]),
+                const SizedBox(height: 8),
+                TextField(
+                  decoration: InputDecoration(prefixIcon: const Icon(Icons.search), hintText: tr('Поиск по имени')),
+                  onSubmitted: (v) {
+                    _q = v;
+                    _loadChamps();
+                  },
+                ),
+                const SizedBox(height: 8),
+                if (_rows.isEmpty && !_busy) Padding(padding: const EdgeInsets.all(12), child: Text(tr('Пока никого'))),
+                for (var i = 0; i < _rows.length; i++)
+                  ListTile(
+                    dense: true,
+                    leading: SizedBox(width: 28, child: Text('${i + 1}', style: const TextStyle(fontWeight: FontWeight.w700))),
+                    title: Text('${_rows[i]['display_name']}'),
+                    subtitle: ((_rows[i]['flag_count'] as int?) ?? 0) > 0 ? Text(tr('Жалоб: {n}', {'n': _rows[i]['flag_count']})) : null,
+                    trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Text((_rows[i]['total'] as num).toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.w800)),
+                      IconButton(
+                        tooltip: tr('Пожаловаться'),
+                        icon: const Icon(Icons.flag_outlined, size: 20),
+                        onPressed: () => _report(_rows[i]),
+                      ),
+                    ]),
+                  ),
+                if (_busy) const Center(child: Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator())),
+                if (_more && !_busy) TextButton(onPressed: () => _loadChamps(more: true), child: Text(tr('Показать ещё'))),
               ],
             ),
     );
