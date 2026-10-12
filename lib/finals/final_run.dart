@@ -16,6 +16,10 @@ enum RunPhase {
 
   /// Идёт серия, одиночный выстрел или перестрелка.
   shooting,
+
+  /// После команды «Стоп»: спортсмен ещё может отметить выстрел, сделанный
+  /// в срок (выстрел за секунды до «Стоп» — не опоздание).
+  grace,
   finished,
 }
 
@@ -102,14 +106,21 @@ class FinalRunController extends ChangeNotifier {
 
   /// Может ли человек сейчас ставить выстрел.
   bool get userCanShoot =>
-      phase == RunPhase.shooting &&
+      (phase == RunPhase.shooting || phase == RunPhase.grace) &&
       !paused &&
       _shooters.contains(userId) &&
-      (_roundFired[userId] ?? 0) < shotsPerShooter;
+      staged.length < shotsPerShooter;
+
+  /// Секунд на отметку выстрелов после «Стоп».
+  static const graceSeconds = 10;
+
+  /// Выстрелы человека в текущем раунде: можно убрать кнопкой «назад», в
+  /// таблицу и движок уходят при закрытии раунда.
+  final List<({double x, double y, int t})> staged = [];
 
   /// Сколько выстрелов осталось человеку в раунде.
   int get userShotsLeft =>
-      _shooters.contains(userId) ? shotsPerShooter - (_roundFired[userId] ?? 0) : 0;
+      _shooters.contains(userId) ? shotsPerShooter - staged.length : 0;
 
   /// Название раунда для экрана.
   String get roundLabel {
@@ -151,7 +162,10 @@ class FinalRunController extends ChangeNotifier {
         clock++;
         roundSeconds++;
         _fireDueBots();
-        if (roundSeconds >= roundLimit || _roundDone()) _endRound();
+        if (roundSeconds >= roundLimit) _stopRound();
+      case RunPhase.grace:
+        clock++;
+        if (--secondsLeft <= 0 || staged.length >= shotsPerShooter) _endRound();
       case RunPhase.finished:
         break;
     }
@@ -173,6 +187,7 @@ class FinalRunController extends ChangeNotifier {
     _shooters = _currentShooters();
     _roundFired.clear();
     _botTimes.clear();
+    staged.clear();
     if (inShootOff) {
       shotsPerShooter = 1;
       roundLimit = format.singleSeconds;
@@ -214,18 +229,21 @@ class FinalRunController extends ChangeNotifier {
     }
   }
 
-  bool _roundDone() =>
-      _shooters.every((id) => (_roundFired[id] ?? 0) >= shotsPerShooter);
-
   /// Выстрел человека в точку (x, y) мм от центра мишени (y вверх).
   /// Возвращает результат с десятыми либо `null`, если сейчас нельзя.
   double? submitUserShot(double x, double y) {
     if (!userCanShoot) return null;
-    final score = scoreForPoint(x, y, face);
-    _record(userId, x, y, score);
-    if (_roundDone()) _endRound();
+    staged.add((x: x, y: y, t: clock));
     notifyListeners();
-    return score;
+    return scoreForPoint(x, y, face);
+  }
+
+  /// Кнопка «назад»: убирает последний отмеченный выстрел.
+  bool undoUserShot() {
+    if (staged.isEmpty || paused || (phase != RunPhase.shooting && phase != RunPhase.grace)) return false;
+    staged.removeLast();
+    notifyListeners();
+    return true;
   }
 
   void _record(String id, double x, double y, double score) {
@@ -241,12 +259,30 @@ class FinalRunController extends ChangeNotifier {
     }
   }
 
+  /// Время раунда вышло («Стоп»): если человек отметил не всё — короткое окно.
+  void _stopRound() {
+    if (_shooters.contains(userId) && staged.length < shotsPerShooter) {
+      phase = RunPhase.grace;
+      secondsLeft = graceSeconds;
+      log.add({'e': 'stop', 't': clock});
+    } else {
+      _endRound();
+    }
+  }
+
   void _endRound() {
-    // Не успел человек в срок — нули за невыстрелянные выстрелы.
+    // Отмеченные выстрелы человека уходят в зачёт; не отмеченные — нули.
     if (_shooters.contains(userId)) {
-      while ((_roundFired[userId] ?? 0) < shotsPerShooter && !engine.isFinished && _userStillInRound()) {
+      for (final st in staged) {
+        if (engine.isFinished || !_userStillInRound()) break;
+        _record(userId, st.x, st.y, scoreForPoint(st.x, st.y, face));
+      }
+      var fired = staged.length;
+      staged.clear();
+      while (fired < shotsPerShooter && !engine.isFinished && _userStillInRound()) {
         _record(userId, face.faceRadiusMm, 0, 0.0);
         log.add({'e': 'timeout', 'who': userId, 't': clock});
+        fired++;
       }
     }
     if (engine.isFinished) {

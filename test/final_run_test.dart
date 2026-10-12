@@ -125,4 +125,30 @@ void main() {
 
     expect(avgOfBots(BotDifficulty.easy), lessThan(avgOfBots(BotDifficulty.hard)));
   });
+
+  test('«назад» убирает выстрел; после «Стоп» ещё 10 с на отметку', () {
+    final c = _make(11);
+    c.skipSighting();
+    for (var i = 0; i < 5; i++) {
+      c.tick();
+    }
+    c.submitUserShot(0, 0);
+    c.submitUserShot(1, 1);
+    expect(c.staged.length, 2);
+    expect(c.undoUserShot(), isTrue);
+    expect(c.staged.length, 1);
+    for (var i = 0; i < 250; i++) {
+      c.tick();
+    }
+    expect(c.phase, RunPhase.grace); // 4 выстрела не отмечены — окно открыто
+    expect(c.userCanShoot, isTrue);
+    c.submitUserShot(0, 0);
+    for (var i = 0; i < 10; i++) {
+      c.tick();
+    }
+    expect(c.phase, RunPhase.loading);
+    expect(c.user.shots.length, 5); // 2 отмеченных + 3 нуля
+    expect(c.user.shots.where((v) => v == 0.0).length, 3);
+    expect(c.staged, isEmpty);
+  });
 }

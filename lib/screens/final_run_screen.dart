@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../finals/final_engine.dart';
 import '../finals/final_run.dart';
 import '../finals/bot.dart';
 import '../finals/champions_service.dart';
@@ -13,16 +15,19 @@ import 'package:provider/provider.dart';
 import '../i18n/i18n.dart';
 import '../logic/scoring.dart';
 import '../models/target_color_scheme.dart';
+import '../models/target_face.dart';
 import '../painters/target_painter.dart';
 import '../state/app_data_store.dart';
 import '../widgets/glass_pill.dart';
 
-/// Ход финала: мишень, таймер, таблица восьми участников.
+/// Ход финала: сверху мишень спортсмена (~40% экрана), ниже мишени соперников,
+/// свайпом вправо — таблица результатов.
 class FinalRunScreen extends StatefulWidget {
   final FinalRunController controller;
   final int speed;
   final AppDataStore store;
-  const FinalRunScreen({super.key, required this.controller, required this.speed, required this.store});
+  final bool custom; // «свой финал» — не публикуется
+  const FinalRunScreen({super.key, required this.controller, required this.speed, required this.store, this.custom = false});
 
   @override
   State<FinalRunScreen> createState() => _FinalRunScreenState();
@@ -30,9 +35,10 @@ class FinalRunScreen extends StatefulWidget {
 
 class _FinalRunScreenState extends State<FinalRunScreen> {
   Timer? _timer;
-  Offset? _draft; // мм от центра, y вверх
-  double? _lastScore;
+  final List<Offset> _sightingMarks = []; // мм, пристрелка не идёт в зачёт
+  final _page = PageController(initialPage: 1);
   bool _saved = false;
+  bool _holding = false;
 
   FinalRunController get c => widget.controller;
 
@@ -40,7 +46,6 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
   void initState() {
     super.initState();
     c.addListener(_onChange);
-    // Один тик = секунда симуляции; при ускорении таймер чаще.
     _timer = Timer.periodic(Duration(milliseconds: 1000 ~/ widget.speed), (_) => c.tick());
   }
 
@@ -49,7 +54,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
     if (c.phase == RunPhase.finished && !_saved) {
       _saved = true;
       _timer?.cancel();
-      final rec = c.toRecord();
+      final rec = c.toRecord()..['custom'] = widget.custom;
       FinalsRepository(widget.store.db).save(rec);
       Future.microtask(() {
         if (mounted) {
@@ -64,6 +69,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _page.dispose();
     c.removeListener(_onChange);
     super.dispose();
   }
@@ -76,6 +82,8 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
         return tr('Заряжай… старт через {n} с', {'n': c.secondsLeft});
       case RunPhase.finished:
         return tr('Финал окончен');
+      case RunPhase.grace:
+        return tr('Стоп! Отметьте выстрел');
       case RunPhase.shooting:
         final l = c.roundLabel;
         if (l == 'shootoff') return tr('Перестрелка');
@@ -92,53 +100,55 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
     return '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
   }
 
-  /// Пиксели → мм от центра (y вверх).
-  Offset _toMm(Offset p, Size size) {
-    final mmPerPx = c.face.faceRadiusMm / (size.shortestSide / 2);
-    return Offset((p.dx - size.width / 2) * mmPerPx, -(p.dy - size.height / 2) * mmPerPx);
+  bool get _canPlace => c.phase == RunPhase.sighting || c.userCanShoot;
+
+  void _onShot(Offset mm) {
+    if (c.phase == RunPhase.sighting) {
+      setState(() => _sightingMarks.add(mm));
+    } else {
+      c.submitUserShot(mm.dx, mm.dy);
+    }
   }
 
-  void _fire() {
-    final d = _draft;
-    if (d == null) return;
-    final sc = c.submitUserShot(d.dx, d.dy);
-    if (sc != null) {
-      setState(() {
-          _lastScore = sc;
-          _draft = null;
-      });
+  void _undo() {
+    if (c.phase == RunPhase.sighting) {
+      if (_sightingMarks.isNotEmpty) setState(() => _sightingMarks.removeLast());
+    } else {
+      c.undoUserShot();
     }
+  }
+
+  List<Offset> get _myMarks =>
+      c.phase == RunPhase.sighting ? _sightingMarks : [for (final s in c.staged) Offset(s.x, s.y)];
+
+  Future<bool> _confirmLeave() async {
+    c.pause();
+    final leave = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('Выйти из финала?')),
+        content: Text(tr('Результат не будет сохранён.')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Остаться'))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Выйти'))),
+        ],
+      ),
+    );
+    if (leave != true) c.resume();
+    return leave == true;
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final sighting = c.phase == RunPhase.sighting;
-    final canPlace = sighting || c.userCanShoot;
-    final rows = c.engine.standings;
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
-        c.pause();
-        final leave = await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: Text(tr('Выйти из финала?')),
-            content: Text(tr('Результат не будет сохранён.')),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Остаться'))),
-              TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Выйти'))),
-            ],
-          ),
-        );
-        if (leave == true) {
+        if (await _confirmLeave()) {
           _saved = true;
           _timer?.cancel();
           if (mounted) Navigator.of(context).pop();
-        } else {
-          c.resume();
         }
       },
       child: Scaffold(
@@ -146,8 +156,12 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
         appBar: GlassHeader(
           leading: const SizedBox.shrink(),
           title: Row(children: [
-            Expanded(child: Text(_banner(), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
-            Text(_time(), style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800, fontFeatures: const [FontFeature.tabularFigures()])),
+            Expanded(
+                child: Text(_banner(),
+                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
+            Text(_time(),
+                style: theme.textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w800, fontFeatures: const [FontFeature.tabularFigures()])),
           ]),
           actions: [
             IconButton(
@@ -157,142 +171,326 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
             ),
           ],
         ),
-        body: Column(children: [
-          SizedBox(height: MediaQuery.paddingOf(context).top + GlassHeader.height),
-          // Мишень.
-          Expanded(
-            flex: 5,
-            child: Padding(
-              padding: const EdgeInsets.all(8),
-              child: LayoutBuilder(builder: (ctx, box) {
-                final size = Size(box.maxWidth, box.maxHeight);
-                final mmToPx = size.shortestSide / 2 / c.face.faceRadiusMm;
-                void place(Offset p) {
-                  if (canPlace && !c.paused) setState(() => _draft = _toMm(p, size));
-                }
+        // Таблица слева (свайп вправо), главный экран справа.
+        body: PageView(
+          controller: _page,
+          physics: _holding ? const NeverScrollableScrollPhysics() : null,
+          children: [_table(context), _main(context)],
+        ),
+      ),
+    );
+  }
 
-                return GestureDetector(
-                  onTapDown: (d) => place(d.localPosition),
-                  onPanUpdate: (d) => place(d.localPosition),
-                  child: Stack(children: [
-                    Positioned.fill(
-                      child: CustomPaint(
-                        painter: TargetPainter(
-                          face: c.face,
-                          colors: TargetColorScheme.defaultScheme,
-                          visibleShots: const [],
-                          selectedShot: null,
-                          currentSeriesNo: 1,
-                        ),
-                      ),
-                    ),
-                    Positioned.fill(
-                      child: CustomPaint(
-                        painter: _MarkerPainter(
-                          [for (final s in c.shots) if (s.who == c.userId && !s.shootOff) Offset(s.x, s.y)],
-                          _draft,
-                          mmToPx,
-                          cs.primary,
-                        ),
-                      ),
-                    ),
-                    if (c.paused)
-                      Positioned.fill(
-                        child: ColoredBox(
-                          color: Colors.black54,
-                          child: Center(child: Text(tr('Пауза'), style: theme.textTheme.headlineMedium?.copyWith(color: Colors.white))),
-                        ),
-                      ),
-                  ]),
-                );
-              }),
+  Widget _main(BuildContext context) {
+    final theme = Theme.of(context);
+    final top = MediaQuery.paddingOf(context).top + GlassHeader.height;
+    final h = MediaQuery.sizeOf(context).height;
+    final bots = [for (final x in c.engine.competitors) if (!x.isUser) x];
+    final sighting = c.phase == RunPhase.sighting;
+    final marks = _myMarks;
+    return Column(children: [
+      SizedBox(height: top),
+      Text(c.user.name, style: theme.textTheme.titleSmall),
+      SizedBox(
+        height: h * 0.40,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 2, 8, 2),
+          child: Stack(children: [
+            Positioned.fill(
+              child: _UserPad(
+                face: c.face,
+                marks: marks,
+                enabled: _canPlace && !c.paused,
+                onHold: (v) => setState(() => _holding = v),
+                onShot: _onShot,
+              ),
             ),
-          ),
-          // Кнопка выстрела.
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
-            child: Row(children: [
-              Expanded(
-                child: Text(
-                  sighting
-                      ? tr('Пристрелка: выстрелы не идут в зачёт')
-                      : c.userCanShoot
-                          ? tr('Осталось выстрелов: {n}', {'n': c.userShotsLeft}) +
-                              (_lastScore == null ? '' : ' · ${formatScore(_lastScore!, c.face)}')
-                          : (c.user.active ? tr('Ждите команды') : tr('Вы выбыли')),
-                  style: theme.textTheme.bodyMedium,
+            if (c.paused)
+              Positioned.fill(
+                child: ColoredBox(
+                  color: Colors.black54,
+                  child: Center(child: Text(tr('Пауза'), style: theme.textTheme.headlineMedium?.copyWith(color: Colors.white))),
                 ),
               ),
-              if (sighting) TextButton(onPressed: c.skipSighting, child: Text(tr('Готов'))),
-              FilledButton(
-                onPressed: (_draft != null && c.userCanShoot) ? _fire : null,
-                child: Text(tr('Выстрел')),
-              ),
-            ]),
-          ),
-          // Таблица.
+          ]),
+        ),
+      ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 8, 4),
+        child: Row(children: [
           Expanded(
-            flex: 3,
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-              children: [
-                for (final r in rows)
-                  Opacity(
-                    opacity: r.active ? 1 : 0.5,
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 4),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: r.isUser ? cs.primary.withValues(alpha: 0.16) : cs.surfaceContainerHigh,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(children: [
-                        SizedBox(width: 26, child: Text('${r.place ?? (rows.indexOf(r) + 1)}', style: const TextStyle(fontWeight: FontWeight.w800))),
-                        Expanded(child: Text(r.name, overflow: TextOverflow.ellipsis)),
-                        Text(r.shots.isEmpty ? '' : r.shots.last.toStringAsFixed(1), style: theme.textTheme.bodySmall),
-                        const SizedBox(width: 12),
-                        Text(r.total.toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.w700)),
-                      ]),
-                    ),
-                  ),
-              ],
+            child: Text(
+              sighting
+                  ? tr('Пристрелка: выстрелы не идут в зачёт')
+                  : c.userCanShoot
+                      ? tr('Осталось выстрелов: {n}', {'n': c.userShotsLeft})
+                      : (c.user.active ? tr('Ждите команды') : tr('Вы выбыли')),
+              style: theme.textTheme.bodyMedium,
             ),
+          ),
+          if (sighting) TextButton(onPressed: c.skipSighting, child: Text(tr('Готов'))),
+          TextButton.icon(
+            onPressed: marks.isEmpty ? null : _undo,
+            icon: const Icon(Icons.undo),
+            label: Text(tr('Назад')),
           ),
         ]),
       ),
+      Expanded(
+        child: GridView.count(
+          crossAxisCount: 4,
+          childAspectRatio: 0.72,
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+          children: [for (final b in bots) _BotCard(c: c, bot: b)],
+        ),
+      ),
+    ]);
+  }
+
+  Widget _table(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final rows = c.engine.standings;
+    return ListView(
+      padding: EdgeInsets.fromLTRB(12, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 12, 16),
+      children: [
+        for (final r in rows)
+          Opacity(
+            opacity: r.active ? 1 : 0.5,
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: r.isUser ? cs.primary.withValues(alpha: 0.16) : cs.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(children: [
+                SizedBox(
+                    width: 26,
+                    child: Text('${r.place ?? (rows.indexOf(r) + 1)}', style: const TextStyle(fontWeight: FontWeight.w800))),
+                Expanded(child: Text(r.name, overflow: TextOverflow.ellipsis)),
+                Text(r.shots.isEmpty ? '' : '${r.shots.last.toStringAsFixed(1)}  ', style: theme.textTheme.bodySmall),
+                Text(r.shots.isEmpty ? '' : '${tr('ср')} ${(r.total / r.shots.length).toStringAsFixed(2)}  ',
+                    style: theme.textTheme.bodySmall),
+                Text(r.total.toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.w700)),
+              ]),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Мишень спортсмена: удержание увеличивает место нажатия, пробоина — размером
+/// с палец, вокруг кольцо и значение над ним; отпускание сохраняет выстрел.
+class _UserPad extends StatefulWidget {
+  final TargetFace face;
+  final List<Offset> marks;
+  final bool enabled;
+  final ValueChanged<bool> onHold;
+  final ValueChanged<Offset> onShot;
+  const _UserPad({required this.face, required this.marks, required this.enabled, required this.onHold, required this.onShot});
+
+  @override
+  State<_UserPad> createState() => _UserPadState();
+}
+
+class _UserPadState extends State<_UserPad> {
+  static const double _zoom = 5;
+  Offset? _finger; // px
+  Offset _pan = Offset.zero;
+  double _z = 1;
+
+  double _k(Size s) => s.shortestSide / 2 * _z / widget.face.faceRadiusMm;
+
+  Offset _toMm(Offset p, Size s) {
+    final k = _k(s);
+    final c = Offset(s.width / 2, s.height / 2) + _pan;
+    return Offset((p.dx - c.dx) / k, -(p.dy - c.dy) / k);
+  }
+
+  void _reset() {
+    _finger = null;
+    _z = 1;
+    _pan = Offset.zero;
+  }
+
+  void _down(Offset f, Size s) {
+    if (!widget.enabled) return;
+    final p = _toMm(f, s); // пока zoom = 1, pan = 0
+    _z = _zoom;
+    final k = _k(s);
+    _pan = f - Offset(s.width / 2, s.height / 2) - Offset(p.dx * k, -p.dy * k);
+    setState(() => _finger = f);
+    widget.onHold(true);
+  }
+
+  void _up(Size s) {
+    final f = _finger;
+    if (f == null) return;
+    final mm = _toMm(f, s);
+    setState(_reset);
+    widget.onHold(false);
+    widget.onShot(mm);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (ctx, box) {
+      final size = Size(box.maxWidth, box.maxHeight);
+      final f = _finger;
+      String? score;
+      if (f != null) {
+        final mm = _toMm(f, size);
+        score = formatScore(scoreForPoint(mm.dx, mm.dy, widget.face), widget.face);
+      }
+      return Listener(
+        onPointerDown: (e) => _down(e.localPosition, size),
+        onPointerMove: (e) {
+          if (_finger != null) setState(() => _finger = e.localPosition);
+        },
+        onPointerUp: (_) => _up(size),
+        onPointerCancel: (_) {
+          setState(_reset);
+          widget.onHold(false);
+        },
+        child: ClipRect(
+          child: Stack(children: [
+            Positioned.fill(
+              child: CustomPaint(
+                painter: TargetPainter(
+                  face: widget.face,
+                  colors: TargetColorScheme.defaultScheme,
+                  visibleShots: const [],
+                  selectedShot: null,
+                  currentSeriesNo: 1,
+                  zoom: _z,
+                  pan: _pan,
+                ),
+              ),
+            ),
+            Positioned.fill(
+              child: CustomPaint(
+                painter: _MarkerPainter(
+                  widget.marks,
+                  k: _k(size),
+                  center: Offset(size.width / 2, size.height / 2) + _pan,
+                  finger: f,
+                  score: score,
+                  ring: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ),
+          ]),
+        ),
+      );
+    });
+  }
+}
+
+/// Мишень соперника: имя, последняя пробоина, значение и направление стрелкой.
+class _BotCard extends StatelessWidget {
+  final FinalRunController c;
+  final FinalCompetitor bot;
+  const _BotCard({required this.c, required this.bot});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final mine = [for (final s in c.shots) if (s.who == bot.id && !s.shootOff) s];
+    final last = mine.isEmpty ? null : mine.last;
+    return Opacity(
+      opacity: bot.active ? 1 : 0.45,
+      child: Column(children: [
+        Text(bot.name, style: theme.textTheme.labelSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+        Expanded(
+          child: LayoutBuilder(builder: (ctx, box) {
+            final k = box.biggest.shortestSide / 2 / c.face.faceRadiusMm;
+            return Stack(children: [
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: TargetPainter(
+                    face: c.face,
+                    colors: TargetColorScheme.defaultScheme,
+                    visibleShots: const [],
+                    selectedShot: null,
+                    currentSeriesNo: 1,
+                  ),
+                ),
+              ),
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _MarkerPainter(
+                    last == null ? const [] : [Offset(last.x, last.y)],
+                    k: k,
+                    center: Offset(box.maxWidth / 2, box.maxHeight / 2),
+                  ),
+                ),
+              ),
+            ]);
+          }),
+        ),
+        SizedBox(
+          height: 18,
+          child: last == null
+              ? null
+              : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Text(last.score.toStringAsFixed(1), style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700)),
+                  if (last.x != 0 || last.y != 0)
+                    Transform.rotate(
+                      angle: math.atan2(last.x, last.y), // 0 = вверх, по часовой
+                      child: const Icon(Icons.arrow_upward, size: 14),
+                    ),
+                ]),
+        ),
+      ]),
     );
   }
 }
 
 class _MarkerPainter extends CustomPainter {
-  final List<Offset> placed;
-  final Offset? draft;
-  final double mmToPx;
-  final Color color;
-  _MarkerPainter(this.placed, this.draft, this.mmToPx, this.color);
-
-  Offset _px(Offset mm, Size s) => Offset(s.width / 2 + mm.dx * mmToPx, s.height / 2 - mm.dy * mmToPx);
+  final List<Offset> placed; // мм
+  final double k; // px на мм
+  final Offset center;
+  final Offset? finger;
+  final String? score;
+  final Color ring;
+  _MarkerPainter(this.placed, {required this.k, required this.center, this.finger, this.score, this.ring = Colors.blue});
 
   @override
   void paint(Canvas canvas, Size size) {
-    final r = (mmToPx * 2.25).clamp(3.0, 14.0); // калибр 4,5 мм
+    final r = (k * 2.25).clamp(3.0, 14.0); // калибр 4,5 мм
     final fill = Paint()..color = Colors.orange.withValues(alpha: 0.85);
     final edge = Paint()
       ..color = Colors.black
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
     for (final p in placed) {
-      canvas.drawCircle(_px(p, size), r, fill);
-      canvas.drawCircle(_px(p, size), r, edge);
+      final o = Offset(center.dx + p.dx * k, center.dy - p.dy * k);
+      canvas.drawCircle(o, r, fill);
+      canvas.drawCircle(o, r, edge);
     }
-    final d = draft;
-    if (d != null) {
-      final o = _px(d, size);
-      final line = Paint()
-        ..color = color
-        ..strokeWidth = 2;
-      canvas.drawLine(o - const Offset(14, 0), o + const Offset(14, 0), line);
-      canvas.drawLine(o - const Offset(0, 14), o + const Offset(0, 14), line);
+    final f = finger;
+    if (f != null) {
+      // Пробоина — размером с палец, кольцо больше, значение над кольцом.
+      canvas.drawCircle(f, 20, Paint()..color = Colors.orange.withValues(alpha: 0.7));
+      canvas.drawCircle(f, 20, edge);
+      canvas.drawCircle(
+          f,
+          34,
+          Paint()
+            ..color = ring
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 3);
+      if (score != null) {
+        final tp = TextPainter(
+          text: TextSpan(
+              text: score,
+              style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800, shadows: [Shadow(blurRadius: 4)])),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tp.paint(canvas, Offset(f.dx - tp.width / 2, f.dy - 34 - 8 - tp.height));
+      }
     }
   }
 
@@ -379,7 +577,10 @@ class FinalResultScreen extends StatelessWidget {
             for (final v in mine) Chip(label: Text(v.toStringAsFixed(1)), visualDensity: VisualDensity.compact),
           ]),
           const SizedBox(height: 20),
-          FilledButton.icon(
+          if (record['custom'] == true)
+            Text(tr('Свой финал: в общий рейтинг не попадает'), textAlign: TextAlign.center)
+          else
+            FilledButton.icon(
             onPressed: () => _publish(context),
             icon: const Icon(Icons.public),
             label: Text(tr('Опубликовать среди чемпионов')),

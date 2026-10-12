@@ -112,6 +112,10 @@ class FinalSetupScreen extends StatefulWidget {
 class _FinalSetupScreenState extends State<FinalSetupScreen> {
   String _level = 'mixed'; // mixed | easy | medium | hard | unpredictable
   int _speed = 1;
+  bool _custom = false; // свой финал: не публикуется
+
+  // Семь соперников: обычные боты или чемпионы (по их статистике).
+  late final List<_Opp> _opps = [for (final n in _names) _Opp(n)];
 
   static const _names = ['Алексей', 'Мария', 'Игорь', 'Елена', 'Сергей', 'Ольга', 'Дмитрий'];
 
@@ -133,7 +137,7 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
       ? const ShotStats(0, 0, 9.0, 9.0, 0)
       : const ShotStats(0, 0, 3.5, 3.5, 0);
 
-  Future<void> _start(AppDataStore store) async {
+  void _start(AppDataStore store) {
     final face = TargetFace.byCode(widget.format.faceCode);
     final h = _history(store);
     final enough = h.all.length >= 20;
@@ -148,24 +152,12 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
       BotDifficulty.hard,
       BotDifficulty.unpredictable,
     ];
-    final levels = _level == 'mixed' || _level == 'champions'
+    final levels = _level == 'mixed'
         ? ([...mixed]..shuffle(rng))
         : List.filled(7, BotDifficulty.values.firstWhere((d) => d.name == _level));
-    // Чемпионы: боты стреляют по их опубликованной статистике.
-    final champs = <String, (String, ShotStats)>{};
-    if (_level == 'champions') {
-      final list = await ChampionsService(ChatAuthService(store.db)).champions(widget.format.id);
-      list.shuffle(rng);
-      for (final r in list.take(7)) {
-        final st = r['stats'] as Map<String, dynamic>;
-        double n(String k) => (st[k] as num).toDouble();
-        champs['b${champs.length}'] = ('${r['display_name']}', ShotStats(n('mx'), n('my'), n('sx'), n('sy'), (st['n'] as num).toInt()));
-      }
-    }
-    if (!mounted) return;
     final competitors = [
       FinalCompetitor('me', tr('Вы'), isUser: true),
-      for (var i = 0; i < 7; i++) FinalCompetitor('b$i', champs['b$i']?.$1 ?? _names[i]),
+      for (var i = 0; i < 7; i++) FinalCompetitor('b$i', _opps[i].name),
     ];
     final controller = FinalRunController(
       format: widget.format,
@@ -174,13 +166,64 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
       userId: 'me',
       bots: {
         for (var i = 0; i < 7; i++)
-          'b$i': BotShooter(champs['b$i']?.$2 ?? stats, champs.containsKey('b$i') ? BotDifficulty.medium : levels[i], face, math.Random(rng.nextInt(1 << 30)), sessions: h.sessions),
+          'b$i': BotShooter(_opps[i].stats ?? stats, _opps[i].stats != null ? BotDifficulty.medium : levels[i], face,
+              math.Random(rng.nextInt(1 << 30)),
+              sessions: h.sessions),
       },
       rng: rng,
     );
     Navigator.of(context).pushReplacement(MaterialPageRoute(
-      builder: (_) => FinalRunScreen(controller: controller, speed: _speed, store: store),
+      builder: (_) => FinalRunScreen(controller: controller, speed: _speed, store: store, custom: _custom),
     ));
+  }
+
+  /// Выбор чемпиона из таблицы и замена им одного из участников.
+  Future<void> _addChampion(AppDataStore store) async {
+    final list = await ChampionsService(ChatAuthService(store.db)).champions(widget.format.id);
+    if (!mounted) return;
+    if (list.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('В таблице пока нет чемпионов'))));
+      return;
+    }
+    final champ = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => ListView(children: [
+        for (final r in list)
+          ListTile(
+            title: Text('${r['display_name']}'),
+            trailing: Text((r['total'] as num).toStringAsFixed(1)),
+            onTap: () => Navigator.pop(ctx, r),
+          ),
+      ]),
+    );
+    if (champ == null || !mounted) return;
+    // Восьмой участник не помещается: предлагаем убрать лишнего.
+    final slot = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('Максимум 8 участников')),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView(shrinkWrap: true, children: [
+            Text(tr('Выберите, кого убрать, чтобы добавить {n}', {'n': champ['display_name']})),
+            for (var i = 0; i < _opps.length; i++)
+              ListTile(
+                dense: true,
+                title: Text(_opps[i].name),
+                subtitle: Text(_opps[i].stats == null ? tr('Бот') : tr('Чемпион')),
+                trailing: const Icon(Icons.delete_outline),
+                onTap: () => Navigator.pop(ctx, i),
+              ),
+          ]),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Отмена')))],
+      ),
+    );
+    if (slot == null) return;
+    final st = champ['stats'] as Map<String, dynamic>;
+    double n(String k) => (st[k] as num).toDouble();
+    setState(() => _opps[slot] = _Opp('${champ['display_name']}',
+        stats: ShotStats(n('mx'), n('my'), n('sx'), n('sy'), (st['n'] as num).toInt())));
   }
 
   @override
@@ -236,6 +279,37 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
                   ('champions', tr('Чемпионы (недостающих заменят боты)')),
                 ], _level, (v) => _level = v),
                 const SizedBox(height: 18),
+                // Участники.
+                Text(tr('Участники'), style: theme.textTheme.titleSmall),
+                const SizedBox(height: 4),
+                for (var i = 0; i < _opps.length; i++)
+                  ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(_opps[i].stats == null ? Icons.smart_toy_outlined : Icons.emoji_events_outlined, size: 20),
+                    title: Text(_opps[i].name),
+                    trailing: _opps[i].stats == null
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.close, size: 18),
+                            tooltip: tr('Вернуть простого бота'),
+                            onPressed: () => setState(() => _opps[i] = _Opp(_names[i])),
+                          ),
+                  ),
+                OutlinedButton.icon(
+                  onPressed: () => _addChampion(store),
+                  icon: const Icon(Icons.add),
+                  label: Text(tr('Добавить чемпиона')),
+                ),
+                const SizedBox(height: 18),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(tr('Свой финал')),
+                  subtitle: Text(tr('Результат не публикуется и не влияет на рейтинг')),
+                  value: _custom,
+                  onChanged: (v) => setState(() => _custom = v),
+                ),
+                const SizedBox(height: 18),
                 // 3. Скорость.
                 Text(tr('Скорость'), style: theme.textTheme.titleSmall),
                 const SizedBox(height: 8),
@@ -283,4 +357,10 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
       ),
     );
   }
+}
+
+class _Opp {
+  final String name;
+  final ShotStats? stats; // null — обычный бот по вашим тренировкам
+  _Opp(this.name, {this.stats});
 }
