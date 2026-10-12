@@ -27,16 +27,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   late String _gender = UserProfile.genderOf(widget.db);
   late int? _year = UserProfile.birthYearOf(widget.db);
   late String _rank = UserProfile.rankOf(widget.db).isEmpty ? UserProfile.ranks.first : UserProfile.rankOf(widget.db);
+  late final _first = TextEditingController(text: UserProfile.firstNameOf(widget.db));
+  late final _last = TextEditingController(text: UserProfile.lastNameOf(widget.db));
   late final _region = TextEditingController(text: UserProfile.regionOf(widget.db));
   late final _yearCtl = TextEditingController(text: _year == null ? '' : '$_year');
 
   static final int maxYear = DateTime.now().year - 6;
   static const int minYear = 1930;
 
-  bool get _valid => _disciplines.isNotEmpty && (_gender == 'm' || _gender == 'f') && _year != null;
+  bool get _valid => _first.text.trim().isNotEmpty && _last.text.trim().isNotEmpty && _disciplines.isNotEmpty && (_gender == 'm' || _gender == 'f') && _year != null;
 
   @override
   void dispose() {
+    _first.dispose();
+    _last.dispose();
     _region.dispose();
     _yearCtl.dispose();
     super.dispose();
@@ -45,6 +49,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   void _submit() {
     UserProfile.save(
       widget.db,
+      firstName: _first.text,
+      lastName: _last.text,
       disciplines: _disciplines.toList(),
       gender: _gender,
       birthYear: _year!,
@@ -112,10 +118,35 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       ),
                     ]),
                   ),
-                  // 1. Вид стрельбы.
+                  // 1. Имя и фамилия.
                   _section(
                     context,
                     '1',
+                    tr('Имя и фамилия'),
+                    Row(children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _first,
+                          textCapitalization: TextCapitalization.words,
+                          decoration: InputDecoration(hintText: tr('Имя')),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: _last,
+                          textCapitalization: TextCapitalization.words,
+                          decoration: InputDecoration(hintText: tr('Фамилия')),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                      ),
+                    ]),
+                  ),
+                  // 2. Вид стрельбы.
+                  _section(
+                    context,
+                    '2',
                     tr('Из чего вы стреляете'),
                     Wrap(
                       spacing: 8,
@@ -133,7 +164,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   // 2. Пол.
                   _section(
                     context,
-                    '2',
+                    '3',
                     tr('Пол'),
                     SizedBox(
                       width: double.infinity,
@@ -152,7 +183,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   // 3. Год рождения.
                   _section(
                     context,
-                    '3',
+                    '4',
                     tr('Год рождения'),
                     TextField(
                       controller: _yearCtl,
@@ -171,7 +202,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   // 4. Разряд.
                   _section(
                     context,
-                    '4',
+                    '5',
                     tr('Разряд (необязательно)'),
                     DropdownButtonFormField<String>(
                       initialValue: _rank,
@@ -183,7 +214,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   // 5. Регион.
                   _section(
                     context,
-                    '5',
+                    '6',
                     tr('Регион (необязательно)'),
                     TextField(controller: _region, decoration: InputDecoration(hintText: tr('Например, Москва'))),
                   ),

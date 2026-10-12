@@ -31,6 +31,8 @@ class UserProfile {
   ];
 
   static const _kDisciplines = 'profile_disciplines';
+  static const _kFirst = 'profile_first_name';
+  static const _kLast = 'profile_last_name';
   static const _kGender = 'profile_gender';
   static const _kYear = 'profile_birth_year';
   static const _kRank = 'profile_rank';
@@ -67,6 +69,8 @@ class UserProfile {
 
   static List<String> disciplinesOf(LocalDbService db) =>
       _read(db, _kDisciplines).split(',').where((e) => e.isNotEmpty).toList();
+  static String firstNameOf(LocalDbService db) => _read(db, _kFirst);
+  static String lastNameOf(LocalDbService db) => _read(db, _kLast);
   static String genderOf(LocalDbService db) => _read(db, _kGender); // 'm' | 'f'
   static int? birthYearOf(LocalDbService db) => int.tryParse(_read(db, _kYear));
   static String rankOf(LocalDbService db) => _read(db, _kRank);
@@ -75,6 +79,8 @@ class UserProfile {
   /// Сохраняет анкету. Обязательны вид стрельбы, пол и год рождения.
   static void save(
     LocalDbService db, {
+    String firstName = '',
+    String lastName = '',
     required List<String> disciplines,
     required String gender,
     required int birthYear,
@@ -82,6 +88,8 @@ class UserProfile {
     String region = '',
   }) {
     assert(disciplines.isNotEmpty && (gender == 'm' || gender == 'f'));
+    _write(db, _kFirst, firstName.trim());
+    _write(db, _kLast, lastName.trim());
     _write(db, _kDisciplines, disciplines.join(','));
     _write(db, _kGender, gender);
     _write(db, _kYear, '$birthYear');

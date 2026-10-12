@@ -194,6 +194,10 @@ class FinalRunController extends ChangeNotifier {
         times.add(t);
       }
       times.sort();
+      // Два выстрела одного стрелка не быстрее чем через 5 секунд.
+      for (var k = 1; k < times.length; k++) {
+        if (times[k] < times[k - 1] + 5) times[k] = times[k - 1] + 5;
+      }
       _botTimes[id] = times;
     }
   }
