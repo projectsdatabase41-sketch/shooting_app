@@ -221,4 +221,45 @@ void main() {
     c.undoUserShot();
     expect(c.live.first.avg, 0);
   });
+
+  test('несколько людей: каждый ставит свои выстрелы, раунд ждёт всех, нули за неотмеченное', () {
+    final face = TargetFace.rifle10m;
+    const stats = ShotStats(0, 0, 3.0, 3.0, 100);
+    final competitors = [
+      FinalCompetitor('a', 'A', isUser: true),
+      FinalCompetitor('h', 'H'),
+      for (var i = 1; i <= 6; i++) FinalCompetitor('b$i', 'Бот $i'),
+    ];
+    final c = FinalRunController(
+      format: FinalFormat.airRifle10m,
+      face: face,
+      engine: FinalEngine(FinalFormat.airRifle10m, competitors),
+      userId: 'a',
+      otherHumans: {'h'},
+      bots: {for (var i = 1; i <= 6; i++) 'b$i': BotShooter(stats, BotDifficulty.medium, face, math.Random(i))},
+      rng: math.Random(1),
+    );
+    c.skipSighting();
+    for (var i = 0; i < 5; i++) {
+      c.tick();
+    }
+    expect(c.canShootFor('h'), isTrue);
+    for (var i = 0; i < 5; i++) {
+      c.submitUserShot(0, 0);
+    }
+    c.submitShotFor('h', 0, 0);
+    c.submitShotFor('h', 0, 0);
+    c.undoShotFor('h');
+    for (var i = 0; i < 250; i++) {
+      c.tick();
+    }
+    expect(c.phase, RunPhase.grace); // у H не все выстрелы
+    for (var i = 0; i < 10; i++) {
+      c.tick();
+    }
+    final h = c.engine.byId('h');
+    expect(h.shots.length, 5);
+    expect(h.shots.where((v) => v == 0.0).length, 4); // 1 отмечен + 4 нуля
+    expect(c.engine.byId('a').shots.length, 5);
+  });
 }

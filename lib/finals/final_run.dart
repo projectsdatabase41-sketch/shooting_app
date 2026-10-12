@@ -59,6 +59,10 @@ class FinalRunController extends ChangeNotifier {
   final TargetFace face;
   final FinalEngine engine;
   final String userId;
+
+  /// Все люди-участники (спортсмен и, в финале с несколькими спортсменами,
+  /// остальные). Боты — все прочие.
+  final Set<String> humans;
   final math.Random rng;
   final Map<String, BotShooter> bots;
 
@@ -100,23 +104,33 @@ class FinalRunController extends ChangeNotifier {
     required this.userId,
     required this.bots,
     required this.rng,
-  }) : secondsLeft = format.sightingSeconds;
+    Set<String> otherHumans = const {},
+  })  : humans = {userId, ...otherHumans},
+        secondsLeft = format.sightingSeconds;
 
   FinalCompetitor get user => engine.byId(userId);
 
   /// Может ли человек сейчас ставить выстрел.
-  bool get userCanShoot =>
+  bool get userCanShoot => canShootFor(userId);
+
+  /// Может ли человек [id] сейчас ставить выстрел.
+  bool canShootFor(String id) =>
       (phase == RunPhase.shooting || phase == RunPhase.grace) &&
       !paused &&
-      _shooters.contains(userId) &&
-      staged.length < shotsPerShooter;
+      _shooters.contains(id) &&
+      stagedOf(id).length < shotsPerShooter;
 
   /// Секунд на отметку выстрелов после «Стоп».
   static const graceSeconds = 10;
 
   /// Выстрелы человека в текущем раунде: можно убрать кнопкой «назад», в
   /// таблицу и движок уходят при закрытии раунда.
-  final List<({double x, double y, int t})> staged = [];
+  final Map<String, List<({double x, double y, int t})>> _staged = {};
+
+  List<({double x, double y, int t})> stagedOf(String id) => _staged.putIfAbsent(id, () => []);
+
+  /// Отмеченные выстрелы самого спортсмена.
+  List<({double x, double y, int t})> get staged => stagedOf(userId);
 
   /// Сколько выстрелов осталось человеку в раунде.
   int get userShotsLeft =>
@@ -172,7 +186,7 @@ class FinalRunController extends ChangeNotifier {
         }
       case RunPhase.grace:
         clock++;
-        if (--secondsLeft <= 0 || staged.length >= shotsPerShooter) _endRound();
+        if (--secondsLeft <= 0 || _humansDone()) _endRound();
       case RunPhase.finished:
         break;
     }
@@ -207,7 +221,9 @@ class FinalRunController extends ChangeNotifier {
     _shooters = _currentShooters();
     _roundFired.clear();
     _botTimes.clear();
-    staged.clear();
+    for (final l in _staged.values) {
+      l.clear();
+    }
     _doneTicks = 0;
     if (inShootOff) {
       shotsPerShooter = 1;
@@ -267,17 +283,24 @@ class FinalRunController extends ChangeNotifier {
 
   /// Выстрел человека в точку (x, y) мм от центра мишени (y вверх).
   /// Возвращает результат с десятыми либо `null`, если сейчас нельзя.
-  double? submitUserShot(double x, double y) {
-    if (!userCanShoot) return null;
-    staged.add((x: x, y: y, t: clock));
+  double? submitUserShot(double x, double y) => submitShotFor(userId, x, y);
+
+  /// Кнопка «назад»: убирает последний отмеченный выстрел.
+  bool undoUserShot() => undoShotFor(userId);
+
+  /// То же для любого человека-участника (спортсмен на своём телефоне, тренер
+  /// или помощник за другого спортсмена).
+  double? submitShotFor(String id, double x, double y) {
+    if (!humans.contains(id) || !canShootFor(id)) return null;
+    stagedOf(id).add((x: x, y: y, t: clock));
     notifyListeners();
     return scoreForPoint(x, y, face);
   }
 
-  /// Кнопка «назад»: убирает последний отмеченный выстрел.
-  bool undoUserShot() {
-    if (staged.isEmpty || paused || (phase != RunPhase.shooting && phase != RunPhase.grace)) return false;
-    staged.removeLast();
+  bool undoShotFor(String id) {
+    final l = stagedOf(id);
+    if (l.isEmpty || paused || (phase != RunPhase.shooting && phase != RunPhase.grace)) return false;
+    l.removeLast();
     notifyListeners();
     return true;
   }
@@ -297,8 +320,8 @@ class FinalRunController extends ChangeNotifier {
 
   bool _allDone() {
     for (final id in _shooters) {
-      if (id == userId) {
-        if (staged.length < shotsPerShooter) return false;
+      if (humans.contains(id)) {
+        if (stagedOf(id).length < shotsPerShooter) return false;
       } else if ((_botTimes[id] ?? const []).isNotEmpty) {
         return false;
       }
@@ -306,9 +329,11 @@ class FinalRunController extends ChangeNotifier {
     return true;
   }
 
+  bool _humansDone() => _shooters.where(humans.contains).every((id) => stagedOf(id).length >= shotsPerShooter);
+
   /// Время раунда вышло («Стоп»): если человек отметил не всё — короткое окно.
   void _stopRound() {
-    if (_shooters.contains(userId) && staged.length < shotsPerShooter) {
+    if (!_humansDone()) {
       phase = RunPhase.grace;
       secondsLeft = graceSeconds;
       log.add({'e': 'stop', 't': clock});
@@ -318,17 +343,18 @@ class FinalRunController extends ChangeNotifier {
   }
 
   void _endRound() {
-    // Отмеченные выстрелы человека уходят в зачёт; не отмеченные — нули.
-    if (_shooters.contains(userId)) {
-      for (final st in staged) {
-        if (engine.isFinished || !_userStillInRound()) break;
-        _record(userId, st.x, st.y, scoreForPoint(st.x, st.y, face));
+    // Отмеченные выстрелы людей уходят в зачёт; не отмеченные — нули.
+    for (final id in _shooters.where(humans.contains)) {
+      final l = stagedOf(id);
+      for (final st in l) {
+        if (engine.isFinished || !_stillInRound(id)) break;
+        _record(id, st.x, st.y, scoreForPoint(st.x, st.y, face));
       }
-      var fired = staged.length;
-      staged.clear();
-      while (fired < shotsPerShooter && !engine.isFinished && _userStillInRound()) {
-        _record(userId, face.faceRadiusMm, 0, 0.0);
-        log.add({'e': 'timeout', 'who': userId, 't': clock});
+      var fired = l.length;
+      l.clear();
+      while (fired < shotsPerShooter && !engine.isFinished && _stillInRound(id)) {
+        _record(id, face.faceRadiusMm, 0, 0.0);
+        log.add({'e': 'timeout', 'who': id, 't': clock});
         fired++;
       }
     }
@@ -342,9 +368,9 @@ class FinalRunController extends ChangeNotifier {
     _beginLoadingForNextRound();
   }
 
-  bool _userStillInRound() => inShootOff
-      ? engine.phase == FinalPhase.shootOff && engine.shootOffShooters.any((c) => c.id == userId)
-      : engine.phase == FinalPhase.match && user.active;
+  bool _stillInRound(String id) => inShootOff
+      ? engine.phase == FinalPhase.shootOff && engine.shootOffShooters.any((c) => c.id == id)
+      : engine.phase == FinalPhase.match && engine.byId(id).active;
 
   void _beginLoadingForNextRound() => _beginLoading(announcerSeconds + 5);
 
@@ -356,8 +382,8 @@ class FinalRunController extends ChangeNotifier {
     final rows = <LiveRow>[];
     for (final c in engine.competitors) {
       final shots = [...c.shots];
-      if (c.isUser && c.active) {
-        for (final st in staged) {
+      if (humans.contains(c.id) && c.active) {
+        for (final st in stagedOf(c.id)) {
           shots.add(scoreForPoint(st.x, st.y, face));
         }
       }
@@ -376,7 +402,7 @@ class FinalRunController extends ChangeNotifier {
   /// выбывания, перестрелки) досчитывается сразу. Для активного спортсмена
   /// недоступно — его оставшиеся выстрелы пришлось бы обнулить.
   bool fastForward() {
-    if (user.active || phase == RunPhase.finished) return false;
+    if (humans.any((h) => engine.byId(h).active) || phase == RunPhase.finished) return false;
     paused = false;
     var guard = 0;
     while (phase != RunPhase.finished && guard++ < 200000) {
