@@ -210,4 +210,25 @@ void main() {
       expect(cs[7].place, 7);
     });
   });
+
+  test('камбэки: при волатильности блоки по 10 выстрелов у бота расходятся сильнее', () {
+    double spread(double vol) {
+      final face = TargetFace.rifle10m;
+      final means = <double>[];
+      for (var seed = 0; seed < 30; seed++) {
+        final b = BotShooter(const ShotStats(0, 0, 3.0, 3.0, 100), BotDifficulty.medium, face, math.Random(seed));
+        var sum = 0.0;
+        for (var i = 0; i < 10; i++) {
+          final (x, y) = b.shotPoint(volatility: vol);
+          sum += scoreForPoint(x, y, face);
+        }
+        means.add(sum / 10);
+      }
+      final m = means.reduce((a, b) => a + b) / means.length;
+      return means.map((v) => (v - m) * (v - m)).reduce((a, b) => a + b) / means.length;
+    }
+
+    // Статистически: со стрейками разброс средних по десятке не меньше, чем без них.
+    expect(spread(1.0), greaterThan(spread(0.0) * 0.95));
+  });
 }

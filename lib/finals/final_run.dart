@@ -238,13 +238,28 @@ class FinalRunController extends ChangeNotifier {
     }
   }
 
+  /// Сила камбэков ботов (0.15…1): чем лучше стреляет спортсмен относительно
+  /// ботов, тем реже они отыгрываются.
+  double get comebackLevel {
+    final mine = user.shots;
+    if (mine.length < 3) return 1;
+    final botAvgs = [
+      for (final c in engine.competitors)
+        if (!c.isUser && c.shots.isNotEmpty) c.total / c.shots.length
+    ];
+    if (botAvgs.isEmpty) return 1;
+    final d = mine.fold<double>(0, (a, b) => a + b) / mine.length -
+        botAvgs.reduce((a, b) => a + b) / botAvgs.length;
+    return (1 - d / 0.5).clamp(0.15, 1.0);
+  }
+
   void _fireDueBots() {
     for (final id in List.of(_botTimes.keys)) {
       final times = _botTimes[id]!;
       while (times.isNotEmpty && times.first <= roundSeconds) {
         times.removeAt(0);
         final bot = bots[id]!;
-        final (x, y) = bot.shotPoint();
+        final (x, y) = bot.shotPoint(volatility: comebackLevel);
         _record(id, x, y, scoreForPoint(x, y, face));
       }
     }

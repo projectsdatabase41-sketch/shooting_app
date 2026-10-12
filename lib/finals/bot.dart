@@ -90,12 +90,21 @@ class BotShooter {
     return math.sqrt(-2 * math.log(u1)) * math.cos(2 * math.pi * u2);
   }
 
-  /// Один выстрел: точка (x, y) в мм.
-  (double, double) shotPoint() {
+  /// «Форма» бота: полоса удач и неудач (серии держатся несколько выстрелов).
+  /// > 0 — бот в ударе (кучнее и ближе к центру), < 0 — сыпется.
+  double form = 0;
+
+  /// Один выстрел: точка (x, y) в мм. [volatility] 0…1 — сила камбэков:
+  /// форма бота плавает вверх и вниз, из-за чего он может подняться или упасть
+  /// по таблице; при 0 бот стреляет ровно по своей статистике.
+  (double, double) shotPoint({double volatility = 0}) {
     final (mpi, disp) = _scales;
+    form = (0.7 * form + 0.6 * volatility * _gauss()).clamp(-1.5, 1.5);
+    final dm = math.exp(-0.22 * form); // разброс
+    final bm = math.exp(-0.3 * form); // смещение СТП
     return (
-      mpi * _active.mx + disp * _active.sx * _gauss(),
-      mpi * _active.my + disp * _active.sy * _gauss(),
+      mpi * bm * _active.mx + disp * dm * _active.sx * _gauss(),
+      mpi * bm * _active.my + disp * dm * _active.sy * _gauss(),
     );
   }
 
