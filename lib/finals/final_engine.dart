@@ -31,6 +31,18 @@ class FinalFormat {
   /// После скольких выстрелов выбывает самый слабый (место = finalists − индекс).
   final List<int> eliminationAfter;
 
+  /// Сколько выбывает на каждой контрольной точке (по умолчанию по одному).
+  /// 50 м из трёх положений: после 30-го выстрела сразу двое (п. 6.17.3).
+  final List<int>? eliminationCounts;
+
+  /// Открытый этап без команд (лёжа и с колена): первая «серия» из
+  /// [seriesShots] идёт [openSeconds] секунд, стреляют в своём темпе.
+  final int openSeconds;
+
+  /// Размеры блоков для разрыва ничьей по счёту при выбывании двоих
+  /// (последняя серия, предыдущая серия, затем отдельные выстрелы назад).
+  final List<int> countbackBlocks;
+
   const FinalFormat({
     required this.id,
     required this.nameKey,
@@ -42,7 +54,15 @@ class FinalFormat {
     this.singleSeconds = 50,
     this.sightingSeconds = 300,
     this.eliminationAfter = const [12, 14, 16, 18, 20, 22],
+    this.eliminationCounts,
+    this.openSeconds = 0,
+    this.countbackBlocks = const [],
   });
+
+  int eliminationsAt(int checkpoint) =>
+      eliminationCounts == null ? 1 : eliminationCounts![checkpoint];
+
+  bool get hasOpenStage => openSeconds > 0;
 
   int get totalShots => seriesShots.fold(0, (a, b) => a + b) + singleShots;
 
@@ -50,9 +70,9 @@ class FinalFormat {
   /// общий лимит серии, дальше — на каждый выстрел.
   int secondsForShot(int shotIndex) {
     var left = shotIndex;
-    for (final s in seriesShots) {
-      if (left < s) return seriesSeconds;
-      left -= s;
+    for (var i = 0; i < seriesShots.length; i++) {
+      if (left < seriesShots[i]) return (i == 0 && hasOpenStage) ? openSeconds : seriesSeconds;
+      left -= seriesShots[i];
     }
     return singleSeconds;
   }
@@ -71,7 +91,22 @@ class FinalFormat {
     faceCode: 'pistol_10m',
   );
 
-  static const all = [airRifle10m, airPistol10m];
+  /// Винтовка 50 м, три положения (п. 6.17.3): 10 выстрелов с колена и 10 лёжа
+  /// за 22 минуты, затем стоя две серии по 5 по 250 с (после 30-го выстрела
+  /// выбывают двое), далее одиночные по 50 с. Всего 35 выстрелов.
+  static const rifle3p50m = FinalFormat(
+    id: 'rifle_3p_50m',
+    nameKey: /*tr*/ 'Финал: винтовка 50 м, три положения',
+    faceCode: 'rifle_50m',
+    seriesShots: [20, 5, 5],
+    singleShots: 5,
+    openSeconds: 1320,
+    eliminationAfter: [30, 31, 32, 33, 34],
+    eliminationCounts: [2, 1, 1, 1, 1],
+    countbackBlocks: [5, 5],
+  );
+
+  static const all = [airRifle10m, airPistol10m, rifle3p50m];
 }
 
 enum FinalPhase { match, shootOff, finished }
@@ -110,6 +145,7 @@ class FinalEngine {
   FinalPhase phase = FinalPhase.match;
 
   int _checkpoint = 0; // сколько контрольных точек (выбывания + конец) пройдено
+  int _elimInCp = 0; // сколько уже выбыло на текущей контрольной точке
   List<FinalCompetitor> _tied = [];
   int _soRound = 0;
   bool _soForGold = false;
@@ -175,17 +211,43 @@ class FinalEngine {
         _checkpoint++;
         return;
       }
+      final k = format.eliminationsAt(_checkpoint);
       final lowest = act.map((c) => c.totalAt(n)).reduce(math.min);
       final lows = [for (final c in act) if (c.totalAt(n) == lowest) c];
-      final place = format.finalists - _checkpoint;
+      final place = format.finalists - [for (final c in competitors) if (!c.active) c].length;
       if (lows.length == 1) {
         lows.first.place = place;
-        _checkpoint++;
+      } else if (lows.length == 2 && k == 2 && _elimInCp == 0 && _countback(lows[0], lows[1], n) != 0) {
+        // Двое с равной суммой при выбывании двоих: худший по счёту серий — 8-й.
+        final worse = _countback(lows[0], lows[1], n) < 0 ? lows[0] : lows[1];
+        worse.place = place;
       } else {
         _startShootOff(lows, forGold: false, place: place);
         return;
       }
+      _elimInCp++;
+      if (_elimInCp >= k) {
+        _checkpoint++;
+        _elimInCp = 0;
+      }
     }
+  }
+
+  /// Сравнение по счёту ([FinalFormat.countbackBlocks]): >0 — [a] лучше.
+  int _countback(FinalCompetitor a, FinalCompetitor b, int n) {
+    var end = n;
+    for (final size in format.countbackBlocks) {
+      final sa = a.shots.sublist(end - size, end).fold<double>(0, (x, y) => x + y);
+      final sb = b.shots.sublist(end - size, end).fold<double>(0, (x, y) => x + y);
+      final r = ((sa - sb) * 10).round();
+      if (r != 0) return r;
+      end -= size;
+    }
+    for (var i = end - 1; i >= 0; i--) {
+      final r = ((a.shots[i] - b.shots[i]) * 10).round();
+      if (r != 0) return r;
+    }
+    return 0;
   }
 
   void _startShootOff(List<FinalCompetitor> tied, {required bool forGold, required int place}) {
@@ -219,8 +281,13 @@ class FinalEngine {
     } else {
       decided.place = _soPlace;
       phase = FinalPhase.match;
+      _elimInCp++;
+      if (_elimInCp >= format.eliminationsAt(_checkpoint)) {
+        _checkpoint++;
+        _elimInCp = 0;
+      }
     }
-    _checkpoint++;
+    if (_soForGold) _checkpoint++;
     _tied = [];
     if (phase == FinalPhase.match) _advance();
   }

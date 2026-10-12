@@ -133,9 +133,11 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
   }
 
   /// Статистика по умолчанию, пока своих тренировок мало.
-  ShotStats get _fallback => widget.format.faceCode == 'pistol_10m'
-      ? const ShotStats(0, 0, 9.0, 9.0, 0)
-      : const ShotStats(0, 0, 3.5, 3.5, 0);
+  ShotStats get _fallback => switch (widget.format.faceCode) {
+        'pistol_10m' => const ShotStats(0, 0, 9.0, 9.0, 0),
+        'rifle_50m' => const ShotStats(0, 0, 6.0, 6.0, 0),
+        _ => const ShotStats(0, 0, 3.5, 3.5, 0),
+      };
 
   void _start(AppDataStore store) {
     final face = TargetFace.byCode(widget.format.faceCode);
@@ -258,10 +260,12 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(color: cs.surfaceContainerHigh, borderRadius: BorderRadius.circular(18)),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(tr('По правилам ISSF (п. 6.17.2)'), style: theme.textTheme.titleSmall),
+                    Text(tr(f.hasOpenStage ? 'По правилам ISSF (п. 6.17.3)' : 'По правилам ISSF (п. 6.17.2)'), style: theme.textTheme.titleSmall),
                     const SizedBox(height: 6),
                     Text(
-                      tr('Подготовка и пристрелка 5 минут, затем две серии по 5 выстрелов (по 250 с) и 14 одиночных выстрелов (по 50 с). Десятые доли. После 12-го выстрела и далее после каждых двух выбывает самый слабый; при ничьей — перестрелка.'),
+                      f.hasOpenStage
+                          ? tr('Подготовка и пристрелка 5 минут, затем 10 выстрелов с колена и 10 лёжа за 22 минуты. Стоя две серии по 5 выстрелов (по 250 с), после 30-го выстрела выбывают двое, дальше одиночные по 50 с: после каждого выбывает самый слабый. Десятые доли, всего 35 выстрелов.')
+                          : tr('Подготовка и пристрелка 5 минут, затем две серии по 5 выстрелов (по 250 с) и 14 одиночных выстрелов (по 50 с). Десятые доли. После 12-го выстрела и далее после каждых двух выбывает самый слабый; при ничьей — перестрелка.'),
                       style: theme.textTheme.bodySmall,
                     ),
                   ]),

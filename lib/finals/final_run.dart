@@ -125,6 +125,7 @@ class FinalRunController extends ChangeNotifier {
   /// Название раунда для экрана.
   String get roundLabel {
     if (inShootOff) return 'shootoff';
+    if (roundIndex == 0 && format.hasOpenStage) return 'open';
     if (roundIndex < format.seriesShots.length) return 'series:${roundIndex + 1}';
     return 'single:${roundIndex - format.seriesShots.length + 1}';
   }
@@ -213,7 +214,7 @@ class FinalRunController extends ChangeNotifier {
       roundLimit = format.singleSeconds;
     } else if (roundIndex < format.seriesShots.length) {
       shotsPerShooter = format.seriesShots[roundIndex];
-      roundLimit = format.seriesSeconds;
+      roundLimit = (roundIndex == 0 && format.hasOpenStage) ? format.openSeconds : format.seriesSeconds;
     } else {
       shotsPerShooter = 1;
       roundLimit = format.singleSeconds;

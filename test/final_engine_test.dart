@@ -165,4 +165,49 @@ void main() {
       expect(bot.delaySeconds(50), inInclusiveRange(15, 42.6));
     });
   });
+
+  group('50 м, три положения (п. 6.17.3)', () {
+    const f = FinalFormat.rifle3p50m;
+    test('формат: 35 выстрелов, после 30-го выбывают двое', () {
+      expect(f.totalShots, 35);
+      expect(f.eliminationAfter, [30, 31, 32, 33, 34]);
+      expect(f.eliminationsAt(0), 2);
+      expect(f.secondsForShot(0), 1320);
+      expect(f.secondsForShot(20), 250);
+      expect(f.secondsForShot(30), 50);
+    });
+
+    test('места и число выстрелов: 8-й и 7-й — 30, 6-й — 31, … победители — 35', () {
+      final cs = [for (var i = 0; i < 8; i++) FinalCompetitor('c$i', 'C$i')];
+      final e = FinalEngine(f, cs);
+      for (var n = 0; n < 35; n++) {
+        for (var i = 0; i < 8; i++) {
+          if (cs[i].active && !e.isFinished) e.submit('c$i', 10.9 - i * 0.1);
+        }
+      }
+      expect(e.isFinished, isTrue);
+      expect([for (final c in cs) c.place], [1, 2, 3, 4, 5, 6, 7, 8]);
+      expect([for (final c in cs) c.shots.length], [35, 35, 34, 33, 32, 31, 30, 30]);
+    });
+
+    test('ничья двоих внизу после 30-го — по счёту серий, без перестрелки', () {
+      final cs = [for (var i = 0; i < 8; i++) FinalCompetitor('c$i', 'C$i')];
+      final e = FinalEngine(f, cs);
+      // c6: 25×10.0 + 5×9.0 = 295; c7: 25×9.8 + 5×10.0 = 295 — сумма равна,
+      // но в последней серии c7 сильнее, значит c6 выбывает 8-м.
+      for (var n = 0; n < 30; n++) {
+        for (var i = 0; i < 8; i++) {
+          final v = switch (i) {
+            6 => n < 25 ? 10.0 : 9.0,
+            7 => n < 25 ? 9.8 : 10.0,
+            _ => 10.9 - i * 0.1,
+          };
+          e.submit('c$i', v);
+        }
+      }
+      expect(e.phase, FinalPhase.match);
+      expect(cs[6].place, 8);
+      expect(cs[7].place, 7);
+    });
+  });
 }

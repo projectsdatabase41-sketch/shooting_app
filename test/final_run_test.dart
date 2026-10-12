@@ -6,8 +6,8 @@ import 'package:shooting_app/finals/final_engine.dart';
 import 'package:shooting_app/finals/final_run.dart';
 import 'package:shooting_app/models/target_face.dart';
 
-FinalRunController _make(int seed, {BotDifficulty d = BotDifficulty.medium}) {
-  final face = TargetFace.rifle10m;
+FinalRunController _make(int seed, {BotDifficulty d = BotDifficulty.medium, FinalFormat format = FinalFormat.airRifle10m}) {
+  final face = TargetFace.byCode(format.faceCode);
   final rng = math.Random(seed);
   const stats = ShotStats(0.5, -0.5, 3.0, 3.0, 100);
   final competitors = [
@@ -15,9 +15,9 @@ FinalRunController _make(int seed, {BotDifficulty d = BotDifficulty.medium}) {
     for (var i = 1; i <= 7; i++) FinalCompetitor('b$i', 'Бот $i'),
   ];
   return FinalRunController(
-    format: FinalFormat.airRifle10m,
+    format: format,
     face: face,
-    engine: FinalEngine(FinalFormat.airRifle10m, competitors),
+    engine: FinalEngine(format, competitors),
     userId: 'me',
     bots: {for (var i = 1; i <= 7; i++) 'b$i': BotShooter(stats, d, face, math.Random(seed * 31 + i))},
     rng: rng,
@@ -170,5 +170,21 @@ void main() {
     expect(c.phase, RunPhase.loading);
     expect(c.announcing, isTrue);
     expect(c.secondsLeft, FinalRunController.announcerSeconds + 5);
+  });
+
+  test('50 м, три положения: полный финал с открытым этапом на 20 выстрелов', () {
+    final c = _make(21, format: FinalFormat.rifle3p50m);
+    c.skipSighting();
+    for (var i = 0; i < 5; i++) {
+      c.tick();
+    }
+    expect(c.roundLabel, 'open');
+    expect(c.shotsPerShooter, 20);
+    expect(c.roundLimit, 1320);
+    _run(c, aim: (0.0, 0.0), maxTicks: 40000);
+    expect(c.phase, RunPhase.finished);
+    final places = [for (final x in c.engine.competitors) x.place];
+    expect(places.toSet(), {1, 2, 3, 4, 5, 6, 7, 8});
+    expect(c.engine.competitors.firstWhere((x) => x.place == 1).shots.length, 35);
   });
 }

@@ -87,6 +87,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
       case RunPhase.shooting:
         final l = c.roundLabel;
         if (l == 'shootoff') return tr('Перестрелка');
+        if (l == 'open') return tr('С колена и лёжа: 20 выстрелов');
         final n = l.split(':')[1];
         return l.startsWith('series') ? tr('Серия {n}', {'n': n}) : tr('Выстрел {n}', {'n': n});
     }
