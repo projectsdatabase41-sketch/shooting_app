@@ -30,6 +30,7 @@ import 'settings_home_tabs_screen.dart';
 import 'onboarding_screen.dart';
 import 'settings_modules_screen.dart';
 import 'settings_services_screen.dart';
+import '../services/demo_mode.dart';
 import '../services/modules_settings.dart';
 
 /// Настройки (раздел 9 ТЗ) — сгруппированы по назначению в отдельные
@@ -140,6 +141,16 @@ class SettingsScreen extends StatelessWidget {
                     builder: (_) => SettingsServicesScreen(repo: services)),
               ),
             ),
+          ValueListenableBuilder<bool>(
+            valueListenable: DemoMode.enabled,
+            builder: (context, on, _) => SwitchListTile(
+              secondary: const Icon(Icons.rate_review_outlined),
+              title: Text(tr('Режим Демо')),
+              subtitle: Text(tr('На каждой странице кнопка «Отзыв»: можно сообщить об ошибке или идее')),
+              value: on,
+              onChanged: (v) => DemoMode.set(store.db, v),
+            ),
+          ),
           const Divider(height: 24),
           // Рубильник, а не переключатель режима внутри уже включённой
           // тренерской роли: раньше эту роль вообще не было видно как

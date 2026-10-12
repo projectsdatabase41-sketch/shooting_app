@@ -22,6 +22,7 @@ import 'coach_statistics_screen.dart';
 import '../tasks/athlete_tasks_screen.dart';
 import '../tasks/coach_tasks_screen.dart';
 import 'chat_home_screen.dart';
+import '../services/demo_mode.dart';
 import 'exercises_screen.dart';
 import 'finals_screen.dart';
 import 'service_tile_screen.dart';
@@ -133,6 +134,7 @@ class _HomeShellState extends State<HomeShell> {
     final store = context.watch<AppDataStore>();
     final isCoach = store.workMode == WorkMode.coach;
     final tabs = isCoach ? _coachTabs : _athleteTabs;
+    DemoMode.tab = isCoach ? _coachTab : _athleteTab; // для отзывов в режиме «Демо»
     // Тренер без подключённых спортсменов: статистика и задания пусты и
     // бессмысленны — прячем до появления первого спортсмена.
     _coachTabs.suppressed = CoachAccessService(store.db).listAthletes().isEmpty

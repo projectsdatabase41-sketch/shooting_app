@@ -30,6 +30,7 @@ import 'screens/chat_home_screen.dart';
 import 'screens/call_screen.dart';
 import 'screens/chat_thread_screen.dart';
 import 'i18n/i18n.dart';
+import 'services/demo_mode.dart';
 import 'services/coach_access_service.dart';
 import 'tasks/athlete_tasks_screen.dart';
 import 'tasks/coach_tasks_screen.dart';
@@ -144,6 +145,7 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    DemoMode.load(widget.db);
     _store = AppDataStore(widget.db)..loadAll();
     _personalization = PersonalizationViewModel(widget.db)..loadFromDb();
     // Язык интерфейса: словарь подгружается при старте и при смене языка,
@@ -364,6 +366,7 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
           return MaterialApp(
             key: ValueKey(I18n.code),
             navigatorKey: navigatorKey,
+            navigatorObservers: [DemoRouteObserver.instance],
             title: 'Nexus',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light(
@@ -387,7 +390,10 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
                   data: mq.copyWith(
                       textScaler: TextScaler.linear(
                           (system * user).clamp(0.8, 1.8).toDouble())),
-                  child: child ?? const SizedBox.shrink(),
+                  // Режим «Демо»: кнопка отзыва на каждой странице.
+                  child: DemoFeedbackOverlay(
+                      navigatorKey: navigatorKey,
+                      child: child ?? const SizedBox.shrink()),
                 );
               },
             ),
