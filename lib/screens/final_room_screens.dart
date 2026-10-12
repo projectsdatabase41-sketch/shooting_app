@@ -295,6 +295,7 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
   List<FinalsMember> _members = [];
   Timer? _poll;
   bool _busy = false;
+  bool _hostShoots = false; // ведущий сам стреляет (финал спортсменов без тренера)
 
   @override
   void dispose() {
@@ -355,7 +356,13 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
   void _start() {
     final sid = _sessionId!;
     final accepted = [for (final m in _members) if (m.status == 'accepted') m];
-    final athletes = [for (final m in accepted) if (m.role == FinalsRole.athlete) m];
+    final guests = [for (final m in accepted) if (m.role == FinalsRole.athlete) m];
+    final hostId = _hostShoots ? 'u_${_auth.userId}' : null;
+    // Ведущий, если стреляет, — первый участник.
+    final athletes = [
+      if (hostId != null) FinalsMember(sid, _auth.userId, FinalsRole.athlete, hostId, _auth.nickname, 'accepted'),
+      ...guests,
+    ];
     if (athletes.isEmpty) return;
     final f = widget.format;
     final face = TargetFace.byCode(f.faceCode);
@@ -387,7 +394,7 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
     );
     _poll?.cancel();
     Navigator.of(context).pushReplacement(MaterialPageRoute(
-      builder: (_) => FinalHostScreen(controller: controller, sessionId: sid, service: _svc, store: _store, members: _members),
+      builder: (_) => FinalHostScreen(controller: controller, sessionId: sid, service: _svc, store: _store, members: _members, hostCompetitorId: hostId),
     ));
   }
 
@@ -408,6 +415,13 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
               const SizedBox(height: 6),
               Text(tr('Вы ведёте финал: подаёте команды кнопкой «Далее», остальных финалистов до 8 заменят боты.'), style: theme.textTheme.bodySmall),
               const SizedBox(height: 16),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(tr('Я тоже стреляю')),
+                subtitle: Text(tr('Финал спортсменов онлайн без тренера: вы ведёте команды и стреляете сами')),
+                value: _hostShoots,
+                onChanged: started ? null : (v) => setState(() => _hostShoots = v),
+              ),
               Text(tr('Участники'), style: theme.textTheme.titleSmall),
               for (final p in _picks)
                 ListTile(
@@ -443,8 +457,8 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
                 onPressed: _busy
                     ? null
                     : started
-                        ? (accepted > 0 ? _start : null)
-                        : (_picks.any((p) => p.role == FinalsRole.athlete) ? _createAndInvite : null),
+                        ? (accepted > 0 || _hostShoots ? _start : null)
+                        : (_hostShoots || _picks.any((p) => p.role == FinalsRole.athlete) ? _createAndInvite : null),
                 child: Text(started ? tr('Начать финал ({n} принял)', {'n': accepted}) : tr('Разослать приглашения')),
               ),
             ),
@@ -464,7 +478,10 @@ class FinalHostScreen extends StatefulWidget {
   final FinalsSessionService service;
   final AppDataStore store;
   final List<FinalsMember> members;
-  const FinalHostScreen({super.key, required this.controller, required this.sessionId, required this.service, required this.store, required this.members});
+
+  /// Если ведущий сам стреляет — его id участника; иначе `null` (он только ведёт).
+  final String? hostCompetitorId;
+  const FinalHostScreen({super.key, required this.controller, required this.sessionId, required this.service, required this.store, required this.members, this.hostCompetitorId});
 
   @override
   State<FinalHostScreen> createState() => _FinalHostScreenState();
@@ -591,7 +608,8 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
       },
       child: FinalRoomView(
         snapshot: FinalsSnapshot.of(c),
-        role: FinalsRole.coach,
+        role: widget.hostCompetitorId == null ? FinalsRole.coach : FinalsRole.athlete,
+        ownId: widget.hostCompetitorId,
         onShoot: (who, mm) => c.submitShotFor(who, mm.dx, mm.dy),
         onUndo: (who) => c.undoShotFor(who),
         onNext: c.advance,
