@@ -16,6 +16,9 @@ class UserProfile {
     ('ipsc', /*tr*/ 'Практическая (IPSC)'),
   ];
 
+  /// Не спортивная пулевая стрельба — только в режиме разработчика.
+  static const devOnlyDisciplines = {'archery', 'shotgun', 'biathlon', 'ipsc'};
+
   static const ranks = <String>[
     /*tr*/ 'Нет разряда',
     /*tr*/ '3 юношеский',

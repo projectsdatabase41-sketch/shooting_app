@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 
 import '../i18n/i18n.dart';
+import '../logic/friendly_error.dart';
 import '../services/local_db_service.dart';
 import '../services/user_profile.dart';
 import '../widgets/glass_pill.dart';
@@ -153,6 +154,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       runSpacing: 8,
                       children: [
                         for (final d in UserProfile.disciplines)
+                          if (!UserProfile.devOnlyDisciplines.contains(d.$1) || friendlyErrorDevMode || _disciplines.contains(d.$1))
                           FilterChip(
                             label: Text(tr(d.$2)),
                             selected: _disciplines.contains(d.$1),
