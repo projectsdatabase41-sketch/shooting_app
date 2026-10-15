@@ -129,6 +129,20 @@ class FinalSetupScreen extends StatefulWidget {
 class _FinalSetupScreenState extends State<FinalSetupScreen> {
   String _level = 'mixed'; // mixed | easy | medium | hard | unpredictable
   bool _custom = false; // свой финал: не публикуется
+  int _cSeries = 2, _cPerSeries = 5, _cSingles = 14, _cSeriesSec = 250, _cSingleSec = 50, _cStep = 2;
+
+  /// Формат: выбранный или собранный конструктором (`null` — параметры неверны).
+  FinalFormat? get _fmt => _custom
+      ? FinalFormat.custom(
+          faceCode: widget.format.faceCode,
+          series: _cSeries,
+          perSeries: _cPerSeries,
+          singles: _cSingles,
+          seriesSeconds: _cSeriesSec,
+          singleSeconds: _cSingleSec,
+          step: _cStep,
+        )
+      : widget.format;
   late bool _voice = FinalsPrefs.voice(context.read<AppDataStore>().db);
   late String _layout = FinalsPrefs.layout(context.read<AppDataStore>().db);
 
@@ -167,6 +181,8 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
   }
 
   void _start(AppDataStore store) {
+    final fmt = _fmt;
+    if (fmt == null) return;
     final face = TargetFace.byCode(widget.format.faceCode);
     final h = _history(store);
     final enough = h.all.length >= 20;
@@ -189,9 +205,9 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
       for (var i = 0; i < 7; i++) FinalCompetitor('b$i', '${_opps[i].name} (Bot)'),
     ];
     final controller = FinalRunController(
-      format: widget.format,
+      format: fmt,
       face: face,
-      engine: FinalEngine(widget.format, competitors),
+      engine: FinalEngine(fmt, competitors),
       userId: 'me',
       bots: {
         for (var i = 0; i < 7; i++)
@@ -253,6 +269,38 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
     double n(String k) => (st[k] as num).toDouble();
     setState(() => _opps[slot] = _Opp('${champ['display_name']}',
         stats: ShotStats(n('mx'), n('my'), n('sx'), n('sy'), (st['n'] as num).toInt())));
+  }
+
+  Widget _stepper(String label, int value, int min, int max, void Function(int) set, {int step = 1}) => Row(children: [
+        Expanded(child: Text(label)),
+        IconButton(
+          icon: const Icon(Icons.remove_circle_outline),
+          onPressed: value - step < min ? null : () => setState(() => set(value - step)),
+        ),
+        SizedBox(width: 40, child: Text('$value', textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w700))),
+        IconButton(
+          icon: const Icon(Icons.add_circle_outline),
+          onPressed: value + step > max ? null : () => setState(() => set(value + step)),
+        ),
+      ]);
+
+  /// Переименование соперника (удержание на строке).
+  Future<void> _rename(int i) async {
+    final ctl = TextEditingController(text: _opps[i].name);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('Имя соперника')),
+        content: TextField(controller: ctl, autofocus: true, textCapitalization: TextCapitalization.words),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Отмена'))),
+          TextButton(onPressed: () => Navigator.pop(ctx, ctl.text.trim()), child: Text(tr('Сохранить'))),
+        ],
+      ),
+    );
+    ctl.dispose();
+    if (name == null || name.isEmpty) return;
+    setState(() => _opps[i] = _Opp(name, stats: _opps[i].stats));
   }
 
   @override
@@ -319,6 +367,7 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
                     contentPadding: EdgeInsets.zero,
                     leading: Icon(_opps[i].stats == null ? Icons.smart_toy_outlined : Icons.emoji_events_outlined, size: 20),
                     title: Text('${_opps[i].name} (Bot)'),
+                    onLongPress: () => _rename(i),
                     trailing: _opps[i].stats == null
                         ? null
                         : IconButton(
@@ -327,6 +376,10 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
                             onPressed: () => setState(() => _opps[i] = _Opp(_names[i])),
                           ),
                   ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text(tr('Удержите соперника, чтобы изменить имя'), style: theme.textTheme.bodySmall),
+                ),
                 OutlinedButton.icon(
                   onPressed: () => _addChampion(store),
                   icon: const Icon(Icons.add),
@@ -340,6 +393,20 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
                   value: _custom,
                   onChanged: (v) => setState(() => _custom = v),
                 ),
+                if (_custom) ...[
+                  _stepper(tr('Серий'), _cSeries, 0, 4, (v) => _cSeries = v),
+                  _stepper(tr('Выстрелов в серии'), _cPerSeries, 1, 10, (v) => _cPerSeries = v),
+                  _stepper(tr('Одиночных выстрелов'), _cSingles, 0, 40, (v) => _cSingles = v),
+                  _stepper(tr('Секунд на серию'), _cSeriesSec, 30, 600, (v) => _cSeriesSec = v, step: 10),
+                  _stepper(tr('Секунд на выстрел'), _cSingleSec, 10, 120, (v) => _cSingleSec = v, step: 5),
+                  _stepper(tr('Выбывание после каждых N выстрелов'), _cStep, 1, 5, (v) => _cStep = v),
+                  if (_fmt == null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(tr('Мало выстрелов: нужно минимум {n}, чтобы выбыли шестеро из восьми', {'n': 6 * _cStep + 1}),
+                          style: TextStyle(color: cs.error)),
+                    ),
+                ],
                 const SizedBox(height: 18),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
@@ -393,7 +460,7 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
                 width: double.infinity,
                 height: 52,
                 child: FilledButton.icon(
-                  onPressed: () => _start(store),
+                  onPressed: _fmt == null ? null : () => _start(store),
                   icon: const Icon(Icons.play_arrow),
                   label: Text(tr('Начать финал')),
                 ),

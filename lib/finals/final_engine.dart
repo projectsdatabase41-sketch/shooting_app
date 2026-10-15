@@ -106,6 +106,35 @@ class FinalFormat {
     countbackBlocks: [5, 5],
   );
 
+  /// Свой финал (конструктор): серии, одиночные выстрелы и время задаёт
+  /// пользователь. Выбывание — по одному после каждых [step] выстрелов так,
+  /// чтобы к последнему выстрелу остались двое (как в п. 6.17.2).
+  /// Возвращает `null`, если выстрелов слишком мало для восьми финалистов.
+  static FinalFormat? custom({
+    required String faceCode,
+    required int series,
+    required int perSeries,
+    required int singles,
+    required int seriesSeconds,
+    required int singleSeconds,
+    required int step,
+  }) {
+    final total = series * perSeries + singles;
+    const eliminations = 6; // из восьми остаётся двое
+    final first = total - step * eliminations;
+    if (first < 1 || step < 1 || total < 1) return null;
+    return FinalFormat(
+      id: 'custom',
+      nameKey: /*tr*/ 'Свой финал',
+      faceCode: faceCode,
+      seriesShots: [for (var i = 0; i < series; i++) perSeries],
+      singleShots: singles,
+      seriesSeconds: seriesSeconds,
+      singleSeconds: singleSeconds,
+      eliminationAfter: [for (var i = 0; i < eliminations; i++) first + step * i],
+    );
+  }
+
   static const all = [airRifle10m, airPistol10m, rifle3p50m];
 }
 

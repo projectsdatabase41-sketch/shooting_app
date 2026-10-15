@@ -231,4 +231,12 @@ void main() {
     // Статистически: со стрейками разброс средних по десятке не меньше, чем без них.
     expect(spread(1.0), greaterThan(spread(0.0) * 0.95));
   });
+
+  test('свой финал: выбывание по одному, к последнему выстрелу остаются двое', () {
+    final f = FinalFormat.custom(faceCode: 'rifle_10m', series: 1, perSeries: 5, singles: 10, seriesSeconds: 200, singleSeconds: 40, step: 2)!;
+    expect(f.totalShots, 15);
+    expect(f.eliminationAfter, [3, 5, 7, 9, 11, 13]);
+    expect(f.seriesShots, [5]);
+    expect(FinalFormat.custom(faceCode: 'rifle_10m', series: 0, perSeries: 5, singles: 8, seriesSeconds: 200, singleSeconds: 40, step: 2), isNull);
+  });
 }

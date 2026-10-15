@@ -262,4 +262,13 @@ void main() {
     expect(h.shots.where((v) => v == 0.0).length, 4); // 1 отмечен + 4 нуля
     expect(c.engine.byId('a').shots.length, 5);
   });
+
+  test('свой финал без серий и с другим временем доходит до конца', () {
+    final f = FinalFormat.custom(faceCode: 'rifle_10m', series: 0, perSeries: 5, singles: 14, seriesSeconds: 100, singleSeconds: 20, step: 2)!;
+    final c = _make(41, format: f);
+    c.skipSighting();
+    _run(c, aim: (0.0, 0.0), maxTicks: 40000);
+    expect(c.phase, RunPhase.finished);
+    expect({for (final x in c.engine.competitors) x.place}, {1, 2, 3, 4, 5, 6, 7, 8});
+  });
 }
