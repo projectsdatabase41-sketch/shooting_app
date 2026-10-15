@@ -248,7 +248,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
       SizedBox(height: top),
       Text(c.user.name, style: theme.textTheme.titleSmall),
       SizedBox(
-        height: h * 0.40,
+        height: h * 0.46,
         child: side
             ? Row(children: [
                 Expanded(flex: 5, child: pad),
@@ -269,7 +269,10 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
               sighting
                   ? tr('Пристрелка: выстрелы не идут в зачёт')
                   : c.userCanShoot
-                      ? tr('Осталось выстрелов: {n}', {'n': c.userShotsLeft})
+                      ? tr('Осталось выстрелов: {n}', {'n': c.userShotsLeft}) +
+                          (marks.isEmpty
+                              ? ''
+                              : ' · ${[for (final m in marks) formatScore(scoreForPoint(m.dx, m.dy, c.face), c.face)].join(' ')}')
                       : (c.user.active ? tr('Ждите команды') : tr('Вы выбыли — боты продолжают')),
               style: theme.textTheme.bodyMedium,
             ),
@@ -286,8 +289,8 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
       ),
       Expanded(
         child: GridView.count(
-          crossAxisCount: side ? 3 : 4,
-          childAspectRatio: side ? 0.9 : 0.72,
+          crossAxisCount: 3,
+          childAspectRatio: 0.85,
           padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
           children: [for (final b in rest) _BotCard(c: c, bot: b)],
         ),
@@ -318,7 +321,6 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
                     child: Text('${rows[i].c.place ?? (i + 1)}', style: const TextStyle(fontWeight: FontWeight.w800))),
                 Expanded(child: Text(rows[i].c.name, overflow: TextOverflow.ellipsis)),
                 Text(rows[i].shots.isEmpty ? '' : '${rows[i].shots.last.toStringAsFixed(1)}  ', style: theme.textTheme.bodySmall),
-                Text(rows[i].shots.isEmpty ? '' : '${tr('ср')} ${rows[i].avg.toStringAsFixed(2)}  ', style: theme.textTheme.bodySmall),
                 Text(rows[i].total.toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.w700)),
               ]),
             ),
@@ -463,7 +465,7 @@ class _ShotPadState extends State<ShotPad> {
           ),
           Positioned.fill(
             child: CustomPaint(
-              painter: ShotMarkerPainter(widget.marks, k: k, center: Offset(size.width / 2, size.height / 2), finger: f, holeR: 4),
+              painter: ShotMarkerPainter(widget.marks, k: k, center: Offset(size.width / 2, size.height / 2), finger: f, holeR: 4, labels: [for (final m in widget.marks) formatScore(scoreForPoint(m.dx, m.dy, widget.face), widget.face)]),
             ),
           ),
           if (loupe != null) loupe,
@@ -490,7 +492,11 @@ class _BotCard extends StatelessWidget {
         Text(bot.name, style: theme.textTheme.labelSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
         Expanded(
           child: LayoutBuilder(builder: (ctx, box) {
-            final k = box.biggest.shortestSide / 2 / c.face.faceRadiusMm;
+            // Мишень соперника приближается к центру, пока пробоина умещается;
+            // сильный промах уменьшает зум, чтобы пробоина осталась видна.
+            final dist = last == null ? 0.0 : math.sqrt(last.x * last.x + last.y * last.y);
+            final zoom = last == null ? 1.0 : (c.face.faceRadiusMm * 0.8 / math.max(dist, 1.0)).clamp(1.0, 4.0);
+            final k = box.biggest.shortestSide / 2 * zoom / c.face.faceRadiusMm;
             return Stack(children: [
               Positioned.fill(
                 child: CustomPaint(
@@ -500,6 +506,7 @@ class _BotCard extends StatelessWidget {
                     visibleShots: const [],
                     selectedShot: null,
                     currentSeriesNo: 1,
+                    zoom: zoom,
                   ),
                 ),
               ),
@@ -539,7 +546,9 @@ class ShotMarkerPainter extends CustomPainter {
   final Offset center;
   final Offset? finger; // px: где сейчас пробоина-кандидат
   final double holeR; // радиус кандидата, px
-  ShotMarkerPainter(this.placed, {required this.k, required this.center, this.finger, this.holeR = 4});
+  /// Подписи к пробоинам (значение выстрела), по порядку [placed].
+  final List<String>? labels;
+  ShotMarkerPainter(this.placed, {required this.k, required this.center, this.finger, this.holeR = 4, this.labels});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -549,10 +558,21 @@ class ShotMarkerPainter extends CustomPainter {
       ..color = Colors.black
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
-    for (final p in placed) {
+    for (var i = 0; i < placed.length; i++) {
+      final p = placed[i];
       final o = Offset(center.dx + p.dx * k, center.dy - p.dy * k);
       canvas.drawCircle(o, r, fill);
       canvas.drawCircle(o, r, edge);
+      final lb = labels;
+      if (lb != null && i < lb.length) {
+        final tp = TextPainter(
+          text: TextSpan(
+              text: lb[i],
+              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800, shadows: [Shadow(blurRadius: 3), Shadow(blurRadius: 3)])),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tp.paint(canvas, Offset(o.dx + r + 2, o.dy - tp.height / 2));
+      }
     }
     final f = finger;
     if (f != null) {
@@ -684,11 +704,6 @@ class FinalResultScreen extends StatelessWidget {
         children: [
           _protocol(context, st),
           const SizedBox(height: 12),
-          Text(tr('Ваши выстрелы'), style: theme.textTheme.titleSmall),
-          const SizedBox(height: 8),
-          Wrap(spacing: 6, runSpacing: 6, children: [
-            for (final v in mine) Chip(label: Text(v.toStringAsFixed(1)), visualDensity: VisualDensity.compact),
-          ]),
           if (mine.isNotEmpty) ...[
             const SizedBox(height: 12),
             Text(

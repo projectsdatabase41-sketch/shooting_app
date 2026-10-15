@@ -29,7 +29,7 @@ String standingsSpeech(List<AnnounceRow> rows, {List<String> eliminated = const 
       parts.add('${_ordinals[i]} ${active[i].name}, ${_num(active[i].total)}.');
     }
     final me = active.indexWhere((r) => r.isMe);
-    if (me >= 3) parts.add('Вы на ${me + 1}-м месте, ${_num(active[me].total)}.');
+    if (me >= 3) parts.add('${active[me].name}, ${me + 1}-е место, ${_num(active[me].total)}.');
   }
   return parts.join(' ');
 }

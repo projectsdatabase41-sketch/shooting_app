@@ -14,7 +14,7 @@ void main() {
     expect(t, contains('Выбывает Мария.'));
     expect(t, contains('Лидирует Анна, 104,3.'));
     expect(t, contains('Второй Игорь, 103,9.'));
-    expect(t, contains('Вы на 4-м месте, 101,5.'));
+    expect(t, contains('Вы, 4-е место, 101,5.'));
     expect(standingsSpeech(const []), '');
   });
 

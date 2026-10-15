@@ -37,14 +37,48 @@ class DemoMode {
   static String currentPage() {
     final route = DemoRouteObserver.instance.top;
     String? name = route?.settings.name;
+    String? title;
     if (name == '/') name = null; // стартовый маршрут безымянный
     if (route is ModalRoute) {
       final ctx = route.subtreeContext;
-      if (ctx != null) name ??= _findScreenName(ctx);
+      if (ctx != null) {
+        title = _findTitle(ctx);
+        name ??= _findScreenName(ctx);
+      }
     }
     name ??= route?.runtimeType.toString() ?? 'unknown';
+    // В веб-сборке имена классов сжаты — читаемым остаётся заголовок экрана.
+    if (title != null && title.isNotEmpty) name = name.startsWith('minified:') ? title : '$title ($name)';
     final t = tab;
     return t == null || !name.contains('HomeShell') ? name : '$name / $t';
+  }
+
+  /// Текст заголовка экрана (AppBar / GlassHeader): первый Text внутри шапки.
+  static String? _findTitle(BuildContext ctx) {
+    String? result;
+    var visited = 0;
+    void inHeader(Element e) {
+      if (result != null || visited++ > 300) return;
+      final w = e.widget;
+      if (w is Text && (w.data ?? '').trim().isNotEmpty) {
+        result = w.data!.trim();
+        return;
+      }
+      e.visitChildren(inHeader);
+    }
+
+    void walk(Element e) {
+      if (result != null || visited++ > 1500) return;
+      final n = e.widget.runtimeType.toString();
+      if (e.widget is AppBar || n.contains('GlassHeader')) {
+        e.visitChildren(inHeader);
+        return;
+      }
+      e.visitChildren(walk);
+    }
+
+    (ctx as Element).visitChildren(walk);
+    return result;
   }
 
   static String? _findScreenName(BuildContext ctx) {

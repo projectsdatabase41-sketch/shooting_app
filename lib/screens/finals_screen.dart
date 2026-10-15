@@ -14,6 +14,7 @@ import '../widgets/glass_pill.dart';
 import '../finals/champions_service.dart';
 import '../services/chat_auth_service.dart';
 import '../finals/finals_session_service.dart';
+import '../services/user_profile.dart';
 import 'champions_screen.dart';
 import 'final_room_screens.dart';
 import 'final_run_screen.dart';
@@ -156,6 +157,15 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
         _ => const ShotStats(0, 0, 3.5, 3.5, 0),
       };
 
+  /// Имя и фамилия из профиля; без них — ник мессенджера или «Вы».
+  String _myName(AppDataStore store) {
+    final first = UserProfile.firstNameOf(store.db), last = UserProfile.lastNameOf(store.db);
+    final full = '$first $last'.trim();
+    if (full.isNotEmpty) return full;
+    final nick = ChatAuthService(store.db).nickname;
+    return nick.isNotEmpty ? nick : tr('Вы');
+  }
+
   void _start(AppDataStore store) {
     final face = TargetFace.byCode(widget.format.faceCode);
     final h = _history(store);
@@ -175,7 +185,7 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
         ? ([...mixed]..shuffle(rng))
         : List.filled(7, BotDifficulty.values.firstWhere((d) => d.name == _level));
     final competitors = [
-      FinalCompetitor('me', tr('Вы'), isUser: true),
+      FinalCompetitor('me', _myName(store), isUser: true),
       for (var i = 0; i < 7; i++) FinalCompetitor('b$i', '${_opps[i].name} (Bot)'),
     ];
     final controller = FinalRunController(
