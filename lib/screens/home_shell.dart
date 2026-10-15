@@ -151,8 +151,11 @@ class _HomeShellState extends State<HomeShell> {
       if (!ModulesSettings.isOn(store.db, AppModule.services))
         for (final s in _services.list()) '$serviceTabPrefix${s.id}',
     };
-    _coachTabs.suppressed = {..._coachTabs.suppressed, ...hiddenModules};
-    _athleteTabs.suppressed = hiddenModules;
+    // В режиме плиток «Настройки» живут в шапке справа вверху, а не плиткой.
+    final tilesMode = tabs.layout == 'tiles';
+    final suppressedNow = {...hiddenModules, if (tilesMode) 'settings'};
+    _coachTabs.suppressed = {..._coachTabs.suppressed, ...suppressedNow};
+    _athleteTabs.suppressed = suppressedNow;
 
     // Рубильник "Режим тренера" переключают со страницы настроек —
     // после смены роли логичнее увидеть домашнюю вкладку нового режима
@@ -183,9 +186,17 @@ class _HomeShellState extends State<HomeShell> {
         if (tabs.layout == 'tiles') {
           return Scaffold(
             extendBodyBehindAppBar: true,
-            appBar: const GlassHeader(
-                title: Text('Nexus',
-                    style: TextStyle(fontWeight: FontWeight.w600))),
+            appBar: GlassHeader(
+                title: const Text('Nexus',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                actions: [
+                  IconButton(
+                    tooltip: tr('Настройки'),
+                    icon: const Icon(Icons.settings_outlined),
+                    onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => _pageFor('settings', store, isCoach, tabs))),
+                  ),
+                ]),
             body: Column(
               children: [
                 if (store.isBackgroundSyncing) const _SyncBanner(),

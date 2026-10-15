@@ -9,6 +9,7 @@ import '../state/app_data_store.dart';
 import '../widgets/glass_pill.dart';
 import '../widgets/section_header.dart';
 import 'export_screen.dart';
+import 'settings_screen.dart' show AccountTile;
 import '../i18n/i18n.dart';
 
 /// "Данные и синхронизация" — импорт/экспорт, ручная синхронизация с
@@ -61,6 +62,8 @@ class _SettingsDataScreenState extends State<SettingsDataScreen> {
             ),
           ),
           const Divider(height: 24),
+          // Подключение своей базы Supabase — здесь же, где синхронизация.
+          const AccountTile(),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: SectionHeader(title: tr('Синхронизация')),

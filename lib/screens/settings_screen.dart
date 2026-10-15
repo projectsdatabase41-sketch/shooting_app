@@ -190,7 +190,7 @@ class SettingsScreen extends StatelessWidget {
           // Учётная запись — в самом низу, как просил пользователь:
           // заходят сюда раз в жизни, а место наверху занимает то, что
           // трогают каждый день.
-          const _AccountTile(),
+          const AccountTile(),
         ],
       ),
     );
@@ -382,8 +382,8 @@ class _UpdateTileState extends State<_UpdateTile> {
   }
 }
 
-class _AccountTile extends StatelessWidget {
-  const _AccountTile();
+class AccountTile extends StatelessWidget {
+  const AccountTile();
 
   @override
   Widget build(BuildContext context) {
@@ -498,7 +498,7 @@ class _AccountSheetState extends State<_AccountSheet> {
     try {
       final ok = await action();
       if (!mounted) return;
-      // "Учётная запись" на самом экране настроек (_AccountTile) читает
+      // "Учётная запись" на самом экране настроек (AccountTile) читает
       // состояние входа из той же локальной базы, но это ДРУГОЙ виджет —
       // без notifyListeners() он не узнаёт о входе/регистрации, пока
       // что-нибудь ещё не вызовет случайную перерисовку (отсюда "вроде

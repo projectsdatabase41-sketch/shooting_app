@@ -113,7 +113,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          tr('Эти данные нужны, чтобы подобрать упражнения и мишени, сравнивать результаты с нормативами для вашего возраста и пола и — позже — участвовать в финалах и таблице чемпионов. Они хранятся на вашем устройстве; в облако и в общую таблицу попадают только если вы сами это включите.'),
+                          tr('Данные о вас помогут улучшить качество ответов ИИ и подобрать упражнения и нормативы. Они хранятся на вашем устройстве. Указывайте достоверные данные: их изменение позже может привести к ошибкам в сохранённой информации.'),
                           style: theme.textTheme.bodyMedium,
                         ),
                       ),
@@ -219,24 +219,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     '6',
                     tr('Регион (необязательно)'),
                     TextField(controller: _region, decoration: InputDecoration(hintText: tr('Например, Москва'))),
-                  ),
-                  // 6. Предупреждение.
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: cs.errorContainer.withValues(alpha: 0.35),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Icon(Icons.warning_amber_rounded, color: cs.error),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          tr('Вводите достоверные данные. Изменить их можно позже в настройках, но смена пола, года рождения или разряда повлияет на сравнение с нормативами и на подтверждение результатов тренером.'),
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      ),
-                    ]),
                   ),
                 ],
               ),

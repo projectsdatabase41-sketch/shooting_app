@@ -359,7 +359,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
               decoration: InputDecoration(
                 labelText: 'URL',
                 helperText:
-                    tr('Адрес API вашего сервиса (совместимого с OpenAI)'),
+                    tr('Адрес API вашего ИИ-сервиса: любого, который понимает формат запросов OpenAI (OpenRouter, свой сервер и другие)'),
               ),
               keyboardType: TextInputType.url,
               autocorrect: false,
