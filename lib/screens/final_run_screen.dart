@@ -347,7 +347,13 @@ class ShotPad extends StatefulWidget {
 }
 
 class _ShotPadState extends State<ShotPad> {
-  static const double _zoom = 6; // увеличение в лупе
+  /// Увеличение лупы: так, чтобы шаг десятой доли был не меньше ~8 пикселей
+  /// (у пневматики шаг 0,25 мм — при 6× десятка попадала в 2–3 px).
+  double get _zoom => (8 * widget.face.faceRadiusMm / (_stepMm * _loupe / 2)).clamp(6.0, 40.0);
+  double get _stepMm {
+    final st = widget.face.decimalStepMm;
+    return st > 0 ? st : 1.0;
+  }
   static const double _loupe = 140; // диаметр лупы, px
   static const double _gap = 100; // от пальца до центра лупы
   Offset? _finger; // px
@@ -398,7 +404,10 @@ class _ShotPadState extends State<ShotPad> {
           height: _loupe,
           child: IgnorePointer(
             child: Stack(clipBehavior: Clip.none, children: [
-              Container(
+              DecoratedBox(
+                // Рамка рисуется ПОВЕРХ (foreground): иначе она сужает область
+                // и центр мишени смещается на её толщину относительно перекрестия.
+                position: DecorationPosition.foreground,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(color: Theme.of(context).colorScheme.primary, width: 3),

@@ -650,34 +650,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final replyTo = _replyingTo;
     _input.clear();
     setState(() {
-      _sending = true;
       _replyingTo = null;
       _pendingChart = null;
     });
-    try {
-      _pollLoop?.poller.nudge(); // ждём ответ — опрашиваем чаще
-      await widget.sync.send(_contact.id, text, replyTo: replyTo);
-      _scrollToEnd();
-    } catch (e) {
-      // Раньше необработанное исключение здесь означало, что сообщение
-      // просто "пропадало" — текст уже очищен из поля, а _sending
-      // навсегда оставался true (кнопка отправки переставала работать),
-      // без единого следа для пользователя. Теперь ошибка видна и не
-      // блокирует дальнейшую отправку.
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(tr('Не отправлено: {e}', {'e': friendlyError(e)}))));
-      }
-    } finally {
-      // Всегда, а не только при успехе — иначе сообщение с красным
-      // статусом "ошибка" просто не появлялось бы в списке до ручного
-      // обновления экрана (retry() теперь бросает исключение при неудаче,
-      // см. ChatSyncService.retry).
-      if (mounted) {
-        _reload();
-        setState(() => _sending = false);
-      }
-    }
+    _pollLoop?.poller.nudge(); // ждём ответ — опрашиваем чаще
+    // Сообщение сохраняется локально сразу (статус «отправляется» с анимацией),
+    // а сеть не ждём: ошибка отобразится на самом сообщении с кнопкой «Повторить».
+    final sending = widget.sync.send(_contact.id, text, replyTo: replyTo);
+    _reload();
+    _scrollToEnd();
+    sending.then<void>((_) {}, onError: (_) {}).whenComplete(() {
+      if (mounted) _reload();
+    });
   }
 
   /// Кнопка ИИ у поля ввода: задание своими словами → готовое сообщение
@@ -2463,15 +2447,23 @@ class _Bubble extends StatelessWidget {
                 // Одна серая ✓ — дошло (на сервере или уже на устройстве, но
                 // не прочитано), синие ✓✓ — прочитано. Промежуточного
                 // «доставлено, но двумя галочками» нет — путает с «прочитано».
-                Icon(
-                  message.readByPeer
-                      ? Icons.done_all
-                      : _statusIcon(message.status),
-                  size: 14,
-                  color: message.readByPeer
-                      ? const Color(0xFF34B7F1)
-                      : theme.hintColor,
-                ),
+                if (!message.readByPeer && message.status == ChatMessageStatus.sending)
+                  // Идёт отправка: крутится индикатор, пока нет ответа сервера.
+                  SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(strokeWidth: 1.6, color: theme.hintColor),
+                  )
+                else
+                  Icon(
+                    message.readByPeer
+                        ? Icons.done_all
+                        : _statusIcon(message.status),
+                    size: 14,
+                    color: message.readByPeer
+                        ? const Color(0xFF34B7F1)
+                        : (message.status == ChatMessageStatus.error ? theme.colorScheme.error : theme.hintColor),
+                  ),
               ],
               if (translationError != null) ...[
                 const SizedBox(width: 6),
@@ -2487,10 +2479,11 @@ class _Bubble extends StatelessWidget {
         ),
         if (mine && message.status == ChatMessageStatus.error) ...[
           const SizedBox(height: 2),
+          Text(tr('Отправка прервана'), style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.error)),
           TextButton.icon(
             onPressed: onRetry,
             icon: const Icon(Icons.refresh, size: 14),
-            label: Text(tr('Отправить ещё раз')),
+            label: Text(tr('Повторить')),
             style: TextButton.styleFrom(
                 visualDensity: VisualDensity.compact, padding: EdgeInsets.zero),
           ),
