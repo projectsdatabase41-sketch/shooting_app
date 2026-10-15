@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 
 import '../logic/avatar_utils.dart';
 import '../logic/adaptive_poller.dart';
+import 'final_room_screens.dart' show offerFinalInvites;
 import '../models/chat_contact.dart';
 import '../models/chat_message.dart';
 import '../services/chat_auth_service.dart';
@@ -95,8 +96,17 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
     _reload();
     if (_auth.isSignedIn) {
       _startPolling();
+      // При открытии мессенджера сразу проверяем входящие, а не ждём первого
+      // такта опроса: пришедшее раньше должно быть в списке с самого начала.
+      _sync.pollIncoming().then((added) {
+        if (added > 0 && mounted) _reload();
+      }).catchError((_) {});
       PushService(_auth).init();
       _syncFriends();
+      // Приглашения в финал: предлагаем принять при открытии мессенджера.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) offerFinalInvites(context, context.read<AppDataStore>());
+      });
     } else if (_mainAuth.isSignedIn) {
       _autoProvisioning = true;
       _ensureChatSession();

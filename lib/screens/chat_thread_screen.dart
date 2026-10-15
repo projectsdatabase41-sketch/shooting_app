@@ -1321,12 +1321,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                               })
                             : tr('Участников: {length}',
                                 {'length': _contact.members.length}),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall,
                       )
                     else if (seen != null)
                       // «О себе» тут не показываем — только на странице собеседника
                       // (ChatContactPanelScreen), решение пользователя.
                       Text(seen,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall?.copyWith(
                               color: online ? const Color(0xFF3DDC84) : null)),
                   ],

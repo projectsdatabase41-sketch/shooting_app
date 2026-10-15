@@ -343,7 +343,7 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
       // Приглашение дублируем сообщением в мессенджере — оно приходит push-уведомлением.
       try {
         await ChatSyncService(_auth, ChatMessagesRepository(_store.db))
-            .send(p.contact.id, tr('Приглашаю в финал: откройте вкладку «Финалы» в приложении и примите приглашение.'));
+            .send(p.contact.id, tr('Приглашаю в финал! Откройте мессенджер или вкладку «Финалы» (модуль «Финалы» должен быть включён в настройках) и примите приглашение.'));
       } catch (_) {}
     }
     _sessionId = sid;
@@ -740,4 +740,34 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
       offline: !_online,
     );
   }
+}
+
+
+/// Проверяет приглашения в финалы и, если есть ожидающие ответа, предлагает
+/// принять — работает из любого места (например, при открытии мессенджера),
+/// не зависит от того, включён ли модуль «Финалы».
+Future<void> offerFinalInvites(BuildContext context, AppDataStore store) async {
+  final svc = FinalsSessionService(ChatAuthService(store.db));
+  final list = [for (final m in await svc.myInvitations()) if (m.status == 'invited') m];
+  if (list.isEmpty || !context.mounted) return;
+  final m = list.first;
+  final role = switch (m.role) {
+    FinalsRole.athlete => tr('финалистом'),
+    FinalsRole.helper => tr('помощником'),
+    FinalsRole.coach => tr('тренером'),
+  };
+  final accept = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(tr('Приглашение в финал')),
+      content: Text(tr('Вас приглашают участвовать {r}. Войти сейчас?', {'r': role})),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Позже'))),
+        TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Принять'))),
+      ],
+    ),
+  );
+  if (accept != true || !context.mounted) return;
+  if (!await svc.answer(m, accept: true) || !context.mounted) return;
+  await Navigator.of(context).push(MaterialPageRoute(builder: (_) => FinalGuestScreen(member: m, service: svc)));
 }

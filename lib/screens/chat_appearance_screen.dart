@@ -8,6 +8,7 @@ import '../services/ai_service.dart';
 import '../services/ai_settings.dart';
 import '../services/chat_preferences.dart';
 import '../services/local_db_service.dart';
+import '../widgets/color_picker_dialog.dart';
 import '../widgets/glass_pill.dart';
 import '../i18n/i18n.dart';
 
@@ -25,14 +26,9 @@ class ChatAppearanceScreen extends StatefulWidget {
 }
 
 class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
-  Future<void> _pickColor(
-      String title, Color current, ValueChanged<Color> onPicked) async {
-    final picked = await showDialog<Color>(
-      context: context,
-      builder: (_) => _ColorPickerDialog(title: title, initial: current),
-    );
-    if (picked != null) setState(() => onPicked(picked));
-  }
+  /// Выбор цвета — тот же диалог, что в настройках приложения.
+  Future<void> _pickColor(String title, Color current, ValueChanged<Color> onPicked) =>
+      ColorPickerDialog.showForColor(context, title: title, color: current, onApply: (c) => setState(() => onPicked(c)));
 
   @override
   Widget build(BuildContext context) {
@@ -362,133 +358,6 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
 /// `ColorPickerDialog` из настроек мишени, без "недавних цветов" и
 /// автоконтраста (там это завязано на `PersonalizationViewModel`,
 /// цвета чата — независимая, отдельная настройка).
-class _ColorPickerDialog extends StatefulWidget {
-  final String title;
-  final Color initial;
-  const _ColorPickerDialog({required this.title, required this.initial});
-
-  @override
-  State<_ColorPickerDialog> createState() => _ColorPickerDialogState();
-}
-
-class _ColorPickerDialogState extends State<_ColorPickerDialog>
-    with SingleTickerProviderStateMixin {
-  late TabController _tab;
-  late TextEditingController _hexController;
-  late Color _color;
-
-  @override
-  void initState() {
-    super.initState();
-    _tab = TabController(length: 2, vsync: this);
-    _color = widget.initial;
-    _hexController = TextEditingController(
-        text: TargetColorScheme.colorToHex(_color, withAlpha: false));
-  }
-
-  @override
-  void dispose() {
-    _tab.dispose();
-    _hexController.dispose();
-    super.dispose();
-  }
-
-  void _apply(Color c) {
-    setState(() {
-      _color = c;
-      _hexController.text = TargetColorScheme.colorToHex(c, withAlpha: false);
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.title),
-      content: SizedBox(
-        width: 320,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TabBar(
-                controller: _tab,
-                tabs: [Tab(text: tr('Палитра')), const Tab(text: 'HEX')]),
-            SizedBox(
-                height: 220,
-                child: TabBarView(
-                    controller: _tab, children: [_paletteTab(), _hexTab()])),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(tr('Отмена'))),
-        FilledButton(
-            onPressed: () => Navigator.of(context).pop(_color),
-            child: Text(tr('Применить'))),
-      ],
-    );
-  }
-
-  Widget _paletteTab() {
-    final hsv = HSVColor.fromColor(_color);
-    return Column(
-      children: [
-        Expanded(
-          child: GridView.count(
-            crossAxisCount: 8,
-            children: List.generate(64, (i) {
-              final hue = (i % 8) * 45.0;
-              final sat = (0.3 + (i ~/ 8) * 0.1).clamp(0.0, 1.0);
-              final c = HSVColor.fromAHSV(1, hue, sat, hsv.value).toColor();
-              return GestureDetector(
-                onTap: () => _apply(c),
-                child: Container(
-                  margin: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(
-                      color: c,
-                      border: c == _color
-                          ? Border.all(color: Colors.white, width: 3)
-                          : null),
-                ),
-              );
-            }),
-          ),
-        ),
-        Row(
-          children: [
-            Text(tr('Яркость')),
-            Expanded(
-                child: Slider(
-                    value: hsv.value,
-                    onChanged: (v) => _apply(hsv.withValue(v).toColor()))),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _hexTab() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        TextField(
-          controller: _hexController,
-          decoration: const InputDecoration(labelText: 'HEX (#RRGGBB)'),
-          onChanged: (value) {
-            if (TargetColorScheme.isValidHex(value))
-              setState(() => _color = TargetColorScheme.hexToColor(value));
-          },
-        ),
-        const SizedBox(height: 16),
-        ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Container(height: 48, color: _color)),
-      ],
-    );
-  }
-}
-
 /// "Чат с ИИ" для персонализации (решение пользователя) — только
 /// цвета/тень, никакого доступа к сообщениям или их удалению: модель
 /// физически не может тронуть переписку, у неё просто нет для этого

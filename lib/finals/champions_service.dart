@@ -11,9 +11,14 @@ class ChampionsService {
   final ChatAuthService auth;
   ChampionsService(this.auth);
 
+  /// Сколько выстрелов в своих тренировках на этой мишени достаточно, чтобы
+  /// публиковаться без подписи тренера (результат при этом проверяется на
+  /// правдоподобие).
+  static const minTrainingShotsForSelf = 100;
+
   /// Отправляет запись; [coachId] — chat-id тренера, который должен подписать.
   /// Возвращает текст ошибки или `null`.
-  Future<String?> publish(Map<String, dynamic> record, {required String name, required String coachId, required Map<String, dynamic> stats}) async {
+  Future<String?> publish(Map<String, dynamic> record, {required String name, String? coachId, bool selfVerified = false, required Map<String, dynamic> stats}) async {
     if (!auth.isSignedIn) return 'Войдите в мессенджер';
     final token = await auth.ensureFreshToken();
     if (token == null) return 'Нет входа в мессенджер';
@@ -34,6 +39,11 @@ class ChampionsService {
           'total': me['total'],
           'stats': stats,
           'coach_id': coachId,
+          if (selfVerified) ...{
+            // Достаточно собственных тренировок: подпись тренера не нужна.
+            'self_verified': true,
+            'coach_signed_at': DateTime.now().toUtc().toIso8601String(),
+          },
           'consent': true,
         }),
       ).timeout(const Duration(seconds: 20));

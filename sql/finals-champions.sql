@@ -184,3 +184,17 @@ begin
   end if;
   return new;
 end $$;
+
+-- ===== Публикация без подписи тренера (по своим тренировкам) =====
+-- Клиент проверяет, что у спортсмена достаточно тренировок и результат им не
+-- противоречит, и ставит self_verified = true. Сервер приватную базу
+-- тренировок не видит, поэтому доверяет клиенту — это слабее подписи тренера
+-- (честность держат жалобы, баны и апелляции).
+alter table finals_champions add column if not exists self_verified boolean not null default false;
+
+drop policy if exists champions_insert on finals_champions;
+create policy champions_insert on finals_champions for insert
+  with check (user_id = auth.uid() and consent
+    and ((coach_signed_at is null) or (self_verified and coach_id is null))
+    and not exists (select 1 from finals_user_strikes s
+                    where s.user_id = auth.uid() and s.banned_until >= now()));

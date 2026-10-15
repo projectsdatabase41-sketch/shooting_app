@@ -11,6 +11,7 @@ import '../finals/champions_service.dart';
 import '../finals/finals_repository.dart';
 import '../finals/plausibility.dart';
 import '../services/chat_auth_service.dart';
+import '../services/user_profile.dart';
 import '../services/supabase_auth_service.dart';
 import 'package:provider/provider.dart';
 import '../i18n/i18n.dart';
@@ -665,14 +666,32 @@ class FinalResultScreen extends StatelessWidget {
     if (checkPlausibility(training, [for (final s in mine) (s['s'] as num).toDouble()]) == Plausibility.suspicious) {
       return say(tr('Результат намного выше ваших тренировок — публикация невозможна без подтверждения тренера на месте'));
     }
-    final coaches = await SupabaseAuthService(store.db).fetchLinkedCoaches();
-    if (!context.mounted) return;
-    if (coaches.isEmpty) return say(tr('Для публикации нужен связанный тренер: он подписывает результат'));
+    final st = ShotStats.fromPoints([for (final s in mine) ((s['x'] as num).toDouble(), (s['y'] as num).toDouble())]);
+    final stats = {'mx': st.mx, 'my': st.my, 'sx': st.sx, 'sy': st.sy, 'n': st.n, 'face': face};
+    final profile = '${UserProfile.firstNameOf(store.db)} ${UserProfile.lastNameOf(store.db)}'.trim();
+    final name = profile.isNotEmpty ? profile : auth.nickname;
+
+    // Достаточно своих тренировок на этой мишени и результат им не противоречит —
+    // подтверждение тренера не нужно.
+    final selfOk = training.length >= ChampionsService.minTrainingShotsForSelf &&
+        checkPlausibility(training, [for (final s in mine) (s['s'] as num).toDouble()]) == Plausibility.ok;
+    String? coachId;
+    if (!selfOk) {
+      final coaches = await SupabaseAuthService(store.db).fetchLinkedCoaches();
+      if (!context.mounted) return;
+      if (coaches.isEmpty) {
+        return say(tr('Для публикации нужен связанный тренер (или не менее {n} выстрелов в ваших тренировках на этой мишени)',
+            {'n': ChampionsService.minTrainingShotsForSelf}));
+      }
+      coachId = coaches.first.chatUserId;
+    }
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Публикация')),
-        content: Text(tr('Ваше имя, результат и статистика стрельбы станут видны другим после подписи тренера {c}. Продолжить?', {'c': coaches.first.nickname.isNotEmpty ? coaches.first.nickname : coaches.first.label})),
+        content: Text(selfOk
+            ? tr('Ваше имя, результат и статистика стрельбы станут видны другим сразу: по вашим тренировкам подтверждение тренера не требуется. Продолжить?')
+            : tr('Ваше имя, результат и статистика стрельбы станут видны другим после подписи тренера. Продолжить?')),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Отмена'))),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Опубликовать'))),
@@ -680,12 +699,8 @@ class FinalResultScreen extends StatelessWidget {
       ),
     );
     if (ok != true) return;
-    final st = ShotStats.fromPoints([for (final s in mine) ((s['x'] as num).toDouble(), (s['y'] as num).toDouble())]);
-    final err = await ChampionsService(auth).publish(record,
-        name: auth.nickname,
-        coachId: coaches.first.chatUserId,
-        stats: {'mx': st.mx, 'my': st.my, 'sx': st.sx, 'sy': st.sy, 'n': st.n, 'face': face});
-    say(err ?? tr('Отправлено тренеру на подпись'));
+    final err = await ChampionsService(auth).publish(record, name: name, coachId: coachId, selfVerified: selfOk, stats: stats);
+    say(err ?? (selfOk ? tr('Опубликовано') : tr('Отправлено тренеру на подпись')));
   }
 
   @override
