@@ -11,6 +11,7 @@ import '../logic/friendly_error.dart';
 import '../models/chat_contact.dart';
 import '../models/chat_message.dart';
 import '../services/chat_auth_service.dart';
+import '../services/demo_mode.dart';
 import '../services/chat_messages_repository.dart';
 import '../services/chat_preferences.dart';
 import '../services/chat_settings.dart';
@@ -103,11 +104,10 @@ class _ShareToChatScreenState extends State<ShareToChatScreen> {
       nav.push(MaterialPageRoute(
         builder: (_) => ChatThreadScreen(contact: c, auth: _auth, repo: _repo, sync: sync, prefs: _prefs),
       ));
-    } catch (e) {
+    } catch (e, st) {
       if (mounted) {
         setState(() => _sending = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(tr('Не отправлено: {e}', {'e': friendlyError(e)}))));
+        DemoMode.reportError(context, tr('Не отправлено: {e}', {'e': friendlyError(e)}), 'ShareToChatScreen', e, st);
       }
     }
   }

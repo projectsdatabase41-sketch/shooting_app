@@ -40,7 +40,10 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
   final _page = PageController(initialPage: 1);
   bool _saved = false;
   bool _holding = false;
-  late final String _layout = FinalsPrefs.layout(widget.store.db);
+
+  /// Финал не стартует сам: часы пойдут после кнопки «Начать финал».
+  bool _started = false;
+  final String _layout = 'classic'; // вид экрана один (раскладки убраны из настройки)
   late final bool _voice = FinalsPrefs.voice(widget.store.db);
   final _tracker = AnnounceTracker();
 
@@ -50,7 +53,6 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
   void initState() {
     super.initState();
     c.addListener(_onChange);
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) => c.tick());
   }
 
   void _onChange() {
@@ -84,6 +86,12 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
     _page.dispose();
     c.removeListener(_onChange);
     super.dispose();
+  }
+
+  void _begin() {
+    if (_started) return;
+    setState(() => _started = true);
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) => c.tick());
   }
 
   String _banner() {
@@ -206,11 +214,36 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
           ],
         ),
         // Таблица слева (свайп вправо), главный экран справа.
-        body: PageView(
-          controller: _page,
-          physics: _holding ? const NeverScrollableScrollPhysics() : null,
-          children: [_layout == 'table' ? _botsPage(context) : _table(context), _main(context)],
-        ),
+        body: Stack(children: [
+          Positioned.fill(
+            child: PageView(
+              controller: _page,
+              physics: _holding ? const NeverScrollableScrollPhysics() : null,
+              children: [_layout == 'table' ? _botsPage(context) : _table(context), _main(context)],
+            ),
+          ),
+          if (!_started)
+            Positioned.fill(
+              child: ColoredBox(
+                color: Colors.black.withValues(alpha: 0.72),
+                child: Center(
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.emoji_events_outlined, color: Colors.white, size: 52),
+                    const SizedBox(height: 12),
+                    Text(tr('Всё готово'), style: theme.textTheme.headlineSmall?.copyWith(color: Colors.white)),
+                    const SizedBox(height: 6),
+                    Text(tr('Подготовка и пристрелка начнутся после нажатия'), style: const TextStyle(color: Colors.white70)),
+                    const SizedBox(height: 20),
+                    FilledButton.icon(
+                      onPressed: _begin,
+                      icon: const Icon(Icons.play_arrow),
+                      label: Text(tr('Начать финал')),
+                    ),
+                  ]),
+                ),
+              ),
+            ),
+        ]),
       ),
     );
   }
@@ -362,15 +395,15 @@ class ShotPad extends StatefulWidget {
 }
 
 class _ShotPadState extends State<ShotPad> {
-  /// Увеличение лупы: так, чтобы шаг десятой доли был не меньше ~8 пикселей
-  /// (у пневматики шаг 0,25 мм — при 6× десятка попадала в 2–3 px).
-  double get _zoom => (8 * widget.face.faceRadiusMm / (_stepMm * _loupe / 2)).clamp(6.0, 40.0);
+  /// Увеличение лупы: шаг десятой доли занимает ~4,5 пикселя (мягче, чем
+  /// раньше: сильное увеличение «убегало» из-под пальца).
+  double get _zoom => (4.5 * widget.face.faceRadiusMm / (_stepMm * _loupe / 2)).clamp(3.0, 24.0);
   double get _stepMm {
     final st = widget.face.decimalStepMm;
     return st > 0 ? st : 1.0;
   }
-  static const double _loupe = 140; // диаметр лупы, px
-  static const double _gap = 100; // от пальца до центра лупы
+  static const double _loupe = 190; // диаметр лупы, px
+  static const double _gap = 125; // от пальца до центра лупы
   Offset? _finger; // px
 
   double _k(Size s) => s.shortestSide / 2 / widget.face.faceRadiusMm;
@@ -420,12 +453,20 @@ class _ShotPadState extends State<ShotPad> {
           child: IgnorePointer(
             child: Stack(clipBehavior: Clip.none, children: [
               DecoratedBox(
+                // Тень лупы — объём вместо плоской наклейки.
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.45), blurRadius: 22, spreadRadius: 1, offset: const Offset(0, 10)),
+                  ],
+                ),
+                child: DecoratedBox(
                 // Рамка рисуется ПОВЕРХ (foreground): иначе она сужает область
                 // и центр мишени смещается на её толщину относительно перекрестия.
                 position: DecorationPosition.foreground,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: Theme.of(context).colorScheme.primary, width: 3),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.9), width: 4),
                 ),
                 child: ClipOval(
                   child: Stack(children: [
@@ -444,11 +485,26 @@ class _ShotPadState extends State<ShotPad> {
                     ),
                     Positioned.fill(
                       child: CustomPaint(
-                        painter: ShotMarkerPainter(widget.marks, k: kz, center: lc, finger: Offset(_loupe / 2, _loupe / 2), holeR: 2.25 * kz),
+                        painter: ShotMarkerPainter(widget.marks,
+                            k: kz, center: lc, finger: Offset(_loupe / 2, _loupe / 2), holeR: 2.25 * kz, lens: true),
+                      ),
+                    ),
+                    // Блик и виньетка стекла.
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: RadialGradient(
+                            center: const Alignment(-0.45, -0.55),
+                            radius: 1.0,
+                            colors: [Colors.white.withValues(alpha: 0.28), Colors.white.withValues(alpha: 0.0), Colors.black.withValues(alpha: 0.18)],
+                            stops: const [0.0, 0.55, 1.0],
+                          ),
+                        ),
                       ),
                     ),
                   ]),
                 ),
+              ),
               ),
               Positioned(
                 left: 0,
@@ -522,7 +578,8 @@ class _BotCard extends StatelessWidget {
             final dist = last == null ? 0.0 : math.sqrt(last.x * last.x + last.y * last.y);
             final zoom = last == null ? 1.0 : (c.face.faceRadiusMm * 0.8 / math.max(dist, 1.0)).clamp(1.0, 4.0);
             final k = box.biggest.shortestSide / 2 * zoom / c.face.faceRadiusMm;
-            return Stack(children: [
+            return ClipRect(
+                child: Stack(children: [
               Positioned.fill(
                 child: CustomPaint(
                   painter: TargetPainter(
@@ -544,7 +601,7 @@ class _BotCard extends StatelessWidget {
                   ),
                 ),
               ),
-            ]);
+            ]));
           }),
         ),
         SizedBox(
@@ -573,7 +630,10 @@ class ShotMarkerPainter extends CustomPainter {
   final double holeR; // радиус кандидата, px
   /// Подписи к пробоинам (значение выстрела), по порядку [placed].
   final List<String>? labels;
-  ShotMarkerPainter(this.placed, {required this.k, required this.center, this.finger, this.holeR = 4, this.labels});
+
+  /// Внутри лупы: тонкое перекрестие и кольцо вместо красной точки.
+  final bool lens;
+  ShotMarkerPainter(this.placed, {required this.k, required this.center, this.finger, this.holeR = 4, this.labels, this.lens = false});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -600,7 +660,24 @@ class ShotMarkerPainter extends CustomPainter {
       }
     }
     final f = finger;
-    if (f != null) {
+    if (f != null && lens) {
+      final rr = holeR.clamp(4.0, 16.0);
+      final white = Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.6;
+      final dark = Paint()
+        ..color = Colors.black.withValues(alpha: 0.7)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3.2;
+      for (final p in [dark, white]) {
+        canvas.drawCircle(f, rr, p);
+        canvas.drawLine(f - Offset(rr + 14, 0), f - Offset(rr + 2, 0), p);
+        canvas.drawLine(f + Offset(rr + 2, 0), f + Offset(rr + 14, 0), p);
+        canvas.drawLine(f - Offset(0, rr + 14), f - Offset(0, rr + 2), p);
+        canvas.drawLine(f + Offset(0, rr + 2), f + Offset(0, rr + 14), p);
+      }
+    } else if (f != null) {
       final rr = holeR < 3 ? 3.0 : holeR;
       canvas.drawCircle(f, rr, Paint()..color = Colors.red.withValues(alpha: 0.8));
       canvas.drawCircle(f, rr, edge);
@@ -619,7 +696,12 @@ class ShotMarkerPainter extends CustomPainter {
 /// Итог финала: места, суммы, выстрелы человека.
 class FinalResultScreen extends StatelessWidget {
   final Map<String, dynamic> record;
-  const FinalResultScreen({super.key, required this.record});
+
+  /// Только просмотр протокола (чемпион из таблицы): без публикации и без
+  /// статистики по выстрелам.
+  final bool readOnly;
+  final String? title;
+  const FinalResultScreen({super.key, required this.record, this.readOnly = false, this.title});
 
   /// Протокол финала: по каждому участнику суммы серий, одиночные выстрелы
   /// и итог (как в ведомости финалистов).
@@ -723,7 +805,12 @@ class FinalResultScreen extends StatelessWidget {
       ),
     );
     if (ok != true) return;
-    final err = await ChampionsService(auth).publish(record, name: name, coachId: coachId, selfVerified: selfOk, stats: stats);
+    final err = await ChampionsService(auth).publish(record,
+        name: name,
+        coachId: coachId,
+        selfVerified: selfOk,
+        stats: stats,
+        protocolShots: [for (final s in mine) (s['s'] as num).toDouble()]);
     say(err ?? (selfOk ? tr('Опубликовано') : tr('Отправлено тренеру на подпись')));
   }
 
@@ -737,26 +824,27 @@ class FinalResultScreen extends StatelessWidget {
     ];
     return Scaffold(
       extendBodyBehindAppBar: true,
-      appBar: GlassHeader(title: Text(tr('Итоги финала'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600))),
+      appBar: GlassHeader(title: Text(title ?? tr('Итоги финала'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600))),
       body: ListView(
         padding: EdgeInsets.fromLTRB(16, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 16, 24),
         children: [
           _protocol(context, st),
           const SizedBox(height: 12),
-          if (mine.isNotEmpty) ...[
+          if (!readOnly && mine.isNotEmpty) ...[
             const SizedBox(height: 12),
             Text(
-              tr('Средний выстрел {a} · лучший {b} · худший {c} · десяток от 10.0: {d}', {
+              tr('Средний выстрел {a} · лучший {b} · худший {c}', {
                 'a': (mine.fold(0.0, (a, b) => a + b) / mine.length).toStringAsFixed(2),
                 'b': mine.reduce((a, b) => a > b ? a : b).toStringAsFixed(1),
                 'c': mine.reduce((a, b) => a < b ? a : b).toStringAsFixed(1),
-                'd': mine.where((v) => v >= 10.0).length,
               }),
               style: theme.textTheme.bodyMedium,
             ),
           ],
           const SizedBox(height: 20),
-          if (record['custom'] == true)
+          if (readOnly)
+            const SizedBox.shrink()
+          else if (record['custom'] == true)
             Text(tr('Свой финал: в общий рейтинг не попадает'), textAlign: TextAlign.center)
           else
             FilledButton.icon(

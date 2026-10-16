@@ -8,6 +8,7 @@ import '../services/chat_auth_service.dart';
 import '../services/coach_access_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/glass_pill.dart';
+import 'final_run_screen.dart' show FinalResultScreen;
 
 /// Чемпионы по формату и (для тренера) записи, ждущие подписи.
 class ChampionsScreen extends StatefulWidget {
@@ -74,6 +75,26 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
       _more = page.length >= ChampionsService.pageSize;
       _busy = false;
     });
+  }
+
+  /// Протокол чемпиона: серии и одиночные выстрелы, как в ведомости.
+  void _openProtocol(Map<String, dynamic> r, int place) {
+    final shots = ((r['protocol'] as Map?)?['shots'] as List?)?.map((e) => (e as num).toDouble()).toList();
+    if (shots == null || shots.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Подробный протокол этого результата не опубликован'))));
+      return;
+    }
+    final rec = <String, dynamic>{
+      'format': r['format_id'],
+      'face': '',
+      'standings': [
+        {'id': 'p', 'name': '${r['display_name']}', 'place': place, 'total': (r['total'] as num).toDouble(), 'user': true},
+      ],
+      'shots': [for (var i = 0; i < shots.length; i++) {'who': 'p', 'i': i, 's': shots[i]}],
+    };
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => FinalResultScreen(record: rec, readOnly: true, title: '${r['display_name']}'),
+    ));
   }
 
   Future<void> _sign(Map<String, dynamic> r) async {
@@ -189,6 +210,7 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
                 for (var i = 0; i < _rows.length; i++)
                   ListTile(
                     dense: true,
+                    onTap: () => _openProtocol(_rows[i], i + 1),
                     leading: SizedBox(width: 28, child: Text('${i + 1}', style: const TextStyle(fontWeight: FontWeight.w700))),
                     title: Text('${_rows[i]['display_name']}'),
                     subtitle: ((_rows[i]['flag_count'] as int?) ?? 0) > 0 ? Text(tr('Жалоб: {n}', {'n': _rows[i]['flag_count']})) : null,

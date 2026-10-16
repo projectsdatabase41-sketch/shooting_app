@@ -198,3 +198,6 @@ create policy champions_insert on finals_champions for insert
     and ((coach_signed_at is null) or (self_verified and coach_id is null))
     and not exists (select 1 from finals_user_strikes s
                     where s.user_id = auth.uid() and s.banned_until >= now()));
+
+-- ===== Протокол выстрелов чемпиона (смотреть по сериям, как в ведомости) =====
+alter table finals_champions add column if not exists protocol jsonb;

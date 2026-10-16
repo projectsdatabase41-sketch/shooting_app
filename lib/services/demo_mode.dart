@@ -101,6 +101,65 @@ class DemoMode {
   }
 
   static DateTime? _lastSent;
+  static DateTime? _lastError;
+
+  /// Отчёт об ошибке в ту же таблицу отзывов: что случилось, где, технические
+  /// подробности (тип ошибки, стек, платформа) — без личных данных.
+  static Future<String?> sendError(String where, Object error, [StackTrace? stack, String? extra]) async {
+    if (!ChatSettings.isConfigured) return tr('Сервер отзывов не настроен');
+    final last = _lastError;
+    if (last != null && DateTime.now().difference(last) < const Duration(seconds: 5)) return null;
+    _lastError = DateTime.now();
+    final st = (stack?.toString() ?? '').split('\n').take(12).join('\n');
+    final text = '[ОШИБКА] $error\nТип: ${error.runtimeType}\nГде: $where'
+        '${extra == null ? '' : '\n$extra'}${st.isEmpty ? '' : '\n--- стек ---\n$st'}';
+    final client = http.Client();
+    try {
+      final res = await client
+          .post(
+            Uri.parse('${ChatSettings.url}/rest/v1/app_feedback'),
+            headers: {
+              'apikey': ChatSettings.anonKey,
+              'Authorization': 'Bearer ${ChatSettings.anonKey}',
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal',
+            },
+            body: jsonEncode({
+              'text': text.length > 4000 ? text.substring(0, 4000) : text,
+              'page': 'ERROR: ${where.length > 190 ? where.substring(0, 190) : where}',
+              'platform': kIsWeb ? 'web' : defaultTargetPlatform.name,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+      return res.statusCode >= 300 ? tr('Не удалось отправить (код {c})', {'c': res.statusCode}) : null;
+    } catch (_) {
+      return tr('Нет сети');
+    } finally {
+      client.close();
+    }
+  }
+
+  /// Показывает сообщение об ошибке и отправляет подробности разработчику:
+  /// сразу сам — в режиме «Демо», иначе по кнопке «Отправить отчёт».
+  static void reportError(BuildContext context, String message, String where, Object error, [StackTrace? stack]) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (enabled.value) {
+      sendError(where, error, stack);
+      messenger?.showSnackBar(SnackBar(content: Text('$message\n${tr('Отчёт об ошибке отправлен автоматически')}')));
+      return;
+    }
+    messenger?.showSnackBar(SnackBar(
+      content: Text(message),
+      duration: const Duration(seconds: 8),
+      action: SnackBarAction(
+        label: tr('Отправить отчёт'),
+        onPressed: () async {
+          final err = await sendError(where, error, stack);
+          messenger.showSnackBar(SnackBar(content: Text(err ?? tr('Отчёт отправлен, спасибо'))));
+        },
+      ),
+    ));
+  }
 
   /// Отправка отзыва. Возвращает текст ошибки или `null`.
   static Future<String?> send(String text, String page) async {

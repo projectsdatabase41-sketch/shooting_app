@@ -144,7 +144,6 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
         )
       : widget.format;
   late bool _voice = FinalsPrefs.voice(context.read<AppDataStore>().db);
-  late String _layout = FinalsPrefs.layout(context.read<AppDataStore>().db);
 
   // Семь соперников: обычные боты или чемпионы (по их статистике).
   late final List<_Opp> _opps = [for (final n in _names) _Opp(n)];
@@ -418,18 +417,6 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
                     FinalsPrefs.setVoice(store.db, v);
                   },
                 ),
-                // Вид экрана.
-                Text(tr('Вид экрана финала'), style: theme.textTheme.titleSmall),
-                const SizedBox(height: 8),
-                chips<String>([
-                  ('classic', tr('Мишень сверху, боты ниже')),
-                  ('side', tr('Большая мишень и три бота справа')),
-                  ('table', tr('Мишень и таблица на одной странице, мишени ботов свайпом')),
-                ], _layout, (v) {
-                  _layout = v;
-                  FinalsPrefs.setLayout(store.db, v);
-                }),
-                const SizedBox(height: 18),
                 // 4. Откуда данные ботов.
                 Container(
                   padding: const EdgeInsets.all(14),

@@ -18,35 +18,41 @@ class ChampionsService {
 
   /// Отправляет запись; [coachId] — chat-id тренера, который должен подписать.
   /// Возвращает текст ошибки или `null`.
-  Future<String?> publish(Map<String, dynamic> record, {required String name, String? coachId, bool selfVerified = false, required Map<String, dynamic> stats}) async {
+  Future<String?> publish(Map<String, dynamic> record, {required String name, String? coachId, bool selfVerified = false, required Map<String, dynamic> stats, List<double>? protocolShots}) async {
     if (!auth.isSignedIn) return 'Войдите в мессенджер';
     final token = await auth.ensureFreshToken();
     if (token == null) return 'Нет входа в мессенджер';
     final me = (record['standings'] as List).cast<Map<String, dynamic>>().firstWhere((s) => s['user'] == true);
     final client = http.Client();
     try {
-      final res = await client.post(
-        Uri.parse('${auth.url}/rest/v1/finals_champions'),
-        headers: {
-          'apikey': auth.anonKey,
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-          'Prefer': 'return=minimal',
-        },
-        body: jsonEncode({
-          'display_name': name,
-          'format_id': record['format'],
-          'total': me['total'],
-          'stats': stats,
-          'coach_id': coachId,
-          if (selfVerified) ...{
-            // Достаточно собственных тренировок: подпись тренера не нужна.
-            'self_verified': true,
-            'coach_signed_at': DateTime.now().toUtc().toIso8601String(),
-          },
-          'consent': true,
-        }),
-      ).timeout(const Duration(seconds: 20));
+      Future<http.Response> post(bool withProtocol) => client.post(
+            Uri.parse('${auth.url}/rest/v1/finals_champions'),
+            headers: {
+              'apikey': auth.anonKey,
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal',
+            },
+            body: jsonEncode({
+              'display_name': name,
+              'format_id': record['format'],
+              'total': me['total'],
+              'stats': stats,
+              'coach_id': coachId,
+              'consent': true,
+              if (selfVerified) ...{
+                'self_verified': true,
+                'coach_signed_at': DateTime.now().toUtc().toIso8601String(),
+              },
+              // Все выстрелы по порядку: по ним в таблице чемпионов виден протокол.
+              if (withProtocol && protocolShots != null) 'protocol': {'shots': protocolShots},
+            }),
+          ).timeout(const Duration(seconds: 20));
+      var res = await post(true);
+      // Колонка protocol ещё не создана (SQL не обновлён) — публикуем без неё.
+      if (res.statusCode == 400 && protocolShots != null && res.body.contains('protocol')) {
+        res = await post(false);
+      }
       if (res.statusCode == 401 || res.statusCode == 403) {
         return 'Публикация недоступна: аккаунт заблокирован за жалобы или нет прав';
       }

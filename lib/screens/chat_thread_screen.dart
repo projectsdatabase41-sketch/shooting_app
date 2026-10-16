@@ -42,6 +42,7 @@ import '../services/message_sound.dart';
 import '../services/web_push_token.dart';
 import '../services/chat_sync_service.dart';
 import '../services/coach_link.dart';
+import '../services/demo_mode.dart';
 import '../services/p2p_file_transfer.dart';
 import '../services/push_service.dart' show PushService, pendingCallAckContactId;
 import '../widgets/link_signal.dart';
@@ -978,10 +979,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     try {
       await widget.sync.retry(m);
-    } catch (e) {
+    } catch (e, st) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(tr('Не отправлено: {e}', {'e': friendlyError(e)}))));
+        DemoMode.reportError(context, tr('Не отправлено: {e}', {'e': friendlyError(e)}), 'ChatThreadScreen', e, st);
       }
     } finally {
       _reload();
@@ -1359,10 +1359,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             widget.prefs.downloadAllowedFor(isPersonal: !_contact.isGroup),
       );
       _scrollToEnd();
-    } catch (e) {
+    } catch (e, st) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(tr('Не отправлено: {e}', {'e': friendlyError(e)}))));
+        DemoMode.reportError(context, tr('Не отправлено: {e}', {'e': friendlyError(e)}), 'ChatThreadScreen', e, st);
       }
     } finally {
       if (mounted) {
@@ -1545,10 +1544,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             widget.prefs.downloadAllowedFor(isPersonal: !_contact.isGroup),
       );
       _scrollToEnd();
-    } catch (e) {
+    } catch (e, st) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(tr('Не отправлено: {e}', {'e': friendlyError(e)}))));
+        DemoMode.reportError(context, tr('Не отправлено: {e}', {'e': friendlyError(e)}), 'ChatThreadScreen', e, st);
       }
     } finally {
       if (mounted) {
@@ -1818,10 +1816,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         throw Exception(tr('Запись слишком большая для отправки из браузера'));
       }
       _scrollToEnd();
-    } catch (e) {
+    } catch (e, st) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(tr('Не отправлено: {e}', {'e': friendlyError(e)}))));
+        DemoMode.reportError(context, tr('Не отправлено: {e}', {'e': friendlyError(e)}), 'ChatThreadScreen', e, st);
       }
     } finally {
       if (mounted) {
