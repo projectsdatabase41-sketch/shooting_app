@@ -1,3 +1,4 @@
+import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -38,12 +39,14 @@ class _SettingsModulesScreenState extends State<SettingsModulesScreen> {
         tr('Локальный ИИ'),
         tr('Модель на самом устройстве, без интернета')
       ),
-      (
-        AppModule.finals,
-        Icons.emoji_events_outlined,
-        tr('Финалы'),
-        tr('Финалы по правилам ISSF с ботами и таблицей результатов')
-      ),
+      // Финалы пока только в режиме разработчика (рано публиковать).
+      if (friendlyErrorDevMode)
+        (
+          AppModule.finals,
+          Icons.emoji_events_outlined,
+          tr('Финалы'),
+          tr('Финалы по правилам ISSF с ботами и таблицей результатов')
+        ),
       (
         AppModule.services,
         Icons.extension_outlined,

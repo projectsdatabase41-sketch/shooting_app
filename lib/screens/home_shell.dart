@@ -30,6 +30,7 @@ import 'settings_screen.dart';
 import 'statistics_screen.dart';
 import 'target_screen.dart';
 import '../i18n/i18n.dart';
+import '../logic/friendly_error.dart';
 
 /// Домашняя оболочка с нижней навигацией. Состав вкладок зависит от
 /// `workMode` (часть C.1 логики-спека). Порядок и видимость каждой
@@ -143,7 +144,8 @@ class _HomeShellState extends State<HomeShell> {
     // Выключенные модули (Настройки → Модули) скрыты с главного экрана.
     final hiddenModules = <String>{
       if (!ModulesSettings.isOn(store.db, AppModule.messenger)) 'messenger',
-      if (!ModulesSettings.isOn(store.db, AppModule.finals)) 'finals',
+      // Финалы — только в режиме разработчика и при включённом модуле.
+      if (!friendlyErrorDevMode || !ModulesSettings.isOn(store.db, AppModule.finals)) 'finals',
       if (!ModulesSettings.isOn(store.db, AppModule.assistant)) ...{
         'assistant',
         'assistant_coach'

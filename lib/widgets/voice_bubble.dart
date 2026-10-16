@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:audioplayers/audioplayers.dart';
@@ -25,7 +26,10 @@ class VoicePlayerBar extends StatefulWidget {
   final int durationSec;
   final Color fg;
   final Future<MediaSource?> Function() load;
-  const VoicePlayerBar({super.key, required this.durationSec, required this.fg, required this.load});
+
+  /// Для рисунка волны: у разных сообщений она разная (например, id сообщения).
+  final String seed;
+  const VoicePlayerBar({super.key, required this.durationSec, required this.fg, required this.load, this.seed = ''});
 
   @override
   State<VoicePlayerBar> createState() => _VoicePlayerBarState();
@@ -41,6 +45,7 @@ class _VoicePlayerBarState extends State<VoicePlayerBar> {
   Duration _pos = Duration.zero;
   Duration? _total;
   double _speed = 1;
+  double? _drag; // доля 0…1, пока палец ведёт по волне (позицию плеера не слушаем)
   final List<StreamSubscription<dynamic>> _subs = [];
 
   @override
@@ -109,6 +114,46 @@ class _VoicePlayerBarState extends State<VoicePlayerBar> {
     await _player?.setPlaybackRate(next);
   }
 
+  void _seekTo(double frac, int total) {
+    if (_source == null || total <= 0) return;
+    _player?.seek(Duration(milliseconds: (frac.clamp(0.0, 1.0) * total).round()));
+  }
+
+  /// Волна как в Telegram: столбики, проигранная часть закрашена; тап и
+  /// перетаскивание перематывают без «зависающего» ползунка.
+  Widget _wave(Color fg, int total) {
+    return LayoutBuilder(builder: (context, box) {
+      final w = box.maxWidth;
+      final progress = total <= 0 ? 0.0 : (_pos.inMilliseconds / total).clamp(0.0, 1.0);
+      double frac(double dx) => (dx / w).clamp(0.0, 1.0);
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapUp: (d) => _seekTo(frac(d.localPosition.dx), total),
+        onHorizontalDragStart: (d) => setState(() => _drag = frac(d.localPosition.dx)),
+        onHorizontalDragUpdate: (d) => setState(() => _drag = frac(d.localPosition.dx)),
+        onHorizontalDragEnd: (_) {
+          final f = _drag;
+          setState(() => _drag = null);
+          if (f != null) _seekTo(f, total);
+        },
+        onHorizontalDragCancel: () => setState(() => _drag = null),
+        child: SizedBox(
+          height: 32,
+          child: CustomPaint(
+            size: Size(w, 32),
+            painter: _WavePainter(
+              seed: Object.hash(widget.seed, widget.durationSec),
+              progress: _drag ?? progress,
+              played: fg,
+              rest: fg.withValues(alpha: 0.35),
+              active: _playing,
+            ),
+          ),
+        ),
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final fg = widget.fg;
@@ -133,24 +178,7 @@ class _VoicePlayerBarState extends State<VoicePlayerBar> {
                   : Icon(_playing ? Icons.pause : Icons.play_arrow, color: fg),
             ),
           ),
-          Expanded(
-            child: SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                trackHeight: 3,
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                overlayShape: SliderComponentShape.noOverlay,
-                activeTrackColor: fg,
-                inactiveTrackColor: fg.withValues(alpha: 0.3),
-                thumbColor: fg,
-              ),
-              child: Slider(
-                value: total <= 0 ? 0 : (_pos.inMilliseconds / total).clamp(0.0, 1.0),
-                onChanged: _source == null || total <= 0
-                    ? null
-                    : (v) => _player?.seek(Duration(milliseconds: (v * total).round())),
-              ),
-            ),
-          ),
+          Expanded(child: _wave(fg, total)),
           Text(formatClock(shown.inSeconds), style: TextStyle(color: fg, fontSize: 12)),
           const SizedBox(width: 6),
           InkWell(
@@ -166,4 +194,36 @@ class _VoicePlayerBarState extends State<VoicePlayerBar> {
       ),
     );
   }
+}
+
+class _WavePainter extends CustomPainter {
+  final int seed;
+  final double progress;
+  final Color played;
+  final Color rest;
+  final bool active;
+  _WavePainter({required this.seed, required this.progress, required this.played, required this.rest, required this.active});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const bar = 3.0, gap = 2.0;
+    final n = math.max(8, (size.width / (bar + gap)).floor());
+    final rnd = math.Random(seed);
+    final paint = Paint()..strokeCap = StrokeCap.round..strokeWidth = bar;
+    for (var i = 0; i < n; i++) {
+      // Плавные «речевые» столбики: огибающая и случайность.
+      final env = 0.45 + 0.55 * math.sin(i / n * math.pi);
+      var h = size.height * (0.25 + 0.75 * rnd.nextDouble()) * env;
+      final x = i * (bar + gap) + bar / 2;
+      final done = (i + 0.5) / n <= progress;
+      // Столбик под проигрываемой позицией чуть «пульсирует».
+      if (active && ((i + 0.5) / n - progress).abs() < 0.04) h = math.min(size.height, h * 1.25);
+      paint.color = done ? played : rest;
+      final cy = size.height / 2;
+      canvas.drawLine(Offset(x, cy - h / 2), Offset(x, cy + h / 2), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_WavePainter old) => old.progress != progress || old.active != active || old.played != played;
 }

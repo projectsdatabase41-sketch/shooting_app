@@ -113,6 +113,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   /// должна перестраивать всю ленту.
   final _showJumpToEnd = ValueNotifier(false);
 
+  /// Лента прижата к низу (последнее сообщение на виду).
+  bool _atBottom = true;
+
+  /// Сколько новых сообщений пришло, пока лента была прокручена вверх.
+  final _newBelow = ValueNotifier<int>(0);
+  int _lastCount = 0;
+
   /// Панель смайликов вместо системной клавиатуры.
   bool _emojiOpen = false;
   final _inputFocus = FocusNode();
@@ -267,8 +274,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         final added = await widget.sync.pollIncoming();
         if (added > 0 && mounted) {
           _markRead();
-          _reload();
-          _scrollToEnd();
+          _reload(); // сам решает: прокрутить вниз или показать счётчик
         }
         return added > 0;
       },
@@ -306,7 +312,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           MessageSound.play();
           _markRead();
           _reload();
-          _scrollToEnd();
         }
         ..onPeerRead = () {
           if (mounted) _reload();
@@ -322,7 +327,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           MessageSound.play();
           _markRead();
           _reload();
-          _scrollToEnd();
         },
         onPresenceChanged: () {
           if (mounted) setState(() {});
@@ -375,6 +379,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _itemPos.itemPositions.removeListener(_onScroll);
     _searchCtl.dispose();
     _showJumpToEnd.dispose();
+    _newBelow.dispose();
     _inputFocus.dispose();
     super.dispose();
   }
@@ -407,6 +412,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     // Лента перевёрнута (reverse): индекс 0 — самое новое сообщение внизу.
     _showJumpToEnd.value = lo > 2;
+    _atBottom = lo <= 0;
+    if (_atBottom) _newBelow.value = 0;
     if (_translateVisibleCount >= _messages.length) return;
     if (hi >= _messages.length - 4) {
       // Последние 15, листаем выше — ещё 20, дальше по 30 (решение пользователя).
@@ -416,11 +423,24 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   void _reload() {
+    final before = _lastCount;
     setState(() {
       _messages = widget.repo.forContact(_contact.id);
       _reactions = widget.repo.reactionsForContact(_contact.id);
       _saved = widget.repo.savedFor(_contact.id);
     });
+    final grew = _messages.length - before;
+    _lastCount = _messages.length;
+    if (before > 0 && grew > 0) {
+      final last = _messages.last;
+      if (_atBottom || last.direction == ChatMessageDirection.outgoing) {
+        // Внизу (или это моё сообщение) — остаёмся внизу, новое видно сразу.
+        _scrollToEnd();
+      } else if (last.direction == ChatMessageDirection.incoming) {
+        // Листаю выше — не дёргаем ленту, показываем счётчик на кнопке «вниз».
+        _newBelow.value += grew;
+      }
+    }
     if (_autoOn) _autoTranslateIncoming();
     _autoAckCall();
   }
@@ -520,6 +540,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   void _scrollToEnd() {
+    _newBelow.value = 0;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_itemCtl.isAttached) {
         _itemCtl.scrollTo(
@@ -527,6 +548,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOut);
       }
+    });
+    // Высота нового пузыря и поля ввода могут догрузиться позже — если после
+    // анимации последнее сообщение всё ещё не на месте, ставим его прыжком.
+    Future<void>.delayed(const Duration(milliseconds: 320), () {
+      if (!mounted || !_itemCtl.isAttached || _atBottom) return;
+      _itemCtl.jumpTo(index: 0);
     });
   }
 
@@ -679,8 +706,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           minLines: 2,
           maxLines: 6,
           decoration: InputDecoration(
-            hintText: tr(
-                'Например: «расскажи тренеру, как прошла последняя тренировка, с графиком по сериям»'),
+            hintText: tr('Что я должен отправить собеседнику?'),
           ),
         ),
         actions: [
@@ -1712,7 +1738,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final h = _barKey.currentContext?.size?.height;
       if (mounted && h != null && (h - _barHeight).abs() > 1)
-        setState(() => _barHeight = h);
+        {
+          setState(() => _barHeight = h);
+          if (_atBottom) _scrollToEnd();
+        }
     });
     final topInset = MediaQuery.paddingOf(context).top + 60;
     return AnimatedBuilder(
@@ -1790,10 +1819,35 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                           child: ValueListenableBuilder<bool>(
                             valueListenable: _showJumpToEnd,
                             builder: (_, show, __) => show
-                                ? GlassCircleButton(
-                                    size: 44,
-                                    onTap: _scrollToEnd,
-                                    icon: const Icon(Icons.arrow_downward))
+                                ? ValueListenableBuilder<int>(
+                                    valueListenable: _newBelow,
+                                    builder: (_, n, __) => Stack(
+                                      clipBehavior: Clip.none,
+                                      children: [
+                                        GlassCircleButton(
+                                            size: 44,
+                                            onTap: _scrollToEnd,
+                                            icon: const Icon(Icons.arrow_downward)),
+                                        if (n > 0)
+                                          Positioned(
+                                            top: -6,
+                                            right: -4,
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: Theme.of(context).colorScheme.primary,
+                                                borderRadius: BorderRadius.circular(10),
+                                              ),
+                                              child: Text('$n',
+                                                  style: TextStyle(
+                                                      color: Theme.of(context).colorScheme.onPrimary,
+                                                      fontSize: 12,
+                                                      fontWeight: FontWeight.w700)),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  )
                                 : const SizedBox.shrink(),
                           ),
                         ),
@@ -2152,6 +2206,7 @@ class _Bubble extends StatelessWidget {
                 _ChatThreadScreenState._secondsFromName(message.attachmentName),
             fg: fg,
             load: onLoadMedia,
+            seed: message.clientMessageId,
           ),
           const SizedBox(height: 4),
         ] else if (message.type == ChatMessageType.video) ...[

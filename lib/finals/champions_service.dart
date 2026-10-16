@@ -50,7 +50,7 @@ class ChampionsService {
       if (res.statusCode == 401 || res.statusCode == 403) {
         return 'Публикация недоступна: аккаунт заблокирован за жалобы или нет прав';
       }
-      return res.statusCode < 300 ? null : 'Сервер: ${res.statusCode}';
+      return res.statusCode < 300 ? null : _explain(res);
     } catch (_) {
       return 'Нет сети';
     } finally {
@@ -172,4 +172,15 @@ class ChampionsService {
 
   Future<String?> requestAppeal(String id) => _post('rpc/finals_request_appeal', {'p_id': id});
   Future<String?> voteAppeal(String id) => _post('finals_appeals', {'champion_id': id}, conflict: 'Вы уже голосовали');
+
+  /// Короткое объяснение отказа сервера: код и сообщение базы (если есть).
+  String _explain(http.Response res) {
+    var detail = '';
+    try {
+      final j = jsonDecode(utf8.decode(res.bodyBytes));
+      if (j is Map && j['message'] != null) detail = '${j['message']}';
+    } catch (_) {}
+    if (detail.length > 140) detail = '${detail.substring(0, 140)}…';
+    return detail.isEmpty ? 'Сервер: ${res.statusCode}' : 'Сервер: ${res.statusCode} — $detail';
+  }
 }

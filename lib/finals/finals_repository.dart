@@ -60,7 +60,7 @@ class FinalsPrefs {
   static String layout(LocalDbService db) {
     final rows = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [_kLayout]);
     final v = rows.isEmpty ? '' : '${rows.first['hex']}';
-    return v == 'side' ? 'side' : 'classic';
+    return (v == 'side' || v == 'table') ? v : 'classic';
   }
 
   static const _kVoice = 'finals_voice';

@@ -209,7 +209,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
         body: PageView(
           controller: _page,
           physics: _holding ? const NeverScrollableScrollPhysics() : null,
-          children: [_table(context), _main(context)],
+          children: [_layout == 'table' ? _botsPage(context) : _table(context), _main(context)],
         ),
       ),
     );
@@ -289,22 +289,37 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
         ]),
       ),
       Expanded(
-        child: GridView.count(
-          crossAxisCount: 3,
-          childAspectRatio: 0.85,
-          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-          children: [for (final b in rest) _BotCard(c: c, bot: b)],
-        ),
+        child: _layout == 'table'
+            ? _table(context, embedded: true)
+            : GridView.count(
+                crossAxisCount: 3,
+                childAspectRatio: 0.85,
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                children: [for (final b in rest) _BotCard(c: c, bot: b)],
+              ),
       ),
     ]);
   }
 
-  Widget _table(BuildContext context) {
+  /// Страница с мишенями соперников (вид «мишень и таблица на одной странице»).
+  Widget _botsPage(BuildContext context) {
+    final bots = [for (final x in c.engine.competitors) if (!x.isUser) x];
+    return GridView.count(
+      crossAxisCount: 3,
+      childAspectRatio: 0.85,
+      padding: EdgeInsets.fromLTRB(8, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 8, 16),
+      children: [for (final b in bots) _BotCard(c: c, bot: b)],
+    );
+  }
+
+  Widget _table(BuildContext context, {bool embedded = false}) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final rows = c.live;
     return ListView(
-      padding: EdgeInsets.fromLTRB(12, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 12, 16),
+      padding: embedded
+          ? const EdgeInsets.fromLTRB(12, 0, 12, 12)
+          : EdgeInsets.fromLTRB(12, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 12, 16),
       children: [
         for (var i = 0; i < rows.length; i++)
           Opacity(

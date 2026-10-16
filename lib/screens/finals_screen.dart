@@ -424,6 +424,7 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
                 chips<String>([
                   ('classic', tr('Мишень сверху, боты ниже')),
                   ('side', tr('Большая мишень и три бота справа')),
+                  ('table', tr('Мишень и таблица на одной странице, мишени ботов свайпом')),
                 ], _layout, (v) {
                   _layout = v;
                   FinalsPrefs.setLayout(store.db, v);
