@@ -333,13 +333,41 @@ class P2pFiles {
   /// Передача изменилась (прогресс/итог) — для перерисовки.
   void Function()? onChanged;
 
+  /// Фоновая служба: (есть ли активные передачи, подпись, средний прогресс).
+  /// Вызывается при каждом изменении; `false` — службу можно останавливать.
+  void Function(bool active, String text, double progress)? onBackground;
+
+  /// Идёт ли сейчас хоть одна передача (чтобы не закрывать P2P-соединение).
+  bool get hasActive =>
+      senders.values.any((s) => !s.finished && s.state.value == P2pState.active) ||
+      receivers.values.any((r) => !r.finished && r.state.value == P2pState.active);
+
+  void _changed() {
+    onChanged?.call();
+    final act = <(String, double)>[
+      for (final s in senders.values)
+        if (!s.finished && s.state.value == P2pState.active) (s.name, s.progress.value),
+      for (final r in receivers.values)
+        if (!r.finished && r.state.value == P2pState.active) (r.name, r.progress.value),
+    ];
+    if (act.isEmpty) {
+      onBackground?.call(false, '', 0);
+    } else {
+      final avg = act.fold<double>(0, (a, e) => a + e.$2) / act.length;
+      final text = act.length == 1
+          ? '${act.first.$1} — ${(act.first.$2 * 100).round()}%'
+          : 'Файлов: ${act.length} — ${(avg * 100).round()}%';
+      onBackground?.call(true, text, avg);
+    }
+  }
+
   static bool isFileEvent(String e) => e.startsWith('file_');
 
   P2pSender sendFile({required String path, required String name, required int size, required String mime}) {
     final s = P2pSender(path: path, name: name, size: size, mime: mime, send: send);
     senders[s.id] = s;
-    s.state.addListener(() => onChanged?.call());
-    s.progress.addListener(() => onChanged?.call());
+    s.state.addListener(_changed);
+    s.progress.addListener(_changed);
     s.offer();
     return s;
   }
@@ -359,8 +387,8 @@ class P2pFiles {
           dir: await dirFor(),
         );
         receivers[id] = r;
-        r.state.addListener(() => onChanged?.call());
-        r.progress.addListener(() => onChanged?.call());
+        r.state.addListener(_changed);
+        r.progress.addListener(_changed);
         onOffer?.call(r);
       case 'file_accept' || 'file_reject' || 'file_ack' || 'file_ok' || 'file_bad':
         senders[id]?.handle(event, p);

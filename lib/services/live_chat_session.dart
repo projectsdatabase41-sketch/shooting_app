@@ -12,6 +12,7 @@ import 'chat_auth_service.dart';
 import 'chat_messages_repository.dart';
 import 'chat_settings.dart';
 import 'p2p_file_transfer.dart';
+import 'push_service.dart' show PushService;
 import 'peer_link.dart';
 import 'realtime_client.dart';
 import 'remote_config.dart';
@@ -81,7 +82,7 @@ class LiveChatSession {
       return l != null && l.isOpen && l.send(encodePeerFrame(e, pl));
     },
     dirFor: () async => Directory(p.join((await getApplicationDocumentsDirectory()).path, 'p2p_inbox')),
-  );
+  )..onBackground = (active, text, progress) => PushService.setTransferActive(active, text: text, progress: progress);
   int _rtcTries = 0;
   static const int _maxRtcTries = 4;
 
@@ -376,18 +377,31 @@ class LiveSessions {
 
   static void close(String contactId) {
     _timers.remove(contactId)?.cancel();
-    _sessions.remove(contactId)?.close();
+    final s = _sessions[contactId];
+    if (s == null) return;
+    // Идёт передача файла напрямую — соединение держим (в том числе в фоне),
+    // повторная проверка через несколько секунд.
+    if (s.files.hasActive) {
+      _timers[contactId] = Timer(const Duration(seconds: 10), () => close(contactId));
+      return;
+    }
+    _sessions.remove(contactId);
+    s.close();
   }
 
   static void closeAll() {
+    final busy = [for (final e in _sessions.entries) if (e.value.files.hasActive) e.key];
     for (final t in _timers.values) {
       t.cancel();
     }
     _timers.clear();
-    final all = _sessions.values.toList();
-    _sessions.clear();
-    for (final s in all) {
-      s.close();
+    final idle = [for (final e in _sessions.entries) if (!busy.contains(e.key)) e.key];
+    for (final id in idle) {
+      _sessions.remove(id)?.close();
+    }
+    // Соединения с идущей передачей остаются; закроем, когда она закончится.
+    for (final id in busy) {
+      _timers[id] = Timer(const Duration(seconds: 10), () => close(id));
     }
   }
 

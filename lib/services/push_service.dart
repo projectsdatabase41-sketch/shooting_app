@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart'
-    show kIsWeb, defaultTargetPlatform, TargetPlatform;
+    show kIsWeb, defaultTargetPlatform, TargetPlatform, debugPrint;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
@@ -250,6 +250,65 @@ class PushService {
       FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
     }
     await _initTapHandling(messaging);
+  }
+
+  static const transferChannelId = 'p2p_transfer';
+  static const _transferNotificationId = 4242;
+  static bool _transferRunning = false;
+  static DateTime _lastTransferUpdate = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// Службе переднего плана Android нужно уведомление: пока идёт передача
+  /// файла напрямую, приложение не выгружается из памяти, а процесс не
+  /// «замораживается» при сворачивании. [active] = false — остановить.
+  static Future<void> setTransferActive(bool active, {String? text, double progress = 0}) async {
+    if (!_isAndroid) return;
+    try {
+      final android = _localNotifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      if (android == null) return;
+      if (!active) {
+        if (_transferRunning) {
+          _transferRunning = false;
+          await android.stopForegroundService();
+        }
+        return;
+      }
+      final now = DateTime.now();
+      if (_transferRunning && now.difference(_lastTransferUpdate) < const Duration(seconds: 1)) return;
+      _lastTransferUpdate = now;
+      final details = AndroidNotificationDetails(
+        transferChannelId,
+        tr('Передача файлов'),
+        channelDescription: tr('Идёт передача файла напрямую между устройствами'),
+        importance: Importance.low,
+        priority: Priority.low,
+        ongoing: true,
+        onlyAlertOnce: true,
+        showProgress: true,
+        maxProgress: 100,
+        progress: (progress * 100).round().clamp(0, 100),
+      );
+      if (!_transferRunning) {
+        await _initLocalNotifications();
+        await android.createNotificationChannel(AndroidNotificationChannel(
+          transferChannelId,
+          tr('Передача файлов'),
+          description: tr('Идёт передача файла напрямую между устройствами'),
+          importance: Importance.low,
+        ));
+        _transferRunning = true;
+        await android.startForegroundService(
+          _transferNotificationId,
+          tr('Передача файла'),
+          text ?? '',
+          notificationDetails: details,
+          foregroundServiceTypes: {AndroidServiceForegroundType.foregroundServiceTypeDataSync},
+        );
+      } else {
+        await _localNotifications.show(_transferNotificationId, tr('Передача файла'), text ?? '', NotificationDetails(android: details));
+      }
+    } catch (e) {
+      debugPrint('Служба передачи недоступна: $e');
+    }
   }
 
   /// Переписка с [contactId] открыта и прочитана — убрать висящее

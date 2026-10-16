@@ -20,6 +20,10 @@
     <!-- Входящий звонок на весь экран, даже при заблокированном телефоне. -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Передача больших файлов напрямую в фоне: служба переднего плана -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
     <uses-feature android:name="android.hardware.microphone" android:required="false"/>
     <!-- Обновление одной кнопкой из настроек (AppUpdateService) — система
          спросит один раз при первой установке из этого источника, дальше
@@ -92,6 +96,12 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+            <!-- Служба переднего плана для передачи файлов (flutter_local_notifications) -->
+        <service
+            android:name="com.dexterous.flutterlocalnotifications.ForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"
+            android:stopWithTask="false" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
