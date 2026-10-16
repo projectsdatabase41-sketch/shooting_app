@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shooting_app/logic/friendly_error.dart';
 import 'package:shooting_app/services/demo_mode.dart';
 
 void main() {
   testWidgets('режим «Демо»: кнопка видна только при включении и называет страницу', (tester) async {
     final key = GlobalKey<NavigatorState>();
+    friendlyErrorDevMode = true; // кнопка отзыва — только в режиме разработчика
+    addTearDown(() => friendlyErrorDevMode = false);
     DemoMode.enabled.value = false;
     await tester.pumpWidget(MaterialApp(
       navigatorKey: key,

@@ -14,6 +14,7 @@ import '../state/personalization_view_model.dart';
 import '../widgets/glass_pill.dart';
 import '../widgets/home_tabs_bar.dart';
 import '../widgets/service_icon_picker.dart';
+import '../widgets/role_split.dart';
 import 'ai_chat_screen.dart';
 import 'coach_ai_chat_screen.dart';
 import 'coach_athletes_screen.dart';
@@ -111,12 +112,12 @@ class _HomeShellState extends State<HomeShell> {
     final noAthletes = CoachAccessService(db).listAthletes().isEmpty;
     AiContext.notesEnabled = on(AppModule.notes);
     return {
-      if (!store.isAthlete) ...{'exercises', 'statistics', 'tasks'},
-      if (!store.isCoach) ...{'athletes', 'statistics_coach', 'tasks_coach', 'assistant_coach'},
-      if (store.isCoach && noAthletes) ...{'statistics_coach', 'tasks_coach'},
-      if (!on(AppModule.assistant)) ...{'assistant', 'assistant_coach'},
-      // Один ассистент: «Ассистент тренера» нужен, только когда включены оба
-      // направления, иначе общий ассистент подстраивается под единственное.
+      if (!store.isAthlete) 'exercises',
+      if (!store.isCoach) 'athletes',
+      // Статистика и задания: свои — у спортсмена, спортсменов — у тренера;
+      // тренеру без подключённых спортсменов показывать нечего.
+      if (!store.isAthlete && (!store.isCoach || noAthletes)) ...{'statistics', 'tasks'},
+      if (!on(AppModule.assistant)) 'assistant',
       if (!on(AppModule.messenger)) 'messenger',
       if (!on(AppModule.notes)) 'notes',
       // Финалы — только в режиме разработчика и при включённом модуле.
@@ -197,17 +198,14 @@ class _HomeShellState extends State<HomeShell> {
       // упражнений (решение пользователя: отдельная «Мишень» без
       // тренировки бесполезна).
       'exercises' => _ActiveTargetTab(key: ValueKey(_activeSessionKey(store))),
-      'statistics' => const StatisticsScreen(),
-      'tasks' => const AthleteTasksScreen(),
+      'statistics' => RoleSplit(athlete: const StatisticsScreen(), coach: const CoachStatisticsScreen()),
+      'tasks' => RoleSplit(athlete: const AthleteTasksScreen(), coach: const CoachTasksScreen()),
       'athletes' => const CoachAthletesScreen(),
-      'statistics_coach' => const CoachStatisticsScreen(),
-      'tasks_coach' => const CoachTasksScreen(),
       // Чат с ассистентом без привязки к тренировке (решение
       // пользователя: «чат с ИИ без выбора тренировок, на главный
       // экран»). Тот же экран открывается и из шапки мишени, но там —
       // с контекстом конкретной тренировки.
-      'assistant' => const AiChatScreen(),
-      'assistant_coach' => const CoachAiChatScreen(),
+      'assistant' => RoleSplit(athlete: const AiChatScreen(), coach: const CoachAiChatScreen()),
       'notes' => const CoachDiaryNotesScreen(),
       'finals' => const FinalsScreen(),
       'messenger' => ChatHomeScreen(

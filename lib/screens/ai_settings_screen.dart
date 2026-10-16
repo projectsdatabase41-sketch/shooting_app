@@ -4,6 +4,7 @@ import '../local_ai/local_ai_screen.dart';
 import '../widgets/glass_pill.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../logic/ai_context.dart';
 import '../services/ai_service.dart';
@@ -384,11 +385,32 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                 'Ответ из Google прямо в чате: вставьте бесплатный ключ Gemini (aistudio.google.com → Get API key)'),
           ),
           const SizedBox(height: 12),
-          TextField(
-            controller: _geminiKey,
-            obscureText: true,
-            autocorrect: false,
-            decoration: const InputDecoration(labelText: 'Gemini API Key'),
+          // Пока ключа нет — рядом маленький ярлычок со стрелкой: открывает сайт,
+          // где ключ выдают, чтобы не искать.
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: _geminiKey,
+            builder: (context, v, _) => TextField(
+              controller: _geminiKey,
+              obscureText: true,
+              autocorrect: false,
+              decoration: InputDecoration(
+                labelText: 'Gemini API Key',
+                suffixIcon: v.text.isNotEmpty
+                    ? null
+                    : Padding(
+                        padding: const EdgeInsets.only(right: 4),
+                        child: ActionChip(
+                          visualDensity: VisualDensity.compact,
+                          avatar: const Icon(Icons.arrow_outward, size: 16),
+                          label: Text(tr('Получить')),
+                          onPressed: () => launchUrl(
+                            Uri.parse('https://aistudio.google.com/apikey'),
+                            mode: LaunchMode.externalApplication,
+                          ),
+                        ),
+                      ),
+              ),
+            ),
           ),
           const SizedBox(height: 24),
           SectionHeader(title: tr('Инструкция ассистенту')),

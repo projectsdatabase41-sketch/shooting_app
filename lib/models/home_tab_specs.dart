@@ -19,13 +19,10 @@ import '../widgets/home_tabs_bar.dart';
 // в одну плитку.
 const allTabIds = [
   'exercises', // модуль «Тренировки»
-  'statistics', // модуль «Тренировки»
-  'tasks', // модуль «Тренировки» (задания спортсмену)
+  'statistics', // подстраивается под роли: свои / спортсменов / оба
+  'tasks', // подстраивается под роли
   'athletes', // модуль «Спортсмены»
-  'statistics_coach', // модуль «Спортсмены»
-  'tasks_coach', // модуль «Спортсмены»
-  'assistant', // модуль «ИИ Ассистент»
-  'assistant_coach', // «ИИ Ассистент» + «Спортсмены»
+  'assistant', // модуль «ИИ Ассистент», подстраивается под роли
   'notes', // модуль «Заметки»
   'finals', // модуль «Финалы» (режим разработчика)
   'messenger', // модуль «Мессенджер»
@@ -36,7 +33,7 @@ const allTabIds = [
 const unhidableTabs = {'settings'};
 
 /// Вкладки, работающие с данными подключённых спортсменов (контекст «тренер»).
-const coachTabSet = {'athletes', 'statistics_coach', 'tasks_coach', 'assistant_coach'};
+const coachTabSet = {'athletes'};
 
 /// Префикс id вкладки сервиса в `HomeTabsViewModel.allIds` — плитки
 /// сервисов (`SettingsServicesScreen`) добавляются/убираются во время
@@ -52,14 +49,8 @@ const Map<String, HomeTabSpec> homeTabSpecs = {
       HomeTabSpec(icon: Icons.assignment_outlined, label: /*tr*/ 'Задания'),
   'athletes':
       HomeTabSpec(icon: Icons.groups_outlined, label: /*tr*/ 'Спортсмены'),
-  'statistics_coach': HomeTabSpec(
-      icon: Icons.stacked_bar_chart, label: /*tr*/ 'Статистика спортсменов'),
-  'tasks_coach': HomeTabSpec(
-      icon: Icons.assignment_ind_outlined, label: /*tr*/ 'Задания спортсменам'),
   'assistant':
       HomeTabSpec(icon: Icons.auto_awesome_outlined, label: /*tr*/ 'Ассистент'),
-  'assistant_coach': HomeTabSpec(
-      icon: Icons.psychology_outlined, label: /*tr*/ 'Ассистент тренера'),
   'notes':
       HomeTabSpec(icon: Icons.sticky_note_2_outlined, label: /*tr*/ 'Заметки'),
   'finals':

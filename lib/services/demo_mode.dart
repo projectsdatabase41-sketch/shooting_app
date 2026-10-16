@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../i18n/i18n.dart';
+import '../logic/friendly_error.dart';
 import 'chat_settings.dart';
 import 'local_db_service.dart';
 
@@ -139,26 +140,14 @@ class DemoMode {
     }
   }
 
-  /// Показывает сообщение об ошибке и отправляет подробности разработчику:
-  /// сразу сам — в режиме «Демо», иначе по кнопке «Отправить отчёт».
+  /// Показывает сообщение об ошибке и сразу сам отправляет подробности
+  /// разработчику (без участия человека).
   static void reportError(BuildContext context, String message, String where, Object error, [StackTrace? stack]) {
     final messenger = ScaffoldMessenger.maybeOf(context);
-    if (enabled.value) {
-      sendError(where, error, stack);
-      messenger?.showSnackBar(SnackBar(content: Text('$message\n${tr('Отчёт об ошибке отправлен автоматически')}')));
-      return;
-    }
-    messenger?.showSnackBar(SnackBar(
-      content: Text(message),
-      duration: const Duration(seconds: 8),
-      action: SnackBarAction(
-        label: tr('Отправить отчёт'),
-        onPressed: () async {
-          final err = await sendError(where, error, stack);
-          messenger.showSnackBar(SnackBar(content: Text(err ?? tr('Отчёт отправлен, спасибо'))));
-        },
-      ),
-    ));
+    // Отчёт уходит сам всегда (так разработчик видит сбои у всех); в режиме
+    // разработчика человек видит это и в сообщении.
+    sendError(where, error, stack);
+    messenger?.showSnackBar(SnackBar(content: Text('$message\n${tr('Отчёт об ошибке отправлен разработчику')}')));
   }
 
   /// Отправка отзыва. Возвращает текст ошибки или `null`.
@@ -318,7 +307,8 @@ class _DemoFeedbackOverlayState extends State<DemoFeedbackOverlay> {
       ValueListenableBuilder<bool>(
         valueListenable: DemoMode.enabled,
         builder: (context, on, _) {
-          if (!on) return const SizedBox.shrink();
+          // Кнопка отзыва — только в режиме разработчика.
+          if (!on || !friendlyErrorDevMode) return const SizedBox.shrink();
           final size = MediaQuery.sizeOf(context);
           final pos = _pos ?? const Offset(8, 120);
           return Positioned(

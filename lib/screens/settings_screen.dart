@@ -133,6 +133,7 @@ class SettingsScreen extends StatelessWidget {
                     builder: (_) => SettingsServicesScreen(repo: services)),
               ),
             ),
+          if (friendlyErrorDevMode)
           ValueListenableBuilder<bool>(
             valueListenable: DemoMode.enabled,
             builder: (context, on, _) => SwitchListTile(
@@ -146,10 +147,6 @@ class SettingsScreen extends StatelessWidget {
           const Divider(height: 24),
           const _UpdateTile(),
           const Divider(height: 24),
-          // Учётная запись — в самом низу, как просил пользователь:
-          // заходят сюда раз в жизни, а место наверху занимает то, что
-          // трогают каждый день.
-          const AccountTile(),
           ListTile(
             leading: const Icon(Icons.how_to_reg_outlined),
             title: Text(tr('Добавить тренера')),

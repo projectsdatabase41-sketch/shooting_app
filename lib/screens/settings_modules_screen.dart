@@ -32,7 +32,7 @@ class _SettingsModulesScreenState extends State<SettingsModulesScreen> {
   /// Какой модуль отвечает за вкладку; `null` — отдельного модуля нет
   /// (вкладку можно просто скрыть).
   AppModule? _moduleOf(String id) => switch (id) {
-        'assistant' || 'assistant_coach' => AppModule.assistant,
+        'assistant' => AppModule.assistant,
         'messenger' => AppModule.messenger,
         'notes' => AppModule.notes,
         'finals' => AppModule.finals,
@@ -54,9 +54,9 @@ class _SettingsModulesScreenState extends State<SettingsModulesScreen> {
 
   /// Вкладка зависит от роли: пока роль выключена, переключатель недоступен.
   String? _needs(String id, AppDataStore store) {
-    if ({'statistics', 'tasks'}.contains(id) && !store.isAthlete) return tr('нужен модуль «Тренировка»');
-    if ({'statistics_coach', 'tasks_coach', 'assistant_coach'}.contains(id) && !store.isCoach) {
-      return tr('нужен модуль «Спортсмены»');
+    // Статистика, задания и ассистент подстраиваются под роли сами.
+    if ({'statistics', 'tasks'}.contains(id) && !store.isAthlete && !store.isCoach) {
+      return tr('нужен модуль «Тренировка» или «Спортсмены»');
     }
     return null;
   }
