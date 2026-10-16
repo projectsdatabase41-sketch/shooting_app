@@ -29,6 +29,8 @@ import '../services/chat_presence.dart';
 import '../services/voice_recorder.dart';
 import '../widgets/circle_video.dart';
 import '../widgets/file_chip.dart';
+import '../widgets/photo_stack.dart';
+import 'photo_gallery_screen.dart';
 import '../widgets/voice_bubble.dart';
 import 'circle_recorder_screen.dart';
 import '../widgets/reaction_bar.dart';
@@ -102,6 +104,79 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   LiveChatSession? _live;
   GroupLiveSession? _groupLive;
   List<ChatMessage> _messages = [];
+
+  // «Стопки» фото: несколько подряд идущих фото от одного человека показываются
+  // одним блоком (ведущий — последнее фото, остальные скрыты, индексы ленты те же).
+  List<ChatMessage>? _groupedFor;
+  final Map<String, List<ChatMessage>> _stackLeader = {};
+  final Set<String> _stackHidden = {};
+
+  void _ensureStacks() {
+    if (identical(_groupedFor, _messages)) return;
+    _groupedFor = _messages;
+    _stackLeader.clear();
+    _stackHidden.clear();
+    bool plain(ChatMessage m) =>
+        m.type == ChatMessageType.image &&
+        m.attachmentBase64 != null &&
+        (m.text == null || m.text!.isEmpty) &&
+        m.replyToPreview == null;
+    var run = <ChatMessage>[];
+    void flush() {
+      if (run.length >= 2) {
+        _stackLeader[run.last.id] = List.of(run);
+        for (final m in run.take(run.length - 1)) {
+          _stackHidden.add(m.id);
+        }
+      }
+      run = [];
+    }
+
+    for (final m in _messages) {
+      if (!plain(m)) {
+        flush();
+        continue;
+      }
+      if (run.isNotEmpty) {
+        final prev = run.last;
+        final same = prev.direction == m.direction &&
+            prev.senderId == m.senderId &&
+            m.createdAt.difference(prev.createdAt).abs() <= const Duration(minutes: 5);
+        if (!same) flush();
+      }
+      run.add(m);
+    }
+    flush();
+  }
+
+  Widget _stackItem(List<ChatMessage> group) {
+    final last = group.last;
+    final mine = last.direction == ChatMessageDirection.outgoing;
+    final theme = Theme.of(context);
+    final providers = [for (final m in group) ChatMediaUtils.imageOf(m.id, m.attachmentBase64!)];
+    return Align(
+      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Column(
+          crossAxisAlignment: mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            PhotoStack(
+              images: providers,
+              sending: mine && group.any((m) => m.status == ChatMessageStatus.sending),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PhotoGalleryScreen(images: providers))),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(6, 2, 6, 0),
+              child: Text(DateFormat('HH:mm').format(last.createdAt.toLocal()),
+                  style: theme.textTheme.labelSmall?.copyWith(color: theme.hintColor)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
   bool _sending = false;
   bool _aiBusy = false;
 
@@ -1853,9 +1928,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                     _barHeight + 8),
                                 itemCount: _messages.length,
                                 itemBuilder: (context, i) {
+                                  _ensureStacks();
                                   final idx = _messages.length - 1 - i;
                                   final m = _messages[idx];
-                                  final item = _item(m);
+                                  final item = _stackHidden.contains(m.id)
+                                      ? const SizedBox.shrink()
+                                      : (_stackLeader[m.id] != null ? _stackItem(_stackLeader[m.id]!) : _item(m));
                                   // Первое сообщение дня — плашка с датой над ним (как в Telegram).
                                   if (idx > 0 &&
                                       _sameDay(_messages[idx - 1].createdAt,
