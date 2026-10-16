@@ -1006,6 +1006,20 @@ Future<void> addCoachViaMessenger(BuildContext context, AppDataStore store) asyn
     ),
   );
   if (ok != true) return;
+  // При приватности «только друзья» сообщение незнакомого не попадает в чат
+  // (приходит только уведомление), поэтому запрос просим отправлять друзьям.
+  if (await auth.friendStatusWith(coach.id) != 'accepted') {
+    if (!context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('Сначала добавьте в друзья')),
+        content: Text(tr('Запрос придёт тренеру в чат только если вы друзья в мессенджере. Отправьте ему заявку в друзья, а когда он её примет, повторите.')),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Понятно')))],
+      ),
+    );
+    return;
+  }
   try {
     final sync = ChatSyncService(auth, repo);
     await CoachLink(db: store.db, auth: auth, repo: repo, sync: sync).requestCoach(coach);

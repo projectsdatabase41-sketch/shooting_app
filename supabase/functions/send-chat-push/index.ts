@@ -320,6 +320,17 @@ Deno.serve(async (req: Request) => {
   }
 
   const preview = (r: Record<string, unknown>): string => {
+    // Служебные карточки приложения (подключение тренера): вместо сырого JSON.
+    if (typeof r.text === 'string' && (r.text as string).startsWith('NX1:')) {
+      const kind = /"k"\s*:\s*"(\w+)"/.exec(r.text as string)?.[1];
+      switch (kind) {
+        case 'coach_req': return 'Запрос на добавление в спортсмены';
+        case 'coach_ok': return 'Тренер принял запрос';
+        case 'coach_no': return 'Тренер отклонил запрос';
+        case 'coach_grant': return 'Доступ к данным спортсмена';
+        default: return 'Новое сообщение';
+      }
+    }
     if (r.text) {
       // График (```chart) в уведомлении — просто пометкой.
       const caption = (r.text as string).replace(/```chart[\s\S]*?```/g, '').trim();

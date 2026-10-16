@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import '../models/coach_note.dart';
 import 'local_db_service.dart';
+import 'notes_sync_service.dart';
 
 /// Дневник тренера — CRUD над `coach_notes`, тот же простой паттерн,
 /// что и `CommentsRepository`.
@@ -11,25 +12,33 @@ class CoachNotesRepository {
   CoachNotesRepository(this.db);
 
   List<CoachNote> list() {
-    final rows =
-        db.db.select('SELECT * FROM coach_notes ORDER BY created_at DESC');
+    final rows = db.db.select('SELECT * FROM coach_notes WHERE deleted = 0 ORDER BY created_at DESC');
     return rows.map(CoachNote.fromRow).toList();
   }
 
   void add(CoachNote note) {
     db.db.execute(
-      'INSERT INTO coach_notes (id, topic, content, chart_json, created_at) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO coach_notes (id, topic, content, chart_json, created_at, dirty, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?)',
       [
         note.id,
         note.topic,
         note.content,
         note.chart == null ? null : jsonEncode(note.chart),
         note.createdAt.toIso8601String(),
+        DateTime.now().toUtc().toIso8601String(),
       ],
     );
+    NotesSyncService.schedule(db);
   }
 
   void delete(String id) {
+    final cloud = db.db.select('SELECT cloud_id FROM coach_notes WHERE id = ?', [id]);
+    if (cloud.isNotEmpty && cloud.first['cloud_id'] != null) {
+      // Уже в облаке: помечаем удалённой — при синхронизации заметка уйдёт в архив.
+      db.db.execute('UPDATE coach_notes SET deleted = 1, dirty = 1 WHERE id = ?', [id]);
+      NotesSyncService.schedule(db);
+      return;
+    }
     db.db.execute('DELETE FROM coach_note_files WHERE note_id = ?', [id]);
     db.db.execute('DELETE FROM coach_notes WHERE id = ?', [id]);
   }
@@ -73,8 +82,9 @@ class CoachNotesRepository {
   /// (в отличие от завершённой тренировки спортсмена).
   void update(String id, {required String topic, required String content}) {
     db.db.execute(
-      'UPDATE coach_notes SET topic = ?, content = ? WHERE id = ?',
-      [topic, content, id],
+      'UPDATE coach_notes SET topic = ?, content = ?, dirty = 1, updated_at = ? WHERE id = ?',
+      [topic, content, DateTime.now().toUtc().toIso8601String(), id],
     );
+    NotesSyncService.schedule(db);
   }
 }

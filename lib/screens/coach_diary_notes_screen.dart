@@ -12,6 +12,7 @@ import '../models/coach_note.dart';
 import '../services/ai_service.dart';
 import '../services/ai_settings.dart';
 import '../services/coach_notes_repository.dart';
+import '../services/notes_sync_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/ai_chart_view.dart';
 import '../widgets/empty_state.dart';
@@ -46,9 +47,22 @@ class _CoachDiaryNotesScreenState extends State<CoachDiaryNotesScreen> {
     _repo = CoachNotesRepository(db);
     _aiSettings = AiSettings(db);
     _reload();
+    // Заметки синхронизируются с таблицей notes своей базы (если она подключена).
+    NotesSyncService.changed.addListener(_onSynced);
+    NotesSyncService.schedule(db);
   }
 
   void _reload() => setState(() => _notes = _repo.list());
+
+  void _onSynced() {
+    if (mounted) _reload();
+  }
+
+  @override
+  void dispose() {
+    NotesSyncService.changed.removeListener(_onSynced);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

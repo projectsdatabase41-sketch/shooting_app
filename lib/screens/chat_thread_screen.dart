@@ -2310,7 +2310,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         ];
         if (!mine) {
           if (st == null) {
-            actions = Row(mainAxisSize: MainAxisSize.min, children: [
+            actions = Wrap(spacing: 8, runSpacing: 6, children: [
               FilledButton(
                 onPressed: () async {
                   await _coachLink.answerRequest(m, accept: true);
@@ -2318,7 +2318,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 },
                 child: Text(tr('Добавить')),
               ),
-              const SizedBox(width: 8),
               OutlinedButton(
                 onPressed: () async {
                   await _coachLink.answerRequest(m, accept: false);

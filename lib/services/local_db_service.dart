@@ -183,6 +183,13 @@ class LocalDbService {
         'chart_json': 'TEXT',
       },
       'custom_services': {'display_spec': 'TEXT'},
+      // Заметки синхронизируются с таблицей notes: id в облаке, «ждёт отправки», «удалена».
+      'coach_notes': {
+        'cloud_id': 'TEXT',
+        'dirty': 'INTEGER NOT NULL DEFAULT 1',
+        'deleted': 'INTEGER NOT NULL DEFAULT 0',
+        'updated_at': 'TEXT',
+      },
     };
 
     for (final table in additions.keys) {

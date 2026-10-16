@@ -579,7 +579,7 @@ Future<void> showMessageNotification(Map<String, dynamic> data) async {
     contactId.hashCode &
         0x3fffffff, // одно уведомление на собеседника, новые его обновляют
     '${data['title'] ?? 'Сообщение'}',
-    '${data['body'] ?? ''}',
+    _friendlyPushBody('${data['body'] ?? ''}'),
     NotificationDetails(
       android: AndroidNotificationDetails(
         PushService.messageChannelId,
@@ -592,6 +592,20 @@ Future<void> showMessageNotification(Map<String, dynamic> data) async {
     ),
     payload: contactId,
   );
+}
+
+/// Служебные карточки приложения (подключение тренера) приходят текстом
+/// `NX1:{json}` — в уведомлении показываем понятную подпись, а не JSON.
+String _friendlyPushBody(String body) {
+  if (!body.startsWith('NX1:')) return body;
+  final kind = RegExp(r'"k"\s*:\s*"(\w+)"').firstMatch(body)?.group(1);
+  return switch (kind) {
+    'coach_req' => tr('Запрос на добавление в спортсмены'),
+    'coach_ok' => tr('Тренер принял запрос'),
+    'coach_no' => tr('Тренер отклонил запрос'),
+    'coach_grant' => tr('Доступ к данным спортсмена'),
+    _ => tr('Новое сообщение'),
+  };
 }
 
 /// Диалог с выключенным колокольчиком (ChatPreferences.mutedFor).
