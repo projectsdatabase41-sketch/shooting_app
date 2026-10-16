@@ -7,7 +7,7 @@ void main() {
     final db = LocalDbService();
     await db.open(overridePath: ':memory:');
     expect(UserProfile.needsOnboarding(db), isTrue);
-    UserProfile.save(db, disciplines: ['pistol', 'rifle'], gender: 'f', birthYear: 2008, rank: '2 разряд', region: ' Москва ');
+    UserProfile.save(db, disciplines: ['pistol', 'rifle'], gender: 'f', birthDate: DateTime(2008, 5, 20), rank: '2 разряд', region: ' Москва ');
     expect(UserProfile.needsOnboarding(db), isFalse);
     expect(UserProfile.disciplinesOf(db), ['pistol', 'rifle']);
     expect(UserProfile.genderOf(db), 'f');

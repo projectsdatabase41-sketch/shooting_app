@@ -738,9 +738,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final reply = await AiService(AiSettings(store.db)).ask(
         systemPrompt:
             'You help a rifle/pistol shooting athlete write a message $who in the app messenger. '
-            'You get a CONTEXT with their trainings and an instruction. Answer ONLY with the ready message text — '
-            'no explanations, quotes or reasoning, in the first person, in the language of the instruction, neatly formatted '
-            '(paragraphs, a short list if needed) so that it can be sent right away. '
+            'You get a CONTEXT with their trainings and an instruction. Reply in EXACTLY two parts separated by a line '
+            '---COMMENT---. PART 1 (before the separator) is ONLY the ready message text for the recipient: no greetings or '
+            'pleasantries unless asked, no explanations, quotes or reasoning, in the first person, in the language of the '
+            'instruction, neatly formatted (paragraphs, a short list if needed) so that it can be sent right away. '
+            'PART 2 (after the separator) is your short comment for the athlete only (1-3 sentences, in the language of the '
+            'instruction): what you based the message on, what you assumed or could not verify, a tip if useful. '
             'No insults or profanity, even if asked for.\n'
             'If a chart, diagram, comparison of trainings or the dynamics of the result is requested — you MUST add '
             'a ```chart block (tagged "chart") at the END of the reply strictly in the format below, using REAL data from '
@@ -754,12 +757,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
       if (!mounted) return;
       // График ask() уже вынул из текста в reply.chart — второй разбор его не найдёт.
-      final (caption, parsed) = AiService.splitChart(reply.text.trim());
+      final raw = reply.text.trim();
+      final cut = raw.indexOf('---COMMENT---');
+      final messagePart = cut < 0 ? raw : raw.substring(0, cut);
+      final comment = cut < 0 ? '' : raw.substring(cut + '---COMMENT---'.length).trim();
+      final (caption, parsed) = AiService.splitChart(messagePart.trim());
       final chart = reply.chart ?? parsed;
-      setState(() {
-        _input.text = caption.trim();
-        _pendingChart = chart;
-      });
+      await _showAiDraft(caption.trim(), comment, chart);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -767,6 +771,56 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       }
     } finally {
       if (mounted) setState(() => _aiBusy = false);
+    }
+  }
+
+  /// Черновик от ИИ: сверху редактируемый текст для собеседника, ниже
+  /// неизменяемый комментарий ИИ лично пользователю. «Вставить» кладёт текст
+  /// (и график) в поле ввода — отправляет человек сам.
+  Future<void> _showAiDraft(String message, String comment, Map<String, dynamic>? chart) async {
+    final ctl = TextEditingController(text: message);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('Черновик сообщения')),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(tr('Текст для собеседника (можно править)'), style: Theme.of(ctx).textTheme.labelMedium),
+            const SizedBox(height: 6),
+            TextField(controller: ctl, minLines: 3, maxLines: 10),
+            if (chart != null) ...[
+              const SizedBox(height: 6),
+              Text(tr('К сообщению добавится график'), style: Theme.of(ctx).textTheme.bodySmall),
+            ],
+            if (comment.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Text(tr('Комментарий ИИ вам'), style: Theme.of(ctx).textTheme.labelMedium),
+              const SizedBox(height: 6),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Theme.of(ctx).colorScheme.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: SelectableText(comment, style: Theme.of(ctx).textTheme.bodySmall),
+              ),
+            ],
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Отмена'))),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Вставить в чат'))),
+        ],
+      ),
+    );
+    final text = ctl.text.trim();
+    ctl.dispose();
+    if (ok == true && mounted) {
+      setState(() {
+        _input.text = text;
+        _pendingChart = chart;
+      });
     }
   }
 

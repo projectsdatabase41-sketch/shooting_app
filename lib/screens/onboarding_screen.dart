@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show FilteringTextInputFormatter;
+import 'package:flutter/services.dart';
 
 import '../i18n/i18n.dart';
 import '../logic/friendly_error.dart';
@@ -26,24 +26,37 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   late final Set<String> _disciplines = {...UserProfile.disciplinesOf(widget.db)};
   late String _gender = UserProfile.genderOf(widget.db);
-  late int? _year = UserProfile.birthYearOf(widget.db);
+  late DateTime? _date = UserProfile.birthDateOf(widget.db);
   late String _rank = UserProfile.rankOf(widget.db).isEmpty ? UserProfile.ranks.first : UserProfile.rankOf(widget.db);
   late final _first = TextEditingController(text: UserProfile.firstNameOf(widget.db));
   late final _last = TextEditingController(text: UserProfile.lastNameOf(widget.db));
   late final _region = TextEditingController(text: UserProfile.regionOf(widget.db));
-  late final _yearCtl = TextEditingController(text: _year == null ? '' : '$_year');
+  late final _dateCtl = TextEditingController(text: _date == null ? '' : _fmt(_date!));
 
-  static final int maxYear = DateTime.now().year - 6;
-  static const int minYear = 1930;
+  static final DateTime maxDate = DateTime(DateTime.now().year - 6, DateTime.now().month, DateTime.now().day);
+  static final DateTime minDate = DateTime(1930);
 
-  bool get _valid => _first.text.trim().isNotEmpty && _last.text.trim().isNotEmpty && _disciplines.isNotEmpty && (_gender == 'm' || _gender == 'f') && _year != null;
+  static String _two(int v) => v.toString().padLeft(2, '0');
+  static String _fmt(DateTime d) => '${_two(d.day)}.${_two(d.month)}.${d.year}';
+
+  /// ДД.ММ.ГГГГ → дата (с проверкой календаря и возраста от 6 лет); иначе null.
+  static DateTime? parseDate(String v) {
+    final m = RegExp(r'^(\d{2})\.(\d{2})\.(\d{4})$').firstMatch(v);
+    if (m == null) return null;
+    final d = int.parse(m[1]!), mo = int.parse(m[2]!), y = int.parse(m[3]!);
+    final dt = DateTime(y, mo, d);
+    if (dt.day != d || dt.month != mo || dt.year != y) return null; // 31.02 и т. п.
+    return (dt.isBefore(minDate) || dt.isAfter(maxDate)) ? null : dt;
+  }
+
+  bool get _valid => _first.text.trim().isNotEmpty && _last.text.trim().isNotEmpty && _disciplines.isNotEmpty && (_gender == 'm' || _gender == 'f') && _date != null;
 
   @override
   void dispose() {
     _first.dispose();
     _last.dispose();
     _region.dispose();
-    _yearCtl.dispose();
+    _dateCtl.dispose();
     super.dispose();
   }
 
@@ -54,7 +67,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       lastName: _last.text,
       disciplines: _disciplines.toList(),
       gender: _gender,
-      birthYear: _year!,
+      birthDate: _date!,
       rank: _rank == UserProfile.ranks.first ? '' : _rank,
       region: _region.text,
     );
@@ -182,24 +195,40 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       ),
                     ),
                   ),
-                  // 3. Год рождения.
+                  // 3. Дата рождения.
                   _section(
                     context,
                     '4',
-                    tr('Год рождения'),
-                    TextField(
-                      controller: _yearCtl,
-                      keyboardType: TextInputType.number,
-                      maxLength: 4,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: InputDecoration(
-                          hintText: tr('Например, 2005'), counterText: ''),
-                      onChanged: (v) {
-                        final y = int.tryParse(v);
-                        setState(() => _year =
-                            (y != null && y >= minYear && y <= maxYear) ? y : null);
-                      },
-                    ),
+                    tr('Дата рождения'),
+                    Row(children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _dateCtl,
+                          keyboardType: TextInputType.number,
+                          maxLength: 10,
+                          inputFormatters: [_DateMaskFormatter()],
+                          decoration: InputDecoration(hintText: tr('ДД.ММ.ГГГГ'), counterText: ''),
+                          onChanged: (v) => setState(() => _date = parseDate(v)),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: tr('Календарь'),
+                        icon: const Icon(Icons.calendar_month_outlined),
+                        onPressed: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: _date ?? DateTime(maxDate.year - 15, 6, 15),
+                            firstDate: minDate,
+                            lastDate: maxDate,
+                            initialEntryMode: DatePickerEntryMode.calendarOnly,
+                          );
+                          if (picked != null) {
+                            _dateCtl.text = _fmt(picked);
+                            setState(() => _date = picked);
+                          }
+                        },
+                      ),
+                    ]),
                   ),
                   // 4. Разряд.
                   _section(
@@ -320,4 +349,20 @@ Future<void> showSyncOffer(BuildContext context) {
       );
     },
   );
+}
+
+/// Подставляет точки при вводе цифр: 15032000 → 15.03.2000.
+class _DateMaskFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue old, TextEditingValue value) {
+    final digits = value.text.replaceAll(RegExp(r'\D'), '');
+    final cut = digits.length > 8 ? digits.substring(0, 8) : digits;
+    final buf = StringBuffer();
+    for (var i = 0; i < cut.length; i++) {
+      if (i == 2 || i == 4) buf.write('.');
+      buf.write(cut[i]);
+    }
+    final text = buf.toString();
+    return TextEditingValue(text: text, selection: TextSelection.collapsed(offset: text.length));
+  }
 }

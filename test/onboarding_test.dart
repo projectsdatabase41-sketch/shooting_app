@@ -23,10 +23,10 @@ void main() {
     await tester.tap(find.text('Мужской'));
     await tester.pump();
     expect(button().onPressed, isNull); // нет года
-    await tester.enterText(find.byType(TextField).at(2), '2030'); // слишком молодой
+    await tester.enterText(find.byType(TextField).at(2), '01012030'); // слишком молодой
     await tester.pump();
     expect(button().onPressed, isNull);
-    await tester.enterText(find.byType(TextField).at(2), '2000');
+    await tester.enterText(find.byType(TextField).at(2), '15032000');
     await tester.pump();
     expect(button().onPressed, isNotNull);
     await tester.tap(find.widgetWithText(FilledButton, 'Продолжить'));
@@ -38,6 +38,7 @@ void main() {
     expect(UserProfile.lastNameOf(db), 'Петров');
     expect(UserProfile.genderOf(db), 'm');
     expect(UserProfile.birthYearOf(db), 2000);
+    expect(UserProfile.birthDateOf(db), DateTime(2000, 3, 15));
     expect(find.text('Профиль спортсмена'), findsNothing); // открыт главный экран
     expect(find.text('Синхронизация с облаком'), findsOneWidget); // предложение после анкеты
   });

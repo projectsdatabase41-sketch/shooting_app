@@ -38,6 +38,7 @@ class UserProfile {
   static const _kLast = 'profile_last_name';
   static const _kGender = 'profile_gender';
   static const _kYear = 'profile_birth_year';
+  static const _kDate = 'profile_birth_date';
   static const _kRank = 'profile_rank';
   static const _kRegion = 'profile_region';
   static const _kDone = 'profile_done';
@@ -75,7 +76,13 @@ class UserProfile {
   static String firstNameOf(LocalDbService db) => _read(db, _kFirst);
   static String lastNameOf(LocalDbService db) => _read(db, _kLast);
   static String genderOf(LocalDbService db) => _read(db, _kGender); // 'm' | 'f'
-  static int? birthYearOf(LocalDbService db) => int.tryParse(_read(db, _kYear));
+  static int? birthYearOf(LocalDbService db) => birthDateOf(db)?.year ?? int.tryParse(_read(db, _kYear));
+
+  /// Полная дата рождения; `null`, если указан только год (старый профиль).
+  static DateTime? birthDateOf(LocalDbService db) {
+    final raw = _read(db, _kDate);
+    return raw.isEmpty ? null : DateTime.tryParse(raw);
+  }
   static String rankOf(LocalDbService db) => _read(db, _kRank);
   static String regionOf(LocalDbService db) => _read(db, _kRegion);
 
@@ -86,7 +93,7 @@ class UserProfile {
     String lastName = '',
     required List<String> disciplines,
     required String gender,
-    required int birthYear,
+    required DateTime birthDate,
     String rank = '',
     String region = '',
   }) {
@@ -95,7 +102,8 @@ class UserProfile {
     _write(db, _kLast, lastName.trim());
     _write(db, _kDisciplines, disciplines.join(','));
     _write(db, _kGender, gender);
-    _write(db, _kYear, '$birthYear');
+    _write(db, _kDate, '${birthDate.year.toString().padLeft(4, '0')}-${birthDate.month.toString().padLeft(2, '0')}-${birthDate.day.toString().padLeft(2, '0')}');
+    _write(db, _kYear, '${birthDate.year}');
     _write(db, _kRank, rank);
     _write(db, _kRegion, region.trim());
     _write(db, _kDone, '1');
