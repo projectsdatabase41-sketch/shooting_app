@@ -149,11 +149,14 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
   Widget build(BuildContext context) {
     final vm = context.watch<TargetViewModel>();
     final workspace = context.watch<WorkspaceViewModel>();
-    final pages = workspace.visible;
-    _ensureController(workspace.targetIndex);
+    // Страница «Тренер» нужна, только если кому-то выдан доступ (есть тренер).
+    final hasCoach = context.watch<AppDataStore>().shareGrants.any((g) => g.isActive);
+    final pages = [for (final p in workspace.visible) if (p != WorkspacePage.coach || hasCoach) p];
+    final tIdx = pages.indexOf(WorkspacePage.target) < 0 ? 0 : pages.indexOf(WorkspacePage.target);
+    _ensureController(tIdx);
     // ShotListSheet живёт на СВОЕЙ странице рабочего стола и не видит
     // наш PageController напрямую — сообщает о переходе через вью-модель.
-    vm.onJumpToTargetRequested = () => _goTo(workspace.targetIndex);
+    vm.onJumpToTargetRequested = () => _goTo(tIdx);
 
     // Индекс мог уехать за границы, если страницу спрятали, пока мы
     // на ней стояли.
@@ -170,11 +173,11 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
       // и что-то поправил, выход дополнительно спрашивает — применить
       // правки или вернуть как было (решение пользователя, часть 12).
       canPop:
-          safeCurrent == workspace.targetIndex && !vm.hasUnsavedFinishedEdits,
+          safeCurrent == tIdx && !vm.hasUnsavedFinishedEdits,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-        if (safeCurrent != workspace.targetIndex) {
-          _goTo(workspace.targetIndex);
+        if (safeCurrent != tIdx) {
+          _goTo(tIdx);
           return;
         }
         _handleFinishedEditExit(context, vm);
