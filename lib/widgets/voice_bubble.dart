@@ -29,7 +29,10 @@ class VoicePlayerBar extends StatefulWidget {
 
   /// Для рисунка волны: у разных сообщений она разная (например, id сообщения).
   final String seed;
-  const VoicePlayerBar({super.key, required this.durationSec, required this.fg, required this.load, this.seed = ''});
+
+  /// Настоящая огибающая громкости записи (hex 0–f); пусто — волна по умолчанию.
+  final String wave;
+  const VoicePlayerBar({super.key, required this.durationSec, required this.fg, required this.load, this.seed = '', this.wave = ''});
 
   @override
   State<VoicePlayerBar> createState() => _VoicePlayerBarState();
@@ -143,6 +146,7 @@ class _VoicePlayerBarState extends State<VoicePlayerBar> {
             size: Size(w, 32),
             painter: _WavePainter(
               seed: Object.hash(widget.seed, widget.durationSec),
+              wave: widget.wave,
               progress: _drag ?? progress,
               played: fg,
               rest: fg.withValues(alpha: 0.35),
@@ -202,7 +206,8 @@ class _WavePainter extends CustomPainter {
   final Color played;
   final Color rest;
   final bool active;
-  _WavePainter({required this.seed, required this.progress, required this.played, required this.rest, required this.active});
+  final String wave;
+  _WavePainter({required this.seed, required this.progress, required this.played, required this.rest, required this.active, this.wave = ''});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -212,8 +217,15 @@ class _WavePainter extends CustomPainter {
     final paint = Paint()..strokeCap = StrokeCap.round..strokeWidth = bar;
     for (var i = 0; i < n; i++) {
       // Плавные «речевые» столбики: огибающая и случайность.
-      final env = 0.45 + 0.55 * math.sin(i / n * math.pi);
-      var h = size.height * (0.25 + 0.75 * rnd.nextDouble()) * env;
+      double h;
+      if (wave.isNotEmpty) {
+        // Реальная громкость: берём ближайшее значение огибающей.
+        final v = int.tryParse(wave[(i * wave.length / n).floor().clamp(0, wave.length - 1)], radix: 16) ?? 4;
+        h = size.height * (0.14 + 0.86 * v / 15);
+      } else {
+        final env = 0.45 + 0.55 * math.sin(i / n * math.pi);
+        h = size.height * (0.25 + 0.75 * rnd.nextDouble()) * env;
+      }
       final x = i * (bar + gap) + bar / 2;
       final done = (i + 0.5) / n <= progress;
       // Столбик под проигрываемой позицией чуть «пульсирует».
@@ -225,5 +237,5 @@ class _WavePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_WavePainter old) => old.progress != progress || old.active != active || old.played != played;
+  bool shouldRepaint(_WavePainter old) => old.progress != progress || old.active != active || old.played != played || old.wave != wave;
 }

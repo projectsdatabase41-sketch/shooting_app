@@ -1530,8 +1530,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   /// Секунды из имени вложения: voice-42.m4a / circle-75.mp4.
   static int _secondsFromName(String? name) {
-    final m = RegExp(r'-(\d+)\.').firstMatch(name ?? '');
+    final m = RegExp(r'-(\d+)(?:-[0-9a-f]+)?\.').firstMatch(name ?? '');
     return m == null ? 0 : int.parse(m.group(1)!);
+  }
+
+  /// Волна громкости из имени голосового (48 hex-символов) либо пусто.
+  static String _waveFromName(String? name) {
+    final m = RegExp(r'-\d+-([0-9a-f]{16,96})\.').firstMatch(name ?? '');
+    return m?.group(1) ?? '';
   }
 
   Future<void> _startVoice() async {
@@ -1571,7 +1577,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final ext = clip.path.toLowerCase().endsWith('.webm') ? 'webm' : 'm4a';
     await _sendRecorded(
       type: ChatMessageType.audio,
-      name: 'voice-${clip.seconds}.$ext',
+      // Волна громкости едет в имени вложения: voice-<сек>-<48 hex>.m4a
+      name: clip.wave.isEmpty ? 'voice-${clip.seconds}.$ext' : 'voice-${clip.seconds}-${clip.wave}.$ext',
       mime: ext == 'webm' ? 'audio/webm' : 'audio/mp4',
       bytes: kIsWeb ? await clip.readBytes() : null,
       path: kIsWeb ? null : clip.path,
@@ -1720,9 +1727,27 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                       style: const TextStyle(fontWeight: FontWeight.w600)),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Text(tr('Идёт запись…'),
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall),
+                    // Живой уровень голоса: столбики прыгают в такт громкости.
+                    child: ValueListenableBuilder<double>(
+                      valueListenable: _voice.level,
+                      builder: (_, v, __) => Row(
+                        children: [
+                          for (var i = 0; i < 22; i++)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 2),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 90),
+                                width: 3,
+                                height: 4 + 18 * (v * (0.35 + 0.65 * ((i * 7919) % 13) / 12)).clamp(0.0, 1.0),
+                                decoration: BoxDecoration(
+                                  color: cs.primary.withValues(alpha: 0.85),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -2454,6 +2479,7 @@ class _Bubble extends StatelessWidget {
             fg: fg,
             load: onLoadMedia,
             seed: message.clientMessageId,
+            wave: _ChatThreadScreenState._waveFromName(message.attachmentName),
           ),
           const SizedBox(height: 4),
         ] else if (message.type == ChatMessageType.video) ...[
