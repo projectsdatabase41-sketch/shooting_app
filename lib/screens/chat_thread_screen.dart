@@ -1344,6 +1344,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<void> _attachLarge() async {
     final picked = await ChatMediaUtils.pickLargeFile();
     if (!mounted || picked == null) return;
+    if (picked.size > ChatMediaUtils.maxDriveBytes) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(tr('Файл больше 1,5 ГБ: через облако такой не отправить. Для очень больших файлов нужна прямая передача (P2P).'))));
+      return;
+    }
 
     setState(() => _sending = true);
     try {

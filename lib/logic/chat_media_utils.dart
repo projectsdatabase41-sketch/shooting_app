@@ -43,6 +43,10 @@ class ChatMediaUtils {
   /// приложение по памяти, поэтому лимит consciously не поднят выше.
   static const int maxAttachmentBytes = 50 * 1024 * 1024;
 
+  /// Потолок для файла через Google Drive: 1,5 ГБ. Больше — только напрямую
+  /// между устройствами (P2P), когда эта возможность подключена.
+  static const int maxDriveBytes = 1536 * 1024 * 1024;
+
   /// `null`, если файл не распознан как изображение — тогда стоит
   /// отправить как есть, типом `file`, а не `image`.
   static Uint8List? compressImage(Uint8List bytes) {

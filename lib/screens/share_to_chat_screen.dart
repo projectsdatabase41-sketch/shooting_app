@@ -57,6 +57,9 @@ class _ShareToChatScreenState extends State<ShareToChatScreen> {
       for (final f in widget.files) {
         final file = File(f.path);
         final size = await file.length();
+        if (size > ChatMediaUtils.maxDriveBytes) {
+          throw Exception(tr('Файл «{n}» больше 1,5 ГБ — через облако не отправить', {'n': f.name}));
+        }
         if (size > ChatMediaUtils.maxAttachmentBytes) {
           // Большой файл — через Google Drive, без чтения в память.
           await sync.sendLargeAttachment(
