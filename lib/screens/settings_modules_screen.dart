@@ -17,9 +17,23 @@ class SettingsModulesScreen extends StatefulWidget {
 }
 
 class _SettingsModulesScreenState extends State<SettingsModulesScreen> {
+  /// Включает/выключает роль; хотя бы одна должна остаться.
+  void _setRole(AppDataStore store, {bool? athlete, bool? coach}) {
+    final a = athlete ?? store.isAthlete, c = coach ?? store.isCoach;
+    if (!a && !c) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Нужна хотя бы одна роль: тренировки или спортсмены'))));
+      return;
+    }
+    store.isAthlete = a;
+    store.isCoach = c;
+    store.saveSettings();
+    store.refreshView();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final db = context.read<AppDataStore>().db;
+    final store = context.watch<AppDataStore>();
+    final db = store.db;
     final items = <(AppModule, IconData, String, String)>[
       (
         AppModule.messenger,
@@ -74,6 +88,22 @@ class _SettingsModulesScreenState extends State<SettingsModulesScreen> {
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
+          // Роли: можно быть спортсменом, тренером или обоими сразу.
+          SwitchListTile(
+            secondary: const Icon(Icons.fitness_center),
+            title: Text(tr('Тренировки')),
+            subtitle: Text(tr('Свои тренировки: мишень, упражнения, статистика')),
+            value: store.isAthlete,
+            onChanged: (v) => _setRole(store, athlete: v),
+          ),
+          SwitchListTile(
+            secondary: const Icon(Icons.groups_outlined),
+            title: Text(tr('Спортсмены')),
+            subtitle: Text(tr('Режим тренера: дневники, результаты и задания подключённых спортсменов')),
+            value: store.isCoach,
+            onChanged: (v) => _setRole(store, coach: v),
+          ),
+          const Divider(height: 24),
           for (final (module, icon, title, subtitle) in items)
             SwitchListTile(
               secondary: Icon(icon),

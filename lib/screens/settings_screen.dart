@@ -157,39 +157,25 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
           const Divider(height: 24),
-          // Рубильник, а не переключатель режима внутри уже включённой
-          // тренерской роли: раньше эту роль вообще не было видно как
-          // включить — переключатель показывался, только если isCoach
-          // уже почему-то стоял true, а поставить его true было неоткуда.
-          // По умолчанию — всегда спортсмен; включили — стали тренером,
-          // это единственная и исключающая пара, не два флага сразу.
-          SwitchListTile(
-            title: Text(tr('Режим тренера')),
-            subtitle: Text(
-              store.workMode == WorkMode.coach
-                  ? tr(
-                      'Тренер — свои тренировки не ведёте, только дневники подключённых спортсменов')
-                  : tr('Спортсмен — обычный режим'),
+          // Роли включаются в «Модулях» (Тренировки / Спортсмены). Если включены
+          // обе — здесь переключается, в какой роли работаем сейчас.
+          if (store.isAthlete && store.isCoach)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: SegmentedButton<WorkMode>(
+                segments: [
+                  ButtonSegment(value: WorkMode.athlete, icon: const Icon(Icons.fitness_center), label: Text(tr('Спортсмен'))),
+                  ButtonSegment(value: WorkMode.coach, icon: const Icon(Icons.groups_outlined), label: Text(tr('Тренер'))),
+                ],
+                selected: {store.workMode},
+                onSelectionChanged: (s) {
+                  store.workMode = s.first;
+                  store.saveSettings();
+                  store.refreshView();
+                  Navigator.of(context).popUntil((r) => r.isFirst);
+                },
+              ),
             ),
-            value: store.workMode == WorkMode.coach,
-            onChanged: (v) {
-              // Не устанавливаем store.workMode отдельно: при ровно
-              // одной активной роли (а здесь всегда так) геттер сам
-              // выводит режим из isAthlete/isCoach.
-              store.isCoach = v;
-              store.isAthlete = !v;
-              store.saveSettings();
-              // notifyListeners() (тот же AppDataStore, который слушает
-              // HomeShell через context.watch) сам перерисует нижнюю
-              // навигацию и переключит вкладку на домашнюю нового режима
-              // (см. _lastMode в home_shell.dart) — но только в "страничной"
-              // раскладке, где вкладки не отдельные маршруты. В раскладке
-              // "плитки" настройки — отдельный запушенный экран поверх
-              // главного, и без этого он так и оставался бы открытым.
-              store.refreshView();
-              Navigator.of(context).popUntil((r) => r.isFirst);
-            },
-          ),
           const _UpdateTile(),
           const Divider(height: 24),
           // Учётная запись — в самом низу, как просил пользователь:
