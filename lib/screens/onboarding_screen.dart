@@ -107,7 +107,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         extendBodyBehindAppBar: true,
         appBar: GlassHeader(
           leading: widget.editing ? null : const SizedBox.shrink(),
-          title: Text(tr('Профиль спортсмена'),
+          title: Text(tr('Мой профиль'),
               style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
         ),
         body: Column(

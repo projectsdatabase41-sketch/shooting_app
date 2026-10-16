@@ -11,7 +11,6 @@ import '../services/modules_settings.dart';
 import '../state/app_data_store.dart';
 import '../state/home_tabs_view_model.dart';
 import '../state/personalization_view_model.dart';
-import '../widgets/finished_edit_exit_dialog.dart';
 import '../widgets/glass_pill.dart';
 import '../widgets/home_tabs_bar.dart';
 import '../widgets/service_icon_picker.dart';
@@ -46,13 +45,6 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
-  /// Текущая вкладка («страничная» раскладка).
-  String _tab = 'exercises';
-
-  /// Вкладка, открытая до мессенджера, — туда его «сворачивает» кнопка
-  /// закрытия (см. ChatHomeScreen.close).
-  String? _beforeMessenger;
-
   late final HomeTabsViewModel _tabs;
   late final CustomServicesRepository _services;
   late final PersonalizationViewModel _personalization;
@@ -70,7 +62,7 @@ class _HomeShellState extends State<HomeShell> {
     _onServicesChanged(); // сервисы, добавленные в прошлой сессии
     _chatPoll = ChatBackgroundPoll(db, shouldPoll: () {
       if (!ModulesSettings.isOn(db, AppModule.messenger) || ChatHomeScreen.isOpen) return false;
-      return _tab != 'messenger';
+      return true;
     });
     _syncChatPoll();
     ModulesSettings.revision.addListener(_syncChatPoll);
@@ -113,7 +105,7 @@ class _HomeShellState extends State<HomeShell> {
   /// Какие вкладки сейчас убраны из показа без изменения сохранённых
   /// настроек: модуль выключен, нет данных (у тренера без спортсменов
   /// нечего показывать в статистике и заданиях) и т. п.
-  Set<String> _suppressedTabs(AppDataStore store, {required bool tilesMode}) {
+  Set<String> _suppressedTabs(AppDataStore store) {
     final db = store.db;
     bool on(AppModule m) => ModulesSettings.isOn(db, m);
     final noAthletes = CoachAccessService(db).listAthletes().isEmpty;
@@ -131,8 +123,8 @@ class _HomeShellState extends State<HomeShell> {
       if (!friendlyErrorDevMode || !on(AppModule.finals)) 'finals',
       if (!on(AppModule.services))
         for (final s in _services.list()) '$serviceTabPrefix${s.id}',
-      // В режиме плиток «Настройки» живут в шапке справа вверху, а не плиткой.
-      if (tilesMode) 'settings',
+      // «Настройки» живут в шапке справа вверху, а не плиткой.
+      'settings',
     };
   }
 
@@ -140,93 +132,47 @@ class _HomeShellState extends State<HomeShell> {
   Widget build(BuildContext context) {
     final store = context.watch<AppDataStore>();
     final tabs = _tabs;
-    tabs.suppressed = _suppressedTabs(store, tilesMode: tabs.layout == 'tiles');
-    DemoMode.tab = _tab; // для отзывов в режиме «Демо»
+    tabs.suppressed = _suppressedTabs(store);
 
     return AnimatedBuilder(
       // И сервисы тоже: переименование не меняет набор вкладок (id те же),
       // а подпись плитки должна обновиться сразу.
       animation: Listenable.merge([tabs, _services, ModulesSettings.revision]),
       builder: (context, _) {
-        tabs.suppressed = _suppressedTabs(store, tilesMode: tabs.layout == 'tiles');
-        // Режим "плитки" (решение пользователя) — один рабочий стол,
-        // вкладки открываются отдельным экраном по тапу, а не в этом же
-        // Scaffold: своей "текущей вкладки" тут нет, поэтому и
-        // проверка несохранённых правок (см. _onDestinationSelected) не
-        // нужна — уход с экрана мишени идёт обычным Navigator.pop,
-        // который PopScope самого TargetScreen и так видит.
+        tabs.suppressed = _suppressedTabs(store);
+        // Главный экран — один рабочий стол из плиток (страничного режима с
+        // нижней навигацией нет): вкладки открываются отдельным экраном по
+        // тапу, «Настройки» — шестерёнка в шапке справа вверху.
         final specs = _specsWithServices();
-
-        if (tabs.layout == 'tiles') {
-          return Scaffold(
-            extendBodyBehindAppBar: true,
-            appBar: GlassHeader(
-                title: const Text('Nexus',
-                    style: TextStyle(fontWeight: FontWeight.w600)),
-                actions: [
-                  IconButton(
-                    tooltip: tr('Настройки'),
-                    icon: const Icon(Icons.settings_outlined),
-                    onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => _pageFor('settings', store, tabs))),
-                  ),
-                ]),
-            body: Column(
-              children: [
-                if (store.isBackgroundSyncing) const _SyncBanner(),
-                Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.only(
-                        top: MediaQuery.paddingOf(context).top +
-                            GlassHeader.height),
-                    child: HomeTileGrid(
-                      vm: tabs,
-                      specs: specs,
-                      onSelect: (id) => Navigator.of(context).push(
-                        MaterialPageRoute(
-                            builder: (_) => _pageFor(id, store, tabs)),
-                      ),
-                    ),
+        return Scaffold(
+          extendBodyBehindAppBar: true,
+          appBar: GlassHeader(
+              title: const Text('Nexus', style: TextStyle(fontWeight: FontWeight.w600)),
+              actions: [
+                IconButton(
+                  tooltip: tr('Настройки'),
+                  icon: const Icon(Icons.settings_outlined),
+                  onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => _pageFor('settings', store, tabs))),
+                ),
+              ]),
+          body: Column(
+            children: [
+              if (store.isBackgroundSyncing) const _SyncBanner(),
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + GlassHeader.height),
+                  child: HomeTileGrid(
+                    vm: tabs,
+                    specs: specs,
+                    onSelect: (id) {
+                      DemoMode.tab = id; // для отзывов в режиме «Демо»
+                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => _pageFor(id, store, tabs)));
+                    },
                   ),
                 ),
-              ],
-            ),
-          );
-        }
-
-        final homeTabId = tabs.visible.isEmpty ? 'settings' : tabs.visible.first;
-        // Скрыли вкладку, на которой стояли — переезжаем на первую
-        // оставшуюся видимую, а не оставляем экран без вкладки вовсе.
-        final current = tabs.visible.contains(_tab) ? _tab : homeTabId;
-
-        // Вкладки в "страничном" режиме — не отдельные маршруты
-        // Navigator (только один Scaffold на весь HomeShell, тело
-        // подменяется по тапу на нижней панели), поэтому без этого
-        // PopScope системный жест "назад" на любой вкладке, кроме
-        // домашней, сразу закрывал приложение — свернуть было некуда,
-        // ведь для Navigator это был единственный маршрут (жалоба
-        // пользователя: "в некоторых окнах он полностью закрывает
-        // приложение"). Теперь сперва возвращает на домашнюю вкладку,
-        // как в большинстве приложений с нижней навигацией.
-        return PopScope(
-          canPop: current == homeTabId,
-          onPopInvokedWithResult: (didPop, _) {
-            if (didPop) return;
-            _onDestinationSelected(context, store, homeTabId);
-          },
-          child: Scaffold(
-            body: Column(
-              children: [
-                if (store.isBackgroundSyncing) const _SyncBanner(),
-                Expanded(child: _pageFor(current, store, tabs)),
-              ],
-            ),
-            bottomNavigationBar: HomeTabsBar(
-              vm: tabs,
-              specs: specs,
-              selected: current,
-              onSelect: (id) => _onDestinationSelected(context, store, id),
-            ),
+              ),
+            ],
           ),
         );
       },
@@ -265,31 +211,9 @@ class _HomeShellState extends State<HomeShell> {
       'notes' => const CoachDiaryNotesScreen(),
       'finals' => const FinalsScreen(),
       'messenger' => ChatHomeScreen(
-          onClose: tabs.layout == 'tiles' ? null : () => _leaveMessenger(store)),
+          onClose: null),
       _ => SettingsScreen(homeTabs: tabs, services: _services),
     };
-  }
-
-  void _leaveMessenger(AppDataStore store) {
-    final home = _tabs.visible.isEmpty ? 'settings' : _tabs.visible.first;
-    final back = _beforeMessenger ?? home;
-    _onDestinationSelected(context, store, back == 'messenger' ? home : back);
-  }
-
-  /// Переключение нижней вкладки — не Navigator.pop, поэтому PopScope
-  /// экрана мишени его не видит: без этой проверки правки в
-  /// разблокированной завершённой тренировке терялись бы молча при
-  /// уходе на другую вкладку.
-  Future<void> _onDestinationSelected(
-      BuildContext context, AppDataStore store, String id) async {
-    final current = _tab;
-    if (id != current && store.hasUnsavedFinishedEdit) {
-      final keep = await confirmFinishedEditExit(context);
-      if (keep == null) return; // остаёмся на текущей вкладке
-      store.resolvePendingFinishedEdit?.call(keep: keep);
-    }
-    if (id == 'messenger' && current != 'messenger') _beforeMessenger = current;
-    setState(() => _tab = id);
   }
 
   String _activeSessionKey(AppDataStore store) {

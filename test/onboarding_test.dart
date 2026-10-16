@@ -13,7 +13,7 @@ void main() {
     await db.open(overridePath: ':memory:');
     await tester.pumpWidget(ShootingApp(db: db));
     await tester.pump();
-    expect(find.text('Профиль спортсмена'), findsOneWidget);
+    expect(find.text('Мой профиль'), findsOneWidget);
     FilledButton button() => tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Продолжить'));
     expect(button().onPressed, isNull);
 
@@ -39,7 +39,7 @@ void main() {
     expect(UserProfile.genderOf(db), 'm');
     expect(UserProfile.birthYearOf(db), 2000);
     expect(UserProfile.birthDateOf(db), DateTime(2000, 3, 15));
-    expect(find.text('Профиль спортсмена'), findsNothing); // открыт главный экран
+    expect(find.text('Мой профиль'), findsNothing); // открыт главный экран
     expect(find.text('Синхронизация с облаком'), findsOneWidget); // предложение после анкеты
   });
 }

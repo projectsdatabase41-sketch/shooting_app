@@ -100,8 +100,8 @@ class SettingsScreen extends StatelessWidget {
           ),
           ListTile(
             leading: const Icon(Icons.badge_outlined),
-            title: Text(tr('Профиль спортсмена')),
-            subtitle: Text(tr('Вид стрельбы, пол, год рождения, разряд, регион')),
+            title: Text(tr('Мой профиль')),
+            subtitle: Text(tr('Имя, вид стрельбы, пол, дата рождения, разряд, регион')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
               final db = store.db;
@@ -809,6 +809,11 @@ class _AccountSheetState extends State<_AccountSheet> {
                       overflow: TextOverflow.ellipsis),
                 ),
               const SizedBox(height: 14),
+              Text(
+                tr('Почта и пароль — это ваш личный вход в эту базу. Адрес базы сам по себе данные не открывает: вход нужен, чтобы вы видели и меняли только свои записи. Это не пароль от Supabase и не пароль мессенджера; при первом входе нажмите «Регистрация».'),
+                style: theme.textTheme.bodySmall,
+              ),
+              const SizedBox(height: 10),
               TextField(
                 controller: _email,
                 decoration: InputDecoration(labelText: tr('Почта')),

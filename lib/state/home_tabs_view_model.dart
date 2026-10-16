@@ -60,8 +60,10 @@ class HomeTabsViewModel extends ChangeNotifier {
   /// плитками в два столбика (решение пользователя). Выбор/удаление/
   /// порядок — общие для обоих режимов, отображение отличается только
   /// оформлением.
-  String _layout = 'pages';
-  String get layout => _layout;
+  String _layout = 'tiles';
+
+  /// Раскладка одна — плитки (страничный режим с нижней навигацией убран).
+  String get layout => 'tiles';
   set layout(String value) {
     if (value == _layout) return;
     _layout = value;

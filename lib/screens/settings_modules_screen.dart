@@ -101,7 +101,7 @@ class _SettingsModulesScreenState extends State<SettingsModulesScreen> {
           final spec = widget.specs[id];
           final needs = _needs(id, store);
           final on = _on(id, store);
-          return ReorderableDragStartListener(
+          return ReorderableDelayedDragStartListener(
             key: ValueKey(id),
             index: index,
             child: Card(
@@ -126,25 +126,12 @@ class _SettingsModulesScreenState extends State<SettingsModulesScreen> {
           ),
           body: CustomScrollView(
             slivers: [
-              SliverPadding(
-                padding: EdgeInsets.fromLTRB(16, MediaQuery.paddingOf(context).top + GlassHeader.height + 12, 16, 4),
-                sliver: SliverToBoxAdapter(
-                  child: SegmentedButton<String>(
-                    segments: [
-                      ButtonSegment(value: 'pages', icon: const Icon(Icons.view_agenda_outlined), label: Text(tr('Страницы'))),
-                      ButtonSegment(value: 'tiles', icon: const Icon(Icons.grid_view_outlined), label: Text(tr('Плитки'))),
-                    ],
-                    selected: {tabs.layout},
-                    showSelectedIcon: false,
-                    onSelectionChanged: (s) => tabs.layout = s.first,
-                  ),
-                ),
-              ),
+              SliverToBoxAdapter(child: SizedBox(height: MediaQuery.paddingOf(context).top + GlassHeader.height + 8)),
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                 sliver: SliverToBoxAdapter(
                   child: Text(
-                    tr('Включайте нужные модули и расставляйте их по приоритету: удержите строку и перетащите. Режима «спортсмен / тренер» нет — «Тренировка» и «Спортсмены» можно включить вместе или по отдельности. Выключенный модуль скрыт и не работает в фоне.'),
+                    tr('Включайте нужные модули и расставляйте их по приоритету: удержите строку, затем перетащите (простой свайп просто листает список). Режима «спортсмен / тренер» нет — «Тренировка» и «Спортсмены» можно включить вместе или по отдельности. Выключенный модуль скрыт и не работает в фоне.'),
                     style: theme.textTheme.bodySmall,
                   ),
                 ),
