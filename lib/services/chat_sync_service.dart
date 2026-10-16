@@ -13,6 +13,7 @@ import '../models/chat_contact.dart';
 import '../models/chat_message.dart';
 import 'ai_service.dart';
 import 'chat_auth_service.dart';
+import 'coach_link.dart';
 import 'chat_drive_service.dart';
 import 'chat_messages_repository.dart';
 import 'chat_settings.dart';
@@ -128,6 +129,7 @@ class ChatSyncService {
   /// при отправке (что уйдёт собеседнику), и в UI (полоска над полем
   /// ввода, пока идёт набор ответа).
   static String previewOf(ChatMessage m) {
+    if (CoachLink.isCard(m.text)) return CoachLink.preview(m.text);
     if (m.text != null && m.text!.isNotEmpty) {
       final (caption, chart) = AiService.splitChart(m.text!);
       if (caption.isEmpty && chart != null) return '📊 ${chart['title'] ?? 'График'}';

@@ -40,6 +40,7 @@ import '../services/call_service.dart';
 import '../services/message_sound.dart';
 import '../services/web_push_token.dart';
 import '../services/chat_sync_service.dart';
+import '../services/coach_link.dart';
 import '../services/push_service.dart' show PushService, pendingCallAckContactId;
 import '../widgets/link_signal.dart';
 import '../services/chat_translation_service.dart';
@@ -107,6 +108,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   // «Стопки» фото: несколько подряд идущих фото от одного человека показываются
   // одним блоком (ведущий — последнее фото, остальные скрыты, индексы ленты те же).
+  late final CoachLink _coachLink = CoachLink(
+    db: context.read<AppDataStore>().db,
+    auth: widget.auth,
+    repo: widget.repo,
+    sync: widget.sync,
+  );
+
+  /// Служебные шаги «подключение тренера» (выдать доступ / сохранить спортсмена).
+  void _coachSteps() {
+    _coachLink.processIncoming(context.read<AppDataStore>()).then((n) {
+      if (n > 0 && mounted) _reload();
+    }).catchError((_) {});
+  }
+
   List<ChatMessage>? _groupedFor;
   final Map<String, List<ChatMessage>> _stackLeader = {};
   final Set<String> _stackHidden = {};
@@ -352,11 +367,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         if (added > 0 && mounted) {
           _markRead();
           _reload(); // сам решает: прокрутить вниз или показать счётчик
+          _coachSteps();
         }
         return added > 0;
       },
     )..start();
     _pollLoop!.poke(); // открыли диалог — сразу забираем то, что лежит в базе
+    _coachSteps(); // дошли ли служебные шаги подключения тренера
   }
 
   /// Приложение на переднем плане. Свёрнутое НЕ должно «читать» сообщения:
@@ -390,6 +407,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           MessageSound.play();
           _markRead();
           _reload();
+          _coachSteps();
         }
         ..onPeerRead = () {
           if (mounted) _reload();
@@ -2080,7 +2098,96 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         ),
       );
 
+  /// Карточка подключения тренера вместо сырого текста сообщения.
+  Widget _coachCardItem(ChatMessage m) {
+    final d = CoachLink.parse(m.text) ?? const {};
+    final mine = m.direction == ChatMessageDirection.outgoing;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final st = _coachLink.state(m.clientMessageId);
+    final k = '${d['k']}';
+    String title;
+    var lines = <String>[];
+    Widget? actions;
+    switch (k) {
+      case 'coach_req':
+        title = mine ? tr('Запрос тренеру отправлен') : tr('Запрос на добавление в спортсмены');
+        final birth = '${d['birth'] ?? ''}';
+        final shownBirth = birth.length >= 10
+            ? '${birth.substring(8, 10)}.${birth.substring(5, 7)}.${birth.substring(0, 4)}'
+            : (d['birth_year'] != null ? '${d['birth_year']}' : '');
+        lines = [
+          if ('${d['name'] ?? ''}'.isNotEmpty) '${d['name']}',
+          if (shownBirth.isNotEmpty) tr('Дата рождения: {d}', {'d': shownBirth}),
+          if ('${d['region'] ?? ''}'.isNotEmpty) tr('Регион: {r}', {'r': d['region']}),
+        ];
+        if (!mine) {
+          if (st == null) {
+            actions = Row(mainAxisSize: MainAxisSize.min, children: [
+              FilledButton(
+                onPressed: () async {
+                  await _coachLink.answerRequest(m, accept: true);
+                  if (mounted) setState(() {});
+                },
+                child: Text(tr('Добавить')),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton(
+                onPressed: () async {
+                  await _coachLink.answerRequest(m, accept: false);
+                  if (mounted) setState(() {});
+                },
+                child: Text(tr('Отказать')),
+              ),
+            ]);
+          } else {
+            lines.add(st == 'yes' ? tr('Вы приняли запрос — ждём доступ от спортсмена') : tr('Вы отказали'));
+          }
+        }
+      case 'coach_ok':
+        title = mine ? tr('Вы приняли спортсмена') : tr('Тренер принял запрос');
+        if (!mine) {
+          lines.add(switch (st) {
+            'done' => tr('Доступ тренеру выдан'),
+            'needs_db' => tr('Чтобы выдать доступ, подключите свою базу: Настройки → Данные и синхронизация'),
+            'error' => tr('Не удалось выдать доступ — попробуем снова при открытии переписки'),
+            _ => tr('Выдаём доступ…'),
+          });
+        }
+      case 'coach_no':
+        title = mine ? tr('Вы отказали') : tr('Тренер отклонил запрос');
+      case 'coach_grant':
+        title = mine ? tr('Доступ тренеру выдан') : tr('Спортсмен добавлен');
+        if (!mine) lines.add(st == 'done' ? tr('Он в вашем списке спортсменов') : tr('Сохраняем…'));
+      default:
+        title = tr('Сообщение');
+    }
+    return Align(
+      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 300),
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: cs.primary.withValues(alpha: 0.35)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.how_to_reg_outlined, size: 18, color: cs.primary),
+            const SizedBox(width: 8),
+            Flexible(child: Text(title, style: theme.textTheme.titleSmall)),
+          ]),
+          for (final l in lines) Padding(padding: const EdgeInsets.only(top: 4), child: Text(l, style: theme.textTheme.bodySmall)),
+          if (actions != null) Padding(padding: const EdgeInsets.only(top: 10), child: actions),
+        ]),
+      ),
+    );
+  }
+
   Widget _item(ChatMessage m) {
+    if (CoachLink.isCard(m.text)) return _coachCardItem(m);
     final selected = _selected.contains(m.id);
     final mine = m.direction == ChatMessageDirection.outgoing;
     return Align(

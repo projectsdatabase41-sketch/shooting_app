@@ -31,6 +31,11 @@ import 'onboarding_screen.dart';
 import 'settings_modules_screen.dart';
 import 'settings_services_screen.dart';
 import '../services/demo_mode.dart';
+import '../models/chat_contact.dart';
+import '../services/chat_auth_service.dart';
+import '../services/chat_messages_repository.dart';
+import '../services/chat_sync_service.dart';
+import '../services/coach_link.dart';
 import '../services/modules_settings.dart';
 
 /// Настройки (раздел 9 ТЗ) — сгруппированы по назначению в отдельные
@@ -191,6 +196,13 @@ class SettingsScreen extends StatelessWidget {
           // заходят сюда раз в жизни, а место наверху занимает то, что
           // трогают каждый день.
           const AccountTile(),
+          ListTile(
+            leading: const Icon(Icons.how_to_reg_outlined),
+            title: Text(tr('Добавить тренера')),
+            subtitle: Text(tr('Выберите тренера в мессенджере — ему уйдёт запрос, без кодов и паролей')),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => addCoachViaMessenger(context, store),
+          ),
         ],
       ),
     );
@@ -1001,5 +1013,50 @@ class _HiddenDevModeToggleState extends State<_HiddenDevModeToggle> {
       onTap: _onTap,
       child: Text(tr('Настройки')),
     );
+  }
+}
+
+
+/// «Добавить тренера»: выбор из контактов мессенджера → тренеру уходит запрос
+/// (имя, дата рождения, регион). Доступ к данным он получит только после согласия.
+Future<void> addCoachViaMessenger(BuildContext context, AppDataStore store) async {
+  final msg = ScaffoldMessenger.of(context);
+  final auth = ChatAuthService(store.db);
+  if (!auth.isSignedIn) {
+    msg.showSnackBar(SnackBar(content: Text(tr('Сначала войдите в мессенджер'))));
+    return;
+  }
+  final repo = ChatMessagesRepository(store.db);
+  final contacts = [for (final c in repo.listContacts()) if (!c.isGroup) c];
+  if (contacts.isEmpty) {
+    msg.showSnackBar(SnackBar(content: Text(tr('Добавьте тренера в контакты мессенджера, затем повторите'))));
+    return;
+  }
+  final coach = await showModalBottomSheet<ChatContact>(
+    context: context,
+    builder: (ctx) => ListView(children: [
+      Padding(padding: const EdgeInsets.all(16), child: Text(tr('Кто ваш тренер?'), style: Theme.of(ctx).textTheme.titleMedium)),
+      for (final c in contacts) ListTile(title: Text(c.nickname), onTap: () => Navigator.pop(ctx, c)),
+    ]),
+  );
+  if (coach == null || !context.mounted) return;
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(tr('Отправить запрос тренеру?')),
+      content: Text(tr('{c} получит ваше имя, дату рождения и регион из профиля. Доступ к вашим данным он получит только после своего согласия.', {'c': coach.nickname})),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Отмена'))),
+        TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Отправить'))),
+      ],
+    ),
+  );
+  if (ok != true) return;
+  try {
+    final sync = ChatSyncService(auth, repo);
+    await CoachLink(db: store.db, auth: auth, repo: repo, sync: sync).requestCoach(coach);
+    msg.showSnackBar(SnackBar(content: Text(tr('Запрос отправлен: {c}', {'c': coach.nickname}))));
+  } catch (e) {
+    msg.showSnackBar(SnackBar(content: Text(tr('Не отправлено: {e}', {'e': friendlyError(e)}))));
   }
 }

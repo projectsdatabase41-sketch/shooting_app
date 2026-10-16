@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 
 import '../logic/avatar_utils.dart';
 import '../logic/adaptive_poller.dart';
+import '../services/coach_link.dart';
 import 'final_room_screens.dart' show offerFinalInvites;
 import '../models/chat_contact.dart';
 import '../models/chat_message.dart';
@@ -74,6 +75,14 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
   late final SupabaseAuthService _mainAuth;
   late final ChatMessagesRepository _repo;
   late final ChatSyncService _sync;
+  late final CoachLink _coachLink = CoachLink(db: _db, auth: _auth, repo: _repo, sync: _sync);
+
+  void _coachSteps() {
+    _coachLink.processIncoming(context.read<AppDataStore>()).then((n) {
+      if (n > 0 && mounted) _reload();
+    }).catchError((_) {});
+  }
+
   late final ChatPreferences _prefs;
   PollLoop? _pollLoop;
   List<ChatContact> _contacts = [];
@@ -99,7 +108,10 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
       // При открытии мессенджера сразу проверяем входящие, а не ждём первого
       // такта опроса: пришедшее раньше должно быть в списке с самого начала.
       _sync.pollIncoming().then((added) {
-        if (added > 0 && mounted) _reload();
+        if (added > 0 && mounted) {
+          _reload();
+          _coachSteps();
+        }
       }).catchError((_) {});
       PushService(_auth).init();
       _syncFriends();
@@ -320,6 +332,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
           // приходит (экран уже открыт), так что это единственный сигнал.
           if (_sync.lastNewMessages > 0) MessageSound.play();
           _reload();
+          _coachSteps();
         }
         return added > 0;
       },
