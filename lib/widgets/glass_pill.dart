@@ -3,6 +3,7 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'package:flutter/material.dart';
+import 'role_switch_scope.dart';
 import '../i18n/i18n.dart';
 
 /// Полупрозрачная «таблетка» с размытием того, что под ней (шапка и поле
@@ -160,6 +161,15 @@ class GlassHeader extends StatelessWidget implements PreferredSizeWidget {
               ),
             ),
             for (final a in actions) ...[const SizedBox(width: 8), a],
+            if (RoleSwitchScope.maybeOf(context) case final scope?) ...[
+              const SizedBox(width: 8),
+              GlassCircleButton(
+                tooltip: scope.coach ? tr('Спортсмены — нажмите, чтобы перейти к своим') : tr('Мои — нажмите, чтобы перейти к спортсменам'),
+                onTap: scope.toggle,
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.22),
+                icon: Text(scope.coach ? 'С' : 'М', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+              ),
+            ],
           ],
         ),
       ),

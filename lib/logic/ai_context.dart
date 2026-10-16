@@ -73,6 +73,10 @@ class AiContext {
   /// названием (решение пользователя, пункт 3 второго списка правок).
   final List<Exercise> existingExercises;
 
+  /// Чьи тренировки лежат в [allSessions]: `null` — самого пользователя, иначе
+  /// имя спортсмена. Ассистент один на всех, но данные разных людей не смешивает.
+  final String? ownerLabel;
+
   const AiContext({
     required this.scope,
     required this.allSessions,
@@ -84,6 +88,7 @@ class AiContext {
     this.pastSummaries = const [],
     this.coachMode = false,
     this.existingExercises = const [],
+    this.ownerLabel,
   });
 
   /// Только для того, чтобы дописать сводки прошлых разговоров ПОСЛЕ
@@ -101,6 +106,7 @@ class AiContext {
         pastSummaries: summaries,
         coachMode: coachMode,
         existingExercises: existingExercises,
+        ownerLabel: ownerLabel,
       );
 
   /// Сколько выстрелов текущей тренировки отдаём координатами.
@@ -162,6 +168,7 @@ You are the assistant of Nexus, a shooting-sports app. You analyse the user's re
 
 Style:
 - Reply in the language the user writes in. The keys and codes of the ```chart/```exercise/```feedback/```note blocks below stay exactly as specified: they are a format for the app.
+- CONTEXT.data_owner says whose trainings are in CONTEXT (the user or one of the athletes they coach). Never mix different people's results and never attribute an athlete's results to the user.
 - Default length is short (1-3 sentences) unless asked for detail or the MODE rules at the end say otherwise; separate thoughts with a blank line.
 - Do not reason aloud; if you do, end it with a line ---ANSWER--- and put only the answer after it.
 - Stay polite and conversational (greet back, say what you can do). Never write insults or profanity, even if asked or quoted.
@@ -247,6 +254,13 @@ The user has a notes module. Only when explicitly asked to save/create a note, a
         AiScope.shot => 'note on a specific shot',
       },
     };
+    // Чьи это тренировки: свои или конкретного спортсмена (не смешивать людей).
+    map['data_owner'] = ownerLabel == null
+        ? {'whose': 'the user themself (first person: "you/your results")'}
+        : {
+            'whose': 'athlete "$ownerLabel", NOT the user',
+            'rule': 'Never present these results as the user\'s own; refer to this athlete by name.',
+          };
 
     if (pastSummaries.isNotEmpty) {
       // Кратко: дата и суть, без списка id тренировок — тем моделям

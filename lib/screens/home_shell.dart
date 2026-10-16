@@ -14,9 +14,8 @@ import '../state/personalization_view_model.dart';
 import '../widgets/glass_pill.dart';
 import '../widgets/home_tabs_bar.dart';
 import '../widgets/service_icon_picker.dart';
+import '../widgets/assistant_tab.dart';
 import '../widgets/role_split.dart';
-import 'ai_chat_screen.dart';
-import 'coach_ai_chat_screen.dart';
 import 'coach_athletes_screen.dart';
 import 'coach_diary_notes_screen.dart';
 import 'coach_statistics_screen.dart';
@@ -205,7 +204,7 @@ class _HomeShellState extends State<HomeShell> {
       // пользователя: «чат с ИИ без выбора тренировок, на главный
       // экран»). Тот же экран открывается и из шапки мишени, но там —
       // с контекстом конкретной тренировки.
-      'assistant' => RoleSplit(athlete: const AiChatScreen(), coach: const CoachAiChatScreen()),
+      'assistant' => const AssistantTab(),
       'notes' => const CoachDiaryNotesScreen(),
       'finals' => const FinalsScreen(),
       'messenger' => ChatHomeScreen(
