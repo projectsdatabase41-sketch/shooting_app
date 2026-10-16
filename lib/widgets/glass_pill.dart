@@ -163,11 +163,26 @@ class GlassHeader extends StatelessWidget implements PreferredSizeWidget {
             for (final a in actions) ...[const SizedBox(width: 8), a],
             if (RoleSwitchScope.maybeOf(context) case final scope?) ...[
               const SizedBox(width: 8),
-              GlassCircleButton(
-                tooltip: scope.coach ? tr('Спортсмены — нажмите, чтобы перейти к своим') : tr('Мои — нажмите, чтобы перейти к спортсменам'),
-                onTap: scope.toggle,
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.22),
-                icon: Text(scope.coach ? 'С' : 'М', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+              // Круглая кнопка с буквой; нажатие выдвигает список из двух строк,
+              // выбор закрывает его и переключает часть.
+              PopupMenuButton<bool>(
+                tooltip: tr('Чьи данные'),
+                position: PopupMenuPosition.under,
+                offset: const Offset(0, 6),
+                initialValue: scope.coach,
+                onSelected: scope.select,
+                itemBuilder: (_) => [
+                  PopupMenuItem(value: false, child: Text('М — ${tr('Мои')}', style: TextStyle(fontWeight: scope.coach ? FontWeight.w400 : FontWeight.w800))),
+                  PopupMenuItem(value: true, child: Text('С — ${tr('Спортсмены')}', style: TextStyle(fontWeight: scope.coach ? FontWeight.w800 : FontWeight.w400))),
+                ],
+                child: SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: GlassPill(
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.22),
+                    child: Center(child: Text(scope.coach ? 'С' : 'М', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18))),
+                  ),
+                ),
               ),
             ],
           ],

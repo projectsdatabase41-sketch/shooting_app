@@ -5,6 +5,7 @@ import '../i18n/i18n.dart';
 import '../state/app_data_store.dart';
 import '../state/personalization_view_model.dart';
 import '../widgets/glass_pill.dart';
+import '../widgets/splash_gate.dart';
 import 'color_personalization_screen.dart';
 
 /// "Внешний вид" — язык интерфейса и цветовые настройки, вынесены из
@@ -100,6 +101,18 @@ class SettingsAppearanceScreen extends StatelessWidget {
             subtitle: Text(currentLabel),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => _pickLanguage(context, personalization),
+          ),
+          const Divider(height: 1),
+          // Видео-заставка при запуске (звук играет на Android и компьютере;
+          // в браузере без звука — так требуют браузеры).
+          StatefulBuilder(
+            builder: (ctx, setS) => SwitchListTile(
+              secondary: const Icon(Icons.movie_outlined),
+              title: Text(tr('Заставка при запуске')),
+              subtitle: Text(tr('Короткое видео при открытии приложения; касание пропускает')),
+              value: SplashGate.isOn(context.read<AppDataStore>().db),
+              onChanged: (v) => setS(() => SplashGate.setOn(context.read<AppDataStore>().db, v)),
+            ),
           ),
           const Divider(height: 1),
           ListTile(

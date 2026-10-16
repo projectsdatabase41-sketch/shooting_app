@@ -1,3 +1,4 @@
+import '../widgets/app_loader.dart';
 import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -118,7 +119,7 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
               children: [
                 _athletePicker(),
                 const SizedBox(height: 12),
-                if (_loading) const Center(child: CircularProgressIndicator()),
+                if (_loading) const AppLoader(),
                 if (_error != null)
                   Text(_error!,
                       style: TextStyle(

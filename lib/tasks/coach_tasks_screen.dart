@@ -1,3 +1,4 @@
+import '../widgets/app_loader.dart';
 import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -155,7 +156,7 @@ class _CoachTasksScreenState extends State<CoachTasksScreen> {
               child: Text(tr('Сначала добавьте спортсмена'),
                   style: TextStyle(color: theme.hintColor)))
           : groups == null
-              ? const Center(child: CircularProgressIndicator())
+              ? const AppLoader()
               : groups.isEmpty
                   ? Center(
                       child: Text(tr('Заданий пока нет'),

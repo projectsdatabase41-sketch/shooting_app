@@ -1,3 +1,4 @@
+import '../widgets/app_loader.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -140,7 +141,7 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(title: Text(tr('Чемпионы'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600))),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const AppLoader()
           : ListView(
               padding: EdgeInsets.fromLTRB(16, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 16, 24),
               children: [

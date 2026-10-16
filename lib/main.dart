@@ -31,6 +31,7 @@ import 'screens/call_screen.dart';
 import 'screens/chat_thread_screen.dart';
 import 'i18n/i18n.dart';
 import 'services/demo_mode.dart';
+import 'widgets/splash_gate.dart';
 import 'services/coach_access_service.dart';
 import 'tasks/athlete_tasks_screen.dart';
 import 'tasks/coach_tasks_screen.dart';
@@ -70,7 +71,7 @@ Future<void> main() async {
   RemoteConfig.refresh(db); // в фоне, без ожидания
   // Фоновая загрузка модели ИИ, прерванная закрытием приложения, продолжится сама.
   if (localAiSupported) initModelDownloads().catchError((_) {});
-  runApp(ShootingApp(db: db));
+  runApp(ShootingApp(db: db, showSplash: true));
 }
 
 /// Экран на случай, если базу так и не удалось открыть (см. комментарий
@@ -121,7 +122,10 @@ class ShootingApp extends StatefulWidget {
   /// Показывать ли обязательную анкету при первом открытии (в тестах выключают).
   final bool requireProfile;
 
-  const ShootingApp({super.key, required this.db, this.requireProfile = true});
+  /// Играть заставку при запуске (в тестах выключено).
+  final bool showSplash;
+
+  const ShootingApp({super.key, required this.db, this.requireProfile = true, this.showSplash = false});
 
   @override
   State<ShootingApp> createState() => _ShootingAppState();
@@ -410,7 +414,10 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
             // работает локально, и требовать вход при каждом запуске ради
             // необязательной возможности — значит запирать дверь, за
             // которой ничего нет. Подключение к базе живёт в настройках.
-            home: _ProfileGate(db: widget.db, require: widget.requireProfile),
+            home: SplashGate(
+              enabled: widget.showSplash && SplashGate.isOn(widget.db),
+              child: _ProfileGate(db: widget.db, require: widget.requireProfile),
+            ),
           );
         },
       ),

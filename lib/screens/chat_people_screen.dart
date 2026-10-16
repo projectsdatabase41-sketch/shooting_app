@@ -1,3 +1,4 @@
+import '../widgets/app_loader.dart';
 import '../logic/friendly_error.dart';
 import 'dart:async';
 
@@ -593,7 +594,7 @@ class _ChatDirectoryScreenState extends State<ChatDirectoryScreen> {
                       if (i >= _people.length) {
                         return const Padding(
                             padding: EdgeInsets.all(16),
-                            child: Center(child: CircularProgressIndicator()));
+                            child: const AppLoader());
                       }
                       final p = _people[i];
                       return ListTile(

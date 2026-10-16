@@ -1,3 +1,4 @@
+import '../widgets/app_loader.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -89,7 +90,7 @@ class _AiMemoryScreenState extends State<AiMemoryScreen> {
         ],
       ),
       body: items == null
-          ? const Center(child: CircularProgressIndicator())
+          ? const AppLoader()
           : !_auth.isSignedIn
               ? EmptyState(icon: Icons.cloud_off_outlined, text: tr('Память хранится в вашей базе: войдите в неё в «Данные и синхронизация»'))
               : items.isEmpty

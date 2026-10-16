@@ -110,6 +110,8 @@ flutter:
     - assets/ai/
     # Тихий звук нового сообщения в открытом чате.
     - assets/sounds/
+    # Заставка при запуске и цикличная анимация ожидания.
+    - assets/video/
 
 flutter_launcher_icons:
   android: true

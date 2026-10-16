@@ -1,3 +1,4 @@
+import 'app_loader.dart';
 import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -104,7 +105,7 @@ class _AthleteCoachChatState extends State<AthleteCoachChat> {
     final coaches = _coaches;
     if (coaches == null) {
       return _error == null
-          ? const Center(child: CircularProgressIndicator())
+          ? const AppLoader()
           : _hint(_error!);
     }
 

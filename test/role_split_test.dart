@@ -20,11 +20,18 @@ void main() {
     expect(find.text('М'), findsOneWidget);
     expect(find.text('Мои данные'), findsOneWidget);
     await tester.tap(find.text('М'));
-    await tester.pump();
+    await tester.pumpAndSettle();
+    expect(find.text('М — Мои'), findsOneWidget); // выдвинулся список из двух строк
+    expect(find.text('С — Спортсмены'), findsOneWidget);
+    await tester.tap(find.text('С — Спортсмены'));
+    await tester.pumpAndSettle();
+    expect(find.text('М — Мои'), findsNothing); // выбор закрыл список
     expect(find.text('С'), findsOneWidget);
     expect(store.workMode, WorkMode.coach);
     await tester.tap(find.text('С'));
-    await tester.pump();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('М — Мои'));
+    await tester.pumpAndSettle();
     expect(find.text('М'), findsOneWidget);
     expect(store.workMode, WorkMode.athlete);
 

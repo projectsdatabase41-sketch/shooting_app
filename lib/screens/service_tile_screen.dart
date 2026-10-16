@@ -1,3 +1,4 @@
+import '../widgets/app_loader.dart';
 import '../logic/friendly_error.dart';
 import 'dart:convert';
 
@@ -397,7 +398,7 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
   Widget _buildContent(BuildContext context, Map<String, dynamic>? spec,
       List<Map<String, dynamic>>? displayRows) {
     return _busy
-        ? const Center(child: CircularProgressIndicator())
+        ? const AppLoader()
         : _error != null
             ? Padding(
                 padding: const EdgeInsets.all(16),

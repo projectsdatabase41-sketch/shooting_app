@@ -1,3 +1,4 @@
+import '../widgets/app_loader.dart';
 import '../logic/friendly_error.dart';
 import 'dart:async';
 
@@ -407,7 +408,7 @@ class _TaskRunScreenState extends State<TaskRunScreen> {
         ),
         const SizedBox(height: 16),
         if (_submitting)
-          const Center(child: CircularProgressIndicator())
+          const AppLoader()
         else
           Raised3DButton(
             icon: Icons.send,

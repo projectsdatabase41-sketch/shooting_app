@@ -1,3 +1,4 @@
+import '../widgets/app_loader.dart';
 import '../logic/friendly_error.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -352,7 +353,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
     }
     if (!_auth.isSignedIn) {
       if (_autoProvisioning) {
-        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        return const Scaffold(body: const AppLoader());
       }
       return _ChatAuthScreen(
         auth: _auth,

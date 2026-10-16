@@ -1,3 +1,4 @@
+import '../widgets/app_loader.dart';
 import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
 
@@ -138,7 +139,7 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
                 ?.copyWith(fontWeight: FontWeight.w600)),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const AppLoader()
           : RefreshIndicator(
               onRefresh: _reload,
               child: ListView(

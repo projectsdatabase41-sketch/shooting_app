@@ -1,3 +1,4 @@
+import '../widgets/app_loader.dart';
 import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -105,7 +106,7 @@ class _CoachExerciseDetailScreenState extends State<CoachExerciseDetailScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading)
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(body: const AppLoader());
     final error = _error;
     if (error != null) {
       return Scaffold(

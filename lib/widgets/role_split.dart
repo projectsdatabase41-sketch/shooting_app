@@ -32,8 +32,8 @@ class _RoleSplitState extends State<RoleSplit> {
     store.setContextSilently(_coach ? WorkMode.coach : WorkMode.athlete);
     return RoleSwitchScope(
       coach: _coach,
-      toggle: () {
-        setState(() => _coach = !_coach);
+      select: (coach) {
+        setState(() => _coach = coach);
         store.setContextSilently(_coach ? WorkMode.coach : WorkMode.athlete);
       },
       child: IndexedStack(index: _coach ? 1 : 0, children: [widget.athlete, widget.coach]),
