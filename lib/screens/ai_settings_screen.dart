@@ -4,6 +4,7 @@ import '../local_ai/local_ai_screen.dart';
 import '../widgets/glass_pill.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'ai_memory_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../logic/ai_context.dart';
@@ -413,6 +414,15 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             ),
           ),
           const SizedBox(height: 24),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.psychology_outlined),
+            title: Text(tr('Память ассистента')),
+            subtitle: Text(tr('Что он помнит о прошлых разговорах: смотреть и стирать')),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AiMemoryScreen())),
+          ),
+          const SizedBox(height: 12),
           SectionHeader(title: tr('Инструкция ассистенту')),
           const SizedBox(height: 12),
           TextField(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../logic/friendly_error.dart';
 import '../models/chat_contact.dart';
 import '../services/chat_auth_service.dart';
 import '../services/chat_messages_repository.dart';
@@ -38,7 +39,18 @@ class _CoachAthletesChatScreenState extends State<CoachAthletesChatScreen> {
   /// как резерв, чтобы переписка не пропадала совсем.
   Future<void> _open(CoachAthlete a) async {
     final chatAuth = ChatAuthService(widget.access.db);
-    if (chatAuth.isSignedIn) {
+    final messenger = ScaffoldMessenger.of(context);
+    String? why; // почему не получилось открыть мессенджер-чат
+    if (!chatAuth.isSignedIn) {
+      why = tr('вы не вошли в мессенджер');
+    } else {
+      // Сразу даём знать, что нажатие принято: связь с базой спортсмена
+      // может занять несколько секунд.
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+            duration: const Duration(seconds: 4),
+            content: Text(tr('Подключаемся к {n}…', {'n': a.name}))));
       try {
         final link = await widget.access.linkChat(a,
             chatUserId: chatAuth.userId, nickname: chatAuth.nickname);
@@ -66,11 +78,18 @@ class _CoachAthletesChatScreenState extends State<CoachAthletesChatScreen> {
           ));
           return;
         }
-      } catch (_) {
+        why = tr('у спортсмена нет мессенджера, доступ отозван или база недоступна');
+      } catch (e) {
         // сеть/спортсмен без мессенджера — падём на старый канал ниже
+        why = friendlyError(e);
       }
     }
     if (!mounted) return;
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+          duration: const Duration(seconds: 6),
+          content: Text(tr('Мессенджер-чат с {n} недоступен: {w}. Открыт резервный канал.', {'n': a.name, 'w': why}))));
     await Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => CoachAthleteChatScreen(access: widget.access, athlete: a),
     ));

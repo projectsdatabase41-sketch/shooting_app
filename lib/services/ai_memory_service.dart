@@ -148,6 +148,46 @@ class AiMemoryService {
     }
   }
 
+  /// Вся память для экрана «Память ассистента» (новые сверху).
+  Future<List<AiMemorySummary>> listAll({int limit = 300}) => _fetchRecent(limit: limit);
+
+  Map<String, String>? _h(String? token) =>
+      token == null ? null : {'apikey': auth.anonKey, 'Authorization': 'Bearer $token'};
+
+  /// Удаляет одну запись памяти. `true` — удалена.
+  Future<bool> deleteOne(String id) async {
+    final h = _h(await auth.ensureFreshToken());
+    if (h == null) return false;
+    final client = clientFactory();
+    try {
+      final res = await client
+          .delete(Uri.parse('${auth.url}/rest/v1/ai_conversation_summaries?id=eq.$id'), headers: h)
+          .timeout(const Duration(seconds: 20));
+      return res.statusCode < 300;
+    } catch (_) {
+      return false;
+    } finally {
+      client.close();
+    }
+  }
+
+  /// Стирает всю память ассистента о разговорах.
+  Future<bool> clearAll() async {
+    final h = _h(await auth.ensureFreshToken());
+    if (h == null) return false;
+    final client = clientFactory();
+    try {
+      final res = await client
+          .delete(Uri.parse('${auth.url}/rest/v1/ai_conversation_summaries?id=not.is.null'), headers: h)
+          .timeout(const Duration(seconds: 30));
+      return res.statusCode < 300;
+    } catch (_) {
+      return false;
+    } finally {
+      client.close();
+    }
+  }
+
   /// Добавляет новую сводку. Молча ничего не делает без облака —
   /// вызывающий код (`AiChatViewModel`) не должен ронять сам разговор
   /// из-за того, что подведение итога не сохранилось.
