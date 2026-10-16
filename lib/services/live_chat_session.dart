@@ -1,13 +1,17 @@
 import 'dart:async';
+import 'dart:io' show Directory;
 
 import 'package:flutter/widgets.dart' show AppLifecycleState, WidgetsBinding, WidgetsBindingObserver;
 
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/chat_message.dart';
 import 'chat_auth_service.dart';
 import 'chat_messages_repository.dart';
 import 'chat_settings.dart';
+import 'p2p_file_transfer.dart';
 import 'peer_link.dart';
 import 'realtime_client.dart';
 import 'remote_config.dart';
@@ -69,6 +73,15 @@ class LiveChatSession {
   int _attempt = 0;
   bool _closed = false;
   PeerLink? _link;
+
+  /// Передача больших файлов напрямую (только когда открыт P2P-канал).
+  late final P2pFiles files = P2pFiles(
+    send: (e, pl) {
+      final l = _link;
+      return l != null && l.isOpen && l.send(encodePeerFrame(e, pl));
+    },
+    dirFor: () async => Directory(p.join((await getApplicationDocumentsDirectory()).path, 'p2p_inbox')),
+  );
   int _rtcTries = 0;
   static const int _maxRtcTries = 4;
 
@@ -185,6 +198,10 @@ class LiveChatSession {
   }
 
   void _onBroadcast(String event, Map<String, dynamic> p) {
+    if (P2pFiles.isFileEvent(event)) {
+      files.handle(event, p);
+      return;
+    }
     if (event == 'reaction') {
       final id = p['target_client_message_id'];
       final emoji = p['emoji'];
@@ -274,6 +291,7 @@ class LiveChatSession {
         return;
       }
       _link = null;
+      files.abortAll(); // передачи по оборванному P2P останавливаем
       if (_closed) return;
       // Канал сигнализации мог быть закрыт «на отдыхе» (P2P и так работал) —
       // поднимаем его заново; presence подскажет, когда пробовать P2P снова.
@@ -310,6 +328,7 @@ class LiveChatSession {
 
   void close() {
     _closed = true;
+    files.abortAll();
     _link?.close();
     _link = null;
     _retry?.cancel();
@@ -349,6 +368,8 @@ class LiveSessions {
     if (s == null) return;
     s.onIncoming = null;
     s.onPeerRead = null;
+    s.files.onOffer = null;
+    s.files.onChanged = null;
     _timers.remove(contactId)?.cancel();
     _timers[contactId] = Timer(grace, () => close(contactId));
   }

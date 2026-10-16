@@ -1,3 +1,4 @@
+import 'package:uuid/uuid.dart';
 import 'dart:ui' as ui;
 import '../logic/friendly_error.dart';
 import 'dart:async';
@@ -41,6 +42,7 @@ import '../services/message_sound.dart';
 import '../services/web_push_token.dart';
 import '../services/chat_sync_service.dart';
 import '../services/coach_link.dart';
+import '../services/p2p_file_transfer.dart';
 import '../services/push_service.dart' show PushService, pendingCallAckContactId;
 import '../widgets/link_signal.dart';
 import '../services/chat_translation_service.dart';
@@ -413,6 +415,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           if (mounted) _reload();
         };
       widget.sync.live = _live;
+      _live!.files.onOffer = _onFileOffer;
+      _live!.files.onChanged = () {
+        if (mounted) setState(() {});
+      };
     } else {
       _groupLive = GroupLiveSession(
         auth: widget.auth,
@@ -964,6 +970,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _retry(ChatMessage m) async {
+    // Файл крупнее лимита облака повторно через облако не отправить.
+    if (m.attachmentLocalPath != null && (m.attachmentSize ?? 0) > ChatMediaUtils.maxDriveBytes) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(tr('Файл больше 1,5 ГБ — отправьте его заново напрямую (P2P)'))));
+      return;
+    }
     try {
       await widget.sync.retry(m);
     } catch (e) {
@@ -1021,6 +1033,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         }
         _reload();
         msg = widget.repo.forContact(_contact.id).firstWhere((x) => x.id == m.id, orElse: () => m);
+      }
+      final lp = msg.attachmentLocalPath;
+      if (lp != null && File(lp).existsSync() && File(lp).lengthSync() > 64 * 1024 * 1024) {
+        // Большие файлы не грузим в память: отдаём системе.
+        await ChatMediaUtils.shareAttachmentPath(lp, msg.attachmentMime);
+        return;
       }
       final bytes = await _attachmentBytes(msg);
       if (bytes == null || !mounted) return;
@@ -1354,6 +1372,121 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
+  // ---- Передача файлов напрямую (P2P) ----
+
+  /// Следим за передачей: прогресс в пузыре, итог — в статусе/пути сообщения.
+  void _watchTransfer({
+    required String messageId,
+    required String clientId,
+    required ValueNotifier<double> progress,
+    required ValueNotifier<P2pState> state,
+    String? Function()? donePath,
+  }) {
+    void setProgress(double? v) {
+      final m = {...ChatSyncService.uploadProgress.value};
+      if (v == null) {
+        m.remove(clientId);
+      } else {
+        m[clientId] = v;
+      }
+      ChatSyncService.uploadProgress.value = m;
+    }
+
+    progress.addListener(() => setProgress(progress.value));
+    state.addListener(() {
+      final st = state.value;
+      if (st == P2pState.active || st == P2pState.offered) return;
+      setProgress(null);
+      if (st == P2pState.done) {
+        final path = donePath?.call();
+        if (path != null) widget.repo.updateAttachmentLocalPath(messageId, path);
+        widget.repo.updateStatus(messageId, ChatMessageStatus.delivered);
+      } else {
+        widget.repo.updateStatus(messageId, ChatMessageStatus.error);
+      }
+      if (mounted) _reload();
+    });
+    setProgress(0);
+  }
+
+  void _sendFileP2p(ChatLargeFilePick picked) {
+    final live = _live;
+    if (live == null || !live.isDirect) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(tr('Прямого соединения нет: откройте переписку одновременно с собеседником'))));
+      return;
+    }
+    final sender = live.files.sendFile(
+      path: picked.path,
+      name: picked.name,
+      size: picked.size,
+      mime: ChatMediaUtils.looksLikeImage(picked.name) ? ChatMediaUtils.mimeFor(picked.name) : 'application/octet-stream',
+    );
+    final msg = ChatMessage(
+      id: const Uuid().v4(),
+      clientMessageId: sender.id,
+      contactId: _contact.id,
+      direction: ChatMessageDirection.outgoing,
+      status: ChatMessageStatus.sending,
+      type: ChatMessageType.file,
+      attachmentName: picked.name,
+      attachmentMime: 'application/octet-stream',
+      attachmentSize: picked.size,
+      attachmentLocalPath: picked.path,
+      downloadAllowed: true,
+      createdAt: DateTime.now(),
+    );
+    widget.repo.addMessage(msg);
+    _watchTransfer(messageId: msg.id, clientId: sender.id, progress: sender.progress, state: sender.state);
+    _reload();
+    _scrollToEnd();
+  }
+
+  /// Собеседник предлагает файл напрямую: спрашиваем, принимать ли.
+  Future<void> _onFileOffer(P2pReceiver r) async {
+    if (!mounted) return r.reject();
+    final ok = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('Файл напрямую')),
+        content: Text(tr('{c} отправляет «{n}» ({s}). Принять?', {
+          'c': _contact.nickname,
+          'n': r.name,
+          's': ChatMediaUtils.formatSize(r.size),
+        })),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Отказаться'))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Принять'))),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) {
+      r.reject();
+      return;
+    }
+    final msg = ChatMessage(
+      id: const Uuid().v4(),
+      clientMessageId: r.id,
+      contactId: _contact.id,
+      direction: ChatMessageDirection.incoming,
+      status: ChatMessageStatus.sending,
+      type: ChatMessageType.file,
+      attachmentName: r.name,
+      attachmentMime: r.mime,
+      attachmentSize: r.size,
+      downloadAllowed: true,
+      createdAt: DateTime.now(),
+    );
+    widget.repo.addMessage(msg);
+    _watchTransfer(messageId: msg.id, clientId: r.id, progress: r.progress, state: r.state, donePath: () => r.path);
+    await r.accept();
+    if (r.state.value == P2pState.failed || r.state.value == P2pState.rejected) {
+      widget.repo.updateStatus(msg.id, ChatMessageStatus.error);
+    }
+    if (mounted) _reload();
+  }
+
   /// Большой файл (видео, архив...) — минуя Storage (лимит 50 МБ), через
   /// Google Drive (см. `ChatDriveService`). Долгое нажатие на скрепку, а
   /// не отдельная видимая кнопка (пока это редкий случай) — без
@@ -1362,6 +1495,35 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<void> _attachLarge() async {
     final picked = await ChatMediaUtils.pickLargeFile();
     if (!mounted || picked == null) return;
+    // Прямая передача (P2P) возможна в личной переписке, когда оба на линии.
+    final direct = !_contact.isGroup && _live?.isDirect == true;
+    final how = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            leading: const Icon(Icons.swap_horiz),
+            title: Text(tr('Напрямую (P2P)')),
+            subtitle: Text(direct
+                ? tr('Без базы и облака, любой размер. Пока идёт передача, держите приложение открытым.')
+                : tr('Недоступно: нужно прямое соединение — оба в этой переписке, в шапке значок P2P.')),
+            enabled: direct,
+            onTap: () => Navigator.pop(ctx, 'p2p'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.cloud_upload_outlined),
+            title: Text(tr('Через облако (Google Диск)')),
+            subtitle: Text(tr('До 1,5 ГБ, получатель скачает позже')),
+            onTap: () => Navigator.pop(ctx, 'cloud'),
+          ),
+        ]),
+      ),
+    );
+    if (how == null || !mounted) return;
+    if (how == 'p2p') {
+      _sendFileP2p(picked);
+      return;
+    }
     if (picked.size > ChatMediaUtils.maxDriveBytes) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(tr('Файл больше 1,5 ГБ: через облако такой не отправить. Для очень больших файлов нужна прямая передача (P2P).'))));
@@ -2512,6 +2674,21 @@ class _Bubble extends StatelessWidget {
             onTap: (mine || message.downloadAllowed || message.attachmentBase64 != null)
                 ? onOpenFile
                 : null,
+          ),
+          // Передача напрямую (P2P): полоса прогресса под файлом.
+          ValueListenableBuilder<Map<String, double>>(
+            valueListenable: ChatSyncService.uploadProgress,
+            builder: (_, map, __) {
+              final pr = map[message.clientMessageId];
+              if (pr == null || message.attachmentBase64 != null) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(value: pr, minHeight: 5),
+                ),
+              );
+            },
           ),
           const SizedBox(height: 6),
         ] else if (message.type == ChatMessageType.image && !isImage) ...[
