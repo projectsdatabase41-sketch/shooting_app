@@ -36,6 +36,9 @@ class HomeTabsViewModel extends ChangeNotifier {
   }
 
   static const List<String> allKeys = [
+    'home_tabs_visible_all',
+    'home_tabs_hidden_all',
+    'home_tabs_layout_all',
     'home_tabs_visible_athlete',
     'home_tabs_hidden_athlete',
     'home_tabs_visible_coach',
@@ -130,6 +133,25 @@ class HomeTabsViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Полный порядок всех известных вкладок (включая скрытые и убранные
+  /// по состоянию данных) — для экрана «Модули».
+  List<String> get order => [..._visible, for (final id in allIds) if (!_visible.contains(id)) id];
+
+  /// Задаёт порядок по списку id (остальные — в конец). Скрытость сохраняется.
+  void setOrder(List<String> ids) {
+    final known = allIds.toSet();
+    final ordered = <String>[
+      for (final id in ids)
+        if (known.contains(id) && !_hidden.contains(id)) id,
+    ];
+    for (final id in _visible) {
+      if (!ordered.contains(id)) ordered.add(id);
+    }
+    _visible = ordered;
+    _persist();
+    notifyListeners();
+  }
+
   /// Индексы — из `ReorderableListView` (см. `WorkspaceViewModel.move`,
   /// тот же приём с поправкой на единицу).
   void move(int oldIndex, int newIndex) {
@@ -149,14 +171,21 @@ class HomeTabsViewModel extends ChangeNotifier {
   String get _keyHidden => 'home_tabs_hidden_$mode';
 
   void _load() {
-    final savedLayout = _readRaw('home_tabs_layout_$mode');
+    var savedLayout = _readRaw('home_tabs_layout_$mode');
+    // Единый набор вкладок ('all') унаследовал настройки спортсмена
+    // (раньше были отдельные наборы для спортсмена и тренера).
+    if (savedLayout.isEmpty && mode == 'all') savedLayout = _readRaw('home_tabs_layout_athlete');
     if (savedLayout.isNotEmpty) _layout = savedLayout;
 
     final savedCols = int.tryParse(_readRaw(_keyTileColumns));
     if (savedCols != null) _tileColumns = savedCols.clamp(2, 5);
 
-    final savedVisible = _readRaw(_keyVisible);
-    final savedHidden = _readRaw(_keyHidden);
+    var savedVisible = _readRaw(_keyVisible);
+    var savedHidden = _readRaw(_keyHidden);
+    if (savedVisible.isEmpty && savedHidden.isEmpty && mode == 'all') {
+      savedVisible = _readRaw('home_tabs_visible_athlete');
+      savedHidden = _readRaw('home_tabs_hidden_athlete');
+    }
     if (savedVisible.isEmpty && savedHidden.isEmpty)
       return; // ничего не сохранено — умолчание уже стоит
 

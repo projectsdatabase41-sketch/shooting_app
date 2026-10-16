@@ -10,7 +10,8 @@ enum AppModule {
   assistant('module_assistant'),
   localAi('module_local_ai'),
   services('module_services'),
-  finals('module_finals');
+  finals('module_finals'),
+  notes('module_notes');
 
   final String key;
   const AppModule(this.key);
@@ -53,7 +54,17 @@ class ModulesSettings {
 
   static bool isOn(LocalDbService db, AppModule m) {
     ensureInitialized(db);
-    return _read(db, m.key) == '1';
+    var v = _read(db, m.key);
+    if (v == null) {
+      // Модуль, появившийся позже установки: у прежних пользователей включён
+      // (вкладка не должна пропасть), у новых — выключен.
+      final existingUser = _read(db, 'home_tabs_visible_athlete') != null ||
+          _read(db, 'home_tabs_visible_coach') != null ||
+          _read(db, 'home_tabs_visible_all') != null;
+      v = existingUser ? '1' : '0';
+      _write(db, m.key, v);
+    }
+    return v == '1';
   }
 
   static void set(LocalDbService db, AppModule m, bool on) {

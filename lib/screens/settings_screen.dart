@@ -26,7 +26,6 @@ import '../widgets/service_icon_picker.dart';
 import 'ai_settings_screen.dart';
 import 'settings_appearance_screen.dart';
 import 'settings_data_screen.dart';
-import 'settings_home_tabs_screen.dart';
 import 'onboarding_screen.dart';
 import 'settings_modules_screen.dart';
 import 'settings_services_screen.dart';
@@ -100,18 +99,6 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
           ListTile(
-            leading: const Icon(Icons.dashboard_customize_outlined),
-            title: Text(tr('Рабочие пространства')),
-            subtitle: Text(tr(
-                'Какие вкладки показывать на главном экране и в каком порядке')),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                  builder: (_) =>
-                      SettingsHomeTabsScreen(specs: specs, tabs: homeTabs)),
-            ),
-          ),
-          ListTile(
             leading: const Icon(Icons.badge_outlined),
             title: Text(tr('Профиль спортсмена')),
             subtitle: Text(tr('Вид стрельбы, пол, год рождения, разряд, регион')),
@@ -128,10 +115,10 @@ class SettingsScreen extends StatelessWidget {
             leading: const Icon(Icons.tune),
             title: Text(tr('Модули')),
             subtitle: Text(tr(
-                'Мессенджер, ИИ, локальный ИИ, сервисы — включить или скрыть')),
+                'Тренировки, спортсмены, заметки, мессенджер, ИИ — включить и расставить по приоритету')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const SettingsModulesScreen()),
+              MaterialPageRoute(builder: (_) => SettingsModulesScreen(tabs: homeTabs, specs: specs)),
             ),
           ),
           if (ModulesSettings.isOn(store.db, AppModule.services))
@@ -157,25 +144,6 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
           const Divider(height: 24),
-          // Роли включаются в «Модулях» (Тренировки / Спортсмены). Если включены
-          // обе — здесь переключается, в какой роли работаем сейчас.
-          if (store.isAthlete && store.isCoach)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-              child: SegmentedButton<WorkMode>(
-                segments: [
-                  ButtonSegment(value: WorkMode.athlete, icon: const Icon(Icons.fitness_center), label: Text(tr('Спортсмен'))),
-                  ButtonSegment(value: WorkMode.coach, icon: const Icon(Icons.groups_outlined), label: Text(tr('Тренер'))),
-                ],
-                selected: {store.workMode},
-                onSelectionChanged: (s) {
-                  store.workMode = s.first;
-                  store.saveSettings();
-                  store.refreshView();
-                  Navigator.of(context).popUntil((r) => r.isFirst);
-                },
-              ),
-            ),
           const _UpdateTile(),
           const Divider(height: 24),
           // Учётная запись — в самом низу, как просил пользователь:

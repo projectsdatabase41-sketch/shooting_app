@@ -258,7 +258,7 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
   Future<void> _openTaskFromPush(String taskId) async {
     final nav = navigatorKey.currentState;
     if (nav == null) return;
-    if (_store.workMode == WorkMode.coach) {
+    if (_store.isCoach && !_store.isAthlete) {
       nav.push(MaterialPageRoute(
           builder: (_) => CoachTasksScreen(openTaskId: taskId)));
     } else {

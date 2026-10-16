@@ -563,7 +563,7 @@ class _AiChatBodyState extends State<_AiChatBody> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
-          SnackBar(content: Text(tr('Заметка сохранена в дневник'))));
+          SnackBar(content: Text(tr('Заметка сохранена'))));
   }
 
   /// Правка своего вопроса перед повторной отправкой (пункт 6 списка
@@ -1154,7 +1154,7 @@ class _NoteProposalCard extends StatelessWidget {
             Raised3DButton(
               dense: true,
               icon: Icons.add,
-              label: tr('Сохранить в дневник'),
+              label: tr('Сохранить в заметки'),
               baseColor: cs.primary,
               onTap: onSave,
             ),

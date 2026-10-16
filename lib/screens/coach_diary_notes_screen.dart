@@ -57,7 +57,7 @@ class _CoachDiaryNotesScreenState extends State<CoachDiaryNotesScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
-        title: Text(tr('Дневник'),
+        title: Text(tr('Заметки'),
             style: Theme.of(context)
                 .textTheme
                 .titleMedium
@@ -65,7 +65,7 @@ class _CoachDiaryNotesScreenState extends State<CoachDiaryNotesScreen> {
       ),
       body: _notes.isEmpty
           ? EmptyState(
-              icon: Icons.menu_book_outlined, text: tr('Заметок пока нет'))
+              icon: Icons.sticky_note_2_outlined, text: tr('Заметок пока нет'))
           : Stack(
               children: [
                 Positioned.fill(
@@ -323,7 +323,7 @@ class _NoteScreenState extends State<_NoteScreen> {
     if (f == null || bytes == null || !mounted) return;
     if (bytes.length > _maxFileBytes) {
       setState(
-          () => _error = tr('Файл больше 15 МБ — он не поместится в дневник'));
+          () => _error = tr('Файл больше 15 МБ — он не поместится в заметку'));
       return;
     }
     widget.repo.addFile(widget.note.id, const Uuid().v4(), f.name, null, bytes);

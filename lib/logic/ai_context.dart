@@ -130,6 +130,10 @@ class AiContext {
   /// `customInstructions` — необязательная короткая инструкция от
   /// пользователя из настроек ассистента (см. `AiSettings.customInstructions`),
   /// дописывается ПОСЛЕ базовых правил, а не вместо них.
+  /// Включён модуль «Заметки» — ассистент вправе предлагать заметку (```note)
+  /// любому пользователю, а не только тренеру. Выставляет `HomeShell`.
+  static bool notesEnabled = false;
+
   static String systemPrompt(
       {String? customInstructions,
       bool coachMode = false,
@@ -142,7 +146,7 @@ class AiContext {
         : (baseOverride != null && baseOverride.trim().isNotEmpty)
             ? baseOverride
             : defaultBasePrompt;
-    final withCoach = '${coachMode ? '$base$_coachExtra' : base}\n${_profileRules(profile)}';
+    final withCoach = '${(coachMode || notesEnabled) ? '$base$_notesExtra' : base}\n${_profileRules(profile)}';
     final extra = customInstructions?.trim();
     if (extra == null || extra.isEmpty) return withCoach;
     return '$withCoach\n'
@@ -223,9 +227,9 @@ MODE: THINK. The CONTEXT ends with HELPER WORKING NOTES: results of several inde
 ''',
       };
 
-  static const String _coachExtra = '''
+  static const String _notesExtra = '''
 
-The user is a COACH. Only when explicitly asked to save/create a diary note, add a ```note block at the end: {"topic":"Short topic","content":"Note text"}. The content is only what the coach dictated — add no training or shot data or earlier notes. Before the block, confirm briefly without retelling the JSON.
+The user has a notes module. Only when explicitly asked to save/create a note, add a ```note block at the end: {"topic":"Short topic","content":"Note text"}. The content is only what the user dictated — add no training or shot data or earlier notes. Before the block, confirm briefly without retelling the JSON.
 ''';
 
   /// Блок КОНТЕКСТ — компактный JSON, чтобы модель не тратила внимание

@@ -124,7 +124,7 @@ class _SettingsDataScreenState extends State<SettingsDataScreen> {
           ),
           // Тренер не ведёт свои тренировки и никому не передаёт свои
           // данные — токен доступа тренерам нужен только спортсмену.
-          if (store.workMode != WorkMode.coach) ...[
+          if (store.isAthlete) ...[
             const Divider(height: 24),
             const ShareTokensSection(),
           ],
@@ -473,7 +473,7 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           child: SectionHeader(
             title: tr('Доступ тренерам'),
-            subtitle: tr('Токены на просмотр вашего дневника'),
+            subtitle: tr('Токены на просмотр ваших тренировок'),
           ),
         ),
         if (!signedIn)

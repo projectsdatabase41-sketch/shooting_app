@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../logic/ai_context.dart';
 import '../models/home_tab_specs.dart';
 import '../models/training_session.dart';
 import '../services/custom_services_repository.dart';
@@ -32,8 +33,8 @@ import 'target_screen.dart';
 import '../i18n/i18n.dart';
 import '../logic/friendly_error.dart';
 
-/// Домашняя оболочка с нижней навигацией. Состав вкладок зависит от
-/// `workMode` (часть C.1 логики-спека). Порядок и видимость каждой
+/// Домашняя оболочка с нижней навигацией. Состав вкладок задают включённые
+/// модули (режима «спортсмен / тренер» больше нет). Порядок и видимость каждой
 /// вкладки пользователь настраивает сам — долгое нажатие на значок в
 /// нижней навигации (см. `HomeTabsBar`) и раздел "Рабочие пространства"
 /// в настройках.
@@ -45,36 +46,23 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
-  String _athleteTab = 'exercises';
-  String _coachTab = 'diary';
+  /// Текущая вкладка («страничная» раскладка).
+  String _tab = 'exercises';
 
   /// Вкладка, открытая до мессенджера, — туда его «сворачивает» кнопка
   /// закрытия (см. ChatHomeScreen.close).
   String? _beforeMessenger;
-  WorkMode? _lastMode;
 
-  late final HomeTabsViewModel _athleteTabs;
-  late final HomeTabsViewModel _coachTabs;
+  late final HomeTabsViewModel _tabs;
   late final CustomServicesRepository _services;
   late final PersonalizationViewModel _personalization;
   ChatBackgroundPoll? _chatPoll;
-
-  /// Вкладки недоделанных функций — скрыты от обычных пользователей,
-  /// пока не включён "режим разработчика". Не про удаление функции,
-  /// только про то, чтобы её не увидели раньше времени — сам код никуда
-  /// не делся. Мессенджер выведен из-под этого флага (решение
-  /// пользователя) — звонки/видеозвонки внутри него остаются
-  /// разработческими отдельно (см. кнопки в ChatContactPanelScreen).
-  static const _devOnlyTabIds = <String>{};
 
   @override
   void initState() {
     super.initState();
     final db = context.read<AppDataStore>().db;
-    _athleteTabs = HomeTabsViewModel(db,
-        mode: 'athlete', allIds: athleteTabIds, unhidable: athleteUnhidable);
-    _coachTabs = HomeTabsViewModel(db,
-        mode: 'coach', allIds: coachTabIds, unhidable: coachUnhidable);
+    _tabs = HomeTabsViewModel(db, mode: 'all', allIds: allTabIds, unhidable: unhidableTabs);
     _services = CustomServicesRepository(db);
     _personalization = context.read<PersonalizationViewModel>();
     _services.addListener(_onServicesChanged);
@@ -82,8 +70,7 @@ class _HomeShellState extends State<HomeShell> {
     _onServicesChanged(); // сервисы, добавленные в прошлой сессии
     _chatPoll = ChatBackgroundPoll(db, shouldPoll: () {
       if (!ModulesSettings.isOn(db, AppModule.messenger) || ChatHomeScreen.isOpen) return false;
-      final coach = context.read<AppDataStore>().workMode == WorkMode.coach;
-      return (coach ? _coachTab : _athleteTab) != 'messenger';
+      return _tab != 'messenger';
     });
     _syncChatPoll();
     ModulesSettings.revision.addListener(_syncChatPoll);
@@ -107,20 +94,13 @@ class _HomeShellState extends State<HomeShell> {
     super.dispose();
   }
 
-  /// Плитки сервисов — общие для обоих режимов (решение пользователя не
-  /// уточняло разделение по ролям, а разделять было бы лишней сложностью
-  /// без явной причины). Заодно пересчитывается при включении/выключении
-  /// режима разработчика — те же id, просто с учётом `_devOnlyTabIds`.
+  /// Плитки сервисов добавляются/убираются во время работы — пересчитываем
+  /// набор известных id вкладок.
   void _onServicesChanged() {
-    final devMode = _personalization.devMode;
     final serviceIds = [
       for (final s in _services.list()) '$serviceTabPrefix${s.id}'
     ];
-    List<String> withDevFilter(List<String> ids) => devMode
-        ? ids
-        : ids.where((id) => !_devOnlyTabIds.contains(id)).toList();
-    _athleteTabs.setAllIds([...withDevFilter(athleteTabIds), ...serviceIds]);
-    _coachTabs.setAllIds([...withDevFilter(coachTabIds), ...serviceIds]);
+    _tabs.setAllIds([...allTabIds, ...serviceIds]);
   }
 
   Map<String, HomeTabSpec> _specsWithServices() => {
@@ -130,53 +110,45 @@ class _HomeShellState extends State<HomeShell> {
               HomeTabSpec(icon: iconForService(s.iconName), label: s.name),
       };
 
+  /// Какие вкладки сейчас убраны из показа без изменения сохранённых
+  /// настроек: модуль выключен, нет данных (у тренера без спортсменов
+  /// нечего показывать в статистике и заданиях) и т. п.
+  Set<String> _suppressedTabs(AppDataStore store, {required bool tilesMode}) {
+    final db = store.db;
+    bool on(AppModule m) => ModulesSettings.isOn(db, m);
+    final noAthletes = CoachAccessService(db).listAthletes().isEmpty;
+    AiContext.notesEnabled = on(AppModule.notes);
+    return {
+      if (!store.isAthlete) ...{'exercises', 'statistics', 'tasks'},
+      if (!store.isCoach) ...{'athletes', 'statistics_coach', 'tasks_coach', 'assistant_coach'},
+      if (store.isCoach && noAthletes) ...{'statistics_coach', 'tasks_coach'},
+      if (!on(AppModule.assistant)) ...{'assistant', 'assistant_coach'},
+      // Один ассистент: «Ассистент тренера» нужен, только когда включены оба
+      // направления, иначе общий ассистент подстраивается под единственное.
+      if (!on(AppModule.messenger)) 'messenger',
+      if (!on(AppModule.notes)) 'notes',
+      // Финалы — только в режиме разработчика и при включённом модуле.
+      if (!friendlyErrorDevMode || !on(AppModule.finals)) 'finals',
+      if (!on(AppModule.services))
+        for (final s in _services.list()) '$serviceTabPrefix${s.id}',
+      // В режиме плиток «Настройки» живут в шапке справа вверху, а не плиткой.
+      if (tilesMode) 'settings',
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final store = context.watch<AppDataStore>();
-    final isCoach = store.workMode == WorkMode.coach;
-    final tabs = isCoach ? _coachTabs : _athleteTabs;
-    DemoMode.tab = isCoach ? _coachTab : _athleteTab; // для отзывов в режиме «Демо»
-    // Тренер без подключённых спортсменов: статистика и задания пусты и
-    // бессмысленны — прячем до появления первого спортсмена.
-    _coachTabs.suppressed = CoachAccessService(store.db).listAthletes().isEmpty
-        ? const {'statistics_coach', 'tasks'}
-        : <String>{};
-    // Выключенные модули (Настройки → Модули) скрыты с главного экрана.
-    final hiddenModules = <String>{
-      if (!ModulesSettings.isOn(store.db, AppModule.messenger)) 'messenger',
-      // Финалы — только в режиме разработчика и при включённом модуле.
-      if (!friendlyErrorDevMode || !ModulesSettings.isOn(store.db, AppModule.finals)) 'finals',
-      if (!ModulesSettings.isOn(store.db, AppModule.assistant)) ...{
-        'assistant',
-        'assistant_coach'
-      },
-      if (!ModulesSettings.isOn(store.db, AppModule.services))
-        for (final s in _services.list()) '$serviceTabPrefix${s.id}',
-    };
-    // В режиме плиток «Настройки» живут в шапке справа вверху, а не плиткой.
-    final tilesMode = tabs.layout == 'tiles';
-    final suppressedNow = {...hiddenModules, if (tilesMode) 'settings'};
-    _coachTabs.suppressed = {..._coachTabs.suppressed, ...suppressedNow};
-    _athleteTabs.suppressed = suppressedNow;
-
-    // Рубильник "Режим тренера" переключают со страницы настроек —
-    // после смены роли логичнее увидеть домашнюю вкладку нового режима
-    // (Дневник у тренера, Мишень у спортсмена), а не ту, на которой
-    // листали до переключения (обычно это и есть сами настройки).
-    if (_lastMode != null && _lastMode != store.workMode) {
-      if (isCoach) {
-        _coachTab = 'diary';
-      } else {
-        _athleteTab = 'exercises';
-      }
-    }
-    _lastMode = store.workMode;
+    final tabs = _tabs;
+    tabs.suppressed = _suppressedTabs(store, tilesMode: tabs.layout == 'tiles');
+    DemoMode.tab = _tab; // для отзывов в режиме «Демо»
 
     return AnimatedBuilder(
       // И сервисы тоже: переименование не меняет набор вкладок (id те же),
       // а подпись плитки должна обновиться сразу.
       animation: Listenable.merge([tabs, _services, ModulesSettings.revision]),
       builder: (context, _) {
+        tabs.suppressed = _suppressedTabs(store, tilesMode: tabs.layout == 'tiles');
         // Режим "плитки" (решение пользователя) — один рабочий стол,
         // вкладки открываются отдельным экраном по тапу, а не в этом же
         // Scaffold: своей "текущей вкладки" тут нет, поэтому и
@@ -196,7 +168,7 @@ class _HomeShellState extends State<HomeShell> {
                     tooltip: tr('Настройки'),
                     icon: const Icon(Icons.settings_outlined),
                     onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => _pageFor('settings', store, isCoach, tabs))),
+                        builder: (_) => _pageFor('settings', store, tabs))),
                   ),
                 ]),
             body: Column(
@@ -212,7 +184,7 @@ class _HomeShellState extends State<HomeShell> {
                       specs: specs,
                       onSelect: (id) => Navigator.of(context).push(
                         MaterialPageRoute(
-                            builder: (_) => _pageFor(id, store, isCoach, tabs)),
+                            builder: (_) => _pageFor(id, store, tabs)),
                       ),
                     ),
                   ),
@@ -222,12 +194,10 @@ class _HomeShellState extends State<HomeShell> {
           );
         }
 
-        final selected = isCoach ? _coachTab : _athleteTab;
+        final homeTabId = tabs.visible.isEmpty ? 'settings' : tabs.visible.first;
         // Скрыли вкладку, на которой стояли — переезжаем на первую
         // оставшуюся видимую, а не оставляем экран без вкладки вовсе.
-        final current =
-            tabs.visible.contains(selected) ? selected : tabs.visible.first;
-        final homeTabId = isCoach ? 'diary' : 'exercises';
+        final current = tabs.visible.contains(_tab) ? _tab : homeTabId;
 
         // Вкладки в "страничном" режиме — не отдельные маршруты
         // Navigator (только один Scaffold на весь HomeShell, тело
@@ -242,21 +212,20 @@ class _HomeShellState extends State<HomeShell> {
           canPop: current == homeTabId,
           onPopInvokedWithResult: (didPop, _) {
             if (didPop) return;
-            _onDestinationSelected(context, store, isCoach, homeTabId);
+            _onDestinationSelected(context, store, homeTabId);
           },
           child: Scaffold(
             body: Column(
               children: [
                 if (store.isBackgroundSyncing) const _SyncBanner(),
-                Expanded(child: _pageFor(current, store, isCoach, tabs)),
+                Expanded(child: _pageFor(current, store, tabs)),
               ],
             ),
             bottomNavigationBar: HomeTabsBar(
               vm: tabs,
               specs: specs,
               selected: current,
-              onSelect: (id) =>
-                  _onDestinationSelected(context, store, isCoach, id),
+              onSelect: (id) => _onDestinationSelected(context, store, id),
             ),
           ),
         );
@@ -268,27 +237,14 @@ class _HomeShellState extends State<HomeShell> {
   // настроек открывается через `Navigator.push` НА КОРНЕВОЙ навигатор
   // приложения (у HomeShell нет своего), а Provider, объявленный внутри
   // поддерева HomeShell, пушнутому поверх всего маршруту не виден
-  // (см. `SettingsHomeTabsScreen`).
-  Widget _pageFor(
-      String id, AppDataStore store, bool isCoach, HomeTabsViewModel tabs) {
+  // (см. `SettingsModulesScreen`).
+  Widget _pageFor(String id, AppDataStore store, HomeTabsViewModel tabs) {
+    // Контекст «спортсмен / тренер» определяется вкладкой, а не режимом.
+    store.setContextSilently(coachTabSet.contains(id) ? WorkMode.coach : WorkMode.athlete);
     if (id.startsWith(serviceTabPrefix)) {
       final service = _services.byId(id.substring(serviceTabPrefix.length));
       if (service != null)
         return ServiceTileScreen(service: service, repo: _services);
-    }
-    if (isCoach) {
-      return switch (id) {
-        'diary' => const CoachDiaryNotesScreen(),
-        'athletes' => const CoachAthletesScreen(),
-        'statistics_coach' => const CoachStatisticsScreen(),
-        'assistant_coach' => const CoachAiChatScreen(),
-        'tasks' => const CoachTasksScreen(),
-        'messenger' => ChatHomeScreen(
-            onClose: tabs.layout == 'tiles'
-                ? null
-                : () => _leaveMessenger(store, isCoach)),
-        _ => SettingsScreen(homeTabs: tabs, services: _services),
-      };
     }
     return switch (id) {
       // Запущена тренировка — плитка открывает её (мишень), иначе список
@@ -296,51 +252,44 @@ class _HomeShellState extends State<HomeShell> {
       // тренировки бесполезна).
       'exercises' => _ActiveTargetTab(key: ValueKey(_activeSessionKey(store))),
       'statistics' => const StatisticsScreen(),
+      'tasks' => const AthleteTasksScreen(),
+      'athletes' => const CoachAthletesScreen(),
+      'statistics_coach' => const CoachStatisticsScreen(),
+      'tasks_coach' => const CoachTasksScreen(),
       // Чат с ассистентом без привязки к тренировке (решение
       // пользователя: «чат с ИИ без выбора тренировок, на главный
       // экран»). Тот же экран открывается и из шапки мишени, но там —
       // с контекстом конкретной тренировки.
       'assistant' => const AiChatScreen(),
-      'messenger' => ChatHomeScreen(
-          onClose: tabs.layout == 'tiles'
-              ? null
-              : () => _leaveMessenger(store, isCoach)),
-      'tasks' => const AthleteTasksScreen(),
+      'assistant_coach' => const CoachAiChatScreen(),
+      'notes' => const CoachDiaryNotesScreen(),
       'finals' => const FinalsScreen(),
+      'messenger' => ChatHomeScreen(
+          onClose: tabs.layout == 'tiles' ? null : () => _leaveMessenger(store)),
       _ => SettingsScreen(homeTabs: tabs, services: _services),
     };
   }
 
-  void _leaveMessenger(AppDataStore store, bool isCoach) {
-    final back = _beforeMessenger ?? (isCoach ? 'diary' : 'exercises');
-    _onDestinationSelected(context, store, isCoach,
-        back == 'messenger' ? (isCoach ? 'diary' : 'exercises') : back);
+  void _leaveMessenger(AppDataStore store) {
+    final home = _tabs.visible.isEmpty ? 'settings' : _tabs.visible.first;
+    final back = _beforeMessenger ?? home;
+    _onDestinationSelected(context, store, back == 'messenger' ? home : back);
   }
 
   /// Переключение нижней вкладки — не Navigator.pop, поэтому PopScope
   /// экрана мишени его не видит: без этой проверки правки в
   /// разблокированной завершённой тренировке терялись бы молча при
-  /// уходе на другую вкладку (пункт 13 списка правок; на практике
-  /// сейчас недостижимо — вкладка "Мишень" показывает только
-  /// running/paused тренировки, а редактирование завершённой открыто
-  /// отдельным экраном из истории — но это дешёвая защита на будущее,
-  /// если это когда-нибудь изменится).
+  /// уходе на другую вкладку.
   Future<void> _onDestinationSelected(
-      BuildContext context, AppDataStore store, bool isCoach, String id) async {
-    final current = isCoach ? _coachTab : _athleteTab;
+      BuildContext context, AppDataStore store, String id) async {
+    final current = _tab;
     if (id != current && store.hasUnsavedFinishedEdit) {
       final keep = await confirmFinishedEditExit(context);
       if (keep == null) return; // остаёмся на текущей вкладке
       store.resolvePendingFinishedEdit?.call(keep: keep);
     }
     if (id == 'messenger' && current != 'messenger') _beforeMessenger = current;
-    setState(() {
-      if (isCoach) {
-        _coachTab = id;
-      } else {
-        _athleteTab = id;
-      }
-    });
+    setState(() => _tab = id);
   }
 
   String _activeSessionKey(AppDataStore store) {

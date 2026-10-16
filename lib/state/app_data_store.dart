@@ -28,13 +28,21 @@ class AppDataStore extends ChangeNotifier {
   bool isCoach = false;
   WorkMode _workMode = WorkMode.athlete;
 
+  /// Контекст работы: «мои тренировки» или «данные подключённых
+  /// спортсменов». Режима, который выбирает пользователь, больше нет —
+  /// это просто модули «Тренировки» и «Спортсмены» ([isAthlete]/[isCoach]);
+  /// когда включены оба, контекст определяется вкладкой, в которой человек
+  /// находится (см. [setContextSilently]).
   WorkMode get workMode {
-    // Если включена только одна роль — workMode жёстко равен ей (C.1).
     if (!(isAthlete && isCoach)) {
-      return isAthlete ? WorkMode.athlete : WorkMode.coach;
+      return isCoach ? WorkMode.coach : WorkMode.athlete;
     }
     return _workMode;
   }
+
+  /// Выставляет контекст без перерисовки — вызывается при сборке экрана и
+  /// выборе вкладки.
+  void setContextSilently(WorkMode mode) => _workMode = mode;
 
   set workMode(WorkMode mode) {
     if (!(isAthlete && isCoach))
