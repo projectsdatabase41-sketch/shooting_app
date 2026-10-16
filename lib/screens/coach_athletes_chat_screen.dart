@@ -167,27 +167,41 @@ class _CoachAthletesChatScreenState extends State<CoachAthletesChatScreen> {
               ),
         body: _athletes.isEmpty
             ? Center(child: Text(tr('Спортсменов пока нет')))
-            : ListView(
-                children: [
-                  for (final a in _athletes)
-                    ListTile(
-                      selected: _selected.contains(a.id),
-                      selectedTileColor: cs.primary.withValues(alpha: 0.12),
+            : ListView.separated(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+                itemCount: _athletes.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                // Каждый спортсмен — отдельная карточка, а не голая строка текста.
+                itemBuilder: (context, i) {
+                  final a = _athletes[i];
+                  final sel = _selected.contains(a.id);
+                  return Card(
+                    margin: EdgeInsets.zero,
+                    clipBehavior: Clip.antiAlias,
+                    color: sel ? cs.primary.withValues(alpha: 0.14) : null,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(color: sel ? cs.primary : cs.outlineVariant),
+                    ),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                       leading: CircleAvatar(
-                        backgroundColor: _selected.contains(a.id)
-                            ? cs.primary
-                            : cs.primaryContainer,
-                        child: _selected.contains(a.id)
+                        radius: 22,
+                        backgroundColor: sel ? cs.primary : cs.primaryContainer,
+                        child: sel
                             ? Icon(Icons.check, color: cs.onPrimary)
-                            : Text(
-                                a.name.isEmpty ? '?' : a.name[0].toUpperCase(),
-                                style: TextStyle(color: cs.onPrimaryContainer)),
+                            : Text(a.name.isEmpty ? '?' : a.name[0].toUpperCase(),
+                                style: TextStyle(color: cs.onPrimaryContainer, fontWeight: FontWeight.w700)),
                       ),
-                      title: Text(a.name),
+                      title: Text(a.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: Text(selecting ? tr('Выбран для общего сообщения') : tr('Нажмите, чтобы открыть чат'),
+                          style: Theme.of(context).textTheme.bodySmall),
+                      trailing: selecting ? null : const Icon(Icons.chevron_right),
                       onTap: selecting ? () => _toggle(a.id) : () => _open(a),
                       onLongPress: () => _toggle(a.id),
                     ),
-                ],
+                  );
+                },
               ),
       ),
     );
