@@ -252,6 +252,17 @@ class PushService {
     await _initTapHandling(messaging);
   }
 
+  /// Переписка с [contactId] открыта и прочитана — убрать висящее
+  /// уведомление об этом собеседнике из шторки (иначе после «прочитал в
+  /// приложении» оно остаётся).
+  static Future<void> clearForContact(String contactId) async {
+    if (!_isAndroid) return;
+    try {
+      await _initLocalNotifications();
+      await _localNotifications.cancel(contactId.hashCode & 0x3fffffff);
+    } catch (_) {}
+  }
+
   static void _handleForegroundMessage(RemoteMessage message) {
     if (message.data['type'] == 'task' && _isAndroid)
       showTaskNotification(message.data);

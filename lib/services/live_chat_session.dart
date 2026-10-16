@@ -209,7 +209,7 @@ class LiveChatSession {
       if (id is String && id.isNotEmpty) {
         final target = repo.byClientId(contactId, id);
         if (target != null) repo.deleteMessage(target.id);
-        onIncoming?.call();
+        onPeerRead?.call(); // перерисовать ленту, без звука нового сообщения
       }
       return;
     }

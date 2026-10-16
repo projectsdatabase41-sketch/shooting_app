@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import '../logic/friendly_error.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -37,7 +38,7 @@ import '../services/call_service.dart';
 import '../services/message_sound.dart';
 import '../services/web_push_token.dart';
 import '../services/chat_sync_service.dart';
-import '../services/push_service.dart' show pendingCallAckContactId;
+import '../services/push_service.dart' show PushService, pendingCallAckContactId;
 import '../widgets/link_signal.dart';
 import '../services/chat_translation_service.dart';
 import '../services/group_live_session.dart';
@@ -242,6 +243,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _saved = widget.repo.savedFor(_contact.id);
     widget.repo.markThreadSeen(_contact.id);
     widget.sync.reportRead(_contact.id);
+    PushService.clearForContact(_contact.id);
     // Открыли переписку — сразу спросить «в сети», не ждать общего тика
     // с домашнего экрана; если поднимется живой канал ниже, он даст
     // мгновенный статус и без этого опроса.
@@ -289,6 +291,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   void _markRead() {
     if (!_foreground) return;
+    PushService.clearForContact(_contact.id); // убрать уведомление о сообщениях отсюда
     widget.repo.markThreadSeen(_contact.id);
     if (!_contact.isGroup) widget.sync.reportRead(_contact.id);
   }
@@ -2241,6 +2244,15 @@ class _Bubble extends StatelessWidget {
                 : null,
           ),
           const SizedBox(height: 6),
+        ] else if (message.type == ChatMessageType.image && !isImage) ...[
+          // Сообщение-фото есть, а самого изображения нет (загрузка оборвалась).
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.broken_image_outlined, color: fg),
+            const SizedBox(width: 8),
+            Text(mine ? tr('Фото не отправлено целиком') : tr('Фото не загрузилось, попросите отправить ещё раз'),
+                style: theme.textTheme.bodySmall?.copyWith(color: fg)),
+          ]),
+          const SizedBox(height: 6),
         ] else if (!isImage && message.type == ChatMessageType.call) ...[
           Row(
             mainAxisSize: MainAxisSize.min,
@@ -2437,25 +2449,54 @@ class _Bubble extends StatelessWidget {
             builder: (context, progress, _) {
               final p = progress[message.clientMessageId];
               if (p == null) return frame;
-              return Stack(
-                alignment: Alignment.center,
-                children: [
-                  frame,
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(radius),
-                    child:
-                        Container(color: Colors.black.withValues(alpha: 0.35)),
-                  ),
-                  SizedBox(
-                    width: 36,
-                    height: 36,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 3, value: p, color: Colors.white),
-                  ),
-                  Text('${(p * 100).round()}%',
-                      style:
-                          const TextStyle(color: Colors.white, fontSize: 10)),
-                ],
+              // Фото «проявляется»: размытие и затемнение уходят по мере загрузки;
+              // плавная анимация сглаживает рывки порций, а после 100% (ждём ответ
+              // сервера) значок пульсирует.
+              return TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0, end: p),
+                duration: const Duration(milliseconds: 350),
+                curve: Curves.easeOutCubic,
+                builder: (context, v, _) {
+                  final sigma = (1 - v) * 9;
+                  return Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      ImageFiltered(
+                        imageFilter: ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+                        child: frame,
+                      ),
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(radius),
+                            child: ColoredBox(color: Colors.black.withValues(alpha: 0.30 * (1 - v))),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        right: 8,
+                        bottom: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(12)),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            SizedBox(
+                              width: 12,
+                              height: 12,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                value: v >= 0.999 ? null : v,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text('${(v * 100).round()}%', style: const TextStyle(color: Colors.white, fontSize: 11)),
+                          ]),
+                        ),
+                      ),
+                    ],
+                  );
+                },
               );
             },
           )

@@ -14,6 +14,10 @@ class ChatMessagesRepository {
   final LocalDbService db;
   ChatMessagesRepository(this.db);
 
+  /// Сколько сообщений в локальной истории — чтобы отличить настоящие новые
+  /// сообщения от служебных сигналов (прочитано, реакция, правка).
+  int messageCount() => db.db.select('SELECT COUNT(*) AS n FROM chat_local_messages').first['n'] as int;
+
   List<ChatContact> listContacts() {
     final rows = db.db.select('SELECT * FROM chat_contacts ORDER BY nickname');
     return rows.map(ChatContact.fromRow).toList();

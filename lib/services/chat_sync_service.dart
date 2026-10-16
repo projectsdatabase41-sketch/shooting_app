@@ -606,7 +606,18 @@ class ChatSyncService {
   /// скачивается ЦЕЛИКОМ и кладётся в локальную базу как base64, ПОСЛЕ
   /// чего объект и строка удаляются с сервера — дальше живёт только в
   /// локальной истории получателя.
+  /// Сколько НАСТОЯЩИХ новых сообщений принёс последний опрос (служебные
+  /// сигналы — «прочитано», реакции, правки — не считаются): по нему играет звук.
+  int lastNewMessages = 0;
+
   Future<int> pollIncoming() async {
+    final before = repo.messageCount();
+    final r = await _pollIncomingImpl();
+    lastNewMessages = repo.messageCount() - before;
+    return r;
+  }
+
+  Future<int> _pollIncomingImpl() async {
     if (!ChatSettings.isConfigured) return 0;
     final token = await auth.ensureFreshToken();
     if (token == null) return 0;
@@ -744,6 +755,10 @@ class ChatSyncService {
         if (type != ChatMessageType.text && path != null) {
           final bytes = await _downloadAttachment(path, token, client);
           if (bytes == null) continue; // не скачалось — попробуем в следующий опрос, строку не трогаем
+          // Файл пришёл не целиком (оборвалась загрузка отправителя или скачивание) —
+          // не принимаем «пустое» вложение, заберём целым в следующий опрос.
+          final expected = (row['attachment_size'] as num?)?.toInt();
+          if (expected != null && expected > 0 && bytes.length != expected) continue;
           // Защитный фильтр: опасный файл не сохраняем, вместо него — пометка.
           final verdict = AttachmentGuard.check(
               Uint8List.fromList(bytes), '${row['attachment_name'] ?? 'file'}');

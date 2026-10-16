@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
 import '../i18n/i18n.dart';
+import 'chat_thread_screen.dart';
+import 'chat_home_screen.dart';
 import '../logic/chat_media_utils.dart';
 import '../logic/friendly_error.dart';
 import '../models/chat_contact.dart';
@@ -91,9 +93,13 @@ class _ShareToChatScreenState extends State<ShareToChatScreen> {
         );
       }
       if (!mounted) return;
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(tr('Отправлено: {name}', {'name': c.nickname}))));
+      // Открываем переписку с тем, кому отправили: список чатов, поверх — чат
+      // («назад» ведёт к списку), а не просто главный экран приложения.
+      final nav = Navigator.of(context);
+      nav.pushReplacement(MaterialPageRoute(builder: (_) => const ChatHomeScreen()));
+      nav.push(MaterialPageRoute(
+        builder: (_) => ChatThreadScreen(contact: c, auth: _auth, repo: _repo, sync: sync, prefs: _prefs),
+      ));
     } catch (e) {
       if (mounted) {
         setState(() => _sending = false);

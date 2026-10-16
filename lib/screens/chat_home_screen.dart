@@ -318,7 +318,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
           // Лёгкий «щелчок» — мессенджер уже открыт (список чатов), значит
           // пользователь «в сети»; системный пуш в этот момент обычно и не
           // приходит (экран уже открыт), так что это единственный сигнал.
-          MessageSound.play();
+          if (_sync.lastNewMessages > 0) MessageSound.play();
           _reload();
         }
         return added > 0;
