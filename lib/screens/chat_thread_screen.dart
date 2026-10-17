@@ -494,6 +494,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   @override
   void dispose() {
+    for (final t in _scrollTimers) {
+      t.cancel();
+    }
     PushService.incomingPing.removeListener(_onPushPing);
     WidgetsBinding.instance.removeObserver(this);
     webSetActiveChat(null);
@@ -687,6 +690,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return _photosCache!;
   }
 
+  final List<Timer> _scrollTimers = [];
+
   void _scrollToEnd() {
     _newBelow.value = 0;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -699,13 +704,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     });
     // Высота нового пузыря и поля ввода могут догрузиться позже — если после
     // анимации последнее сообщение всё ещё не на месте, ставим его прыжком.
+    for (final t in _scrollTimers) {
+      t.cancel();
+    }
+    _scrollTimers.clear();
     for (final ms in const [320, 800]) {
-      Future<void>.delayed(Duration(milliseconds: ms), () {
+      _scrollTimers.add(Timer(Duration(milliseconds: ms), () {
         if (!mounted || !_itemCtl.isAttached) return;
         // не у самого низа (пузырь дорос позже, подтянулось фото) — ставим прыжком
         final first = _itemPos.itemPositions.value.where((p) => p.index == 0).firstOrNull;
         if (first == null || first.itemLeadingEdge > 0.01) _itemCtl.jumpTo(index: 0);
-      });
+      }));
     }
   }
 
@@ -3208,18 +3217,18 @@ class _Bubble extends StatelessWidget {
       };
 }
 
-/// Отступ под клавиатуру. Читает высоту клавиатуры только здесь: экран целиком
-/// (длинная лента сообщений) на каждом кадре анимации клавиатуры не пересобирается —
-/// иначе при сворачивании было «подёргивание» примерно в 20 кадров/с. Без
-/// AnimatedPadding: высота и так меняется покадрово, повторные анимации лишь
-/// запаздывали.
+/// Подъём содержимого над клавиатурой. Экран НЕ меняет размер при её анимации (это
+/// пересобирало и перекладывало всю ленту на каждом кадре — рывки, особенно когда
+/// скорость анимации клавиатуры неравномерна), а только сдвигается целиком
+/// трансформацией: лента внизу закреплена, поле ввода едет вместе с клавиатурой.
+/// Читает высоту клавиатуры только здесь.
 class _KeyboardPad extends StatelessWidget {
   final Widget child;
   const _KeyboardPad({required this.child});
 
   @override
   Widget build(BuildContext context) =>
-      Padding(padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom), child: child);
+      Transform.translate(offset: Offset(0, -MediaQuery.viewInsetsOf(context).bottom), child: child);
 }
 
 /// Нижний отступ поля ввода (жестовая панель): виден, пока клавиатура закрыта.

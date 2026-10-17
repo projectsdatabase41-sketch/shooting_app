@@ -88,15 +88,13 @@ class AppTransitions extends PageTransitionsBuilder {
       Animation<double> secondaryAnimation, Widget child) {
     if (!AnimSettings.enabled) return child;
     final type = AnimSettings.type;
-    final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic);
-    final back = CurvedAnimation(parent: secondaryAnimation, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic);
     return AnimatedBuilder(
-      animation: Listenable.merge([curved, back]),
+      animation: Listenable.merge([animation, secondaryAnimation]),
       child: child,
       builder: (ctx, child) {
         final size = MediaQuery.sizeOf(ctx);
-        final i = curved.value; // 0 → 1: этот экран приходит
-        final o = back.value; // 0 → 1: этот экран уходит под новый
+        final i = Curves.easeOutCubic.transform(animation.value); // 0 → 1: этот экран приходит
+        final o = Curves.easeOutCubic.transform(secondaryAnimation.value); // 0 → 1: этот экран уходит под новый
         Widget w = child!;
         switch (type) {
           case AnimType.dissolve:
