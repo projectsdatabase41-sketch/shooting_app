@@ -27,6 +27,12 @@ class AvatarUtils {
   /// у пакета `camera` — см. camera_scan_screen.dart) — там остаётся
   /// прежний общий выбор файла через `file_picker`.
   static Future<String?> pickAndProcess() async {
+    final bytes = await pickBytes();
+    return bytes == null ? null : processToBase64(bytes);
+  }
+
+  /// Только выбор файла (без обработки) — дальше фото обрезается на экране выбора области.
+  static Future<Uint8List?> pickBytes() async {
     final windows = !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
     final Uint8List? bytes;
     if (windows) {
@@ -36,8 +42,19 @@ class AvatarUtils {
       final file = await ImagePicker().pickImage(source: ImageSource.gallery);
       bytes = file == null ? null : await file.readAsBytes();
     }
-    if (bytes == null) return null;
-    return processToBase64(bytes);
+    return bytes;
+  }
+
+  /// Квадрат со стороной [side] и левым верхним углом ([x], [y]) в пикселях картинки →
+  /// 256×256 JPEG (base64). Границы подрезаются, чтобы не выйти за картинку.
+  static String cropToBase64(img.Image decoded, double x, double y, double side) {
+    final maxSide = decoded.width < decoded.height ? decoded.width : decoded.height;
+    final sd = side.round().clamp(16, maxSide);
+    final cx = x.round().clamp(0, decoded.width - sd);
+    final cy = y.round().clamp(0, decoded.height - sd);
+    final cropped = img.copyCrop(decoded, x: cx, y: cy, width: sd, height: sd);
+    final resized = img.copyResize(cropped, width: size, height: size);
+    return base64Encode(img.encodeJpg(resized, quality: jpegQuality));
   }
 
   /// `null`, если файл не распознан как изображение.

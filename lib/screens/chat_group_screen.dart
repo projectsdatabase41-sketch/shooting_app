@@ -1,7 +1,7 @@
 import '../logic/friendly_error.dart';
+import 'avatar_crop_screen.dart';
 import 'package:flutter/material.dart';
 
-import '../logic/avatar_utils.dart';
 import '../models/chat_contact.dart';
 import '../services/chat_auth_service.dart';
 import '../services/chat_messages_repository.dart';
@@ -146,7 +146,7 @@ class _ChatGroupEditScreenState extends State<ChatGroupEditScreen> {
           Center(
             child: GestureDetector(
               onTap: () async {
-                final b64 = await AvatarUtils.pickAndProcess();
+                final b64 = await pickAvatarWithCrop(context);
                 if (b64 != null) setState(() => _avatar = b64);
               },
               child: Stack(

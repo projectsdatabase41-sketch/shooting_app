@@ -1,4 +1,5 @@
 import '../widgets/app_loader.dart';
+import 'avatar_crop_screen.dart';
 import '../logic/friendly_error.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -10,7 +11,6 @@ import 'package:flutter/services.dart'
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../logic/avatar_utils.dart';
 import '../logic/adaptive_poller.dart';
 import '../services/coach_link.dart';
 import 'final_room_screens.dart' show offerFinalInvites;
@@ -828,7 +828,7 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
   }
 
   Future<void> _pickAvatar() async {
-    final b64 = await AvatarUtils.pickAndProcess();
+    final b64 = await pickAvatarWithCrop(context);
     if (b64 == null) return;
     setState(() => _avatarBase64 = b64);
   }
@@ -1054,7 +1054,7 @@ class _ProfileSheetState extends State<_ProfileSheet> {
   }
 
   Future<void> _changeAvatar() async {
-    final b64 = await AvatarUtils.pickAndProcess();
+    final b64 = await pickAvatarWithCrop(context);
     if (b64 == null) return;
     await _run(() => widget.auth.updateAvatar(b64), tr('Фото обновлено'));
   }
