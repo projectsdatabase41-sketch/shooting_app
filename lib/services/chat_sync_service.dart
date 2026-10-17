@@ -631,6 +631,8 @@ class ChatSyncService {
     if (!ChatSettings.isConfigured) return 0;
     final token = await auth.ensureFreshToken();
     if (token == null) return 0;
+    // Аккаунт открыт на другом устройстве — очередь не трогаем, чтобы не «съесть» чужие сообщения.
+    if (!await auth.isActiveDevice()) return 0;
     final client = clientFactory();
     try {
       final res = await client.get(

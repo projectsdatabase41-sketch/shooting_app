@@ -104,6 +104,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
     _sync = ChatSyncService(_auth, _repo);
     _prefs = ChatPreferences(_db);
     _reload();
+    ChatAuthService.otherDeviceActive.addListener(_deviceBanner);
     if (_auth.isSignedIn) {
       _startPolling();
       // При открытии мессенджера сразу проверяем входящие, а не ждём первого
@@ -142,8 +143,39 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
     };
   }
 
+  /// Аккаунт открыт на другом устройстве: входящие здесь не забираем (иначе
+  /// сообщения «съедаются» то одним, то другим устройством).
+  ScaffoldMessengerState? _bannerMessenger;
+
+  void _deviceBanner() {
+    if (!mounted) return;
+    final m = _bannerMessenger = ScaffoldMessenger.of(context);
+    if (!ChatAuthService.otherDeviceActive.value) {
+      m.clearMaterialBanners();
+      return;
+    }
+    m.showMaterialBanner(MaterialBanner(
+      content: Text(tr('Аккаунт открыт на другом устройстве. Здесь новые сообщения не принимаются, чтобы они не терялись.')),
+      actions: [
+        TextButton(
+          onPressed: () async {
+            await _auth.claimDevice();
+            _sync.pollIncoming().then((_) {
+              if (mounted) _reload();
+            });
+          },
+          child: Text(tr('Использовать здесь')),
+        ),
+      ],
+    ));
+  }
+
   @override
   void dispose() {
+    ChatAuthService.otherDeviceActive.removeListener(_deviceBanner);
+    try {
+      _bannerMessenger?.clearMaterialBanners();
+    } catch (_) {}
     ChatHomeScreen._closeActive = null;
     _pollLoop?.stop();
     // Мессенджер закрыт (ушли на главную) — прямые соединения рвём.

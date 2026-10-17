@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:http/http.dart' as http;
+import 'package:uuid/uuid.dart';
 
 import '../models/chat_contact.dart';
 import 'chat_settings.dart';
@@ -57,6 +58,71 @@ class ChatAuthService {
     return effective != ChatSettings.url;
   }
 
+  // ---- Одно активное устройство на аккаунт (sql/chat-active-device.sql) ----
+
+  /// Метка этой установки (создаётся один раз).
+  String get deviceId {
+    final rows = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', ['chat_device_id']);
+    if (rows.isNotEmpty) return '${rows.first['hex']}';
+    final id = const Uuid().v4();
+    db.db.execute('INSERT INTO color_prefs (key, hex) VALUES (?, ?)', ['chat_device_id', id]);
+    return id;
+  }
+
+  /// `true` — другое устройство забрало аккаунт: входящие здесь не опрашиваем.
+  static final ValueNotifier<bool> otherDeviceActive = ValueNotifier(false);
+  DateTime? _activeCheckedAt;
+  bool _activeCache = true;
+
+  Future<dynamic> _deviceRpc(String fn, Map<String, dynamic> body) async {
+    final token = await ensureFreshToken();
+    if (token == null) throw AuthException(tr('Сначала войдите в чат'));
+    final client = clientFactory();
+    try {
+      final res = await client
+          .post(Uri.parse('$url/rest/v1/rpc/$fn'),
+              headers: {'apikey': anonKey, 'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
+              body: jsonEncode(body))
+          .timeout(const Duration(seconds: 15));
+      if (res.statusCode >= 400) throw AuthException('rpc ${res.statusCode}');
+      return res.body.isEmpty ? null : jsonDecode(utf8.decode(res.bodyBytes));
+    } finally {
+      client.close();
+    }
+  }
+
+  /// Сделать это устройство активным («Использовать здесь» / новый вход).
+  Future<void> claimDevice() async {
+    try {
+      await _deviceRpc('chat_claim_device', {'p_device': deviceId});
+      _activeCache = true;
+      _activeCheckedAt = DateTime.now();
+      otherDeviceActive.value = false;
+    } catch (_) {
+      // SQL не выполнен — защиты нет, работаем как раньше
+    }
+  }
+
+  /// Это устройство может забирать входящие? Проверка не чаще раза в 15 с;
+  /// нет метки у аккаунта — занимаем сами; сбой или нет SQL — разрешаем.
+  Future<bool> isActiveDevice() async {
+    final at = _activeCheckedAt;
+    if (at != null && DateTime.now().difference(at) < const Duration(seconds: 15)) return _activeCache;
+    try {
+      final r = await _deviceRpc('chat_active_device', {});
+      if (r == null || '$r'.isEmpty) {
+        await claimDevice();
+        return true;
+      }
+      _activeCache = '$r' == deviceId;
+    } catch (_) {
+      _activeCache = true;
+    }
+    _activeCheckedAt = DateTime.now();
+    otherDeviceActive.value = !_activeCache;
+    return _activeCache;
+  }
+
   Future<String?> ensureFreshToken() async {
     if (!isSignedIn) return null;
     final exp = expiresAt;
@@ -102,6 +168,7 @@ class ChatAuthService {
     await _token(
         grant: 'password', body: {'email': email.trim(), 'password': password});
     await _loadOwnProfile();
+    await claimDevice(); // новый вход — это устройство становится активным
     // Если проект требует подтверждение почты, `signUp` не успевает
     // завести профиль (RLS не даст вставить строку без настоящей сессии,
     // а её при регистрации ещё не было) — код контакта у пользователя
