@@ -1,4 +1,5 @@
 import '../logic/friendly_error.dart';
+import '../widgets/home_tabs_bar.dart' show TileStyle;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../i18n/i18n.dart';
@@ -105,6 +106,15 @@ class SettingsAppearanceScreen extends StatelessWidget {
           const Divider(height: 1),
           // Видео-заставка при запуске (звук играет на Android и компьютере;
           // в браузере без звука — так требуют браузеры).
+          StatefulBuilder(
+            builder: (ctx, setS) => SwitchListTile(
+              secondary: const Icon(Icons.blur_on),
+              title: Text(tr('Плитки-«стекло»')),
+              subtitle: Text(tr('Прозрачные плитки с размытием фона вместо цветных с тенью')),
+              value: TileStyle.isGlass(context.read<AppDataStore>().db),
+              onChanged: (v) => setS(() => TileStyle.setGlass(context.read<AppDataStore>().db, v)),
+            ),
+          ),
           StatefulBuilder(
             builder: (ctx, setS) => SwitchListTile(
               secondary: const Icon(Icons.movie_outlined),

@@ -1,5 +1,7 @@
 import 'dart:math' as math;
+import 'dart:ui' show ImageFilter;
 
+import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -258,6 +260,27 @@ class _HomeTabsBarState extends State<HomeTabsBar> {
 /// перетаскивание в `GridView` не встроено во Flutter и собрано вручную
 /// на `LongPressDraggable`/`DragTarget` (аналога `ReorderableListView`
 /// для сетки в стандартной библиотеке нет).
+/// Вид плиток главного экрана: сплошные (цвет + тень) или «стекло»
+/// (прозрачность + размытие фона, как кнопки в шапке). Хранится в color_prefs.
+class TileStyle {
+  static final ValueNotifier<bool?> _glass = ValueNotifier(null);
+
+  static ValueListenable<bool?> get listenable => _glass;
+
+  static bool isGlass(dynamic db) {
+    if (_glass.value != null) return _glass.value!;
+    final rows = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', ['tile_glass']);
+    return _glass.value = rows.isNotEmpty && '${rows.first['hex']}' == '1';
+  }
+
+  static void setGlass(dynamic db, bool v) {
+    db.db.execute(
+        'INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex',
+        ['tile_glass', v ? '1' : '0']);
+    _glass.value = v;
+  }
+}
+
 class HomeTileGrid extends StatefulWidget {
   final HomeTabsViewModel vm;
   final Map<String, HomeTabSpec> specs;
@@ -274,6 +297,22 @@ class HomeTileGrid extends StatefulWidget {
 }
 
 class _HomeTileGridState extends State<HomeTileGrid> {
+  void _styleChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    TileStyle.listenable.addListener(_styleChanged);
+  }
+
+  @override
+  void dispose() {
+    TileStyle.listenable.removeListener(_styleChanged);
+    super.dispose();
+  }
+
   final Map<String, GlobalKey> _tileKeys = {};
   String? _dragging;
 
@@ -505,6 +544,7 @@ class _HomeTileGridState extends State<HomeTileGrid> {
     final pressed = !elevated && _pressedId == id;
     final canTap = _dragging == null;
 
+    final glass = TileStyle.isGlass(context.read<AppDataStore>().db);
     return GestureDetector(
       onTapDown: canTap ? (_) => setState(() => _pressedId = id) : null,
       onTapCancel: () => setState(() => _pressedId = null),
@@ -513,7 +553,9 @@ class _HomeTileGridState extends State<HomeTileGrid> {
         duration: const Duration(milliseconds: 90),
         curve: Curves.easeOut,
         transform: Matrix4.translationValues(0, pressed ? 3 : 0, 0),
-        decoration: BoxDecoration(
+        decoration: glass
+            ? null
+            : BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -532,7 +574,11 @@ class _HomeTileGridState extends State<HomeTileGrid> {
             ),
           ],
         ),
-        child: Material(
+        child: _glassWrap(
+          glass,
+          cs.brightness == Brightness.dark,
+          pressed,
+          Material(
           color: Colors.transparent,
           borderRadius: BorderRadius.circular(16),
           child: InkWell(
@@ -558,6 +604,27 @@ class _HomeTileGridState extends State<HomeTileGrid> {
               ),
             ),
           ),
+        ),
+        ),
+      ),
+    );
+  }
+
+  /// «Стекло»: полупрозрачная заливка + размытие фона + тонкая рамка.
+  Widget _glassWrap(bool glass, bool dark, bool pressed, Widget child) {
+    if (!glass) return child;
+    final r = BorderRadius.circular(16);
+    return ClipRRect(
+      borderRadius: r,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: r,
+            color: (dark ? Colors.white : Colors.white).withValues(alpha: dark ? (pressed ? 0.16 : 0.09) : (pressed ? 0.7 : 0.5)),
+            border: Border.all(color: (dark ? Colors.white : Colors.black).withValues(alpha: dark ? 0.16 : 0.08)),
+          ),
+          child: child,
         ),
       ),
     );
