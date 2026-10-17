@@ -198,7 +198,16 @@ class LiveChatSession {
     _emit('reaction', {'target_client_message_id': clientMessageId, 'emoji': emoji ?? ''});
   }
 
+  /// Сигналы звонка (ring / offer / answer / ice / join / hangup …) по тому же
+  /// каналу: сначала прямой P2P, иначе Realtime. Сервер звонков не нужен.
+  void Function(Map<String, dynamic> p)? onCall;
+  bool sendCall(Map<String, dynamic> p) => peerOnline && _emit('call', p);
+
   void _onBroadcast(String event, Map<String, dynamic> p) {
+    if (event == 'call') {
+      onCall?.call(p);
+      return;
+    }
     if (P2pFiles.isFileEvent(event)) {
       files.handle(event, p);
       return;

@@ -8,6 +8,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'call_service.dart';
 import 'chat_auth_service.dart';
+import 'live_chat_session.dart';
 import '../i18n/i18n.dart';
 
 enum CallState { preparing, calling, ringing, connecting, active, ended }
@@ -26,14 +27,37 @@ class CallSession extends ChangeNotifier {
     required this.peerName,
     required this.outgoing,
     required this.video,
-  }) : state = outgoing ? CallState.preparing : CallState.ringing;
+    this.live,
+    bool viaLive = false,
+  })  : _viaLive = viaLive,
+        state = outgoing ? CallState.preparing : CallState.ringing;
 
-  factory CallSession.outgoing(ChatAuthService auth, {required String peerId, required String peerName, required bool video}) =>
-      CallSession._(auth: auth, callId: const Uuid().v4(), peerId: peerId, peerName: peerName, outgoing: true, video: video);
+  factory CallSession.outgoing(ChatAuthService auth, {required String peerId, required String peerName, required bool video, LiveChatSession? live}) =>
+      CallSession._(
+          auth: auth,
+          callId: const Uuid().v4(),
+          peerId: peerId,
+          peerName: peerName,
+          outgoing: true,
+          video: video,
+          live: live,
+          viaLive: live?.peerOnline == true);
 
   factory CallSession.incoming(ChatAuthService auth,
-          {required String callId, required String peerId, required String peerName, required bool video}) =>
-      CallSession._(auth: auth, callId: callId, peerId: peerId, peerName: peerName, outgoing: false, video: video);
+          {required String callId,
+          required String peerId,
+          required String peerName,
+          required bool video,
+          LiveChatSession? live}) =>
+      CallSession._(
+          auth: auth,
+          callId: callId,
+          peerId: peerId,
+          peerName: peerName,
+          outgoing: false,
+          video: video,
+          live: live,
+          viaLive: live != null);
 
   /// Звонок, который сейчас идёт (второй в то же время не начинаем).
   static CallSession? current;
@@ -44,6 +68,13 @@ class CallSession extends ChangeNotifier {
   final String peerName;
   final bool outgoing;
   final bool video;
+
+  /// Канал переписки (P2P + Realtime): по нему идут сигналы звонка, пока он жив.
+  /// Если не ответил — переходим на сервер звонков (push + комната).
+  final LiveChatSession? live;
+  bool _viaLive;
+  void Function(Map<String, dynamic>)? _prevOnCall;
+  Timer? _fallbackTimer;
 
   CallState state;
   String? endReason;
@@ -131,6 +162,7 @@ class CallSession extends ChangeNotifier {
   }
 
   Future<void> _openRoom() async {
+    if (_viaLive || _ws != null) return;
     final token = await auth.ensureFreshToken();
     if (token == null) throw Exception(tr('Сначала войдите в мессенджер'));
     final ws = WebSocketChannel.connect(CallService.roomUri(callId, token));
@@ -145,7 +177,20 @@ class CallSession extends ChangeNotifier {
     );
   }
 
+  void _attachLive() {
+    final l = live;
+    if (l == null || _prevOnCall != null) return;
+    _prevOnCall = l.onCall ?? (_) {};
+    l.onCall = (p) {
+      if (p['callId'] == callId) _onSignal(p);
+    };
+  }
+
   void _send(Map<String, dynamic> msg) {
+    if (_viaLive) {
+      live?.sendCall({...msg, 'callId': callId, 'from': auth.userId});
+      return;
+    }
     try {
       _ws?.sink.add(jsonEncode(msg));
     } catch (_) {}
@@ -156,6 +201,18 @@ class CallSession extends ChangeNotifier {
     current = this;
     try {
       await _prepareMedia();
+      if (_viaLive && live?.peerOnline == true) {
+        // Основной путь: P2P / Realtime. Не отозвались за 4 с — идём через сервер.
+        _attachLive();
+        _set(CallState.calling);
+        _send({'type': 'ring', 'name': auth.nickname, 'video': video});
+        _fallbackTimer = Timer(const Duration(seconds: 4), _fallbackToServer);
+        _ringTimeout = Timer(ringTimeout, () {
+          if (state == CallState.calling) _end(tr('Не отвечает'), outcome: 'missed');
+        });
+        return;
+      }
+      _viaLive = false;
       await _openRoom();
       _set(CallState.calling);
       final delivered = await _service.ring(callId: callId, to: peerId, name: auth.nickname, video: video);
@@ -174,13 +231,31 @@ class CallSession extends ChangeNotifier {
     }
   }
 
+  /// Собеседник не откликнулся по каналу переписки — звоним через сервер.
+  Future<void> _fallbackToServer() async {
+    if (state != CallState.calling || !_viaLive) return;
+    _viaLive = false;
+    try {
+      await _openRoom();
+      final delivered = await _service.ring(callId: callId, to: peerId, name: auth.nickname, video: video);
+      if (delivered == 0) {
+        _end(tr('{peerName} сейчас недоступен — нет устройства с приложением', {'peerName': peerName}), outcome: 'failed');
+      }
+    } catch (e) {
+      _end(_humanError(e), outcome: 'failed');
+    }
+  }
+
   /// Принять входящий.
   Future<void> accept() async {
     current = this;
     _set(CallState.connecting);
     try {
+      _attachLive();
       await _prepareMedia();
       await _openRoom();
+      // по каналу переписки комнаты нет — сообщаем, что готовы (звонящий шлёт offer)
+      if (_viaLive) _send({'type': 'join'});
     } catch (e) {
       _end(_humanError(e));
     }
@@ -189,6 +264,7 @@ class CallSession extends ChangeNotifier {
   /// Отклонить входящий: сообщаем звонящему через комнату.
   Future<void> decline() async {
     try {
+      _attachLive();
       await _openRoom();
       _send({'type': 'decline'});
     } catch (_) {}
@@ -198,6 +274,7 @@ class CallSession extends ChangeNotifier {
   /// Уже идёт другой разговор — сразу отвечаем звонящему «занято».
   Future<void> rejectBusy() async {
     try {
+      _attachLive();
       await _openRoom();
       _send({'type': 'busy'});
     } catch (_) {}
@@ -211,7 +288,7 @@ class CallSession extends ChangeNotifier {
 
   Future<void> hangUp() async {
     final beforeAnswer = !answered;
-    if (outgoing && beforeAnswer) _service.cancel(callId: callId, to: peerId);
+    if (outgoing && beforeAnswer && !_viaLive) _service.cancel(callId: callId, to: peerId);
     _send({'type': 'hangup'});
     _end(answered ? tr('Звонок завершён') : tr('Звонок отменён'), outcome: beforeAnswer ? 'cancelled' : 'answered');
   }
@@ -225,7 +302,10 @@ class CallSession extends ChangeNotifier {
         if (!outgoing && !(m['peers'] as List).contains(peerId)) _end(tr('Звонок отменён'), outcome: 'missed');
         // Исходящий: собеседник уже там (переподключение) — предлагаем соединение.
         if (outgoing && (m['peers'] as List).contains(peerId)) await _makeOffer();
+      case 'ringing':
+        _fallbackTimer?.cancel(); // собеседник получил звонок по каналу
       case 'join':
+        _fallbackTimer?.cancel();
         if (outgoing && m['from'] == peerId) await _makeOffer();
       case 'offer':
         if (pc == null) return;
@@ -313,7 +393,9 @@ class CallSession extends ChangeNotifier {
     _endedAt = DateTime.now();
     state = CallState.ended;
     _ringTimeout?.cancel();
+    _fallbackTimer?.cancel();
     _disconnectTimer?.cancel();
+    if (_prevOnCall != null && live != null) live!.onCall = _prevOnCall;
     _wsSub?.cancel();
     try {
       _ws?.sink.close();

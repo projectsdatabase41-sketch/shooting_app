@@ -417,6 +417,24 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           if (mounted) _reload();
         };
       widget.sync.live = _live;
+      // Входящий звонок по каналу переписки (P2P/Realtime) — без сервера и push.
+      _live!.onCall = (p) {
+        if (p['type'] != 'ring' || !mounted) return;
+        final id = '${p['callId']}';
+        final busy = CallSession.current;
+        if (busy != null) {
+          if (busy.callId != id) _live!.sendCall({'type': 'busy', 'callId': id, 'from': widget.auth.userId});
+          return;
+        }
+        _live!.sendCall({'type': 'ringing', 'callId': id, 'from': widget.auth.userId});
+        final session = CallSession.incoming(widget.auth,
+            callId: id, peerId: _contact.id, peerName: _contact.nickname, video: p['video'] == true, live: _live);
+        Navigator.of(context)
+            .push(MaterialPageRoute(
+              builder: (_) => CallScreen(session: session, avatarBase64: _contact.avatarBase64, repo: widget.repo),
+            ))
+            .then((_) => _reload());
+      };
       _live!.files.onOffer = _onFileOffer;
       _live!.files.onChanged = () {
         if (mounted) setState(() {});
@@ -932,7 +950,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         .push(MaterialPageRoute(
           builder: (_) => CallScreen(
             session: CallSession.outgoing(widget.auth,
-                peerId: _contact.id, peerName: _contact.nickname, video: video),
+                peerId: _contact.id, peerName: _contact.nickname, video: video, live: _live),
             avatarBase64: _contact.avatarBase64,
             repo: widget.repo,
           ),
