@@ -238,13 +238,17 @@ class DemoFeedbackOverlay extends StatefulWidget {
 }
 
 class _DemoFeedbackOverlayState extends State<DemoFeedbackOverlay> {
+  /// Недописанный отзыв сохраняется, если окно закрыли (чтобы не терять текст).
+  static String _draft = '';
+
   Offset? _pos; // от правого нижнего угла
 
   Future<void> _open() async {
     final ctx = widget.navigatorKey.currentContext;
     if (ctx == null) return;
     final page = DemoMode.currentPage();
-    final ctl = TextEditingController();
+    final ctl = TextEditingController(text: _draft);
+    final shownPage = page.startsWith('minified:') ? null : page; // сборочные имена не показываем
     await showDialog<void>(
       context: ctx,
       builder: (dctx) {
@@ -255,9 +259,11 @@ class _DemoFeedbackOverlayState extends State<DemoFeedbackOverlay> {
             title: Text(tr('Отзыв о приложении')),
             content: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(tr('Страница: {p}', {'p': page}), style: Theme.of(dctx).textTheme.bodySmall),
-                const SizedBox(height: 4),
-                Text(tr('Отправляется только текст и название страницы, без личных данных.'),
+                if (shownPage != null) ...[
+                  Text(tr('Страница: {p}', {'p': shownPage}), style: Theme.of(dctx).textTheme.bodySmall),
+                  const SizedBox(height: 4),
+                ],
+                Text(tr('Отправляется анонимно: только текст и название страницы, без личных данных.'),
                     style: Theme.of(dctx).textTheme.bodySmall),
                 const SizedBox(height: 12),
                 TextField(
@@ -281,6 +287,7 @@ class _DemoFeedbackOverlayState extends State<DemoFeedbackOverlay> {
                         final err = await DemoMode.send(ctl.text, page);
                         if (!dctx.mounted) return;
                         if (err == null) {
+                          ctl.clear();
                           Navigator.pop(dctx);
                           ScaffoldMessenger.maybeOf(ctx)?.showSnackBar(SnackBar(content: Text(tr('Спасибо за отзыв!'))));
                         } else {
@@ -297,6 +304,7 @@ class _DemoFeedbackOverlayState extends State<DemoFeedbackOverlay> {
         );
       },
     );
+    _draft = ctl.text;
     ctl.dispose();
   }
 
