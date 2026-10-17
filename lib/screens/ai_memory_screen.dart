@@ -52,12 +52,19 @@ class _AiMemoryScreenState extends State<AiMemoryScreen> {
     }
   }
 
-  Future<void> _clearAll() async {
+  /// [cloud] — пересказы разговоров в вашей базе; [local] — кэш и примеры
+  /// локального ИИ на этом устройстве. Можно сбросить любую часть отдельно.
+  Future<void> _reset({required bool cloud, required bool local}) async {
+    final what = cloud && local
+        ? tr('всю память (облачную и локальную)')
+        : cloud
+            ? tr('облачную память (пересказы прошлых разговоров)')
+            : tr('локальную память (кэш и примеры локального ИИ на этом устройстве)');
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Сбросить память ИИ?')),
-        content: Text(tr('Ассистент забудет пересказы прошлых разговоров и локальную память (кэш и примеры) — как после чистой установки. Тренировки и данные приложения останутся.')),
+        content: Text(tr('Будет сброшена {w}. Тренировки и данные приложения останутся.', {'w': what})),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Отмена'))),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Сбросить'))),
@@ -66,14 +73,17 @@ class _AiMemoryScreenState extends State<AiMemoryScreen> {
     );
     if (ok != true) return;
     setState(() => _busy = true);
-    try {
-      LocalAiMemory(context.read<AppDataStore>().db).clear();
-    } catch (_) {}
-    final done = await _svc.clearAll();
+    if (local) {
+      try {
+        LocalAiMemory(context.read<AppDataStore>().db).clear();
+      } catch (_) {}
+    }
+    final done = cloud ? await _svc.clearAll() : true;
     if (!mounted) return;
     setState(() => _busy = false);
     if (done) {
-      setState(() => _items = []);
+      if (cloud) setState(() => _items = []);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Память сброшена'))));
     } else {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Не удалось стереть'))));
     }
@@ -89,8 +99,17 @@ class _AiMemoryScreenState extends State<AiMemoryScreen> {
       appBar: GlassHeader(
         title: Text(tr('Память ассистента'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
-          if (items != null && items.isNotEmpty)
-            IconButton(tooltip: tr('Сбросить память ИИ'), icon: const Icon(Icons.delete_sweep_outlined), onPressed: _busy ? null : _clearAll),
+          PopupMenuButton<int>(
+              tooltip: tr('Сбросить память ИИ'),
+              icon: const Icon(Icons.delete_sweep_outlined),
+              enabled: !_busy,
+              onSelected: (v) => _reset(cloud: v != 2, local: v != 1),
+              itemBuilder: (_) => [
+                PopupMenuItem(value: 1, child: Text(tr('Облачная память'))),
+                PopupMenuItem(value: 2, child: Text(tr('Локальная память'))),
+                PopupMenuItem(value: 3, child: Text(tr('Всё сразу'))),
+              ],
+            ),
         ],
       ),
       body: items == null
