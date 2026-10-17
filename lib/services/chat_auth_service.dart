@@ -103,11 +103,11 @@ class ChatAuthService {
     }
   }
 
-  /// Это устройство может забирать входящие? Проверка не чаще раза в 15 с;
+  /// Это устройство может забирать входящие? Проверка не чаще раза в 45 с;
   /// нет метки у аккаунта — занимаем сами; сбой или нет SQL — разрешаем.
   Future<bool> isActiveDevice() async {
     final at = _activeCheckedAt;
-    if (at != null && DateTime.now().difference(at) < const Duration(seconds: 15)) return _activeCache;
+    if (at != null && DateTime.now().difference(at) < const Duration(seconds: 45)) return _activeCache;
     try {
       final r = await _deviceRpc('chat_active_device', {});
       if (r == null || '$r'.isEmpty) {

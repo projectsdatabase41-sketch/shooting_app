@@ -106,6 +106,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
     _reload();
     ChatAuthService.otherDeviceActive.addListener(_deviceBanner);
     if (_auth.isSignedIn) {
+      _auth.isActiveDevice().catchError((_) => true); // прогрев: первый опрос в переписке без лишнего круга по сети
       _startPolling();
       // При открытии мессенджера сразу проверяем входящие, а не ждём первого
       // такта опроса: пришедшее раньше должно быть в списке с самого начала.
