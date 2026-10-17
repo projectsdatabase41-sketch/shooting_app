@@ -1,4 +1,5 @@
 import '../logic/friendly_error.dart';
+import '../widgets/ai_gate.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -275,6 +276,7 @@ class _AddServiceScreenState extends State<AddServiceScreen>
                 .titleMedium
                 ?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
+          if (aiModuleOn(context))
           GlassCircleButton(
             icon: _aiBusy
                 ? const SizedBox(

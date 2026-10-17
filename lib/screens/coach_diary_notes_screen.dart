@@ -1,4 +1,5 @@
 import '../logic/friendly_error.dart';
+import '../widgets/ai_gate.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -246,6 +247,7 @@ class _AddNoteDialogState extends State<_AddNoteDialog> {
                         labelText: _aiMode ? tr('Я сам заполню') : tr('Тема')),
                   ),
                 ),
+                if (aiModuleOn(context)) ...[
                 const SizedBox(width: 8),
                 IconButton.filledTonal(
                   tooltip:
@@ -254,6 +256,7 @@ class _AddNoteDialogState extends State<_AddNoteDialog> {
                   isSelected: _aiMode,
                   onPressed: () => setState(() => _aiMode = !_aiMode),
                 ),
+                ],
               ],
             ),
             const SizedBox(height: 8),
@@ -470,6 +473,7 @@ class _NoteScreenState extends State<_NoteScreen> {
                   .titleMedium
                   ?.copyWith(fontWeight: FontWeight.w600)),
           actions: [
+            if (aiModuleOn(context))
             GlassCircleButton(
               tooltip: tr('Помощь ИИ'),
               icon: _aiBusy

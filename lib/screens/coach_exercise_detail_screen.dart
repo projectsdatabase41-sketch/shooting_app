@@ -1,4 +1,5 @@
 import '../widgets/app_loader.dart';
+import '../widgets/ai_gate.dart';
 import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -221,6 +222,7 @@ class _DetailBody extends StatelessWidget {
       case ExerciseDetailBlock.statistics:
         return _StatisticsBlock(session: session, face: face);
       case ExerciseDetailBlock.chat:
+        if (!aiModuleOn(context)) return const SizedBox.shrink();
         return SizedBox(
           height: 480,
           child: AiChatScreen(

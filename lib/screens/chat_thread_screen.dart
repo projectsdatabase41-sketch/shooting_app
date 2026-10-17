@@ -1,4 +1,5 @@
 import 'package:uuid/uuid.dart';
+import '../widgets/ai_gate.dart';
 import '../services/chat_history_transfer.dart';
 import '../widgets/app_backdrop.dart';
 import 'dart:ui' as ui;
@@ -2148,7 +2149,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                             ),
                           ),
                         ),
-                        IconButton(
+                        if (aiModuleOn(context))
+                          IconButton(
                           onPressed:
                               _sending || _aiBusy ? null : _composeWithAi,
                           tooltip: tr('Написать с ИИ'),

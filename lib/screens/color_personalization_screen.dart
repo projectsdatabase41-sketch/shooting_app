@@ -1,4 +1,5 @@
 import '../logic/friendly_error.dart';
+import '../widgets/ai_gate.dart';
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -910,6 +911,7 @@ class _CreatePresetSheetState extends State<_CreatePresetSheet> {
             icon: const Icon(Icons.save_outlined),
             label: Text(tr('Из текущих цветов')),
           ),
+          if (aiModuleOn(context)) ...[
           const SizedBox(height: 16),
           TextField(
             controller: _prompt,
@@ -931,6 +933,7 @@ class _CreatePresetSheetState extends State<_CreatePresetSheet> {
             ),
             onSubmitted: (_) => _withAi(),
           ),
+          ],
           if (_error != null) ...[
             const SizedBox(height: 8),
             Text(_error!, style: TextStyle(color: theme.colorScheme.error)),

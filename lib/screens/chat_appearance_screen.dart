@@ -1,4 +1,5 @@
 import '../logic/friendly_error.dart';
+import '../widgets/ai_gate.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -52,6 +53,7 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
             style: theme.textTheme.titleMedium
                 ?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
+          if (aiModuleOn(context))
           GlassCircleButton(
             onTap: () => showModalBottomSheet(
               context: context,

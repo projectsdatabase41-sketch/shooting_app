@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/ai_gate.dart';
 import 'package:provider/provider.dart';
 import '../logic/ai_context.dart';
 import '../logic/shot_photo_detection.dart';
@@ -274,6 +275,7 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
       case WorkspacePage.shots:
         return const ShotListSheet();
       case WorkspacePage.assistant:
+        if (!aiModuleOn(context)) return const SizedBox.shrink();
         return AiChatScreen(
           scope: AiScope.session,
           session: vm.session,

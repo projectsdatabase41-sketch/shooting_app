@@ -1,4 +1,5 @@
 import '../widgets/app_loader.dart';
+import '../widgets/ai_gate.dart';
 import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -496,6 +497,7 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
           const SizedBox(height: 12),
           Row(
             children: [
+              if (aiModuleOn(context)) ...[
               Expanded(
                 child: FilledButton.icon(
                   onPressed: _busy ? null : _buildWithAi,
@@ -509,6 +511,7 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
                 ),
               ),
               const SizedBox(width: 8),
+              ],
               OutlinedButton(
                 onPressed: () => setState(
                     () => _plan ??= TaskPlan(title: _title.text, stages: [
