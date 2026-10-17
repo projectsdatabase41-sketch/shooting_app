@@ -1,4 +1,5 @@
 import '../widgets/app_loader.dart';
+import '../widgets/ai_charts_section.dart';
 import '../widgets/ai_gate.dart';
 import '../logic/ai_context.dart' show AiScope;
 import 'ai_chat_screen.dart';
@@ -192,6 +193,7 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
         showSeries: selection.showSeries,
         mixedFacesNote: selection.mixedFacesNote,
       ),
+      AiChartsSection(sessions: _sessions, nameOf: _nameOf, ownerLabel: _athlete?.name),
       if (aiModuleOn(context)) ...[
         const SizedBox(height: 16),
         SizedBox(
