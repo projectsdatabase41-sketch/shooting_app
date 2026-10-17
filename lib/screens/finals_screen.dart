@@ -106,6 +106,24 @@ class _FinalsScreenState extends State<FinalsScreen> {
                   ),
                   title: Text(tr(FinalFormat.all.firstWhere((f) => f.id == r.formatId, orElse: () => FinalFormat.airRifle10m).nameKey)),
                   subtitle: Text('${r.finishedAt.toLocal().toString().substring(0, 16)} · ${r.userTotal.toStringAsFixed(1)}'),
+                  trailing: IconButton(
+                    tooltip: tr('Удалить финал'),
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: () async {
+                      final ok = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: Text(tr('Удалить финал?')),
+                          content: Text(tr('Запись о финале будет удалена с этого устройства.')),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Отмена'))),
+                            TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Удалить'))),
+                          ],
+                        ),
+                      );
+                      if (ok == true) setState(() => repo.delete(r.id));
+                    },
+                  ),
                   onTap: () => Navigator.of(context)
                       .push(MaterialPageRoute(builder: (_) => FinalResultScreen(record: r.data))),
                 ),

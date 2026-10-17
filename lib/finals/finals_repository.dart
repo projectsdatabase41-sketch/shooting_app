@@ -37,6 +37,8 @@ class FinalsRepository {
     return id;
   }
 
+  void delete(String id) => db.db.execute('DELETE FROM finals_runs WHERE id = ?', [id]);
+
   List<FinalRecord> list() => [
         for (final r in db.db.select('SELECT * FROM finals_runs ORDER BY finished_at DESC'))
           FinalRecord(
