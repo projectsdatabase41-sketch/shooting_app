@@ -1,5 +1,8 @@
 import 'dart:async';
-import 'dart:io' show Directory;
+import 'dart:convert';
+import 'dart:io' show Directory, File;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'package:flutter/widgets.dart' show AppLifecycleState, WidgetsBinding, WidgetsBindingObserver;
 
@@ -196,6 +199,58 @@ class LiveChatSession {
   void sendReaction(String clientMessageId, String? emoji) {
     if (!peerOnline) return;
     _emit('reaction', {'target_client_message_id': clientMessageId, 'emoji': emoji ?? ''});
+  }
+
+  /// Вложение (фото, голос, файл до 8 МБ) напрямую по P2P: без Storage и базы.
+  /// `true` — получатель подтвердил приём; иначе вызывающий код грузит как обычно.
+  Future<bool> sendAttachmentDirect(ChatMessage m) async {
+    final b64 = m.attachmentBase64;
+    if (kIsWeb || !isDirect || b64 == null) return false;
+    final bytes = base64Decode(b64);
+    if (bytes.length > 8 * 1024 * 1024) return false;
+    File? f;
+    try {
+      final dir = await getTemporaryDirectory();
+      f = File(p.join(dir.path, 'p2p_out_${m.clientMessageId}'));
+      await f.writeAsBytes(bytes, flush: true);
+      final s = files.sendFile(
+        path: f.path,
+        name: m.attachmentName ?? 'file',
+        size: bytes.length,
+        mime: m.attachmentMime ?? 'application/octet-stream',
+        id: m.clientMessageId,
+        meta: {
+          'att': 1,
+          't': m.type.name,
+          if (m.text != null) 'cap': m.text,
+          if (m.replyToClientMessageId != null) 'rp': m.replyToClientMessageId,
+          if (m.replyToPreview != null) 'rv': m.replyToPreview,
+          'dl': m.downloadAllowed,
+        },
+      );
+      final done = Completer<bool>();
+      void check() {
+        if (done.isCompleted) return;
+        final st = s.state.value;
+        if (st == P2pState.done) done.complete(true);
+        if (st == P2pState.failed || st == P2pState.rejected || st == P2pState.cancelled) done.complete(false);
+      }
+
+      s.state.addListener(check);
+      check();
+      final ok = await done.future.timeout(Duration(seconds: 15 + bytes.length ~/ 100000), onTimeout: () {
+        s.cancel();
+        return false;
+      });
+      s.state.removeListener(check);
+      return ok;
+    } catch (_) {
+      return false;
+    } finally {
+      try {
+        await f?.delete();
+      } catch (_) {}
+    }
   }
 
   /// Сигналы звонка (ring / offer / answer / ice / join / hangup …) по тому же

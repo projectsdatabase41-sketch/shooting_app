@@ -415,6 +415,14 @@ class ChatSyncService {
     }
     final l = live;
     if (l != null && l.contactId == message.contactId && await l.trySend(message)) return;
+    // Вложение: сначала напрямую (P2P); не вышло — дальше обычная отправка через базу.
+    if (l != null &&
+        l.contactId == message.contactId &&
+        _attachmentTypes.contains(message.type) &&
+        await l.sendAttachmentDirect(message)) {
+      repo.updateStatus(message.id, ChatMessageStatus.delivered);
+      return;
+    }
     // Только обычный текст — вложения, правки и «позвать» идут как раньше
     // (broadcastText создаёт у получателя ТЕКСТОВОЕ входящее сообщение,
     // фото/файл так не передать).

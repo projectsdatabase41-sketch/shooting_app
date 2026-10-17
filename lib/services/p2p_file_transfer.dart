@@ -50,8 +50,8 @@ const int p2pWindow = 48;
 const int p2pAckEvery = 16;
 
 class P2pSender {
-  P2pSender({required this.path, required this.name, required this.size, required this.mime, required this.send})
-      : id = _uuid.v4(),
+  P2pSender({required this.path, required this.name, required this.size, required this.mime, required this.send, String? id, this.meta})
+      : id = id ?? _uuid.v4(),
         chunks = (size / p2pChunkSize).ceil();
 
   final String id;
@@ -61,6 +61,9 @@ class P2pSender {
   final String mime;
   final int chunks;
   final P2pSend send;
+
+  /// Доп. данные для получателя (вложение переписки: тип, подпись, ответ).
+  final Map<String, dynamic>? meta;
 
   final progress = ValueNotifier<double>(0);
   final state = ValueNotifier<P2pState>(P2pState.offered);
@@ -76,7 +79,7 @@ class P2pSender {
   bool get finished => state.value == P2pState.done || state.value == P2pState.failed || state.value == P2pState.rejected || state.value == P2pState.cancelled;
 
   bool offer() {
-    final ok = send('file_offer', {'id': id, 'name': name, 'size': size, 'mime': mime, 'chunks': chunks});
+    final ok = send('file_offer', {'id': id, 'name': name, 'size': size, 'mime': mime, 'chunks': chunks, if (meta != null) 'meta': meta});
     if (!ok) _fail('нет прямого соединения');
     return ok;
   }
@@ -174,7 +177,7 @@ class P2pSender {
 }
 
 class P2pReceiver {
-  P2pReceiver({required this.id, required this.name, required this.size, required this.mime, required this.chunks, required this.send, required this.dir});
+  P2pReceiver({required this.id, required this.name, required this.size, required this.mime, required this.chunks, required this.send, required this.dir, this.meta});
 
   final String id;
   final String name;
@@ -183,6 +186,7 @@ class P2pReceiver {
   final int chunks;
   final P2pSend send;
   final Directory dir;
+  final Map<String, dynamic>? meta;
 
   final progress = ValueNotifier<double>(0);
   final state = ValueNotifier<P2pState>(P2pState.offered);
@@ -363,8 +367,9 @@ class P2pFiles {
 
   static bool isFileEvent(String e) => e.startsWith('file_');
 
-  P2pSender sendFile({required String path, required String name, required int size, required String mime}) {
-    final s = P2pSender(path: path, name: name, size: size, mime: mime, send: send);
+  P2pSender sendFile(
+      {required String path, required String name, required int size, required String mime, String? id, Map<String, dynamic>? meta}) {
+    final s = P2pSender(path: path, name: name, size: size, mime: mime, send: send, id: id, meta: meta);
     senders[s.id] = s;
     s.state.addListener(_changed);
     s.progress.addListener(_changed);
@@ -385,6 +390,7 @@ class P2pFiles {
           chunks: (p['chunks'] as num?)?.toInt() ?? 0,
           send: send,
           dir: await dirFor(),
+          meta: p['meta'] is Map ? (p['meta'] as Map).cast<String, dynamic>() : null,
         );
         receivers[id] = r;
         r.state.addListener(_changed);

@@ -1471,9 +1471,56 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _scrollToEnd();
   }
 
+  /// Фото/голос/файл из переписки, пришедшие по P2P: принимаем без вопросов и
+  /// кладём в переписку как обычное вложение (тот же clientMessageId — дубль
+  /// из базы не появится).
+  Future<void> _receiveInlineAttachment(P2pReceiver r, Map<String, dynamic> meta) async {
+    if (widget.repo.existsByClientId(r.id) || r.size > 8 * 1024 * 1024) return r.reject();
+    void done() async {
+      if (r.state.value != P2pState.done) return;
+      r.state.removeListener(done);
+      try {
+        final path = r.path;
+        if (path == null) return;
+        final bytes = await File(path).readAsBytes();
+        final type = ChatMessageType.values.where((t) => t.name == meta['t']).firstOrNull ?? ChatMessageType.file;
+        widget.repo.addMessage(ChatMessage(
+          id: const Uuid().v4(),
+          clientMessageId: r.id,
+          contactId: _contact.id,
+          direction: ChatMessageDirection.incoming,
+          status: ChatMessageStatus.delivered,
+          type: type,
+          text: meta['cap'] as String?,
+          attachmentBase64: base64Encode(bytes),
+          attachmentName: r.name,
+          attachmentMime: r.mime,
+          attachmentSize: bytes.length,
+          downloadAllowed: meta['dl'] != false,
+          replyToClientMessageId: meta['rp'] as String?,
+          replyToPreview: meta['rv'] as String?,
+          createdAt: DateTime.now(),
+        ));
+        try {
+          await File(path).delete();
+        } catch (_) {}
+        if (mounted) {
+          MessageSound.play();
+          _markRead();
+          _reload();
+        }
+      } catch (_) {}
+    }
+
+    r.state.addListener(done);
+    await r.accept();
+  }
+
   /// Собеседник предлагает файл напрямую: спрашиваем, принимать ли.
   Future<void> _onFileOffer(P2pReceiver r) async {
     if (!mounted) return r.reject();
+    final meta = r.meta;
+    if (meta != null && meta['att'] == 1) return _receiveInlineAttachment(r, meta);
     final ok = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
