@@ -534,7 +534,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     // Лента перевёрнута (reverse): индекс 0 — самое новое сообщение внизу.
     _showJumpToEnd.value = lo > 2;
-    _atBottom = lo <= 0;
+    // «Режим низа»: следуем за новыми сообщениями, пока нижнее сообщение у
+    // нижнего края; сместили примерно на пол-экрана — слежение отключается.
+    final first = pos.where((p) => p.index == 0).firstOrNull;
+    _atBottom = lo <= 0 && (first == null || first.itemLeadingEdge < 0.45);
     if (_atBottom) _newBelow.value = 0;
     if (_translateVisibleCount >= _messages.length) return;
     if (hi >= _messages.length - 4) {
@@ -674,8 +677,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     // Высота нового пузыря и поля ввода могут догрузиться позже — если после
     // анимации последнее сообщение всё ещё не на месте, ставим его прыжком.
     Future<void>.delayed(const Duration(milliseconds: 320), () {
-      if (!mounted || !_itemCtl.isAttached || _atBottom) return;
-      _itemCtl.jumpTo(index: 0);
+      if (!mounted || !_itemCtl.isAttached) return;
+      // не у самого низа (пузырь дорос позже) — ставим последнее сообщение прыжком
+      final first = _itemPos.itemPositions.value.where((p) => p.index == 0).firstOrNull;
+      if (first == null || first.itemLeadingEdge > 0.01) _itemCtl.jumpTo(index: 0);
     });
   }
 
