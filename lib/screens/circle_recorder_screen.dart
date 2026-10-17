@@ -74,11 +74,18 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
   }
 
   Future<void> _flip() async {
-    if (_recording || _cameras.length < 2) return;
+    if (_cameras.length < 2) return;
     final next = (_camIndex + 1) % _cameras.length;
     _camIndex = next;
     try {
-      await _open(_cameras[next]);
+      final c = _controller;
+      if (_recording && c != null) {
+        // камеру можно сменить прямо во время записи (запись продолжается одним роликом)
+        await c.setDescription(_cameras[next]);
+        if (mounted) setState(() {});
+      } else {
+        await _open(_cameras[next]);
+      }
     } catch (e) {
       if (mounted) setState(() => _error = friendlyError(e));
     }
@@ -127,7 +134,6 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final c = _controller;
     final d = (MediaQuery.sizeOf(context).shortestSide * 0.82).clamp(200.0, 360.0);
     return Scaffold(
@@ -232,9 +238,9 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
                         ),
                         GlassCircleButton(
                           size: 52,
-                          icon: Icon(Icons.cameraswitch_outlined, color: _recording ? cs.outline : null),
+                          icon: const Icon(Icons.cameraswitch_outlined),
                           tooltip: tr('Сменить камеру'),
-                          onTap: _recording || _cameras.length < 2 ? null : _flip,
+                          onTap: _cameras.length < 2 ? null : _flip,
                         ),
                       ],
                     ),
