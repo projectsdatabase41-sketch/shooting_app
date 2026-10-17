@@ -163,6 +163,22 @@ class ChatAuthService {
     return true;
   }
 
+  /// Подтверждение почты кодом из письма (6 цифр) вместо перехода по ссылке.
+  /// Нужен шаблон письма «Confirm signup» с `{{ .Token }}` в настройках проекта.
+  Future<void> verifySignupCode({
+    required String email,
+    required String code,
+    required String nickname,
+    String? avatarBase64,
+  }) async {
+    _requireConfigured();
+    final res = await _post('/auth/v1/verify', {'type': 'signup', 'email': email.trim(), 'token': code.trim()});
+    if (res['access_token'] == null) throw AuthException(tr('Неверный код'));
+    _saveSession(res);
+    await _createProfile(nickname: nickname, avatarBase64: avatarBase64);
+    await claimDevice();
+  }
+
   Future<void> signIn({required String email, required String password}) async {
     _requireConfigured();
     await _token(

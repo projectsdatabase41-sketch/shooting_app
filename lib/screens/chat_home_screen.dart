@@ -888,6 +888,31 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
     await mainAuth.saveChatPassword(password);
   }
 
+  Future<String?> _askSignupCode() {
+    final ctl = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('Код из письма')),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(tr('Мы отправили письмо на {e}. Если в нём есть код — введите его. Если только ссылка — пропустите и перейдите по ссылке.',
+              {'e': _email.text.trim()})),
+          const SizedBox(height: 12),
+          TextField(
+            controller: ctl,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(labelText: tr('Код')),
+          ),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Пропустить'))),
+          FilledButton(onPressed: () => Navigator.pop(ctx, ctl.text.trim()), child: Text(tr('Подтвердить'))),
+        ],
+      ),
+    );
+  }
+
   Future<void> _submit() async {
     setState(() {
       _busy = true;
@@ -902,9 +927,16 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
           avatarBase64: _avatarBase64,
         );
         if (!ok) {
-          setState(() => _error = tr(
-              'Аккаунт создан. Если почта требует подтверждения — перейдите по ссылке из письма, затем войдите через "Вход" (код контакта появится автоматически).'));
-          return;
+          // Почта требует подтверждения: предлагаем ввести код из письма; нет кода
+          // (письмо со ссылкой) — как раньше: перейти по ссылке и войти.
+          final code = await _askSignupCode();
+          if (code == null || code.isEmpty) {
+            setState(() => _error = tr(
+                'Аккаунт создан. Если почта требует подтверждения — перейдите по ссылке из письма, затем войдите через "Вход" (код контакта появится автоматически).'));
+            return;
+          }
+          await widget.auth.verifySignupCode(
+              email: _email.text, code: code, nickname: _nickname.text, avatarBase64: _avatarBase64);
         }
       } else {
         await widget.auth.signIn(email: _email.text, password: _password.text);
