@@ -212,8 +212,13 @@ class _HomeShellState extends State<HomeShell> {
       // упражнений (решение пользователя: отдельная «Мишень» без
       // тренировки бесполезна).
       'exercises' => _ActiveTargetTab(key: ValueKey(_activeSessionKey(store))),
-      'statistics' => RoleSplit(athlete: const StatisticsScreen(), coach: const CoachStatisticsScreen()),
-      'tasks' => RoleSplit(athlete: const AthleteTasksScreen(), coach: const CoachTasksScreen()),
+      'statistics' => RoleSplit(
+          athlete: (top) => StatisticsScreen(top: top),
+          coach: (top, id) => CoachStatisticsScreen(key: ValueKey(id), athleteId: id, top: top)),
+      'tasks' => RoleSplit(
+          perAthlete: false,
+          athlete: (top) => AthleteTasksScreen(top: top),
+          coach: (top, _) => CoachTasksScreen(top: top)),
       'athletes' => const CoachAthletesScreen(),
       // Чат с ассистентом без привязки к тренировке (решение
       // пользователя: «чат с ИИ без выбора тренировок, на главный

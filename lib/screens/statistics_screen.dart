@@ -27,7 +27,9 @@ import '../i18n/i18n.dart';
 /// открывается с экрана мишени по кнопке "График", поэтому "статистика
 /// тренировки" в приложении ровно одна, а не две разные.
 class StatisticsScreen extends StatefulWidget {
-  const StatisticsScreen({super.key});
+  /// Выбор «чьи данные» (общий для тренера-спортсмена), показывается над срезами.
+  final Widget? top;
+  const StatisticsScreen({super.key, this.top});
 
   @override
   State<StatisticsScreen> createState() => _StatisticsScreenState();
@@ -80,6 +82,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: EdgeInsets.only(top: topInset + GlassHeader.height),
           children: [
+            if (widget.top != null) Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: widget.top!),
             EmptyState(
               icon: Icons.insights_outlined,
               text: tr('Статистика появится после первых записанных выстрелов'),
@@ -98,6 +101,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 40),
         children: [
+          if (widget.top != null) ...[widget.top!, const SizedBox(height: 12)],
           _scopeSelector(),
           const SizedBox(height: 12),
           ..._scopePickers(store, sessions),

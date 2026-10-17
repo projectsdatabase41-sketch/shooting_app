@@ -34,7 +34,9 @@ enum _DoneSort { date, title }
 /// пользователя: "итоги выполненного задания можно хранить во вкладке
 /// выполненные, сортировка по дате и названию").
 class AthleteTasksScreen extends StatefulWidget {
-  const AthleteTasksScreen({super.key});
+  /// Общий выбор «чьи данные» (если вы и спортсмен, и тренер).
+  final Widget? top;
+  const AthleteTasksScreen({super.key, this.top});
 
   @override
   State<AthleteTasksScreen> createState() => _AthleteTasksScreenState();
@@ -202,7 +204,12 @@ class _AthleteTasksScreenState extends State<AthleteTasksScreen> {
               onTap: _load)
         ],
       ),
-      body: body,
+      body: widget.top == null
+          ? body
+          : Column(children: [
+              Padding(padding: const EdgeInsets.fromLTRB(12, 8, 12, 0), child: widget.top!),
+              Expanded(child: body),
+            ]),
     );
   }
 

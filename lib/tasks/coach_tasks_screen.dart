@@ -28,7 +28,10 @@ typedef _Copy = ({CoachAthlete athlete, TaskPlan task});
 /// заданием (тап по push «выполнено»).
 class CoachTasksScreen extends StatefulWidget {
   final String? openTaskId;
-  const CoachTasksScreen({super.key, this.openTaskId});
+
+  /// Общий выбор «чьи данные» (если вы и спортсмен, и тренер).
+  final Widget? top;
+  const CoachTasksScreen({super.key, this.openTaskId, this.top});
 
   @override
   State<CoachTasksScreen> createState() => _CoachTasksScreenState();
@@ -151,7 +154,7 @@ class _CoachTasksScreenState extends State<CoachTasksScreen> {
               onPressed: _create,
               icon: const Icon(Icons.add),
               label: Text(tr('Задание'))),
-      body: _athletes.isEmpty
+      body: _withTop(_athletes.isEmpty
           ? Center(
               child: Text(tr('Сначала добавьте спортсмена'),
                   style: TextStyle(color: theme.hintColor)))
@@ -212,9 +215,16 @@ class _CoachTasksScreenState extends State<CoachTasksScreen> {
                             ),
                         ],
                       ),
-                    ),
+                    )),
     );
   }
+
+  Widget _withTop(Widget body) => widget.top == null
+      ? body
+      : Column(children: [
+          Padding(padding: const EdgeInsets.fromLTRB(12, 8, 12, 0), child: widget.top!),
+          Expanded(child: body),
+        ]);
 }
 
 // ---------------- Создание ----------------

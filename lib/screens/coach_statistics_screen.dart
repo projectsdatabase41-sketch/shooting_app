@@ -23,7 +23,11 @@ import '../i18n/i18n.dart';
 /// тренера нет каталога упражнений спортсмена, только снимки-названия
 /// тренировок.
 class CoachStatisticsScreen extends StatefulWidget {
-  const CoachStatisticsScreen({super.key});
+  /// Если задан — спортсмен выбран снаружи (общий список «Я + спортсмены»): свой
+  /// выпадающий список не показывается, а [top] стоит на его месте.
+  final String? athleteId;
+  final Widget? top;
+  const CoachStatisticsScreen({super.key, this.athleteId, this.top});
 
   @override
   State<CoachStatisticsScreen> createState() => _CoachStatisticsScreenState();
@@ -51,7 +55,7 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
     _access = CoachAccessService(context.read<AppDataStore>().db);
     _athletes = _access.listAthletes();
     if (_athletes.isNotEmpty) {
-      _athlete = _athletes.first;
+      _athlete = _athletes.where((a) => a.id == widget.athleteId).firstOrNull ?? _athletes.first;
       _load();
     }
   }
@@ -117,7 +121,7 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
               padding: EdgeInsets.fromLTRB(
                   16, topInset + GlassHeader.height + 8, 16, 40),
               children: [
-                _athletePicker(),
+                widget.top ?? _athletePicker(),
                 const SizedBox(height: 12),
                 if (_loading) const AppLoader(),
                 if (_error != null)
