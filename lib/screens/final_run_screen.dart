@@ -277,12 +277,19 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
       ]),
     );
     final side = _layout == 'side';
-    final rest = side ? bots.skip(3).toList() : bots;
+    // По умолчанию: три бота над моей мишенью, остальные ниже (лупа не перескакивает).
+    final stacked = !side && _layout != 'table';
+    final rest = (side || stacked) ? bots.skip(3).toList() : bots;
     return Column(children: [
       SizedBox(height: top),
+      if (stacked)
+        SizedBox(
+          height: h * 0.14,
+          child: Row(children: [for (final b in bots.take(3)) Expanded(child: _BotCard(c: c, bot: b))]),
+        ),
       Text(c.user.name, style: theme.textTheme.titleSmall),
       SizedBox(
-        height: h * 0.46,
+        height: stacked ? h * 0.36 : h * 0.46,
         child: side
             ? Row(children: [
                 Expanded(flex: 5, child: pad),
@@ -325,8 +332,8 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
         child: _layout == 'table'
             ? _table(context, embedded: true)
             : GridView.count(
-                crossAxisCount: 3,
-                childAspectRatio: 0.85,
+                crossAxisCount: stacked ? 4 : 3,
+                childAspectRatio: stacked ? 0.8 : 0.85,
                 padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
                 children: [for (final b in rest) _BotCard(c: c, bot: b)],
               ),
@@ -596,6 +603,7 @@ class _BotCard extends StatelessWidget {
                 child: CustomPaint(
                   painter: ShotMarkerPainter(
                     last == null ? const [] : [Offset(last.x, last.y)],
+                    ghosts: [for (final g in mine.take(mine.length - 1)) Offset(g.x, g.y)],
                     k: k,
                     center: Offset(box.maxWidth / 2, box.maxHeight / 2),
                   ),
@@ -633,7 +641,11 @@ class ShotMarkerPainter extends CustomPainter {
 
   /// Внутри лупы: тонкое перекрестие и кольцо вместо красной точки.
   final bool lens;
-  ShotMarkerPainter(this.placed, {required this.k, required this.center, this.finger, this.holeR = 4, this.labels, this.lens = false});
+
+  /// Прошлые выстрелы (бледно, чтобы отличать от последнего).
+  final List<Offset> ghosts;
+  ShotMarkerPainter(this.placed,
+      {required this.k, required this.center, this.finger, this.holeR = 4, this.labels, this.lens = false, this.ghosts = const []});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -643,6 +655,16 @@ class ShotMarkerPainter extends CustomPainter {
       ..color = Colors.black
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
+    final pale = Paint()..color = Colors.orange.withValues(alpha: 0.28);
+    final paleEdge = Paint()
+      ..color = Colors.black.withValues(alpha: 0.3)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    for (final g in ghosts) {
+      final o = Offset(center.dx + g.dx * k, center.dy - g.dy * k);
+      canvas.drawCircle(o, r, pale);
+      canvas.drawCircle(o, r, paleEdge);
+    }
     for (var i = 0; i < placed.length; i++) {
       final p = placed[i];
       final o = Offset(center.dx + p.dx * k, center.dy - p.dy * k);
