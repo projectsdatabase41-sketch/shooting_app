@@ -74,6 +74,13 @@ class SettingsScreen extends StatelessWidget {
         padding: EdgeInsets.fromLTRB(0, topInset + GlassHeader.height, 0, 32),
         children: [
           ListTile(
+            leading: const Icon(Icons.language_outlined),
+            title: Text(tr('Язык')),
+            subtitle: Text(SettingsAppearanceScreen.languageLabel(context.watch<PersonalizationViewModel>().localeCode)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => SettingsAppearanceScreen.pickLanguage(context, context.read<PersonalizationViewModel>()),
+          ),
+          ListTile(
             leading: const Icon(Icons.palette_outlined),
             title: Text(tr('Внешний вид')),
             subtitle: Text(tr('Язык, цвета и тема интерфейса')),

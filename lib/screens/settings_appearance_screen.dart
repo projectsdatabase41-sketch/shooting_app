@@ -16,7 +16,7 @@ import 'color_personalization_screen.dart';
 class SettingsAppearanceScreen extends StatelessWidget {
   const SettingsAppearanceScreen({super.key});
 
-  static String _label(String? code) => switch (code) {
+  static String languageLabel(String? code) => switch (code) {
         null => tr('Системный'),
         'ru' => tr('Русский'),
         _ => I18n.builtIn[code] ?? I18n.downloadable[code] ?? code,
@@ -24,7 +24,7 @@ class SettingsAppearanceScreen extends StatelessWidget {
 
   /// Встроенные языки — сразу; остальные сначала скачиваются (словарь
   /// небольшой, из репозитория) и дальше живут на устройстве.
-  Future<void> _pickLanguage(
+  static Future<void> pickLanguage(
       BuildContext context, PersonalizationViewModel personalization) async {
     final db = context.read<AppDataStore>().db;
     final picked = await showModalBottomSheet<String?>(
@@ -37,7 +37,7 @@ class SettingsAppearanceScreen extends StatelessWidget {
           children: [
             for (final code in <String?>[null, 'ru', ...I18n.builtIn.keys])
               ListTile(
-                title: Text(_label(code)),
+                title: Text(languageLabel(code)),
                 trailing: personalization.localeCode == code
                     ? const Icon(Icons.check)
                     : null,
@@ -50,7 +50,7 @@ class SettingsAppearanceScreen extends StatelessWidget {
             ),
             for (final code in I18n.downloadable.keys)
               ListTile(
-                title: Text(_label(code)),
+                title: Text(languageLabel(code)),
                 trailing: personalization.localeCode == code
                     ? const Icon(Icons.check)
                     : (I18n.isDownloaded(db, code)
@@ -82,7 +82,6 @@ class SettingsAppearanceScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final personalization = context.watch<PersonalizationViewModel>();
-    final currentLabel = _label(personalization.localeCode);
 
     final topInset = MediaQuery.paddingOf(context).top;
     return Scaffold(
@@ -97,14 +96,6 @@ class SettingsAppearanceScreen extends StatelessWidget {
       body: ListView(
         padding: EdgeInsets.only(top: topInset + GlassHeader.height),
         children: [
-          ListTile(
-            leading: const Icon(Icons.language_outlined),
-            title: Text(tr('Язык')),
-            subtitle: Text(currentLabel),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _pickLanguage(context, personalization),
-          ),
-          const Divider(height: 1),
           // Видео-заставка при запуске (звук играет на Android и компьютере;
           // в браузере без звука — так требуют браузеры).
           // ---- Плитки главного экрана ----
