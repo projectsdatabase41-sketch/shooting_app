@@ -1381,6 +1381,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     required ValueNotifier<double> progress,
     required ValueNotifier<P2pState> state,
     String? Function()? donePath,
+    VoidCallback? onFail,
   }) {
     void setProgress(double? v) {
       final m = {...ChatSyncService.uploadProgress.value};
@@ -1401,6 +1402,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         final path = donePath?.call();
         if (path != null) widget.repo.updateAttachmentLocalPath(messageId, path);
         widget.repo.updateStatus(messageId, ChatMessageStatus.delivered);
+      } else if (onFail != null) {
+        // следующий уровень приоритета (облако): неудавшийся пузырь убираем,
+        // чтобы не было дубля — новая отправка создаёт свой
+        widget.repo.deleteMessage(messageId);
+        if (mounted) onFail();
       } else {
         widget.repo.updateStatus(messageId, ChatMessageStatus.error);
       }
@@ -1409,7 +1415,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     setProgress(0);
   }
 
-  void _sendFileP2p(ChatLargeFilePick picked) {
+  void _sendFileP2p(ChatLargeFilePick picked, {bool cloudFallback = false}) {
     final live = _live;
     if (live == null || !live.isDirect) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -1437,7 +1443,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       createdAt: DateTime.now(),
     );
     widget.repo.addMessage(msg);
-    _watchTransfer(messageId: msg.id, clientId: sender.id, progress: sender.progress, state: sender.state);
+    _watchTransfer(
+        messageId: msg.id,
+        clientId: sender.id,
+        progress: sender.progress,
+        state: sender.state,
+        onFail: cloudFallback && picked.size <= ChatMediaUtils.maxDriveBytes ? () => _sendLargeCloud(picked) : null);
     _reload();
     _scrollToEnd();
   }
@@ -1495,35 +1506,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<void> _attachLarge() async {
     final picked = await ChatMediaUtils.pickLargeFile();
     if (!mounted || picked == null) return;
-    // Прямая передача (P2P) возможна в личной переписке, когда оба на линии.
-    final direct = !_contact.isGroup && _live?.isDirect == true;
-    final how = await showModalBottomSheet<String>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          ListTile(
-            leading: const Icon(Icons.swap_horiz),
-            title: Text(tr('Напрямую (P2P)')),
-            subtitle: Text(direct
-                ? tr('Без базы и облака, любой размер. Пока идёт передача, держите приложение открытым.')
-                : tr('Недоступно: нужно прямое соединение — оба в этой переписке, в шапке значок P2P.')),
-            enabled: direct,
-            onTap: () => Navigator.pop(ctx, 'p2p'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.cloud_upload_outlined),
-            title: Text(tr('Через облако (Google Диск)')),
-            subtitle: Text(tr('До 1,5 ГБ, получатель скачает позже')),
-            onTap: () => Navigator.pop(ctx, 'cloud'),
-          ),
-        ]),
-      ),
-    );
-    if (how == null || !mounted) return;
-    if (how == 'p2p') {
-      _sendFileP2p(picked);
+    // Приоритет: P2P (если оба на линии) → облако. В облако уходим только
+    // если прямая передача не удалась — второй раз то же не отправляется.
+    if (!_contact.isGroup && _live?.isDirect == true) {
+      _sendFileP2p(picked, cloudFallback: true);
       return;
     }
+    await _sendLargeCloud(picked);
+  }
+
+  Future<void> _sendLargeCloud(ChatLargeFilePick picked) async {
     if (picked.size > ChatMediaUtils.maxDriveBytes) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(tr('Файл больше 1,5 ГБ: через облако такой не отправить. Для очень больших файлов нужна прямая передача (P2P).'))));

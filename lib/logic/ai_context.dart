@@ -40,6 +40,14 @@ enum AiProfile {
   think,
 }
 
+/// Тренировки одного спортсмена для общего контекста ассистента.
+class AiAthleteData {
+  final String name;
+  final List<TrainingSession> sessions;
+  final String Function(TrainingSession) nameOf;
+  const AiAthleteData(this.name, this.sessions, this.nameOf);
+}
+
 class AiContext {
   final AiScope scope;
   final TrainingSession? session;
@@ -77,6 +85,10 @@ class AiContext {
   /// имя спортсмена. Ассистент один на всех, но данные разных людей не смешивает.
   final String? ownerLabel;
 
+  /// Тренировки спортсменов тренера (имя → сводка): ассистент видит всех и
+  /// различает по имени, свои данные — в [allSessions].
+  final List<AiAthleteData> athletes;
+
   const AiContext({
     required this.scope,
     required this.allSessions,
@@ -89,6 +101,7 @@ class AiContext {
     this.coachMode = false,
     this.existingExercises = const [],
     this.ownerLabel,
+    this.athletes = const [],
   });
 
   /// Только для того, чтобы дописать сводки прошлых разговоров ПОСЛЕ
@@ -107,6 +120,7 @@ class AiContext {
         coachMode: coachMode,
         existingExercises: existingExercises,
         ownerLabel: ownerLabel,
+        athletes: athletes,
       );
 
   /// Сколько выстрелов текущей тренировки отдаём координатами.
@@ -352,6 +366,29 @@ The user has a notes module. Only when explicitly asked to save/create a note, a
       rows.add(row);
     }
     map['training_history'] = rows;
+
+    // Спортсмены тренера: кратко, по имени — чтобы не путать людей.
+    if (athletes.isNotEmpty) {
+      map['athletes_training_history'] = [
+        for (final a in athletes)
+          {
+            'athlete': a.name,
+            'note': 'NOT the user; refer to this athlete by name',
+            'sessions': [
+              for (final t in (a.sessions.where((t) => t.shots.isNotEmpty).toList()
+                    ..sort((x, y) => (y.startedAt ?? DateTime(0)).compareTo(x.startedAt ?? DateTime(0))))
+                  .take(15))
+                {
+                  'exercise': a.nameOf(t),
+                  'date': _dt(t.startedAt),
+                  'shots_count': t.shots.length,
+                  'total': _round(t.totalScore),
+                  'average': _round(t.totalScore / t.shots.length),
+                },
+            ],
+          },
+      ];
+    }
 
     return 'КОНТЕКСТ:\n${const JsonEncoder().convert(map)}';
   }

@@ -68,6 +68,9 @@ class AiChatScreen extends StatelessWidget {
   /// Чьи данные в [sessionsOverride] (имя спортсмена); `null` — пользователя.
   final String? ownerLabel;
 
+  /// Данные спортсменов тренера (общий ассистент видит всех).
+  final List<AiAthleteData> athletes;
+
   const AiChatScreen({
     super.key,
     this.scope = AiScope.general,
@@ -80,6 +83,7 @@ class AiChatScreen extends StatelessWidget {
     this.sessionsOverride,
     this.exerciseNameOfOverride,
     this.ownerLabel,
+    this.athletes = const [],
   });
 
   @override
@@ -104,6 +108,7 @@ class AiChatScreen extends StatelessWidget {
               (s) => store.exerciseFor(s)?.label ?? tr('без упражнения'),
           coachMode: coachMode,
           ownerLabel: ownerLabel,
+          athletes: athletes,
         ));
     return _AiChatBody(embedded: embedded, coachMode: coachMode);
   }

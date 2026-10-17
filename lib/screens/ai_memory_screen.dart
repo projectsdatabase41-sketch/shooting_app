@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../i18n/i18n.dart';
+import '../local_ai/local_ai_memory.dart';
 import '../models/ai_memory_summary.dart';
 import '../services/ai_memory_service.dart';
 import '../services/supabase_auth_service.dart';
@@ -55,16 +56,19 @@ class _AiMemoryScreenState extends State<AiMemoryScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(tr('Стереть всю память?')),
-        content: Text(tr('Ассистент забудет пересказы прошлых разговоров. Сами переписки и тренировки останутся.')),
+        title: Text(tr('Сбросить память ИИ?')),
+        content: Text(tr('Ассистент забудет пересказы прошлых разговоров и локальную память (кэш и примеры) — как после чистой установки. Тренировки и данные приложения останутся.')),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Отмена'))),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Стереть'))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Сбросить'))),
         ],
       ),
     );
     if (ok != true) return;
     setState(() => _busy = true);
+    try {
+      LocalAiMemory(context.read<AppDataStore>().db).clear();
+    } catch (_) {}
     final done = await _svc.clearAll();
     if (!mounted) return;
     setState(() => _busy = false);
@@ -86,7 +90,7 @@ class _AiMemoryScreenState extends State<AiMemoryScreen> {
         title: Text(tr('Память ассистента'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
           if (items != null && items.isNotEmpty)
-            IconButton(tooltip: tr('Стереть всё'), icon: const Icon(Icons.delete_sweep_outlined), onPressed: _busy ? null : _clearAll),
+            IconButton(tooltip: tr('Сбросить память ИИ'), icon: const Icon(Icons.delete_sweep_outlined), onPressed: _busy ? null : _clearAll),
         ],
       ),
       body: items == null
