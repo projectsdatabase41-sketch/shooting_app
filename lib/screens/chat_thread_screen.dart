@@ -667,6 +667,21 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
+  List<ChatMessage>? _photosCache;
+  List<ChatMessage>? _photosFor;
+
+  /// Фото переписки (для листания в просмотре); пересчитывается только при смене списка.
+  List<ChatMessage> get _photos {
+    if (!identical(_photosFor, _messages)) {
+      _photosFor = _messages;
+      _photosCache = [
+        for (final x in _messages)
+          if (x.type == ChatMessageType.image && x.attachmentBase64 != null) x
+      ];
+    }
+    return _photosCache!;
+  }
+
   void _scrollToEnd() {
     _newBelow.value = 0;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -2560,6 +2575,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   onAckCall: () => _ackCall(m),
                   onCancelCall: () => _cancelCall(m),
                   onOpenFile: () => _openAttachment(m),
+                  photos: _photos,
                   onLoadMedia: () => _mediaSource(m),
                   onSave: () => _saveAttachment(m),
                   saved: _saved.contains(m.clientMessageId),
@@ -2632,6 +2648,9 @@ class _Bubble extends StatelessWidget {
   final VoidCallback onCancelCall;
   final VoidCallback onOpenFile;
 
+  /// Все фото переписки — для листания в полноэкранном просмотре.
+  final List<ChatMessage> photos;
+
   /// Источник для голосового/кружка (скачивает с сервера при первом обращении).
   final Future<MediaSource?> Function() onLoadMedia;
 
@@ -2661,6 +2680,7 @@ class _Bubble extends StatelessWidget {
     required this.onAckCall,
     required this.onCancelCall,
     required this.onOpenFile,
+    this.photos = const [],
     required this.onLoadMedia,
     required this.onSave,
     required this.saved,
@@ -2799,15 +2819,12 @@ class _Bubble extends StatelessWidget {
                 message.driveFileId != null,
             busy: downloading,
             onSave: !mine &&
-                    message.downloadAllowed &&
                     !saved &&
                     (message.attachmentBase64 != null ||
                         message.attachmentLocalPath != null)
                 ? onSave
                 : null,
-            onTap: (mine || message.downloadAllowed || message.attachmentBase64 != null)
-                ? onOpenFile
-                : null,
+            onTap: onOpenFile,
           ),
           // Передача напрямую (P2P): полоса прогресса под файлом.
           ValueListenableBuilder<Map<String, double>>(
@@ -2925,9 +2942,9 @@ class _Bubble extends StatelessWidget {
         );
 
     Widget withDownloadButton(Widget image) {
-      final canDownload = !mine && message.downloadAllowed;
-      final canShare = mine || message.downloadAllowed;
-      if (!canDownload && !canShare) return image;
+      // Сохранять и пересылать можно всегда (решение пользователя).
+      final canDownload = !mine;
+      const canShare = true;
       final name = message.attachmentName ?? 'photo.jpg';
       return Stack(
         children: [
@@ -2956,8 +2973,11 @@ class _Bubble extends StatelessWidget {
     }
 
     void openFullscreen() {
-      PhotoViewerScreen.open(context,
-          ChatMediaUtils.imageOf(message.id, message.attachmentBase64!));
+      // Листаем все фото переписки свайпом (от старых к новым).
+      final at = photos.indexWhere((m) => m.id == message.id);
+      PhotoViewerScreen.open(context, ChatMediaUtils.imageOf(message.id, message.attachmentBase64!),
+          gallery: at < 0 ? null : [for (final m in photos) ChatMediaUtils.imageOf(m.id, m.attachmentBase64!)],
+          index: at < 0 ? 0 : at);
     }
 
     final Widget frame;
