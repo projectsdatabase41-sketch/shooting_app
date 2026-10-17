@@ -264,19 +264,21 @@ class _HomeTabsBarState extends State<HomeTabsBar> {
 /// (прозрачность + размытие фона, как кнопки в шапке). Хранится в color_prefs.
 class TileStyle {
   static final ValueNotifier<bool?> _glass = ValueNotifier(null);
+  static bool? _cached; // читаем из базы один раз; уведомляем только при смене
 
   static ValueListenable<bool?> get listenable => _glass;
 
   static bool isGlass(dynamic db) {
-    if (_glass.value != null) return _glass.value!;
+    if (_cached != null) return _cached!;
     final rows = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', ['tile_glass']);
-    return _glass.value = rows.isNotEmpty && '${rows.first['hex']}' == '1';
+    return _cached = rows.isNotEmpty && '${rows.first['hex']}' == '1';
   }
 
   static void setGlass(dynamic db, bool v) {
     db.db.execute(
         'INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex',
         ['tile_glass', v ? '1' : '0']);
+    _cached = v;
     _glass.value = v;
   }
 }
