@@ -333,6 +333,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   void initState() {
     super.initState();
     _lastTranslationLanguage = widget.prefs.translationLanguage;
+    PushService.incomingPing.addListener(_onPushPing);
     WidgetsBinding.instance.addObserver(this);
     widget.prefs.addListener(_onPrefsChanged);
     webSetActiveChat(_contact.id);
@@ -493,6 +494,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   @override
   void dispose() {
+    PushService.incomingPing.removeListener(_onPushPing);
     WidgetsBinding.instance.removeObserver(this);
     webSetActiveChat(null);
     widget.prefs.removeListener(_onPrefsChanged);
@@ -550,6 +552,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (_autoOn) _autoTranslateIncoming();
     }
   }
+
+  void _onPushPing() => _pollLoop?.poke();
 
   void _reload() {
     final before = _lastCount;

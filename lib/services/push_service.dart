@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart'
-    show kIsWeb, defaultTargetPlatform, TargetPlatform, debugPrint;
+    show kIsWeb, defaultTargetPlatform, TargetPlatform, debugPrint, ValueNotifier;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
@@ -322,7 +322,12 @@ class PushService {
     } catch (_) {}
   }
 
+  /// Пришёл push, пока приложение открыто: открытая переписка тут же забирает
+  /// сообщение из базы, не дожидаясь очередного такта опроса.
+  static final ValueNotifier<int> incomingPing = ValueNotifier<int>(0);
+
   static void _handleForegroundMessage(RemoteMessage message) {
+    if (message.data['contact_id'] != null) incomingPing.value++;
     if (message.data['type'] == 'task' && _isAndroid)
       showTaskNotification(message.data);
     if (message.data['type'] == 'coach_call' && _isAndroid)
@@ -418,6 +423,35 @@ class PushService {
       projectId: FirebaseSettings.projectId,
       iosBundleId: isIOS ? 'ru.bsshooting.shootingApp' : null,
     );
+  }
+
+  /// Мессенджер выключен в модулях: этот телефон/браузер больше не получает его push
+  /// (токен убирается с сервера). Включили снова — токен регистрируется при открытии
+  /// мессенджера. Окно разрешения не показывается.
+  Future<void> unregisterDevice() async {
+    if (!FirebaseSettings.isConfigured || !_supportedPlatform || !auth.isSignedIn) return;
+    try {
+      String? token;
+      if (kIsWeb) {
+        if (webPushPermission() != 'granted') return;
+        token = await _webToken();
+      } else {
+        if (Firebase.apps.isEmpty) await Firebase.initializeApp(options: _options);
+        token = await FirebaseMessaging.instance.getToken();
+      }
+      if (token == null) return;
+      final fresh = await auth.ensureFreshToken();
+      if (fresh == null) return;
+      final client = http.Client();
+      try {
+        await client.delete(
+          Uri.parse('${ChatSettings.url}/rest/v1/chat_push_tokens?token=eq.${Uri.encodeQueryComponent(token)}&user_id=eq.${auth.userId}'),
+          headers: {'apikey': ChatSettings.anonKey, 'Authorization': 'Bearer $fresh'},
+        ).timeout(const Duration(seconds: 20));
+      } finally {
+        client.close();
+      }
+    } catch (_) {}
   }
 
   Future<void> _saveToken(String token) async {

@@ -150,12 +150,27 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
 
   String? _appliedLocale;
 
+  bool _pushOffSent = false;
+
+  void _syncPushWithModule() {
+    final on = ModulesSettings.isOn(widget.db, AppModule.messenger);
+    if (on) {
+      _pushOffSent = false;
+    } else if (!_pushOffSent) {
+      _pushOffSent = true;
+      PushService(ChatAuthService(widget.db)).unregisterDevice();
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     DemoMode.load(widget.db);
     AnimSettings.load(widget.db);
+    // Мессенджер выключен — его push на этом устройстве не нужны.
+    _syncPushWithModule();
+    ModulesSettings.revision.addListener(_syncPushWithModule);
     // Веб: нажатие на push открывает нужную переписку (воркер → адрес/сообщение → здесь).
     if (kIsWeb) {
       Timer.periodic(const Duration(seconds: 1), (_) => PushService.consumeWebTap());

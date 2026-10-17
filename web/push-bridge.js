@@ -83,3 +83,8 @@ window.nexusConsumePushTap = function () {
   window.__nexusPushTap = null;
   return d ? JSON.stringify(d) : null;
 };
+
+// Текущее разрешение на уведомления без запроса: 'granted' | 'denied' | 'default' | 'unsupported'.
+window.nexusPushPermission = function () {
+  return ('Notification' in window) ? Notification.permission : 'unsupported';
+};

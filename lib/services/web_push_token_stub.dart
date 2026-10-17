@@ -10,3 +10,5 @@ Future<String> webRequestPermission() async => 'granted';
 void webSetActiveChat(String? contactId) {}
 
 String? webConsumePushTap() => null;
+
+String webPushPermission() => 'unsupported';

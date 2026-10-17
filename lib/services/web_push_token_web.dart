@@ -36,3 +36,9 @@ external JSString? _nexusConsumePushTap();
 
 /// Данные уведомления, по которому нажали (JSON) — один раз, затем `null`.
 String? webConsumePushTap() => _nexusConsumePushTap()?.toDart;
+
+@JS('nexusPushPermission')
+external JSString _nexusPushPermission();
+
+/// Разрешение на уведомления без запроса (не показывает окно разрешения).
+String webPushPermission() => _nexusPushPermission().toDart;
