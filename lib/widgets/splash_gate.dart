@@ -39,8 +39,7 @@ class SplashGate extends StatefulWidget {
 }
 
 class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateMixin {
-  late final AnimationController _a =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: SplashGate.cycleMs));
+  late final AnimationController _a;
   bool _showing = false;
   bool _fading = false;
   Timer? _guard;
@@ -48,6 +47,7 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
+    _a = AnimationController(vsync: this, duration: const Duration(milliseconds: SplashGate.cycleMs));
     if (!widget.enabled || SplashGate._played) return;
     SplashGate._played = true;
     _showing = true;
