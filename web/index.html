@@ -37,7 +37,8 @@
        кнопок («нажимаю выше кнопки»). Фиксируем окно и отключаем двойной тап. */
     html, body { position: fixed; inset: 0; width: 100%; overflow: hidden; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
     #loading { position: fixed; inset: 0; background: #000; display: flex; align-items: center; justify-content: center; }
-    #loading video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+    #loading img { width: 100%; height: 100%; object-fit: contain; }
+    @media (prefers-color-scheme: light) { html, body, #loading { background: #f4f6f8; } }
     /* Запасная крутилка — только если видео не запустилось. */
     #loading .target { position: absolute; width: 64px; height: 64px; }
     #loading .target[hidden] { display: none; }
@@ -52,55 +53,25 @@
 </head>
 <body>
   <div id="loading">
-    <video id="introVideo" muted playsinline autoplay preload="auto" src="assets/assets/video/intro.mp4"></video>
-    <div class="target" id="fallbackSpinner" hidden>
-      <div class="ring"></div>
-      <div class="ring"></div>
-      <div class="ring"></div>
-      <div class="dot"></div>
-    </div>
+    <picture>
+      <source srcset="assets/assets/bg/web/launch_light.webp" media="(prefers-color-scheme: light)">
+      <img id="launchImg" alt="" src="assets/assets/bg/web/launch_dark.webp">
+    </picture>
   </div>
   <script>
-    // Заставку убираем, когда ВЫПОЛНЕНЫ оба условия: Flutter отрисовал первый
-    // кадр и видео доиграло либо прошло MAX_MS (видео длиннее, чем нужно, —
-    // не заставляем ждать). Касание по заставке пропускает её, если приложение
-    // уже готово.
+    // Статичная заставка (видео в вебе подтормаживало): картинка сразу, исчезает,
+    // как только Flutter нарисовал первый кадр. Страховка — 15 с.
     (function () {
-      var MAX_MS = 2400;
-      var started = Date.now();
-      var ready = false, done = false;
-      var el = document.getElementById('loading');
-      var v = document.getElementById('introVideo');
-      var spinner = document.getElementById('fallbackSpinner');
-
+      var el = document.getElementById('loading'), done = false;
       function hide() {
         if (done || !el) return;
         done = true;
         el.classList.add('fade-out');
-        // animationend на iOS бывает не приходит (вкладка в фоне) — невидимая,
-        // но живая заглушка съедала бы нажатия, поэтому ещё и удаление по таймеру.
         el.addEventListener('animationend', function () { el.remove(); });
         setTimeout(function () { el.remove(); }, 700);
       }
-      function tryHide() {
-        if (!ready || done) return;
-        var left = MAX_MS - (Date.now() - started);
-        if ((v && v.ended) || left <= 0) hide();
-        else setTimeout(tryHide, Math.min(left, 150));
-      }
-      window.addEventListener('flutter-first-frame', function () { ready = true; tryHide(); });
-      if (v) {
-        v.addEventListener('ended', tryHide);
-        v.addEventListener('playing', function () { spinner.hidden = true; });
-        v.addEventListener('error', function () { spinner.hidden = false; });
-        var p = v.play();
-        if (p && p.catch) p.catch(function () { spinner.hidden = false; });
-        // Если за секунду видео так и не пошло — показываем крутилку, а не пустоту.
-        setTimeout(function () { if (v.paused || v.readyState < 3) spinner.hidden = false; }, 1000);
-      }
-      el.addEventListener('click', function () { if (ready) hide(); });
-      // Страховка: приложение не открылось вовсе — заставка не висит вечно.
-      setTimeout(function () { if (ready) hide(); }, 15000);
+      window.addEventListener('flutter-first-frame', hide);
+      setTimeout(hide, 15000);
     })();
   </script>
   <script src="vendor/firebase-app-compat.js"></script>

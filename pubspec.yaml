@@ -112,6 +112,9 @@ flutter:
     - assets/sounds/
     # Заставка при запуске и цикличная анимация ожидания.
     - assets/video/
+    # Фоновые картинки экранов (tools/gen_backgrounds.py).
+    - assets/bg/web/
+    - assets/bg/android/
 
 flutter_launcher_icons:
   android: true

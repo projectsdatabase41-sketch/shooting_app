@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_backdrop.dart';
 import 'package:provider/provider.dart';
 
 import '../i18n/i18n.dart';
@@ -67,8 +68,8 @@ class _AssistantTabState extends State<AssistantTab> {
       exerciseNameOfOverride: data?.nameOf,
       ownerLabel: data == null ? null : _owner!.name,
     );
-    if (!showPicker) return chat;
-    return Column(children: [
+    if (!showPicker) return AppBackdrop(kind: 'ai', child: chat);
+    return AppBackdrop(kind: 'ai', child: Column(children: [
       Padding(
         padding: EdgeInsets.fromLTRB(12, MediaQuery.paddingOf(context).top + 6, 12, 0),
         child: SingleChildScrollView(
@@ -90,6 +91,6 @@ class _AssistantTabState extends State<AssistantTab> {
       if (_error != null)
         Padding(padding: const EdgeInsets.all(8), child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error))),
       Expanded(child: MediaQuery.removePadding(context: context, removeTop: true, child: chat)),
-    ]);
+    ]));
   }
 }

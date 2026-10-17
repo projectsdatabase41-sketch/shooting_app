@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/app_backdrop.dart';
 import 'package:provider/provider.dart';
 import '../logic/ai_context.dart';
 import '../models/home_tab_specs.dart';
@@ -156,7 +157,9 @@ class _HomeShellState extends State<HomeShell> {
                       MaterialPageRoute(builder: (_) => _pageFor('settings', store, tabs))),
                 ),
               ]),
-          body: Column(
+          body: AppBackdrop(
+            kind: 'home',
+            child: Column(
             children: [
               if (store.isBackgroundSyncing) const _SyncBanner(),
               Expanded(
@@ -173,6 +176,7 @@ class _HomeShellState extends State<HomeShell> {
                 ),
               ),
             ],
+          ),
           ),
         );
       },

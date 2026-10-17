@@ -1,4 +1,5 @@
 import '../logic/friendly_error.dart';
+import '../widgets/app_backdrop.dart';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -67,7 +68,9 @@ class SettingsScreen extends StatelessWidget {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: const GlassHeader(title: _HiddenDevModeToggle()),
-      body: ListView(
+      body: AppBackdrop(
+        kind: 'settings',
+        child: ListView(
         padding: EdgeInsets.fromLTRB(0, topInset + GlassHeader.height, 0, 32),
         children: [
           ListTile(
@@ -155,6 +158,7 @@ class SettingsScreen extends StatelessWidget {
             onTap: () => addCoachViaMessenger(context, store),
           ),
         ],
+      ),
       ),
     );
   }

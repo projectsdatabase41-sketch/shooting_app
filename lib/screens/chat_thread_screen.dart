@@ -1,4 +1,5 @@
 import 'package:uuid/uuid.dart';
+import '../widgets/app_backdrop.dart';
 import 'dart:ui' as ui;
 import '../logic/friendly_error.dart';
 import 'dart:async';
@@ -2117,6 +2118,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                     decoration: widget.prefs.wallpaperDecoration,
                     child: Stack(
                       children: [
+                        if (widget.prefs.wallpaperDecoration == null)
+                          Positioned.fill(
+                              child: AppBackdrop(
+                                  kind: 'messenger',
+                                  child: const SizedBox.shrink())),
                         _messages.isEmpty
                             ? EmptyState(
                                 icon: Icons.forum_outlined,
