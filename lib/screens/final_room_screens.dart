@@ -555,15 +555,18 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
   }
 
   final _tracker = AnnounceTracker();
+  final _phaseVoice = PhaseAnnouncer();
 
   void _onChange() {
     if (!mounted) return;
     if (FinalsPrefs.voice(widget.store.db)) {
+      final cmd = _phaseVoice.update(c.phase.name, secondsLeft: c.secondsLeft, announcing: c.announcing);
+      if (cmd != null) FinalsAnnouncer.speak(cmd, queue: true);
       final text = _tracker.update(
         [for (final r in c.live) AnnounceRow(r.c.name, r.total, r.c.active)],
         announcing: c.announcing,
       );
-      if (text != null) FinalsAnnouncer.speak(text);
+      if (text != null) FinalsAnnouncer.speak(text, queue: true);
     }
     if (c.phase == RunPhase.finished && !_saved) {
       _saved = true;
@@ -647,6 +650,7 @@ class FinalGuestScreen extends StatefulWidget {
 class _FinalGuestScreenState extends State<FinalGuestScreen> {
   FinalsGuest? _guest;
   final _tracker = AnnounceTracker();
+  final _phaseVoice = PhaseAnnouncer();
   FinalsSnapshot? _last; // последнее известное состояние (показываем при обрыве)
   Timer? _hello;
   Timer? _retry;
@@ -688,11 +692,13 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
         if (!mounted) return;
         final snap = _guest?.snapshot;
         if (snap != null) {
+          final cmd = _phaseVoice.update(snap.phase, secondsLeft: snap.secondsLeft, announcing: snap.phase == 'loading' && snap.secondsLeft > 5);
+          if (cmd != null) FinalsAnnouncer.speak(cmd, queue: true);
           final text = _tracker.update(
             [for (final r in snap.rows) AnnounceRow('${r['name']}', (r['total'] as num).toDouble(), r['active'] == true, isMe: r['id'] == widget.member.targetId)],
             announcing: snap.phase == 'loading' && snap.secondsLeft > 5,
           );
-          if (text != null) FinalsAnnouncer.speak(text);
+          if (text != null) FinalsAnnouncer.speak(text, queue: true);
         }
         setState(() => _last = snap ?? _last);
       });

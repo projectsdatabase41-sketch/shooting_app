@@ -57,21 +57,49 @@ class AnnounceTracker {
   }
 }
 
+/// Команды диктора по смене этапа: «Заряжай», «Старт», «Стоп», «Финал окончен».
+/// [phase] — имя этапа (sighting/loading/shooting/grace/finished).
+class PhaseAnnouncer {
+  String? _last;
+  bool _loadingCalled = false;
+
+  String? update(String phase, {required int secondsLeft, required bool announcing}) {
+    String? say;
+    if (phase == 'loading' && !announcing && !_loadingCalled && _last != null) {
+      _loadingCalled = true;
+      say = 'Заряжай.';
+    }
+    if (phase != _last) {
+      if (phase == 'shooting') say = 'Старт.';
+      if (phase == 'grace' || (phase == 'loading' && _last == 'shooting')) say = 'Стоп.';
+      if (phase == 'finished') say = 'Финал окончен.';
+      if (phase == 'loading') _loadingCalled = false;
+      if (phase == 'sighting' && _last == null) say = 'Пристрелка.';
+      _last = phase;
+    }
+    return say;
+  }
+}
+
 /// Озвучка средствами телефона (без ИИ и сети). Любая ошибка — молча без звука.
 class FinalsAnnouncer {
   FinalsAnnouncer._();
   static final FlutterTts _tts = FlutterTts();
   static bool _ready = false;
 
-  static Future<void> speak(String text, {String language = 'ru-RU'}) async {
+  /// [queue] — не обрывать то, что уже звучит (команда и следом рейтинг).
+  static Future<void> speak(String text, {String language = 'ru-RU', bool queue = false}) async {
     if (text.trim().isEmpty) return;
     try {
       if (!_ready) {
         await _tts.setLanguage(language);
         await _tts.setSpeechRate(0.5);
+        try {
+          await _tts.setQueueMode(1); // новая фраза встаёт в очередь
+        } catch (_) {}
         _ready = true;
       }
-      await _tts.stop();
+      if (!queue) await _tts.stop();
       await _tts.speak(text);
     } catch (e) {
       debugPrint('TTS недоступен: $e');

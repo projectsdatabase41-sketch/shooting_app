@@ -46,6 +46,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
   final String _layout = 'classic'; // вид экрана один (раскладки убраны из настройки)
   late final bool _voice = FinalsPrefs.voice(widget.store.db);
   final _tracker = AnnounceTracker();
+  final _phaseVoice = PhaseAnnouncer();
 
   FinalRunController get c => widget.controller;
 
@@ -70,11 +71,13 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
       return;
     }
     if (_voice) {
+      final cmd = _phaseVoice.update(c.phase.name, secondsLeft: c.secondsLeft, announcing: c.announcing);
+      if (cmd != null) FinalsAnnouncer.speak(cmd, queue: true);
       final text = _tracker.update(
         [for (final r in c.live) AnnounceRow(r.c.name, r.total, r.c.active, isMe: r.c.id == c.userId)],
         announcing: c.announcing,
       );
-      if (text != null) FinalsAnnouncer.speak(text);
+      if (text != null) FinalsAnnouncer.speak(text, queue: true);
     }
     setState(() {});
   }
