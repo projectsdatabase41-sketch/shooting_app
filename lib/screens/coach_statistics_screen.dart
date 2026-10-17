@@ -1,4 +1,7 @@
 import '../widgets/app_loader.dart';
+import '../widgets/ai_gate.dart';
+import '../logic/ai_context.dart' show AiScope;
+import 'ai_chat_screen.dart';
 import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -189,6 +192,21 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
         showSeries: selection.showSeries,
         mixedFacesNote: selection.mixedFacesNote,
       ),
+      if (aiModuleOn(context)) ...[
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 460,
+          child: AiChatScreen(
+            key: ValueKey('ai-${_athlete?.id}'),
+            scope: AiScope.general,
+            embedded: true,
+            coachMode: true,
+            sessionsOverride: _sessions,
+            exerciseNameOfOverride: _nameOf,
+            ownerLabel: _athlete?.name,
+          ),
+        ),
+      ],
     ];
   }
 

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../widgets/ai_gate.dart';
+import '../logic/ai_context.dart' show AiScope;
+import 'ai_chat_screen.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../logic/shot_analytics.dart';
@@ -113,6 +116,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             showSeries: selection.showSeries,
             mixedFacesNote: selection.mixedFacesNote,
           ),
+          if (aiModuleOn(context)) ...[
+            const SizedBox(height: 16),
+            SizedBox(height: 460, child: AiChatScreen(scope: AiScope.general, embedded: true)),
+          ],
         ],
       ),
     );

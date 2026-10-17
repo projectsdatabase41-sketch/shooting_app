@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 
+import 'package:provider/provider.dart';
+import '../state/app_data_store.dart';
 import 'package:flutter/material.dart';
 import '../logic/shot_analytics.dart';
 import '../models/shot.dart';
@@ -98,9 +100,9 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
     // вариантов меньше (в одной серии нечего сравнивать по сериям).
     final mode = modes.isEmpty ? 0 : _mode % modes.length;
 
-    final blocks = <Widget>[
+    final blocks = <(String, Widget)>[
       if (modes.isNotEmpty)
-        _block(
+        ('dynamics', _block(
           title: modes[mode].title,
           subtitle: modes.length > 1
               ? tr('{p} · нажмите, чтобы сменить', {'p': modes[mode].subtitle})
@@ -124,8 +126,8 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
               ),
             ),
           ),
-        ),
-      _block(
+        )),
+      ('dist', _block(
         // У разбивки по десятым подписи нет намеренно: заголовок
         // «Распределение внутри десятки» и сами подписи 10.9…10.0
         // говорят всё сами.
@@ -143,11 +145,11 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
             child: const SizedBox.expand(),
           ),
         ),
-      ),
+      )),
       if (mixedFacesNote != null)
-        _noteCard(context, mixedFacesNote!)
+        ('group', _noteCard(context, mixedFacesNote!))
       else
-        _block(
+        ('group', _block(
           title: tr('СТП и кучность'),
           subtitle: _groupSubtitle(a),
           child: _chartCard(
@@ -180,9 +182,9 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
               ],
             ),
           ),
-        ),
+        )),
       if (showSeries && series.length > 1)
-        _block(
+        ('series', _block(
           title: tr('Средний результат по сериям'),
           subtitle: tr('Видно, где результат садится к концу'),
           child: _chartCard(
@@ -196,14 +198,23 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
               child: const SizedBox.expand(),
             ),
           ),
-        ),
+        )),
     ];
+    final ordered = _ordered(blocks);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _tiles(context, a, accent),
-        const SizedBox(height: 24),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: () => setState(() => _arranging = !_arranging),
+            icon: Icon(_arranging ? Icons.check : Icons.swap_vert, size: 18),
+            label: Text(_arranging ? tr('Готово') : tr('Порядок блоков')),
+          ),
+        ),
+        const SizedBox(height: 8),
         // Горизонтальная ориентация — карточки в два столбца вместо
         // одной длинной ленты (решение пользователя): на развёрнутом
         // экране лента графиков уходила далеко за пределы видимого.
@@ -213,7 +224,7 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
             if (!wide) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [for (final b in blocks) Padding(padding: const EdgeInsets.only(bottom: 24), child: b)],
+                children: [for (final b in ordered) Padding(padding: const EdgeInsets.only(bottom: 24), child: _withMoveControls(b.$1, b.$2, ordered))],
               );
             }
             const gap = 16.0;
@@ -221,12 +232,73 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
             return Wrap(
               spacing: gap,
               runSpacing: gap,
-              children: [for (final b in blocks) SizedBox(width: colWidth, child: b)],
+              children: [for (final b in ordered) SizedBox(width: colWidth, child: _withMoveControls(b.$1, b.$2, ordered))],
             );
           },
         ),
       ],
     );
+  }
+
+  // ---- Порядок блоков: переставляется стрелками, запоминается ----
+  bool _arranging = false;
+  static List<String>? _savedOrder;
+
+  List<String> _loadOrder() {
+    if (_savedOrder != null) return _savedOrder!;
+    try {
+      final db = context.read<AppDataStore>().db;
+      final rows = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', ['stats_blocks_order']);
+      _savedOrder = rows.isEmpty ? <String>[] : '${rows.first['hex']}'.split(',');
+    } catch (_) {
+      _savedOrder = <String>[];
+    }
+    return _savedOrder!;
+  }
+
+  void _saveOrder(List<String> ids) {
+    _savedOrder = ids;
+    try {
+      final db = context.read<AppDataStore>().db;
+      db.db.execute(
+          'INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex',
+          ['stats_blocks_order', ids.join(',')]);
+    } catch (_) {}
+  }
+
+  List<(String, Widget)> _ordered(List<(String, Widget)> blocks) {
+    final pref = _loadOrder();
+    final out = [...blocks];
+    out.sort((x, y) {
+      final ix = pref.indexOf(x.$1), iy = pref.indexOf(y.$1);
+      return (ix < 0 ? 999 : ix).compareTo(iy < 0 ? 999 : iy);
+    });
+    return out;
+  }
+
+  Widget _withMoveControls(String id, Widget block, List<(String, Widget)> all) {
+    if (!_arranging) return block;
+    final ids = [for (final b in all) b.$1];
+    final i = ids.indexOf(id);
+    void move(int d) {
+      final j = i + d;
+      if (j < 0 || j >= ids.length) return;
+      ids.insert(j, ids.removeAt(i));
+      setState(() => _saveOrder(ids));
+    }
+
+    return Stack(children: [
+      block,
+      Positioned(
+        right: 0,
+        top: 0,
+        child: Row(children: [
+          IconButton.filledTonal(visualDensity: VisualDensity.compact, icon: const Icon(Icons.arrow_upward, size: 18), onPressed: i > 0 ? () => move(-1) : null),
+          IconButton.filledTonal(
+              visualDensity: VisualDensity.compact, icon: const Icon(Icons.arrow_downward, size: 18), onPressed: i < ids.length - 1 ? () => move(1) : null),
+        ]),
+      ),
+    ]);
   }
 
   /// Заголовок + подпись + карточка одним блоком — единица раскладки:
