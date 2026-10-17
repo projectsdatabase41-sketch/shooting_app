@@ -98,6 +98,9 @@ class FinalRunController extends ChangeNotifier {
   /// Журнал событий (паузы, выбывания) для записи в базу.
   final List<Map<String, dynamic>> log = [];
 
+  /// Пристрелочные выстрелы ботов (не в зачёт): показываются бледно на их мишенях.
+  final Map<String, List<(double, double)>> sightShots = {};
+
   final Map<String, List<int>> _botTimes = {}; // секунды раунда, когда стреляет бот
   final Map<String, int> _roundFired = {};
   List<String> _shooters = [];
@@ -176,6 +179,11 @@ class FinalRunController extends ChangeNotifier {
     if (paused || phase == RunPhase.finished) return;
     switch (phase) {
       case RunPhase.sighting:
+        // Боты тоже пристреливаются: до 5 выстрелов, примерно раз в 3–6 секунд.
+        for (final e in bots.entries) {
+          final list = sightShots.putIfAbsent(e.key, () => []);
+          if (list.length < 5 && rng.nextInt(5) == 0) list.add(e.value.shotPoint());
+        }
         if (--secondsLeft <= 0 && !manual) _beginLoading(pauseAfterSighting + 5);
       case RunPhase.loading:
         if (--secondsLeft <= 0 && !manual) _beginRound();
