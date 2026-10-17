@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import '../theme/app_transitions.dart';
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
@@ -265,20 +266,51 @@ class _HomeTabsBarState extends State<HomeTabsBar> {
 class TileStyle {
   static final ValueNotifier<bool?> _glass = ValueNotifier(null);
   static bool? _cached; // читаем из базы один раз; уведомляем только при смене
+  /// Множитель прозрачности «стекла» (0.2 — почти прозрачно … 2 — плотнее).
+  static double alpha = 1.0;
+
+  /// Уровень тени / объёма плиток (0 — плоские … 2 — выраженный 3D).
+  static double shadow = 1.0;
 
   static ValueListenable<bool?> get listenable => _glass;
 
+  static String? _get(dynamic db, String k) {
+    final r = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [k]);
+    return r.isEmpty ? null : '${r.first['hex']}';
+  }
+
+  static void _put(dynamic db, String k, String v) => db.db.execute(
+      'INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex', [k, v]);
+
   static bool isGlass(dynamic db) {
     if (_cached != null) return _cached!;
-    final rows = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', ['tile_glass']);
-    return _cached = rows.isNotEmpty && '${rows.first['hex']}' == '1';
+    alpha = (double.tryParse(_get(db, 'tile_alpha') ?? '') ?? 1.0).clamp(0.2, 2.0).toDouble();
+    shadow = (double.tryParse(_get(db, 'tile_shadow') ?? '') ?? 1.0).clamp(0.0, 2.0).toDouble();
+    return _cached = _get(db, 'tile_glass') == '1';
   }
 
   static void setGlass(dynamic db, bool v) {
-    db.db.execute(
-        'INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex',
-        ['tile_glass', v ? '1' : '0']);
+    _put(db, 'tile_glass', v ? '1' : '0');
     _cached = v;
+    _glass.value = v;
+  }
+
+  static void setAlpha(dynamic db, double v) {
+    alpha = v;
+    _put(db, 'tile_alpha', '$v');
+    _glass.value = _cached; // перерисовать плитки
+    _bump();
+  }
+
+  static void setShadow(dynamic db, double v) {
+    shadow = v;
+    _put(db, 'tile_shadow', '$v');
+    _bump();
+  }
+
+  static void _bump() {
+    final v = _glass.value;
+    _glass.value = null;
     _glass.value = v;
   }
 }
@@ -547,7 +579,7 @@ class _HomeTileGridState extends State<HomeTileGrid> {
     final canTap = _dragging == null;
 
     final glass = TileStyle.isGlass(context.read<AppDataStore>().db);
-    return GestureDetector(
+    return _scatter(context, GestureDetector(
       onTapDown: canTap ? (_) => setState(() => _pressedId = id) : null,
       onTapCancel: () => setState(() => _pressedId = null),
       onTapUp: (_) => setState(() => _pressedId = null),
@@ -556,7 +588,18 @@ class _HomeTileGridState extends State<HomeTileGrid> {
         curve: Curves.easeOut,
         transform: Matrix4.translationValues(0, pressed ? 3 : 0, 0),
         decoration: glass
-            ? null
+            ? (TileStyle.shadow < 0.05
+                ? null
+                : BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: ((pressed ? 0.08 : 0.18) * TileStyle.shadow).clamp(0.0, 0.7)),
+                        offset: Offset(0, (pressed ? 1 : 5) * TileStyle.shadow),
+                        blurRadius: (pressed ? 3 : 12) * TileStyle.shadow,
+                      ),
+                    ],
+                  ))
             : BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           gradient: LinearGradient(
@@ -569,10 +612,10 @@ class _HomeTileGridState extends State<HomeTileGrid> {
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black
-                  .withValues(alpha: pressed ? 0.10 : (elevated ? 0.35 : 0.22)),
-              offset: Offset(0, pressed ? 1 : (elevated ? 8 : 4)),
-              blurRadius: pressed ? 2 : (elevated ? 12 : 6),
+              color: Colors.black.withValues(
+                  alpha: ((pressed ? 0.10 : (elevated ? 0.35 : 0.22)) * TileStyle.shadow).clamp(0.0, 0.8)),
+              offset: Offset(0, (pressed ? 1 : (elevated ? 8 : 4)) * TileStyle.shadow),
+              blurRadius: (pressed ? 2 : (elevated ? 12 : 6)) * TileStyle.shadow,
             ),
           ],
         ),
@@ -609,6 +652,39 @@ class _HomeTileGridState extends State<HomeTileGrid> {
         ),
         ),
       ),
+    ));
+  }
+
+  /// Тип «Разброс»: при открытии другого экрана плитка уходит к ближайшему краю.
+  Widget _scatter(BuildContext context, Widget tile) {
+    if (!AnimSettings.enabled || AnimSettings.type != AnimType.scatter) return tile;
+    final anim = ModalRoute.of(context)?.secondaryAnimation;
+    if (anim == null) return tile;
+    return AnimatedBuilder(
+      animation: anim,
+      child: tile,
+      builder: (ctx, child) {
+        final t = Curves.easeInCubic.transform(anim.value);
+        if (t == 0) return child!;
+        final box = ctx.findRenderObject();
+        final screen = MediaQuery.sizeOf(ctx);
+        var dx = 0.0, dy = 0.0;
+        if (box is RenderBox && box.hasSize) {
+          final c = box.localToGlobal(box.size.center(Offset.zero));
+          // расстояния до краёв; уходим к ближайшему
+          final d = {
+            'l': c.dx,
+            'r': screen.width - c.dx,
+            't': c.dy,
+            'b': screen.height - c.dy,
+          };
+          final k = d.entries.reduce((a, b) => a.value <= b.value ? a : b).key;
+          dx = switch (k) { 'l' => -(c.dx + box.size.width), 'r' => screen.width - c.dx + box.size.width, _ => 0.0 };
+          dy = switch (k) { 't' => -(c.dy + box.size.height), 'b' => screen.height - c.dy + box.size.height, _ => 0.0 };
+        }
+        return Opacity(
+            opacity: (1 - t).clamp(0.0, 1.0), child: Transform.translate(offset: Offset(dx * t, dy * t), child: child));
+      },
     );
   }
 
@@ -623,7 +699,8 @@ class _HomeTileGridState extends State<HomeTileGrid> {
         child: DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: r,
-            color: (dark ? Colors.white : Colors.white).withValues(alpha: dark ? (pressed ? 0.16 : 0.09) : (pressed ? 0.7 : 0.5)),
+            color: Colors.white.withValues(
+                alpha: ((dark ? (pressed ? 0.16 : 0.09) : (pressed ? 0.7 : 0.5)) * TileStyle.alpha).clamp(0.02, 0.95)),
             border: Border.all(color: (dark ? Colors.white : Colors.black).withValues(alpha: dark ? 0.16 : 0.08)),
           ),
           child: child,

@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../widgets/app_loader.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -722,7 +723,7 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
         appBar: GlassHeader(title: Text(tr('Финал'))),
         body: Center(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const CircularProgressIndicator(),
+            const AppLoader(),
             const SizedBox(height: 12),
             Text(_attempt > 2 ? tr('Нет связи, пробуем снова…') : tr('Ждём ведущего…')),
           ]),

@@ -312,7 +312,7 @@ class _ChatContactsScreenState extends State<ChatContactsScreen> {
               child: _people == null
                   ? Center(
                       child: _error == null
-                          ? const CircularProgressIndicator()
+                          ? const AppLoader()
                           : Text(_error!))
                   : people.isEmpty
                       ? EmptyState(

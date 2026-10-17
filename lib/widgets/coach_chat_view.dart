@@ -1,4 +1,5 @@
 import '../logic/friendly_error.dart';
+import 'app_loader.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -158,7 +159,7 @@ class _CoachChatViewState extends State<CoachChatView> {
           child: messages == null
               ? Center(
                   child: _error == null
-                      ? const CircularProgressIndicator()
+                      ? const AppLoader()
                       : Padding(
                           padding: const EdgeInsets.all(24),
                           child: Text(_error!, textAlign: TextAlign.center)),

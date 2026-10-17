@@ -1,4 +1,5 @@
 import '../logic/friendly_error.dart';
+import '../theme/app_transitions.dart';
 import '../widgets/home_tabs_bar.dart' show TileStyle;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -106,20 +107,91 @@ class SettingsAppearanceScreen extends StatelessWidget {
           const Divider(height: 1),
           // Видео-заставка при запуске (звук играет на Android и компьютере;
           // в браузере без звука — так требуют браузеры).
+          // ---- Плитки главного экрана ----
           StatefulBuilder(
-            builder: (ctx, setS) => SwitchListTile(
-              secondary: const Icon(Icons.blur_on),
-              title: Text(tr('Плитки-«стекло»')),
-              subtitle: Text(tr('Прозрачные плитки с размытием фона вместо цветных с тенью')),
-              value: TileStyle.isGlass(context.read<AppDataStore>().db),
-              onChanged: (v) => setS(() => TileStyle.setGlass(context.read<AppDataStore>().db, v)),
-            ),
+            builder: (ctx, setS) {
+              final db = context.read<AppDataStore>().db;
+              final glass = TileStyle.isGlass(db);
+              return Column(children: [
+                SwitchListTile(
+                  secondary: const Icon(Icons.blur_on),
+                  title: Text(tr('Плитки-«стекло»')),
+                  subtitle: Text(tr('Прозрачные плитки с размытием фона вместо цветных с тенью')),
+                  value: glass,
+                  onChanged: (v) => setS(() => TileStyle.setGlass(db, v)),
+                ),
+                ListTile(
+                  enabled: glass,
+                  leading: const Icon(Icons.opacity),
+                  title: Text(tr('Плотность «стекла»')),
+                  subtitle: Slider(
+                    min: 0.2,
+                    max: 2.0,
+                    value: TileStyle.alpha,
+                    onChanged: glass ? (v) => setS(() => TileStyle.setAlpha(db, v)) : null,
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.layers_outlined),
+                  title: Text(tr('Тень плиток (объём)')),
+                  subtitle: Slider(
+                    min: 0,
+                    max: 2.0,
+                    value: TileStyle.shadow,
+                    onChanged: (v) => setS(() => TileStyle.setShadow(db, v)),
+                  ),
+                ),
+              ]);
+            },
           ),
+          const Divider(height: 1),
+          // ---- Анимации переходов между экранами ----
+          StatefulBuilder(
+            builder: (ctx, setS) {
+              final db = context.read<AppDataStore>().db;
+              final on = AnimSettings.enabled;
+              return Column(children: [
+                SwitchListTile(
+                  secondary: const Icon(Icons.animation),
+                  title: Text(tr('Анимации переходов')),
+                  subtitle: Text(tr('Выключите — экраны сменятся мгновенно')),
+                  value: on,
+                  onChanged: (v) => setS(() => AnimSettings.save(db, on: v)),
+                ),
+                ListTile(
+                  enabled: on,
+                  leading: const Icon(Icons.swap_horiz),
+                  title: Text(tr('Тип перехода')),
+                  trailing: DropdownButton<AnimType>(
+                    value: AnimSettings.type,
+                    onChanged: on ? (t) => setS(() => AnimSettings.save(db, t: t)) : null,
+                    items: [
+                      for (final t in AnimType.values) DropdownMenuItem(value: t, child: Text(tr(AnimSettings.label(t)))),
+                    ],
+                  ),
+                ),
+                ListTile(
+                  enabled: on,
+                  leading: const Icon(Icons.speed),
+                  title: Text(tr('Скорость анимаций')),
+                  subtitle: Slider(
+                    min: 0.5,
+                    max: 2.0,
+                    divisions: 6,
+                    label: '×${AnimSettings.speed.toStringAsFixed(2)}',
+                    value: AnimSettings.speed,
+                    onChanged: on ? (v) => setS(() => AnimSettings.save(db, spd: v)) : null,
+                  ),
+                ),
+              ]);
+            },
+          ),
+          const Divider(height: 1),
           StatefulBuilder(
             builder: (ctx, setS) => SwitchListTile(
               secondary: const Icon(Icons.movie_outlined),
               title: Text(tr('Заставка при запуске')),
-              subtitle: Text(tr('Короткое видео при открытии приложения; касание пропускает')),
+              subtitle: Text(tr('Короткая пульсирующая N при открытии приложения; касание пропускает')),
               value: SplashGate.isOn(context.read<AppDataStore>().db),
               onChanged: (v) => setS(() => SplashGate.setOn(context.read<AppDataStore>().db, v)),
             ),

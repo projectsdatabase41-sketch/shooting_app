@@ -1,4 +1,5 @@
 import '../logic/friendly_error.dart';
+import '../widgets/app_loader.dart';
 import 'package:flutter/material.dart';
 
 import '../i18n/i18n.dart';
@@ -63,7 +64,7 @@ class _ChatBlocklistScreenState extends State<ChatBlocklistScreen> {
       body: list == null
           ? Center(
               child: _error == null
-                  ? const CircularProgressIndicator()
+                  ? const AppLoader()
                   : Text(_error!))
           : list.isEmpty
               ? ListView(

@@ -135,7 +135,9 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
 /// Кадр заставки; t — фаза цикла 0..1 (в конце равна началу, шва нет).
 class _NexusPulsePainter extends CustomPainter {
   final double t;
-  _NexusPulsePainter(this.t);
+  final bool compact; // маленький индикатор ожидания: меньше колец, круг крупнее
+  final Color letter;
+  _NexusPulsePainter(this.t, {this.compact = false, this.letter = Colors.white});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -145,8 +147,8 @@ class _NexusPulsePainter extends CustomPainter {
     final pulse = 1 + 0.06 * math.sin(ph);
     const blue = Color(0xFF9FD3FF);
     // слабое движение колец: радиус «дышит», соседние кольца в противофазе
-    for (var i = 0; i < 5; i++) {
-      final r = u * (0.30 + 0.07 * i) + u * 0.006 * math.sin(ph + i * 1.2);
+    for (var i = 0; i < (compact ? 2 : 5); i++) {
+      final r = u * (compact ? 0.30 + 0.09 * i : 0.30 + 0.07 * i) + u * 0.006 * math.sin(ph + i * 1.2);
       canvas.drawCircle(
           c,
           r,
@@ -156,7 +158,7 @@ class _NexusPulsePainter extends CustomPainter {
             ..color = blue.withValues(alpha: 0.28 - 0.045 * i));
     }
     // круг с буквой N
-    final r0 = u * 0.17 * pulse;
+    final r0 = u * (compact ? 0.24 : 0.17) * pulse;
     canvas.drawCircle(
         c,
         r0 * 1.5,
@@ -173,7 +175,7 @@ class _NexusPulsePainter extends CustomPainter {
     final tp = TextPainter(
       text: TextSpan(
           text: 'N',
-          style: TextStyle(color: Colors.white, fontSize: r0 * 1.15, fontWeight: FontWeight.w600, height: 1)),
+          style: TextStyle(color: letter, fontSize: r0 * 1.15, fontWeight: FontWeight.w600, height: 1)),
       textDirection: TextDirection.ltr,
     )..layout();
     // заглавная N: центр по высоте капители, а не по строке (иначе визуально выше/ниже)
@@ -184,4 +186,40 @@ class _NexusPulsePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_NexusPulsePainter o) => o.t != t;
+}
+
+/// Индикатор ожидания: та же пульсирующая N в круге (вместо колеса загрузки).
+class NexusPulse extends StatefulWidget {
+  final double size;
+  const NexusPulse({super.key, this.size = 96});
+
+  @override
+  State<NexusPulse> createState() => _NexusPulseState();
+}
+
+class _NexusPulseState extends State<NexusPulse> with SingleTickerProviderStateMixin {
+  late final AnimationController _a =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: SplashGate.cycleMs))..repeat();
+
+  @override
+  void dispose() {
+    _a.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final letter = Theme.of(context).colorScheme.onSurface;
+    return Center(
+      child: SizedBox(
+        width: widget.size,
+        height: widget.size,
+        child: AnimatedBuilder(
+          animation: _a,
+          builder: (_, __) =>
+              CustomPaint(painter: _NexusPulsePainter(_a.value, compact: true, letter: letter), size: Size.infinite),
+        ),
+      ),
+    );
+  }
 }

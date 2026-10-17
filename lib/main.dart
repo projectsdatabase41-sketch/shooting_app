@@ -1,7 +1,9 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'theme/app_transitions.dart';
 import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'logic/ai_context.dart';
 import 'services/ai_memory_service.dart';
@@ -47,6 +49,8 @@ final navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Фон приложения идёт под строку состояния и системную панель (сквозной экран).
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   // Обработчик фонового push должен быть зарегистрирован ДО первого
   // сообщения, поэтому здесь, до runApp (см. push_service.dart).
   if (FirebaseSettings.isConfigured &&
@@ -150,6 +154,7 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     DemoMode.load(widget.db);
+    AnimSettings.load(widget.db);
     _store = AppDataStore(widget.db)..loadAll();
     _personalization = PersonalizationViewModel(widget.db)..loadFromDb();
     // Язык интерфейса: словарь подгружается при старте и при смене языка,
@@ -395,9 +400,18 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
                       textScaler: TextScaler.linear(
                           (system * user).clamp(0.8, 1.8).toDouble())),
                   // Режим «Демо»: кнопка отзыва на каждой странице.
-                  child: DemoFeedbackOverlay(
-                      navigatorKey: navigatorKey,
-                      child: child ?? const SizedBox.shrink()),
+                  child: AnnotatedRegion<SystemUiOverlayStyle>(
+                    value: (Theme.of(ctx).brightness == Brightness.dark
+                            ? SystemUiOverlayStyle.light
+                            : SystemUiOverlayStyle.dark)
+                        .copyWith(
+                            statusBarColor: Colors.transparent,
+                            systemNavigationBarColor: Colors.transparent,
+                            systemNavigationBarContrastEnforced: false),
+                    child: DemoFeedbackOverlay(
+                        navigatorKey: navigatorKey,
+                        child: child ?? const SizedBox.shrink()),
+                  ),
                 );
               },
             ),

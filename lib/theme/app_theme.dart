@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'app_transitions.dart';
 import 'package:flutter/material.dart';
 
 import '../logic/contrast.dart';
@@ -242,12 +242,10 @@ class AppTheme {
       ),
       // Веб на iPhone: пока идёт анимация перехода между экранами, касания
       // попадают мимо кнопок («сенсор тупит, пока страница не загрузится»).
-      // На вебе экраны сменяются без анимации.
-      pageTransitionsTheme: kIsWeb
-          ? PageTransitionsTheme(builders: {
-              for (final p in TargetPlatform.values) p: const _InstantTransitions(),
-            })
-          : null,
+      // Переходы между экранами настраиваются (AnimSettings, «Внешний вид»).
+      pageTransitionsTheme: PageTransitionsTheme(builders: {
+        for (final p in TargetPlatform.values) p: const AppTransitions(),
+      }),
       navigationBarTheme: NavigationBarThemeData(
         height: 72,
         backgroundColor: cs.surfaceContainerLow,
@@ -368,13 +366,4 @@ class AppTheme {
           TextStyle(fontWeight: FontWeight.w600, letterSpacing: 0.1),
         ),
       );
-}
-
-class _InstantTransitions extends PageTransitionsBuilder {
-  const _InstantTransitions();
-
-  @override
-  Widget buildTransitions<T>(PageRoute<T> route, BuildContext context,
-          Animation<double> animation, Animation<double> secondaryAnimation, Widget child) =>
-      child;
 }

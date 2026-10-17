@@ -1,4 +1,5 @@
 import '../logic/friendly_error.dart';
+import '../widgets/app_loader.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -101,7 +102,7 @@ class _AthleteTasksScreenState extends State<AthleteTasksScreen> {
     } else if (_tasks == null) {
       body = Center(
           child: _error == null
-              ? const CircularProgressIndicator()
+              ? const AppLoader()
               : Text(_error!));
     } else if (_tasks!.isEmpty) {
       body = Center(
