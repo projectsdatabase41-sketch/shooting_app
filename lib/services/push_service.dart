@@ -369,10 +369,22 @@ class PushService {
     FirebaseMessaging.onMessageOpenedApp.listen(_handleTap);
   }
 
-  static void _handleTap(RemoteMessage message) {
-    final type = message.data['type'];
+  /// Веб: нажатие на уведомление (см. web/firebase-messaging-sw.js) — открыть нужный экран.
+  static void consumeWebTap() {
+    final raw = webConsumePushTap();
+    if (raw == null) return;
+    try {
+      final data = (jsonDecode(raw) as Map).cast<String, dynamic>();
+      _dispatchTap(data);
+    } catch (_) {}
+  }
+
+  static void _handleTap(RemoteMessage message) => _dispatchTap(message.data);
+
+  static void _dispatchTap(Map<String, dynamic> data) {
+    final type = data['type'];
     if (type == 'task') {
-      final id = '${message.data['task_id'] ?? ''}';
+      final id = '${data['task_id'] ?? ''}';
       if (id.isNotEmpty) pushTaskTapHandler?.call(id);
       return;
     }
@@ -380,7 +392,7 @@ class PushService {
       // Заявка в друзья: открываем мессенджер — красный кружок у меню ведёт к «Друзьям».
       pushChatTapHandler?.call(const PushChatTarget.global());
     } else {
-      final contactId = message.data['contact_id'];
+      final contactId = data['contact_id'];
       if (contactId is String && contactId.isNotEmpty) {
         pushChatTapHandler?.call(PushChatTarget.personal(contactId));
       }

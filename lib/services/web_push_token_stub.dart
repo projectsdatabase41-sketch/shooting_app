@@ -8,3 +8,5 @@ String webPushEnv() => 'ok';
 Future<String> webRequestPermission() async => 'granted';
 
 void webSetActiveChat(String? contactId) {}
+
+String? webConsumePushTap() => null;

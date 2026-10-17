@@ -11,6 +11,30 @@
 // на каждую платформу, см. комментарий в firebase_settings.dart).
 // Скрипты Firebase лежат рядом (web/vendor/, v10.14.1), а не на gstatic.com:
 // недоступный CDN ронял регистрацию воркера целиком — и push, и кеш.
+// Нажатие на уведомление: фокусируем вкладку приложения (или открываем новую) и
+// передаём ей данные уведомления — приложение откроет нужную переписку. Обработчик
+// стоит ДО подключения Firebase и гасит его собственный (тот открывал лишь корень сайта).
+self.addEventListener('notificationclick', (event) => {
+  const n = event.notification;
+  const raw = n.data || {};
+  const d = (raw.FCM_MSG && raw.FCM_MSG.data) || raw;
+  n.close();
+  event.stopImmediatePropagation();
+  event.waitUntil((async () => {
+    const list = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const c of list) {
+      if ('focus' in c) {
+        await c.focus();
+        c.postMessage({ nexusPush: d });
+        return;
+      }
+    }
+    const url = new URL('./', self.registration.scope);
+    if (d && (d.contact_id || d.task_id || d.type)) url.hash = 'push=' + encodeURIComponent(JSON.stringify(d));
+    await clients.openWindow(url.href);
+  })());
+});
+
 importScripts('vendor/firebase-app-compat.js');
 importScripts('vendor/firebase-messaging-compat.js');
 

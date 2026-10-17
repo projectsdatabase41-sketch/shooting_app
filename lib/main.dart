@@ -1,3 +1,4 @@
+import 'dart:async' show Timer;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'theme/app_transitions.dart';
 import 'package:flutter/foundation.dart'
@@ -155,6 +156,10 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     DemoMode.load(widget.db);
     AnimSettings.load(widget.db);
+    // Веб: нажатие на push открывает нужную переписку (воркер → адрес/сообщение → здесь).
+    if (kIsWeb) {
+      Timer.periodic(const Duration(seconds: 1), (_) => PushService.consumeWebTap());
+    }
     _store = AppDataStore(widget.db)..loadAll();
     _personalization = PersonalizationViewModel(widget.db)..loadFromDb();
     // Язык интерфейса: словарь подгружается при старте и при смене языка,

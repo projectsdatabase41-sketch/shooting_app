@@ -59,3 +59,27 @@ if (window.visualViewport) {
   window.visualViewport.addEventListener('resize', fix);
   window.visualViewport.addEventListener('scroll', fix);
 }
+
+// Нажатие на push: воркер присылает данные уведомления (вкладка уже открыта) или
+// кладёт их в адрес (#push=…, вкладку пришлось открыть заново). Dart забирает их
+// через nexusConsumePushTap().
+(function () {
+  try {
+    if (navigator.serviceWorker) {
+      navigator.serviceWorker.addEventListener('message', function (e) {
+        if (e.data && e.data.nexusPush) window.__nexusPushTap = e.data.nexusPush;
+      });
+    }
+    var m = /[#&]push=([^&]+)/.exec(location.hash || '');
+    if (m) {
+      window.__nexusPushTap = JSON.parse(decodeURIComponent(m[1]));
+      history.replaceState(null, '', location.pathname + location.search);
+    }
+  } catch (_) {}
+})();
+
+window.nexusConsumePushTap = function () {
+  var d = window.__nexusPushTap;
+  window.__nexusPushTap = null;
+  return d ? JSON.stringify(d) : null;
+};

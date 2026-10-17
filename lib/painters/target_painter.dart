@@ -218,7 +218,7 @@ class TargetPainter extends CustomPainter {
 
       final midMm = (outerMm + innerMm) / 2;
       final rPx = midMm * mmToPx;
-      final fontSize = (bandPx * 0.7).clamp(8.0, 15.0);
+      final fontSize = (bandPx * 0.7).clamp(8.0, 48.0);
       final onBullseye = midMm <= face.bullseyeRadiusMm;
       final color = face.isArchery
           ? (_isDark(archeryZoneColor(ring)) ? Colors.white : Colors.black)

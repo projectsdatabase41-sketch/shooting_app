@@ -30,3 +30,9 @@ external void _nexusSetActiveChat(JSString? id);
 
 /// Открытый сейчас чат — для него уведомление при открытом приложении не нужно.
 void webSetActiveChat(String? contactId) => _nexusSetActiveChat(contactId?.toJS);
+
+@JS('nexusConsumePushTap')
+external JSString? _nexusConsumePushTap();
+
+/// Данные уведомления, по которому нажали (JSON) — один раз, затем `null`.
+String? webConsumePushTap() => _nexusConsumePushTap()?.toDart;
