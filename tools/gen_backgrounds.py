@@ -127,7 +127,8 @@ def make(kind, theme, w, h):
         d = ImageDraw.Draw(base)
         d.ellipse([cx - r0, cy - r0, cx + r0, cy + r0], outline=col, width=lw * 3)
         f = ImageFont.truetype('C:/Windows/Fonts/segoeuisb.ttf' if os.path.exists('C:/Windows/Fonts/segoeuisb.ttf') else 'C:/Windows/Fonts/seguisb.ttf', int(r0 * 1.15))
-        d.text((cx, cy), 'N', font=f, fill=(255, 255, 255) if dark else (18, 54, 94), anchor='mm')
+        bb = f.getbbox('N')
+        d.text((cx - (bb[0] + bb[2]) / 2, cy - (bb[1] + bb[3]) / 2), 'N', font=f, fill=(255, 255, 255) if dark else (18, 54, 94))
         img = base
     return img.resize((w, h), Image.LANCZOS)
 

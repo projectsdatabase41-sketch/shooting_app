@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart';
 
 import '../services/local_db_service.dart';
 
@@ -40,6 +41,7 @@ class SplashGate extends StatefulWidget {
 
 class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateMixin {
   late final AnimationController _a;
+  VideoPlayerController? _v;
   bool _showing = false;
   bool _fading = false;
   Timer? _guard;
@@ -52,7 +54,26 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
     SplashGate._played = true;
     _showing = true;
     _a.repeat();
+    _startVideo();
     _guard = Timer(const Duration(milliseconds: SplashGate.maxMs), _finish);
+  }
+
+  /// Ролик 1 с в цикле; пока он не готов (или не запустился) — та же картинка,
+  /// нарисованная кодом, так что заставка видна сразу.
+  Future<void> _startVideo() async {
+    try {
+      final c = VideoPlayerController.asset('assets/video/splash_loop.mp4');
+      _v = c;
+      await c.initialize().timeout(const Duration(milliseconds: 800));
+      if (!mounted || !_showing) return;
+      await c.setVolume(0);
+      await c.setLooping(true);
+      await c.play();
+      setState(() {});
+    } catch (_) {
+      _v?.dispose();
+      _v = null;
+    }
   }
 
   void _finish() {
@@ -63,6 +84,8 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
       if (!mounted) return;
       setState(() => _showing = false);
       _a.stop();
+      _v?.dispose();
+      _v = null;
     });
   }
 
@@ -70,6 +93,7 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
   void dispose() {
     _guard?.cancel();
     _a.dispose();
+    _v?.dispose();
     super.dispose();
   }
 
@@ -89,10 +113,16 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
               onTap: _finish,
               child: ColoredBox(
                 color: Colors.black,
-                child: AnimatedBuilder(
-                  animation: _a,
-                  builder: (_, __) => CustomPaint(painter: _NexusPulsePainter(_a.value), size: Size.infinite),
-                ),
+                child: _v != null && _v!.value.isInitialized
+                    ? SizedBox.expand(
+                        child: FittedBox(
+                            fit: BoxFit.contain,
+                            child: SizedBox(
+                                width: _v!.value.size.width, height: _v!.value.size.height, child: VideoPlayer(_v!))))
+                    : AnimatedBuilder(
+                        animation: _a,
+                        builder: (_, __) => CustomPaint(painter: _NexusPulsePainter(_a.value), size: Size.infinite),
+                      ),
               ),
             ),
           ),
@@ -146,7 +176,10 @@ class _NexusPulsePainter extends CustomPainter {
           style: TextStyle(color: Colors.white, fontSize: r0 * 1.15, fontWeight: FontWeight.w600, height: 1)),
       textDirection: TextDirection.ltr,
     )..layout();
-    tp.paint(canvas, c - Offset(tp.width / 2, tp.height / 2));
+    // заглавная N: центр по высоте капители, а не по строке (иначе визуально выше/ниже)
+    final base = tp.computeDistanceToActualBaseline(TextBaseline.alphabetic);
+    final cap = r0 * 1.15 * 0.71;
+    tp.paint(canvas, Offset(c.dx - tp.width / 2, c.dy + cap / 2 - base));
   }
 
   @override
