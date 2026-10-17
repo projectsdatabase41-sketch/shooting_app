@@ -18,6 +18,9 @@ class SplashGate extends StatefulWidget {
 
   static bool _played = false;
 
+  /// Сколько максимум держится заставка (мс), даже если видео длиннее.
+  static const int maxMs = 2400;
+
   /// Настройка «Заставка при запуске» (по умолчанию включена).
   static bool isOn(LocalDbService db) {
     final rows = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', ['splash_on']);
@@ -60,7 +63,8 @@ class _SplashGateState extends State<SplashGate> {
       await c.play();
       setState(() {});
       // Страховка: заставка не должна зависнуть, даже если видео «застыло».
-      _guard = Timer(c.value.duration + const Duration(seconds: 3), _finish);
+      // Не дольше SplashGate.maxMs: приложение под заставкой уже готово.
+      _guard = Timer(const Duration(milliseconds: SplashGate.maxMs), _finish);
     } catch (_) {
       _finish();
     }

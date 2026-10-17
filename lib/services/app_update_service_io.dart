@@ -144,6 +144,18 @@ class AppUpdateService {
             existing.status == TaskStatus.enqueued)) {
       return _finishDownload(await _waitFor(_taskId, onProgress));
     }
+    // Загрузку прервали (заблокировали телефон, пропала связь) — докачиваем с
+    // места остановки, а не начинаем с нуля.
+    if (existing != null && existing.task is DownloadTask) {
+      var resumed = false;
+      try {
+        resumed = await FileDownloader().taskCanResume(existing.task) &&
+            await FileDownloader().resume(existing.task as DownloadTask);
+      } catch (_) {
+        // докачка невозможна — ниже обычная загрузка с начала
+      }
+      if (resumed) return _finishDownload(await _waitFor(_taskId, onProgress));
+    }
     await cleanupStale();
     final task = DownloadTask(
       taskId: _taskId,
@@ -180,8 +192,17 @@ class AppUpdateService {
 
   static Future<void> _finishDownload(TaskStatusUpdate result) async {
     if (result.status != TaskStatus.complete) {
-      // Недокачанный файл и запись о задаче не оставляем: иначе следующая
-      // попытка может упереться в «битый» остаток.
+      // Если загрузку можно продолжить (сервер отдаёт Range), остаток и запись
+      // оставляем: следующее «Обновить» докачает с того же места.
+      var canResume = false;
+      try {
+        canResume = await FileDownloader().taskCanResume(result.task);
+      } catch (_) {}
+      if (canResume) {
+        throw HttpException(tr('Загрузка прервана. Нажмите «Обновить» ещё раз — она продолжится с места остановки.'));
+      }
+      // Иначе недокачанный файл и запись не оставляем: следующая попытка
+      // может упереться в «битый» остаток.
       await cleanupAfterFailure();
       throw HttpException(result.exception?.description ??
           tr('загрузка не удалась ({name})', {'name': result.status.name}));
