@@ -308,6 +308,13 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
                         SnackBar(content: Text(tr('Код скопирован'))));
                   },
           ),
+        if (!_contact.isGroup)
+          ListTile(
+            leading: const Icon(Icons.history),
+            title: Text(tr('Восстановить историю')),
+            subtitle: Text(tr('Попросить у собеседника копию вашей переписки (оба должны быть в ней)')),
+            onTap: () => Navigator.pop(context, 'history'),
+          ),
         if (_contact.about.isNotEmpty)
           ListTile(
             leading: const Icon(Icons.info_outline),

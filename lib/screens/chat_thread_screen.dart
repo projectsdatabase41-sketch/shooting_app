@@ -1,4 +1,5 @@
 import 'package:uuid/uuid.dart';
+import '../services/chat_history_transfer.dart';
 import '../widgets/app_backdrop.dart';
 import 'dart:ui' as ui;
 import '../logic/friendly_error.dart';
@@ -436,6 +437,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             .then((_) => _reload());
       };
       _live!.files.onOffer = _onFileOffer;
+      _live!.onHistoryRequest = _onHistoryRequest;
       _live!.files.onChanged = () {
         if (mounted) setState(() {});
       };
@@ -980,6 +982,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _call(false);
       case 'video':
         _call(true);
+      case 'history':
+        _requestHistory();
       case 'left' || 'removed':
         Navigator.of(context).pop();
         return;
@@ -1476,6 +1480,73 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _scrollToEnd();
   }
 
+  // ---- Восстановление истории у собеседника ----
+  DateTime? _awaitingHistoryUntil;
+
+  void _requestHistory() {
+    final live = _live;
+    final messenger = ScaffoldMessenger.of(context);
+    if (live == null || !live.peerOnline) {
+      messenger.showSnackBar(SnackBar(content: Text(tr('Собеседник должен быть сейчас в этой переписке'))));
+      return;
+    }
+    _awaitingHistoryUntil = DateTime.now().add(const Duration(minutes: 3));
+    live.requestHistory();
+    messenger.showSnackBar(SnackBar(content: Text(tr('Запрос отправлен. Ждём согласия собеседника…'))));
+  }
+
+  /// Собеседник просит копию переписки — отдаём только с согласием.
+  Future<void> _onHistoryRequest() async {
+    if (!mounted) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('Передать переписку?')),
+        content: Text(tr('{c} просит копию вашей переписки (сообщения и небольшие вложения), чтобы восстановить свою историю. Передать?',
+            {'c': _contact.nickname})),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Нет'))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Передать'))),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final sent = await _live?.sendHistory(ChatHistoryTransfer.encode(widget.repo.forContact(_contact.id))) ?? false;
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(sent ? tr('Переписка передана') : tr('Не удалось передать: нужно прямое соединение (P2P)'))));
+  }
+
+  Future<void> _receiveHistory(P2pReceiver r) async {
+    final until = _awaitingHistoryUntil;
+    if (until == null || DateTime.now().isAfter(until) || r.size > ChatHistoryTransfer.maxPackageBytes + 1024 * 1024) {
+      return r.reject();
+    }
+    void done() async {
+      if (r.state.value != P2pState.done) return;
+      r.state.removeListener(done);
+      _awaitingHistoryUntil = null;
+      try {
+        final path = r.path;
+        if (path == null) return;
+        final json = await File(path).readAsString();
+        final n = ChatHistoryTransfer.import(widget.repo, _contact.id, json, () => const Uuid().v4());
+        try {
+          await File(path).delete();
+        } catch (_) {}
+        widget.repo.markThreadSeen(_contact.id);
+        if (mounted) {
+          _reload();
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(n > 0 ? tr('Восстановлено сообщений: {n}', {'n': n}) : tr('Новых сообщений в копии нет'))));
+        }
+      } catch (_) {}
+    }
+
+    r.state.addListener(done);
+    await r.accept();
+  }
+
   /// Фото/голос/файл из переписки, пришедшие по P2P: принимаем без вопросов и
   /// кладём в переписку как обычное вложение (тот же clientMessageId — дубль
   /// из базы не появится).
@@ -1526,6 +1597,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (!mounted) return r.reject();
     final meta = r.meta;
     if (meta != null && meta['att'] == 1) return _receiveInlineAttachment(r, meta);
+    if (meta != null && meta['hist'] == 1) return _receiveHistory(r);
     final ok = await showDialog<bool>(
       context: context,
       barrierDismissible: false,

@@ -253,6 +253,46 @@ class LiveChatSession {
     }
   }
 
+  /// Восстановление переписки: запрос собеседнику и отправка пакета (см.
+  /// ChatHistoryTransfer). Нужен прямой канал или Realtime — оба в переписке.
+  void Function()? onHistoryRequest;
+  bool requestHistory() => peerOnline && _emit('hist_req', {});
+
+  Future<bool> sendHistory(String json) async {
+    if (kIsWeb || !isDirect) return false;
+    File? f;
+    try {
+      final bytes = utf8.encode(json);
+      final dir = await getTemporaryDirectory();
+      f = File(p.join(dir.path, 'history_out_${DateTime.now().microsecondsSinceEpoch}'));
+      await f.writeAsBytes(bytes, flush: true);
+      final s = files.sendFile(
+          path: f.path, name: 'history.json', size: bytes.length, mime: 'application/json', meta: {'hist': 1});
+      final done = Completer<bool>();
+      void check() {
+        if (done.isCompleted) return;
+        final st = s.state.value;
+        if (st == P2pState.done) done.complete(true);
+        if (st == P2pState.failed || st == P2pState.rejected || st == P2pState.cancelled) done.complete(false);
+      }
+
+      s.state.addListener(check);
+      check();
+      final ok = await done.future.timeout(Duration(seconds: 30 + bytes.length ~/ 50000), onTimeout: () {
+        s.cancel();
+        return false;
+      });
+      s.state.removeListener(check);
+      return ok;
+    } catch (_) {
+      return false;
+    } finally {
+      try {
+        await f?.delete();
+      } catch (_) {}
+    }
+  }
+
   /// Сигналы звонка (ring / offer / answer / ice / join / hangup …) по тому же
   /// каналу: сначала прямой P2P, иначе Realtime. Сервер звонков не нужен.
   void Function(Map<String, dynamic> p)? onCall;
@@ -261,6 +301,10 @@ class LiveChatSession {
   void _onBroadcast(String event, Map<String, dynamic> p) {
     if (event == 'call') {
       onCall?.call(p);
+      return;
+    }
+    if (event == 'hist_req') {
+      onHistoryRequest?.call();
       return;
     }
     if (P2pFiles.isFileEvent(event)) {
