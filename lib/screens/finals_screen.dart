@@ -68,7 +68,9 @@ class _FinalsScreenState extends State<FinalsScreen> {
           const SizedBox(height: 4),
           Text(tr('Финалы с участниками'), style: theme.textTheme.titleSmall),
           const SizedBox(height: 8),
-          Card(
+          // Проводить финалы может тренер — только при включённом модуле «Я тренер».
+          if (store.isCoach)
+            Card(
             child: ListTile(
               leading: const Icon(Icons.groups_outlined),
               title: Text(tr('Провести финал (тренер)')),
