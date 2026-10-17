@@ -2105,9 +2105,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               onCancel: () => setState(() => _replyingTo = null),
             ),
           ),
-        SafeArea(
-          top: false,
-          bottom: !_emojiOpen && MediaQuery.viewInsetsOf(context).bottom == 0,
+        _InputSafeArea(
+          emojiOpen: _emojiOpen,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
             child: _voiceRecording
@@ -2241,10 +2240,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           // AnimatedPadding реагирует на MediaQuery сам, на каждой перестройке,
           // и не завязан на то, как именно клавиатуру закрыли.
           resizeToAvoidBottomInset: false,
-          body: AnimatedPadding(
-            padding: EdgeInsets.only(
-                bottom: MediaQuery.viewInsetsOf(context).bottom),
-            duration: const Duration(milliseconds: 100),
+          body: _KeyboardPad(
             child: Column(
               children: [
                 Expanded(
@@ -3179,4 +3175,33 @@ class _Bubble extends StatelessWidget {
           Icons.check, // дошло, но не прочитано — одна галочка
         ChatMessageStatus.error => Icons.error_outline,
       };
+}
+
+/// Отступ под клавиатуру. Читает высоту клавиатуры только здесь: экран целиком
+/// (длинная лента сообщений) на каждом кадре анимации клавиатуры не пересобирается —
+/// иначе при сворачивании было «подёргивание» примерно в 20 кадров/с. Без
+/// AnimatedPadding: высота и так меняется покадрово, повторные анимации лишь
+/// запаздывали.
+class _KeyboardPad extends StatelessWidget {
+  final Widget child;
+  const _KeyboardPad({required this.child});
+
+  @override
+  Widget build(BuildContext context) =>
+      Padding(padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom), child: child);
+}
+
+/// Нижний отступ поля ввода (жестовая панель): виден, пока клавиатура закрыта.
+/// Отдельный виджет — чтобы высота клавиатуры не пересобирала весь экран.
+class _InputSafeArea extends StatelessWidget {
+  final bool emojiOpen;
+  final Widget child;
+  const _InputSafeArea({required this.emojiOpen, required this.child});
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+        top: false,
+        bottom: !emojiOpen && MediaQuery.viewInsetsOf(context).bottom == 0,
+        child: child,
+      );
 }
