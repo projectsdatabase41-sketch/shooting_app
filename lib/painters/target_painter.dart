@@ -129,7 +129,7 @@ class TargetPainter extends CustomPainter {
     _paintRings(canvas, center, mmToPx);
 
     // 4. Перекрестие — только внутри разметки
-    _paintCrosshair(canvas, center, mmToPx);
+    // Центральный крест убран: мишень как бумажная, без лишней разметки.
 
     // 5. Подписи габаритов — после перекрестия, см. комментарий к классу
     _paintRingLabels(canvas, size, center, mmToPx);
@@ -244,23 +244,6 @@ class TargetPainter extends CustomPainter {
       textDirection: TextDirection.ltr,
     )..layout();
     tp.paint(canvas, pos - Offset(tp.width / 2, tp.height / 2));
-  }
-
-  /// Перекрестие центра — в пределах внешнего кольца, а не на весь
-  /// экран.
-  ///
-  /// На настоящем бланке разметка заканчивается вместе с габаритом 1;
-  /// линии до краёв окна выглядели как координатная сетка поверх
-  /// мишени и мешали смотреть на группу.
-  void _paintCrosshair(Canvas canvas, Offset center, double mmToPx) {
-    final radii = face.ringRadiiMm;
-    if (radii.isEmpty) return;
-    final r = radii.last * mmToPx;
-    final paint = Paint()
-      ..color = colors.crosshair
-      ..strokeWidth = 1.0;
-    canvas.drawLine(Offset(center.dx - r, center.dy), Offset(center.dx + r, center.dy), paint);
-    canvas.drawLine(Offset(center.dx, center.dy - r), Offset(center.dx, center.dy + r), paint);
   }
 
   /// Компас выбора угла — появляется только во время правки.

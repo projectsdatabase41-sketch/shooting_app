@@ -150,7 +150,7 @@ class _HomeShellState extends State<HomeShell> {
         return Scaffold(
           extendBodyBehindAppBar: true,
           appBar: GlassHeader(
-              title: const Text('Nexus', style: TextStyle(fontWeight: FontWeight.w600)),
+              title: const Text('Nexus', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 30, letterSpacing: 1.5, height: 1)),
               actions: [
                 IconButton(
                   tooltip: tr('Настройки'),

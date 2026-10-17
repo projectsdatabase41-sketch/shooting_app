@@ -108,7 +108,7 @@ class _SettingsModulesScreenState extends State<SettingsModulesScreen> {
               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               child: ListTile(
                 leading: Icon(spec?.icon ?? Icons.circle_outlined),
-                title: Text(spec?.label == null ? id : tr(spec!.label)),
+                title: Text(id == 'athletes' ? tr('Я тренер') : (spec?.label == null ? id : tr(spec!.label))),
                 subtitle: needs != null ? Text(needs) : (on ? null : Text(tr('выключено'))),
                 trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                   Switch(value: on && needs == null, onChanged: needs != null ? null : (v) => _toggle(id, v, store)),

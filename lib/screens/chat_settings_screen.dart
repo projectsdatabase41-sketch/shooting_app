@@ -280,11 +280,6 @@ class _ChatNotificationSettingsScreenState
                 RadioListTile<String>(
                   value: m.$1,
                   title: Text(tr(m.$2)),
-                  secondary: IconButton(
-                    icon: const Icon(Icons.play_arrow),
-                    onPressed: () =>
-                        MessageSound.preview(m.$1, _sound.soundVolume),
-                  ),
                 ),
             ]),
           ),

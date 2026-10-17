@@ -572,7 +572,13 @@ class _HomeTileGridState extends State<HomeTileGrid> {
     final personalization = context.watch<PersonalizationViewModel>();
     final bg =
         personalization.appButtonFor(cs.brightness) ?? cs.surfaceContainerHigh;
-    final fg = personalization.appButtonTextFor(cs.brightness) ?? cs.primary;
+    var fg = personalization.appButtonTextFor(cs.brightness) ?? cs.primary;
+    // «Стекло» просвечивает фон, цвет самой кнопки там не при чём; иначе (светлая
+    // тема: белый на белом) берём цвет текста темы, если контраст слабый.
+    final under = TileStyle.isGlass(context.read<AppDataStore>().db) ? cs.surface : bg;
+    double lum(Color c) => c.computeLuminance();
+    final hi = math.max(lum(fg), lum(under)) + 0.05, lo = math.min(lum(fg), lum(under)) + 0.05;
+    if (hi / lo < 3) fg = cs.onSurface;
     // Вдавливание — только у "живой" плитки на месте, не у теней
     // перетаскивания (elevated — палец уже держит её приподнятой).
     final pressed = !elevated && _pressedId == id;

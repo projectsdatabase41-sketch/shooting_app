@@ -148,7 +148,7 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
   // Семь соперников: обычные боты или чемпионы (по их статистике).
   late final List<_Opp> _opps = [for (final n in _names) _Opp(n)];
 
-  static const _names = ['Алексей', 'Мария', 'Игорь', 'Елена', 'Сергей', 'Ольга', 'Дмитрий'];
+  static const _names = ['Бывалый', 'Татошка', 'Кость', 'Я в свое время тоже стрельбой занимался', 'Рыцарь', 'Сахарок', 'Усталый'];
 
   /// Выстрелы тренировок на мишени этого финала.
   ({List<(double, double)> all, List<ShotStats> sessions}) _history(AppDataStore store) {

@@ -771,7 +771,7 @@ class _AiChatBodyState extends State<_AiChatBody> {
                       // пользователя): сообщение уходит только по кнопке.
                       textInputAction: TextInputAction.newline,
                       decoration: InputDecoration(
-                        hintText: tr('Вопрос по стрельбе'),
+                        hintText: tr('Спросите что угодно'),
                         border: InputBorder.none,
                         enabledBorder: InputBorder.none,
                         focusedBorder: InputBorder.none,

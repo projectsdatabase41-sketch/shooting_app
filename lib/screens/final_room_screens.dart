@@ -373,7 +373,7 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
       'rifle_50m' => const ShotStats(0, 0, 6.0, 6.0, 0),
       _ => const ShotStats(0, 0, 3.5, 3.5, 0),
     };
-    const names = ['Алексей', 'Мария', 'Игорь', 'Елена', 'Сергей', 'Ольга', 'Дмитрий'];
+    const names = ['Бывалый', 'Татошка', 'Кость', 'Я в свое время тоже стрельбой занимался', 'Рыцарь', 'Сахарок', 'Усталый'];
     final rng = math.Random();
     final competitors = [
       for (final a in athletes) FinalCompetitor(a.targetId!, a.name),

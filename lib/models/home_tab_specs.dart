@@ -43,7 +43,7 @@ const serviceTabPrefix = 'service_';
 
 const Map<String, HomeTabSpec> homeTabSpecs = {
   'exercises':
-      HomeTabSpec(icon: Icons.fitness_center, label: /*tr*/ 'Тренировка'),
+      HomeTabSpec(icon: Icons.fitness_center, label: /*tr*/ 'Тренировки'),
   'statistics': HomeTabSpec(icon: Icons.bar_chart, label: /*tr*/ 'Статистика'),
   'tasks':
       HomeTabSpec(icon: Icons.assignment_outlined, label: /*tr*/ 'Задания'),
