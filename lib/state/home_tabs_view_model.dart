@@ -157,14 +157,20 @@ class HomeTabsViewModel extends ChangeNotifier {
   /// Индексы — из `ReorderableListView` (см. `WorkspaceViewModel.move`,
   /// тот же приём с поправкой на единицу).
   void move(int oldIndex, int newIndex) {
-    if (oldIndex < 0 || oldIndex >= _visible.length) return;
+    // Индексы — по видимому списку (без убранных по состоянию данных), а
+    // хранится полный: переводим через id, иначе плитка «выскакивала обратно».
+    final shown = visible;
+    if (oldIndex < 0 || oldIndex >= shown.length) return;
     var target = newIndex;
     if (target > oldIndex) target -= 1;
     if (target < 0) target = 0;
-    if (target >= _visible.length) target = _visible.length - 1;
+    if (target >= shown.length) target = shown.length - 1;
     if (target == oldIndex) return;
-    final id = _visible.removeAt(oldIndex);
-    _visible.insert(target, id);
+    final id = shown[oldIndex];
+    final before = shown[target];
+    _visible.remove(id);
+    final at = _visible.indexOf(before);
+    _visible.insert(target > oldIndex ? at + 1 : at, id);
     _persist();
     notifyListeners();
   }

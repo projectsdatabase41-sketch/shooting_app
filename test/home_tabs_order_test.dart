@@ -38,4 +38,17 @@ void main() {
     vm.hide('settings');
     expect(vm.isHidden('settings'), isFalse);
   });
+
+  test('перетаскивание при убранных по состоянию плитках двигает именно ту плитку', () async {
+    final db = LocalDbService();
+    await db.open(overridePath: ':memory:');
+    final vm = HomeTabsViewModel(db, mode: 'all', allIds: allTabIds, unhidable: unhidableTabs);
+    vm.setOrder(['exercises', 'statistics', 'tasks', 'notes', 'messenger']);
+    vm.suppressed = {'statistics'}; // убрана (например, модуль выключен)
+    expect(vm.visible.take(3), ['exercises', 'tasks', 'notes']);
+    vm.move(2, 1); // «notes» выше «tasks»
+    expect(vm.visible.take(3), ['exercises', 'notes', 'tasks']);
+    vm.suppressed = {};
+    expect(vm.visible.take(4), ['exercises', 'statistics', 'notes', 'tasks']);
+  });
 }
