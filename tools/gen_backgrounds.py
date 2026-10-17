@@ -18,11 +18,11 @@ ORANGE = (255, 106, 19)
 
 THEMES = {
     'dark': {
-        'top': (10, 12, 15), 'bottom': (17, 21, 27),
+        'top': (7, 9, 13), 'bottom': (18, 30, 52),
         'ring': (159, 211, 255), 'glow': (58, 141, 255),
     },
     'light': {
-        'top': (246, 248, 250), 'bottom': (233, 238, 243),
+        'top': (250, 251, 253), 'bottom': (214, 227, 244),
         'ring': (18, 54, 94), 'glow': (160, 200, 255),
     },
 }
@@ -30,95 +30,100 @@ THEMES = {
 SS = 2  # суперсэмплинг для гладких линий
 
 
-def gradient(w, h, top, bottom):
-    img = Image.new('RGB', (w, h))
-    px = img.load()
-    for y in range(h):
-        t = y / (h - 1)
-        c = tuple(round(top[i] + (bottom[i] - top[i]) * t) for i in range(3))
-        for x in range(w):
-            px[x, y] = c
-    return img
+def vgrad(w, h, top, bottom):
+    m = Image.linear_gradient('L').resize((w, h))
+    return Image.composite(Image.new('RGB', (w, h), bottom), Image.new('RGB', (w, h), top), m)
 
 
-def rings(base, cx, cy, radii, color, alpha, width, dot=None):
-    """Кольца с центром (cx, cy) в долях размера (в пикселях базы)."""
-    w, h = base.size
+def radial(img, cx, cy, radius, color, strength):
+    """Мягкое свечение: центр (cx, cy) в пикселях, strength 0..1."""
+    w, h = img.size
+    m = Image.radial_gradient('L').resize((radius * 2, radius * 2))  # 0 в центре, 255 по краю
+    m = m.point(lambda v: int(strength * max(0, 255 - min(255, v * 1.45)) ** 1.5 / 255 ** 0.5))
+    full = Image.new('L', (w, h), 0)
+    full.paste(m, (int(cx - radius), int(cy - radius)))
+    img.paste(Image.new('RGB', (w, h), color), (0, 0), full)
+
+
+def target(img, cx, cy, radii, color, a0, fade, width, dot=None):
+    """Симметричные кольца; прозрачность плавно падает от центра наружу."""
+    w, h = img.size
     layer = Image.new('RGBA', (w, h), (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
-    for r in radii:
-        d.ellipse([cx - r, cy - r, cx + r, cy + r], outline=color + (int(255 * alpha),), width=width)
+    for i, r in enumerate(radii):
+        a = max(0.0, a0 * (fade ** i))
+        d.ellipse([cx - r, cy - r, cx + r, cy + r], outline=color + (int(255 * a),), width=width)
     if dot:
-        x, y, rr, a = dot
-        d.ellipse([x - rr, y - rr, x + rr, y + rr], fill=ORANGE + (int(255 * a),))
-    base.paste(Image.alpha_composite(base.convert('RGBA'), layer).convert('RGB'))
-
-
-def glow(base, cx, cy, radius, color, alpha):
-    w, h = base.size
-    layer = Image.new('RGBA', (w, h), color + (0,))
-    mask = Image.new('L', (w, h), 0)
-    d = ImageDraw.Draw(mask)
-    d.ellipse([cx - radius, cy - radius, cx + radius, cy + radius], fill=int(255 * alpha))
-    mask = mask.filter(ImageFilter.GaussianBlur(radius / 2.2))
-    layer.putalpha(mask)
-    base.paste(Image.alpha_composite(base.convert('RGBA'), layer).convert('RGB'))
-
-
-def dither(img, amp=1.2, seed=7):
-    """Лёгкий шум против полос на плавных градиентах."""
-    rnd = random.Random(seed)
-    w, h = img.size
-    noise = Image.new('L', (w, h))
-    noise.putdata([128 + int(rnd.gauss(0, amp * 3)) for _ in range(w * h)])
-    n = Image.merge('RGB', (noise, noise, noise))
-    # смешиваем шум как «мягкий свет» очень слабо
-    return ImageChops.add(img, n, scale=1, offset=-128)
-
-
-def finish(img, w, h):
-    return dither(img.resize((w, h), Image.LANCZOS))
+        ang, ri, rr = dot
+        x, y = cx + radii[ri] * math.cos(ang), cy + radii[ri] * math.sin(ang)
+        d.ellipse([x - rr, y - rr, x + rr, y + rr], fill=ORANGE + (255,))
+    img.paste(Image.alpha_composite(img.convert('RGBA'), layer).convert('RGB'))
 
 
 def make(kind, theme, w, h):
     t = THEMES[theme]
+    dark = theme == 'dark'
     W, H = w * SS, h * SS
-    img = gradient(W, H, t['top'], t['bottom'])
+    img = vgrad(W, H, t['top'], t['bottom'])
     ring = t['ring']
-    lw = max(2, round(w * 0.0018)) * SS
+    lw = max(2, round(w * 0.0016)) * SS
+    step = W * 0.14
     if kind == 'home':
-        # огромные кольца, выходящие из правого нижнего угла
-        cx, cy = W * 0.86, H * 1.02
-        rings(img, cx, cy, [W * k for k in (0.35, 0.62, 0.9, 1.2, 1.55)], ring, 0.075, lw)
-        rings(img, W * 0.12, H * 0.07, [W * 0.10, W * 0.18], ring, 0.04, lw)
+        cx, cy = W / 2, H * 0.40
+        radial(img, cx, cy, int(W * 0.9), t['glow'], 0.30 if dark else 0.40)
+        target(img, cx, cy, [step * k for k in range(1, 9)], ring, 0.30 if dark else 0.26, 0.80, lw)
     elif kind == 'messenger':
-        # редкий рисунок из маленьких мишеней, 4–5% контраста
-        step = W * 0.26
-        for row in range(-1, int(H / step) + 2):
-            off = step / 2 if row % 2 else 0
-            for col in range(-1, int(W / step) + 2):
-                x, y = col * step + off, row * step * 0.95
-                rr = W * 0.022
-                rings(img, x, y, [rr, rr * 1.9, rr * 2.8], ring, 0.05, max(1, lw // 2))
+        # в духе обоев Telegram: диагональный градиент + узор из простых значков
+        v = Image.linear_gradient('L').resize((W, H))
+        hz = Image.linear_gradient('L').rotate(90).resize((W, H))
+        m = ImageChops.add(v, hz, scale=2)
+        c1, c2 = ((12, 24, 48), (22, 70, 96)) if dark else ((205, 226, 248), (236, 244, 252))
+        img = Image.composite(Image.new('RGB', (W, H), c2), Image.new('RGB', (W, H), c1), m)
+        pat = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+        d = ImageDraw.Draw(pat)
+        col = (255, 255, 255, 34) if dark else (18, 54, 94, 30)
+        cell = W * 0.15
+        u = cell * 0.17
+        lw2 = max(2, lw)
+        rnd = random.Random(3)
+        for row in range(int(H / cell) + 2):
+            for c in range(int(W / cell) + 2):
+                x = c * cell + (cell / 2 if row % 2 else 0)
+                y = row * cell
+                k = (row * 3 + c * 5 + rnd.randint(0, 1)) % 6
+                if k == 0:    # мишень
+                    for r in (u, u * 0.55):
+                        d.ellipse([x - r, y - r, x + r, y + r], outline=col, width=lw2)
+                elif k == 1:  # прицел
+                    d.line([x - u, y, x + u, y], fill=col, width=lw2)
+                    d.line([x, y - u, x, y + u], fill=col, width=lw2)
+                elif k == 2:  # точка-пробоина
+                    r = u * 0.45
+                    d.ellipse([x - r, y - r, x + r, y + r], outline=col, width=lw2)
+                elif k == 3:  # кольцо
+                    r = u * 0.8
+                    d.ellipse([x - r, y - r, x + r, y + r], outline=col, width=lw2)
+                elif k == 4:  # ромб
+                    r = u * 0.8
+                    d.polygon([(x, y - r), (x + r, y), (x, y + r), (x - r, y)], outline=col, width=lw2)
+                else:         # плюс
+                    d.line([x - u * 0.6, y, x + u * 0.6, y], fill=col, width=lw2)
+                    d.line([x, y - u * 0.6, x, y + u * 0.6], fill=col, width=lw2)
+        img = Image.alpha_composite(img.convert('RGBA'), pat).convert('RGB')
     elif kind == 'settings':
-        # почти ровный фон, едва заметные кольца, уходящие от верхней кромки
-        rings(img, W * 0.5, -H * 0.04, [W * k for k in (0.42, 0.7, 0.98, 1.28)], ring, 0.05, lw)
+        cx, cy = W / 2, 0
+        target(img, cx, cy, [step * k for k in range(2, 12)], ring, 0.12 if dark else 0.10, 0.88, lw)
     elif kind == 'ai':
-        glow(img, W * 0.5, H * 0.1, W * 0.72, t['glow'], 0.14 if theme == 'dark' else 0.28)
-        rings(img, W * 0.5, H * 0.1, [W * k for k in (0.22, 0.4, 0.6, 0.82)], ring, 0.09 if theme == 'dark' else 0.10, lw,
-              dot=(W * 0.5 + W * 0.07, H * 0.1 - W * 0.12, W * 0.011, 0.9))
+        cx, cy = W / 2, H * 0.22
+        radial(img, cx, cy, int(W * 0.85), t['glow'], 0.38 if dark else 0.50)
+        target(img, cx, cy, [step * k for k in range(1, 7)], ring, 0.34 if dark else 0.28, 0.78, lw)
     elif kind == 'launch':
-        # как кадр заставки: семь колец и оранжевая точка над центром
-        base = Image.new('RGB', (W, H), (0, 0, 0) if theme == 'dark' else (244, 246, 248))
-        cx, cy = W * 0.5, H * 0.5
-        radii = [W * (0.11 + 0.065 * i) for i in range(7)]
-        col = (159, 211, 255) if theme == 'dark' else (18, 54, 94)
-        for i, r in enumerate(radii):
-            a = 0.55 + 0.4 * (i / 6) if theme == 'dark' else 0.5 + 0.4 * (i / 6)
-            rings(base, cx, cy, [r], col, min(a, 0.95), lw * 2)
-        rings(base, cx, cy, [], col, 0, 1, dot=(cx, cy - W * 0.115, W * 0.022, 1.0))
+        base = Image.new('RGB', (W, H), (0, 0, 0) if dark else (244, 246, 248))
+        cx, cy = W / 2, H / 2
+        col = (159, 211, 255) if dark else (18, 54, 94)
+        target(base, cx, cy, [W * (0.10 + 0.06 * i) for i in range(7)], col, 0.35, 1.0, lw * 2)
         img = base
-    return finish(img, w, h)
+    return img.resize((w, h), Image.LANCZOS)
 
 
 def make_icon(theme, size=1024, foreground_only=False):
@@ -138,9 +143,6 @@ def make_icon(theme, size=1024, foreground_only=False):
         r = maxr * (i + 1) / n
         a = 120 + int(120 * (i + 1) / n)
         d.ellipse([cx - r, cy - r, cx + r, cy + r], outline=col + (a,), width=max(3, S // 170))
-    rr = S * 0.036
-    px, py = cx + maxr * 0.16, cy - maxr * 0.46
-    d.ellipse([px - rr, py - rr, px + rr, py + rr], fill=ORANGE + (255,))
     return img.resize((size, size), Image.LANCZOS)
 
 
