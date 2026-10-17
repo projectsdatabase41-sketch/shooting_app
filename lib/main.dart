@@ -416,7 +416,7 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
             // которой ничего нет. Подключение к базе живёт в настройках.
             home: SplashGate(
               // В вебе заставка играет прямо в index.html и прячет загрузку страницы.
-              enabled: widget.showSplash && !kIsWeb && SplashGate.isOn(widget.db),
+              enabled: widget.showSplash && SplashGate.isOn(widget.db),
               child: _ProfileGate(db: widget.db, require: widget.requireProfile),
             ),
           );

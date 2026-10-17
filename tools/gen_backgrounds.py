@@ -12,7 +12,7 @@ import math
 import os
 import random
 
-from PIL import Image, ImageChops, ImageDraw, ImageFilter
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 ORANGE = (255, 106, 19)
 
@@ -118,10 +118,16 @@ def make(kind, theme, w, h):
         radial(img, cx, cy, int(W * 0.85), t['glow'], 0.38 if dark else 0.50)
         target(img, cx, cy, [step * k for k in range(1, 7)], ring, 0.34 if dark else 0.28, 0.78, lw)
     elif kind == 'launch':
+        # первый кадр заставки (совпадает с lib/widgets/splash_gate.dart): N в круге и кольца
         base = Image.new('RGB', (W, H), (0, 0, 0) if dark else (244, 246, 248))
         cx, cy = W / 2, H / 2
         col = (159, 211, 255) if dark else (18, 54, 94)
-        target(base, cx, cy, [W * (0.10 + 0.06 * i) for i in range(7)], col, 0.35, 1.0, lw * 2)
+        target(base, cx, cy, [W * (0.30 + 0.07 * i) for i in range(5)], col, 0.28, 0.84, lw)
+        r0 = W * 0.17
+        d = ImageDraw.Draw(base)
+        d.ellipse([cx - r0, cy - r0, cx + r0, cy + r0], outline=col, width=lw * 3)
+        f = ImageFont.truetype('C:/Windows/Fonts/segoeuisb.ttf' if os.path.exists('C:/Windows/Fonts/segoeuisb.ttf') else 'C:/Windows/Fonts/seguisb.ttf', int(r0 * 1.15))
+        d.text((cx, cy), 'N', font=f, fill=(255, 255, 255) if dark else (18, 54, 94), anchor='mm')
         img = base
     return img.resize((w, h), Image.LANCZOS)
 
