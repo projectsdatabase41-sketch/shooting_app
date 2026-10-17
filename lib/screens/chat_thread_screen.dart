@@ -1,4 +1,5 @@
 import 'package:uuid/uuid.dart';
+import '../widgets/linked_text.dart';
 import '../widgets/ai_gate.dart';
 import '../services/chat_history_transfer.dart';
 import '../widgets/app_backdrop.dart';
@@ -2894,7 +2895,9 @@ class _Bubble extends StatelessWidget {
           // Пока идёт перевод — оригинал чуть бледнее, высота не меняется.
           Opacity(
               opacity: translating ? 0.6 : 1,
-              child: _highlightedText(captionText, textStyle, highlight)),
+              child: highlight.isEmpty && LinkedMessageText.hasLink(captionText)
+                  ? LinkedMessageText(text: captionText, style: textStyle)
+                  : _highlightedText(captionText, textStyle, highlight)),
         if (masked &&
             translation != null &&
             translation!.trim().isNotEmpty &&
