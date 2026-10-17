@@ -579,7 +579,7 @@ class _HomeTileGridState extends State<HomeTileGrid> {
     final canTap = _dragging == null;
 
     final glass = TileStyle.isGlass(context.read<AppDataStore>().db);
-    return _scatter(context, GestureDetector(
+    return _scatter(context, id, GestureDetector(
       onTapDown: canTap ? (_) => setState(() => _pressedId = id) : null,
       onTapCancel: () => setState(() => _pressedId = null),
       onTapUp: (_) => setState(() => _pressedId = null),
@@ -628,7 +628,12 @@ class _HomeTileGridState extends State<HomeTileGrid> {
           borderRadius: BorderRadius.circular(16),
           child: InkWell(
             borderRadius: BorderRadius.circular(16),
-            onTap: canTap ? () => widget.onSelect(id) : null,
+            onTap: canTap
+                ? () {
+                    TileOpen.capture(id);
+                    widget.onSelect(id);
+                  }
+                : null,
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Column(
@@ -656,36 +661,46 @@ class _HomeTileGridState extends State<HomeTileGrid> {
   }
 
   /// Тип «Разброс»: при открытии другого экрана плитка уходит к ближайшему краю.
-  Widget _scatter(BuildContext context, Widget tile) {
-    if (!AnimSettings.enabled || AnimSettings.type != AnimType.scatter) return tile;
-    final anim = ModalRoute.of(context)?.secondaryAnimation;
-    if (anim == null) return tile;
-    return AnimatedBuilder(
-      animation: anim,
-      child: tile,
-      builder: (ctx, child) {
-        final t = Curves.easeInCubic.transform(anim.value);
-        if (t == 0) return child!;
-        final box = ctx.findRenderObject();
-        final screen = MediaQuery.sizeOf(ctx);
-        var dx = 0.0, dy = 0.0;
-        if (box is RenderBox && box.hasSize) {
-          final c = box.localToGlobal(box.size.center(Offset.zero));
-          // расстояния до краёв; уходим к ближайшему
-          final d = {
-            'l': c.dx,
-            'r': screen.width - c.dx,
-            't': c.dy,
-            'b': screen.height - c.dy,
-          };
-          final k = d.entries.reduce((a, b) => a.value <= b.value ? a : b).key;
-          dx = switch (k) { 'l' => -(c.dx + box.size.width), 'r' => screen.width - c.dx + box.size.width, _ => 0.0 };
-          dy = switch (k) { 't' => -(c.dy + box.size.height), 'b' => screen.height - c.dy + box.size.height, _ => 0.0 };
-        }
-        return Opacity(
-            opacity: (1 - t).clamp(0.0, 1.0), child: Transform.translate(offset: Offset(dx * t, dy * t), child: child));
-      },
-    );
+  Widget _scatter(BuildContext context, String id, Widget tile) {
+    // запоминаем, где плитка на экране (нужно для «превращения»)
+    return Builder(builder: (bc) {
+      TileOpen.contexts[id] = bc;
+      final type = AnimSettings.type;
+      if (!AnimSettings.enabled || (type != AnimType.scatter && type != AnimType.morph)) return tile;
+      final anim = ModalRoute.of(bc)?.secondaryAnimation;
+      if (anim == null) return tile;
+      return AnimatedBuilder(
+        animation: anim,
+        child: tile,
+        builder: (ctx, child) {
+          final t = Curves.easeInCubic.transform(anim.value);
+          if (t == 0) return child!;
+          final box = ctx.findRenderObject();
+          final screen = MediaQuery.sizeOf(ctx);
+          var dx = 0.0, dy = 0.0;
+          if (box is RenderBox && box.hasSize && box.attached) {
+            final c = box.localToGlobal(box.size.center(Offset.zero));
+            if (type == AnimType.morph) {
+              // выбранная плитка заменяется «превращением»; остальные — прочь от неё
+              if (TileOpen.id == id) return Opacity(opacity: 0, child: child);
+              final o = TileOpen.rect?.center ?? screen.center(Offset.zero);
+              var v = c - o;
+              if (v.distance < 1) v = const Offset(0, 1);
+              final d = v / v.distance * (screen.longestSide * 0.6);
+              dx = d.dx;
+              dy = d.dy;
+            } else {
+              final d = {'l': c.dx, 'r': screen.width - c.dx, 't': c.dy, 'b': screen.height - c.dy};
+              final k = d.entries.reduce((a, b) => a.value <= b.value ? a : b).key;
+              dx = switch (k) { 'l' => -(c.dx + box.size.width), 'r' => screen.width - c.dx + box.size.width, _ => 0.0 };
+              dy = switch (k) { 't' => -(c.dy + box.size.height), 'b' => screen.height - c.dy + box.size.height, _ => 0.0 };
+            }
+          }
+          return Opacity(
+              opacity: (1 - t).clamp(0.0, 1.0), child: Transform.translate(offset: Offset(dx * t, dy * t), child: child));
+        },
+      );
+    });
   }
 
   /// «Стекло»: полупрозрачная заливка + размытие фона + тонкая рамка.

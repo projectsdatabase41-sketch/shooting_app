@@ -12,6 +12,7 @@ enum AnimType {
   vertical, // то же по вертикали
   zoom, // новое «наплывает» из глубины, старое отдаляется
   fade, // простое перекрёстное затухание
+  morph, // плитка раскрывается в экран раздела, остальные разлетаются от неё
 }
 
 /// Настройки анимаций (раздел «Внешний вид»): вкл/выкл, скорость, тип.
@@ -31,7 +32,7 @@ class AnimSettings {
     try {
       final on = _get(db, 'anim_on');
       if (on != null) enabled = on == '1';
-      speed = (double.tryParse(_get(db, 'anim_speed') ?? '') ?? 1.0).clamp(0.5, 2.0).toDouble();
+      speed = (double.tryParse(_get(db, 'anim_speed') ?? '') ?? 1.0).clamp(0.5, 4.0).toDouble();
       final t = _get(db, 'anim_type');
       type = AnimType.values.where((e) => e.name == t).firstOrNull ?? type;
     } catch (_) {}
@@ -62,6 +63,7 @@ class AnimSettings {
         AnimType.vertical => 'Вертикаль',
         AnimType.zoom => 'Наплыв',
         AnimType.fade => 'Затухание',
+        AnimType.morph => 'Превращение',
       };
 }
 
@@ -112,6 +114,10 @@ class AppTransitions extends PageTransitionsBuilder {
             w = Opacity(
                 opacity: (i * (1 - o)).clamp(0.0, 1.0),
                 child: Transform.scale(scale: (0.88 + 0.12 * i) * (1 + 0.08 * o), child: w));
+          case AnimType.morph: // обычные экраны (не с плитки) — как наплыв
+            w = Opacity(
+                opacity: (i * (1 - o)).clamp(0.0, 1.0),
+                child: Transform.scale(scale: (0.88 + 0.12 * i) * (1 + 0.08 * o), child: w));
           case AnimType.fade:
             w = Opacity(opacity: (i * (1 - o)).clamp(0.0, 1.0), child: w);
         }
@@ -119,4 +125,56 @@ class AppTransitions extends PageTransitionsBuilder {
       },
     );
   }
+}
+
+/// Запоминает, какую плитку нажали (где она на экране) — от этого зависит
+/// «превращение»: плитка раскрывается из своего места, остальные разлетаются.
+class TileOpen {
+  static final Map<String, BuildContext> contexts = {};
+  static String? id;
+  static Rect? rect;
+
+  static void capture(String tileId) {
+    id = tileId;
+    rect = null;
+    final box = contexts[tileId]?.findRenderObject();
+    if (box is RenderBox && box.hasSize && box.attached) {
+      rect = box.localToGlobal(Offset.zero) & box.size;
+    }
+  }
+}
+
+/// Маршрут «превращения»: плитка (цвет, значок) растёт из своего места до
+/// всего экрана и становится фоном раздела, раздел проявляется поверх.
+class MorphRoute<T> extends PageRouteBuilder<T> {
+  MorphRoute({required Widget page, required IconData icon, required Rect from})
+      : super(
+          opaque: false,
+          transitionDuration: Duration(milliseconds: (420 / AnimSettings.speed).round()),
+          reverseTransitionDuration: Duration(milliseconds: (360 / AnimSettings.speed).round()),
+          pageBuilder: (_, __, ___) => page,
+          transitionsBuilder: (ctx, anim, sec, child) {
+            final t = Curves.easeInOutCubic.transform(anim.value);
+            if (anim.isCompleted) return child;
+            final theme = Theme.of(ctx);
+            final screen = MediaQuery.sizeOf(ctx);
+            final rect = Rect.lerp(from, Offset.zero & screen, t)!;
+            final dark = theme.brightness == Brightness.dark;
+            final tileColor = theme.colorScheme.surfaceContainerHigh;
+            final color = Color.lerp(tileColor, theme.scaffoldBackgroundColor, t)!;
+            final iconSize = (from.shortestSide * 0.45) + (screen.shortestSide * 0.85 - from.shortestSide * 0.45) * t;
+            final iconColor = Color.lerp(theme.colorScheme.primary, theme.colorScheme.primary.withValues(alpha: dark ? 0.07 : 0.06), t)!;
+            return Stack(children: [
+              Positioned.fromRect(
+                rect: rect,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(16 * (1 - t))),
+                  child: Center(child: Icon(icon, size: iconSize, color: iconColor)),
+                ),
+              ),
+              // сам раздел проявляется во второй половине превращения
+              Opacity(opacity: Curves.easeIn.transform(((anim.value - 0.45) / 0.55).clamp(0.0, 1.0)), child: child),
+            ]);
+          },
+        );
 }

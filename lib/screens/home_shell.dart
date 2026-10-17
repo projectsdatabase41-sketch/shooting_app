@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_transitions.dart';
 import '../widgets/tile_backdrop.dart';
 import '../widgets/app_backdrop.dart';
 import 'package:provider/provider.dart';
@@ -172,10 +173,15 @@ class _HomeShellState extends State<HomeShell> {
                     onSelect: (id) {
                       DemoMode.tab = id; // для отзывов в режиме «Демо»
                       final icon = specs[id]?.icon;
-                      Navigator.of(context).push(MaterialPageRoute(
-                          builder: (_) => icon == null
-                              ? _pageFor(id, store, tabs)
-                              : TileBackdropPage(icon: icon, child: _pageFor(id, store, tabs))));
+                      final page = icon == null
+                          ? _pageFor(id, store, tabs)
+                          : TileBackdropPage(icon: icon, child: _pageFor(id, store, tabs));
+                      final from = TileOpen.rect;
+                      if (AnimSettings.enabled && AnimSettings.type == AnimType.morph && icon != null && from != null) {
+                        Navigator.of(context).push(MorphRoute(page: page, icon: icon, from: from));
+                      } else {
+                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
+                      }
                     },
                   ),
                 ),

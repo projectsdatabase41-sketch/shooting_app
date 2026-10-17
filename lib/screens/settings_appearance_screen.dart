@@ -176,8 +176,8 @@ class SettingsAppearanceScreen extends StatelessWidget {
                   title: Text(tr('Скорость анимаций')),
                   subtitle: Slider(
                     min: 0.5,
-                    max: 2.0,
-                    divisions: 6,
+                    max: 4.0,
+                    divisions: 14,
                     label: '×${AnimSettings.speed.toStringAsFixed(2)}',
                     value: AnimSettings.speed,
                     onChanged: on ? (v) => setS(() => AnimSettings.save(db, spd: v)) : null,
