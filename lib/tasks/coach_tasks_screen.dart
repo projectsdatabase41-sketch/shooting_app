@@ -10,6 +10,7 @@ import '../models/target_face.dart';
 import '../services/ai_settings.dart';
 import '../services/coach_access_service.dart';
 import '../services/push_service.dart';
+import '../services/supabase_auth_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/glass_pill.dart';
 import '../widgets/press_3d.dart';
@@ -149,7 +150,7 @@ class _CoachTasksScreenState extends State<CoachTasksScreen> {
             style: theme.textTheme.titleMedium
                 ?.copyWith(fontWeight: FontWeight.w600)),
       ),
-      floatingActionButton: _athletes.isEmpty
+      floatingActionButton: _athletes.isEmpty && !context.read<AppDataStore>().isAthlete
           ? null
           : FloatingActionButton.extended(
               onPressed: _create,
@@ -241,6 +242,7 @@ class _CoachTaskEditorScreen extends StatefulWidget {
 
 class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
   final Set<String> _to = {};
+  bool _toMe = false; // задание самому себе (если вы и спортсмен)
   final _text = TextEditingController();
   final _title = TextEditingController();
   DateTime? _due;
@@ -387,7 +389,7 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
 
   Future<void> _send() async {
     final plan = _plan;
-    if (plan == null || _to.isEmpty || plan.stages.isEmpty) return;
+    if (plan == null || (_to.isEmpty && !_toMe) || plan.stages.isEmpty) return;
     plan
       ..title = _title.text.trim().isEmpty ? tr('Задание') : _title.text.trim()
       ..coachText = _text.text.trim()
@@ -396,6 +398,13 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
       ..groupKey = const Uuid().v4();
     setState(() => _busy = true);
     final failed = <String>[];
+    if (_toMe) {
+      try {
+        await AthleteTaskService(SupabaseAuthService(context.read<AppDataStore>().db)).create(plan);
+      } catch (e) {
+        failed.add(tr('себе'));
+      }
+    }
     for (final a in widget.athletes.where((a) => _to.contains(a.id))) {
       try {
         final id = (await widget.service.create(a, plan)).replaceAll('"', '');
@@ -436,6 +445,13 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
           Wrap(
             spacing: 6,
             children: [
+              if (context.read<AppDataStore>().isAthlete)
+                FilterChip(
+                  avatar: const Icon(Icons.person, size: 16),
+                  label: Text(tr('Себе')),
+                  selected: _toMe,
+                  onSelected: (v) => setState(() => _toMe = v),
+                ),
               for (final a in widget.athletes)
                 FilterChip(
                   label: Text(a.name),

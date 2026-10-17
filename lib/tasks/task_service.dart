@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:uuid/uuid.dart';
 
 import '../services/call_service.dart';
 import '../services/coach_access_service.dart';
@@ -22,6 +23,51 @@ class AthleteTaskService {
       for (final r in rows)
         TaskPlan.fromJson((r as Map).cast<String, dynamic>())
     ];
+  }
+
+  /// Задание самому себе: спортсмен — владелец своей базы, строки пишутся прямо
+  /// (id задаются на клиенте — ответ записи пустой). Возвращает id задания.
+  Future<String> create(TaskPlan plan) async {
+    const uuid = Uuid();
+    final taskId = uuid.v4();
+    final stages = <Map<String, dynamic>>[];
+    final steps = <Map<String, dynamic>>[];
+    for (var i = 0; i < plan.stages.length; i++) {
+      final stageId = uuid.v4();
+      stages.add({'id': stageId, 'task_id': taskId, 'position': i, 'mode': plan.stages[i].mode.db});
+      final list = plan.stages[i].steps;
+      for (var j = 0; j < list.length; j++) {
+        final st = list[j].toJson();
+        steps.add({
+          'id': uuid.v4(),
+          'stage_id': stageId,
+          'position': j,
+          'title': st['title'] ?? '',
+          'instructions': st['instructions'] ?? '',
+          'exercise': st['exercise'],
+          'time_limit_sec': st['time_limit_sec'],
+          'sighting': st['sighting'],
+          'note_mode': st['note_mode'] ?? 'step',
+          'keep_stats': st['keep_stats'] ?? false,
+        });
+      }
+    }
+    await auth.rest('POST', 'tasks', body: {
+      'id': taskId,
+      if (plan.groupKey != null) 'group_key': plan.groupKey,
+      'title': plan.title,
+      'coach_text': plan.coachText,
+      if (plan.dueAt != null) 'due_at': plan.dueAt!.toUtc().toIso8601String(),
+      if (plan.repeatRule != null) 'repeat_rule': plan.repeatRule,
+    });
+    if (stages.isNotEmpty) await auth.rest('POST', 'task_stages', body: stages);
+    if (steps.isNotEmpty) await auth.rest('POST', 'task_steps', body: steps);
+    if (plan.clarifications.isNotEmpty) {
+      await auth.rest('POST', 'task_clarifications', body: [
+        for (final c in plan.clarifications) {'task_id': taskId, 'question': c.question, 'answer': c.answer}
+      ]);
+    }
+    return taskId;
   }
 
   /// Спортсмен — владелец своей базы, прямой REST без RPC (в отличие от
