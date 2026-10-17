@@ -695,12 +695,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     });
     // Высота нового пузыря и поля ввода могут догрузиться позже — если после
     // анимации последнее сообщение всё ещё не на месте, ставим его прыжком.
-    Future<void>.delayed(const Duration(milliseconds: 320), () {
-      if (!mounted || !_itemCtl.isAttached) return;
-      // не у самого низа (пузырь дорос позже) — ставим последнее сообщение прыжком
-      final first = _itemPos.itemPositions.value.where((p) => p.index == 0).firstOrNull;
-      if (first == null || first.itemLeadingEdge > 0.01) _itemCtl.jumpTo(index: 0);
-    });
+    for (final ms in const [320, 800]) {
+      Future<void>.delayed(Duration(milliseconds: ms), () {
+        if (!mounted || !_itemCtl.isAttached) return;
+        // не у самого низа (пузырь дорос позже, подтянулось фото) — ставим прыжком
+        final first = _itemPos.itemPositions.value.where((p) => p.index == 0).firstOrNull;
+        if (first == null || first.itemLeadingEdge > 0.01) _itemCtl.jumpTo(index: 0);
+      });
+    }
   }
 
   // ---- Поиск по переписке ----
