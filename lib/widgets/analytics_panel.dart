@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'stats_blocks.dart';
 import 'package:provider/provider.dart';
 import '../state/app_data_store.dart';
 import 'package:flutter/material.dart';
@@ -200,21 +201,12 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
           ),
         )),
     ];
+    blocks.insert(0, ('tiles', _tiles(context, a, accent)));
     final ordered = _ordered(blocks);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _tiles(context, a, accent),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton.icon(
-            onPressed: () => setState(() => _arranging = !_arranging),
-            icon: Icon(_arranging ? Icons.check : Icons.swap_vert, size: 18),
-            label: Text(_arranging ? tr('Готово') : tr('Порядок блоков')),
-          ),
-        ),
-        const SizedBox(height: 8),
         // Горизонтальная ориентация — карточки в два столбца вместо
         // одной длинной ленты (решение пользователя): на развёрнутом
         // экране лента графиков уходила далеко за пределы видимого.
@@ -224,7 +216,7 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
             if (!wide) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [for (final b in ordered) Padding(padding: const EdgeInsets.only(bottom: 24), child: _withMoveControls(b.$1, b.$2, ordered))],
+                children: [for (final b in ordered) Padding(padding: const EdgeInsets.only(bottom: 24), child: b.$2)],
               );
             }
             const gap = 16.0;
@@ -232,7 +224,7 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
             return Wrap(
               spacing: gap,
               runSpacing: gap,
-              children: [for (final b in ordered) SizedBox(width: colWidth, child: _withMoveControls(b.$1, b.$2, ordered))],
+              children: [for (final b in ordered) SizedBox(width: colWidth, child: b.$2)],
             );
           },
         ),
@@ -240,65 +232,29 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
     );
   }
 
-  // ---- Порядок блоков: переставляется стрелками, запоминается ----
-  bool _arranging = false;
-  static List<String>? _savedOrder;
-
-  List<String> _loadOrder() {
-    if (_savedOrder != null) return _savedOrder!;
-    try {
-      final db = context.read<AppDataStore>().db;
-      final rows = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', ['stats_blocks_order']);
-      _savedOrder = rows.isEmpty ? <String>[] : '${rows.first['hex']}'.split(',');
-    } catch (_) {
-      _savedOrder = <String>[];
-    }
-    return _savedOrder!;
+  // ---- Порядок и включённость блоков: настраиваются кнопкой в шапке (stats_blocks.dart) ----
+  @override
+  void initState() {
+    super.initState();
+    StatsBlocks.revision.addListener(_onBlocksChanged);
   }
 
-  void _saveOrder(List<String> ids) {
-    _savedOrder = ids;
-    try {
-      final db = context.read<AppDataStore>().db;
-      db.db.execute(
-          'INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex',
-          ['stats_blocks_order', ids.join(',')]);
-    } catch (_) {}
+  @override
+  void dispose() {
+    StatsBlocks.revision.removeListener(_onBlocksChanged);
+    super.dispose();
+  }
+
+  void _onBlocksChanged() {
+    if (mounted) setState(() {});
   }
 
   List<(String, Widget)> _ordered(List<(String, Widget)> blocks) {
-    final pref = _loadOrder();
-    final out = [...blocks];
-    out.sort((x, y) {
-      final ix = pref.indexOf(x.$1), iy = pref.indexOf(y.$1);
-      return (ix < 0 ? 999 : ix).compareTo(iy < 0 ? 999 : iy);
-    });
+    final db = context.read<AppDataStore>().db;
+    final pref = StatsBlocks.order(db);
+    final out = [for (final b in blocks) if (StatsBlocks.visible(db, b.$1)) b];
+    out.sort((x, y) => pref.indexOf(x.$1).compareTo(pref.indexOf(y.$1)));
     return out;
-  }
-
-  Widget _withMoveControls(String id, Widget block, List<(String, Widget)> all) {
-    if (!_arranging) return block;
-    final ids = [for (final b in all) b.$1];
-    final i = ids.indexOf(id);
-    void move(int d) {
-      final j = i + d;
-      if (j < 0 || j >= ids.length) return;
-      ids.insert(j, ids.removeAt(i));
-      setState(() => _saveOrder(ids));
-    }
-
-    return Stack(children: [
-      block,
-      Positioned(
-        right: 0,
-        top: 0,
-        child: Row(children: [
-          IconButton.filledTonal(visualDensity: VisualDensity.compact, icon: const Icon(Icons.arrow_upward, size: 18), onPressed: i > 0 ? () => move(-1) : null),
-          IconButton.filledTonal(
-              visualDensity: VisualDensity.compact, icon: const Icon(Icons.arrow_downward, size: 18), onPressed: i < ids.length - 1 ? () => move(1) : null),
-        ]),
-      ),
-    ]);
   }
 
   /// Заголовок + подпись + карточка одним блоком — единица раскладки:

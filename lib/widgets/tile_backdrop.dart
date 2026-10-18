@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-/// Страница раздела, открытая с плитки главного экрана: на фоне — большой
-/// блёклый значок этой плитки и кольца мишени (плитка «растворилась» в фон).
+/// Страница раздела, открытая с плитки главного экрана: спокойный фон (градиент и
+/// кольца мишени). Значок плитки на фоне не рисуется — у разделов он и так есть.
 /// Сам экран раздела прозрачный поверх этого фона.
 class TileBackdropPage extends StatelessWidget {
   final IconData icon;
@@ -14,7 +14,6 @@ class TileBackdropPage extends StatelessWidget {
     final dark = theme.brightness == Brightness.dark;
     final base = theme.scaffoldBackgroundColor;
     final tint = theme.colorScheme.primary;
-    final size = MediaQuery.sizeOf(context);
     return Stack(fit: StackFit.expand, children: [
       DecoratedBox(
         decoration: BoxDecoration(
@@ -26,10 +25,6 @@ class TileBackdropPage extends StatelessWidget {
         ),
       ),
       CustomPaint(painter: _RingsPainter(tint.withValues(alpha: dark ? 0.10 : 0.09))),
-      Align(
-        alignment: const Alignment(0.0, -0.15),
-        child: Icon(icon, size: size.shortestSide * 0.85, color: tint.withValues(alpha: dark ? 0.07 : 0.06)),
-      ),
       // сам раздел — поверх, с прозрачным фоном экрана
       Theme(
         data: theme.copyWith(scaffoldBackgroundColor: Colors.transparent),

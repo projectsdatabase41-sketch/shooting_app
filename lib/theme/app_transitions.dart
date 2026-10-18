@@ -157,11 +157,10 @@ class MorphRoute<T> extends PageRouteBuilder<T> {
             final theme = Theme.of(ctx);
             final screen = MediaQuery.sizeOf(ctx);
             final rect = Rect.lerp(from, Offset.zero & screen, t)!;
-            final dark = theme.brightness == Brightness.dark;
             final tileColor = theme.colorScheme.surfaceContainerHigh;
             final color = Color.lerp(tileColor, theme.scaffoldBackgroundColor, t)!;
             final iconSize = (from.shortestSide * 0.45) + (screen.shortestSide * 0.85 - from.shortestSide * 0.45) * t;
-            final iconColor = Color.lerp(theme.colorScheme.primary, theme.colorScheme.primary.withValues(alpha: dark ? 0.07 : 0.06), t)!;
+            final iconColor = Color.lerp(theme.colorScheme.primary, theme.colorScheme.primary.withValues(alpha: 0), t)!;
             return Stack(children: [
               Positioned.fromRect(
                 rect: rect,

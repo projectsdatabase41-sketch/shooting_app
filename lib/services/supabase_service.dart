@@ -83,7 +83,7 @@ class SupabaseSyncService {
     final token = await auth.ensureFreshToken();
     if (token == null) {
       throw SupabaseSyncException(
-          tr('Сначала войдите в базу — Настройки → Учётная запись'));
+          tr('Сначала войдите в базу — Настройки → Данные и синхронизация → Учётная запись'));
     }
     return token;
   }

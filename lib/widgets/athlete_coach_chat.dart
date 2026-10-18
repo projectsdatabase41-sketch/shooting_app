@@ -100,7 +100,7 @@ class _AthleteCoachChatState extends State<AthleteCoachChat> {
   Widget build(BuildContext context) {
     if (!_main.isSignedIn) {
       return _hint(tr(
-          'Чтобы переписываться с тренером, войдите в свою базу: Настройки → Учётная запись.'));
+          'Чтобы переписываться с тренером, войдите в свою базу: Настройки → Данные и синхронизация → Учётная запись.'));
     }
     final coaches = _coaches;
     if (coaches == null) {

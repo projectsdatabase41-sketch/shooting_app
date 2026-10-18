@@ -418,9 +418,30 @@ class _AiChatBodyState extends State<_AiChatBody> {
 
   Widget _buildChat(AiChatViewModel vm) {
     if (vm.messages.isEmpty) {
-      return EmptyState(
-        icon: Icons.forum_outlined,
-        text: tr('ИИ ассистент'),
+      // Пустой чат: быстрые запросы — в том числе графики и таблицы по тренировкам.
+      final ideas = [
+        tr('Построй график моих результатов по неделям'),
+        tr('Сравни упражнения по кучности столбцами'),
+        tr('Таблица лучших серий за последний месяц'),
+        tr('Как распределены мои выстрелы по габаритам? Покажи кругом'),
+      ];
+      return ListView(
+        padding: EdgeInsets.fromLTRB(
+            16, widget.embedded ? 12 : MediaQuery.paddingOf(context).top + GlassHeader.height + 12, 16, 12),
+        children: [
+          EmptyState(icon: Icons.forum_outlined, text: tr('ИИ ассистент')),
+          const SizedBox(height: 8),
+          Text(tr('Можно попросить'), style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: 8),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final q in ideas)
+              ActionChip(
+                avatar: const Icon(Icons.auto_graph, size: 16),
+                label: Text(q),
+                onPressed: vm.busy ? null : () => vm.send(q),
+              ),
+          ]),
+        ],
       );
     }
     return ListView.builder(

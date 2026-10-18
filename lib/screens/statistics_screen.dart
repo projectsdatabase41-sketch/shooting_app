@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../widgets/ai_charts_section.dart';
+import '../widgets/stats_blocks.dart';
 import '../widgets/ai_gate.dart';
 import '../logic/ai_context.dart' show AiScope;
 import 'ai_chat_screen.dart';
@@ -76,6 +76,9 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     final topInset = MediaQuery.paddingOf(context).top;
     final header = GlassHeader(
       title: Text(tr('Статистика'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+      actions: [
+        GlassCircleButton(icon: const Icon(Icons.tune), tooltip: tr('Блоки статистики'), onTap: () => showStatsBlocksSheet(context)),
+      ],
     );
 
     if (sessions.isEmpty) {
@@ -116,10 +119,6 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             dynamics: selection.dynamics,
             showSeries: selection.showSeries,
             mixedFacesNote: selection.mixedFacesNote,
-          ),
-          AiChartsSection(
-            sessions: sessions,
-            nameOf: (t) => store.exerciseFor(t)?.label ?? tr('без упражнения'),
           ),
           if (aiModuleOn(context)) ...[
             const SizedBox(height: 16),

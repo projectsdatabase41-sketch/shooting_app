@@ -97,7 +97,7 @@ class _AthleteTasksScreenState extends State<AthleteTasksScreen> {
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Text(
-              tr('Задания приходят в вашу базу — войдите в неё: Настройки → Учётная запись.'),
+              tr('Задания приходят в вашу базу — войдите в неё: Настройки → Данные и синхронизация → Учётная запись.'),
               textAlign: TextAlign.center),
         ),
       );

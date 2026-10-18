@@ -326,7 +326,7 @@ class SupabaseAuthService {
   Future<dynamic> rest(String method, String path, {Object? body}) async {
     final token = await ensureFreshToken();
     if (token == null)
-      throw Exception(tr('Войдите в свою базу (Настройки → Учётная запись)'));
+      throw Exception(tr('Войдите в свою базу (Настройки → Данные и синхронизация → Учётная запись)'));
     final client = clientFactory();
     try {
       final req = http.Request(method, Uri.parse('$url/rest/v1/$path'))
