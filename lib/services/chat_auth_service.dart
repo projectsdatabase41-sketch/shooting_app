@@ -10,7 +10,7 @@ import '../models/chat_contact.dart';
 import 'chat_settings.dart';
 import 'local_db_service.dart';
 import '../i18n/i18n.dart';
-import 'supabase_auth_service.dart' show AuthException;
+import 'supabase_auth_service.dart' show AuthException, AuthNetworkException;
 
 /// Учётная запись в ОБЩЕМ чате — отдельная от `SupabaseAuthService`
 /// (та ведёт личную базу тренировок пользователя, эта — общий проект
@@ -131,15 +131,35 @@ class ChatAuthService {
       return accessToken;
     }
     if (refreshToken.isEmpty) return null;
+    return _refreshing ?? _refreshOnce();
+  }
+
+  /// Один обмен refresh-токена на всех: параллельные запросы (опрос, присутствие,
+  /// push, звонки) не должны обновлять сессию одновременно — второй запрос с
+  /// уже использованным токеном мог получить отказ.
+  static Future<String?>? _refreshing;
+
+  Future<String?> _refreshOnce() {
+    final f = _refreshSession();
+    _refreshing = f.whenComplete(() => _refreshing = null);
+    return _refreshing!;
+  }
+
+  /// Выход из аккаунта — ТОЛЬКО если сервер ответил, что refresh-токен не годится.
+  /// Нет сети, таймаут, 429/5xx — сессию не трогаем (раньше любая кратковременная
+  /// потеря связи при обновлении токена выкидывала из мессенджера).
+  Future<String?> _refreshSession() async {
     try {
-      await _token(
-          grant: 'refresh_token', body: {'refresh_token': refreshToken});
+      await _token(grant: 'refresh_token', body: {'refresh_token': refreshToken});
       return accessToken;
+    } on AuthNetworkException {
+      return null;
     } on AuthException {
       signOutLocally();
       return null;
     }
   }
+
 
   /// Регистрация: аккаунт в GoTrue общего проекта + строка профиля
   /// (никнейм, случайный код контакта, аватар) в `chat_profiles`.
@@ -1083,13 +1103,14 @@ class ChatAuthService {
           )
           .timeout(const Duration(seconds: 30));
       final decoded = res.body.isEmpty ? null : jsonDecode(res.body);
+      if (res.statusCode == 429 || res.statusCode >= 500) throw AuthNetworkException(_message(res.body));
       if (res.statusCode >= 400) throw AuthException(_message(res.body));
       if (decoded is! Map) return <String, dynamic>{};
       return decoded.map((k, v) => MapEntry('$k', v));
     } on AuthException {
       rethrow;
     } catch (e) {
-      throw AuthException(tr(
+      throw AuthNetworkException(tr(
           'Сеть недоступна или чат временно недоступен ({e})',
           {'e': friendlyError(e)}));
     } finally {

@@ -82,6 +82,24 @@ class CoachLink {
         ['nx_$clientMessageId', v],
       );
 
+  /// Тренеры, принявшие запрос в мессенджере, которым доступ ещё НЕ выдан (не было
+  /// входа в свою базу или сбой): (id сообщения, имя тренера, состояние).
+  List<({String clientId, String name, String state})> pendingGrants() {
+    final rows = db.db.select(
+      "SELECT * FROM chat_local_messages WHERE text LIKE 'NX1:%' AND direction = 'incoming' "
+      'ORDER BY created_at DESC LIMIT 60',
+    );
+    final out = <({String clientId, String name, String state})>[];
+    for (final row in rows) {
+      final m = ChatMessage.fromRow(row);
+      if (parse(m.text)?['k'] != 'coach_ok') continue;
+      final st = state(m.clientMessageId);
+      if (st == 'done') continue;
+      out.add((clientId: m.clientMessageId, name: repo.contactById(m.contactId)?.nickname ?? '—', state: st ?? 'new'));
+    }
+    return out;
+  }
+
   // ---- спортсмен: запрос тренеру ----
 
   /// Данные для карточки: имя, дата рождения, регион из профиля.

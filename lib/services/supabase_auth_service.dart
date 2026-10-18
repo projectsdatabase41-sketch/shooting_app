@@ -73,17 +73,35 @@ class SupabaseAuthService {
       return accessToken;
     }
     if (refreshToken.isEmpty) return null;
+    return _refreshing ?? _refreshOnce();
+  }
+
+  /// Один обмен refresh-токена на всех: параллельные запросы (опрос, присутствие,
+  /// push, звонки) не должны обновлять сессию одновременно — второй запрос с
+  /// уже использованным токеном мог получить отказ.
+  static Future<String?>? _refreshing;
+
+  Future<String?> _refreshOnce() {
+    final f = _refreshSession();
+    _refreshing = f.whenComplete(() => _refreshing = null);
+    return _refreshing!;
+  }
+
+  /// Refresh-токен протух или отозван — нормальный конец сессии: выходим. Но ТОЛЬКО если сервер ответил, что токен не годится.
+  /// Нет сети, таймаут, 429/5xx — сессию не трогаем (раньше любая кратковременная
+  /// потеря связи при обновлении токена выкидывала из мессенджера).
+  Future<String?> _refreshSession() async {
     try {
-      await _token(
-          grant: 'refresh_token', body: {'refresh_token': refreshToken});
+      await _token(grant: 'refresh_token', body: {'refresh_token': refreshToken});
       return accessToken;
+    } on AuthNetworkException {
+      return null;
     } on AuthException {
-      // Refresh-токен протух или отозван — это не ошибка приложения, а
-      // нормальный конец сессии. Чистим и просим войти заново.
       signOutLocally();
       return null;
     }
   }
+
 
   // ---- Действия пользователя ----
 
@@ -488,6 +506,9 @@ class SupabaseAuthService {
           )
           .timeout(const Duration(seconds: 30));
       final decoded = res.body.isEmpty ? null : jsonDecode(res.body);
+      if (res.statusCode == 429 || res.statusCode >= 500) {
+        throw AuthNetworkException(_message(res.body));
+      }
       if (res.statusCode >= 400) {
         throw AuthException(_message(res.body));
       }
@@ -496,7 +517,7 @@ class SupabaseAuthService {
     } on AuthException {
       rethrow;
     } catch (e) {
-      throw AuthException(tr('Сеть недоступна или адрес базы неверен ({e})',
+      throw AuthNetworkException(tr('Сеть недоступна или адрес базы неверен ({e})',
           {'e': friendlyError(e)}));
     } finally {
       client.close();
@@ -578,4 +599,9 @@ class AuthException implements Exception {
   const AuthException(this.message);
   @override
   String toString() => message;
+}
+
+/// Ошибка связи (нет сети, таймаут, 429/5xx): сессию из-за неё сбрасывать нельзя.
+class AuthNetworkException extends AuthException {
+  const AuthNetworkException(super.message);
 }

@@ -1,4 +1,8 @@
 import '../logic/friendly_error.dart';
+import '../services/chat_auth_service.dart';
+import '../services/chat_messages_repository.dart';
+import '../services/chat_sync_service.dart';
+import '../services/coach_link.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:provider/provider.dart';
@@ -276,6 +280,46 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
   late final SupabaseAuthService _auth;
   late final SupabaseSyncService _sync;
 
+  /// Тренеры из мессенджера: приняли запрос, но доступ ещё не выдан.
+  List<({String clientId, String name, String state})> _pending = const [];
+
+  CoachLink _link(AppDataStore store) {
+    final chatAuth = ChatAuthService(store.db);
+    final repo = ChatMessagesRepository(store.db);
+    return CoachLink(db: store.db, auth: chatAuth, repo: repo, sync: ChatSyncService(chatAuth, repo));
+  }
+
+  void _loadPending() {
+    try {
+      _pending = _link(context.read<AppDataStore>()).pendingGrants();
+    } catch (_) {
+      _pending = const [];
+    }
+  }
+
+  Future<void> _grantNow() async {
+    final store = context.read<AppDataStore>();
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final n = await _link(store).processIncoming(store);
+      await _refresh();
+      if (!mounted) return;
+      if (n == 0) {
+        setState(() => _error = tr('Доступ не выдан: войдите в свою базу (Настройки → Данные и синхронизация → Учётная запись) и повторите'));
+      }
+    } catch (e) {
+      if (mounted) setState(() => _error = friendlyError(e));
+    } finally {
+      if (mounted) {
+        _loadPending();
+        setState(() => _busy = false);
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -286,6 +330,7 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
     // другого устройства), поэтому подтягиваем его при открытии
     // экрана, а не полагаемся на то, что осело в локальной базе.
     if (_auth.isSignedIn) _refresh();
+    _loadPending();
   }
 
   Future<void> _refresh() async {
@@ -549,6 +594,16 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
                   ],
                 ),
               ),
+            ),
+          ),
+        for (final p in _pending)
+          ListTile(
+            leading: const Icon(Icons.hourglass_top),
+            title: Text(p.name),
+            subtitle: Text(tr('Принял запрос в мессенджере — доступ ещё не выдан')),
+            trailing: TextButton(
+              onPressed: _busy ? null : _grantNow,
+              child: Text(tr('Выдать')),
             ),
           ),
         ...store.shareGrants.map((g) => ListTile(

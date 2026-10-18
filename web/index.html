@@ -59,6 +59,11 @@
     </picture>
   </div>
   <script>
+    // Просим браузер не вычищать хранилище приложения (Safari на iPhone иначе стирает
+    // сохранённый вход и данные при долгом неиспользовании).
+    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+  </script>
+  <script>
     // Статичная заставка (видео в вебе подтормаживало): картинка сразу, исчезает,
     // как только Flutter нарисовал первый кадр. Страховка — 15 с.
     (function () {
