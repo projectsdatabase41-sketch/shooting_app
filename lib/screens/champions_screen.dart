@@ -24,6 +24,8 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
   List<Map<String, dynamic>> _pending = [];
   String _fmt = FinalFormat.all.first.id;
   String _q = '';
+  int? _year; // фильтр по году публикации
+  final _search = TextEditingController();
   List<Map<String, dynamic>> _rows = [];
   bool _more = false;
   bool _busy = false;
@@ -69,7 +71,7 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
   Future<void> _loadChamps({bool more = false}) async {
     if (_busy) return;
     setState(() => _busy = true);
-    final page = await _svc.champions(_fmt, q: _q, offset: more ? _rows.length : 0);
+    final page = await _svc.champions(_fmt, q: _q, offset: more ? _rows.length : 0, year: _year);
     if (!mounted) return;
     setState(() {
       _rows = more ? [..._rows, ...page] : page;
@@ -135,8 +137,82 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
   }
 
   @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  /// Люди в порядке лучшего результата: у каждого — лучший старт и число стартов в выборке.
+  List<({String userId, String name, double best, int count, Map<String, dynamic> bestRow})> _people() {
+    final byUser = <String, List<Map<String, dynamic>>>{};
+    for (final r in _rows) {
+      byUser.putIfAbsent('${r['user_id'] ?? r['display_name']}', () => []).add(r);
+    }
+    final out = [
+      for (final e in byUser.entries)
+        (
+          userId: e.key,
+          name: '${e.value.first['display_name']}',
+          best: (e.value.first['total'] as num).toDouble(), // строки уже по убыванию
+          count: e.value.length,
+          bestRow: e.value.first,
+        )
+    ];
+    out.sort((a, b) => b.best.compareTo(a.best));
+    return out;
+  }
+
+  Widget _filters(ThemeData theme) {
+    final years = [for (var y = DateTime.now().year; y >= DateTime.now().year - 4; y--) y];
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(tr('Упражнение'), style: theme.textTheme.labelLarge),
+      const SizedBox(height: 6),
+      SizedBox(
+        height: 40,
+        child: ListView(scrollDirection: Axis.horizontal, children: [
+          for (final f in FinalFormat.all)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(
+                label: Text(tr(f.nameKey)),
+                selected: _fmt == f.id,
+                onSelected: (_) {
+                  _fmt = f.id;
+                  _loadChamps();
+                },
+              ),
+            ),
+        ]),
+      ),
+      const SizedBox(height: 8),
+      Text(tr('Год'), style: theme.textTheme.labelLarge),
+      const SizedBox(height: 6),
+      Wrap(spacing: 8, children: [
+        ChoiceChip(
+          label: Text(tr('Все')),
+          selected: _year == null,
+          onSelected: (_) {
+            _year = null;
+            _loadChamps();
+          },
+        ),
+        for (final y in years)
+          ChoiceChip(
+            label: Text('$y'),
+            selected: _year == y,
+            onSelected: (_) {
+              _year = y;
+              _loadChamps();
+            },
+          ),
+      ]),
+    ]);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final people = _people();
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(title: Text(tr('Чемпионы'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600))),
@@ -145,6 +221,29 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
           : ListView(
               padding: EdgeInsets.fromLTRB(16, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 16, 24),
               children: [
+                TextField(
+                  controller: _search,
+                  textInputAction: TextInputAction.search,
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.search),
+                    hintText: tr('Поиск по имени'),
+                    suffixIcon: _q.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () {
+                              _search.clear();
+                              _q = '';
+                              _loadChamps();
+                            },
+                          ),
+                  ),
+                  onSubmitted: (v) {
+                    _q = v;
+                    _loadChamps();
+                  },
+                ),
+                const SizedBox(height: 12),
                 if (_pending.isNotEmpty) ...[
                   Text(tr('Ждут вашей подписи'), style: theme.textTheme.titleSmall),
                   for (final r in _pending)
@@ -185,47 +284,118 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
                     ),
                   const SizedBox(height: 16),
                 ],
-                Text(tr('Упражнение'), style: theme.textTheme.titleSmall),
+                _filters(theme),
+                const SizedBox(height: 12),
+                Text(tr('Чемпионы'), style: theme.textTheme.titleSmall),
                 const SizedBox(height: 8),
-                Wrap(spacing: 8, runSpacing: 8, children: [
-                  for (final f in FinalFormat.all)
-                    ChoiceChip(
-                      label: Text(tr(f.nameKey)),
-                      selected: _fmt == f.id,
-                      onSelected: (_) {
-                        _fmt = f.id;
-                        _loadChamps();
-                      },
-                    ),
-                ]),
-                const SizedBox(height: 8),
-                TextField(
-                  decoration: InputDecoration(prefixIcon: const Icon(Icons.search), hintText: tr('Поиск по имени')),
-                  onSubmitted: (v) {
-                    _q = v;
-                    _loadChamps();
-                  },
-                ),
-                const SizedBox(height: 8),
-                if (_rows.isEmpty && !_busy) Padding(padding: const EdgeInsets.all(12), child: Text(tr('Пока никого'))),
-                for (var i = 0; i < _rows.length; i++)
-                  ListTile(
-                    dense: true,
-                    onTap: () => _openProtocol(_rows[i], i + 1),
-                    leading: SizedBox(width: 28, child: Text('${i + 1}', style: const TextStyle(fontWeight: FontWeight.w700))),
-                    title: Text('${_rows[i]['display_name']}'),
-                    subtitle: ((_rows[i]['flag_count'] as int?) ?? 0) > 0 ? Text(tr('Жалоб: {n}', {'n': _rows[i]['flag_count']})) : null,
-                    trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                      Text((_rows[i]['total'] as num).toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.w800)),
-                      IconButton(
-                        tooltip: tr('Пожаловаться'),
-                        icon: const Icon(Icons.flag_outlined, size: 20),
-                        onPressed: () => _report(_rows[i]),
+                if (people.isEmpty && !_busy) Padding(padding: const EdgeInsets.all(12), child: Text(tr('Пока никого'))),
+                for (var i = 0; i < people.length; i++)
+                  Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => ChampionProfileScreen(
+                          svc: _svc,
+                          userId: people[i].userId,
+                          name: people[i].name,
+                          place: i + 1,
+                          onOpenProtocol: _openProtocol,
+                          onReport: _report,
+                        ),
+                      )),
+                      leading: CircleAvatar(
+                        backgroundColor: i < 3 ? const Color(0xFFD9A441) : theme.colorScheme.surfaceContainerHigh,
+                        child: Text('${i + 1}', style: const TextStyle(fontWeight: FontWeight.w800)),
                       ),
-                    ]),
+                      title: Text(people[i].name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: Text(tr('Стартов: {n}', {'n': people[i].count})),
+                      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Text(people[i].best.toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                        const Icon(Icons.chevron_right),
+                      ]),
+                    ),
                   ),
                 if (_busy) const Center(child: Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator())),
                 if (_more && !_busy) TextButton(onPressed: () => _loadChamps(more: true), child: Text(tr('Показать ещё'))),
+              ],
+            ),
+    );
+  }
+}
+
+
+/// Профиль чемпиона: все его опубликованные результаты, лучшие сверху.
+/// Нажатие на результат — смета выстрелов (протокол).
+class ChampionProfileScreen extends StatefulWidget {
+  final ChampionsService svc;
+  final String userId;
+  final String name;
+  final int place;
+  final void Function(Map<String, dynamic> row, int place) onOpenProtocol;
+  final void Function(Map<String, dynamic> row) onReport;
+  const ChampionProfileScreen({
+    super.key,
+    required this.svc,
+    required this.userId,
+    required this.name,
+    required this.place,
+    required this.onOpenProtocol,
+    required this.onReport,
+  });
+
+  @override
+  State<ChampionProfileScreen> createState() => _ChampionProfileScreenState();
+}
+
+class _ChampionProfileScreenState extends State<ChampionProfileScreen> {
+  List<Map<String, dynamic>>? _rows;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.svc.resultsOf(widget.userId).then((r) {
+      if (mounted) setState(() => _rows = r);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final rows = _rows;
+    return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(title: Text(widget.name, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600))),
+      body: rows == null
+          ? const AppLoader()
+          : ListView(
+              padding: EdgeInsets.fromLTRB(16, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 16, 24),
+              children: [
+                if (rows.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      tr('Лучший результат {s} · стартов: {n}', {'s': (rows.first['total'] as num).toStringAsFixed(1), 'n': rows.length}),
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ),
+                if (rows.isEmpty) Padding(padding: const EdgeInsets.all(12), child: Text(tr('Результатов нет'))),
+                for (final r in rows)
+                  Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      onTap: () => widget.onOpenProtocol(r, widget.place),
+                      title: Text(tr(FinalFormat.all.firstWhere((f) => f.id == r['format_id'], orElse: () => FinalFormat.airRifle10m).nameKey)),
+                      subtitle: Text('${r['created_at']}'.length >= 10 ? '${r['created_at']}'.substring(0, 10) : ''),
+                      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Text((r['total'] as num).toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                        IconButton(
+                          tooltip: tr('Пожаловаться'),
+                          icon: const Icon(Icons.flag_outlined, size: 20),
+                          onPressed: () => widget.onReport(r),
+                        ),
+                      ]),
+                    ),
+                  ),
               ],
             ),
     );

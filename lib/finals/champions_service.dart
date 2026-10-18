@@ -84,12 +84,19 @@ class ChampionsService {
 
   /// Опубликованные (подписанные) чемпионы формата, лучшие сверху.
   /// Постранично ([offset]) и с поиском по имени ([q]).
-  Future<List<Map<String, dynamic>>> champions(String formatId, {String q = '', int offset = 0}) {
+  /// [year] — только результаты этого года (по дате публикации).
+  Future<List<Map<String, dynamic>>> champions(String formatId, {String q = '', int offset = 0, int? year}) {
     final name = q.trim().isEmpty ? '' : '&display_name=ilike.*${Uri.encodeQueryComponent(q.trim())}*';
-    return _get('format_id=eq.$formatId&coach_signed_at=not.is.null$name&order=total.desc&limit=$pageSize&offset=$offset');
+    final y = year == null ? '' : '&created_at=gte.$year-01-01&created_at=lt.${year + 1}-01-01';
+    return _get('format_id=eq.$formatId&coach_signed_at=not.is.null$name$y&order=total.desc&limit=$pageSize&offset=$offset');
   }
 
-  static const pageSize = 50;
+  /// Все опубликованные результаты одного спортсмена (профиль чемпиона), лучшие сверху.
+  Future<List<Map<String, dynamic>>> resultsOf(String userId) =>
+      _get('user_id=eq.${Uri.encodeQueryComponent(userId)}&coach_signed_at=not.is.null&order=total.desc&limit=200');
+
+  /// Размер страницы: берётся с запасом, потому что список сворачивается по людям.
+  static const pageSize = 200;
 
   /// Записи, ждущие подписи этого тренера.
   Future<List<Map<String, dynamic>>> pendingForMe() =>
