@@ -120,6 +120,14 @@ class _TargetCanvasState extends State<TargetCanvas> {
 
   Size _canvasSize = Size.zero;
 
+  /// Где палец при перетаскивании пробоины (для лупы); `null` — палец не на мишени.
+  Offset? _finger;
+
+  /// Увеличение лупы относительно текущего масштаба мишени — небольшое, чтобы
+  /// видеть окрестность под пальцем.
+  static const double _loupeMagnify = 2.2;
+  static const double _loupeSize = 140;
+
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<TargetViewModel>();
@@ -196,11 +204,68 @@ class _TargetCanvasState extends State<TargetCanvas> {
                 ),
               ),
               ..._buildCornerValues(vm, colors),
+              if (_finger != null && vm.isEditing) _loupe(vm, colors),
             ],
           ),
           ),
         );
       },
+    );
+  }
+
+  /// Лупа над пальцем: окрестность чернового выстрела с небольшим увеличением.
+  /// Положение стабильное: над пальцем, у верхнего края — сбоку от пальца на той
+  /// же высоте (никогда не прыгает вниз).
+  Widget _loupe(TargetViewModel vm, TargetColorScheme colors) {
+    const d = _loupeSize, gap = 18.0, margin = 4.0;
+    final f = _finger!;
+    final w = _canvasSize.width, h = _canvasSize.height;
+    double left, top;
+    if (f.dy - d - gap >= 0) {
+      left = (f.dx - d / 2).clamp(margin, math.max(margin, w - d - margin));
+      top = f.dy - d - gap;
+    } else {
+      final toRight = f.dx < w / 2;
+      left = (toRight ? f.dx + gap : f.dx - d - gap).clamp(margin, math.max(margin, w - d - margin));
+      top = (f.dy - d / 2).clamp(margin, math.max(margin, h - d - margin));
+    }
+    // Масштаб лупы: радиус мишени в ней = радиус на экране × увеличение.
+    final mainRadius = _targetRadiusPx(vm);
+    final zoomL = mainRadius * _loupeMagnify / (d / 2);
+    final mmToPx = mainRadius * _loupeMagnify / vm.face.faceRadiusMm;
+    final pan = Offset(-vm.draftXMm * mmToPx, vm.draftYMm * mmToPx); // черновой выстрел — в центре лупы
+    return Positioned(
+      left: left,
+      top: top,
+      width: d,
+      height: d,
+      child: IgnorePointer(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 10)],
+            border: Border.all(color: Colors.white, width: 2),
+          ),
+          child: ClipOval(
+            child: CustomPaint(
+              painter: TargetPainter(
+                face: vm.face,
+                colors: colors,
+                visibleShots: vm.visibleShots,
+                selectedShot: vm.selectedShot,
+                currentSeriesNo: vm.session.shots.isEmpty ? 1 : vm.session.shots.last.seriesNo,
+                isEditing: true,
+                draftXMm: vm.draftXMm,
+                draftYMm: vm.draftYMm,
+                draftShotNumber: vm.draftShotNumber,
+                zoom: zoomL,
+                pan: pan,
+              ),
+              size: const Size(d, d),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -262,6 +327,7 @@ class _TargetCanvasState extends State<TargetCanvas> {
 
     if (details.pointerCount >= 2) {
       vm.onTwoFingerGestureStarted(); // немедленно отменяет активную правку
+      if (_finger != null) setState(() => _finger = null);
       return;
     }
     // Один палец/курсор, идёт правка — сразу подхватываем пробоину под
@@ -270,6 +336,7 @@ class _TargetCanvasState extends State<TargetCanvas> {
     if (vm.isEditing) {
       _gestureOnCompass = _isInCompassZone(details.localFocalPoint, vm);
       _applyEditDrag(details.localFocalPoint, vm);
+      setState(() => _finger = _gestureOnCompass ? null : details.localFocalPoint);
     }
   }
 
@@ -289,6 +356,7 @@ class _TargetCanvasState extends State<TargetCanvas> {
       // (isAddingNew — без разницы, обе двигаются через draftX/Y).
       if (vm.isEditing) {
         _applyEditDrag(details.localFocalPoint, vm);
+        if (!_gestureOnCompass) setState(() => _finger = details.localFocalPoint);
       }
       return;
     }
@@ -339,6 +407,7 @@ class _TargetCanvasState extends State<TargetCanvas> {
   // ---- Завершение жеста ----
 
   void _onScaleEnd() {
+    if (_finger != null) setState(() => _finger = null);
     _lastScaleDistance = null;
     _lastFocalPoint = null;
     _gestureStartFocal = null;
