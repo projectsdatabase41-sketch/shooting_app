@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'settings_screen.dart' show inviteAthleteViaMessenger;
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
@@ -212,7 +213,32 @@ class _CoachAthletesScreenState extends State<CoachAthletesScreen> {
       // Справа внизу — как «новая запись» в дневнике (единообразие).
       floatingActionButton: FloatingActionButton(
         tooltip: tr('Добавить спортсмена'),
-        onPressed: () => _openAthleteDialog(),
+        onPressed: () async {
+          final how = await showModalBottomSheet<String>(
+            context: context,
+            builder: (ctx) => SafeArea(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                ListTile(
+                  leading: const Icon(Icons.forum_outlined),
+                  title: Text(tr('Пригласить из мессенджера')),
+                  subtitle: Text(tr('Спортсмену придёт приглашение — без кодов и токенов')),
+                  onTap: () => Navigator.pop(ctx, 'invite'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.key_outlined),
+                  title: Text(tr('Вручную (адрес и токен)')),
+                  onTap: () => Navigator.pop(ctx, 'manual'),
+                ),
+              ]),
+            ),
+          );
+          if (!mounted || how == null) return;
+          if (how == 'invite') {
+            await inviteAthleteViaMessenger(context, context.read<AppDataStore>());
+          } else {
+            _openAthleteDialog();
+          }
+        },
         child: const Icon(Icons.add),
       ),
     );

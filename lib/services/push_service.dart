@@ -650,6 +650,7 @@ String _friendlyPushBody(String body) {
     'coach_ok' => tr('Тренер принял запрос'),
     'coach_no' => tr('Тренер отклонил запрос'),
     'coach_grant' => tr('Доступ к данным спортсмена'),
+    'coach_invite' => tr('Тренер приглашает вас подключиться'),
     _ => tr('Новое сообщение'),
   };
 }

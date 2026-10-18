@@ -22,6 +22,9 @@ import 'user_profile.dart';
 ///  1. `coach_req` спортсмен → тренер: «запрос на добавление» (имя, дата
 ///     рождения, регион) с кнопками «Добавить / Отказать»;
 ///  2. `coach_ok` / `coach_no` тренер → спортсмен: ответ;
+///  0. (обратное направление) `coach_invite` тренер → спортсмен: приглашение; спортсмен
+///     принимает — и уходит обычный `coach_req`, который тренер, пригласивший сам,
+///     принимает автоматически;
 ///  3. `coach_grant` спортсмен → тренер: доступ к базе спортсмена (адрес,
 ///     ключ приложения, токен); спортсмен выдаёт его сам, когда пришёл
 ///     `coach_ok`; тренер сохраняет спортсмена в свой список.
@@ -66,6 +69,7 @@ class CoachLink {
       'coach_ok' => tr('Тренер принял запрос'),
       'coach_no' => tr('Тренер отклонил запрос'),
       'coach_grant' => tr('Доступ к данным спортсмена'),
+      'coach_invite' => tr('Тренер приглашает вас подключиться'),
       _ => tr('Сообщение'),
     };
   }
@@ -118,6 +122,32 @@ class CoachLink {
 
   Future<void> requestCoach(ChatContact coach) => sync.send(coach.id, encode(_profileCard()));
 
+  // ---- тренер: приглашение спортсмена ----
+
+  String get _coachName {
+    final n = '${UserProfile.firstNameOf(db)} ${UserProfile.lastNameOf(db)}'.trim();
+    return n.isEmpty ? auth.nickname : n;
+  }
+
+  bool _isInvited(String contactId) => state('invited_$contactId') == '1';
+
+  /// Тренер приглашает контакт мессенджера стать его спортсменом.
+  Future<void> invite(ChatContact athlete) async {
+    _setState('invited_${athlete.id}', '1');
+    await sync.send(athlete.id, encode({'k': 'coach_invite', 'name': _coachName}));
+  }
+
+  /// Спортсмен отвечает на приглашение: «принять» — отправляется обычный запрос тренеру.
+  Future<void> answerInvite(ChatMessage invite, {required bool accept}) async {
+    _setState(invite.clientMessageId, accept ? 'yes' : 'no');
+    final coach = repo.contactById(invite.contactId);
+    if (accept && coach != null) {
+      await requestCoach(coach);
+    } else {
+      await sync.send(invite.contactId, encode({'k': 'coach_no'}));
+    }
+  }
+
   // ---- тренер: ответ на запрос ----
 
   Future<void> answerRequest(ChatMessage request, {required bool accept}) async {
@@ -142,6 +172,12 @@ class CoachLink {
       final d = parse(m.text);
       if (d == null || state(m.clientMessageId) == 'done') continue;
       switch (d['k']) {
+        case 'coach_req':
+          // запрос пришёл в ответ на моё приглашение — принимаю сразу
+          if (state(m.clientMessageId) == null && _isInvited(m.contactId)) {
+            await answerRequest(m, accept: true);
+            done++;
+          }
         case 'coach_ok':
           if (await _grantAccess(store, m)) done++;
         case 'coach_grant':

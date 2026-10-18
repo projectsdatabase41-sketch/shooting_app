@@ -2496,6 +2496,32 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             lines.add(st == 'yes' ? tr('Вы приняли запрос — ждём доступ от спортсмена') : tr('Вы отказали'));
           }
         }
+      case 'coach_invite':
+        title = mine ? tr('Приглашение отправлено') : tr('Тренер приглашает вас подключиться');
+        if ('${d['name'] ?? ''}'.isNotEmpty) lines.add('${d['name']}');
+        if (!mine) {
+          if (st == null) {
+            lines.add(tr('Он увидит ваши тренировки только после вашего согласия на следующем шаге.'));
+            actions = Wrap(spacing: 8, runSpacing: 6, children: [
+              FilledButton(
+                onPressed: () async {
+                  await _coachLink.answerInvite(m, accept: true);
+                  if (mounted) setState(() {});
+                },
+                child: Text(tr('Принять')),
+              ),
+              OutlinedButton(
+                onPressed: () async {
+                  await _coachLink.answerInvite(m, accept: false);
+                  if (mounted) setState(() {});
+                },
+                child: Text(tr('Отказать')),
+              ),
+            ]);
+          } else {
+            lines.add(st == 'yes' ? tr('Вы приняли приглашение — отправлен запрос тренеру') : tr('Вы отказали'));
+          }
+        }
       case 'coach_ok':
         title = mine ? tr('Вы приняли спортсмена') : tr('Тренер принял запрос');
         if (!mine) {

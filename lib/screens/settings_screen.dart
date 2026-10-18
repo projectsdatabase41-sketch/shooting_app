@@ -961,6 +961,49 @@ class _HiddenDevModeToggleState extends State<_HiddenDevModeToggle> {
 }
 
 
+/// Тренер приглашает спортсмена: выбор из контактов мессенджера → тому уходит карточка
+/// «Принять / Отказать». Принял — дальше всё автоматически (запрос, согласие, доступ).
+Future<void> inviteAthleteViaMessenger(BuildContext context, AppDataStore store) async {
+  final msg = ScaffoldMessenger.of(context);
+  final auth = ChatAuthService(store.db);
+  if (!auth.isSignedIn) {
+    msg.showSnackBar(SnackBar(content: Text(tr('Сначала войдите в мессенджер'))));
+    return;
+  }
+  final repo = ChatMessagesRepository(store.db);
+  final contacts = [for (final c in repo.listContacts()) if (!c.isGroup) c];
+  if (contacts.isEmpty) {
+    msg.showSnackBar(SnackBar(content: Text(tr('Добавьте спортсмена в контакты мессенджера, затем повторите'))));
+    return;
+  }
+  final athlete = await showModalBottomSheet<ChatContact>(
+    context: context,
+    builder: (ctx) => ListView(children: [
+      Padding(padding: const EdgeInsets.all(16), child: Text(tr('Кого пригласить?'), style: Theme.of(ctx).textTheme.titleMedium)),
+      for (final c in contacts) ListTile(title: Text(c.nickname), onTap: () => Navigator.pop(ctx, c)),
+    ]),
+  );
+  if (athlete == null || !context.mounted) return;
+  if (await auth.friendStatusWith(athlete.id) != 'accepted') {
+    if (!context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('Сначала добавьте в друзья')),
+        content: Text(tr('Приглашение придёт в чат, только если вы друзья в мессенджере. Отправьте заявку в друзья, а когда её примут, повторите.')),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Понятно')))],
+      ),
+    );
+    return;
+  }
+  try {
+    await CoachLink(db: store.db, auth: auth, repo: repo, sync: ChatSyncService(auth, repo)).invite(athlete);
+    msg.showSnackBar(SnackBar(content: Text(tr('Приглашение отправлено: {c}', {'c': athlete.nickname}))));
+  } catch (e) {
+    msg.showSnackBar(SnackBar(content: Text(tr('Не отправлено: {e}', {'e': friendlyError(e)}))));
+  }
+}
+
 /// «Добавить тренера»: выбор из контактов мессенджера → тренеру уходит запрос
 /// (имя, дата рождения, регион). Доступ к данным он получит только после согласия.
 Future<void> addCoachViaMessenger(BuildContext context, AppDataStore store) async {
