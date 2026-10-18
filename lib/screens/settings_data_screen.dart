@@ -13,7 +13,7 @@ import '../state/app_data_store.dart';
 import '../widgets/glass_pill.dart';
 import '../widgets/section_header.dart';
 import 'export_screen.dart';
-import 'settings_screen.dart' show AccountTile;
+import 'settings_screen.dart' show AccountTile, addCoachViaMessenger;
 import '../i18n/i18n.dart';
 
 /// "Данные и синхронизация" — импорт/экспорт, ручная синхронизация с
@@ -354,12 +354,39 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
     List<String>? available;
     String? tablesError;
     final db = context.read<AppDataStore>().db;
+    // Не предлагаем: служебные таблицы и таблицы самого приложения — тренировки,
+    // результаты, комментарии, задания и т.п. тренер и так видит на базовом уровне.
+    // В расширенном выбираются только ДОПОЛНИТЕЛЬНЫЕ таблицы вашей базы.
     const blocked = {
       'share_grants',
       'share_events',
       'project_settings',
       'chat_push_tokens',
-      'task_devices'
+      'task_devices',
+      'keepalive_log',
+      'table_docs',
+      'training_packages',
+      'shots',
+      'exercises',
+      'exercise_templates',
+      'target_faces',
+      'comments',
+      'training_notes',
+      'archived_packages',
+      'file_assets',
+      'photo_import_jobs',
+      'remote_athlete_sources',
+      'ai_conversation_summaries',
+      'tasks',
+      'task_stages',
+      'task_steps',
+      'task_clarifications',
+      'task_runs',
+      'task_run_steps',
+      'task_shots',
+      'task_reports',
+      'task_events',
+      'task_series_notes',
     };
 
     return showDialog<({String label, String policy, List<String> tables})>(
@@ -596,6 +623,13 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
               ),
             ),
           ),
+        ListTile(
+          leading: const Icon(Icons.how_to_reg_outlined),
+          title: Text(tr('Добавить тренера')),
+          subtitle: Text(tr('Выберите тренера в мессенджере — ему уйдёт запрос, без кодов и паролей')),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => addCoachViaMessenger(context, store),
+        ),
         for (final p in _pending)
           ListTile(
             leading: const Icon(Icons.hourglass_top),
