@@ -381,10 +381,17 @@ class KnowledgeService {
   /// другое. Такой кусок отбрасывается: стойка и прицеливание у пистолета
   /// (рука вытянута) и винтовки (приклад в плечо) разные, подмена даёт
   /// вредные советы.
+  /// «Пистолетная рукоятка» — деталь ВИНТОВКИ (а не признак текста про пистолет):
+  /// раньше куски про хват винтовки отбрасывались как «про пистолет».
+  static final _pistolGripRe = RegExp(r'пистолетн[а-яё]*\s+рукоят[а-яё]*|pistol\s+grip', caseSensitive: false);
+
   static bool weaponMismatch(String question, String text) {
     final qp = _pistolRe.hasMatch(question), qr = _rifleRe.hasMatch(question);
     if (qp == qr) return false; // оружие не названо или названо оба
-    final tPistol = _pistolRe.hasMatch(text), tRifle = _rifleRe.hasMatch(text);
+    // нижний регистр: без флага unicode кириллица не сравнивается без учёта регистра
+    final low = text.toLowerCase();
+    final plain = low.replaceAll(_pistolGripRe, '');
+    final tPistol = _pistolRe.hasMatch(plain), tRifle = _rifleRe.hasMatch(low);
     return qp ? (tRifle && !tPistol) : (tPistol && !tRifle);
   }
 
@@ -588,7 +595,7 @@ class KnowledgeService {
       // Перечень материалов — модель должна знать, что в базе вообще есть,
       // и не говорить «такой книги нет», когда она просто не попала в выдачу.
       buf.writeln(
-          'Knowledge-base materials (file names): ${catalog.take(80).join('; ')}. A listed book IS in the base; if no excerpt below, say none was found for this question, not that the book is missing.');
+          'Knowledge-base materials (file names): ${catalog.take(80).join('; ')}. A listed book IS in the base; if no excerpt below, say none was found for this question, not that the book is missing. IMPORTANT: this is only a LIST OF FILE NAMES, not their content — never say what a document contains and never cite a file as a source unless its excerpt is given below. With no relevant excerpt: say plainly that the base had no excerpt on this question, give a SHORT answer from general knowledge marked as such, do not invent details, and mention devices (e.g. SCATT) or user data only if they are present in CONTEXT.');
       buf.writeln();
     }
     for (final c in chunks) {

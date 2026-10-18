@@ -10,6 +10,12 @@ void main() {
     expect(KnowledgeService.weaponMismatch(q, 'Пистолет и винтовка: сравнение'), isFalse);
   });
 
+  test('«пистолетная рукоятка» — деталь винтовки: куски про хват винтовки не отбрасываются', () {
+    const q = 'правильный хват рукоятки пневматической винтовки';
+    expect(KnowledgeService.weaponMismatch(q, 'Пистолетная рукоятка: кисть расслаблена, давление постоянное'), isFalse);
+    expect(KnowledgeService.weaponMismatch(q, 'Хват пистолета двумя руками'), isTrue);
+  });
+
   test('вопрос про винтовку отбрасывает куски про пистолет; без оружия — ничего', () {
     expect(KnowledgeService.weaponMismatch('как держать винтовку', 'хват пистолета'), isTrue);
     expect(KnowledgeService.weaponMismatch('как целиться', 'хват пистолета'), isFalse);
