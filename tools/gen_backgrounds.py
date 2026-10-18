@@ -115,8 +115,8 @@ def make(kind, theme, w, h):
         target(img, cx, cy, [step * k for k in range(2, 12)], ring, 0.12 if dark else 0.10, 0.88, lw)
     elif kind == 'ai':
         cx, cy = W / 2, H * 0.22
-        radial(img, cx, cy, int(W * 0.85), t['glow'], 0.38 if dark else 0.50)
-        target(img, cx, cy, [step * k for k in range(1, 7)], ring, 0.34 if dark else 0.28, 0.78, lw)
+        radial(img, cx, cy, int(W * 0.95), t['glow'], 0.70 if dark else 0.75)
+        target(img, cx, cy, [step * k for k in range(1, 8)], ring, 0.55 if dark else 0.40, 0.82, lw)
     elif kind == 'launch':
         # первый кадр заставки (совпадает с lib/widgets/splash_gate.dart): N в круге и кольца
         base = Image.new('RGB', (W, H), (0, 0, 0) if dark else (244, 246, 248))
