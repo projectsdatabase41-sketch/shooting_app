@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../widgets/glass_pill.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -327,13 +328,12 @@ class _DemoFeedbackOverlayState extends State<DemoFeedbackOverlay> {
               child: GestureDetector(
                 onPanUpdate: (d) => setState(() {
                   final p = _pos ?? const Offset(8, 120);
-                  _pos = Offset((p.dx - d.delta.dx).clamp(0, size.width - 90), (p.dy - d.delta.dy).clamp(0, size.height - 80));
+                  _pos = Offset((p.dx - d.delta.dx).clamp(0, size.width - 56), (p.dy - d.delta.dy).clamp(0, size.height - 56));
                 }),
-                child: FloatingActionButton.extended(
-                  heroTag: null,
-                  onPressed: _open,
-                  icon: const Icon(Icons.rate_review_outlined),
-                  label: Text(tr('Отзыв')),
+                // круглая, как кнопка «назад» (48 px); без tooltip — здесь нет Overlay
+                child: GlassCircleButton(
+                  icon: const BoldIcon(Icons.rate_review_outlined),
+                  onTap: _open,
                 ),
               ),
             ),

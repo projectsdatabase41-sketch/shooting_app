@@ -2,7 +2,8 @@
 import '../i18n/i18n.dart';
 
 class AppUpdateInfo {
-  const AppUpdateInfo({required this.downloadUrl, required this.sha});
+  const AppUpdateInfo({required this.downloadUrl, required this.sha, this.publishedAt});
+  final DateTime? publishedAt;
   final String downloadUrl;
   final String sha;
 }

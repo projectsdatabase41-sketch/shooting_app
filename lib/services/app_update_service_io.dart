@@ -11,9 +11,12 @@ import '../i18n/i18n.dart';
 /// [downloadUrl] — прямая ссылка на app-release.apk из GitHub Release;
 /// [sha] — коммит, из которого он собран (для показа/логов).
 class AppUpdateInfo {
-  const AppUpdateInfo({required this.downloadUrl, required this.sha});
+  const AppUpdateInfo({required this.downloadUrl, required this.sha, this.publishedAt});
   final String downloadUrl;
   final String sha;
+
+  /// Когда опубликована новая сборка (для показа даты вместо номера).
+  final DateTime? publishedAt;
 }
 
 /// Одной кнопкой из настроек — проверить и поставить свежий APK, минуя
@@ -31,7 +34,7 @@ class AppUpdateService {
 
   /// Только у веб-сборки (см. app_update_service_web.dart) — здесь
   /// обновление и так показывает currentSha/дату релиза через check().
-  static const String buildTime = '';
+  static const String buildTime = String.fromEnvironment('BUILD_TIME');
 
   /// `null` — обновлений нет (или сверить не с чем: локальная сборка без
   /// GIT_SHA, либо сеть недоступна — молчим, не тревожим ложной тревогой).
@@ -76,7 +79,8 @@ class AppUpdateService {
       }
     }
     if (url == null || url.isEmpty) return null;
-    return AppUpdateInfo(downloadUrl: url, sha: sha);
+    return AppUpdateInfo(
+        downloadUrl: url, sha: sha, publishedAt: DateTime.tryParse('${json['published_at']}')?.toLocal());
   }
 
   static Future<Directory> _dir() async {

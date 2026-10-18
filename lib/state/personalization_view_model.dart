@@ -71,7 +71,6 @@ class PersonalizationViewModel extends ChangeNotifier {
   /// в настройках (7 нажатий на заголовок экрана), не отдельным пунктом
   /// меню — иначе сам факт его существования был бы на виду у всех.
   static const String devModeKey = 'dev_mode_enabled';
-  static const String devModePassword = '9612';
 
   bool _devMode = false;
   bool get devMode => _devMode;
@@ -80,12 +79,11 @@ class PersonalizationViewModel extends ChangeNotifier {
     friendlyErrorDevMode = v;
   }
 
-  bool tryEnableDevMode(String password) {
-    if (password != devModePassword) return false;
+  /// Режим разработчика включается без пароля (7 нажатий на заголовок «Настройки»).
+  void enableDevMode() {
     _devFlag = true;
     _persistDevMode();
     notifyListeners();
-    return true;
   }
 
   void disableDevMode() {

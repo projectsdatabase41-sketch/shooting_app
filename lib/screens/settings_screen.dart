@@ -223,6 +223,12 @@ class _UpdateTileState extends State<_UpdateTile> {
     }
   }
 
+  /// Дата сборки установленной версии дд.мм.гггг (`null`, если неизвестна).
+  String? _myDate() {
+    final t = DateTime.tryParse(AppUpdateService.buildTime)?.toLocal();
+    return t == null ? null : DateFormat('dd.MM.yyyy').format(t);
+  }
+
   Future<void> _check() async {
     setState(() => _stage = _UpdateStage.checking);
     try {
@@ -314,8 +320,10 @@ class _UpdateTileState extends State<_UpdateTile> {
           leading: const Icon(Icons.system_update_outlined),
           title: Text(tr('Проверить обновления')),
           subtitle: _stage == _UpdateStage.upToDate
-              ? Text(tr('У вас последняя версия'))
-              : null,
+              ? Text(_myDate() == null
+                  ? tr('У вас последняя версия')
+                  : tr('У вас последняя версия, от {d}', {'d': _myDate()!}))
+              : (_myDate() == null ? null : Text(tr('Ваша версия от {d}', {'d': _myDate()!}))),
           onTap: _check,
         ),
       _UpdateStage.checking => ListTile(
@@ -329,8 +337,10 @@ class _UpdateTileState extends State<_UpdateTile> {
           leading:
               const Icon(Icons.system_update_outlined, color: Colors.orange),
           title: Text(tr('Доступно обновление')),
-          subtitle:
-              Text(tr('Коммит {sha}', {'sha': _info!.sha.substring(0, 7)})),
+          // Только дата новой версии (номер сборки не нужен).
+          subtitle: Text(_info!.publishedAt == null
+              ? tr('Вышла новая версия')
+              : tr('Версия от {d}', {'d': DateFormat('dd.MM.yyyy').format(_info!.publishedAt!)})),
           trailing:
               FilledButton(onPressed: _install, child: Text(tr('Обновить'))),
         ),
@@ -941,35 +951,10 @@ class _HiddenDevModeToggleState extends State<_HiddenDevModeToggle> {
       return;
     }
 
-    final ctrl = TextEditingController();
-    final password = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(tr('Режим разработчика')),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          obscureText: true,
-          onSubmitted: (v) => Navigator.of(ctx).pop(v),
-          decoration: InputDecoration(labelText: tr('Пароль')),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: Text(tr('Отмена'))),
-          FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(ctrl.text),
-              child: Text(tr('Включить'))),
-        ],
-      ),
-    );
-    if (password == null || !mounted) return;
-    final ok = personalization.tryEnableDevMode(password);
+    personalization.enableDevMode();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content: Text(
-              ok ? tr('Режим разработчика включён') : tr('Неверный пароль'))),
+      SnackBar(content: Text(tr('Режим разработчика включён'))),
     );
   }
 

@@ -1,3 +1,4 @@
+import 'package:shooting_app/widgets/glass_pill.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shooting_app/logic/friendly_error.dart';
@@ -15,10 +16,10 @@ void main() {
       builder: (c, child) => DemoFeedbackOverlay(navigatorKey: key, child: child!),
       home: const _DemoScreen(),
     ));
-    expect(find.text('Отзыв'), findsNothing);
+    expect(find.byType(GlassCircleButton), findsNothing);
     DemoMode.enabled.value = true;
     await tester.pump();
-    expect(find.text('Отзыв'), findsOneWidget);
+    expect(find.byType(GlassCircleButton), findsOneWidget);
     expect(DemoMode.currentPage(), '_DemoScreen');
     DemoMode.enabled.value = false;
   });
