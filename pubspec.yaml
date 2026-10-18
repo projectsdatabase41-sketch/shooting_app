@@ -115,6 +115,7 @@ flutter:
     # Фоновые картинки экранов (tools/gen_backgrounds.py).
     - assets/bg/web/
     - assets/bg/android/
+    - assets/bg/chat/
 
 flutter_launcher_icons:
   android: true

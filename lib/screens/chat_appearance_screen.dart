@@ -1,4 +1,5 @@
 import '../logic/friendly_error.dart';
+import '../widgets/app_backdrop.dart';
 import '../widgets/ai_gate.dart';
 import 'dart:convert';
 
@@ -156,7 +157,23 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
             spacing: 12,
             runSpacing: 12,
             children: [
-              _wallpaperTile('', tr('Как в приложении'), null),
+              // Стандартный фон — та самая картинка приложения (а не пустой квадрат).
+              _wallpaperTile(
+                '',
+                tr('Стандартный'),
+                BoxDecoration(
+                  image: DecorationImage(
+                      image: AssetImage(AppBackdrop.path('messenger', theme.brightness)), fit: BoxFit.cover),
+                ),
+              ),
+              for (final e in ChatPreferences.imageWallpapers.entries)
+                _wallpaperTile(
+                  'img_${e.key}',
+                  tr(e.value),
+                  BoxDecoration(
+                    image: DecorationImage(image: AssetImage('assets/bg/chat/${e.key}.webp'), fit: BoxFit.cover),
+                  ),
+                ),
               for (final e in ChatPreferences.chatWallpapers.entries)
                 _wallpaperTile(
                   e.key,
@@ -231,7 +248,8 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
         padding: const EdgeInsets.all(12),
         decoration: prefs.wallpaperDecoration ??
             BoxDecoration(
-                color: theme.colorScheme.surfaceContainerLow,
+                image: DecorationImage(
+                    image: AssetImage(AppBackdrop.path('messenger', theme.brightness)), fit: BoxFit.cover),
                 border: Border.all(color: theme.dividerColor)),
         child: Column(
           children: [

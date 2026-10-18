@@ -319,9 +319,10 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
     final role = await showDialog<FinalsRole>(
       context: context,
       builder: (ctx) => SimpleDialog(title: Text(c.nickname), children: [
-        SimpleDialogOption(onPressed: () => Navigator.pop(ctx, FinalsRole.athlete), child: Text(tr('Спортсмен (финалист)'))),
-        SimpleDialogOption(onPressed: () => Navigator.pop(ctx, FinalsRole.helper), child: Text(tr('Помощник (вводит за всех)'))),
-        SimpleDialogOption(onPressed: () => Navigator.pop(ctx, FinalsRole.coach), child: Text(tr('Второй тренер (команды и ввод)'))),
+        SimpleDialogOption(onPressed: () => Navigator.pop(ctx, FinalsRole.athlete), child: Text(tr('Участник'))),
+        // Жюри: объявляют команды и вносят результаты, права равные; кто чем занят —
+        // договариваются сами (отдельных ролей внутри жюри нет).
+        SimpleDialogOption(onPressed: () => Navigator.pop(ctx, FinalsRole.coach), child: Text(tr('Жюри (команды и ввод результатов)'))),
       ]),
     );
     if (role != null) setState(() => _picks.add(_Pick(c, role)));
@@ -431,9 +432,9 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
                   contentPadding: EdgeInsets.zero,
                   title: Text(p.contact.nickname),
                   subtitle: Text(switch (p.role) {
-                    FinalsRole.athlete => tr('Спортсмен'),
-                    FinalsRole.helper => tr('Помощник'),
-                    FinalsRole.coach => tr('Второй тренер'),
+                    FinalsRole.athlete => tr('Участник'),
+                    FinalsRole.helper => tr('Жюри'),
+                    FinalsRole.coach => tr('Жюри'),
                   }),
                   trailing: started
                       ? Text(_members.where((m) => m.userId == p.contact.id).map((m) => switch (m.status) {

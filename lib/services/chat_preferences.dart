@@ -350,10 +350,31 @@ class ChatPreferences extends ChangeNotifier {
     'graphite': (/*tr*/ 'Графит', [Color(0xFF1E2126), Color(0xFF34383F)]),
   };
 
-  /// Декорация фона переписки; null — фон приложения.
+  /// Картинки-обои (assets/bg/chat/<id>.webp, см. tools/gen_chat_wallpapers.py) — id: название.
+  static const Map<String, String> imageWallpapers = {
+    'night': /*tr*/ 'Ночь',
+    'teal': /*tr*/ 'Бирюза',
+    'forest': /*tr*/ 'Хвоя',
+    'violet': /*tr*/ 'Сумерки',
+    'wine': /*tr*/ 'Вино',
+    'dusk': /*tr*/ 'Янтарь',
+    'graphite': /*tr*/ 'Графит',
+    'sand': /*tr*/ 'Песок',
+    'mint': /*tr*/ 'Мята',
+    'sky': /*tr*/ 'Небо',
+    'lavender': /*tr*/ 'Лаванда',
+    'peach': /*tr*/ 'Персик',
+  };
+
+  /// Декорация фона переписки; null — стандартный фон (картинка приложения).
   BoxDecoration? get wallpaperDecoration {
     final w = wallpaper;
     if (w.isEmpty) return null;
+    if (w.startsWith('img_') && imageWallpapers.containsKey(w.substring(4))) {
+      return BoxDecoration(
+        image: DecorationImage(image: AssetImage('assets/bg/chat/${w.substring(4)}.webp'), fit: BoxFit.cover),
+      );
+    }
     final preset = chatWallpapers[w];
     if (preset != null) {
       return BoxDecoration(

@@ -556,7 +556,14 @@ class _ChatContactsView extends StatelessWidget {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
-        leading: Builder(
+        leading: Row(mainAxisSize: MainAxisSize.min, children: [
+          GlassCircleButton(
+            icon: const BoldIcon(Icons.arrow_back),
+            tooltip: tr('Назад'),
+            onTap: () => ChatHomeScreen.close(context),
+          ),
+          const SizedBox(width: 8),
+          Builder(
           builder: (ctx) => Stack(
             clipBehavior: Clip.none,
             children: [
@@ -581,16 +588,10 @@ class _ChatContactsView extends StatelessWidget {
             ],
           ),
         ),
+        ]),
         title: Text(tr('Мессенджер'),
             style: theme.textTheme.titleMedium
                 ?.copyWith(fontWeight: FontWeight.w600)),
-        actions: [
-          GlassCircleButton(
-            icon: const BoldIcon(Icons.close),
-            tooltip: tr('Свернуть мессенджер'),
-            onTap: () => ChatHomeScreen.close(context),
-          ),
-        ],
       ),
       // Шторка слева, как в Telegram: профиль, контакты, настройки.
       drawer: Drawer(
