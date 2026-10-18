@@ -122,7 +122,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && friendlyErrorDevMode) offerFinalInvites(context, context.read<AppDataStore>());
       });
-    } else if (_mainAuth.isSignedIn) {
+    } else if (_mainAuth.isSignedIn && !_auth.manuallySignedOut) {
       _autoProvisioning = true;
       _ensureChatSession();
     }
@@ -679,7 +679,7 @@ class _ChatContactsView extends StatelessWidget {
                 title: Text(tr('Выйти из чата')),
                 onTap: () {
                   Navigator.of(context).pop();
-                  auth.signOutLocally();
+                  auth.manualSignOut();
                   onContactsChanged();
                 },
               ),
@@ -1156,7 +1156,7 @@ class _ProfileSheetState extends State<_ProfileSheet> {
             const SizedBox(height: 16),
             TextButton.icon(
               onPressed: () {
-                widget.auth.signOutLocally();
+                widget.auth.manualSignOut();
                 Navigator.of(context).pop();
               },
               icon: const Icon(Icons.logout),

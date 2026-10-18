@@ -52,4 +52,24 @@ void main() {
     expect(r, ['new', 'new', 'new']);
     expect(calls, 1);
   });
+
+  test('«Выйти из чата» вручную: тихий вход отключён, пока человек сам не войдёт', () async {
+    final a = await _expiredSession(() => MockClient((req) async {
+          if (req.url.path.contains('/auth/v1/token')) {
+            return http.Response(jsonEncode({'access_token': 'new', 'refresh_token': 'r2', 'expires_in': 3600, 'user': {'id': 'me'}}), 200);
+          }
+          return http.Response('[]', 200); // профиль и прочее
+        }));
+    expect(a.manuallySignedOut, false);
+    a.manualSignOut();
+    expect(a.isSignedIn, false);
+    expect(a.manuallySignedOut, true);
+    try {
+      await a.signIn(email: 'a@b.c', password: 'pw'); // вход вручную снимает запрет
+    } catch (_) {}
+    expect(a.manuallySignedOut, false);
+    // вынужденный выход (сервер отверг токен) запрет НЕ ставит — тихий вход остаётся
+    a.signOutLocally();
+    expect(a.manuallySignedOut, false);
+  });
 }

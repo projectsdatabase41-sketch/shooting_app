@@ -178,6 +178,7 @@ class ChatAuthService {
       'password': password,
     });
     if (res['access_token'] == null) return false;
+    _setManualSignout(false);
     _saveSession(res);
     await _createProfile(nickname: nickname, avatarBase64: avatarBase64);
     return true;
@@ -194,6 +195,7 @@ class ChatAuthService {
     _requireConfigured();
     final res = await _post('/auth/v1/verify', {'type': 'signup', 'email': email.trim(), 'token': code.trim()});
     if (res['access_token'] == null) throw AuthException(tr('Неверный код'));
+    _setManualSignout(false);
     _saveSession(res);
     await _createProfile(nickname: nickname, avatarBase64: avatarBase64);
     await claimDevice();
@@ -203,6 +205,7 @@ class ChatAuthService {
     _requireConfigured();
     await _token(
         grant: 'password', body: {'email': email.trim(), 'password': password});
+    _setManualSignout(false);
     await _loadOwnProfile();
     await claimDevice(); // новый вход — это устройство становится активным
     // Если проект требует подтверждение почты, `signUp` не успевает
@@ -907,6 +910,24 @@ class ChatAuthService {
 
   Future<void> setGroupRole(String groupId, String userId, String role) => _rpc(
       'set_group_role', {'p_group': groupId, 'p_user': userId, 'p_role': role});
+
+  /// Пользователь сам нажал «Выйти из чата»: после этого тихий вход под основным
+  /// аккаунтом не выполняется — показывается форма входа и регистрации, пока он
+  /// сам не войдёт. (Вынужденный выход при отказе сервера — `signOutLocally`, там
+  /// тихий вход по-прежнему нужен.)
+  bool get manuallySignedOut {
+    final r = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', ['chat_manual_signout']);
+    return r.isNotEmpty && '${r.first['hex']}' == '1';
+  }
+
+  void _setManualSignout(bool v) => db.db.execute(
+      'INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex',
+      ['chat_manual_signout', v ? '1' : '0']);
+
+  void manualSignOut() {
+    signOutLocally();
+    _setManualSignout(true);
+  }
 
   void signOutLocally() {
     _write('chat_user_id', '');
