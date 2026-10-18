@@ -280,6 +280,25 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
   /// probeModel возвращает либо «ответила за …», либо текст ошибки.
   static bool _probeOk(String result) => result.startsWith('ответила');
 
+  /// Раздел настроек: отдельная карточка с рамкой и компактными отступами — строки
+  /// и блоки не сливаются в один длинный список.
+  Widget _card(List<Widget> children) {
+    final cs = Theme.of(context).colorScheme;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 0,
+      color: cs.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.6)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -303,6 +322,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
         padding:
             EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 32),
         children: [
+          _card([
           SectionHeader(
             title: tr('Доступ'),
             subtitle: switch (_mode) {
@@ -379,7 +399,8 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                   ),
             ),
           ],
-          const SizedBox(height: 24),
+          ]),
+          _card([
           SectionHeader(
             title: tr('Поиск в интернете'),
             subtitle: tr(
@@ -413,7 +434,8 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 24),
+          ]),
+          _card([
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.psychology_outlined),
@@ -422,7 +444,8 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AiMemoryScreen())),
           ),
-          const SizedBox(height: 12),
+          ]),
+          _card([
           SectionHeader(title: tr('Инструкция ассистенту')),
           const SizedBox(height: 12),
           TextField(
@@ -490,11 +513,12 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 24),
+          ]),
           // Окно выбора цепочки моделей нужно, только когда пользователь
           // сам подставляет ключ — со встроенным ключом ручной выбор
           // модели заменяет одна кнопка ниже (решение пользователя,
           // пункт 2 списка правок).
+          _card([
           if (_ownKey) ...[
             SectionHeader(
               title: tr('Модели'),
@@ -641,9 +665,9 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
               style: theme.textTheme.bodySmall,
             ),
           ],
+          ]),
           // Справочные материалы — для всех (решение пользователя).
-          ...[
-            const SizedBox(height: 24),
+          _card([
             SectionHeader(
               title: tr('Справочные материалы'),
               subtitle: tr(
@@ -675,7 +699,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                   ),
               ],
             ),
-          ],
+          ]),
           if (_message != null) ...[
             const SizedBox(height: 20),
             Text(_message!, style: theme.textTheme.bodySmall),
