@@ -73,9 +73,18 @@ jobs:
       # же релиз-тег при каждой сборке, а не плодит новый релиз на
       # каждый пуш (решение: не нужна история версий, нужен один
       # актуальный файл под рукой).
+      # Маленький файл версии рядом с APK: приложение проверяет обновление по прямой
+      # ссылке, а не через api.github.com (у API лимит 60 запросов/час на IP — в РФ с
+      # общими адресами он быстро кончается, и проверка падала с 403).
+      - name: version.json
+        run: |
+          printf '{"sha":"%s","built":"%s"}' "${{ github.sha }}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > build/app/outputs/flutter-apk/version.json
+
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: latest-apk
           name: Последняя сборка
           body: Автособрано из ${{ github.sha }}
-          files: build/app/outputs/flutter-apk/app-release.apk
+          files: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/flutter-apk/version.json

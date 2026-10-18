@@ -44,21 +44,47 @@ class AppUpdateService {
   /// приложение писало «новых нет»), поэтому бросаем исключение.
   static Future<AppUpdateInfo?> check({bool strict = false}) async {
     if (!Platform.isAndroid || currentSha.isEmpty) return null;
+    // 1) Прямая ссылка на version.json рядом с APK — без лимитов api.github.com.
     try {
       final res = await http
-          .get(Uri.parse(
-              'https://api.github.com/repos/$_repo/releases/tags/latest-apk'))
+          .get(Uri.parse('https://github.com/$_repo/releases/download/latest-apk/version.json'))
+          .timeout(const Duration(seconds: 15));
+      if (res.statusCode == 200) {
+        final info = parseVersionJson(jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>, currentSha, _repo);
+        return info;
+      }
+    } catch (_) {
+      // файла ещё нет (сборка до этой правки) или сеть — пробуем API ниже
+    }
+    // 2) Запасной путь — API релизов.
+    try {
+      final res = await http
+          .get(Uri.parse('https://api.github.com/repos/$_repo/releases/tags/latest-apk'))
           .timeout(const Duration(seconds: 15));
       if (res.statusCode != 200) {
-        if (strict) throw HttpException('HTTP ${res.statusCode}');
+        if (strict) {
+          throw HttpException(res.statusCode == 403 || res.statusCode == 429
+              ? tr('GitHub ограничил запросы с вашего адреса (HTTP {c}). Повторите позже или включите VPN.', {'c': res.statusCode})
+              : 'HTTP ${res.statusCode}');
+        }
         return null;
       }
-      return parseRelease(
-          jsonDecode(res.body) as Map<String, dynamic>, currentSha);
+      return parseRelease(jsonDecode(res.body) as Map<String, dynamic>, currentSha);
     } catch (_) {
       if (strict) rethrow;
       return null;
     }
+  }
+
+  /// Разбор version.json: `{"sha": "...", "built": "ISO"}`; `null` — это та же сборка.
+  static AppUpdateInfo? parseVersionJson(Map<String, dynamic> j, String currentSha, String repo) {
+    final sha = '${j['sha'] ?? ''}';
+    if (sha.length < 7 || sha == currentSha) return null;
+    return AppUpdateInfo(
+      downloadUrl: 'https://github.com/$repo/releases/download/latest-apk/app-release.apk',
+      sha: sha,
+      publishedAt: DateTime.tryParse('${j['built']}')?.toLocal(),
+    );
   }
 
   /// Чистый разбор ответа GitHub Releases API — вынесено отдельно ради
