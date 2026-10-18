@@ -1,4 +1,5 @@
 import '../logic/friendly_error.dart';
+import '../services/starter_exercises.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/exercise.dart';
@@ -20,8 +21,22 @@ import '../i18n/i18n.dart';
 /// сразу новую тренировку: там же, кнопкой "+", создают следующую по
 /// этому упражнению. Приложение стартует пустым — без предустановленного
 /// набора упражнений (раздел 10 ТЗ).
-class ExercisesScreen extends StatelessWidget {
+class ExercisesScreen extends StatefulWidget {
   const ExercisesScreen({super.key});
+
+  @override
+  State<ExercisesScreen> createState() => _ExercisesScreenState();
+}
+
+class _ExercisesScreenState extends State<ExercisesScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Первое открытие: типовые упражнения по профилю (вид стрельбы, пол).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) StarterExercises.seedIfNeeded(context.read<AppDataStore>());
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
