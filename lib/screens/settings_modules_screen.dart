@@ -56,7 +56,7 @@ class _SettingsModulesScreenState extends State<SettingsModulesScreen> {
   String? _needs(String id, AppDataStore store) {
     // Статистика, задания и ассистент подстраиваются под роли сами.
     if ({'statistics', 'tasks'}.contains(id) && !store.isAthlete && !store.isCoach) {
-      return tr('нужен модуль «Тренировка» или «Спортсмены»');
+      return tr('нужен модуль «Тренировки» или «Я тренер»');
     }
     return null;
   }
@@ -158,14 +158,14 @@ class _SettingsModulesScreenState extends State<SettingsModulesScreen> {
                 SwitchListTile(
                   secondary: const Icon(Icons.offline_bolt_outlined),
                   title: Text(tr('Локальный ИИ')),
-                  subtitle: Text(tr('Модель на самом устройстве, без интернета')),
+                  subtitle: Text(tr('Работает без интернета')),
                   value: ModulesSettings.isOn(db, AppModule.localAi),
                   onChanged: (v) => ModulesSettings.set(db, AppModule.localAi, v),
                 ),
                 SwitchListTile(
                   secondary: const Icon(Icons.extension_outlined),
                   title: Text(tr('Сервисы')),
-                  subtitle: Text(tr('Свои плитки: Google Диск, Supabase, любые API')),
+                  subtitle: Text(tr('Свои плитки с внешними сервисами')),
                   value: ModulesSettings.isOn(db, AppModule.services),
                   onChanged: (v) => ModulesSettings.set(db, AppModule.services, v),
                 ),

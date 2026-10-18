@@ -83,7 +83,7 @@ class SettingsScreen extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.palette_outlined),
             title: Text(tr('Внешний вид')),
-            subtitle: Text(tr('Язык, цвета и тема интерфейса')),
+            subtitle: Text(tr('Как выглядит приложение')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(
@@ -93,7 +93,7 @@ class SettingsScreen extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.auto_awesome_outlined),
             title: Text(tr('ИИ Ассистент')),
-            subtitle: Text(tr('Облачный ИИ, свой API Key, модели')),
+            subtitle: Text(tr('Настройка помощника с ИИ')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const AiSettingsScreen()),
@@ -102,7 +102,7 @@ class SettingsScreen extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.storage_outlined),
             title: Text(tr('Данные и синхронизация')),
-            subtitle: Text(tr('Импорт, экспорт, облако, доступ тренерам')),
+            subtitle: Text(tr('Резервные копии и обмен данными')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const SettingsDataScreen()),
@@ -111,7 +111,7 @@ class SettingsScreen extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.badge_outlined),
             title: Text(tr('Мой профиль')),
-            subtitle: Text(tr('Имя, вид стрельбы, пол, дата рождения, разряд, регион')),
+            subtitle: Text(tr('Данные о вас')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
               final db = store.db;
@@ -124,8 +124,7 @@ class SettingsScreen extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.tune),
             title: Text(tr('Модули')),
-            subtitle: Text(tr(
-                'Тренировки, спортсмены, заметки, мессенджер, ИИ — включить и расставить по приоритету')),
+            subtitle: Text(tr('Подключаемые дополнительные возможности')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => SettingsModulesScreen(tabs: homeTabs, specs: specs)),
@@ -136,7 +135,7 @@ class SettingsScreen extends StatelessWidget {
               leading: const Icon(Icons.extension_outlined),
               title: Text(tr('Сервисы')),
               subtitle: Text(
-                  tr('Google Диск, Supabase, заметки и другие свои плитки')),
+                  tr('Свои плитки с внешними сервисами')),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(
@@ -149,7 +148,7 @@ class SettingsScreen extends StatelessWidget {
             builder: (context, on, _) => SwitchListTile(
               secondary: const Icon(Icons.rate_review_outlined),
               title: Text(tr('Режим Демо')),
-              subtitle: Text(tr('На каждой странице кнопка «Отзыв»: можно сообщить об ошибке или идее')),
+              subtitle: Text(tr('Кнопка для отзывов на каждой странице')),
               value: on,
               onChanged: (v) => DemoMode.set(store.db, v),
             ),

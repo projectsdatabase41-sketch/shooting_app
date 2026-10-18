@@ -107,7 +107,7 @@ class SettingsAppearanceScreen extends StatelessWidget {
                 SwitchListTile(
                   secondary: const Icon(Icons.blur_on),
                   title: Text(tr('Плитки-«стекло»')),
-                  subtitle: Text(tr('Прозрачные плитки с размытием фона вместо цветных с тенью')),
+                  subtitle: Text(tr('Прозрачные плитки главного экрана')),
                   value: glass,
                   onChanged: (v) => setS(() => TileStyle.setGlass(db, v)),
                 ),
@@ -145,7 +145,7 @@ class SettingsAppearanceScreen extends StatelessWidget {
                 SwitchListTile(
                   secondary: const Icon(Icons.animation),
                   title: Text(tr('Анимации переходов')),
-                  subtitle: Text(tr('Выключите — экраны сменятся мгновенно')),
+                  subtitle: Text(tr('Плавные переходы между экранами')),
                   value: on,
                   onChanged: (v) => setS(() => AnimSettings.save(db, on: v)),
                 ),
@@ -182,7 +182,7 @@ class SettingsAppearanceScreen extends StatelessWidget {
             builder: (ctx, setS) => SwitchListTile(
               secondary: const Icon(Icons.movie_outlined),
               title: Text(tr('Заставка при запуске')),
-              subtitle: Text(tr('Короткая пульсирующая N при открытии приложения; касание пропускает')),
+              subtitle: Text(tr('Короткая анимация при запуске')),
               value: SplashGate.isOn(context.read<AppDataStore>().db),
               onChanged: (v) => setS(() => SplashGate.setOn(context.read<AppDataStore>().db, v)),
             ),

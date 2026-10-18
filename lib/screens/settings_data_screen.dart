@@ -51,15 +51,14 @@ class _SettingsDataScreenState extends State<SettingsDataScreen> {
           ListTile(
             leading: const Icon(Icons.file_download_outlined),
             title: Text(tr('Импорт тренировок')),
-            subtitle: Text(tr('Через чат с ИИ-ассистентом')),
+            subtitle: Text(tr('Загрузка тренировок из других источников')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => _showImportDialog(context),
           ),
           ListTile(
             leading: const Icon(Icons.ios_share_outlined),
             title: Text(tr('Экспорт тренировок')),
-            subtitle: Text(tr(
-                'В файл: для резервной копии или переноса на другое устройство')),
+            subtitle: Text(tr('Резервная копия в файл')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const ExportScreen()),
@@ -626,7 +625,7 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
         ListTile(
           leading: const Icon(Icons.how_to_reg_outlined),
           title: Text(tr('Добавить тренера')),
-          subtitle: Text(tr('Выберите тренера в мессенджере — ему уйдёт запрос, без кодов и паролей')),
+          subtitle: Text(tr('Подключение тренера через мессенджер')),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => addCoachViaMessenger(context, store),
         ),
@@ -634,7 +633,7 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
           ListTile(
             leading: const Icon(Icons.hourglass_top),
             title: Text(p.name),
-            subtitle: Text(tr('Принял запрос в мессенджере — доступ ещё не выдан')),
+            subtitle: Text(tr('Принял запрос, доступ не выдан')),
             trailing: TextButton(
               onPressed: _busy ? null : _grantNow,
               child: Text(tr('Выдать')),

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../services/user_profile.dart';
 import 'package:http/http.dart' as http;
 
 import '../services/chat_auth_service.dart';
@@ -25,7 +26,8 @@ class ChampionsService {
     final me = (record['standings'] as List).cast<Map<String, dynamic>>().firstWhere((s) => s['user'] == true);
     final client = http.Client();
     try {
-      Future<http.Response> post(bool withProtocol) => client.post(
+      final gender = UserProfile.genderOf(auth.db); // 'm' | 'f' — для фильтра чемпионов
+      Future<http.Response> post(bool withProtocol, {bool withGender = true}) => client.post(
             Uri.parse('${auth.url}/rest/v1/finals_champions'),
             headers: {
               'apikey': auth.anonKey,
@@ -40,6 +42,7 @@ class ChampionsService {
               'stats': stats,
               'coach_id': coachId,
               'consent': true,
+              if (withGender && (gender == 'm' || gender == 'f')) 'gender': gender,
               if (selfVerified) ...{
                 'self_verified': true,
                 'coach_signed_at': DateTime.now().toUtc().toIso8601String(),
@@ -49,6 +52,10 @@ class ChampionsService {
             }),
           ).timeout(const Duration(seconds: 20));
       var res = await post(true);
+      // Колонка gender ещё не создана (SQL не обновлён) — публикуем без неё.
+      if (res.statusCode == 400 && res.body.contains('gender')) {
+        res = await post(true, withGender: false);
+      }
       // Колонка protocol ещё не создана (SQL не обновлён) — публикуем без неё.
       if (res.statusCode == 400 && protocolShots != null && res.body.contains('protocol')) {
         res = await post(false);
@@ -85,10 +92,11 @@ class ChampionsService {
   /// Опубликованные (подписанные) чемпионы формата, лучшие сверху.
   /// Постранично ([offset]) и с поиском по имени ([q]).
   /// [year] — только результаты этого года (по дате публикации).
-  Future<List<Map<String, dynamic>>> champions(String formatId, {String q = '', int offset = 0, int? year}) {
+  Future<List<Map<String, dynamic>>> champions(String formatId, {String q = '', int offset = 0, int? year, String? gender}) {
     final name = q.trim().isEmpty ? '' : '&display_name=ilike.*${Uri.encodeQueryComponent(q.trim())}*';
     final y = year == null ? '' : '&created_at=gte.$year-01-01&created_at=lt.${year + 1}-01-01';
-    return _get('format_id=eq.$formatId&coach_signed_at=not.is.null$name$y&order=total.desc&limit=$pageSize&offset=$offset');
+    final g = gender == null ? '' : '&gender=eq.$gender';
+    return _get('format_id=eq.$formatId&coach_signed_at=not.is.null$name$y$g&order=total.desc&limit=$pageSize&offset=$offset');
   }
 
   /// Все опубликованные результаты одного спортсмена (профиль чемпиона), лучшие сверху.

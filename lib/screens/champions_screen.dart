@@ -25,6 +25,7 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
   String _fmt = FinalFormat.all.first.id;
   String _q = '';
   int? _year; // фильтр по году публикации
+  String? _gender; // 'm' | 'f' | null — все
   final _search = TextEditingController();
   List<Map<String, dynamic>> _rows = [];
   bool _more = false;
@@ -71,7 +72,7 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
   Future<void> _loadChamps({bool more = false}) async {
     if (_busy) return;
     setState(() => _busy = true);
-    final page = await _svc.champions(_fmt, q: _q, offset: more ? _rows.length : 0, year: _year);
+    final page = await _svc.champions(_fmt, q: _q, offset: more ? _rows.length : 0, year: _year, gender: _gender);
     if (!mounted) return;
     setState(() {
       _rows = more ? [..._rows, ...page] : page;
@@ -184,6 +185,20 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
             ),
         ]),
       ),
+      const SizedBox(height: 8),
+      Text(tr('Пол'), style: theme.textTheme.labelLarge),
+      const SizedBox(height: 6),
+      Wrap(spacing: 8, children: [
+        for (final g in <(String?, String)>[(null, tr('Все')), ('m', tr('Мужчины')), ('f', tr('Женщины'))])
+          ChoiceChip(
+            label: Text(g.$2),
+            selected: _gender == g.$1,
+            onSelected: (_) {
+              _gender = g.$1;
+              _loadChamps();
+            },
+          ),
+      ]),
       const SizedBox(height: 8),
       Text(tr('Год'), style: theme.textTheme.labelLarge),
       const SizedBox(height: 6),
