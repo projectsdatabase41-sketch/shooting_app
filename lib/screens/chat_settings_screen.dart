@@ -11,6 +11,7 @@ import '../services/local_db_service.dart';
 import '../services/message_sound.dart';
 import '../widgets/glass_pill.dart';
 import 'chat_appearance_screen.dart';
+import 'chat_backup_settings_screen.dart';
 import 'chat_privacy_screen.dart';
 import '../i18n/i18n.dart';
 
@@ -103,6 +104,12 @@ class _ChatSettingsScreenState extends State<ChatSettingsScreen> {
                 sync: widget.sync,
                 prefs: prefs,
                 onChanged: widget.onChanged),
+          ),
+          folder(
+            Icons.backup_outlined,
+            tr('Сохранение переписок'),
+            tr('Копия в базу, папка на телефоне'),
+            ChatBackupSettingsScreen(db: widget.db),
           ),
           folder(
             Icons.manage_accounts_outlined,

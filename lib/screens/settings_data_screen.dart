@@ -1,13 +1,10 @@
 import '../logic/friendly_error.dart';
 import 'db_check_screen.dart';
 import '../services/chat_auth_service.dart';
-import '../services/chat_backup_service.dart';
-import '../services/chat_vault.dart';
 import '../services/chat_messages_repository.dart';
 import '../services/chat_sync_service.dart';
 import '../services/coach_link.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -34,53 +31,6 @@ class SettingsDataScreen extends StatefulWidget {
 class _SettingsDataScreenState extends State<SettingsDataScreen> {
   bool _syncing = false;
   String? _syncMessage;
-  bool _vaultBusy = false;
-  String? _vaultMessage;
-
-  Future<void> _vaultRun(BuildContext context, {required bool restore}) async {
-    final db = context.read<AppDataStore>().db;
-    setState(() {
-      _vaultBusy = true;
-      _vaultMessage = null;
-    });
-    try {
-      final n = restore ? await ChatVault.restore(db, ChatMessagesRepository(db)) : await ChatVault.sync(db);
-      if (mounted) {
-        setState(() => _vaultMessage = restore
-            ? (n == 0 ? tr('В папке нет ничего нового') : tr('Восстановлено сообщений: {n}', {'n': n}))
-            : (n == 0 ? tr('Всё уже сохранено') : tr('Сохранено сообщений: {n}', {'n': n})));
-      }
-    } catch (e) {
-      if (mounted) setState(() => _vaultMessage = tr('Нужен доступ ко всем файлам: включите его для Nexus в настройках телефона'));
-    } finally {
-      if (mounted) setState(() => _vaultBusy = false);
-    }
-  }
-
-  bool _backupBusy = false;
-  String? _backupMessage;
-
-  Future<void> _backupNow(BuildContext context) async {
-    final db = context.read<AppDataStore>().db;
-    final auth = SupabaseAuthService(db);
-    if (!auth.hasBase) {
-      setState(() => _backupMessage = tr('Сначала подключите свою базу (Учётная запись ниже)'));
-      return;
-    }
-    setState(() {
-      _backupBusy = true;
-      _backupMessage = null;
-    });
-    try {
-      final n = await ChatBackupService(db, auth).run();
-      if (mounted) setState(() => _backupMessage = n == 0 ? tr('Всё уже скопировано') : tr('Скопировано сообщений: {n}', {'n': n}));
-    } catch (e) {
-      if (mounted) setState(() => _backupMessage = friendlyError(e));
-    } finally {
-      if (mounted) setState(() => _backupBusy = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final store = context.watch<AppDataStore>();
@@ -121,81 +71,6 @@ class _SettingsDataScreenState extends State<SettingsDataScreen> {
               MaterialPageRoute(builder: (_) => const ExportScreen()),
             ),
           ),
-          // Сохранение переписок в личную базу: частота и (по желанию) фото/файлы до 20 МБ.
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: SectionHeader(title: tr('Сохранение переписок')),
-          ),
-          ListTile(
-            leading: const Icon(Icons.forum_outlined),
-            title: Text(tr('Как часто копировать в мою базу')),
-            subtitle: Text(_backupMessage ??
-                (ChatBackupService.mode(store.db) == ChatBackupMode.off
-                    ? tr('Выключено')
-                    : tr('Не скопировано: {n}. Последний раз: {t}', {
-                        'n': ChatBackupService.pending(store.db),
-                        't': ChatBackupService.lastRun(store.db) == null
-                            ? tr('ещё не копировали')
-                            : DateFormat('dd.MM.yy HH:mm').format(ChatBackupService.lastRun(store.db)!),
-                      }))),
-            trailing: DropdownButton<ChatBackupMode>(
-              value: ChatBackupService.mode(store.db),
-              underline: const SizedBox.shrink(),
-              onChanged: (m) {
-                if (m == null) return;
-                ChatBackupService.setMode(store.db, m);
-                setState(() => _backupMessage = null);
-                if (m != ChatBackupMode.off) _backupNow(context);
-              },
-              items: [
-                DropdownMenuItem(value: ChatBackupMode.off, child: Text(tr('Выкл'))),
-                DropdownMenuItem(value: ChatBackupMode.live, child: Text(tr('Постоянно'))),
-                DropdownMenuItem(value: ChatBackupMode.daily, child: Text(tr('Раз в день'))),
-                DropdownMenuItem(value: ChatBackupMode.weekly, child: Text(tr('Раз в неделю'))),
-              ],
-            ),
-          ),
-          if (ChatBackupService.mode(store.db) != ChatBackupMode.off) ...[
-            SwitchListTile(
-              secondary: const Icon(Icons.attach_file),
-              title: Text(tr('Фото и файлы')),
-              subtitle: Text(tr('Каждый до 20 МБ; места в базе хватает не бесконечно, следите за объёмом')),
-              value: ChatBackupService.withFiles(store.db),
-              onChanged: (v) {
-                ChatBackupService.setWithFiles(store.db, v);
-                setState(() {});
-              },
-            ),
-            ListTile(
-              leading: _backupBusy
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.cloud_upload_outlined),
-              title: Text(tr('Сохранить сейчас')),
-              onTap: _backupBusy ? null : () => _backupNow(context),
-            ),
-          ],
-          if (ChatVault.supported) ...[
-            SwitchListTile(
-              secondary: const Icon(Icons.folder_special_outlined),
-              title: Text(tr('Папка Nexus на телефоне')),
-              subtitle: Text(_vaultMessage ??
-                  tr('Фото, файлы и история чатов копируются в папку Nexus/Chats в памяти телефона. Удаление приложения её не трогает')),
-              value: ChatVault.isOn(store.db),
-              onChanged: (v) async {
-                ChatVault.setOn(store.db, v);
-                setState(() => _vaultMessage = null);
-                if (v) await _vaultRun(context, restore: false);
-              },
-            ),
-            ListTile(
-              leading: _vaultBusy
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.restore_outlined),
-              title: Text(tr('Восстановить из папки Nexus')),
-              subtitle: Text(tr('После переустановки: вернуть переписки и вложения')),
-              onTap: _vaultBusy ? null : () => _vaultRun(context, restore: true),
-            ),
-          ],
           const Divider(height: 24),
           // Подключение своей базы Supabase — здесь же, где синхронизация.
           const AccountTile(),
