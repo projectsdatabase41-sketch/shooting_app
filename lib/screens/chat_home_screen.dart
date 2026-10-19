@@ -105,7 +105,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
     _sync = ChatSyncService(_auth, _repo);
     _prefs = ChatPreferences(_db);
     _reload();
-    ChatBackupService.runIfOn(_db);
+    ChatBackupService.runIfDue(_db);
     ChatAuthService.otherDeviceActive.addListener(_deviceBanner);
     if (_auth.isSignedIn) {
       _auth.isActiveDevice().catchError((_) => true); // прогрев: первый опрос в переписке без лишнего круга по сети

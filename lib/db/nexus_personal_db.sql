@@ -1210,7 +1210,17 @@ create table if not exists chat_backup (
   created_at        timestamptz not null,
   backed_up_at      timestamptz not null default now()
 );
+alter table chat_backup add column if not exists file_path text;
 create index if not exists idx_chat_backup_contact on chat_backup (contact_id, created_at);
+
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('chat-backup', 'chat-backup', false, 20971520)
+on conflict (id) do update set file_size_limit = excluded.file_size_limit, public = false;
+drop policy if exists "chat_backup_files_owner" on storage.objects;
+create policy "chat_backup_files_owner" on storage.objects
+  for all to authenticated
+  using (bucket_id = 'chat-backup' and is_project_owner())
+  with check (bucket_id = 'chat-backup' and is_project_owner());
 
 create index if not exists idx_packages_started on training_packages (started_at desc);
 create index if not exists idx_exercises_package on exercises (package_id);
@@ -1250,7 +1260,7 @@ Derived numbers (peak force, sway amplitude) go to shots.extra.'),
   ('chat_backup', 'table', 'Messenger backup',
 'Text copy of the owner''s messenger chats, written by the app (Settings -> Data and sync). One row per message,
 id = local message id, contact_name = the contact nickname at copy time. Attachment bodies are NOT copied, only their
-name/type/size. Safe to read and search; do not edit - the app overwrites rows by id.'),
+name/type/size, unless the owner enabled files: then each attachment up to 20 MB is stored in the private storage bucket chat-backup and file_path points to it. Safe to read and search; do not edit - the app overwrites rows by id.'),
   ('rule:schema-v2', 'rule', 'Schema v2 changes',
 'exercises.template_id is a real foreign key to exercise_templates (extra.template_id is kept for compatibility).
 exercises.id no longer has to equal the package id: shots are found by exercise_id of the exercises row; exercises of one

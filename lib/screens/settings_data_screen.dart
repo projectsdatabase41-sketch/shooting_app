@@ -6,6 +6,7 @@ import '../services/chat_messages_repository.dart';
 import '../services/chat_sync_service.dart';
 import '../services/coach_link.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -96,28 +97,59 @@ class _SettingsDataScreenState extends State<SettingsDataScreen> {
               MaterialPageRoute(builder: (_) => const ExportScreen()),
             ),
           ),
-          SwitchListTile(
-            secondary: const Icon(Icons.forum_outlined),
-            title: Text(tr('Копия чатов в мою базу')),
-            subtitle: Text(_backupMessage ??
-                (ChatBackupService.isOn(store.db)
-                    ? tr('Не скопировано: {n}', {'n': ChatBackupService.pending(store.db)})
-                    : tr('Текст переписок копируется в вашу базу, без файлов и фото'))),
-            value: ChatBackupService.isOn(store.db),
-            onChanged: (v) {
-              ChatBackupService.setOn(store.db, v);
-              setState(() {});
-              if (v) _backupNow(context);
-            },
+          // Сохранение переписок в личную базу: частота и (по желанию) фото/файлы до 20 МБ.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: SectionHeader(title: tr('Сохранение переписок')),
           ),
-          if (ChatBackupService.isOn(store.db))
+          ListTile(
+            leading: const Icon(Icons.forum_outlined),
+            title: Text(tr('Как часто копировать в мою базу')),
+            subtitle: Text(_backupMessage ??
+                (ChatBackupService.mode(store.db) == ChatBackupMode.off
+                    ? tr('Выключено')
+                    : tr('Не скопировано: {n}. Последний раз: {t}', {
+                        'n': ChatBackupService.pending(store.db),
+                        't': ChatBackupService.lastRun(store.db) == null
+                            ? tr('ещё не копировали')
+                            : DateFormat('dd.MM.yy HH:mm').format(ChatBackupService.lastRun(store.db)!),
+                      }))),
+            trailing: DropdownButton<ChatBackupMode>(
+              value: ChatBackupService.mode(store.db),
+              underline: const SizedBox.shrink(),
+              onChanged: (m) {
+                if (m == null) return;
+                ChatBackupService.setMode(store.db, m);
+                setState(() => _backupMessage = null);
+                if (m != ChatBackupMode.off) _backupNow(context);
+              },
+              items: [
+                DropdownMenuItem(value: ChatBackupMode.off, child: Text(tr('Выкл'))),
+                DropdownMenuItem(value: ChatBackupMode.live, child: Text(tr('Постоянно'))),
+                DropdownMenuItem(value: ChatBackupMode.daily, child: Text(tr('Раз в день'))),
+                DropdownMenuItem(value: ChatBackupMode.weekly, child: Text(tr('Раз в неделю'))),
+              ],
+            ),
+          ),
+          if (ChatBackupService.mode(store.db) != ChatBackupMode.off) ...[
+            SwitchListTile(
+              secondary: const Icon(Icons.attach_file),
+              title: Text(tr('Фото и файлы')),
+              subtitle: Text(tr('Каждый до 20 МБ; места в базе хватает не бесконечно, следите за объёмом')),
+              value: ChatBackupService.withFiles(store.db),
+              onChanged: (v) {
+                ChatBackupService.setWithFiles(store.db, v);
+                setState(() {});
+              },
+            ),
             ListTile(
               leading: _backupBusy
                   ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.cloud_upload_outlined),
-              title: Text(tr('Скопировать чаты сейчас')),
+              title: Text(tr('Сохранить сейчас')),
               onTap: _backupBusy ? null : () => _backupNow(context),
             ),
+          ],
           const Divider(height: 24),
           // Подключение своей базы Supabase — здесь же, где синхронизация.
           const AccountTile(),
