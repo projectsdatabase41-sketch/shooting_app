@@ -89,7 +89,7 @@ dependencies:
   video_player: ^2.11.1
   share_handler: ^0.0.25
   flutter_tts: ^4.2.5
-  permission_handler: ^13.0.2
+  permission_handler: ^11.4.0
 
 dev_dependencies:
   flutter_test:
