@@ -2237,18 +2237,24 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
+  void _measureBar() {
+    final h = _barKey.currentContext?.size?.height;
+    if (mounted && h != null && (h - _barHeight).abs() > 1) {
+      setState(() => _barHeight = h);
+      if (_atBottom) _scrollToEnd();
+    }
+  }
+
+  // Клавиатура закрылась/открылась: поле ввода меняет высоту (отступ жестовой панели),
+  // а State.build от этого не вызывается — без замера последнее сообщение остаётся под полем.
+  @override
+  void didChangeMetrics() => WidgetsBinding.instance.addPostFrameCallback((_) => _measureBar());
+
   @override
   Widget build(BuildContext context) {
     // Высота плавающего низа меняется (ответ, график, многострочный текст) —
     // ленте нужен точный отступ, меряем после кадра.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final h = _barKey.currentContext?.size?.height;
-      if (mounted && h != null && (h - _barHeight).abs() > 1)
-        {
-          setState(() => _barHeight = h);
-          if (_atBottom) _scrollToEnd();
-        }
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measureBar());
     final topInset = MediaQuery.paddingOf(context).top + 60;
     return AnimatedBuilder(
       animation: widget.prefs,
