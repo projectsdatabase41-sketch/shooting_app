@@ -13,7 +13,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+import 'package:flutter/services.dart' show Clipboard, ClipboardData, HapticFeedback;
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -698,6 +698,31 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   double get _endAlignment {
     final h = MediaQuery.sizeOf(context).height;
     return h <= 0 ? 0 : ((_barHeight + 36) / h).clamp(0.0, 0.5);
+  }
+
+  /// Потянули ленту дальше нижнего края (как обновление свайпом, только наоборот) —
+  /// сразу спрашиваем базу о новых сообщениях.
+  double _pullAcc = 0;
+  bool _pullFired = false;
+  final _pullChecking = ValueNotifier<bool>(false);
+
+  bool _onListScroll(ScrollNotification n) {
+    if (n is OverscrollNotification && n.metrics.pixels <= n.metrics.minScrollExtent && n.overscroll < 0) {
+      _pullAcc += -n.overscroll;
+      if (!_pullFired && _pullAcc > 90) {
+        _pullFired = true;
+        HapticFeedback.selectionClick();
+        _pollLoop?.poke();
+        _pullChecking.value = true;
+        Future<void>.delayed(const Duration(milliseconds: 1400), () {
+          if (mounted) _pullChecking.value = false;
+        });
+      }
+    } else if (n is ScrollEndNotification || (n is ScrollUpdateNotification && n.metrics.pixels > n.metrics.minScrollExtent + 1)) {
+      _pullAcc = 0;
+      _pullFired = false;
+    }
+    return false;
   }
 
   void _scrollToEnd() {
@@ -2310,7 +2335,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                             // Перевёрнутая лента: низ (новые) закреплён — при
                             // открытии клавиатуры последние сообщения остаются
                             // видны, а подгрузка картинок выше не сдвигает экран.
-                            : ScrollablePositionedList.builder(
+                            : NotificationListener<ScrollNotification>(
+                                onNotification: _onListScroll,
+                                child: ScrollablePositionedList.builder(
                                 itemScrollController: _itemCtl,
                                 itemPositionsListener: _itemPos,
                                 reverse: true,
@@ -2334,7 +2361,31 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                   return Column(
                                       children: [_dayChip(m.createdAt), item]);
                                 },
+                              )),
+                        // Индикатор проверки новых сообщений (после протяжки вниз у нижнего края).
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: _barHeight + 8,
+                          child: IgnorePointer(
+                            child: Center(
+                              child: ValueListenableBuilder<bool>(
+                                valueListenable: _pullChecking,
+                                builder: (_, on, __) => !on
+                                    ? const SizedBox.shrink() // без скрытого индикатора: он анимируется постоянно
+                                    : Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                        decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(16)),
+                                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                          const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                                          const SizedBox(width: 8),
+                                          Text(tr('Проверяю новые сообщения…'), style: const TextStyle(color: Colors.white, fontSize: 12)),
+                                        ]),
+                                      ),
                               ),
+                            ),
+                          ),
+                        ),
                         // Лента уходит под шапку и поле ввода с мягким затемнением.
                         Positioned.fill(
                           child: EdgeShade(
