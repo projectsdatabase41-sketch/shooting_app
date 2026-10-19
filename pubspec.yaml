@@ -103,6 +103,7 @@ flutter:
   assets:
     - lib/db/local_schema.sql
     - lib/db/puls_install.sql
+    - lib/db/nexus_personal_db.sql
     - assets/icon/badge.png
     # Встроенные словари интерфейса (en/de/zh), см. lib/i18n/i18n.dart.
     - assets/i18n/

@@ -1,4 +1,5 @@
 import '../logic/friendly_error.dart';
+import 'db_check_screen.dart';
 import '../services/chat_auth_service.dart';
 import '../services/chat_messages_repository.dart';
 import '../services/chat_sync_service.dart';
@@ -54,6 +55,13 @@ class _SettingsDataScreenState extends State<SettingsDataScreen> {
             subtitle: Text(tr('Загрузка тренировок из других источников')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => _showImportDialog(context),
+          ),
+          ListTile(
+            leading: const Icon(Icons.fact_check_outlined),
+            title: Text(tr('Проверка базы')),
+            subtitle: Text(tr('Всё ли создано в вашей базе')),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DbCheckScreen())),
           ),
           ListTile(
             leading: const Icon(Icons.ios_share_outlined),

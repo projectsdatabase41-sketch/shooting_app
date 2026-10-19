@@ -451,7 +451,7 @@ class _AccountSheetState extends State<_AccountSheet> {
   Future<void> _copyInstallSql(BuildContext context) async {
     String message;
     try {
-      final sql = await rootBundle.loadString('lib/db/puls_install.sql');
+      final sql = await rootBundle.loadString('lib/db/nexus_personal_db.sql');
       await Clipboard.setData(ClipboardData(text: sql));
       message =
           tr('SQL скопирован — вставьте в SQL Editor Supabase и нажмите Run');
