@@ -340,17 +340,19 @@ class _ChatContactsScreenState extends State<ChatContactsScreen> {
                                   trailing: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      IconButton(
-                                        tooltip: tr('Отклонить'),
-                                        icon: const Icon(Icons.close),
+                                      // Подписанные кнопки вместо безымянных значков («что это за галочка?»).
+                                      TextButton(
+                                        style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
                                         onPressed: () => _run(() => widget.auth
                                             .respondFriend(p.userId, false)),
+                                        child: Text(tr('Отклонить')),
                                       ),
-                                      IconButton.filled(
-                                        tooltip: tr('Принять'),
-                                        icon: const Icon(Icons.check),
+                                      const SizedBox(width: 4),
+                                      FilledButton(
+                                        style: FilledButton.styleFrom(visualDensity: VisualDensity.compact),
                                         onPressed: () => _run(() => widget.auth
                                             .respondFriend(p.userId, true)),
+                                        child: Text(tr('Принять')),
                                       ),
                                     ],
                                   ),
@@ -605,9 +607,10 @@ class _ChatDirectoryScreenState extends State<ChatDirectoryScreen> {
                         // Тап — написать; кнопка — заявка в друзья.
                         trailing: ChatAuthService.friendIds.contains(p.userId)
                             ? const Icon(Icons.how_to_reg, size: 20)
-                            : IconButton(
-                                tooltip: tr('Добавить в друзья'),
-                                icon: const Icon(Icons.person_add_alt_1),
+                            : OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
+                                icon: const Icon(Icons.person_add_alt_1, size: 18),
+                                label: Text(tr('В друзья')),
                                 onPressed: () async {
                                   final messenger =
                                       ScaffoldMessenger.of(context);

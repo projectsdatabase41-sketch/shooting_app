@@ -136,6 +136,28 @@ class _SettingsModulesScreenState extends State<SettingsModulesScreen> {
                   ),
                 ),
               ),
+              // Размер плиток главного экрана: на широком экране (ноутбук) они не растягиваются.
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(tr('Размер плиток'), style: theme.textTheme.labelLarge),
+                    const SizedBox(height: 6),
+                    SegmentedButton<int>(
+                      showSelectedIcon: false,
+                      segments: [
+                        ButtonSegment(value: 160, label: Text(tr('Мелкие'))),
+                        ButtonSegment(value: 240, label: Text(tr('Средние'))),
+                        ButtonSegment(value: 360, label: Text(tr('Крупные'))),
+                      ],
+                      selected: {
+                        [160, 240, 360].reduce((a, b) => (a - tabs.tileMaxPx).abs() <= (b - tabs.tileMaxPx).abs() ? a : b)
+                      },
+                      onSelectionChanged: (v) => tabs.tileMaxPx = v.first,
+                    ),
+                  ]),
+                ),
+              ),
               SliverReorderableList(
                 itemCount: ids.length,
                 onReorder: (oldIndex, newIndex) {

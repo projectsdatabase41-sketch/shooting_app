@@ -412,7 +412,10 @@ class _HomeTileGridState extends State<HomeTileGrid> {
     if (_pointers.length < 2) _startDist = null;
   }
 
-  int get _crossAxisCount => widget.vm.tileColumns;
+  /// Колонок на самом деле: не меньше выбранного щипком и достаточно, чтобы плитка не
+  /// превышала [HomeTabsViewModel.tileMaxPx] (широкие экраны).
+  int? _effCols;
+  int get _crossAxisCount => _effCols ?? widget.vm.tileColumns;
 
   // Меньше плитка (больше колонок при зуме) — меньше значок, а подпись при
   // 4+ колонках вовсе не помещается разборчиво (решение пользователя:
@@ -453,6 +456,8 @@ class _HomeTileGridState extends State<HomeTileGrid> {
   Widget build(BuildContext context) {
     final ids = widget.vm.visible;
     final preview = _previewOrder(ids);
+    final screenW = MediaQuery.sizeOf(context).width;
+    _effCols = math.max(widget.vm.tileColumns, (screenW / widget.vm.tileMaxPx).ceil()).clamp(2, 10);
     final rows = (ids.length / _crossAxisCount).ceil();
 
     return Listener(

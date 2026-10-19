@@ -430,7 +430,21 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
                             systemNavigationBarContrastEnforced: false),
                     child: DemoFeedbackOverlay(
                         navigatorKey: navigatorKey,
-                        child: child ?? const SizedBox.shrink()),
+                        // Ноутбук / широкий браузер: содержимое по центру и не шире 1100 px —
+                        // колонки и списки не растягиваются на весь экран.
+                        child: LayoutBuilder(
+                          builder: (ctx, box) => box.maxWidth <= 1100
+                              ? (child ?? const SizedBox.shrink())
+                              : ColoredBox(
+                                  color: Theme.of(ctx).scaffoldBackgroundColor,
+                                  child: Center(
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(maxWidth: 1100),
+                                      child: child ?? const SizedBox.shrink(),
+                                    ),
+                                  ),
+                                ),
+                        )),
                   ),
                 );
               },

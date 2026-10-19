@@ -51,6 +51,7 @@ class HomeTabsViewModel extends ChangeNotifier {
   /// Общий для обоих режимов — не привязан к `$mode` (визуальная плотность,
   /// а не выбор рабочего процесса).
   static const _keyTileColumns = 'home_tile_columns';
+  static const _keyTileMaxPx = 'home_tile_max_px';
 
   late List<String> _visible = List.of(allIds);
   Set<String> _hidden = {};
@@ -80,6 +81,18 @@ class HomeTabsViewModel extends ChangeNotifier {
     if (clamped == _tileColumns) return;
     _tileColumns = clamped;
     _write(_keyTileColumns, '$clamped');
+    notifyListeners();
+  }
+
+  /// Наибольший размер плитки, px: на широком экране (ноутбук, веб) колонок
+  /// добавляется столько, чтобы плитка не становилась огромной. Настраивается в «Модулях».
+  int _tileMaxPx = 240;
+  int get tileMaxPx => _tileMaxPx;
+  set tileMaxPx(int value) {
+    final v = value.clamp(120, 480);
+    if (v == _tileMaxPx) return;
+    _tileMaxPx = v;
+    _write(_keyTileMaxPx, '$v');
     notifyListeners();
   }
 
@@ -187,6 +200,8 @@ class HomeTabsViewModel extends ChangeNotifier {
 
     final savedCols = int.tryParse(_readRaw(_keyTileColumns));
     if (savedCols != null) _tileColumns = savedCols.clamp(2, 5);
+    final savedPx = int.tryParse(_readRaw(_keyTileMaxPx));
+    if (savedPx != null) _tileMaxPx = savedPx.clamp(120, 480);
 
     var savedVisible = _readRaw(_keyVisible);
     var savedHidden = _readRaw(_keyHidden);
