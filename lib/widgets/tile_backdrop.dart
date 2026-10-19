@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
-/// Страница раздела, открытая с плитки главного экрана: спокойный фон (градиент и
-/// кольца мишени). Значок плитки на фоне не рисуется — у разделов он и так есть.
-/// Сам экран раздела прозрачный поверх этого фона.
+import 'app_backdrop.dart';
+
+/// Страница раздела, открытая с плитки главного экрана: обои (те же, что у
+/// настроек: по теме и платформе). Значка плитки на фоне нет — у разделов он и так
+/// есть. Сам экран раздела прозрачный поверх обоев.
 class TileBackdropPage extends StatelessWidget {
   final IconData icon;
   final Widget child;
@@ -11,45 +13,13 @@ class TileBackdropPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final dark = theme.brightness == Brightness.dark;
-    final base = theme.scaffoldBackgroundColor;
-    final tint = theme.colorScheme.primary;
-    return Stack(fit: StackFit.expand, children: [
-      DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [base, Color.lerp(base, tint, dark ? 0.12 : 0.10)!],
-          ),
-        ),
-      ),
-      CustomPaint(painter: _RingsPainter(tint.withValues(alpha: dark ? 0.10 : 0.09))),
-      // сам раздел — поверх, с прозрачным фоном экрана
-      Theme(
+    return AppBackdrop(
+      kind: 'settings',
+      // раздел поверх обоев — с прозрачным фоном экрана
+      child: Theme(
         data: theme.copyWith(scaffoldBackgroundColor: Colors.transparent),
         child: child,
       ),
-    ]);
+    );
   }
-}
-
-class _RingsPainter extends CustomPainter {
-  final Color color;
-  _RingsPainter(this.color);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final c = Offset(size.width / 2, size.height * 0.42);
-    final p = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2;
-    for (var i = 1; i <= 6; i++) {
-      p.color = color.withValues(alpha: color.a * (1 - i * 0.12));
-      canvas.drawCircle(c, size.width * 0.14 * i, p);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_RingsPainter o) => o.color != color;
 }

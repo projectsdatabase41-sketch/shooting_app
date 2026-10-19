@@ -20,11 +20,11 @@ void main() {
       ),
     ));
     await tester.pumpAndSettle();
-    await tester.runAsync(() => precacheImage(AssetImage(AppBackdrop.path('ai', Brightness.dark)), tester.element(find.byType(Image))));
+    await tester.runAsync(() => precacheImage(AssetImage(AppBackdrop.path('ai', Brightness.dark)), tester.element(find.byType(Image).first)));
     await tester.pump();
     await tester.pump();
     // картинка загрузилась (не сработал errorBuilder)
-    final img = tester.widget<Image>(find.byType(Image));
+    final img = tester.widget<Image>(find.byType(Image).first);
     expect(img.image, isA<AssetImage>());
     final boundary = tester.renderObject<RenderRepaintBoundary>(find.byKey(key));
     final image = await tester.runAsync(() => boundary.toImage());

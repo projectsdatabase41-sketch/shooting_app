@@ -26,7 +26,6 @@ import '../services/feedback_service.dart';
 import '../state/ai_chat_view_model.dart';
 import '../state/app_data_store.dart';
 import '../widgets/ai_chart_view.dart';
-import '../widgets/empty_state.dart';
 import '../widgets/glass_pill.dart';
 import '../widgets/raised_3d_button.dart';
 import '../i18n/i18n.dart';
@@ -429,8 +428,6 @@ class _AiChatBodyState extends State<_AiChatBody> {
         padding: EdgeInsets.fromLTRB(
             16, widget.embedded ? 12 : MediaQuery.paddingOf(context).top + GlassHeader.height + 12, 16, 12),
         children: [
-          EmptyState(icon: Icons.forum_outlined, text: tr('ИИ ассистент')),
-          const SizedBox(height: 8),
           Text(tr('Можно попросить'), style: Theme.of(context).textTheme.labelLarge),
           const SizedBox(height: 8),
           Wrap(spacing: 8, runSpacing: 8, children: [
@@ -792,7 +789,7 @@ class _AiChatBodyState extends State<_AiChatBody> {
                       // пользователя): сообщение уходит только по кнопке.
                       textInputAction: TextInputAction.newline,
                       decoration: InputDecoration(
-                        hintText: tr('Спросите что угодно'),
+                        hintText: tr('Что вас интересует?'),
                         border: InputBorder.none,
                         enabledBorder: InputBorder.none,
                         focusedBorder: InputBorder.none,
