@@ -556,13 +556,16 @@ class _ChatContactsView extends StatelessWidget {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
-        leading: Row(mainAxisSize: MainAxisSize.min, children: [
-          GlassCircleButton(
-            icon: const BoldIcon(Icons.arrow_back),
-            tooltip: tr('Назад'),
-            onTap: () => ChatHomeScreen.close(context),
-          ),
-          const SizedBox(width: 8),
+        leading: GlassCircleButton(
+          icon: const BoldIcon(Icons.arrow_back),
+          tooltip: tr('Назад'),
+          onTap: () => ChatHomeScreen.close(context),
+        ),
+        title: Text(tr('Мессенджер'),
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
+        // Меню (шторка с профилем, контактами, настройками) — справа, после широкой шапки.
+        actions: [
           Builder(
           builder: (ctx) => Stack(
             clipBehavior: Clip.none,
@@ -570,7 +573,7 @@ class _ChatContactsView extends StatelessWidget {
               GlassCircleButton(
                 icon: const Icon(Icons.menu),
                 tooltip: tr('Меню'),
-                onTap: () => Scaffold.of(ctx).openDrawer(),
+                onTap: () => Scaffold.of(ctx).openEndDrawer(),
               ),
               // Красный кружок: есть заявки в друзья — они в меню → «Друзья».
               if (incomingRequests > 0)
@@ -587,14 +590,11 @@ class _ChatContactsView extends StatelessWidget {
                 ),
             ],
           ),
-        ),
-        ]),
-        title: Text(tr('Мессенджер'),
-            style: theme.textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.w600)),
+        )
+        ],
       ),
-      // Шторка слева, как в Telegram: профиль, контакты, настройки.
-      drawer: Drawer(
+      // Шторка справа (кнопка меню в шапке справа): профиль, контакты, настройки.
+      endDrawer: Drawer(
         child: SafeArea(
           child: ListView(
             padding: EdgeInsets.zero,
