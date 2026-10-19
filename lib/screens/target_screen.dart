@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import '../widgets/ai_gate.dart';
 import 'package:provider/provider.dart';
@@ -20,6 +22,9 @@ import '../widgets/raised_3d_button.dart';
 import '../widgets/shot_list_sheet.dart';
 import '../widgets/athlete_coach_chat.dart';
 import '../widgets/shot_wheel.dart';
+import '../services/comments_repository.dart';
+import '../logic/friendly_error.dart' show friendlyErrorDevMode;
+import 'package:uuid/uuid.dart';
 import '../widgets/target_canvas.dart';
 import 'ai_chat_screen.dart';
 import 'photo_scan_screen.dart';
@@ -123,27 +128,21 @@ class _WorkspaceBody extends StatefulWidget {
 }
 
 class _WorkspaceBodyState extends State<_WorkspaceBody> {
-  PageController? _pages;
-  int _current = 0;
+  final _scroll = ScrollController();
+  final Map<WorkspacePage, GlobalKey> _keys = {};
 
   @override
   void dispose() {
-    _pages?.dispose();
+    _scroll.dispose();
     super.dispose();
   }
 
-  void _ensureController(int initial) {
-    if (_pages != null) return;
-    _current = initial;
-    _pages = PageController(initialPage: initial);
-  }
+  GlobalKey _keyOf(WorkspacePage p) => _keys.putIfAbsent(p, GlobalKey.new);
 
-  void _goTo(int index) {
-    _pages?.animateToPage(
-      index,
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOut,
-    );
+  void _jumpTo(WorkspacePage page) {
+    final ctx = _keyOf(page).currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
   }
 
   @override
@@ -153,49 +152,25 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
     // Страница «Тренер» нужна, только если кому-то выдан доступ (есть тренер).
     final hasCoach = context.watch<AppDataStore>().shareGrants.any((g) => g.isActive);
     final pages = [for (final p in workspace.visible) if (p != WorkspacePage.coach || hasCoach) p];
-    final tIdx = pages.indexOf(WorkspacePage.target) < 0 ? 0 : pages.indexOf(WorkspacePage.target);
-    _ensureController(tIdx);
-    // ShotListSheet живёт на СВОЕЙ странице рабочего стола и не видит
-    // наш PageController напрямую — сообщает о переходе через вью-модель.
-    vm.onJumpToTargetRequested = () => _goTo(tIdx);
-
-    // Индекс мог уехать за границы, если страницу спрятали, пока мы
-    // на ней стояли.
-    final safeCurrent = _current.clamp(0, pages.length - 1);
+    // ShotListSheet живёт в своём разделе и не видит нашу прокрутку — просит перейти к мишени
+    // через вью-модель.
+    vm.onJumpToTargetRequested = () => _jumpTo(WorkspacePage.target);
 
     return PopScope(
-      // Системный «назад» сначала возвращает на мишень и только со
-      // страницы мишени выходит из тренировки.
-      //
-      // Раньше «назад» сворачивал приложение целиком: жест уходил
-      // системе, потому что перехватывать его было некому.
-      //
-      // Если тренировка была завершена, но пользователь её разблокировал
-      // и что-то поправил, выход дополнительно спрашивает — применить
-      // правки или вернуть как было (решение пользователя, часть 12).
-      canPop:
-          safeCurrent == tIdx && !vm.hasUnsavedFinishedEdits,
+      // Если завершённая тренировка была разблокирована и что-то поправили, выход спрашивает —
+      // применить правки или вернуть как было (решение пользователя, часть 12).
+      canPop: !vm.hasUnsavedFinishedEdits,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-        if (safeCurrent != tIdx) {
-          _goTo(tIdx);
-          return;
-        }
         _handleFinishedEditExit(context, vm);
       },
       child: Scaffold(
         appBar: GlassHeader(
           title: Text(vm.exercise.name,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w600),
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
               overflow: TextOverflow.ellipsis),
           actions: [
-            // Сброс зума — раньше был только жестом (щипок обратно), а
-            // щипок легко "залипал" на максимуме, если пальцы не сводить
-            // ровно по той же линии. Кнопка — гарантированный выход
-            // независимо от того, как повёл себя жест.
+            // Сброс зума — кнопка надёжнее щипка, который мог «залипнуть» на максимуме.
             if (vm.zoom != 1.0 || vm.panX != 0 || vm.panY != 0)
               GlassCircleButton(
                 icon: const BoldIcon(Icons.zoom_out_map),
@@ -210,52 +185,55 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
               ),
             if (vm.canEditShots)
               GlassCircleButton(
-                icon: BoldIcon(vm.isEditing
-                    ? Icons.remove_red_eye_outlined
-                    : Icons.edit_outlined),
+                icon: BoldIcon(vm.isEditing ? Icons.remove_red_eye_outlined : Icons.edit_outlined),
                 tooltip: vm.isEditing ? tr('Просмотр') : tr('Правка'),
                 onTap: () => _toggleEditMode(vm),
               ),
-            if (vm.session.status == SessionStatus.running ||
-                vm.session.status == SessionStatus.paused)
+            if (vm.session.status == SessionStatus.running || vm.session.status == SessionStatus.paused)
               CallCoachButton(db: context.read<AppDataStore>().db),
             GlassCircleButton(
               icon: const BoldIcon(Icons.grid_view),
-              tooltip: tr('Страницы'),
+              tooltip: tr('Разделы'),
               onTap: () => _openOverview(context),
             ),
           ],
         ),
         body: Column(
           children: [
-            // Управление тренировкой — над страницами и неподвижно.
+            // Управление тренировкой — над разделами и неподвижно.
             if (vm.showTrainingControls) const _TrainingControlsBar(),
             Expanded(
-              child: PageView.builder(
-                controller: _pages,
-                itemCount: pages.length,
-                onPageChanged: (i) => setState(() => _current = i),
-                // Страницы не листаются в двух случаях. Во время
-                // правки — палец на мишени тянет пробоину, и
-                // горизонтальное движение не должно уносить на
-                // соседнюю страницу. И пока на мишени два пальца — это
-                // щипок для зума: пальцы при сведении всегда смещаются
-                // вбок, и горизонтальную составляющую PageView считал
-                // своей, из-за чего зум то и дело уезжал на соседнюю
-                // страницу.
-                physics: vm.isEditing || vm.multiTouch
-                    ? const NeverScrollableScrollPhysics()
-                    : const PageScrollPhysics(),
-                itemBuilder: (context, i) => _pageBody(pages[i], vm),
+              child: LayoutBuilder(
+                builder: (context, box) {
+                  // Мишень ~на 20% ниже прежней (раньше занимала всё место над панелями).
+                  final targetH = ((box.maxHeight - 125) * 0.8).clamp(220.0, 720.0);
+                  final sectionH = math.max(380.0, box.maxHeight * 0.75);
+                  return SingleChildScrollView(
+                    controller: _scroll,
+                    // Пока палец ставит выстрел или два пальца зумят — страница не прокручивается.
+                    physics: vm.isEditing || vm.multiTouch
+                        ? const NeverScrollableScrollPhysics()
+                        : const ClampingScrollPhysics(),
+                    child: Column(
+                      children: [
+                        for (final page in pages)
+                          KeyedSubtree(
+                            key: _keyOf(page),
+                            child: page == WorkspacePage.target
+                                ? _TargetPage(height: targetH)
+                                : _Section(
+                                    title: page.title,
+                                    height: sectionH,
+                                    child: _pageBody(page, vm),
+                                  ),
+                          ),
+                        const SizedBox(height: 24),
+                      ],
+                    ),
+                  );
+                },
               ),
             ),
-            // Точки НАД нижним краем: у самой кромки экрана
-            // вертикальный свайп перехватывает Android своим жестом
-            // «назад/домой», и обзор почти не открывался.
-            _PageDots(
-                count: pages.length,
-                current: safeCurrent,
-                onOverview: () => _openOverview(context)),
           ],
         ),
       ),
@@ -345,65 +323,31 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
       showDragHandle: true,
       builder: (_) => ChangeNotifierProvider.value(
         value: workspace,
-        child: _WorkspaceOverview(
-          onSelect: (page) {
-            final index = workspace.visible.indexOf(page);
-            if (index >= 0) _goTo(index);
-          },
-        ),
+        child: _WorkspaceOverview(onSelect: _jumpTo),
       ),
     );
   }
 }
 
-/// Точки-индикаторы страниц плюс подъём обзора свайпом вверх.
-///
-/// Полоса тонкая и живёт под колесом: тянуть вверх от края экрана —
-/// привычный жест, а на самих страницах вертикальный свайп занят
-/// прокруткой содержимого и перехватывать его нельзя.
-class _PageDots extends StatelessWidget {
-  final int count;
-  final int current;
-  final VoidCallback onOverview;
-
-  const _PageDots(
-      {required this.count, required this.current, required this.onOverview});
+/// Раздел длинной страницы тренировки: заголовок и содержимое фиксированной высоты.
+class _Section extends StatelessWidget {
+  final String title;
+  final double height;
+  final Widget child;
+  const _Section({required this.title, required this.height, required this.child});
 
   @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onVerticalDragEnd: (d) {
-        if ((d.primaryVelocity ?? 0) < -200) onOverview();
-      },
-      onTap: onOverview,
-      child: Padding(
-        // Отступ снизу уводит полосу из зоны системного жеста Android.
-        padding: const EdgeInsets.only(bottom: 18),
-        child: SizedBox(
-          height: 34,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              for (var i = 0; i < count; i++)
-                Container(
-                  width: i == current ? 18 : 6,
-                  height: 6,
-                  margin: const EdgeInsets.symmetric(horizontal: 3),
-                  decoration: BoxDecoration(
-                    color: i == current
-                        ? cs.primary
-                        : cs.onSurfaceVariant.withValues(alpha: 0.35),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                ),
-            ],
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Divider(height: 24),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+            child: Text(title, style: Theme.of(context).textTheme.titleMedium),
           ),
-        ),
-      ),
-    );
-  }
+          SizedBox(height: height, child: child),
+        ],
+      );
 }
 
 /// Обзор: порядок страниц перетаскиванием, скрытые — отдельным списком.
@@ -424,12 +368,12 @@ class _WorkspaceOverview extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text(tr('Страницы'), style: theme.textTheme.titleMedium),
+            child: Text(tr('Разделы'), style: theme.textTheme.titleMedium),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: Text(
-              tr('Удержать и перетащить — поменять порядок. Переключателем справа страница убирается с рабочего стола, но не удаляется.'),
+              tr('Удержать и перетащить — поменять порядок разделов. Переключателем справа раздел убирается со страницы, но не удаляется. Нажатие — перейти к разделу.'),
               style: theme.textTheme.bodySmall,
             ),
           ),
@@ -478,30 +422,186 @@ class _WorkspaceOverview extends StatelessWidget {
       };
 }
 
-/// Страница мишени: холст, панель правки и колесо.
+/// Мишень, панель правки и колесо. [height] задан на рабочем столе тренировки (мишень касанием,
+/// отметка к выстрелу, кнопка отмены выстрела); без него — мишень этапа задания (прежняя раскладка).
 class _TargetPage extends StatelessWidget {
-  const _TargetPage();
+  final double? height;
+  const _TargetPage({this.height});
 
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<TargetViewModel>();
+    final workspace = height != null;
+    // Рамка вокруг мишени: ClipRect держит увеличенную мишень внутри отведённой области.
+    final canvas = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: ClipRect(child: TargetCanvas(addByTouch: workspace)),
+    );
+    if (!workspace) {
+      return Column(
+        children: [
+          Expanded(child: canvas),
+          if (vm.isEditing) const _EditActionBar() else const _ShotActionBar(),
+          const _ShotWheelBar(),
+        ],
+      );
+    }
     return Column(
       children: [
-        // Рамка вокруг мишени.
-        //
-        // Без обрезки увеличенная мишень вылезала за свою страницу и
-        // наползала на соседнюю — при листании получался «затык».
-        // ClipRect держит её внутри отведённой области: рамка масштаб
-        // не меняет, мишень растёт внутри неё.
-        const Expanded(
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 4),
-            child: ClipRect(child: TargetCanvas()),
+        SizedBox(
+          height: height,
+          child: Stack(
+            children: [
+              Positioned.fill(child: canvas),
+              // Отмена последнего выстрела: маленький кружок справа сверху, не зависит от зума
+              // мишени и уезжает вместе со страницей при прокрутке.
+              if (vm.canEditShots && vm.session.shots.isNotEmpty && !vm.isEditing)
+                Positioned(
+                  top: 6,
+                  right: 8,
+                  child: GlassCircleButton(
+                    size: 36,
+                    icon: const Icon(Icons.undo, size: 18),
+                    tooltip: tr('Отменить выстрел'),
+                    onTap: vm.undoLastShot,
+                  ),
+                ),
+            ],
           ),
         ),
-        if (vm.isEditing) const _EditActionBar() else const _ShotActionBar(),
+        if (vm.isEditing) const _EditActionBar() else const _ShotNoteBar(),
         const _ShotWheelBar(),
       ],
+    );
+  }
+}
+
+/// Под мишенью: поле «отметка к выстрелу» (заметка уровня выстрела). У мишеней «попал/мимо» —
+/// ещё две кнопки; фотоопределение выстрелов — только в режиме разработчика.
+class _ShotNoteBar extends StatefulWidget {
+  const _ShotNoteBar();
+
+  @override
+  State<_ShotNoteBar> createState() => _ShotNoteBarState();
+}
+
+class _ShotNoteBarState extends State<_ShotNoteBar> {
+  final _ctl = TextEditingController();
+  bool _scanning = false;
+
+  @override
+  void dispose() {
+    _ctl.dispose();
+    super.dispose();
+  }
+
+  void _save(TargetViewModel vm) {
+    final text = _ctl.text.trim();
+    final shot = vm.selectedShot;
+    if (text.isEmpty || shot == null) return;
+    final store = context.read<AppDataStore>();
+    CommentsRepository(store.db).add(Comment(
+      id: const Uuid().v4(),
+      sessionId: vm.session.id,
+      level: CommentLevel.shot,
+      shotId: shot.id,
+      authorRole: store.workMode == WorkMode.coach ? AuthorRole.coach : AuthorRole.athlete,
+      text: text,
+      createdAt: DateTime.now(),
+    ));
+    vm.noteExternalEdit();
+    _ctl.clear();
+    FocusScope.of(context).unfocus();
+    setState(() {});
+  }
+
+  Future<void> _scanPhoto(TargetViewModel vm) async {
+    setState(() => _scanning = true);
+    try {
+      final knownHolesMm = [for (final s in [...vm.session.shots, ...vm.session.trash]) PixelPoint(s.xMm, s.yMm)];
+      final points = await Navigator.of(context).push<List<PixelPoint>>(
+        MaterialPageRoute(builder: (_) => PhotoScanScreen(face: vm.face, knownHolesMm: knownHolesMm)),
+      );
+      if (points == null || points.isEmpty || !mounted) return;
+      final added = vm.addScannedShots(points);
+      if (added < points.length && mounted) showPauseAddHint(context);
+    } finally {
+      if (mounted) setState(() => _scanning = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final vm = context.watch<TargetViewModel>();
+    final shot = vm.selectedShot;
+    final store = context.watch<AppDataStore>();
+    final notes = shot == null ? const <Comment>[] : CommentsRepository(store.db).forShot(vm.session.id, shot.id);
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (vm.canEditShots && vm.face.hitMiss)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(children: [
+                Expanded(
+                  child: Raised3DButton(
+                    icon: Icons.check_circle_outline,
+                    label: tr('Попал'),
+                    baseColor: Colors.green.shade700,
+                    onTap: () => vm.canAddShotNow ? vm.addHitMiss(true) : showPauseAddHint(context),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Raised3DButton(
+                    icon: Icons.highlight_off,
+                    label: tr('Мимо'),
+                    baseColor: Colors.red.shade700,
+                    onTap: () => vm.canAddShotNow ? vm.addHitMiss(false) : showPauseAddHint(context),
+                  ),
+                ),
+              ]),
+            ),
+          if (notes.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(notes.last.text, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall),
+            ),
+          Row(children: [
+            Expanded(
+              child: TextField(
+                controller: _ctl,
+                enabled: shot != null,
+                minLines: 1,
+                maxLines: 3,
+                textInputAction: TextInputAction.send,
+                onSubmitted: (_) => _save(vm),
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: shot == null ? tr('Сначала сделайте выстрел') : tr('Отметка к выстрелу'),
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: Icon(Icons.send, color: cs.primary),
+                    onPressed: shot == null ? null : () => _save(vm),
+                  ),
+                ),
+              ),
+            ),
+            // Фотоопределение выстрелов — только для разработчика (потом отдельным модулем).
+            if (friendlyErrorDevMode && vm.canEditShots) ...[
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: tr('Фото мишени'),
+                icon: const Icon(Icons.photo_camera_outlined),
+                onPressed: _scanning ? null : () => _scanPhoto(vm),
+              ),
+            ],
+          ]),
+        ],
+      ),
     );
   }
 }
@@ -938,13 +1038,15 @@ class _ShotActionBarState extends State<_ShotActionBar> {
                 // списка выстрелов (shot_list_sheet).
                 onTap: hasShots ? vm.beginMoveSelected : null,
               ),
-              const SizedBox(width: 16),
-              Raised3DButton(
-                icon: Icons.photo_camera_outlined,
-                label: tr('Фото'),
-                baseColor: Theme.of(context).colorScheme.tertiary,
-                onTap: _scanning ? null : () => _scanPhoto(context, vm),
-              ),
+              if (friendlyErrorDevMode) ...[
+                const SizedBox(width: 16),
+                Raised3DButton(
+                  icon: Icons.photo_camera_outlined,
+                  label: tr('Фото'),
+                  baseColor: Theme.of(context).colorScheme.tertiary,
+                  onTap: _scanning ? null : () => _scanPhoto(context, vm),
+                ),
+              ],
             ],
           ),
         ),
@@ -985,7 +1087,7 @@ class _ShotWheelBar extends StatelessWidget {
         maxValue: vm.maxDraftSteps,
         enabled: vm.maxDraftSteps > 0,
         onChanged: vm.setDraftInwardSteps,
-        height: 42, // ниже на 20% (решение пользователя)
+        height: 25, // ниже ещё на 40% (решение пользователя)
       );
     } else {
       final index = vm.selectedIndex;
@@ -995,7 +1097,7 @@ class _ShotWheelBar extends StatelessWidget {
         maxValue: total == 0 ? 0 : total - 1,
         enabled: total > 1,
         onChanged: vm.selectIndex,
-        height: 42, // ниже на 20% (решение пользователя)
+        height: 25, // ниже ещё на 40% (решение пользователя)
       );
     }
 

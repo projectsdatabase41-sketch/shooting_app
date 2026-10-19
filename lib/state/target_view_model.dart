@@ -650,6 +650,12 @@ class TargetViewModel extends ChangeNotifier {
     _persist();
   }
 
+  /// Кнопка «назад» у мишени: отменяет последний выстрел (уходит в корзину, как обычное удаление).
+  void undoLastShot() {
+    if (!canEditShots || session.shots.isEmpty) return;
+    deleteShot(session.shots.last.id);
+  }
+
   void restoreFromTrash(String shotId) {
     if (!canEditShots) return;
     session = SessionLogic.restoreShot(session, shotId, exercise);

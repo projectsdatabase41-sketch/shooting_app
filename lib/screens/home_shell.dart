@@ -163,9 +163,11 @@ class _HomeShellState extends State<HomeShell> {
               ]),
           body: AppBackdrop(
             kind: 'home',
-            child: Column(
+            child: Stack(
             children: [
-              if (store.isBackgroundSyncing) const _SyncBanner(),
+              // Синхронизация — просто текст поверх всего: плитки не сдвигаются.
+              Column(
+            children: [
               Expanded(
                 child: Padding(
                   padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + GlassHeader.height),
@@ -188,6 +190,15 @@ class _HomeShellState extends State<HomeShell> {
                   ),
                 ),
               ),
+            ],
+          ),
+              if (store.isBackgroundSyncing)
+                Positioned(
+                  top: MediaQuery.paddingOf(context).top + GlassHeader.height + 2,
+                  left: 0,
+                  right: 0,
+                  child: const IgnorePointer(child: _SyncBanner()),
+                ),
             ],
           ),
           ),
@@ -274,31 +285,13 @@ class _SyncBanner extends StatelessWidget {
   const _SyncBanner();
 
   @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Theme.of(context).colorScheme.secondaryContainer,
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  tr('Синхронизация с облаком… не выключайте телефон'),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-            ],
+  Widget build(BuildContext context) => Center(
+        child: Text(
+          tr('Синхронизация с облаком…'),
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: Theme.of(context).hintColor,
+            shadows: const [Shadow(blurRadius: 4, color: Colors.black54)],
           ),
         ),
-      ),
-    );
-  }
+      );
 }

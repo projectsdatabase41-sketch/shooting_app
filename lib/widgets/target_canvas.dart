@@ -59,7 +59,11 @@ class TargetCanvas extends StatefulWidget {
   /// Просмотр законченной тренировки: касание выбирает ближайший к нему
   /// выстрел. На рабочем столе выключено — там касание ничего не делает.
   final bool tapToSelect;
-  const TargetCanvas({super.key, this.tapToSelect = false});
+
+  /// Рабочий стол тренировки: касание мишени ставит выстрел (лупа над пальцем, отпустил — записан),
+  /// как в финале. Два пальца — зум, выстрел при этом не ставится.
+  final bool addByTouch;
+  const TargetCanvas({super.key, this.tapToSelect = false, this.addByTouch = false});
 
   @override
   State<TargetCanvas> createState() => _TargetCanvasState();
@@ -123,10 +127,13 @@ class _TargetCanvasState extends State<TargetCanvas> {
   /// Где палец при перетаскивании пробоины (для лупы); `null` — палец не на мишени.
   Offset? _finger;
 
-  /// Увеличение лупы относительно текущего масштаба мишени — небольшое, чтобы
-  /// видеть окрестность под пальцем.
-  static const double _loupeMagnify = 2.2;
-  static const double _loupeSize = 140;
+  /// Идёт выстрел касанием (см. [TargetCanvas.addByTouch]).
+  bool _autoAdd = false;
+
+  /// Лупа всегда показывает ОДНО увеличение — шаг десятой доли ≈ 4,5 px, независимо от
+  /// ручного зума мишени (иначе зумы складывались и было непонятно, куда указываешь).
+  static const double _loupePxPerStep = 4.5;
+  static const double _loupeSize = 170;
 
   @override
   Widget build(BuildContext context) {
@@ -142,15 +149,50 @@ class _TargetCanvasState extends State<TargetCanvas> {
         // свой первый палец и потому не отличает долгое нажатие от
         // медленного пинча.
         return Listener(
-          onPointerDown: (_) {
+          onPointerDown: (e) {
             _activePointers++;
             _syncMultiTouch(vm);
+            if (!widget.addByTouch) return;
+            if (_activePointers == 1 && !vm.isEditing && vm.canEditShots && !vm.face.hitMiss) {
+              if (!vm.canAddShotNow) {
+                showPauseAddHint(context);
+                return;
+              }
+              vm.beginAddNew();
+              _autoAdd = vm.isEditing;
+              if (_autoAdd) {
+                _gestureOnCompass = false;
+                _applyEditDrag(e.localPosition, vm);
+                setState(() => _finger = e.localPosition);
+              }
+            } else if (_autoAdd && _activePointers >= 2) {
+              // Второй палец — это зум: выстрел не ставим.
+              _autoAdd = false;
+              vm.onTwoFingerGestureStarted();
+              setState(() => _finger = null);
+            }
+          },
+          onPointerMove: (e) {
+            if (_autoAdd && _activePointers == 1) {
+              _applyEditDrag(e.localPosition, vm);
+              setState(() => _finger = e.localPosition);
+            }
           },
           onPointerUp: (_) {
+            if (_autoAdd && _activePointers == 1) {
+              _autoAdd = false;
+              if (vm.isEditing && vm.isAddingNew) vm.confirmEdit();
+              setState(() => _finger = null);
+            }
             _activePointers = math.max(0, _activePointers - 1);
             _syncMultiTouch(vm);
           },
           onPointerCancel: (_) {
+            if (_autoAdd) {
+              _autoAdd = false;
+              vm.cancelEditing();
+              setState(() => _finger = null);
+            }
             _activePointers = math.max(0, _activePointers - 1);
             _syncMultiTouch(vm);
           },
@@ -229,10 +271,10 @@ class _TargetCanvasState extends State<TargetCanvas> {
       left = (toRight ? f.dx + gap : f.dx - d - gap).clamp(margin, math.max(margin, w - d - margin));
       top = (f.dy - d / 2).clamp(margin, math.max(margin, h - d - margin));
     }
-    // Масштаб лупы: радиус мишени в ней = радиус на экране × увеличение.
-    final mainRadius = _targetRadiusPx(vm);
-    final zoomL = mainRadius * _loupeMagnify / (d / 2);
-    final mmToPx = mainRadius * _loupeMagnify / vm.face.faceRadiusMm;
+    // Масштаб лупы фиксирован: шаг десятой доли = _loupePxPerStep пикселей.
+    final step = vm.face.decimalStepMm > 0 ? vm.face.decimalStepMm : 1.0;
+    final mmToPx = _loupePxPerStep / step;
+    final zoomL = mmToPx * vm.face.faceRadiusMm / (d / 2);
     final pan = Offset(-vm.draftXMm * mmToPx, vm.draftYMm * mmToPx); // черновой выстрел — в центре лупы
     return Positioned(
       left: left,
@@ -333,7 +375,7 @@ class _TargetCanvasState extends State<TargetCanvas> {
     // Один палец/курсор, идёт правка — сразу подхватываем пробоину под
     // точку касания, не дожидаясь порога сдвига для onUpdate. Режим
     // (компас или свободное XY) решается здесь и на весь жест.
-    if (vm.isEditing) {
+    if (vm.isEditing && !_autoAdd) {
       _gestureOnCompass = _isInCompassZone(details.localFocalPoint, vm);
       _applyEditDrag(details.localFocalPoint, vm);
       setState(() => _finger = _gestureOnCompass ? null : details.localFocalPoint);
@@ -354,7 +396,7 @@ class _TargetCanvasState extends State<TargetCanvas> {
       // +/-, по просьбе пользователя после первого прогона на реальном
       // устройстве). Работает и для новой, и для перемещаемой пробоины
       // (isAddingNew — без разницы, обе двигаются через draftX/Y).
-      if (vm.isEditing) {
+      if (vm.isEditing && !_autoAdd) {
         _applyEditDrag(details.localFocalPoint, vm);
         if (!_gestureOnCompass) setState(() => _finger = details.localFocalPoint);
       }
@@ -407,7 +449,7 @@ class _TargetCanvasState extends State<TargetCanvas> {
   // ---- Завершение жеста ----
 
   void _onScaleEnd() {
-    if (_finger != null) setState(() => _finger = null);
+    if (_finger != null && !_autoAdd) setState(() => _finger = null);
     _lastScaleDistance = null;
     _lastFocalPoint = null;
     _gestureStartFocal = null;
