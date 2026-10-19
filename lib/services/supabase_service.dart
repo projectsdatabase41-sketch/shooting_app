@@ -362,6 +362,7 @@ class SupabaseSyncService {
         // Явная ссылка на шаблон — в реальной схеме прямого внешнего
         // ключа exercises → exercise_templates нет (см. комментарий
         // класса), поэтому связь для pull храним сами.
+        'template_id': exercise.id,
         'extra': {'template_id': exercise.id},
       };
 
@@ -453,7 +454,7 @@ class SupabaseSyncService {
       final exerciseId = _resolveLocalExerciseId(store, child, faceCode);
       final sessionStart = _dateOrNull(packageRow['started_at']);
       final shots = [
-        for (final r in shotsByExercise[id] ?? const <Map<String, dynamic>>[])
+        for (final r in shotsByExercise['${child['id']}'] ?? const <Map<String, dynamic>>[])
           _shotFromRow(r, sessionStart),
       ]..sort((a, b) => a.shotNumber.compareTo(b.shotNumber));
 
@@ -532,7 +533,7 @@ class SupabaseSyncService {
   String _resolveLocalExerciseId(
       AppDataStore store, Map<String, dynamic> child, String faceCode) {
     final extra = extraFromJson(child['extra']);
-    final templateId = extra?['template_id'] as String?;
+    final templateId = (child['template_id'] ?? extra?['template_id']) as String?;
     if (templateId != null && store.exercises.any((e) => e.id == templateId)) {
       return templateId;
     }

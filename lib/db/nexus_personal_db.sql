@@ -24,7 +24,10 @@ begin
       'project_settings', 'target_faces', 'exercise_templates', 'training_packages',
       'exercises', 'file_assets', 'photo_import_jobs', 'shots', 'remote_athlete_sources',
       'archived_packages', 'share_grants', 'share_events', 'comments', 'training_notes',
-      'ai_conversation_summaries', 'notes', 'keepalive_log', 'table_docs'
+      'ai_conversation_summaries', 'notes', 'keepalive_log', 'table_docs',
+      'tasks', 'task_stages', 'task_steps', 'task_clarifications', 'task_runs', 'task_run_steps',
+      'task_shots', 'task_series_notes', 'task_events', 'task_reports', 'task_devices', 'coach_chat',
+      'devices', 'series', 'shot_samples'
     ]);
   if v_extra is not null then
     raise exception
@@ -763,9 +766,9 @@ extra describes what kind of shooting it was: {"event":{"kind":"championship","s
 kind: training | control | regional | championship | final.
 NOTE: the app does not read title and note yet - use a session-level comment for visible text.'),
   ('exercises', 'table', 'Snapshot of an exercise performed inside a package', 'NOT the exercise catalog - the catalog is exercise_templates.
-package_id is the training it belongs to. The link to the template is stored in
-extra.template_id; without it the app cannot match the training to the exercise during
-sync and creates a local duplicate.
+package_id is the training it belongs to; position orders several exercises inside one package.
+template_id is a real foreign key to the catalog; without it the app cannot match the training
+to the exercise during sync and creates a local duplicate. (extra.template_id is kept for older apps.)
 discipline = target_faces.code.'),
   ('exercise_templates', 'table', 'Exercise catalog (templates)', 'Look it up by name + target_face_id before inserting and REUSE it across
 trainings. Never create a new row per file - otherwise the history falls apart into a dozen
@@ -880,11 +883,10 @@ STEP 4. Write in this order (every row is an insert with a deterministic id,
       known, package_status = ''completed'' (only completed counts as a finished training in the app;
       draft/active show up as "not started"), time_is_approximate = true if the time was restored.
       extra: {"event":{"kind":"training"},"import":{"by":"<AI name>","source":"pdf|photo|csv"}}.
-  4.3 exercises - EXACTLY ONE row per package, and its id MUST EQUAL the package id (id = X,
-      package_id = X). Otherwise the app cannot find the shots (it looks them up by
-      exercise_id = package id) and the training arrives empty. Fields: exercise_name,
-      discipline = target code, distance_meters, target_face_id, decimal_scoring = true,
-      expected_shots.
+  4.3 exercises - one row per package for now (position = 1). Prefer id = package id (older apps
+      look shots up that way); the current app finds shots by the exercises row id. Fields:
+      template_id (the catalog row from 4.1), exercise_name, discipline = target code,
+      distance_meters, target_face_id, decimal_scoring = true, expected_shots.
   4.4 shots - exercise_id = X. shot_no runs 1..N through the whole exercise, series_no,
       final_score = the source result AS IS (do not recalculate from coordinates),
       reported_score = the same, x_mm / y_mm (Y positive upward), counts = false for sighting,
@@ -1120,6 +1122,121 @@ end;
 $$;
 
 grant execute on function link_coach_chat(text, text, text) to anon, authenticated;
+
+-- ########## 01b schema v2: links, checks, device layer  (sql/schema-v2.sql) ##########
+
+create table if not exists devices (
+  id           uuid primary key default gen_random_uuid(),
+  kind         text not null default 'other',
+  name         text not null,
+  serial       text,
+  firmware     text,
+  calibration  jsonb,
+  status       text not null default 'active',
+  extra        jsonb,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now()
+);
+alter table devices drop constraint if exists devices_kind_check;
+alter table devices add constraint devices_kind_check
+  check (kind in ('argus', 'trigger', 'target_system', 'other'));
+alter table devices drop constraint if exists devices_status_check;
+alter table devices add constraint devices_status_check
+  check (status in ('active', 'retired'));
+create unique index if not exists uq_devices_serial on devices (kind, serial) where serial is not null;
+
+alter table exercises add column if not exists template_id uuid references exercise_templates(id) on delete set null;
+alter table exercises add column if not exists position int not null default 1;
+
+update exercises
+   set template_id = (extra->>'template_id')::uuid
+ where template_id is null
+   and extra->>'template_id' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+   and exists (select 1 from exercise_templates t where t.id = (extra->>'template_id')::uuid);
+
+create unique index if not exists uq_exercises_package_position on exercises (package_id, position);
+create index if not exists idx_exercises_template on exercises (template_id);
+alter table exercises drop constraint if exists exercises_distance_check;
+alter table exercises add constraint exercises_distance_check check (distance_meters > 0);
+
+create table if not exists series (
+  id           uuid primary key default gen_random_uuid(),
+  exercise_id  uuid not null references exercises(id) on delete cascade,
+  series_no    int not null,
+  started_at   timestamptz,
+  ended_at     timestamptz,
+  note         text,
+  extra        jsonb,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),
+  unique (exercise_id, series_no)
+);
+
+alter table shots add column if not exists device_id uuid references devices(id) on delete set null;
+alter table shots add column if not exists shot_at timestamptz;
+create index if not exists idx_shots_exercise_no on shots (exercise_id, shot_no);
+create index if not exists idx_shots_device on shots (device_id) where device_id is not null;
+alter table shots drop constraint if exists shots_final_score_range;
+alter table shots add constraint shots_final_score_range check (final_score >= 0 and final_score <= 10.9);
+
+create table if not exists shot_samples (
+  id         uuid primary key default gen_random_uuid(),
+  shot_id    uuid not null references shots(id) on delete cascade,
+  device_id  uuid references devices(id) on delete set null,
+  channel    text not null,
+  rate_hz    numeric not null check (rate_hz > 0),
+  t0_ms      int not null default 0,
+  data       real[] not null,
+  extra      jsonb,
+  created_at timestamptz not null default now()
+);
+create unique index if not exists uq_shot_samples_channel
+  on shot_samples (shot_id, channel, coalesce(device_id, '00000000-0000-0000-0000-000000000000'::uuid));
+
+create index if not exists idx_packages_started on training_packages (started_at desc);
+create index if not exists idx_exercises_package on exercises (package_id);
+
+do $$
+declare t text;
+begin
+  foreach t in array array['devices', 'series', 'shot_samples'] loop
+    execute format('alter table %I enable row level security', t);
+    execute format('drop policy if exists "%1$s_owner_all" on %1$I', t);
+    execute format(
+      'create policy "%1$s_owner_all" on %1$I for all to authenticated using (is_project_owner()) with check (is_project_owner())',
+      t);
+    execute format('grant select, insert, update, delete on %I to authenticated', t);
+    execute format('revoke all on %I from anon', t);
+  end loop;
+  foreach t in array array['devices', 'series'] loop
+    execute format('drop trigger if exists touch_%1$s on %1$I', t);
+    execute format('create trigger touch_%1$s before update on %1$I for each row execute function touch_updated_at()', t);
+  end loop;
+end $$;
+
+insert into table_docs (entry_key, kind, title, body) values
+  ('devices', 'table', 'Hardware registry',
+'One row per physical device: Argus (kind = argus), smart trigger (trigger), target system (target_system) or anything else (other).
+calibration holds per-device calibration as a structure. Link data to a device through shots.device_id and
+shot_samples.device_id. The device layer is deliberately separate from the training tables: it can be extended or
+replaced without touching training_packages / exercises / shots.'),
+  ('series', 'table', 'Series of an exercise (optional)',
+'Optional per-series record: start/end time and a note. shots.series_no remains the key that groups shots;
+a row here only adds information. Unique per (exercise_id, series_no).'),
+  ('shot_samples', 'table', 'Raw sensor traces of a shot',
+'One row = one channel of one shot (for example accel_x, gyro_z, pulse, trigger_force). data is a real[] array of
+samples, rate_hz is the sampling rate, t0_ms is the offset of the first sample from the shot moment (negative =
+before the shot). Do NOT store one row per sample: hundreds of samples per shot would bloat the database.
+Derived numbers (peak force, sway amplitude) go to shots.extra.'),
+  ('rule:schema-v2', 'rule', 'Schema v2 changes',
+'exercises.template_id is a real foreign key to exercise_templates (extra.template_id is kept for compatibility).
+exercises.id no longer has to equal the package id: shots are found by exercise_id of the exercises row; exercises of one
+package are ordered by exercises.position (1, 2, ...). shots.final_score is limited to 0..10.9. shots.device_id and
+shots.shot_at (absolute time) are optional. New tables: devices, series, shot_samples.')
+on conflict (entry_key) do update
+  set kind = excluded.kind, title = excluded.title, body = excluded.body, updated_at = now();
+
+notify pgrst, 'reload schema';
 
 -- ########## 02 coach token policies  (sql/share-policy.sql) ##########
 
@@ -1628,7 +1745,7 @@ grant execute on function link_coach_chat(text, text, text) to anon, authenticat
 -- ============================== final check ==============================
 select 'table' as kind, n as name, exists (select 1 from information_schema.tables
        where table_schema = 'public' and table_name = n) as present
-from unnest(array['project_settings', 'target_faces', 'exercise_templates', 'training_packages', 'exercises', 'file_assets', 'photo_import_jobs', 'shots', 'remote_athlete_sources', 'archived_packages', 'share_grants', 'share_events', 'comments', 'training_notes', 'ai_conversation_summaries', 'notes', 'keepalive_log', 'table_docs', 'tasks', 'task_stages', 'task_steps', 'task_clarifications', 'task_runs', 'task_run_steps', 'task_shots', 'task_series_notes', 'task_events', 'task_reports', 'task_devices', 'coach_chat']) as n
+from unnest(array['project_settings', 'target_faces', 'exercise_templates', 'training_packages', 'exercises', 'file_assets', 'photo_import_jobs', 'shots', 'remote_athlete_sources', 'archived_packages', 'share_grants', 'share_events', 'comments', 'training_notes', 'ai_conversation_summaries', 'notes', 'keepalive_log', 'table_docs', 'tasks', 'task_stages', 'task_steps', 'task_clarifications', 'task_runs', 'task_run_steps', 'task_shots', 'task_series_notes', 'task_events', 'task_reports', 'task_devices', 'coach_chat', 'devices', 'series', 'shot_samples']) as n
 union all
 select 'function', n, exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace
        where s.nspname = 'public' and p.proname = n)

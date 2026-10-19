@@ -53,7 +53,10 @@ begin
       'project_settings', 'target_faces', 'exercise_templates', 'training_packages',
       'exercises', 'file_assets', 'photo_import_jobs', 'shots', 'remote_athlete_sources',
       'archived_packages', 'share_grants', 'share_events', 'comments', 'training_notes',
-      'ai_conversation_summaries', 'notes', 'keepalive_log', 'table_docs'
+      'ai_conversation_summaries', 'notes', 'keepalive_log', 'table_docs',
+      'tasks', 'task_stages', 'task_steps', 'task_clarifications', 'task_runs', 'task_run_steps',
+      'task_shots', 'task_series_notes', 'task_events', 'task_reports', 'task_devices', 'coach_chat',
+      'devices', 'series', 'shot_samples'
     ]);
   if v_extra is not null then
     raise exception

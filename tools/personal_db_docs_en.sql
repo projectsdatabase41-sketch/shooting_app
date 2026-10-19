@@ -14,9 +14,9 @@ extra describes what kind of shooting it was: {"event":{"kind":"championship","s
 kind: training | control | regional | championship | final.
 NOTE: the app does not read title and note yet - use a session-level comment for visible text.'),
   ('exercises', 'table', 'Snapshot of an exercise performed inside a package', 'NOT the exercise catalog - the catalog is exercise_templates.
-package_id is the training it belongs to. The link to the template is stored in
-extra.template_id; without it the app cannot match the training to the exercise during
-sync and creates a local duplicate.
+package_id is the training it belongs to; position orders several exercises inside one package.
+template_id is a real foreign key to the catalog; without it the app cannot match the training
+to the exercise during sync and creates a local duplicate. (extra.template_id is kept for older apps.)
 discipline = target_faces.code.'),
   ('exercise_templates', 'table', 'Exercise catalog (templates)', 'Look it up by name + target_face_id before inserting and REUSE it across
 trainings. Never create a new row per file - otherwise the history falls apart into a dozen
@@ -131,11 +131,10 @@ STEP 4. Write in this order (every row is an insert with a deterministic id,
       known, package_status = ''completed'' (only completed counts as a finished training in the app;
       draft/active show up as "not started"), time_is_approximate = true if the time was restored.
       extra: {"event":{"kind":"training"},"import":{"by":"<AI name>","source":"pdf|photo|csv"}}.
-  4.3 exercises - EXACTLY ONE row per package, and its id MUST EQUAL the package id (id = X,
-      package_id = X). Otherwise the app cannot find the shots (it looks them up by
-      exercise_id = package id) and the training arrives empty. Fields: exercise_name,
-      discipline = target code, distance_meters, target_face_id, decimal_scoring = true,
-      expected_shots.
+  4.3 exercises - one row per package for now (position = 1). Prefer id = package id (older apps
+      look shots up that way); the current app finds shots by the exercises row id. Fields:
+      template_id (the catalog row from 4.1), exercise_name, discipline = target code,
+      distance_meters, target_face_id, decimal_scoring = true, expected_shots.
   4.4 shots - exercise_id = X. shot_no runs 1..N through the whole exercise, series_no,
       final_score = the source result AS IS (do not recalculate from coordinates),
       reported_score = the same, x_mm / y_mm (Y positive upward), counts = false for sighting,
