@@ -16,10 +16,17 @@ class AppBackdrop extends StatelessWidget {
   Widget build(BuildContext context) {
     final b = Theme.of(context).brightness;
     return Stack(fit: StackFit.expand, children: [
-      Image.asset(path(kind, b),
-          fit: BoxFit.cover,
-          gaplessPlayback: true,
-          errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+      // Широкий экран: колонка приложения уже окна — картинку растягиваем на всё окно
+      // (по центру), чтобы она бесшовно продолжалась на боковых полях (см. main.dart).
+      OverflowBox(
+        minWidth: MediaQuery.sizeOf(context).width,
+        maxWidth: MediaQuery.sizeOf(context).width,
+        child: Image.asset(path(kind, b),
+            width: MediaQuery.sizeOf(context).width,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+            errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+      ),
       child,
     ]);
   }

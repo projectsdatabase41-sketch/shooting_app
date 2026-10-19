@@ -4,6 +4,7 @@ import 'theme/app_transitions.dart';
 import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
+import 'widgets/app_backdrop.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'logic/ai_context.dart';
@@ -435,14 +436,19 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
                         child: LayoutBuilder(
                           builder: (ctx, box) => box.maxWidth <= 1100
                               ? (child ?? const SizedBox.shrink())
+                              // Фон — на всё окно, плитки и экраны — в колонке по центру.
                               : ColoredBox(
                                   color: Theme.of(ctx).scaffoldBackgroundColor,
-                                  child: Center(
-                                    child: ConstrainedBox(
-                                      constraints: const BoxConstraints(maxWidth: 1100),
-                                      child: child ?? const SizedBox.shrink(),
+                                  child: Stack(fit: StackFit.expand, children: [
+                                    Image.asset(AppBackdrop.path('home', Theme.of(ctx).brightness),
+                                        fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                                    Center(
+                                      child: ConstrainedBox(
+                                        constraints: const BoxConstraints(maxWidth: 1100),
+                                        child: child ?? const SizedBox.shrink(),
+                                      ),
                                     ),
-                                  ),
+                                  ]),
                                 ),
                         )),
                   ),

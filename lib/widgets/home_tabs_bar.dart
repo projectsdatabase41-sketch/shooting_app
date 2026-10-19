@@ -420,9 +420,16 @@ class _HomeTileGridState extends State<HomeTileGrid> {
   // Меньше плитка (больше колонок при зуме) — меньше значок, а подпись при
   // 4+ колонках вовсе не помещается разборчиво (решение пользователя:
   // убрать текст совсем, а не переносить его на две строки).
-  double get _tileIconSize =>
-      switch (_crossAxisCount) { <= 2 => 40.0, 3 => 32.0, _ => 26.0 };
-  bool get _showTileLabel => _crossAxisCount <= 3;
+  // Ноутбук (экран шире 600 px): размер значка и подпись — по реальному размеру
+  // плитки, а не по числу колонок (иначе на широком экране значки мелкие и без текста).
+  double _tilePx = 0;
+  bool _wide = false;
+  double get _tileIconSize {
+    final byCols = switch (_crossAxisCount) { <= 2 => 40.0, 3 => 32.0, _ => 26.0 };
+    return _wide ? math.max(byCols, math.min(_tilePx * 0.34, 64.0)) : byCols;
+  }
+
+  bool get _showTileLabel => _crossAxisCount <= 3 || (_wide && _tilePx >= 100);
 
   /// Куда встанет каждая плитка, если отпустить ПРЯМО СЕЙЧАС — та же
   /// поправка на индекс, что и в `HomeTabsViewModel.move` (иначе
@@ -457,6 +464,7 @@ class _HomeTileGridState extends State<HomeTileGrid> {
     final ids = widget.vm.visible;
     final preview = _previewOrder(ids);
     final screenW = MediaQuery.sizeOf(context).width;
+    _wide = screenW > 600;
     _effCols = math.max(widget.vm.tileColumns, (screenW / widget.vm.tileMaxPx).ceil()).clamp(2, 10);
     final rows = (ids.length / _crossAxisCount).ceil();
 
@@ -471,6 +479,7 @@ class _HomeTileGridState extends State<HomeTileGrid> {
                   _padding * 2 -
                   _spacing * (_crossAxisCount - 1)) /
               _crossAxisCount;
+          _tilePx = tileSize;
           final gaps = rows > 0 ? rows - 1 : 0;
           final contentHeight =
               _padding * 2 + rows * tileSize + gaps * _spacing;
