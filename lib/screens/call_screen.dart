@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../widgets/selfie_light.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:uuid/uuid.dart';
@@ -35,6 +36,7 @@ class CallScreen extends StatefulWidget {
 
 class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateMixin {
   late CallSession s = widget.session;
+  final _light = SelfieLightState(); // подсветка экрана при съёмке на фронтальную камеру
   late final AnimationController _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))
     ..repeat();
   Timer? _tick;
@@ -121,6 +123,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     _tick?.cancel();
     _autoClose?.cancel();
     _pulse.dispose();
+    _light.dispose();
     s.removeListener(_onChange);
     if (CallSession.current == s && s.isEnded) CallSession.current = null;
     s.dispose();
@@ -240,6 +243,10 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
         if (s.video) ...[
           _button(s.cameraOff ? Icons.videocam_off : Icons.videocam_outlined, tr('Камера'), s.toggleCamera, on: s.cameraOff),
           _button(Icons.cameraswitch_outlined, tr('Сменить'), s.switchCamera),
+          // Задняя камера — фонарик; фронтальная — подсветка экрана (яркость, теплота, RGB).
+          _button(s.frontCamera ? Icons.wb_incandescent_outlined : (s.torchOn ? Icons.flashlight_on : Icons.flashlight_off), tr('Свет'),
+              () => s.frontCamera ? showSelfieLightSheet(context, _light) : s.toggleTorch(),
+              on: s.frontCamera ? _light.on : s.torchOn),
         ],
         _button(Icons.call_end, tr('Завершить'), s.hangUp, color: const Color(0xFFE53935)),
       ],
@@ -266,6 +273,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
             children: [
               if (remoteVideo)
                 RTCVideoView(s.remoteRenderer, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
+              if (s.video && s.frontCamera) SelfieLightOverlay(light: _light),
               SafeArea(
                 child: Column(
                   children: [

@@ -38,7 +38,6 @@ class _FinalsScreenState extends State<FinalsScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
-        leading: const SizedBox.shrink(),
         title: Text(tr('Финалы'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
       ),
       body: ListView(

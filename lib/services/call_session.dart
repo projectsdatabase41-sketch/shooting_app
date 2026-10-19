@@ -82,6 +82,8 @@ class CallSession extends ChangeNotifier {
   bool muted = false;
   bool speaker = false;
   bool cameraOff = false;
+  bool frontCamera = true;
+  bool torchOn = false; // фонарик (только задняя камера)
   bool remoteVideo = false;
 
   /// Разговор состоялся (дошли до «активен») и его длительность.
@@ -376,6 +378,21 @@ class CallSession extends ChangeNotifier {
   Future<void> switchCamera() async {
     final tracks = _local?.getVideoTracks() ?? const <MediaStreamTrack>[];
     if (tracks.isNotEmpty) await Helper.switchCamera(tracks.first);
+    frontCamera = !frontCamera;
+    torchOn = false;
+    notifyListeners();
+  }
+
+  /// Фонарик на задней камере.
+  Future<void> toggleTorch() async {
+    if (frontCamera) return;
+    final tracks = _local?.getVideoTracks() ?? const <MediaStreamTrack>[];
+    if (tracks.isEmpty) return;
+    try {
+      await tracks.first.setTorch(!torchOn);
+      torchOn = !torchOn;
+    } catch (_) {}
+    notifyListeners();
   }
 
   Future<void> setSpeaker(bool on) async {

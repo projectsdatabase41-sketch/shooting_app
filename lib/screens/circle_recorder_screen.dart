@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../widgets/selfie_light.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -35,6 +36,23 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
   String? _error;
   bool _recording = false;
   bool _finishing = false;
+  final _light = SelfieLightState();
+  bool _torch = false;
+  bool get _isFront => _cameras.isNotEmpty && _cameras[_camIndex].lensDirection == CameraLensDirection.front;
+
+  Future<void> _toggleLight() async {
+    if (_isFront) {
+      await showSelfieLightSheet(context, _light);
+      return;
+    }
+    final c = _controller;
+    if (c == null) return;
+    try {
+      await c.setFlashMode(_torch ? FlashMode.off : FlashMode.torch);
+      setState(() => _torch = !_torch);
+    } catch (_) {}
+  }
+
   bool _switching = false; // идёт смена камеры — картинку прячем, чтобы не мелькал кадр «вверх ногами»
   int _elapsed = 0;
   Timer? _ticker;
@@ -78,7 +96,10 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
     if (_cameras.length < 2) return;
     final next = (_camIndex + 1) % _cameras.length;
     _camIndex = next;
-    setState(() => _switching = true);
+    setState(() {
+      _switching = true;
+      _torch = false;
+    });
     try {
       final c = _controller;
       if (_recording && c != null) {
@@ -134,6 +155,7 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
   void dispose() {
     _ticker?.cancel();
     _controller?.dispose();
+    _light.dispose();
     super.dispose();
   }
 
@@ -143,7 +165,10 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
     final d = (MediaQuery.sizeOf(context).shortestSide * 0.82).clamp(200.0, 360.0);
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SafeArea(
+      body: Stack(fit: StackFit.expand, children: [
+        // подсветка экрана по краям (фронтальная камера) — под интерфейсом
+        SelfieLightOverlay(light: _light),
+        SafeArea(
         child: _error != null
             ? Center(
                 child: Padding(
@@ -250,12 +275,20 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
                           tooltip: tr('Сменить камеру'),
                           onTap: _cameras.length < 2 ? null : _flip,
                         ),
+                        // Свет: задняя камера — фонарик, фронтальная — подсветка экрана.
+                        GlassCircleButton(
+                          size: 52,
+                          icon: Icon(_isFront ? Icons.wb_incandescent_outlined : (_torch ? Icons.flashlight_on : Icons.flashlight_off)),
+                          tooltip: tr('Свет'),
+                          onTap: _toggleLight,
+                        ),
                       ],
                     ),
                   ),
                 ],
               ),
       ),
+      ]),
     );
   }
 }
