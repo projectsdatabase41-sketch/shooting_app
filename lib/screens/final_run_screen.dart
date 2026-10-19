@@ -608,7 +608,7 @@ class _BotCard extends StatelessWidget {
                     last == null ? const [] : [Offset(last.x, last.y)],
                     ghosts: [
                       for (final g in c.sightShots[bot.id] ?? const <(double, double)>[]) Offset(g.$1, g.$2),
-                      for (final g in mine.take(mine.length - 1)) Offset(g.x, g.y),
+                      for (final g in mine.take(math.max(0, mine.length - 1))) Offset(g.x, g.y),
                     ],
                     k: k,
                     center: Offset(box.maxWidth / 2, box.maxHeight / 2),
