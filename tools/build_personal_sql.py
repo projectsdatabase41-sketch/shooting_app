@@ -1,30 +1,59 @@
-"""Собирает единый установочный SQL личной базы спортсмена: lib/db/nexus_personal_db.sql.
+"""Builds the single install SQL for an athlete's personal database: lib/db/nexus_personal_db.sql.
 
-Запуск из корня репозитория:  python tools/build_personal_sql.py
+Run from the repository root:  python tools/build_personal_sql.py
 
-Состав (порядок важен: tasks.sql ссылается на share_grants из puls_install):
-  1. lib/db/puls_install.sql  — тренировки, защита, notes с эмбеддингами, table_docs, проверка
-  2. sql/share-policy.sql     — политики токена тренера (basic / extended)
-  3. sql/tasks.sql            — задания тренера
-  4. sql/task-delete.sql      — удаление заданий тренером
-  5. sql/coach-chat.sql       — чат тренер ↔ спортсмен
-  6. sql/coach-chat-link.sql  — связь токена тренера с мессенджером
-  + итоговая проверка: список «что должно быть» → ok / нет.
+Parts (order matters: tasks.sql references share_grants from puls_install):
+  1. lib/db/puls_install.sql  - training data, protection, notes with embeddings, table_docs
+  2. sql/share-policy.sql     - coach token policies (basic / extended)
+  3. sql/tasks.sql            - coach tasks
+  4. sql/task-delete.sql      - task deletion by the coach
+  5. sql/coach-chat.sql       - coach <-> athlete chat
+  6. sql/coach-chat-link.sql  - link between the coach token and the messenger
+  + final self-check query (what should exist -> present true/false).
 
-Всё идемпотентно (create ... if not exists / create or replace): повторный запуск
-после сбоя безопасен. Приложение копирует этот файл кнопкой «Скопировать SQL» и
-проверяет результат на экране «Проверка базы» (lib/services/db_setup_check.dart —
-список таблиц и функций там должен совпадать с проверкой внизу этого файла).
+Output is English-only: source comments are stripped with a SQL tokenizer (tools/_strip.py;
+strings, quoted identifiers and dollar quotes are preserved), Russian literals are replaced,
+and the AI-facing documentation comes from tools/personal_db_docs_en.sql. Everything is
+idempotent (create ... if not exists / create or replace): re-running after a failure is
+safe. The app copies this file with the "Copy SQL" button and checks the result on the
+"Database check" screen (lib/services/db_setup_check.dart - its table/function lists must
+match TABLES / FUNCTIONS below).
 """
 import os
+import re
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _strip import strip
 
 PARTS = [
-    ('01 основная схема, защита, заметки, инструкции ИИ', 'lib/db/puls_install.sql'),
-    ('02 политики токена тренера', 'sql/share-policy.sql'),
-    ('03 задания тренера', 'sql/tasks.sql'),
-    ('04 удаление заданий', 'sql/task-delete.sql'),
-    ('05 чат тренер ↔ спортсмен', 'sql/coach-chat.sql'),
-    ('06 связь токена тренера с мессенджером', 'sql/coach-chat-link.sql'),
+    ('01 core schema, protection, notes, AI instructions', 'lib/db/puls_install.sql'),
+    ('02 coach token policies', 'sql/share-policy.sql'),
+    ('03 coach tasks', 'sql/tasks.sql'),
+    ('04 task deletion', 'sql/task-delete.sql'),
+    ('05 coach <-> athlete chat', 'sql/coach-chat.sql'),
+    ('06 coach token <-> messenger link', 'sql/coach-chat-link.sql'),
+]
+
+# Russian literals in code -> English; each must occur exactly once in puls_install.sql.
+REPLACEMENTS = [
+    ("'Установка рассчитана на ПУСТОЙ проект Supabase. В схеме public уже есть посторонние таблицы: %. Ничего не изменено. Создайте новый проект (или уберите эти таблицы), затем запустите файл снова.'",
+     "'This installer is meant for an EMPTY Supabase project. The public schema already contains foreign tables: %. Nothing was changed. Create a new project (or remove those tables), then run the file again.'"),
+    ("'№ 8, пневматическая винтовка 10 м'", "'No. 8, 10 m air rifle'"),
+    ("'№ 9, пневматический пистолет 10 м'", "'No. 9, 10 m air pistol'"),
+    ("'№ 7, малокалиберная винтовка 50 м'", "'No. 7, 50 m small-bore rifle'"),
+    ("'№ 4, пистолет 25 м'", "'No. 4, 25 m pistol'"),
+    ("'Пример: как записана заметка'", "'Example: how a note is stored'"),
+    ("'Кратко: тема + суть + теги. Подробный текст можно оставить пустым.'",
+     "'In short: topic + summary + tags. The detailed text may stay empty.'"),
+    ("'Пример: подробная заметка'", "'Example: a detailed note'"),
+    ("'Заметка с длинным текстом в поле content.'", "'A note with a long text in the content field.'"),
+    ("'Здесь может быть любой длинный текст: разбор тренировки, выписка из правил, мысли после стрельбы. '",
+     "'Any long text can go here: a training review, a rules excerpt, thoughts after shooting. '"),
+    ("'Встроенный ассистент ищет по полям topic, summary, content и показывает теги и дату записи.'",
+     "'The built-in assistant searches the topic, summary and content fields and shows tags and the entry date.'"),
+    ("'пример',\n       array['пример', 'структура']", "'example',\n       array['example', 'structure']"),
+    ("'пример',\n       array['пример', 'разбор']", "'example',\n       array['example', 'review']"),
 ]
 
 TABLES = [
@@ -41,12 +70,13 @@ FUNCTIONS = [
 ]
 
 HEADER = """-- ============================================================================
--- nexus_personal_db.sql — ПОЛНАЯ установка личной базы Nexus ОДНИМ файлом.
--- Собрано tools/build_personal_sql.py — руками не править (правьте исходные файлы).
+-- nexus_personal_db.sql - FULL install of a personal Nexus database in ONE file.
+-- Generated by tools/build_personal_sql.py - do not edit by hand (edit the sources).
 --
--- Как использовать: Supabase → SQL Editor → New query → вставить ВЕСЬ файл → Run.
--- Идемпотентно: если запуск прервался или вы запустили второй раз — просто запустите
--- ещё раз, существующее не пострадает. В конце — таблица «что / есть ли».
+-- How to use: Supabase -> SQL Editor -> New query -> paste the WHOLE file -> Run.
+-- Idempotent: if the run was interrupted, or you run it a second time, just run it
+-- again - existing objects are left intact. The last result is a "kind / name / present" table.
+-- Meant for an EMPTY Supabase project (it refuses to run next to foreign tables).
 -- ============================================================================
 
 """
@@ -57,27 +87,51 @@ def verify():
     f = ', '.join(f"'{x}'" for x in FUNCTIONS)
     return f"""
 
--- ============================== итоговая проверка ==============================
-select 'таблица' as что, n as имя, exists (select 1 from information_schema.tables
-       where table_schema = 'public' and table_name = n) as есть
+-- ============================== final check ==============================
+select 'table' as kind, n as name, exists (select 1 from information_schema.tables
+       where table_schema = 'public' and table_name = n) as present
 from unnest(array[{t}]) as n
 union all
-select 'функция', n, exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace
+select 'function', n, exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace
        where s.nspname = 'public' and p.proname = n)
 from unnest(array[{f}]) as n
 order by 1, 3, 2;
 """
 
 
+def english_install(raw):
+    """puls_install.sql: swap Russian literals and the docs / view / self-check blocks."""
+    s = strip(raw)
+    for old, new in REPLACEMENTS:
+        if s.count(old) != 1:
+            raise SystemExit('literal not found exactly once: ' + old[:50])
+        s = s.replace(old, new)
+    with open('tools/personal_db_docs_en.sql', encoding='utf-8') as f:
+        en = strip(f.read()).strip() + '\n'
+    i_view = en.index('create or replace view table_protection')
+    i_chk = en.index('with required_tables')
+    docs, view, chk = en[:i_view], en[i_view:i_chk], en[i_chk:]
+    a = s.index('comment on table table_docs')
+    end_view = s.index('order by c.relname;') + len('order by c.relname;')
+    d = s.index('with required_tables')
+    e = s.index('order by n;', d) + len('order by n;')
+    return s[:a] + docs + view.rstrip() + s[end_view:d] + chk.rstrip() + s[e:]
+
+
 def main():
     out = [HEADER]
     for title, path in PARTS:
         with open(path, encoding='utf-8') as f:
-            body = f.read().rstrip() + '\n'
-        out.append(f"\n-- ########## {title}  ({path}) ##########\n\n{body}")
+            raw = f.read()
+        body = english_install(raw) if path.endswith('puls_install.sql') else strip(raw).replace("'Задание'", "'Task'")
+        out.append(f"\n-- ########## {title}  ({path}) ##########\n\n{body.strip()}\n")
     out.append(verify())
+    text = ''.join(out)
+    left = [l for l in text.split('\n') if re.search('[А-Яа-яЁё]', l)]
+    if left:
+        raise SystemExit('Cyrillic left:\n' + '\n'.join(left[:20]))
     with open('lib/db/nexus_personal_db.sql', 'w', encoding='utf-8', newline='\n') as f:
-        f.write(''.join(out))
+        f.write(text)
     print('ok', os.path.getsize('lib/db/nexus_personal_db.sql'), 'bytes')
 
 
