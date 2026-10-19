@@ -546,7 +546,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     // «Режим низа»: следуем за новыми сообщениями, пока нижнее сообщение у
     // нижнего края; сместили примерно на пол-экрана — слежение отключается.
     final first = pos.where((p) => p.index == 0).firstOrNull;
-    _atBottom = lo <= 0 && (first == null || first.itemLeadingEdge < 0.45);
+    _atBottom = lo <= 0 && (first == null || first.itemLeadingEdge < 0.45 + _endAlignment);
     if (_atBottom) _newBelow.value = 0;
     if (_translateVisibleCount >= _messages.length) return;
     if (hi >= _messages.length - 4) {
@@ -692,12 +692,21 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   final List<Timer> _scrollTimers = [];
 
+  /// Нижний отступ ленты (поле ввода + запас) как доля высоты экрана. Позиция «в самом
+  /// низу» должна учитывать его: без alignment лента ставит сообщение к самому краю
+  /// окна, а отступ уходит за экран — и последнее сообщение оказывается под полем ввода.
+  double get _endAlignment {
+    final h = MediaQuery.sizeOf(context).height;
+    return h <= 0 ? 0 : ((_barHeight + 36) / h).clamp(0.0, 0.5);
+  }
+
   void _scrollToEnd() {
     _newBelow.value = 0;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_itemCtl.isAttached) {
         _itemCtl.scrollTo(
             index: 0,
+            alignment: _endAlignment,
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOut);
       }
@@ -713,7 +722,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         if (!mounted || !_itemCtl.isAttached) return;
         // не у самого низа (пузырь дорос позже, подтянулось фото) — ставим прыжком
         final first = _itemPos.itemPositions.value.where((p) => p.index == 0).firstOrNull;
-        if (first == null || first.itemLeadingEdge > 0.01) _itemCtl.jumpTo(index: 0);
+        if (first == null || (first.itemLeadingEdge - _endAlignment).abs() > 0.01) {
+          _itemCtl.jumpTo(index: 0, alignment: _endAlignment);
+        }
       }));
     }
   }
