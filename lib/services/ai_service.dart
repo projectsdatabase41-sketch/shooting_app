@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:http/http.dart' as http;
 
 import '../i18n/i18n.dart';
-import '../local_ai/local_ai.dart';
 import 'ai_settings.dart';
 
 /// Ответ модели: текст плюс, если был, разобранный блок графика или
@@ -208,66 +207,17 @@ class AiService {
             'UI language: "${I18n.code}" — reply in it unless the user writes in another language.');
     }
 
-    // Сначала локальная модель (если включена для этой задачи); её ответ
-    // проверяется так же, как его потом разберёт вызывающий код, — не
-    // прошёл проверку, идём в облако.
-    final check =
-        accept ?? (json ? _looksLikeJson : (String t) => t.trim().isNotEmpty);
-    final local = LocalAi.instance;
     // Ручной выбор модели в чате (AiSettings.chatModelChoice) — только для
-    // task == 'chat' и только если выбор не 'auto': тогда обычное поведение
-    // ниже (wants()/models по очереди), как для всех остальных задач.
-    // 'local' — форсирует локальную МИМО wants() (не спрашивает разрешения
-    // у localMode); конкретный id — конкретная облачная модель без
-    // перебора остальных.
+    // task == 'chat'; конкретный id — конкретная облачная модель без перебора.
     final chatChoice = task == 'chat' ? settings.chatModelChoice : 'auto';
-    if (chatChoice == 'local') {
-      final text = await local.tryRun(
-        settings,
-        task: 'chat',
-        system: system.toString(),
-        history: history,
-        json: json,
-        accept: check,
-        image: image,
-      );
-      if (text != null) {
-        try {
-          return _parse(text, null, 'локальная: ${settings.localModelId}');
-        } on AiException {
-          // разобрать не вышло — пусть ответит облако (запасной путь ниже)
-        }
-      }
-    } else if (chatChoice != 'auto') {
-      final reply = await _askCloud(system.toString(), history,
+    if (chatChoice != 'auto' && chatChoice != 'local') {
+      return _askCloud(system.toString(), history,
           onlyModel: chatChoice, image: image, rotateKeys: rotateKeys);
-      local.learn(settings, 'chat', history, reply.text);
-      return reply;
-    } else if (local.wants(settings, task)) {
-      final text = await local.tryRun(
-        settings,
-        task: task!,
-        system: system.toString(),
-        history: history,
-        json: json,
-        accept: check,
-      );
-      if (text != null) {
-        try {
-          return _parse(text, null, 'локальная: ${settings.localModelId}');
-        } on AiException {
-          // разобрать не вышло — пусть ответит облако
-        }
-      }
     }
-
-    final reply = await _askCloud(system.toString(), history,
+    return _askCloud(system.toString(), history,
         image: image,
         rotateKeys: rotateKeys,
         preferReasoning: preferReasoning);
-    if (task != null && check(reply.text))
-      local.learn(settings, task, history, reply.text);
-    return reply;
   }
 
   static final RegExp _reasoningId = RegExp(
@@ -359,18 +309,6 @@ class AiService {
     }
     bool cool(String k) => (_coolUntil[k]?.isAfter(now)) ?? false;
     return [...ordered.where((k) => !cool(k)), ...ordered.where(cool)];
-  }
-
-  static bool _looksLikeJson(String text) {
-    var t = text.trim();
-    final fence = RegExp(r'^```\w*\s*([\s\S]*?)```$').firstMatch(t);
-    if (fence != null) t = fence.group(1)!.trim();
-    try {
-      jsonDecode(t);
-      return true;
-    } catch (_) {
-      return false;
-    }
   }
 
   /// [onlyModel] — не перебирать список моделей, попробовать только эту

@@ -68,7 +68,6 @@ dependencies:
   flutter_colorpicker: ^1.1.0
   web_socket_channel: ^3.0.3
   flutter_webrtc: ^1.6.2+hotfix.3
-  llamadart: ^0.8.24
   background_downloader: ">=9.5.9 <9.6.0"
   emoji_picker_flutter: ^4.5.4
   web: ^1.1.1
@@ -129,15 +128,3 @@ flutter_launcher_icons:
     image_path: "assets/icon/nexus_icon_dark.png"
     background_color: "#1a202c"
     theme_color: "#1a202c"
-
-# Локальная модель ИИ (lib/local_ai/): только llama.cpp, без второго движка
-# LiteRT и без CUDA — иначе сборка под Windows тянет лишние сотни мегабайт.
-hooks:
-  user_defines:
-    llamadart:
-      llamadart_native_runtimes:
-        runtimes: [llama_cpp]
-      llamadart_native_backends:
-        platforms:
-          windows-x64: [cpu, vulkan]
-          linux-x64: [cpu, vulkan]

@@ -7,21 +7,13 @@ import 'package:flutter/foundation.dart'
     show compute, defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
-import 'package:provider/provider.dart';
 
-import '../local_ai/local_ai.dart';
-import '../local_ai/local_ai_catalog.dart';
-import '../local_ai/local_ai_platform.dart';
-import '../local_ai/local_vision.dart';
 import '../logic/scoring.dart';
 import '../logic/shot_photo_detection.dart';
 import '../models/target_face.dart';
-import '../services/ai_settings.dart';
 import '../services/shot_photo_service.dart';
-import '../state/app_data_store.dart';
 import '../widgets/glass_pill.dart';
 import 'camera_scan_screen.dart';
-import 'shot_review_screen.dart';
 import '../i18n/i18n.dart';
 
 /// Функции для `compute()` — обязаны быть верхнеуровневыми: изолят видит
@@ -137,13 +129,6 @@ class PhotoScanScreen extends StatefulWidget {
 
 class _PhotoScanScreenState extends State<PhotoScanScreen>
     with WidgetsBindingObserver {
-  /// ИИ смотрит на фото — «назад» и сворачивание прерывают, а не уходят.
-  bool _visionRunning = false;
-
-  /// Участок ИСХОДНОГО фото (пиксели), который сейчас разбирает модель —
-  /// только пока идёт сам анализ, см. `_runVision`/`_ScanningOverlay`.
-  Rect? _visionCropRect;
-
   @override
   void initState() {
     super.initState();
@@ -153,17 +138,7 @@ class _PhotoScanScreenState extends State<PhotoScanScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    if (_visionRunning) LocalAi.instance.cancel();
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (_visionRunning &&
-        (state == AppLifecycleState.paused ||
-            state == AppLifecycleState.hidden)) {
-      LocalAi.instance.cancel();
-    }
   }
 
   Uint8List? _bytes;
@@ -321,45 +296,6 @@ class _PhotoScanScreenState extends State<PhotoScanScreen>
     await _runDetection();
   }
 
-  /// Спрашиваем один раз за запуск приложения: разбор фото моделью «со
-  /// зрением» — самая тяжёлая нагрузка на CPU из всего, что делает
-  /// приложение, и на слабом по ОЗУ устройстве реально роняет его
-  /// (жалоба пользователя: зависание, еле открывается «назад», потом
-  /// вылет) — не баг конкретно фото, а нехватка памяти под саму модель.
-  /// `true` — работаем моделью как обычно, `false` — обычный алгоритм.
-  static bool _ramWarned = false;
-  Future<bool> _confirmRamOk(LocalModelInfo vision) async {
-    if (_ramWarned) return true;
-    final ram = await totalRamBytes();
-    if (ram == null || vision.minRamGb <= ram / 1e9 + 0.5)
-      return true; // хватает — не спрашиваем
-    _ramWarned = true;
-    if (!mounted) return true;
-    final proceed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(tr('Может не хватить памяти')),
-        content: Text(tr(
-          'Модели «{name}» нужно от {min} ГБ ОЗУ, у устройства примерно {have} ГБ — распознавание может надолго зависнуть или приложение закроется. Можно продолжить или воспользоваться обычным алгоритмом (быстрее, но менее точен на сложных фото).',
-          {
-            'name': vision.name,
-            'min': vision.minRamGb,
-            'have': (ram / 1e9).toStringAsFixed(1)
-          },
-        )),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: Text(tr('Обычный алгоритм'))),
-          FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: Text(tr('Всё равно ИИ'))),
-        ],
-      ),
-    );
-    return proceed ?? false;
-  }
-
   Future<void> _runDetection() async {
     final decoded = _decoded;
     final center = _calibCenter;
@@ -368,39 +304,6 @@ class _PhotoScanScreenState extends State<PhotoScanScreen>
       _busy = true;
       _error = null;
     });
-    // Режим разработчика + скачанная модель «со зрением» — пробоины ищет она
-    // (обычный алгоритм путает цифры колец с пробоинами). Сбой — алгоритм.
-    var vision =
-        await LocalVision.active(AiSettings(context.read<AppDataStore>().db));
-    if (vision != null && !await _confirmRamOk(vision))
-      vision = null; // отказался — обычный алгоритм
-    if (vision != null) {
-      setState(() => _visionRunning = true);
-      try {
-        await _runVision(vision, decoded, center);
-        return;
-      } on LocalAiCancelled {
-        // Прервали — остаёмся на фото с кругом, дальше вручную.
-        if (mounted) {
-          setState(() {
-            _busy = false;
-            _error = tr(
-                'Распознавание прервано. Можно поставить точки вручную или снять новое фото.');
-          });
-        }
-        return;
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(tr(
-                  'ИИ-зрение не сработало ({e}) — ищет обычный алгоритм',
-                  {'e': friendlyError(e)}))));
-        }
-      } finally {
-        if (mounted) setState(() => _visionRunning = false);
-        _visionCropRect = null;
-      }
-    }
     try {
       final analyzed = ShotPhotoService.analyze(decoded);
       final s = analyzed.scale;
@@ -456,59 +359,6 @@ class _PhotoScanScreenState extends State<PhotoScanScreen>
     }
   }
 
-  /// Квадрат вокруг откалиброванного круга → модель → точки обратно в
-  /// пиксели исходного фото. Вне круга мишени (с запасом 5%) — отбрасываем.
-  Future<void> _runVision(
-      LocalModelInfo m, img.Image decoded, Offset center) async {
-    final half = math.max(_calibRx, _calibRy) * 1.1;
-    final x0 = (center.dx - half).clamp(0, decoded.width - 1).floor();
-    final y0 = (center.dy - half).clamp(0, decoded.height - 1).floor();
-    final x1 = (center.dx + half).clamp(1, decoded.width).ceil();
-    final y1 = (center.dy + half).clamp(1, decoded.height).ceil();
-    // Видно, КАКОЙ участок фото сейчас смотрит модель — минуты ожидания на
-    // слабом железе иначе выглядят как замёрзший экран (решение пользователя).
-    setState(() => _visionCropRect = Rect.fromLTRB(
-        x0.toDouble(), y0.toDouble(), x1.toDouble(), y1.toDouble()));
-    final crop =
-        img.copyCrop(decoded, x: x0, y: y0, width: x1 - x0, height: y1 - y0);
-    final square =
-        img.copyResize(crop, width: LocalVision.side, height: LocalVision.side);
-    final jpeg = Uint8List.fromList(img.encodeJpg(square, quality: 90));
-    final points = await LocalVision.findHoles(m, jpeg);
-    final sx = (x1 - x0) / LocalVision.side, sy = (y1 - y0) / LocalVision.side;
-    final maxR = math.max(_calibRx, _calibRy) * 1.05;
-    if (!mounted) return;
-    setState(() {
-      _busy = false;
-      _visionCropRect = null;
-      _candidates = [
-        for (final p in points)
-          if ((Offset(x0 + p.dx * sx, y0 + p.dy * sy) - center).distance <=
-              maxR)
-            Offset(x0 + p.dx * sx, y0 + p.dy * sy),
-      ];
-      if (_candidates.isEmpty) {
-        _error = tr(
-            'ИИ не нашёл пробоин. Можно подровнять круг или добавить точку вручную кнопкой ниже.');
-      }
-    });
-    if (_candidates.isNotEmpty) await _reviewOnTarget();
-  }
-
-  /// Выстрелы от ИИ — сразу на схеме мишени, без подгонки круга: круг уже
-  /// найден автоматически. «ОК» — в тренировку; «Отмена» — остаёмся на
-  /// фото с кругом и точками, как в обычном режиме (поправить вручную).
-  Future<void> _reviewOnTarget() async {
-    final result =
-        await Navigator.of(context).push<List<PixelPoint>>(MaterialPageRoute(
-      builder: (_) => ShotReviewScreen(
-          face: widget.face, shotsMm: _candidatesToConfirm.map(_toMm).toList()),
-    ));
-    if (result == null || !mounted) return;
-    _confirmedMm.addAll(result);
-    _finish();
-  }
-
   PixelPoint _toMm(Offset px) => pixelToMmEllipse(
         PixelPoint(px.dx, px.dy),
         PixelPoint(_calibCenter!.dx, _calibCenter!.dy),
@@ -557,20 +407,10 @@ class _PhotoScanScreenState extends State<PhotoScanScreen>
   Widget build(BuildContext context) {
     final decoded = _decoded;
     return PopScope(
-      // ponytail: раньше canPop блокировался на время распознавания — «назад»
-      // не уводил с экрана, пока ИИ не остановится, а сама остановка у
-      // тяжёлой модели на слабом железе может занять десятки секунд —
-      // выглядело как зависшая кнопка. Теперь «назад» уходит сразу, отмена
-      // уходит в фон (dispose() уже её шлёт).
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop && _visionRunning) LocalAi.instance.cancel();
-      },
       child: Scaffold(
         appBar: GlassHeader(
           title: Text(
-              _visionRunning
-                  ? tr('ИИ смотрит… (назад — прервать и выйти)')
-                  : tr('Фото мишени'),
+              tr('Фото мишени'),
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context)
                   .textTheme
@@ -746,12 +586,6 @@ class _PhotoScanScreenState extends State<PhotoScanScreen>
                               }),
                               onPinchStart: _cancelAccidentalTap,
                             ),
-                            if (_visionRunning && _visionCropRect != null)
-                              IgnorePointer(
-                                child: _ScanningOverlay(
-                                    cropRect: _visionCropRect!,
-                                    displayScale: _displayScale),
-                              ),
                           ],
                         );
                       },
@@ -1094,90 +928,4 @@ class _CalibrationPainter extends CustomPainter {
       oldDelegate.radiusX != radiusX ||
       oldDelegate.radiusY != radiusY ||
       oldDelegate.angle != angle;
-}
-
-/// Видно, какой участок фото сейчас смотрит ИИ, пока идёт распознавание
-/// (минуты на слабом железе — см. фото_scan_screen докстринг у
-/// `_visionCropRect`): снаружи участка — затемнение, внутри — бегущая
-/// полоса сканирования. Сам жест сюда не долетает (обёрнут в IgnorePointer
-/// снаружи) — калибровка/точки под ним по-прежнему видны и не мешают.
-class _ScanningOverlay extends StatefulWidget {
-  final Rect cropRect; // в пикселях исходного фото
-  final double displayScale;
-  const _ScanningOverlay({required this.cropRect, required this.displayScale});
-
-  @override
-  State<_ScanningOverlay> createState() => _ScanningOverlayState();
-}
-
-class _ScanningOverlayState extends State<_ScanningOverlay>
-    with SingleTickerProviderStateMixin {
-  late final _ctrl =
-      AnimationController(vsync: this, duration: const Duration(seconds: 2))
-        ..repeat();
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final rect = Rect.fromLTWH(
-      widget.cropRect.left * widget.displayScale,
-      widget.cropRect.top * widget.displayScale,
-      widget.cropRect.width * widget.displayScale,
-      widget.cropRect.height * widget.displayScale,
-    );
-    return AnimatedBuilder(
-      animation: _ctrl,
-      builder: (context, _) => CustomPaint(
-        painter: _ScanPainter(rect: rect, t: _ctrl.value),
-      ),
-    );
-  }
-}
-
-class _ScanPainter extends CustomPainter {
-  final Rect rect;
-  final double t; // 0..1, бегущая полоса сверху вниз, дальше по кругу
-
-  const _ScanPainter({required this.rect, required this.t});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    // Снаружи участка — затемнение (тонкой рамкой обводим сам участок).
-    final outside = Path.combine(PathOperation.difference,
-        Path()..addRect(Offset.zero & size), Path()..addRect(rect));
-    canvas.drawPath(
-        outside, Paint()..color = Colors.black.withValues(alpha: 0.45));
-    canvas.drawRect(
-        rect,
-        Paint()
-          ..color = Colors.amberAccent
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2);
-
-    // Полоса — сама расширяется/гаснет по краям (градиент), а не жёсткая линия.
-    final y = rect.top + rect.height * t;
-    final band = Rect.fromLTWH(rect.left, y - 18, rect.width, 36);
-    canvas.save();
-    canvas.clipRect(rect);
-    canvas.drawRect(
-      band,
-      Paint()
-        ..shader = const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Colors.transparent, Colors.amberAccent, Colors.transparent],
-          stops: [0, 0.5, 1],
-        ).createShader(band),
-    );
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(covariant _ScanPainter oldDelegate) =>
-      oldDelegate.t != t || oldDelegate.rect != rect;
 }

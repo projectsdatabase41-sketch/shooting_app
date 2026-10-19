@@ -109,6 +109,26 @@ class AppUpdateService {
         downloadUrl: url, sha: sha, publishedAt: DateTime.tryParse('${json['published_at']}')?.toLocal());
   }
 
+  static bool _downloaderReady = false;
+
+  /// Уведомление загрузки APK; trackTasks — чтобы загрузка пережила перезапуск приложения.
+  /// tapOpensFile: тап по «Готово» сразу открывает установщик.
+  static Future<void> _initDownloader() async {
+    if (_downloaderReady) return;
+    _downloaderReady = true;
+    FileDownloader().configureNotificationForGroup(
+      'app-update',
+      running: TaskNotification(tr('{displayName}'), tr('{progress} · осталось {timeRemaining}')),
+      paused: TaskNotification(tr('{displayName}'), tr('Пауза')),
+      complete: TaskNotification(tr('{displayName}'), tr('Готово — нажмите, чтобы установить')),
+      error: TaskNotification(tr('{displayName}'), tr('Ошибка загрузки')),
+      progressBar: true,
+      tapOpensFile: true,
+    );
+    await FileDownloader().trackTasks();
+    await FileDownloader().start();
+  }
+
   static Future<Directory> _dir() async {
     final d = Directory(
         p.join((await getApplicationSupportDirectory()).path, 'updates'));
@@ -122,6 +142,7 @@ class AppUpdateService {
   /// осталось, при следующей проверке). Идущую сейчас загрузку не трогает.
   static Future<void> cleanupStale() async {
     try {
+      await _initDownloader();
       final active = await FileDownloader().database.recordForId(_taskId);
       final skip = active != null &&
               (active.status == TaskStatus.running ||
@@ -168,6 +189,7 @@ class AppUpdateService {
   }) async {
     if (!Platform.isAndroid)
       throw UnsupportedError(tr('Обновление APK доступно только на Android'));
+    await _initDownloader();
     final existing = await FileDownloader().database.recordForId(_taskId);
     if (existing != null &&
         (existing.status == TaskStatus.running ||
@@ -194,8 +216,7 @@ class AppUpdateService {
       baseDirectory: BaseDirectory.applicationSupport,
       directory: 'updates',
       updates: Updates.statusAndProgress,
-      // group — своя настройка уведомления (см. initModelDownloads в
-      // local_ai_platform_io.dart), displayName — что показать в нём.
+      // group — своя настройка уведомления (см. _initDownloader), displayName — что показать в нём.
       group: 'app-update',
       displayName: tr('Обновление Nexus'),
       // Обрыв связи — до 5 автоповторов, догрузка с места остановки

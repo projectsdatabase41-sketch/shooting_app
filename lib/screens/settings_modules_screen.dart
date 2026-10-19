@@ -178,13 +178,6 @@ class _SettingsModulesScreenState extends State<SettingsModulesScreen> {
               ),
               SliverList.list(children: [
                 SwitchListTile(
-                  secondary: const Icon(Icons.offline_bolt_outlined),
-                  title: Text(tr('Локальный ИИ')),
-                  subtitle: Text(tr('Работает без интернета')),
-                  value: ModulesSettings.isOn(db, AppModule.localAi),
-                  onChanged: (v) => ModulesSettings.set(db, AppModule.localAi, v),
-                ),
-                SwitchListTile(
                   secondary: const Icon(Icons.extension_outlined),
                   title: Text(tr('Сервисы')),
                   subtitle: Text(tr('Свои плитки с внешними сервисами')),

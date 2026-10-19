@@ -8,7 +8,6 @@ import 'local_db_service.dart';
 enum AppModule {
   messenger('module_messenger'),
   assistant('module_assistant'),
-  localAi('module_local_ai'),
   services('module_services'),
   finals('module_finals'),
   notes('module_notes');

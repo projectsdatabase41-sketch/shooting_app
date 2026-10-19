@@ -1,6 +1,4 @@
 import '../logic/friendly_error.dart';
-import '../local_ai/local_ai_platform.dart';
-import '../local_ai/local_ai_screen.dart';
 import '../widgets/glass_pill.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -9,7 +7,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../logic/ai_context.dart';
 import '../services/ai_service.dart';
-import '../services/modules_settings.dart';
 import '../services/knowledge_service.dart';
 import '../services/ai_settings.dart';
 import '../services/local_db_service.dart';
@@ -66,9 +63,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     _settings = AiSettings(_db);
     _personalAuth = SupabaseAuthService(_db);
     _ownKey = _settings.hasOwnKey;
-    _mode = _settings.localMode != 'off'
-        ? 'local'
-        : (_ownKey ? 'ownKey' : 'builtin');
+    _mode = _ownKey ? 'ownKey' : 'builtin';
     _key = TextEditingController(text: _ownKey ? _settings.apiKey : '');
     // Адрес по умолчанию не показываем — пустое поле = встроенный сервис.
     _apiBaseUrl = TextEditingController(
@@ -108,8 +103,6 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
       : AiSettings.customInstructionsLimitBuiltIn;
 
   void _save() {
-    if (_mode != 'local' && _settings.localMode != 'off')
-      _settings.localMode = 'off';
     _settings.apiKey = _ownKey ? _key.text : '';
     _settings.apiBaseUrl = _apiBaseUrl.text.isEmpty
         ? AiSettings.defaultApiBaseUrl
@@ -326,8 +319,6 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
           SectionHeader(
             title: tr('Доступ'),
             subtitle: switch (_mode) {
-              'local' => tr(
-                  'Использует производительные мощности этого устройства (долгие ответы и нагрев устройства)'),
               'ownKey' => tr(
                   'Плата взимается поставщиком услуг (возможности, скорость, расход зависят от выбранной LLM модели)'),
               _ => tr('Бесплатный облачный сервис'),
@@ -341,17 +332,12 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             segments: [
               ButtonSegment(value: 'builtin', label: Text(tr('Бесплатный'))),
               ButtonSegment(value: 'ownKey', label: Text(tr('Свой ключ'))),
-              if (localAiSupported &&
-                  ModulesSettings.isOn(_db, AppModule.localAi))
-                ButtonSegment(value: 'local', label: Text(tr('На устройстве'))),
             ],
             selected: {_mode},
             showSelectedIcon: false,
             onSelectionChanged: (v) => setState(() {
               _mode = v.first;
               _ownKey = _mode == 'ownKey';
-              if (_mode == 'local' && _settings.localMode == 'off')
-                _settings.localMode = 'tasks';
               if (!_ownKey) {
                 _key.text = '';
                 // Возвращаемся к эффективной цепочке встроенного ключа
@@ -364,10 +350,6 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
               }
             }),
           ),
-          if (_mode == 'local') ...[
-            const SizedBox(height: 12),
-            LocalAiPanel(settings: _settings),
-          ],
           if (_ownKey) ...[
             const SizedBox(height: 12),
             TextField(

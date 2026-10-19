@@ -10,8 +10,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'package:uuid/uuid.dart';
 
-import '../local_ai/local_ai.dart';
-import '../local_ai/local_ai_catalog.dart';
 import '../logic/ai_context.dart';
 import '../services/ai_settings.dart';
 import '../models/coach_note.dart';
@@ -127,7 +125,6 @@ class _ModelPickerButton extends StatefulWidget {
 class _ModelPickerButtonState extends State<_ModelPickerButton> {
   String _shortLabel(String choice) {
     if (choice == 'auto') return tr('Авто');
-    if (choice == 'local') return tr('Локальная');
     // Модель облака вида "vendor/name:free" — короткая часть после слэша.
     final short = choice.split('/').last.split(':').first;
     return short.length > 14 ? '${short.substring(0, 14)}…' : short;
@@ -135,9 +132,6 @@ class _ModelPickerButtonState extends State<_ModelPickerButton> {
 
   Future<void> _open() async {
     final s = widget.settings;
-    final localModel = localModelById(s.localModelId);
-    final localInstalled =
-        localModel != null && await LocalAi.installedPath(localModel) != null;
     if (!mounted) return;
     final choice = await showModalBottomSheet<String>(
       context: context,
@@ -165,17 +159,6 @@ class _ModelPickerButtonState extends State<_ModelPickerButton> {
                   value: 'auto',
                   title: tr('Авто'),
                   subtitle: tr('Как решают настройки ИИ')),
-              // На вебе локальной модели не бывает вовсе (нет файловой
-              // системы) — не показываем недоступный вариант.
-              if (!kIsWeb)
-                tile(
-                  value: 'local',
-                  title: localModel?.name ?? tr('Локальная'),
-                  subtitle: localInstalled
-                      ? tr('Скачана, работает без интернета')
-                      : tr('Не скачана — выберите и скачайте в настройках ИИ'),
-                  enabled: localInstalled,
-                ),
               const Divider(),
               for (final m in s.models) tile(value: m, title: m),
             ],
@@ -274,12 +257,7 @@ class _AiChatBodyState extends State<_AiChatBody> {
   /// «Авто» — нет: ответит могла и текстовая модель, фото потеряется зря.
   Future<bool> _visionAvailable(AiSettings s) async {
     final choice = s.chatModelChoice;
-    if (choice == 'auto') return false;
-    if (choice != 'local') return true;
-    final model = localModelById(s.localModelId);
-    return model != null &&
-        model.sees &&
-        await LocalAi.installedPath(model) != null;
+    return choice != 'auto' && choice != 'local';
   }
 
   Future<void> _attachImage(AiSettings s) async {
