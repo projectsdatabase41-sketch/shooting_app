@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import 'app_update_service.dart';
 import '../i18n/i18n.dart';
 import '../logic/friendly_error.dart';
 import 'chat_settings.dart';
@@ -102,6 +103,31 @@ class DemoMode {
     return found;
   }
 
+  /// Версия сборки: короткий SHA коммита (APK) или время сборки (веб); локально — «dev».
+  static String get appVersion {
+    final sha = AppUpdateService.currentSha;
+    if (sha.length >= 7) return sha.substring(0, 7);
+    final t = AppUpdateService.buildTime;
+    return t.isEmpty ? 'dev' : t;
+  }
+
+  /// Отправка в app_feedback с версией приложения. Колонки app_version может ещё не
+  /// быть в базе (sql/app-feedback-version.sql) — тогда повторяем без неё.
+  static Future<http.Response> _post(http.Client client, Map<String, dynamic> body) async {
+    Future<http.Response> go(Map<String, dynamic> b) => client.post(
+          Uri.parse('${ChatSettings.url}/rest/v1/app_feedback'),
+          headers: {
+            'apikey': ChatSettings.anonKey,
+            'Authorization': 'Bearer ${ChatSettings.anonKey}',
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal',
+          },
+          body: jsonEncode(b),
+        ).timeout(const Duration(seconds: 15));
+    final res = await go({...body, 'app_version': appVersion});
+    return res.statusCode == 400 ? go(body) : res;
+  }
+
   static DateTime? _lastSent;
   static DateTime? _lastError;
 
@@ -117,22 +143,11 @@ class DemoMode {
         '${extra == null ? '' : '\n$extra'}${st.isEmpty ? '' : '\n--- стек ---\n$st'}';
     final client = http.Client();
     try {
-      final res = await client
-          .post(
-            Uri.parse('${ChatSettings.url}/rest/v1/app_feedback'),
-            headers: {
-              'apikey': ChatSettings.anonKey,
-              'Authorization': 'Bearer ${ChatSettings.anonKey}',
-              'Content-Type': 'application/json',
-              'Prefer': 'return=minimal',
-            },
-            body: jsonEncode({
-              'text': text.length > 4000 ? text.substring(0, 4000) : text,
-              'page': 'ERROR: ${where.length > 190 ? where.substring(0, 190) : where}',
-              'platform': kIsWeb ? 'web' : defaultTargetPlatform.name,
-            }),
-          )
-          .timeout(const Duration(seconds: 15));
+      final res = await _post(client, {
+        'text': text.length > 4000 ? text.substring(0, 4000) : text,
+        'page': 'ERROR: ${where.length > 190 ? where.substring(0, 190) : where}',
+        'platform': kIsWeb ? 'web' : defaultTargetPlatform.name,
+      });
       return res.statusCode >= 300 ? tr('Не удалось отправить (код {c})', {'c': res.statusCode}) : null;
     } catch (_) {
       return tr('Нет сети');
@@ -162,22 +177,11 @@ class DemoMode {
     }
     final client = http.Client();
     try {
-      final res = await client
-          .post(
-            Uri.parse('${ChatSettings.url}/rest/v1/app_feedback'),
-            headers: {
-              'apikey': ChatSettings.anonKey,
-              'Authorization': 'Bearer ${ChatSettings.anonKey}',
-              'Content-Type': 'application/json',
-              'Prefer': 'return=minimal',
-            },
-            body: jsonEncode({
-              'text': t.length > 4000 ? t.substring(0, 4000) : t,
-              'page': page.length > 200 ? page.substring(0, 200) : page,
-              'platform': kIsWeb ? 'web' : defaultTargetPlatform.name,
-            }),
-          )
-          .timeout(const Duration(seconds: 15));
+      final res = await _post(client, {
+        'text': t.length > 4000 ? t.substring(0, 4000) : t,
+        'page': page.length > 200 ? page.substring(0, 200) : page,
+        'platform': kIsWeb ? 'web' : defaultTargetPlatform.name,
+      });
       if (res.statusCode >= 300) return tr('Не удалось отправить (код {c})', {'c': res.statusCode});
       _lastSent = DateTime.now();
       return null;
@@ -249,7 +253,6 @@ class _DemoFeedbackOverlayState extends State<DemoFeedbackOverlay> {
     if (ctx == null) return;
     final page = DemoMode.currentPage();
     final ctl = TextEditingController(text: _draft);
-    final shownPage = page.startsWith('minified:') ? null : page; // сборочные имена не показываем
     await showDialog<void>(
       context: ctx,
       builder: (dctx) {
@@ -260,11 +263,7 @@ class _DemoFeedbackOverlayState extends State<DemoFeedbackOverlay> {
             title: Text(tr('Отзыв о приложении')),
             content: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                if (shownPage != null) ...[
-                  Text(tr('Страница: {p}', {'p': shownPage}), style: Theme.of(dctx).textTheme.bodySmall),
-                  const SizedBox(height: 4),
-                ],
-                Text(tr('Отправляется анонимно: только текст и название страницы, без личных данных.'),
+                Text(tr('Отправляется анонимно: только текст, платформа и версия приложения, без личных данных.'),
                     style: Theme.of(dctx).textTheme.bodySmall),
                 const SizedBox(height: 12),
                 TextField(

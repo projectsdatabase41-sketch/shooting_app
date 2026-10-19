@@ -88,6 +88,28 @@ create table if not exists shot_samples (
 create unique index if not exists uq_shot_samples_channel
   on shot_samples (shot_id, channel, coalesce(device_id, '00000000-0000-0000-0000-000000000000'::uuid));
 
+-- ---------------------------------------------------------------------------
+-- Messenger backup: text of chats copied here by the app (no attachment bodies)
+-- ---------------------------------------------------------------------------
+create table if not exists chat_backup (
+  id                text primary key,
+  contact_id        text not null,
+  contact_name      text,
+  direction         text not null check (direction in ('outgoing', 'incoming')),
+  msg_type          text not null default 'text',
+  text              text,
+  reply_to_preview  text,
+  attachment_name   text,
+  attachment_mime   text,
+  attachment_size   int,
+  sender_id         text,
+  call_status       text,
+  edited            boolean not null default false,
+  created_at        timestamptz not null,
+  backed_up_at      timestamptz not null default now()
+);
+create index if not exists idx_chat_backup_contact on chat_backup (contact_id, created_at);
+
 -- Packages: query indexes and a value check
 create index if not exists idx_packages_started on training_packages (started_at desc);
 create index if not exists idx_exercises_package on exercises (package_id);
@@ -98,7 +120,7 @@ create index if not exists idx_exercises_package on exercises (package_id);
 do $$
 declare t text;
 begin
-  foreach t in array array['devices', 'series', 'shot_samples'] loop
+  foreach t in array array['devices', 'series', 'shot_samples', 'chat_backup'] loop
     execute format('alter table %I enable row level security', t);
     execute format('drop policy if exists "%1$s_owner_all" on %1$I', t);
     execute format(
@@ -130,6 +152,10 @@ a row here only adds information. Unique per (exercise_id, series_no).'),
 samples, rate_hz is the sampling rate, t0_ms is the offset of the first sample from the shot moment (negative =
 before the shot). Do NOT store one row per sample: hundreds of samples per shot would bloat the database.
 Derived numbers (peak force, sway amplitude) go to shots.extra.'),
+  ('chat_backup', 'table', 'Messenger backup',
+'Text copy of the owner''s messenger chats, written by the app (Settings -> Data and sync). One row per message,
+id = local message id, contact_name = the contact nickname at copy time. Attachment bodies are NOT copied, only their
+name/type/size. Safe to read and search; do not edit - the app overwrites rows by id.'),
   ('rule:schema-v2', 'rule', 'Schema v2 changes',
 'exercises.template_id is a real foreign key to exercise_templates (extra.template_id is kept for compatibility).
 exercises.id no longer has to equal the package id: shots are found by exercise_id of the exercises row; exercises of one

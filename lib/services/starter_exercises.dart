@@ -37,6 +37,14 @@ class StarterExercises {
     return out;
   }
 
+  /// Пол по названию стартового упражнения: только «3 положения» различается у мужчин и
+  /// женщин. Для упражнений из облака, где пол ещё не сохранялся. Иначе — `null`.
+  static ExerciseGender? genderOfName(String name) {
+    if (name == 'Винтовка 50 м, 3 положения — 60 выстрелов') return ExerciseGender.female;
+    if (name == 'Винтовка 50 м, 3 положения — 120 выстрелов') return ExerciseGender.male;
+    return null;
+  }
+
   /// Заводит набор, если пора. `true` — упражнения созданы.
   static bool seedIfNeeded(AppDataStore store) {
     final db = store.db;

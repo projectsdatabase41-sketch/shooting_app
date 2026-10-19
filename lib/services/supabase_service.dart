@@ -12,6 +12,8 @@ import '../models/target_face.dart';
 import '../models/training_session.dart';
 import '../state/app_data_store.dart';
 import 'comments_repository.dart';
+import 'starter_exercises.dart';
+import 'user_profile.dart';
 import 'supabase_auth_service.dart';
 import '../i18n/i18n.dart';
 
@@ -319,6 +321,7 @@ class SupabaseSyncService {
         'target_face_id': faceId,
         'is_custom': true,
         'is_active': !ex.isDeleted,
+        'extra': {'gender': ex.gender.name},
       };
 
   Map<String, dynamic> _trainingPackageJson(TrainingSession session) => {
@@ -425,7 +428,14 @@ class SupabaseSyncService {
     for (final row in templateRows) {
       if (store.exercises.any((e) => e.id == row['id'])) continue;
       if (forever.contains('${row['id']}')) continue;
-      store.upsertExerciseFromRemote(_exerciseFromTemplateRow(row, codeById));
+      final ex = _exerciseFromTemplateRow(row, codeById);
+      // Чужого пола (мужчина — женские программы и наоборот) не забираем.
+      final mine = UserProfile.genderOf(store.db);
+      if ((mine == 'm' && ex.gender == ExerciseGender.female) ||
+          (mine == 'f' && ex.gender == ExerciseGender.male)) {
+        continue;
+      }
+      store.upsertExerciseFromRemote(ex);
     }
 
     final packageRows = await _select(token, 'training_packages?select=*');
@@ -520,8 +530,17 @@ class SupabaseSyncService {
       targetFaceCode: faceCode,
       totalShots: shotsCount,
       seriesSize: perSeries <= 0 ? shotsCount : perSeries,
+      gender: _templateGender(row),
       deletedAt: isActive ? null : _dateOrNull(row['updated_at']),
     );
+  }
+
+  ExerciseGender _templateGender(Map<String, dynamic> row) {
+    final g = extraFromJson(row['extra'])?['gender'];
+    for (final v in ExerciseGender.values) {
+      if (v.name == g) return v;
+    }
+    return StarterExercises.genderOfName('${row['name']}') ?? ExerciseGender.mixed;
   }
 
   /// Восстанавливает id локального упражнения-шаблона для дочерней

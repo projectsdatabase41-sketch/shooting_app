@@ -56,7 +56,7 @@ begin
       'ai_conversation_summaries', 'notes', 'keepalive_log', 'table_docs',
       'tasks', 'task_stages', 'task_steps', 'task_clarifications', 'task_runs', 'task_run_steps',
       'task_shots', 'task_series_notes', 'task_events', 'task_reports', 'task_devices', 'coach_chat',
-      'devices', 'series', 'shot_samples'
+      'devices', 'series', 'shot_samples', 'chat_backup'
     ]);
   if v_extra is not null then
     raise exception

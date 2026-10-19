@@ -1,6 +1,7 @@
 import '../logic/friendly_error.dart';
 import 'db_check_screen.dart';
 import '../services/chat_auth_service.dart';
+import '../services/chat_backup_service.dart';
 import '../services/chat_messages_repository.dart';
 import '../services/chat_sync_service.dart';
 import '../services/coach_link.dart';
@@ -31,6 +32,29 @@ class SettingsDataScreen extends StatefulWidget {
 class _SettingsDataScreenState extends State<SettingsDataScreen> {
   bool _syncing = false;
   String? _syncMessage;
+  bool _backupBusy = false;
+  String? _backupMessage;
+
+  Future<void> _backupNow(BuildContext context) async {
+    final db = context.read<AppDataStore>().db;
+    final auth = SupabaseAuthService(db);
+    if (!auth.hasBase) {
+      setState(() => _backupMessage = tr('Сначала подключите свою базу (Учётная запись ниже)'));
+      return;
+    }
+    setState(() {
+      _backupBusy = true;
+      _backupMessage = null;
+    });
+    try {
+      final n = await ChatBackupService(db, auth).run();
+      if (mounted) setState(() => _backupMessage = n == 0 ? tr('Всё уже скопировано') : tr('Скопировано сообщений: {n}', {'n': n}));
+    } catch (e) {
+      if (mounted) setState(() => _backupMessage = friendlyError(e));
+    } finally {
+      if (mounted) setState(() => _backupBusy = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -72,6 +96,28 @@ class _SettingsDataScreenState extends State<SettingsDataScreen> {
               MaterialPageRoute(builder: (_) => const ExportScreen()),
             ),
           ),
+          SwitchListTile(
+            secondary: const Icon(Icons.forum_outlined),
+            title: Text(tr('Копия чатов в мою базу')),
+            subtitle: Text(_backupMessage ??
+                (ChatBackupService.isOn(store.db)
+                    ? tr('Не скопировано: {n}', {'n': ChatBackupService.pending(store.db)})
+                    : tr('Текст переписок копируется в вашу базу, без файлов и фото'))),
+            value: ChatBackupService.isOn(store.db),
+            onChanged: (v) {
+              ChatBackupService.setOn(store.db, v);
+              setState(() {});
+              if (v) _backupNow(context);
+            },
+          ),
+          if (ChatBackupService.isOn(store.db))
+            ListTile(
+              leading: _backupBusy
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.cloud_upload_outlined),
+              title: Text(tr('Скопировать чаты сейчас')),
+              onTap: _backupBusy ? null : () => _backupNow(context),
+            ),
           const Divider(height: 24),
           // Подключение своей базы Supabase — здесь же, где синхронизация.
           const AccountTile(),
