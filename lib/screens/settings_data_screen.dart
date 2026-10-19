@@ -2,6 +2,7 @@ import '../logic/friendly_error.dart';
 import 'db_check_screen.dart';
 import '../services/chat_auth_service.dart';
 import '../services/chat_backup_service.dart';
+import '../services/chat_vault.dart';
 import '../services/chat_messages_repository.dart';
 import '../services/chat_sync_service.dart';
 import '../services/coach_link.dart';
@@ -33,6 +34,29 @@ class SettingsDataScreen extends StatefulWidget {
 class _SettingsDataScreenState extends State<SettingsDataScreen> {
   bool _syncing = false;
   String? _syncMessage;
+  bool _vaultBusy = false;
+  String? _vaultMessage;
+
+  Future<void> _vaultRun(BuildContext context, {required bool restore}) async {
+    final db = context.read<AppDataStore>().db;
+    setState(() {
+      _vaultBusy = true;
+      _vaultMessage = null;
+    });
+    try {
+      final n = restore ? await ChatVault.restore(db, ChatMessagesRepository(db)) : await ChatVault.sync(db);
+      if (mounted) {
+        setState(() => _vaultMessage = restore
+            ? (n == 0 ? tr('В папке нет ничего нового') : tr('Восстановлено сообщений: {n}', {'n': n}))
+            : (n == 0 ? tr('Всё уже сохранено') : tr('Сохранено сообщений: {n}', {'n': n})));
+      }
+    } catch (e) {
+      if (mounted) setState(() => _vaultMessage = tr('Нужен доступ ко всем файлам: включите его для Nexus в настройках телефона'));
+    } finally {
+      if (mounted) setState(() => _vaultBusy = false);
+    }
+  }
+
   bool _backupBusy = false;
   String? _backupMessage;
 
@@ -148,6 +172,28 @@ class _SettingsDataScreenState extends State<SettingsDataScreen> {
                   : const Icon(Icons.cloud_upload_outlined),
               title: Text(tr('Сохранить сейчас')),
               onTap: _backupBusy ? null : () => _backupNow(context),
+            ),
+          ],
+          if (ChatVault.supported) ...[
+            SwitchListTile(
+              secondary: const Icon(Icons.folder_special_outlined),
+              title: Text(tr('Папка Nexus на телефоне')),
+              subtitle: Text(_vaultMessage ??
+                  tr('Фото, файлы и история чатов копируются в папку Nexus/Chats в памяти телефона. Удаление приложения её не трогает')),
+              value: ChatVault.isOn(store.db),
+              onChanged: (v) async {
+                ChatVault.setOn(store.db, v);
+                setState(() => _vaultMessage = null);
+                if (v) await _vaultRun(context, restore: false);
+              },
+            ),
+            ListTile(
+              leading: _vaultBusy
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.restore_outlined),
+              title: Text(tr('Восстановить из папки Nexus')),
+              subtitle: Text(tr('После переустановки: вернуть переписки и вложения')),
+              onTap: _vaultBusy ? null : () => _vaultRun(context, restore: true),
             ),
           ],
           const Divider(height: 24),

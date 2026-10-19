@@ -25,6 +25,7 @@ import '../services/live_chat_session.dart';
 import '../services/coach_access_service.dart';
 import '../services/local_db_service.dart';
 import '../services/chat_backup_service.dart';
+import '../services/chat_vault.dart';
 import '../services/push_service.dart';
 import '../services/remote_config.dart';
 import '../services/supabase_auth_service.dart';
@@ -106,6 +107,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
     _prefs = ChatPreferences(_db);
     _reload();
     ChatBackupService.runIfDue(_db);
+    ChatVault.syncIfOn(_db);
     ChatAuthService.otherDeviceActive.addListener(_deviceBanner);
     if (_auth.isSignedIn) {
       _auth.isActiveDevice().catchError((_) => true); // прогрев: первый опрос в переписке без лишнего круга по сети

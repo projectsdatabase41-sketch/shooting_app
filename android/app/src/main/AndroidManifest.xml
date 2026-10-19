@@ -33,6 +33,11 @@
     <!-- Сохранение принятых файлов в папку Nexus (Android 9 и ниже; новее — через MediaStore без разрешений). -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" tools:replace="android:maxSdkVersion"/>
 
+    <!-- Папка «Nexus» в памяти телефона (файлы и история чатов): переживает удаление приложения.
+         Приложение ставится не из Play, поэтому доступ ко всем файлам допустим; пользователь
+         включает его сам в настройках, это не обязательно. -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>
+
     <application
         android:label="Nexus"
         android:name="${applicationName}"
