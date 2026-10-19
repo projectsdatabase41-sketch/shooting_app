@@ -27,6 +27,7 @@ class ChampionsService {
     final client = http.Client();
     try {
       final gender = UserProfile.genderOf(auth.db); // 'm' | 'f' — для фильтра чемпионов
+      final birthYear = UserProfile.birthYearOf(auth.db); // для возрастного фильтра
       Future<http.Response> post(bool withProtocol, {bool withGender = true}) => client.post(
             Uri.parse('${auth.url}/rest/v1/finals_champions'),
             headers: {
@@ -43,6 +44,7 @@ class ChampionsService {
               'coach_id': coachId,
               'consent': true,
               if (withGender && (gender == 'm' || gender == 'f')) 'gender': gender,
+              if (withGender && birthYear != null) 'birth_year': birthYear,
               if (selfVerified) ...{
                 'self_verified': true,
                 'coach_signed_at': DateTime.now().toUtc().toIso8601String(),
@@ -53,7 +55,7 @@ class ChampionsService {
           ).timeout(const Duration(seconds: 20));
       var res = await post(true);
       // Колонка gender ещё не создана (SQL не обновлён) — публикуем без неё.
-      if (res.statusCode == 400 && res.body.contains('gender')) {
+      if (res.statusCode == 400 && (res.body.contains('gender') || res.body.contains('birth_year'))) {
         res = await post(true, withGender: false);
       }
       // Колонка protocol ещё не создана (SQL не обновлён) — публикуем без неё.
@@ -92,10 +94,12 @@ class ChampionsService {
   /// Опубликованные (подписанные) чемпионы формата, лучшие сверху.
   /// Постранично ([offset]) и с поиском по имени ([q]).
   /// [year] — только результаты этого года (по дате публикации).
-  Future<List<Map<String, dynamic>>> champions(String formatId, {String q = '', int offset = 0, int? year, String? gender}) {
+  Future<List<Map<String, dynamic>>> champions(String formatId, {String q = '', int offset = 0, int? year, String? gender, int? birthFrom, int? birthTo}) {
     final name = q.trim().isEmpty ? '' : '&display_name=ilike.*${Uri.encodeQueryComponent(q.trim())}*';
     final y = year == null ? '' : '&created_at=gte.$year-01-01&created_at=lt.${year + 1}-01-01';
-    final g = gender == null ? '' : '&gender=eq.$gender';
+    final g = (gender == null ? '' : '&gender=eq.$gender') +
+        (birthFrom == null ? '' : '&birth_year=gte.$birthFrom') +
+        (birthTo == null ? '' : '&birth_year=lte.$birthTo');
     return _get('format_id=eq.$formatId&coach_signed_at=not.is.null$name$y$g&order=total.desc&limit=$pageSize&offset=$offset');
   }
 

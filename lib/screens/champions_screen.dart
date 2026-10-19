@@ -24,8 +24,9 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
   List<Map<String, dynamic>> _pending = [];
   String _fmt = FinalFormat.all.first.id;
   String _q = '';
-  int? _year; // фильтр по году публикации
   String? _gender; // 'm' | 'f' | null — все
+  int? _ageMin, _ageMax; // возрастная группа (по году рождения из профиля)
+  String _sort = 'result'; // result | date | starts
   final _search = TextEditingController();
   List<Map<String, dynamic>> _rows = [];
   bool _more = false;
@@ -72,7 +73,10 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
   Future<void> _loadChamps({bool more = false}) async {
     if (_busy) return;
     setState(() => _busy = true);
-    final page = await _svc.champions(_fmt, q: _q, offset: more ? _rows.length : 0, year: _year, gender: _gender);
+    final page = await _svc.champions(_fmt, q: _q, offset: more ? _rows.length : 0,
+        gender: _gender,
+        birthFrom: _ageMax == null ? null : DateTime.now().year - _ageMax!,
+        birthTo: _ageMin == null ? null : DateTime.now().year - _ageMin!);
     if (!mounted) return;
     setState(() {
       _rows = more ? [..._rows, ...page] : page;
@@ -159,68 +163,121 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
           bestRow: e.value.first,
         )
     ];
-    out.sort((a, b) => b.best.compareTo(a.best));
+    switch (_sort) {
+      case 'date':
+        DateTime last(String uid) => [
+              for (final r in _rows)
+                if ('${r['user_id'] ?? r['display_name']}' == uid) DateTime.tryParse('${r['created_at']}') ?? DateTime(2000)
+            ].reduce((a, b) => a.isAfter(b) ? a : b);
+        out.sort((a, b) => last(b.userId).compareTo(last(a.userId)));
+      case 'starts':
+        out.sort((a, b) => b.count != a.count ? b.count.compareTo(a.count) : b.best.compareTo(a.best));
+      default:
+        out.sort((a, b) => b.best.compareTo(a.best));
+    }
     return out;
   }
 
-  Widget _filters(ThemeData theme) {
-    final years = [for (var y = DateTime.now().year; y >= DateTime.now().year - 4; y--) y];
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(tr('Упражнение'), style: theme.textTheme.labelLarge),
-      const SizedBox(height: 6),
-      SizedBox(
-        height: 40,
-        child: ListView(scrollDirection: Axis.horizontal, children: [
-          for (final f in FinalFormat.all)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: ChoiceChip(
-                label: Text(tr(f.nameKey)),
-                selected: _fmt == f.id,
-                onSelected: (_) {
-                  _fmt = f.id;
-                  _loadChamps();
-                },
-              ),
+  static const _ageGroups = <(String, int?, int?)>[
+    ('Любой возраст', null, null),
+    ('До 14', null, 13),
+    ('14–17', 14, 17),
+    ('18–20', 18, 20),
+    ('21–34', 21, 34),
+    ('35–49', 35, 49),
+    ('50 и старше', 50, null),
+  ];
+
+  /// Сколько фильтров включено (для значка на кнопке).
+  int get _activeFilters => (_gender != null ? 1 : 0) + (_ageMin != null || _ageMax != null ? 1 : 0) + (_sort != 'result' ? 1 : 0);
+
+  /// Все фильтры и сортировка — в отдельном окне, а не россыпью на экране.
+  Future<void> _openFilters() async {
+    var fmt = _fmt, gender = _gender, ageMin = _ageMin, ageMax = _ageMax, sort = _sort;
+    final apply = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) {
+          final theme = Theme.of(ctx);
+          Widget title(String t) => Padding(padding: const EdgeInsets.only(top: 12, bottom: 6), child: Text(t, style: theme.textTheme.labelLarge));
+          return SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(tr('Фильтр'), style: theme.textTheme.titleMedium),
+                title(tr('Упражнение')),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  for (final f in FinalFormat.all)
+                    ChoiceChip(label: Text(tr(f.nameKey)), selected: fmt == f.id, onSelected: (_) => setS(() => fmt = f.id)),
+                ]),
+                title(tr('Пол')),
+                Wrap(spacing: 8, children: [
+                  for (final g in <(String?, String)>[(null, tr('Все')), ('m', tr('Мужчины')), ('f', tr('Женщины'))])
+                    ChoiceChip(label: Text(g.$2), selected: gender == g.$1, onSelected: (_) => setS(() => gender = g.$1)),
+                ]),
+                title(tr('Возраст (по году рождения)')),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  for (final a in _ageGroups)
+                    ChoiceChip(
+                      label: Text(tr(a.$1)),
+                      selected: ageMin == a.$2 && ageMax == a.$3,
+                      onSelected: (_) => setS(() {
+                        ageMin = a.$2;
+                        ageMax = a.$3;
+                      }),
+                    ),
+                ]),
+                title(tr('Сортировка')),
+                Wrap(spacing: 8, children: [
+                  for (final o in <(String, String)>[('result', tr('По результату')), ('date', tr('По дате старта')), ('starts', tr('По числу стартов'))])
+                    ChoiceChip(label: Text(o.$2), selected: sort == o.$1, onSelected: (_) => setS(() => sort = o.$1)),
+                ]),
+                const SizedBox(height: 16),
+                Row(children: [
+                  TextButton(
+                    onPressed: () => setS(() {
+                      gender = null;
+                      ageMin = null;
+                      ageMax = null;
+                      sort = 'result';
+                    }),
+                    child: Text(tr('Сбросить')),
+                  ),
+                  const Spacer(),
+                  FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Показать'))),
+                ]),
+              ]),
             ),
-        ]),
+          );
+        },
       ),
-      const SizedBox(height: 8),
-      Text(tr('Пол'), style: theme.textTheme.labelLarge),
-      const SizedBox(height: 6),
-      Wrap(spacing: 8, children: [
-        for (final g in <(String?, String)>[(null, tr('Все')), ('m', tr('Мужчины')), ('f', tr('Женщины'))])
-          ChoiceChip(
-            label: Text(g.$2),
-            selected: _gender == g.$1,
-            onSelected: (_) {
-              _gender = g.$1;
-              _loadChamps();
-            },
-          ),
-      ]),
-      const SizedBox(height: 8),
-      Text(tr('Год'), style: theme.textTheme.labelLarge),
-      const SizedBox(height: 6),
-      Wrap(spacing: 8, children: [
-        ChoiceChip(
-          label: Text(tr('Все')),
-          selected: _year == null,
-          onSelected: (_) {
-            _year = null;
-            _loadChamps();
-          },
+    );
+    if (apply != true || !mounted) return;
+    setState(() {
+      _fmt = fmt;
+      _gender = gender;
+      _ageMin = ageMin;
+      _ageMax = ageMax;
+      _sort = sort;
+    });
+    _loadChamps();
+  }
+
+  Widget _filters(ThemeData theme) {
+    final fmtName = tr(FinalFormat.all.firstWhere((f) => f.id == _fmt, orElse: () => FinalFormat.all.first).nameKey);
+    return Row(children: [
+      Expanded(child: Text(fmtName, style: theme.textTheme.titleSmall, overflow: TextOverflow.ellipsis)),
+      Badge(
+        isLabelVisible: _activeFilters > 0,
+        label: Text('$_activeFilters'),
+        child: OutlinedButton.icon(
+          onPressed: _openFilters,
+          icon: const Icon(Icons.tune, size: 18),
+          label: Text(tr('Фильтр')),
         ),
-        for (final y in years)
-          ChoiceChip(
-            label: Text('$y'),
-            selected: _year == y,
-            onSelected: (_) {
-              _year = y;
-              _loadChamps();
-            },
-          ),
-      ]),
+      ),
     ]);
   }
 
