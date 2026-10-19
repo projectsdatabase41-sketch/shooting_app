@@ -10,7 +10,8 @@ enum AppModule {
   assistant('module_assistant'),
   services('module_services'),
   finals('module_finals'),
-  notes('module_notes');
+  notes('module_notes'),
+  drive('module_drive');
 
   final String key;
   const AppModule(this.key);

@@ -181,7 +181,8 @@ function putBytes(parentId, name, mime, bytes, overwriteId) {
   const m = mime || 'application/octet-stream';
   if (overwriteId) {
     const old = DriveApp.getFileById(overwriteId);
-    if (old.getMimeType().indexOf('text/') === 0 && m.indexOf('text/') === 0) {
+    const textual = function (t) { return /^(text\/|application\/(json|xml))/.test(t); };
+    if (textual(old.getMimeType()) && textual(m)) {
       old.setContent(Utilities.newBlob(bytes).getDataAsString());
       return meta(old, false);
     }

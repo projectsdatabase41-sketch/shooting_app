@@ -1,3 +1,4 @@
+import '../gdrive/gdrive_screen.dart';
 import 'package:flutter/material.dart';
 import '../theme/app_transitions.dart';
 import '../widgets/tile_backdrop.dart';
@@ -121,6 +122,7 @@ class _HomeShellState extends State<HomeShell> {
       if (!store.isAthlete && (!store.isCoach || noAthletes)) ...{'statistics', 'tasks'},
       if (!on(AppModule.assistant)) 'assistant',
       if (!on(AppModule.messenger)) 'messenger',
+      if (!on(AppModule.drive)) 'drive',
       if (!on(AppModule.notes)) 'notes',
       // Финалы — только в режиме разработчика и при включённом модуле.
       if (!friendlyErrorDevMode || !on(AppModule.finals)) 'finals',
@@ -227,6 +229,7 @@ class _HomeShellState extends State<HomeShell> {
       'assistant' => const AssistantTab(),
       'notes' => const CoachDiaryNotesScreen(),
       'finals' => const FinalsScreen(),
+      'drive' => const GDriveScreen(),
       'messenger' => ChatHomeScreen(
           onClose: null),
       _ => SettingsScreen(homeTabs: tabs, services: _services),

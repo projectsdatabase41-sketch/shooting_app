@@ -36,6 +36,7 @@ class _SettingsModulesScreenState extends State<SettingsModulesScreen> {
         'messenger' => AppModule.messenger,
         'notes' => AppModule.notes,
         'finals' => AppModule.finals,
+        'drive' => AppModule.drive,
         _ => null,
       };
 

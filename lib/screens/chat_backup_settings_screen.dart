@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../gdrive/chat_drive_backup.dart';
+import '../gdrive/gdrive_service.dart';
 import '../i18n/i18n.dart';
 import '../logic/friendly_error.dart';
 import '../services/chat_backup_service.dart';
@@ -24,6 +26,8 @@ class _ChatBackupSettingsScreenState extends State<ChatBackupSettingsScreen> {
   bool _backupBusy = false;
   String? _backupMessage;
   bool _vaultBusy = false;
+  bool _driveBusy = false;
+  String? _driveMessage;
   String? _vaultMessage;
 
   LocalDbService get db => widget.db;
@@ -45,6 +49,26 @@ class _ChatBackupSettingsScreenState extends State<ChatBackupSettingsScreen> {
       if (mounted) setState(() => _backupMessage = friendlyError(e));
     } finally {
       if (mounted) setState(() => _backupBusy = false);
+    }
+  }
+
+  Future<void> _driveRun({required bool restore}) async {
+    setState(() {
+      _driveBusy = true;
+      _driveMessage = null;
+    });
+    try {
+      final b = ChatDriveBackup(db, GDriveService(db));
+      final n = restore ? await b.restore(ChatMessagesRepository(db)) : await b.sync();
+      if (mounted) {
+        setState(() => _driveMessage = restore
+            ? (n == 0 ? tr('На Диске нет ничего нового') : tr('Восстановлено сообщений: {n}', {'n': n}))
+            : (n == 0 ? tr('Всё уже на Диске') : tr('Отправлено на Диск: {n}', {'n': n})));
+      }
+    } catch (e) {
+      if (mounted) setState(() => _driveMessage = friendlyError(e));
+    } finally {
+      if (mounted) setState(() => _driveBusy = false);
     }
   }
 
@@ -124,6 +148,38 @@ class _ChatBackupSettingsScreenState extends State<ChatBackupSettingsScreen> {
                   : const Icon(Icons.cloud_upload_outlined),
               title: Text(tr('Сохранить сейчас')),
               onTap: _backupBusy ? null : _backupNow,
+            ),
+          ],
+          const Divider(height: 24),
+          SwitchListTile(
+            secondary: const Icon(Icons.cloud_outlined),
+            title: Text(tr('Копия на Google Диск')),
+            subtitle: Text(_driveMessage ??
+                (!GDriveService.configured(db)
+                    ? tr('Сначала подключите Google Диск: включите модуль «Google Диск» и откройте его')
+                    : tr('Папка Nexus/Chats на вашем Диске, частота — как у копии в базу, вложения до 20 МБ'))),
+            value: ChatDriveBackup.isOn(db),
+            onChanged: !GDriveService.configured(db)
+                ? null
+                : (v) {
+                    ChatDriveBackup.setOn(db, v);
+                    setState(() => _driveMessage = null);
+                    if (v) _driveRun(restore: false);
+                  },
+          ),
+          if (ChatDriveBackup.isOn(db)) ...[
+            ListTile(
+              leading: _driveBusy
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.cloud_upload_outlined),
+              title: Text(tr('Отправить на Диск сейчас')),
+              subtitle: Text(tr('Не отправлено: {n}', {'n': ChatDriveBackup.pending(db)})),
+              onTap: _driveBusy ? null : () => _driveRun(restore: false),
+            ),
+            ListTile(
+              leading: const Icon(Icons.restore_outlined),
+              title: Text(tr('Восстановить с Google Диска')),
+              onTap: _driveBusy ? null : () => _driveRun(restore: true),
             ),
           ],
           if (ChatVault.supported) ...[

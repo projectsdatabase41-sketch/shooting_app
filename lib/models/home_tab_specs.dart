@@ -26,6 +26,7 @@ const allTabIds = [
   'notes', // модуль «Заметки»
   'finals', // модуль «Финалы» (режим разработчика)
   'messenger', // модуль «Мессенджер»
+  'drive', // модуль «Google Диск»
   'settings',
 ];
 
@@ -57,6 +58,8 @@ const Map<String, HomeTabSpec> homeTabSpecs = {
       HomeTabSpec(icon: Icons.emoji_events_outlined, label: /*tr*/ 'Финалы'),
   'messenger':
       HomeTabSpec(icon: Icons.forum_outlined, label: /*tr*/ 'Мессенджер'),
+  'drive':
+      HomeTabSpec(icon: Icons.cloud_outlined, label: /*tr*/ 'Google Диск'),
   'settings':
       HomeTabSpec(icon: Icons.settings_outlined, label: /*tr*/ 'Настройки'),
 };
