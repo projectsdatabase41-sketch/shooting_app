@@ -63,6 +63,15 @@ Flutter-приложение для стрелков (Android, веб на GitHu
 - Старый сервер мессенджера `frbptucr…` и `APP_Tranzite` не используются.
 - **Таблица `notes` общая с другим ИИ владельца** (RAG-память). Приложение трогает только строки `source='nexus_app'` (`notes_sync_service.dart`, `coach_notes_repository.dart`). Для диагностики структуры — `sql/inspect-notes.sql`.
 
+  **Реальная структура `notes` (снята 2026-10-19, 301 строка, источники `airtable`, `qwen`, `nexus_app`):** `id uuid`, `topic text NOT NULL`,
+  `summary`, `content`, `category`, `tags text[]`, `source`, `status` (`active|archived|deleted|draft`, по умолчанию `active`), `version int`,
+  `supersedes`/`parent_note_id` (uuid → notes), `confidence` (`normal|confirmed|unconfirmed`), `metadata jsonb`, `created_at`, `updated_at`,
+  служебные `content_tsv`, `search_vector` (tsvector), `embedding vector` (hnsw, openai/text-embedding-3-large), `embedding_model`, `embedding_created_at`.
+  RLS включён: политики только SELECT/INSERT/UPDATE для anon и authenticated (DELETE нет → «удаление» = `status='archived'`).
+  Триггеры: при INSERT статус принудительно `active`; при UPDATE эмбеддинг сбрасывается (его пересчитывает внешний воркер); `updated_at` ведёт триггер.
+  Приложение: `notes_sync_service.dart` (свои заметки `source='nexus_app'`, `category='Заметки Nexus'`), просмотр всей памяти — `knowledge_notes_screen.dart`
+  (только чтение: список, поиск по теме/описанию, фильтры источник/метка, просмотр целиком).
+
 ## 5. SQL: какой файл для какой базы
 
 **Личная база** — запускать ОДИН файл `lib/db/nexus_personal_db.sql` (собирается `python tools/build_personal_sql.py` из

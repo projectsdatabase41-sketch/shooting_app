@@ -1,4 +1,5 @@
 import '../logic/friendly_error.dart';
+import 'knowledge_notes_screen.dart';
 import '../widgets/ai_gate.dart';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -77,6 +78,14 @@ class _CoachDiaryNotesScreenState extends State<CoachDiaryNotesScreen> {
                 .textTheme
                 .titleMedium
                 ?.copyWith(fontWeight: FontWeight.w600)),
+        actions: [
+          // Вся память: заметки приложения и база знаний из таблицы notes (поиск, фильтры).
+          GlassCircleButton(
+            icon: const Icon(Icons.psychology_outlined),
+            tooltip: tr('Вся память'),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const KnowledgeNotesScreen())),
+          ),
+        ],
       ),
       body: _notes.isEmpty
           ? EmptyState(
