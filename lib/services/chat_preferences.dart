@@ -352,6 +352,7 @@ class ChatPreferences extends ChangeNotifier {
 
   /// Картинки-обои (assets/bg/chat/<id>.webp, см. tools/gen_chat_wallpapers.py) — id: название.
   static const Map<String, String> imageWallpapers = {
+    'black': /*tr*/ 'Чёрный',
     'night': /*tr*/ 'Ночь',
     'teal': /*tr*/ 'Бирюза',
     'forest': /*tr*/ 'Хвоя',
