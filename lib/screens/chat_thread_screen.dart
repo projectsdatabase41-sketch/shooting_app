@@ -2307,7 +2307,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                     12,
                                     _selecting ? 12 : topInset,
                                     12,
-                                    _barHeight + 8),
+                                    _barHeight + 36), // запас: последнее сообщение не прячется под полем ввода
                                 itemCount: _messages.length,
                                 itemBuilder: (context, i) {
                                   _ensureStacks();
