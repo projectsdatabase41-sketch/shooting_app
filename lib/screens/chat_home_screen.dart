@@ -945,6 +945,19 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
       await _maybeSaveChatPasswordForMainAccount(_password.text);
       widget.onSignedIn();
     } on AuthException catch (e) {
+      // Регистрация могла пройти на сервере, а ответ не дошёл (медленная сеть): повтор даёт
+      // «уже зарегистрирован». Тогда просто входим с теми же почтой и паролем.
+      if (_register && e.message.toLowerCase().contains('already registered')) {
+        try {
+          await widget.auth.signIn(email: _email.text, password: _password.text);
+          await _maybeSaveChatPasswordForMainAccount(_password.text);
+          widget.onSignedIn();
+          return;
+        } on AuthException {
+          setState(() => _error = tr('Такая почта уже зарегистрирована. Если это вы — нажмите «Вход» и введите пароль; если пароль забыт — «Забыли пароль».'));
+          return;
+        } catch (_) {}
+      }
       setState(() => _error = e.message);
     } catch (e) {
       setState(() => _error = friendlyError(e));

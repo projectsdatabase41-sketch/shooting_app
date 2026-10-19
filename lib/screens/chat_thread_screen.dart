@@ -3024,8 +3024,13 @@ class _Bubble extends StatelessWidget {
           index: at < 0 ? 0 : at);
     }
 
+    // «Кружок» без подписи и ответа — без рамки пузыря (только сам круг).
+    final isBareCircle = message.type == ChatMessageType.video && !hasCaption && message.replyToPreview == null;
+
     final Widget frame;
-    if (isBareImage) {
+    if (isBareCircle) {
+      frame = ConstrainedBox(constraints: const BoxConstraints(maxWidth: 480), child: captionContent);
+    } else if (isBareImage) {
       frame = ClipRRect(
         borderRadius: BorderRadius.circular(radius),
         child: withDownloadButton(GestureDetector(

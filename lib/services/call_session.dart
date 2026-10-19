@@ -400,6 +400,12 @@ class CallSession extends ChangeNotifier {
     try {
       _ws?.sink.close();
     } catch (_) {}
+    // Сразу убираем картинку с экрана: иначе последний кадр «зависает», пока экран закрывается.
+    try {
+      remoteRenderer.srcObject = null;
+      localRenderer.srcObject = null;
+    } catch (_) {}
+    remoteVideo = false;
     for (final t in _local?.getTracks() ?? const <MediaStreamTrack>[]) {
       t.stop();
     }

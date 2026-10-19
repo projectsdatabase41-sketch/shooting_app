@@ -1122,7 +1122,7 @@ class ChatAuthService {
             headers: {'apikey': anonKey, 'Content-Type': 'application/json'},
             body: jsonEncode(body),
           )
-          .timeout(const Duration(seconds: 30));
+          .timeout(const Duration(seconds: 60));
       final decoded = res.body.isEmpty ? null : jsonDecode(res.body);
       if (res.statusCode == 429 || res.statusCode >= 500) throw AuthNetworkException(_message(res.body));
       if (res.statusCode >= 400) throw AuthException(_message(res.body));

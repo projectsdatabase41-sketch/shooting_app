@@ -35,6 +35,7 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
   String? _error;
   bool _recording = false;
   bool _finishing = false;
+  bool _switching = false; // идёт смена камеры — картинку прячем, чтобы не мелькал кадр «вверх ногами»
   int _elapsed = 0;
   Timer? _ticker;
 
@@ -77,6 +78,7 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
     if (_cameras.length < 2) return;
     final next = (_camIndex + 1) % _cameras.length;
     _camIndex = next;
+    setState(() => _switching = true);
     try {
       final c = _controller;
       if (_recording && c != null) {
@@ -89,6 +91,9 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
     } catch (e) {
       if (mounted) setState(() => _error = friendlyError(e));
     }
+    // пока камера не выдала нормальный кадр — картинка скрыта
+    await Future<void>.delayed(const Duration(milliseconds: 450));
+    if (mounted) setState(() => _switching = false);
   }
 
   Future<void> _start() async {
@@ -175,14 +180,17 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
                             height: d,
                             child: c == null || !c.value.isInitialized
                                 ? const Center(child: CircularProgressIndicator())
-                                : FittedBox(
+                                : AnimatedOpacity(
+                                    opacity: _switching ? 0 : 1,
+                                    duration: const Duration(milliseconds: 150),
+                                    child: FittedBox(
                                     fit: BoxFit.cover,
                                     child: SizedBox(
                                       width: d,
                                       height: d * c.value.aspectRatio,
                                       child: CameraPreview(c),
                                     ),
-                                  ),
+                                  )),
                           ),
                         ),
                       ],

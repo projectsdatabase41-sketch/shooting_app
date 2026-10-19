@@ -66,11 +66,21 @@ class _CircleVideoState extends State<CircleVideo> {
   @override
   Widget build(BuildContext context) {
     final c = _c;
-    final s = widget.size;
     final ready = c != null && c.value.isInitialized;
     final playing = ready && c.value.isPlaying;
-    final total = ready ? c.value.duration.inMilliseconds : widget.durationSec * 1000;
-    final pos = ready ? c.value.position.inMilliseconds : 0;
+    // Во время просмотра кружок увеличивается вдвое (но не шире экрана).
+    final target = playing ? (widget.size * 2).clamp(widget.size, MediaQuery.sizeOf(context).width * 0.88).toDouble() : widget.size;
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(end: target),
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+      builder: (context, s, _) => _circle(c, s, ready, playing),
+    );
+  }
+
+  Widget _circle(VideoPlayerController? c, double s, bool ready, bool playing) {
+    final total = ready ? c!.value.duration.inMilliseconds : widget.durationSec * 1000;
+    final pos = ready ? c!.value.position.inMilliseconds : 0;
     return GestureDetector(
       onTap: _toggle,
       child: SizedBox(
@@ -88,7 +98,7 @@ class _CircleVideoState extends State<CircleVideo> {
                     ? FittedBox(
                         fit: BoxFit.cover,
                         child: SizedBox(
-                          width: c.value.size.width,
+                          width: c!.value.size.width,
                           height: c.value.size.height,
                           child: VideoPlayer(c),
                         ),
