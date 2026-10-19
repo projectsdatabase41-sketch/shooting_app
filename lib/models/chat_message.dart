@@ -123,6 +123,7 @@ class ChatMessage {
     bool? seen,
     String? driveFileId,
     String? attachmentLocalPath,
+    String? attachmentBase64,
   }) =>
       ChatMessage(
         id: id,
@@ -132,7 +133,7 @@ class ChatMessage {
         text: text,
         status: status ?? this.status,
         type: type,
-        attachmentBase64: attachmentBase64,
+        attachmentBase64: attachmentBase64 ?? this.attachmentBase64,
         attachmentName: attachmentName,
         attachmentMime: attachmentMime,
         attachmentSize: attachmentSize,

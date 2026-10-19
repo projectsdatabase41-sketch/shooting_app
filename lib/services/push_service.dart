@@ -454,6 +454,16 @@ class PushService {
     } catch (_) {}
   }
 
+  /// «Выйти из чата»: сначала убираем push-токен этого устройства у ЭТОГО аккаунта
+  /// (пока сессия жива), иначе после входа под другим аккаунтом пуши старого
+  /// продолжают приходить. Не ждём дольше 6 с — выход важнее.
+  static Future<void> signOutChat(ChatAuthService auth) async {
+    try {
+      await PushService(auth).unregisterDevice().timeout(const Duration(seconds: 6));
+    } catch (_) {}
+    auth.manualSignOut();
+  }
+
   Future<void> _saveToken(String token) async {
     final freshToken = await auth.ensureFreshToken();
     if (freshToken == null) return;

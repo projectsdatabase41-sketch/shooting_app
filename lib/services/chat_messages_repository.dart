@@ -90,13 +90,38 @@ class ChatMessagesRepository {
     db.db.execute('DELETE FROM chat_contacts WHERE id = ?', [id]);
   }
 
-  List<ChatMessage> forContact(String contactId) {
+  /// [reuseFrom] — прошлый список этого же диалога: тело вложения (мегабайты у фото)
+  /// берётся оттуда по id, а не читается из БД заново на каждую отправку/приход.
+  List<ChatMessage> forContact(String contactId, {List<ChatMessage>? reuseFrom}) {
     _normalizeTimes();
+    if (reuseFrom == null) {
+      final rows = db.db.select(
+        'SELECT * FROM chat_local_messages WHERE contact_id = ? ORDER BY created_at',
+        [contactId],
+      );
+      return rows.map(ChatMessage.fromRow).toList();
+    }
+    final known = {for (final m in reuseFrom) if (m.attachmentBase64 != null) m.id: m.attachmentBase64};
     final rows = db.db.select(
-      'SELECT * FROM chat_local_messages WHERE contact_id = ? ORDER BY created_at',
+      'SELECT id, client_message_id, contact_id, direction, text, status, msg_type, '
+      'NULL AS attachment_base64, attachment_name, attachment_mime, attachment_size, drive_file_id, attachment_local_path, '
+      'edited, reply_to_client_message_id, reply_to_preview, seen, download_allowed, call_status, sender_id, peer_read, created_at, '
+      '(attachment_base64 IS NOT NULL) AS has_blob '
+      'FROM chat_local_messages WHERE contact_id = ? ORDER BY created_at',
       [contactId],
     );
-    return rows.map(ChatMessage.fromRow).toList();
+    return [
+      for (final r in rows)
+        () {
+          final m = ChatMessage.fromRow(r);
+          if (r['has_blob'] != 1) return m;
+          var blob = known[m.id];
+          blob ??= db.db
+              .select('SELECT attachment_base64 AS b FROM chat_local_messages WHERE id = ?', [m.id])
+              .firstOrNull?['b'] as String?;
+          return blob == null ? m : m.copyWith(attachmentBase64: blob);
+        }(),
+    ];
   }
 
   /// Последнее сообщение переписки — для превью в списке контактов.

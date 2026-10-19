@@ -678,9 +678,9 @@ class _ChatContactsView extends StatelessWidget {
               ListTile(
                 leading: const Icon(Icons.logout),
                 title: Text(tr('Выйти из чата')),
-                onTap: () {
+                onTap: () async {
                   Navigator.of(context).pop();
-                  auth.manualSignOut();
+                  await PushService.signOutChat(auth);
                   onContactsChanged();
                 },
               ),
@@ -1170,7 +1170,7 @@ class _ProfileSheetState extends State<_ProfileSheet> {
             const SizedBox(height: 16),
             TextButton.icon(
               onPressed: () {
-                widget.auth.manualSignOut();
+                PushService.signOutChat(widget.auth);
                 Navigator.of(context).pop();
               },
               icon: const Icon(Icons.logout),

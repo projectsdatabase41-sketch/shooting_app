@@ -561,7 +561,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   void _reload() {
     final before = _lastCount;
     setState(() {
-      _messages = widget.repo.forContact(_contact.id);
+      _messages = widget.repo.forContact(_contact.id, reuseFrom: _messages);
       _reactions = widget.repo.reactionsForContact(_contact.id);
       _saved = widget.repo.savedFor(_contact.id);
     });
@@ -593,7 +593,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         pendingCallAckContactId = null;
         widget.sync.acknowledgeCall(m).then((_) {
           if (mounted) {
-            setState(() => _messages = widget.repo.forContact(_contact.id));
+            setState(() => _messages = widget.repo.forContact(_contact.id, reuseFrom: _messages));
           }
         });
         return;
