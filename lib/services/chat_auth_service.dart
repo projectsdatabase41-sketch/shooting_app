@@ -1,3 +1,4 @@
+import 'secret_box.dart';
 import '../logic/friendly_error.dart';
 import 'dart:convert';
 import 'dart:math';
@@ -1175,14 +1176,15 @@ class ChatAuthService {
     final rows =
         db.db.select('SELECT $column FROM project_settings WHERE id = 1');
     if (rows.isEmpty) return '';
-    return '${rows.first[column] ?? ''}';
+    final v = '${rows.first[column] ?? ''}';
+    return SecretBox.settingsColumns.contains(column) ? SecretBox.open(v) : v;
   }
 
   void _write(String column, String value) {
     db.db.execute(
       'INSERT INTO project_settings (id, $column) VALUES (1, ?) '
       'ON CONFLICT(id) DO UPDATE SET $column = excluded.$column',
-      [value],
+      [SecretBox.settingsColumns.contains(column) ? SecretBox.seal(value) : value],
     );
   }
 }

@@ -1,3 +1,4 @@
+import 'secret_box.dart';
 import 'dart:convert';
 
 import '../services/local_db_service.dart';
@@ -227,7 +228,8 @@ class AiSettings {
     final rows =
         db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [key]);
     if (rows.isEmpty) return fallback;
-    final v = rows.first['hex'] as String?;
+    var v = rows.first['hex'] as String?;
+    if (v != null && SecretBox.prefKeys.contains(key)) v = SecretBox.open(v);
     return (v == null || v.isEmpty) ? fallback : v;
   }
 
@@ -235,7 +237,7 @@ class AiSettings {
     db.db.execute(
       'INSERT INTO color_prefs (key, hex) VALUES (?, ?) '
       'ON CONFLICT(key) DO UPDATE SET hex = excluded.hex',
-      [key, value],
+      [key, SecretBox.prefKeys.contains(key) ? SecretBox.seal(value) : value],
     );
   }
 

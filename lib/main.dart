@@ -1,3 +1,4 @@
+import 'services/secret_box.dart';
 import 'dart:async' show Timer;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'theme/app_transitions.dart';
@@ -72,6 +73,9 @@ Future<void> main() async {
     runApp(_DbOpenFailedApp(error: e));
     return;
   }
+  // Секреты (токены, ключи) шифруются ключом из защищённого хранилища системы.
+  await SecretBox.init();
+  SecretBox.migrate(db);
   RemoteConfig.loadCached(db);
   RemoteConfig.refresh(db); // в фоне, без ожидания
   runApp(ShootingApp(db: db, showSplash: true));

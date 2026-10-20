@@ -1,3 +1,4 @@
+import '../services/secret_box.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -117,12 +118,12 @@ class GDriveService {
 
   static String get _empty => '';
   static String url(LocalDbService db) => _get(db, _urlKey) ?? _empty;
-  static String secret(LocalDbService db) => _get(db, _secretKey) ?? _empty;
+  static String secret(LocalDbService db) => SecretBox.open(_get(db, _secretKey) ?? _empty);
   static bool configured(LocalDbService db) => url(db).startsWith('https://') && secret(db).isNotEmpty;
 
   static void save(LocalDbService db, {required String url, required String secret}) {
     _put(db, _urlKey, url.trim());
-    _put(db, _secretKey, secret.trim());
+    _put(db, _secretKey, SecretBox.seal(secret.trim()));
   }
 
   static void disconnect(LocalDbService db) {

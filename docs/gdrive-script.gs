@@ -23,6 +23,7 @@ function doPost(e) {
   try {
     const req = JSON.parse(e.postData.contents);
     if (!authorized(req)) {
+      Utilities.sleep(1500); // подбор пароля идёт медленно
       return out({ ok: false, error: 'unauthorized' });
     }
     const fn = ACTIONS[req.action];
