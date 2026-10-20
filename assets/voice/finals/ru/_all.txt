@@ -1,0 +1,52 @@
+# Русский: все фразы одним списком (папка/имя файла | текст). Озвучивайте по строке и сохраняйте как <имя>.mp3 рядом с .txt.
+1_commands/cmd_sighting | Пристрелка.
+1_commands/cmd_load | Заряжай.
+1_commands/cmd_start | Старт.
+1_commands/cmd_stop | Стоп.
+1_commands/cmd_finished | Финал окончен.
+2_standings/st_leads | Лидирует
+2_standings/st_eliminated | Выбывает
+2_standings/st_second | Второй
+2_standings/st_third | Третий
+2_standings/st_fourth | Четвёртый
+2_standings/st_fifth | Пятый
+2_standings/st_sixth | Шестой
+2_standings/st_seventh | Седьмой
+2_standings/st_eighth | Восьмой
+3_places/pl_4 | Четвёртое место.
+3_places/pl_5 | Пятое место.
+3_places/pl_6 | Шестое место.
+3_places/pl_7 | Седьмое место.
+3_places/pl_8 | Восьмое место.
+4_numbers/num_000 | ноль
+4_numbers/num_001 | один
+4_numbers/num_002 | два
+4_numbers/num_003 | три
+4_numbers/num_004 | четыре
+4_numbers/num_005 | пять
+4_numbers/num_006 | шесть
+4_numbers/num_007 | семь
+4_numbers/num_008 | восемь
+4_numbers/num_009 | девять
+4_numbers/num_010 | десять
+4_numbers/num_011 | одиннадцать
+4_numbers/num_012 | двенадцать
+4_numbers/num_013 | тринадцать
+4_numbers/num_014 | четырнадцать
+4_numbers/num_015 | пятнадцать
+4_numbers/num_016 | шестнадцать
+4_numbers/num_017 | семнадцать
+4_numbers/num_018 | восемнадцать
+4_numbers/num_019 | девятнадцать
+4_numbers/num_020 | двадцать
+4_numbers/num_030 | тридцать
+4_numbers/num_040 | сорок
+4_numbers/num_050 | пятьдесят
+4_numbers/num_060 | шестьдесят
+4_numbers/num_070 | семьдесят
+4_numbers/num_080 | восемьдесят
+4_numbers/num_090 | девяносто
+4_numbers/num_100 | сто
+4_numbers/num_200 | двести
+4_numbers/num_300 | триста
+4_numbers/num_comma | запятая

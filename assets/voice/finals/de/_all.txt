@@ -1,0 +1,52 @@
+# Deutsch: все фразы одним списком (папка/имя файла | текст). Озвучивайте по строке и сохраняйте как <имя>.mp3 рядом с .txt.
+1_commands/cmd_sighting | Probeschüsse.
+1_commands/cmd_load | Laden.
+1_commands/cmd_start | Start.
+1_commands/cmd_stop | Stopp.
+1_commands/cmd_finished | Finale beendet.
+2_standings/st_leads | Es führt
+2_standings/st_eliminated | Ausgeschieden
+2_standings/st_second | Zweiter
+2_standings/st_third | Dritter
+2_standings/st_fourth | Vierter
+2_standings/st_fifth | Fünfter
+2_standings/st_sixth | Sechster
+2_standings/st_seventh | Siebter
+2_standings/st_eighth | Achter
+3_places/pl_4 | Vierter Platz.
+3_places/pl_5 | Fünfter Platz.
+3_places/pl_6 | Sechster Platz.
+3_places/pl_7 | Siebter Platz.
+3_places/pl_8 | Achter Platz.
+4_numbers/num_000 | null
+4_numbers/num_001 | eins
+4_numbers/num_002 | zwei
+4_numbers/num_003 | drei
+4_numbers/num_004 | vier
+4_numbers/num_005 | fünf
+4_numbers/num_006 | sechs
+4_numbers/num_007 | sieben
+4_numbers/num_008 | acht
+4_numbers/num_009 | neun
+4_numbers/num_010 | zehn
+4_numbers/num_011 | elf
+4_numbers/num_012 | zwölf
+4_numbers/num_013 | dreizehn
+4_numbers/num_014 | vierzehn
+4_numbers/num_015 | fünfzehn
+4_numbers/num_016 | sechzehn
+4_numbers/num_017 | siebzehn
+4_numbers/num_018 | achtzehn
+4_numbers/num_019 | neunzehn
+4_numbers/num_020 | zwanzig
+4_numbers/num_030 | dreißig
+4_numbers/num_040 | vierzig
+4_numbers/num_050 | fünfzig
+4_numbers/num_060 | sechzig
+4_numbers/num_070 | siebzig
+4_numbers/num_080 | achtzig
+4_numbers/num_090 | neunzig
+4_numbers/num_100 | hundert
+4_numbers/num_200 | zweihundert
+4_numbers/num_300 | dreihundert
+4_numbers/num_comma | Komma

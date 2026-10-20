@@ -1,0 +1,52 @@
+# English: все фразы одним списком (папка/имя файла | текст). Озвучивайте по строке и сохраняйте как <имя>.mp3 рядом с .txt.
+1_commands/cmd_sighting | Sighting shots.
+1_commands/cmd_load | Load.
+1_commands/cmd_start | Start.
+1_commands/cmd_stop | Stop.
+1_commands/cmd_finished | Final finished.
+2_standings/st_leads | Leading
+2_standings/st_eliminated | Eliminated
+2_standings/st_second | Second
+2_standings/st_third | Third
+2_standings/st_fourth | Fourth
+2_standings/st_fifth | Fifth
+2_standings/st_sixth | Sixth
+2_standings/st_seventh | Seventh
+2_standings/st_eighth | Eighth
+3_places/pl_4 | Fourth place.
+3_places/pl_5 | Fifth place.
+3_places/pl_6 | Sixth place.
+3_places/pl_7 | Seventh place.
+3_places/pl_8 | Eighth place.
+4_numbers/num_000 | zero
+4_numbers/num_001 | one
+4_numbers/num_002 | two
+4_numbers/num_003 | three
+4_numbers/num_004 | four
+4_numbers/num_005 | five
+4_numbers/num_006 | six
+4_numbers/num_007 | seven
+4_numbers/num_008 | eight
+4_numbers/num_009 | nine
+4_numbers/num_010 | ten
+4_numbers/num_011 | eleven
+4_numbers/num_012 | twelve
+4_numbers/num_013 | thirteen
+4_numbers/num_014 | fourteen
+4_numbers/num_015 | fifteen
+4_numbers/num_016 | sixteen
+4_numbers/num_017 | seventeen
+4_numbers/num_018 | eighteen
+4_numbers/num_019 | nineteen
+4_numbers/num_020 | twenty
+4_numbers/num_030 | thirty
+4_numbers/num_040 | forty
+4_numbers/num_050 | fifty
+4_numbers/num_060 | sixty
+4_numbers/num_070 | seventy
+4_numbers/num_080 | eighty
+4_numbers/num_090 | ninety
+4_numbers/num_100 | one hundred
+4_numbers/num_200 | two hundred
+4_numbers/num_300 | three hundred
+4_numbers/num_comma | point
