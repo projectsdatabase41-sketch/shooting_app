@@ -68,7 +68,7 @@ class SecretBox {
 
   /// Колонки `project_settings` и ключи `color_prefs`, значения которых — секреты.
   static const settingsColumns = {'auth_access_token', 'auth_refresh_token', 'chat_access_token', 'chat_refresh_token', 'coach_share_token'};
-  static const prefKeys = {'ai_api_key', 'ai_gemini_key', 'gdrive_secret'};
+  static const prefKeys = {'ai_api_key', 'ai_gemini_key', 'gdrive_secret', 'finals_voice_key'};
 
   /// Один раз после [init]: шифрует то, что уже лежит в базе открытым текстом.
   static void migrate(LocalDbService db) {

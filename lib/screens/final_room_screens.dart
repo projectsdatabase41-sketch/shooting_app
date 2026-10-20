@@ -562,12 +562,12 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
     if (!mounted) return;
     if (FinalsPrefs.voice(widget.store.db)) {
       final cmd = _phaseVoice.update(c.phase.name, secondsLeft: c.secondsLeft, announcing: c.announcing);
-      if (cmd != null) FinalsAnnouncer.speak(cmd, queue: true);
+      if (cmd != null) FinalsAnnouncer.say(widget.store.db, cmd, refs: _phaseVoice.lastRef == null ? null : [_phaseVoice.lastRef!]);
       final text = _tracker.update(
         [for (final r in c.live) AnnounceRow(r.c.name, r.total, r.c.active)],
         announcing: c.announcing,
       );
-      if (text != null) FinalsAnnouncer.speak(text, queue: true);
+      if (text != null) FinalsAnnouncer.say(widget.store.db, text, refs: _tracker.lastRefs);
     }
     if (c.phase == RunPhase.finished && !_saved) {
       _saved = true;
@@ -694,12 +694,12 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
         final snap = _guest?.snapshot;
         if (snap != null) {
           final cmd = _phaseVoice.update(snap.phase, secondsLeft: snap.secondsLeft, announcing: snap.phase == 'loading' && snap.secondsLeft > 5);
-          if (cmd != null) FinalsAnnouncer.speak(cmd, queue: true);
+          if (cmd != null) FinalsAnnouncer.say(context.read<AppDataStore>().db, cmd, refs: _phaseVoice.lastRef == null ? null : [_phaseVoice.lastRef!]);
           final text = _tracker.update(
             [for (final r in snap.rows) AnnounceRow('${r['name']}', (r['total'] as num).toDouble(), r['active'] == true, isMe: r['id'] == widget.member.targetId)],
             announcing: snap.phase == 'loading' && snap.secondsLeft > 5,
           );
-          if (text != null) FinalsAnnouncer.speak(text, queue: true);
+          if (text != null) FinalsAnnouncer.say(context.read<AppDataStore>().db, text, refs: _tracker.lastRefs);
         }
         setState(() => _last = snap ?? _last);
       });

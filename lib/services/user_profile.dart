@@ -1,3 +1,4 @@
+import '../finals/voice_packs.dart';
 import 'local_db_service.dart';
 
 /// Профиль спортсмена: вид стрельбы, пол, год рождения, разряд, регион.
@@ -98,6 +99,7 @@ class UserProfile {
     String region = '',
   }) {
     assert(disciplines.isNotEmpty && (gender == 'm' || gender == 'f'));
+    final oldName = VoicePacks.ownName(db);
     _write(db, _kFirst, firstName.trim());
     _write(db, _kLast, lastName.trim());
     _write(db, _kDisciplines, disciplines.join(','));
@@ -107,6 +109,8 @@ class UserProfile {
     _write(db, _kRank, rank);
     _write(db, _kRegion, region.trim());
     _write(db, _kDone, '1');
+    // Своё имя сохранено или изменено — диктор финалов заранее озвучивает фразы с ним (в фоне).
+    VoicePacks.onProfileChanged(db, oldName: oldName);
   }
 
   /// Предлагали ли уже синхронизацию с облаком (один раз после анкеты).

@@ -1,3 +1,5 @@
+import 'finals_voice_settings_screen.dart';
+import '../finals/voice_packs.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -201,6 +203,8 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
   void _start(AppDataStore store) {
     final fmt = _fmt;
     if (fmt == null) return;
+    // Недостающие записи диктора для участников готовим в фоне (если они уже есть — ничего не делается).
+    VoicePacks.ensureNames(store.db, [_myName(store), for (final o in _opps) o.name]);
     final face = TargetFace.byCode(widget.format.faceCode);
     final h = _history(store);
     final enough = h.all.length >= 20;
@@ -285,8 +289,10 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
     if (slot == null) return;
     final st = champ['stats'] as Map<String, dynamic>;
     double n(String k) => (st[k] as num).toDouble();
+    final oldChampName = _opps[slot].name;
     setState(() => _opps[slot] = _Opp('${champ['display_name']}',
         stats: ShotStats(n('mx'), n('my'), n('sx'), n('sy'), (st['n'] as num).toInt())));
+    if (mounted) VoicePacks.onOpponentRenamed(context.read<AppDataStore>().db, oldName: oldChampName, newName: '${champ['display_name']}');
   }
 
   Widget _stepper(String label, int value, int min, int max, void Function(int) set, {int step = 1}) => Row(children: [
@@ -318,7 +324,10 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
     );
     ctl.dispose();
     if (name == null || name.isEmpty) return;
+    final old = _opps[i].name;
     setState(() => _opps[i] = _Opp(name, stats: _opps[i].stats));
+    // Имя бота изменено: старые записи диктора удаляются, фразы с новым именем озвучиваются заново.
+    if (mounted) VoicePacks.onOpponentRenamed(context.read<AppDataStore>().db, oldName: old, newName: name);
   }
 
   @override
@@ -435,6 +444,14 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
                     setState(() => _voice = v);
                     FinalsPrefs.setVoice(store.db, v);
                   },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.record_voice_over_outlined),
+                  title: Text(tr('Голос ИИ')),
+                  subtitle: Text(tr('Заранее готовые записи диктора, в том числе с вашим именем')),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => FinalsVoiceSettingsScreen(db: store.db))),
                 ),
                 // 4. Откуда данные ботов.
                 Container(

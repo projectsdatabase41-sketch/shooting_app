@@ -72,12 +72,12 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
     }
     if (_voice) {
       final cmd = _phaseVoice.update(c.phase.name, secondsLeft: c.secondsLeft, announcing: c.announcing);
-      if (cmd != null) FinalsAnnouncer.speak(cmd, queue: true);
+      if (cmd != null) FinalsAnnouncer.say(widget.store.db, cmd, refs: _phaseVoice.lastRef == null ? null : [_phaseVoice.lastRef!]);
       final text = _tracker.update(
         [for (final r in c.live) AnnounceRow(r.c.name, r.total, r.c.active, isMe: r.c.id == c.userId)],
         announcing: c.announcing,
       );
-      if (text != null) FinalsAnnouncer.speak(text, queue: true);
+      if (text != null) FinalsAnnouncer.say(widget.store.db, text, refs: _tracker.lastRefs);
     }
     setState(() {});
   }
