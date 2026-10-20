@@ -72,13 +72,86 @@ class _ChatBackupSettingsScreenState extends State<ChatBackupSettingsScreen> {
     }
   }
 
+  /// Пароль папки: если хранилище уже есть на телефоне (после переустановки) — вводится прежний,
+  /// иначе придумывается новый. `false` — отказались или ввели неверный.
+  Future<bool> _ensureVaultPassword() async {
+    if (await ChatVault.hasKey()) return true;
+    final existing = await ChatVault.hasVaultFile();
+    final a = TextEditingController(), b = TextEditingController();
+    String? error;
+    bool busy = false;
+    final ok = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          title: Text(existing ? tr('Пароль папки Nexus') : tr('Придумайте пароль папки')),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(existing
+                ? tr('Введите пароль, которым папка была защищена раньше.')
+                : tr('Файлы и история чатов в папке будут зашифрованы этим паролем. Забытый пароль восстановить нельзя: без него данные не откроет никто, в том числе вы.')),
+            const SizedBox(height: 8),
+            TextField(controller: a, obscureText: true, autofocus: true, decoration: InputDecoration(labelText: tr('Пароль (от 8 символов)'))),
+            if (!existing) TextField(controller: b, obscureText: true, decoration: InputDecoration(labelText: tr('Повторите пароль'))),
+            if (error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(error!, style: TextStyle(color: Theme.of(ctx).colorScheme.error))),
+          ]),
+          actions: [
+            TextButton(onPressed: busy ? null : () => Navigator.pop(ctx, false), child: Text(tr('Отмена'))),
+            FilledButton(
+              onPressed: busy
+                  ? null
+                  : () async {
+                      if (a.text.length < 8) {
+                        setS(() => error = tr('Не короче 8 символов'));
+                        return;
+                      }
+                      if (!existing && a.text != b.text) {
+                        setS(() => error = tr('Пароли не совпадают'));
+                        return;
+                      }
+                      setS(() {
+                        busy = true;
+                        error = null;
+                      });
+                      bool good;
+                      try {
+                        good = await ChatVault.setPassword(a.text);
+                      } catch (_) {
+                        good = false;
+                        error = tr('Нужен доступ ко всем файлам: включите его для Nexus в настройках телефона');
+                      }
+                      if (!ctx.mounted) return;
+                      if (good) {
+                        Navigator.pop(ctx, true);
+                      } else {
+                        setS(() {
+                          busy = false;
+                          error ??= tr('Неверный пароль');
+                        });
+                      }
+                    },
+              child: busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : Text(tr('ОК')),
+            ),
+          ],
+        ),
+      ),
+    );
+    return ok == true;
+  }
+
   Future<void> _vaultRun({required bool restore}) async {
     setState(() {
       _vaultBusy = true;
       _vaultMessage = null;
     });
     try {
-      final n = restore ? await ChatVault.restore(db, ChatMessagesRepository(db)) : await ChatVault.sync(db);
+      if (!await _ensureVaultPassword()) {
+        if (mounted) setState(() => _vaultMessage = null);
+        return;
+      }
+      final repo = ChatMessagesRepository(db);
+      await ChatVault.migrateLegacy(db, repo); // прежняя открытая копия, если была, заменяется зашифрованной
+      final n = restore ? await ChatVault.restore(db, repo) : await ChatVault.sync(db);
       if (mounted) {
         setState(() => _vaultMessage = restore
             ? (n == 0 ? tr('В папке нет ничего нового') : tr('Восстановлено сообщений: {n}', {'n': n}))
@@ -188,12 +261,18 @@ class _ChatBackupSettingsScreenState extends State<ChatBackupSettingsScreen> {
               secondary: const Icon(Icons.folder_special_outlined),
               title: Text(tr('Папка Nexus на телефоне')),
               subtitle: Text(_vaultMessage ??
-                  tr('Фото, файлы и история чатов копируются в папку Nexus/Chats в памяти телефона. Удаление приложения её не трогает')),
+                  tr('Фото, файлы и история чатов копируются в папку Nexus/Chats зашифрованными вашим паролем. Удаление приложения её не трогает')),
               value: ChatVault.isOn(db),
               onChanged: (v) async {
-                ChatVault.setOn(db, v);
                 setState(() => _vaultMessage = null);
-                if (v) await _vaultRun(restore: false);
+                if (!v) {
+                  ChatVault.setOn(db, false);
+                  setState(() {});
+                  return;
+                }
+                if (!await _ensureVaultPassword()) return;
+                ChatVault.setOn(db, true);
+                await _vaultRun(restore: false);
               },
             ),
             ListTile(
