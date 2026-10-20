@@ -1,19 +1,10 @@
 /**
  * Nexus ↔ Google Диск: мост на Google Apps Script.
- *
- * Как подключить (один раз, ~3 минуты):
- *  1. Откройте https://script.google.com → «Новый проект», вставьте весь этот файл вместо кода.
- *  2. Ниже в SECRET впишите свой длинный пароль (любые 20+ символов) — его же вы введёте в Nexus.
- *  3. «Развернуть» → «Новое развёртывание» → тип «Веб-приложение»:
- *       «Выполнять от имени»: Я (ваш аккаунт);  «У кого есть доступ»: Все.
- *     Нажмите «Развернуть», разрешите доступ к Google Диску (кнопка «Дополнительно» → «Перейти…»).
- *  4. Скопируйте «URL веб-приложения» (заканчивается на /exec) в Nexus, вместе с паролем.
- *
- * Безопасность: без пароля скрипт ничего не отдаёт и не меняет. Не публикуйте пароль и ссылку.
- * Скрипт работает с вашим Диском от вашего имени. Если пароль утёк — смените SECRET и сделайте
- * «Управление развёртываниями» → «Изменить» → «Новая версия».
+ * Этот код готовит сам Nexus: пароль уже вписан в строку SECRET ниже — ничего править не нужно.
+ * Вставьте код целиком в новый проект на script.google.com и разверните как веб-приложение.
+ * Без пароля скрипт ничего не отдаёт и не меняет.
  */
-const SECRET = 'ЗАМЕНИТЕ-НА-СВОЙ-ДЛИННЫЙ-ПАРОЛЬ';
+const SECRET = '__SECRET__';
 const MAX_GET_BYTES = 10 * 1024 * 1024; // крупнее за один раз не отдаём
 const LIST_LIMIT = 500;
 
@@ -21,10 +12,17 @@ function doGet() {
   return out({ ok: true, data: 'Nexus Drive bridge' });
 }
 
+function authorized(req) {
+  if (typeof SECRET !== 'string') return false;
+  if (SECRET.length < 12) return false;
+  if (SECRET.charAt(0) === '_') return false; // шаблон без пароля
+  return req.secret === SECRET;
+}
+
 function doPost(e) {
   try {
     const req = JSON.parse(e.postData.contents);
-    if (!SECRET || SECRET.indexOf('ЗАМЕНИТЕ') === 0 || req.secret !== SECRET) {
+    if (!authorized(req)) {
       return out({ ok: false, error: 'unauthorized' });
     }
     const fn = ACTIONS[req.action];

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -395,15 +396,29 @@ class GDriveSetup extends StatefulWidget {
 class _GDriveSetupState extends State<GDriveSetup> {
   late final _db = context.read<AppDataStore>().db;
   final _url = TextEditingController();
-  final _secret = TextEditingController();
+  late final _secret = TextEditingController(text: _newPassword());
   bool _busy = false;
   String? _error;
 
+  /// Пароль придумывает приложение: 32 символа, только буквы и цифры (в код вставляется как есть).
+  static String _newPassword() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    final r = math.Random.secure();
+    return List.generate(32, (_) => chars[r.nextInt(chars.length)]).join();
+  }
+
+  bool get _passwordOk => RegExp(r'^[A-Za-z0-9]{12,}$').hasMatch(_secret.text.trim());
+
+  /// Готовый скрипт: шаблон из приложения с вписанным паролем.
   Future<void> _copyScript() async {
     final msg = ScaffoldMessenger.of(context);
-    final text = await rootBundle.loadString('docs/gdrive-script.gs');
-    await Clipboard.setData(ClipboardData(text: text));
-    msg.showSnackBar(SnackBar(content: Text(tr('Скрипт скопирован — вставьте его в Google Apps Script'))));
+    if (!_passwordOk) {
+      msg.showSnackBar(SnackBar(content: Text(tr('Пароль: только латинские буквы и цифры, не короче 12 символов'))));
+      return;
+    }
+    final template = await rootBundle.loadString('docs/gdrive-script.gs');
+    await Clipboard.setData(ClipboardData(text: template.replaceFirst('__SECRET__', _secret.text.trim())));
+    msg.showSnackBar(SnackBar(content: Text(tr('Готовый скрипт скопирован — вставьте его в Apps Script целиком'))));
   }
 
   Future<void> _connect() async {
@@ -431,22 +446,45 @@ class _GDriveSetupState extends State<GDriveSetup> {
       children: [
         Text(tr('Подключите свой Google Диск'), style: theme.textTheme.titleMedium),
         const SizedBox(height: 8),
-        Text(tr('Работает через небольшой скрипт в вашем аккаунте Google: Nexus видит только то, что вы ему разрешили, и ничего не отдаёт без вашего пароля.')),
-        const SizedBox(height: 12),
-        Text(tr('1. Нажмите «Скопировать скрипт».\n2. Откройте script.google.com → Новый проект, вставьте скрипт и впишите свой пароль в строке SECRET.\n3. Развернуть → Новое развёртывание → Веб-приложение: выполнять от имени «Я», доступ «Все». Разрешите доступ к Диску.\n4. Скопируйте адрес веб-приложения (заканчивается на /exec) сюда вместе с паролем.')),
-        const SizedBox(height: 12),
-        OutlinedButton.icon(onPressed: _copyScript, icon: const Icon(Icons.copy_outlined), label: Text(tr('Скопировать скрипт'))),
+        Text(tr('Nexus сам готовит маленький скрипт для вашего аккаунта Google. Править в нём ничего не нужно: пароль уже внутри.')),
+        const SizedBox(height: 16),
+        Text(tr('Шаг 1. Пароль (его придумало приложение, можно оставить)'), style: theme.textTheme.titleSmall),
+        const SizedBox(height: 6),
+        TextField(
+          controller: _secret,
+          onChanged: (_) => setState(() {}),
+          decoration: InputDecoration(
+            labelText: tr('Пароль'),
+            helperText: tr('Латинские буквы и цифры, от 12 символов'),
+            suffixIcon: IconButton(
+              tooltip: tr('Придумать другой'),
+              icon: const Icon(Icons.casino_outlined),
+              onPressed: () => setState(() => _secret.text = _newPassword()),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(tr('Шаг 2. Скопируйте готовый скрипт'), style: theme.textTheme.titleSmall),
+        const SizedBox(height: 6),
+        FilledButton.icon(onPressed: _copyScript, icon: const Icon(Icons.copy_outlined), label: Text(tr('Скопировать готовый скрипт'))),
+        const SizedBox(height: 16),
+        Text(tr('Шаг 3. Вставьте и разверните'), style: theme.textTheme.titleSmall),
+        const SizedBox(height: 6),
+        Text(tr('• Нажмите «Открыть Apps Script» → «Новый проект».\n• Выделите весь код в редакторе, удалите и вставьте скопированный.\n• Нажмите «Развернуть» → «Новое развёртывание» → значок шестерёнки → «Веб-приложение».\n• «Выполнять от имени»: Я. «У кого есть доступ»: Все. Нажмите «Развернуть».\n• Разрешите доступ к Google Диску («Дополнительно» → «Перейти…»).\n• Скопируйте «URL веб-приложения» (заканчивается на /exec).')),
+        const SizedBox(height: 8),
         OutlinedButton.icon(
-            onPressed: () => launchUrl(Uri.parse('https://script.google.com'), mode: LaunchMode.externalApplication),
+            onPressed: () => launchUrl(Uri.parse('https://script.google.com/home/projects/create'), mode: LaunchMode.externalApplication),
             icon: const Icon(Icons.open_in_new),
             label: Text(tr('Открыть Apps Script'))),
         const SizedBox(height: 16),
-        TextField(controller: _url, decoration: InputDecoration(labelText: tr('Адрес веб-приложения (…/exec)'))),
-        const SizedBox(height: 8),
-        TextField(controller: _secret, obscureText: true, decoration: InputDecoration(labelText: tr('Пароль (SECRET из скрипта)'))),
+        Text(tr('Шаг 4. Вставьте адрес'), style: theme.textTheme.titleSmall),
+        const SizedBox(height: 6),
+        TextField(controller: _url, decoration: InputDecoration(labelText: tr('URL веб-приложения (…/exec)'))),
         if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: TextStyle(color: theme.colorScheme.error))),
         const SizedBox(height: 16),
-        FilledButton(onPressed: _busy ? null : _connect, child: _busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : Text(tr('Подключить'))),
+        FilledButton(
+            onPressed: _busy || !_passwordOk ? null : _connect,
+            child: _busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : Text(tr('Подключить'))),
       ],
     );
   }
