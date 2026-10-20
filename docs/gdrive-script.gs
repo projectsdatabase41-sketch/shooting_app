@@ -98,6 +98,21 @@ const ACTIONS = {
     };
   },
 
+  // Несколько папок за один вызов (для быстрой индексации Диска приложением).
+  listMany: function (r) {
+    const res = {};
+    const started = Date.now();
+    for (let i = 0; i < r.ids.length; i++) {
+      if (Date.now() - started > 240000) break; // не упираемся в лимит времени скрипта
+      try {
+        res[r.ids[i]] = ACTIONS.list({ folderId: r.ids[i] });
+      } catch (err) {
+        res[r.ids[i]] = null;
+      }
+    }
+    return res;
+  },
+
   search: function (r) {
     const q = "title contains '" + esc(r.q) + "' and trashed = false";
     return {

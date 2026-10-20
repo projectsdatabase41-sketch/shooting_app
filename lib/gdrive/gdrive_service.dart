@@ -35,6 +35,16 @@ class DriveItem {
         isFolder: j['isFolder'] == true,
       );
 
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'mime': mime,
+        'size': size,
+        'modified': modified.millisecondsSinceEpoch,
+        'url': url,
+        'isFolder': isFolder,
+      };
+
   bool get isImage => mime.startsWith('image/');
   bool get isText => mime.startsWith('text/') || const {'application/json', 'application/xml'}.contains(mime);
 }
@@ -46,6 +56,22 @@ class DriveListing {
   final List<DriveItem> folders;
   final List<DriveItem> files;
   const DriveListing({required this.id, required this.name, this.parent, required this.folders, required this.files});
+
+  factory DriveListing.fromJson(Map<String, dynamic> d) => DriveListing(
+        id: '${d['id']}',
+        name: '${d['name']}',
+        parent: d['parent'] as String?,
+        folders: [for (final f in (d['folders'] as List)) DriveItem.fromJson(f as Map<String, dynamic>)],
+        files: [for (final f in (d['files'] as List)) DriveItem.fromJson(f as Map<String, dynamic>)],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'parent': parent,
+        'folders': [for (final f in folders) f.toJson()],
+        'files': [for (final f in files) f.toJson()],
+      };
 }
 
 class DriveFile {
@@ -97,6 +123,47 @@ class GDriveService {
   static void disconnect(LocalDbService db) {
     _put(db, _urlKey, '');
     _put(db, _secretKey, '');
+    clearCache(db);
+  }
+
+  // ---- Локальный кэш списков папок: интерфейс открывается мгновенно, обновление — в фоне ----
+  static const _cachePrefix = 'gdrive_f:';
+  static const _indexedKey = 'gdrive_indexed_at';
+
+  static DriveListing? cached(LocalDbService db, String folderId) {
+    final v = _get(db, '$_cachePrefix$folderId');
+    if (v == null || v.isEmpty) return null;
+    try {
+      return DriveListing.fromJson(jsonDecode(v) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static void _cachePut(LocalDbService db, String folderId, DriveListing l) =>
+      _put(db, '$_cachePrefix$folderId', jsonEncode(l.toJson()));
+
+  static void clearCache(LocalDbService db) {
+    db.db.execute("DELETE FROM color_prefs WHERE key LIKE '$_cachePrefix%' OR key = '$_indexedKey'");
+  }
+
+  static DateTime? indexedAt(LocalDbService db) => DateTime.tryParse(_get(db, _indexedKey) ?? '')?.toLocal();
+
+  /// Поиск по названию в локальном индексе (все закэшированные папки). Мгновенно, без сети.
+  static List<DriveItem> searchCached(LocalDbService db, String q) {
+    final needle = q.trim().toLowerCase();
+    if (needle.isEmpty) return const [];
+    final out = <DriveItem>[];
+    final seen = <String>{};
+    for (final r in db.db.select("SELECT hex FROM color_prefs WHERE key LIKE '$_cachePrefix%'")) {
+      try {
+        final l = DriveListing.fromJson(jsonDecode('${r['hex']}') as Map<String, dynamic>);
+        for (final it in [...l.folders, ...l.files]) {
+          if (it.name.toLowerCase().contains(needle) && seen.add(it.id)) out.add(it);
+        }
+      } catch (_) {}
+    }
+    return out;
   }
 
   /// Один вызов моста. Apps Script отвечает на POST переадресацией (302) на страницу с
@@ -136,15 +203,72 @@ class GDriveService {
 
   Future<String> ping() async => '${(await _call('ping') as Map)['root']}';
 
+  /// Список папки с сервера; результат кладётся в локальный кэш.
   Future<DriveListing> list([String folderId = 'root']) async {
-    final d = await _call('list', {'folderId': folderId}) as Map<String, dynamic>;
-    return DriveListing(
-      id: '${d['id']}',
-      name: '${d['name']}',
-      parent: d['parent'] as String?,
-      folders: [for (final f in (d['folders'] as List)) DriveItem.fromJson(f as Map<String, dynamic>)],
-      files: [for (final f in (d['files'] as List)) DriveItem.fromJson(f as Map<String, dynamic>)],
-    );
+    final l = DriveListing.fromJson(await _call('list', {'folderId': folderId}) as Map<String, dynamic>);
+    _cachePut(db, folderId, l);
+    if (folderId != l.id) _cachePut(db, l.id, l);
+    return l;
+  }
+
+  /// Скачивает структуру всего Диска (только названия и ссылки, без файлов) в кэш: папки потом
+  /// открываются мгновенно. Идёт пакетами по [batch] папок; старый скрипт без пакетного вызова
+  /// обслуживается по одной папке. [onProgress] — сколько папок уже в кэше.
+  Future<int> syncIndex({void Function(int folders)? onProgress, int batch = 20, bool Function()? cancelled}) async {
+    final queue = <String>['root'];
+    final done = <String>{};
+    var batchMode = true;
+    while (queue.isNotEmpty) {
+      if (cancelled?.call() == true) return done.length;
+      final ids = <String>[];
+      while (queue.isNotEmpty && ids.length < (batchMode ? batch : 1)) {
+        final id = queue.removeLast();
+        if (done.add(id)) ids.add(id);
+      }
+      if (ids.isEmpty) continue;
+      final listings = <String, DriveListing?>{};
+      if (batchMode) {
+        try {
+          final d = await _call('listMany', {'ids': ids}) as Map<String, dynamic>;
+          for (final e in d.entries) {
+            listings[e.key] = e.value == null ? null : DriveListing.fromJson(e.value as Map<String, dynamic>);
+          }
+          // пакет мог оборваться по времени — недоданные вернём в очередь
+          for (final id in ids) {
+            if (!listings.containsKey(id)) {
+              done.remove(id);
+              queue.add(id);
+            }
+          }
+        } on GDriveException catch (e) {
+          if (!'$e'.contains('unknown action')) rethrow;
+          batchMode = false; // скрипт не обновлён: по одной папке
+          for (final id in ids) {
+            done.remove(id);
+            queue.add(id);
+          }
+          continue;
+        }
+      } else {
+        try {
+          listings[ids.first] = DriveListing.fromJson(await _call('list', {'folderId': ids.first}) as Map<String, dynamic>);
+        } catch (_) {
+          listings[ids.first] = null;
+        }
+      }
+      for (final e in listings.entries) {
+        final l = e.value;
+        if (l == null) continue;
+        _cachePut(db, e.key, l);
+        if (e.key != l.id) _cachePut(db, l.id, l);
+        for (final f in l.folders) {
+          if (!done.contains(f.id)) queue.add(f.id);
+        }
+      }
+      onProgress?.call(done.length);
+    }
+    _put(db, _indexedKey, DateTime.now().toUtc().toIso8601String());
+    return done.length;
   }
 
   Future<List<DriveItem>> search(String q) async {

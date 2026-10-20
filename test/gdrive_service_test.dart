@@ -81,4 +81,38 @@ void main() {
     expect(GDriveService.configured(db), isFalse);
     await expectLater(GDriveService(db).ping(), throwsA(isA<GDriveException>()));
   });
+
+  test('индекс: пакетный список папок кладётся в кэш, поиск идёт по кэшу, старый скрипт — по одной папке', () async {
+    Map<String, dynamic> listing(String id, String name, {List<String> sub = const [], List<String> files = const []}) => {
+          'id': id,
+          'name': name,
+          'parent': null,
+          'folders': [for (final f in sub) {'id': f, 'name': 'Папка $f', 'mime': 'folder', 'size': 0, 'modified': 1, 'url': 'u', 'isFolder': true}],
+          'files': [for (final f in files) {'id': 'file-$f', 'name': f, 'mime': 'text/plain', 'size': 1, 'modified': 1, 'url': 'u', 'isFolder': false}],
+        };
+    final tree = {
+      'root': listing('root', 'Мой диск', sub: ['a']),
+      'a': listing('a', 'Папка a', files: ['отчёт.txt']),
+    };
+    for (final oldScript in [false, true]) {
+      final db = await _db();
+      final svc = GDriveService(db, clientFactory: () => MockClient((req) async {
+            final body = jsonDecode(req.body) as Map<String, dynamic>;
+            if (body['action'] == 'listMany') {
+              if (oldScript) return http.Response(jsonEncode({'ok': false, 'error': 'unknown action'}), 200);
+              return http.Response.bytes(utf8.encode(jsonEncode({'ok': true, 'data': {for (final id in body['ids']) id: tree[id]}})), 200);
+            }
+            return http.Response.bytes(utf8.encode(jsonEncode({'ok': true, 'data': tree[body['folderId']]})), 200);
+          }));
+      var last = 0;
+      final n = await svc.syncIndex(onProgress: (c) => last = c);
+      expect(n, 2);
+      expect(last, 2);
+      expect(GDriveService.cached(db, 'a')?.files.single.name, 'отчёт.txt');
+      expect(GDriveService.indexedAt(db), isNotNull);
+      expect(GDriveService.searchCached(db, 'ОТЧЁТ').map((e) => e.id), ['file-отчёт.txt']);
+      GDriveService.disconnect(db);
+      expect(GDriveService.cached(db, 'a'), isNull);
+    }
+  });
 }

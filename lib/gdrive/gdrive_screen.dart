@@ -43,36 +43,72 @@ class _GDriveScreenState extends State<GDriveScreen> {
   @override
   void initState() {
     super.initState();
-    if (GDriveService.configured(_db)) _load();
+    if (GDriveService.configured(_db)) {
+      _load();
+      // Первый вход после подключения — сразу скачиваем структуру Диска; дальше — раз в сутки.
+      final at = GDriveService.indexedAt(_db);
+      if (at == null || DateTime.now().difference(at) > const Duration(days: 1)) _buildIndex();
+    }
   }
 
   @override
   void dispose() {
+    _indexCancelled = true;
     _searchCtl.dispose();
     super.dispose();
   }
 
   String get _cur => _path.last.$1;
 
+  /// Сначала показываем сохранённое (мгновенно), потом тихо обновляем с сервера.
   Future<void> _load() async {
+    final c = GDriveService.cached(_db, _cur);
     setState(() {
       _busy = true;
       _error = null;
       _found = null;
+      if (c != null) _listing = c;
     });
     try {
       final l = await _svc.list(_cur);
       if (mounted) setState(() => _listing = l);
     } catch (e) {
-      if (mounted) setState(() => _error = friendlyError(e));
+      // есть кэш — не пугаем ошибкой, просто остаёмся на сохранённом
+      if (mounted && c == null) setState(() => _error = friendlyError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  int? _indexing;
+  bool _indexCancelled = false;
+
+  /// Фоновая загрузка структуры всего Диска в кэш.
+  Future<void> _buildIndex() async {
+    if (_indexing != null) return;
+    _indexCancelled = false;
+    setState(() => _indexing = 0);
+    try {
+      await _svc.syncIndex(onProgress: (n) {
+        if (mounted) setState(() => _indexing = n);
+      }, cancelled: () => _indexCancelled || !mounted);
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _indexing = null);
     }
   }
 
   Future<void> _search(String q) async {
     if (q.trim().isEmpty) {
       setState(() => _found = null);
+      return;
+    }
+    // Индекс готов — ищем по нему сразу, без сети.
+    if (GDriveService.indexedAt(_db) != null) {
+      setState(() {
+        _found = GDriveService.searchCached(_db, q);
+        _error = null;
+      });
       return;
     }
     setState(() {
@@ -248,14 +284,8 @@ class _GDriveScreenState extends State<GDriveScreen> {
           ? '${(b / 1024).toStringAsFixed(0)} КБ'
           : '${(b / 1024 / 1024).toStringAsFixed(1)} МБ';
 
-  Widget _row(DriveItem it) {
-    final df = DateFormat('dd.MM.yy HH:mm');
-    return ListTile(
-      leading: Icon(_icon(it)),
-      title: Text(it.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text(it.isFolder ? df.format(it.modified) : '${_size(it.size)} · ${df.format(it.modified)}'),
-      onTap: () => _open(it),
-      trailing: PopupMenuButton<String>(
+  PopupMenuButton<String> _menu(DriveItem it) => PopupMenuButton<String>(
+        padding: EdgeInsets.zero,
         onSelected: (v) {
           switch (v) {
             case 'web':
@@ -274,7 +304,49 @@ class _GDriveScreenState extends State<GDriveScreen> {
           PopupMenuItem(value: 'ren', child: Text(tr('Переименовать'))),
           PopupMenuItem(value: 'del', child: Text(tr('Удалить'))),
         ],
-      ),
+      );
+
+  Widget _row(DriveItem it) {
+    final theme = Theme.of(context);
+    if (it.isFolder) {
+      // Папка — кнопка-плитка: заливка, скругление, нажатие открывает.
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+        child: Material(
+          color: theme.colorScheme.secondaryContainer.withValues(alpha: 0.75),
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: () => _open(it),
+            child: Padding(
+              padding: const EdgeInsets.only(left: 12, top: 2, bottom: 2),
+              child: Row(children: [
+                Icon(Icons.folder, color: theme.colorScheme.onSecondaryContainer),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(it.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600, color: theme.colorScheme.onSecondaryContainer)),
+                ),
+                _menu(it),
+              ]),
+            ),
+          ),
+        ),
+      );
+    }
+    final df = DateFormat('dd.MM.yy HH:mm');
+    return ListTile(
+      dense: true,
+      visualDensity: const VisualDensity(vertical: -3),
+      minVerticalPadding: 0,
+      contentPadding: const EdgeInsets.only(left: 16, right: 4),
+      leading: Icon(_icon(it)),
+      title: Text(it.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text('${_size(it.size)} · ${df.format(it.modified)}', style: theme.textTheme.bodySmall),
+      onTap: () => _open(it),
+      trailing: _menu(it),
     );
   }
 
@@ -323,6 +395,7 @@ class _GDriveScreenState extends State<GDriveScreen> {
               PopupMenuButton<String>(
                 onSelected: (v) {
                   if (v == 'refresh') _load();
+                  if (v == 'index') _buildIndex();
                   if (v == 'off') {
                     GDriveService.disconnect(_db);
                     setState(() {
@@ -335,6 +408,7 @@ class _GDriveScreenState extends State<GDriveScreen> {
                 },
                 itemBuilder: (_) => [
                   PopupMenuItem(value: 'refresh', child: Text(tr('Обновить'))),
+                  PopupMenuItem(value: 'index', child: Text(tr('Обновить структуру всего Диска'))),
                   PopupMenuItem(value: 'off', child: Text(tr('Отключить Google Диск'))),
                 ],
               ),
@@ -347,7 +421,27 @@ class _GDriveScreenState extends State<GDriveScreen> {
                 const SizedBox(height: 10),
                 FloatingActionButton(heroTag: 'gd-up', onPressed: _busy ? null : _upload, child: const Icon(Icons.upload_file)),
               ]),
-        body: _error != null
+        body: Stack(children: [
+          Positioned.fill(child: _body(theme, top, items)),
+          if (_indexing != null)
+            Positioned(
+              top: top,
+              left: 0,
+              right: 0,
+              child: IgnorePointer(
+                child: Center(
+                  child: Text(tr('Загружаю структуру Диска… папок: {n}', {'n': _indexing}),
+                      style: theme.textTheme.labelSmall?.copyWith(color: theme.hintColor)),
+                ),
+              ),
+            ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _body(ThemeData theme, double top, List<DriveItem> items) {
+    return _error != null
             ? Center(
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(24, top, 24, 0),
@@ -377,9 +471,7 @@ class _GDriveScreenState extends State<GDriveScreen> {
                                 ? const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator()))
                                 : _row(items[i]),
                           ),
-                  ),
-      ),
-    );
+                  );
   }
 }
 
