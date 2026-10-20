@@ -92,10 +92,60 @@ const ACTIONS = {
     return {
       id: f.getId(),
       name: f.getName(),
+      stamp: f.getLastUpdated().getTime(),
       parent: parents.hasNext() ? parents.next().getId() : null,
       folders: collect(f.getFolders(), true, LIST_LIMIT),
       files: collect(f.getFiles(), false, LIST_LIMIT),
     };
+  },
+
+  // Времена последнего изменения папок: приложение по ним находит, что обновилось (быстрая сверка).
+  // Нет в ответе — папки больше нет или она в корзине.
+  stamps: function (r) {
+    const res = {};
+    r.ids.forEach(function (id) {
+      try {
+        const f = DriveApp.getFolderById(id);
+        if (!f.isTrashed()) res[id] = f.getLastUpdated().getTime();
+      } catch (err) {
+        // удалена — пропускаем
+      }
+    });
+    return res;
+  },
+
+  // Описание для ИИ и разработчиков: что умеет мост и в каком формате отвечает.
+  describe: function () {
+    return {
+      about: 'Nexus Drive bridge: JSON over HTTPS (Google Apps Script web app). POST the request body as text (JSON) to the /exec URL; follow the redirect (HTTP 302) with a GET to read the result. Every request: {"secret": "<password>", "action": "<name>", ...params}. Every reply: {"ok": true, "data": ...} or {"ok": false, "error": "..."}.',
+      item: 'Item = {id, name, mime ("folder" for folders), size (bytes), modified (ms since epoch), url, isFolder}.',
+      actions: {
+        ping: 'No params. -> {root: id of My Drive}.',
+        list: '{folderId?: id or "root"} -> {id, name, stamp, parent, folders: [Item], files: [Item]} (up to 500 each).',
+        listMany: '{ids: [id,...]} -> {id: list-result or null}. Batch version of list.',
+        stamps: '{ids: [id,...]} -> {id: lastUpdated ms}. Folders that are gone or trashed are absent.',
+        search: '{q: text} -> {folders: [Item], files: [Item]} by name (up to 100 each).',
+        get: '{id} -> {name, mime, size, b64 (file bytes, base64), url}. Up to 10 MB. Google Docs are returned as PDF.',
+        put: '{parentId, name, mime, b64, overwriteId?} -> Item. Creates a file; with overwriteId a text file is replaced in place.',
+        chunk: '{uploadId, n, b64} -> true. Upload part n (0-based) of a large file; then call finish.',
+        finish: '{uploadId, total, parentId, name, mime, overwriteId?} -> Item. Assembles the parts.',
+        mkdir: '{parentId, name} -> Item (folder).',
+        ensurePath: '{path: "A/B/C"} -> {id}. Creates missing folders from My Drive root.',
+        rename: '{id, name} -> true.',
+        move: '{id, toId} -> true.',
+        copy: '{id, parentId?, name?} -> Item. Copies a file.',
+        trash: '{id} -> true. Moves to the Drive trash (recoverable).',
+        describe: 'No params. This description.',
+      },
+      notes: 'Be careful: trash, move and put change the owner\'s Drive. Prefer read-only actions (list, search, get) unless asked to change things.',
+    };
+  },
+
+  copy: function (r) {
+    const f = DriveApp.getFileById(r.id);
+    const target = r.parentId ? folderOf(r.parentId) : null;
+    const name = r.name ? r.name : f.getName();
+    return meta(target ? f.makeCopy(name, target) : f.makeCopy(name), false);
   },
 
   // Несколько папок за один вызов (для быстрой индексации Диска приложением).

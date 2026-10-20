@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -45,9 +46,8 @@ class _GDriveScreenState extends State<GDriveScreen> {
     super.initState();
     if (GDriveService.configured(_db)) {
       _load();
-      // Первый вход после подключения — сразу скачиваем структуру Диска; дальше — раз в сутки.
-      final at = GDriveService.indexedAt(_db);
-      if (at == null || DateTime.now().difference(at) > const Duration(days: 1)) _buildIndex();
+      // При каждом открытии модуля — быстрая сверка изменений (первый раз — полный индекс).
+      _syncBackground();
     }
   }
 
@@ -60,11 +60,12 @@ class _GDriveScreenState extends State<GDriveScreen> {
 
   String get _cur => _path.last.$1;
 
-  /// Сначала показываем сохранённое (мгновенно), потом тихо обновляем с сервера.
-  Future<void> _load() async {
+  /// Сначала показываем сохранённое (мгновенно), потом тихо обновляем с сервера. [silent] —
+  /// обновление свайпом вниз: без экрана загрузки и без значков, список меняется на месте.
+  Future<void> _load({bool silent = false}) async {
     final c = GDriveService.cached(_db, _cur);
     setState(() {
-      _busy = true;
+      if (!silent) _busy = true;
       _error = null;
       _found = null;
       if (c != null) _listing = c;
@@ -76,25 +77,51 @@ class _GDriveScreenState extends State<GDriveScreen> {
       // есть кэш — не пугаем ошибкой, просто остаёмся на сохранённом
       if (mounted && c == null) setState(() => _error = friendlyError(e));
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted && !silent) setState(() => _busy = false);
     }
   }
 
-  int? _indexing;
+  /// Свайп вниз: обновляет текущую папку и заодно подтягивает изменения по всему Диску в фоне.
+  Future<void> _pullRefresh() async {
+    unawaited(_syncBackground());
+    await _load(silent: true);
+  }
+
+  /// Прогресс фоновой синхронизации: null — не идёт; значение 0..1, либо -1 — доля неизвестна.
+  double? _sync;
+  int _syncDone = 0;
   bool _indexCancelled = false;
 
-  /// Фоновая загрузка структуры всего Диска в кэш.
-  Future<void> _buildIndex() async {
-    if (_indexing != null) return;
+  /// Фоновая синхронизация: быстрая (только изменённое); полный индекс — если его нет или он старше суток.
+  Future<void> _syncBackground({bool forceFull = false}) async {
+    if (_sync != null) return;
     _indexCancelled = false;
-    setState(() => _indexing = 0);
+    setState(() {
+      _sync = -1;
+      _syncDone = 0;
+    });
+    void progress(int done, int total) {
+      if (!mounted) return;
+      setState(() {
+        _syncDone = done;
+        _sync = total > 0 ? (done / total).clamp(0.0, 1.0) : -1;
+      });
+    }
+
     try {
-      await _svc.syncIndex(onProgress: (n) {
-        if (mounted) setState(() => _indexing = n);
-      }, cancelled: () => _indexCancelled || !mounted);
+      final at = GDriveService.indexedAt(_db);
+      final stale = at == null || DateTime.now().difference(at) > const Duration(days: 1);
+      if (forceFull || stale) {
+        await _svc.syncIndex(onProgress: progress, cancelled: () => _indexCancelled || !mounted);
+      } else {
+        await _svc.syncChanges(onProgress: progress, cancelled: () => _indexCancelled || !mounted);
+      }
+      // текущая папка могла измениться — показываем свежую версию из кэша
+      final fresh = GDriveService.cached(_db, _cur);
+      if (mounted && fresh != null) setState(() => _listing = fresh);
     } catch (_) {
     } finally {
-      if (mounted) setState(() => _indexing = null);
+      if (mounted) setState(() => _sync = null);
     }
   }
 
@@ -395,7 +422,7 @@ class _GDriveScreenState extends State<GDriveScreen> {
               PopupMenuButton<String>(
                 onSelected: (v) {
                   if (v == 'refresh') _load();
-                  if (v == 'index') _buildIndex();
+                  if (v == 'index') _syncBackground(forceFull: true);
                   if (v == 'off') {
                     GDriveService.disconnect(_db);
                     setState(() {
@@ -423,16 +450,22 @@ class _GDriveScreenState extends State<GDriveScreen> {
               ]),
         body: Stack(children: [
           Positioned.fill(child: _body(theme, top, items)),
-          if (_indexing != null)
+          // Синхронизация — тихий значок в углу: крутилка с процентами, когда они известны.
+          if (_sync != null)
             Positioned(
-              top: top,
-              left: 0,
-              right: 0,
+              top: top + 4,
+              right: 12,
               child: IgnorePointer(
-                child: Center(
-                  child: Text(tr('Загружаю структуру Диска… папок: {n}', {'n': _indexing}),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2, value: _sync! >= 0 ? _sync : null),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(_sync! >= 0 ? '${(_sync! * 100).round()}%' : '$_syncDone',
                       style: theme.textTheme.labelSmall?.copyWith(color: theme.hintColor)),
-                ),
+                ]),
               ),
             ),
         ]),
@@ -456,7 +489,7 @@ class _GDriveScreenState extends State<GDriveScreen> {
                 ? const AppLoader()
                 : RefreshIndicator(
                     edgeOffset: top,
-                    onRefresh: _load,
+                    onRefresh: _pullRefresh,
                     child: items.isEmpty
                         ? ListView(padding: EdgeInsets.only(top: top), children: [
                             SizedBox(

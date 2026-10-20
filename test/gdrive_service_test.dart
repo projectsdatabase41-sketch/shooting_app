@@ -105,7 +105,7 @@ void main() {
             return http.Response.bytes(utf8.encode(jsonEncode({'ok': true, 'data': tree[body['folderId']]})), 200);
           }));
       var last = 0;
-      final n = await svc.syncIndex(onProgress: (c) => last = c);
+      final n = await svc.syncIndex(onProgress: (c, total) => last = c);
       expect(n, 2);
       expect(last, 2);
       expect(GDriveService.cached(db, 'a')?.files.single.name, 'отчёт.txt');
@@ -114,5 +114,44 @@ void main() {
       GDriveService.disconnect(db);
       expect(GDriveService.cached(db, 'a'), isNull);
     }
+  });
+
+  test('быстрая сверка: перечитываются только изменившиеся папки, исчезнувшие убираются из кэша', () async {
+    Map<String, dynamic> folder(String id, List<String> sub, {int stamp = 1}) => {
+          'id': id,
+          'name': id,
+          'stamp': stamp,
+          'parent': null,
+          'folders': [for (final f in sub) {'id': f, 'name': f, 'mime': 'folder', 'size': 0, 'modified': 1, 'url': 'u', 'isFolder': true}],
+          'files': <dynamic>[],
+        };
+    var tree = {'root': folder('root', ['a', 'b']), 'a': folder('a', []), 'b': folder('b', [])};
+    final calls = <String>[];
+    final db = await _db();
+    final svc = GDriveService(db, clientFactory: () => MockClient((req) async {
+          final body = jsonDecode(req.body) as Map<String, dynamic>;
+          calls.add('${body['action']}');
+          Object? data;
+          switch (body['action']) {
+            case 'listMany':
+              data = {for (final id in body['ids']) id: tree[id]};
+            case 'stamps':
+              data = {for (final id in body['ids']) if (tree[id] != null) id: tree[id]!['stamp']};
+          }
+          return http.Response(jsonEncode({'ok': true, 'data': data}), 200);
+        }));
+    await svc.syncIndex();
+    expect(GDriveService.cached(db, 'b'), isNotNull);
+    calls.clear();
+    // ничего не менялось — только сверка времён, без перечитывания
+    expect(await svc.syncChanges(), 0);
+    expect(calls, ['stamps']);
+    // папку b удалили, a изменилась и в ней появилась c
+    tree = {'root': folder('root', ['a'], stamp: 2), 'a': folder('a', ['c'], stamp: 2), 'c': folder('c', [])};
+    calls.clear();
+    await svc.syncChanges();
+    expect(GDriveService.cached(db, 'b'), isNull);
+    expect(GDriveService.cached(db, 'c'), isNotNull);
+    expect(calls.where((c) => c == 'listMany').isNotEmpty, isTrue);
   });
 }

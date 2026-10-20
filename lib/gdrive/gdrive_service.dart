@@ -55,11 +55,15 @@ class DriveListing {
   final String? parent;
   final List<DriveItem> folders;
   final List<DriveItem> files;
-  const DriveListing({required this.id, required this.name, this.parent, required this.folders, required this.files});
+
+  /// Время последнего изменения самой папки (мс) на момент загрузки — по нему находят обновлённое.
+  final int stamp;
+  const DriveListing({required this.id, required this.name, this.parent, required this.folders, required this.files, this.stamp = 0});
 
   factory DriveListing.fromJson(Map<String, dynamic> d) => DriveListing(
         id: '${d['id']}',
         name: '${d['name']}',
+        stamp: (d['stamp'] as num?)?.toInt() ?? 0,
         parent: d['parent'] as String?,
         folders: [for (final f in (d['folders'] as List)) DriveItem.fromJson(f as Map<String, dynamic>)],
         files: [for (final f in (d['files'] as List)) DriveItem.fromJson(f as Map<String, dynamic>)],
@@ -68,6 +72,7 @@ class DriveListing {
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
+        'stamp': stamp,
         'parent': parent,
         'folders': [for (final f in folders) f.toJson()],
         'files': [for (final f in files) f.toJson()],
@@ -211,11 +216,90 @@ class GDriveService {
     return l;
   }
 
+  /// Все закэшированные папки: id -> список.
+  static Map<String, DriveListing> _allCached(LocalDbService db) {
+    final out = <String, DriveListing>{};
+    for (final r in db.db.select("SELECT key, hex FROM color_prefs WHERE key LIKE '$_cachePrefix%'")) {
+      try {
+        out['${r['key']}'.substring(_cachePrefix.length)] = DriveListing.fromJson(jsonDecode('${r['hex']}') as Map<String, dynamic>);
+      } catch (_) {}
+    }
+    return out;
+  }
+
   /// Скачивает структуру всего Диска (только названия и ссылки, без файлов) в кэш: папки потом
   /// открываются мгновенно. Идёт пакетами по [batch] папок; старый скрипт без пакетного вызова
-  /// обслуживается по одной папке. [onProgress] — сколько папок уже в кэше.
-  Future<int> syncIndex({void Function(int folders)? onProgress, int batch = 20, bool Function()? cancelled}) async {
-    final queue = <String>['root'];
+  /// обслуживается по одной папке. [onProgress] — (сделано папок, всего известно на сейчас).
+  Future<int> syncIndex({void Function(int done, int total)? onProgress, int batch = 20, bool Function()? cancelled}) async {
+    final n = await _crawl(['root'], onProgress: onProgress, batch: batch, cancelled: cancelled, skipKnown: false);
+    _put(db, _indexedKey, DateTime.now().toUtc().toIso8601String());
+    return n;
+  }
+
+  /// Быстрое обновление: спрашивает у скрипта только времена изменения закэшированных папок,
+  /// перечитывает изменившиеся и новые, убирает исчезнувшие. Нет индекса или скрипт старый —
+  /// полный [syncIndex]. Раз в сутки полный индекс всё равно нужен (страховка).
+  Future<int> syncChanges({void Function(int done, int total)? onProgress, bool Function()? cancelled}) async {
+    if (indexedAt(db) == null) return syncIndex(onProgress: onProgress, cancelled: cancelled);
+    final cache = _allCached(db);
+    if (cache.isEmpty) return syncIndex(onProgress: onProgress, cancelled: cancelled);
+    final ids = cache.keys.toList();
+    final changed = <String>[];
+    var checked = 0;
+    for (var i = 0; i < ids.length; i += 200) {
+      if (cancelled?.call() == true) return 0;
+      final part = ids.sublist(i, i + 200 > ids.length ? ids.length : i + 200);
+      final Map<String, dynamic> st;
+      try {
+        st = await _call('stamps', {'ids': part}) as Map<String, dynamic>;
+      } on GDriveException catch (e) {
+        if ('$e'.contains('unknown action')) return syncIndex(onProgress: onProgress, cancelled: cancelled);
+        rethrow;
+      }
+      for (final id in part) {
+        final now = (st[id] as num?)?.toInt();
+        if (now == null) {
+          _remove(db, id); // папки больше нет
+        } else if (now != cache[id]!.stamp) {
+          changed.add(id);
+        }
+      }
+      checked += part.length;
+      onProgress?.call(checked, ids.length);
+    }
+    if (changed.isEmpty) {
+      _pruneUnreachable(db);
+      return 0;
+    }
+    final n = await _crawl(changed, onProgress: onProgress, cancelled: cancelled, skipKnown: true);
+    _pruneUnreachable(db);
+    return n;
+  }
+
+  static void _remove(LocalDbService db, String id) => db.db.execute('DELETE FROM color_prefs WHERE key = ?', ['$_cachePrefix$id']);
+
+  /// Удаляет из кэша папки, до которых больше нет пути от корня (удалены или перемещены в корзину).
+  static void _pruneUnreachable(LocalDbService db) {
+    final cache = _allCached(db);
+    final root = cache['root'];
+    if (root == null) return;
+    final seen = <String>{root.id, 'root'};
+    final stack = [root];
+    while (stack.isNotEmpty) {
+      final l = stack.removeLast();
+      for (final f in l.folders) {
+        final c = cache[f.id];
+        if (c != null && seen.add(c.id)) stack.add(c);
+      }
+    }
+    for (final id in cache.keys) {
+      if (!seen.contains(id) && !seen.contains(cache[id]!.id)) _remove(db, id);
+    }
+  }
+
+  Future<int> _crawl(List<String> start,
+      {void Function(int done, int total)? onProgress, int batch = 20, bool Function()? cancelled, required bool skipKnown}) async {
+    final queue = <String>[...start];
     final done = <String>{};
     var batchMode = true;
     while (queue.isNotEmpty) {
@@ -258,16 +342,20 @@ class GDriveService {
       }
       for (final e in listings.entries) {
         final l = e.value;
-        if (l == null) continue;
+        if (l == null) {
+          _remove(db, e.key);
+          continue;
+        }
         _cachePut(db, e.key, l);
         if (e.key != l.id) _cachePut(db, l.id, l);
         for (final f in l.folders) {
-          if (!done.contains(f.id)) queue.add(f.id);
+          if (done.contains(f.id)) continue;
+          if (skipKnown && cached(db, f.id) != null) continue;
+          queue.add(f.id);
         }
       }
-      onProgress?.call(done.length);
+      onProgress?.call(done.length, done.length + queue.length);
     }
-    _put(db, _indexedKey, DateTime.now().toUtc().toIso8601String());
     return done.length;
   }
 
