@@ -1,3 +1,5 @@
+import 'security_settings_screen.dart';
+import '../services/app_lock.dart';
 import '../logic/friendly_error.dart';
 import '../widgets/app_backdrop.dart';
 import 'dart:convert';
@@ -106,6 +108,15 @@ class SettingsScreen extends StatelessWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const SettingsDataScreen()),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.lock_outline),
+            title: Text(tr('Защита входа')),
+            subtitle: Text(AppLock.isEnabled(store.db) ? tr('PIN включён') : tr('PIN и биометрия')),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => SecuritySettingsScreen(db: store.db)),
             ),
           ),
           ListTile(

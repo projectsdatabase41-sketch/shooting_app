@@ -1,3 +1,4 @@
+import 'widgets/app_lock_gate.dart';
 import 'services/secret_box.dart';
 import 'dart:async' show Timer;
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -430,7 +431,9 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
                             statusBarColor: Colors.transparent,
                             systemNavigationBarColor: Colors.transparent,
                             systemNavigationBarContrastEnforced: false),
-                    child: DemoFeedbackOverlay(
+                    child: AppLockGate(
+                        db: widget.db,
+                        child: DemoFeedbackOverlay(
                         navigatorKey: navigatorKey,
                         // Ноутбук / широкий браузер: содержимое по центру и не шире 1100 px —
                         // колонки и списки не растягиваются на весь экран.
@@ -451,7 +454,7 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
                                     ),
                                   ]),
                                 ),
-                        )),
+                        ))),
                   ),
                 );
               },

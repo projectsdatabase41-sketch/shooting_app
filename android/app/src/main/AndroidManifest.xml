@@ -37,6 +37,8 @@
          Приложение ставится не из Play, поэтому доступ ко всем файлам допустим; пользователь
          включает его сам в настройках, это не обязательно. -->
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>
+    <!-- Вход в приложение по отпечатку / лицу (по желанию, «Защита входа»). -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
 
     <application
         android:allowBackup="false"
