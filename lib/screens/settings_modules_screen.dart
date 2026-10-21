@@ -1,3 +1,4 @@
+import '../widgets/app_backdrop.dart';
 import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -133,7 +134,7 @@ class _SettingsModulesScreenState extends State<SettingsModulesScreen> {
             title: Text(tr('Модули'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
             actions: [Builder(builder: (ctx) => SettingsDraftScope.confirmButton(ctx, tooltip: tr('Сохранить')))],
           ),
-          body: CustomScrollView(
+          body: AppBackdrop(kind: 'settings', child: CustomScrollView(
             slivers: [
               SliverToBoxAdapter(child: SizedBox(height: MediaQuery.paddingOf(context).top + GlassHeader.height + 8)),
               SliverPadding(
@@ -196,7 +197,7 @@ class _SettingsModulesScreenState extends State<SettingsModulesScreen> {
               ]),
               const SliverToBoxAdapter(child: SizedBox(height: 24)),
             ],
-          ),
+          )),
         ));
       },
     );

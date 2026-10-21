@@ -1,3 +1,4 @@
+import '../widgets/app_backdrop.dart';
 import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
 
@@ -69,7 +70,7 @@ class _ChatSettingsScreenState extends State<ChatSettingsScreen> {
                 .titleMedium
                 ?.copyWith(fontWeight: FontWeight.w600)),
       ),
-      body: ListView(
+      body: AppBackdrop(kind: 'settings', child: ListView(
         padding: EdgeInsets.only(top: topInset + GlassHeader.height),
         children: [
           folder(
@@ -118,7 +119,7 @@ class _ChatSettingsScreenState extends State<ChatSettingsScreen> {
             ChatAccountSettingsScreen(auth: auth, onChanged: widget.onChanged),
           ),
         ],
-      ),
+      )),
     );
   }
 }
@@ -194,7 +195,7 @@ class ChatTranslationSettingsScreen extends StatelessWidget {
               style: theme.textTheme.titleMedium
                   ?.copyWith(fontWeight: FontWeight.w600)),
         ),
-        body: ListView(
+        body: AppBackdrop(kind: 'settings', child: ListView(
           padding: EdgeInsets.fromLTRB(
               16,
               MediaQuery.paddingOf(context).top + GlassHeader.height + 8,
@@ -220,7 +221,7 @@ class ChatTranslationSettingsScreen extends StatelessWidget {
               style: theme.textTheme.bodySmall,
             ),
           ],
-        ),
+        )),
       ),
     );
   }
@@ -306,7 +307,7 @@ class _ChatNotificationSettingsScreenState
                 .titleMedium
                 ?.copyWith(fontWeight: FontWeight.w600)),
       ),
-      body: ListView(
+      body: AppBackdrop(kind: 'settings', child: ListView(
         padding: EdgeInsets.only(
             top: MediaQuery.paddingOf(context).top + GlassHeader.height),
         children: [
@@ -332,7 +333,7 @@ class _ChatNotificationSettingsScreenState
             },
           ),
         ],
-      ),
+      )),
     );
   }
 }
@@ -389,7 +390,7 @@ class ChatAccountSettingsScreen extends StatelessWidget {
                 .titleMedium
                 ?.copyWith(fontWeight: FontWeight.w600)),
       ),
-      body: ListView(
+      body: AppBackdrop(kind: 'settings', child: ListView(
         padding: EdgeInsets.only(
             top: MediaQuery.paddingOf(context).top + GlassHeader.height),
         children: [
@@ -418,7 +419,7 @@ class ChatAccountSettingsScreen extends StatelessWidget {
             onTap: () => _delete(context),
           ),
         ],
-      ),
+      )),
     );
   }
 }

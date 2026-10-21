@@ -1,3 +1,4 @@
+import '../widgets/app_backdrop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData, rootBundle;
 import 'package:provider/provider.dart';
@@ -85,7 +86,7 @@ class _DbCheckScreenState extends State<DbCheckScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(title: Text(tr('Проверка базы'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600))),
-      body: !_auth.hasBase
+      body: AppBackdrop(kind: 'settings', child: !_auth.hasBase
           ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(tr('Сначала укажите адрес и ключ своей базы: Настройки → Данные и синхронизация → Учётная запись.'), textAlign: TextAlign.center)))
           : ListView(
               padding: EdgeInsets.fromLTRB(0, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 0, 24),
@@ -124,7 +125,7 @@ class _DbCheckScreenState extends State<DbCheckScreen> {
                   ]),
                 ),
               ],
-            ),
+            )),
     );
   }
 }

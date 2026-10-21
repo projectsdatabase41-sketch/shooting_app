@@ -1,3 +1,5 @@
+import '../widgets/app_backdrop.dart';
+import '../theme/backdrop_tint.dart';
 import '../logic/friendly_error.dart';
 import '../widgets/ai_gate.dart';
 import 'dart:convert';
@@ -157,7 +159,7 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
           ),
         ],
       ),
-      body: Column(
+      body: AppBackdrop(kind: 'settings', child: Column(
         children: [
           SizedBox(
               height: MediaQuery.paddingOf(context).top + GlassHeader.height),
@@ -213,7 +215,7 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
             ),
           ),
         ],
-      ),
+      )),
       bottomNavigationBar: Builder(builder: (context) {
         final wide = MediaQuery.of(context).size.width >= 700;
         if (wide) return const SizedBox.shrink();
@@ -279,6 +281,7 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
           ),
         ),
         const _AppColorPresetsRow(),
+        const _BackdropTintSection(),
         _AppColorRow(
           title: tr('Фон приложения'),
           color: vm.appBackgroundFor(brightness),
@@ -958,6 +961,84 @@ class _CreatePresetSheetState extends State<_CreatePresetSheet> {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// Оттенок фоновых картинок: по пресету (авто), вручную или исходные картинки.
+class _BackdropTintSection extends StatefulWidget {
+  const _BackdropTintSection();
+
+  @override
+  State<_BackdropTintSection> createState() => _BackdropTintSectionState();
+}
+
+class _BackdropTintSectionState extends State<_BackdropTintSection> {
+  @override
+  Widget build(BuildContext context) {
+    final db = context.read<AppDataStore>().db;
+    final theme = Theme.of(context);
+    final mode = BackdropTint.mode;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(tr('Оттенок фоновых картинок'), style: theme.textTheme.titleSmall),
+        const SizedBox(height: 6),
+        SegmentedButton<String>(
+          showSelectedIcon: false,
+          segments: [
+            ButtonSegment(value: 'auto', label: Text(tr('Как пресет'))),
+            ButtonSegment(value: 'manual', label: Text(tr('Вручную'))),
+            ButtonSegment(value: 'off', label: Text(tr('Исходный'))),
+          ],
+          selected: {mode},
+          onSelectionChanged: (v) => setState(() => BackdropTint.save(db, newMode: v.first)),
+        ),
+        if (mode == 'auto')
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(tr('Фон подстраивается под цвет кнопок выбранного пресета. Золотые фоны «Чемпионов» и «Финалов» не меняются.'), style: theme.textTheme.bodySmall),
+          ),
+        if (mode == 'manual') ...[
+          const SizedBox(height: 8),
+          Text(tr('Оттенок: {h}°', {'h': BackdropTint.hue.round()}), style: theme.textTheme.bodySmall),
+          // Радужная полоса под ползунком — видно, какой цвет получится.
+          Stack(alignment: Alignment.center, children: [
+            Container(
+              height: 8,
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(4),
+                gradient: LinearGradient(colors: [for (var h = 0; h <= 360; h += 60) HSLColor.fromAHSL(1, h.toDouble(), 0.7, 0.5).toColor()]),
+              ),
+            ),
+            Slider(
+              min: 0,
+              max: 360,
+              value: BackdropTint.hue,
+              activeColor: Colors.transparent,
+              inactiveColor: Colors.transparent,
+              onChanged: (v) => setState(() => BackdropTint.save(db, newHue: v)),
+            ),
+          ]),
+          Text(tr('Насыщенность: {s}%', {'s': (BackdropTint.sat * 100).round()}), style: theme.textTheme.bodySmall),
+          Slider(
+            min: 0,
+            max: 1.5,
+            value: BackdropTint.sat,
+            onChanged: (v) => setState(() => BackdropTint.save(db, newSat: v)),
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: () => setState(() {
+                BackdropTint.save(db, newHue: BackdropTint.baseHue, newSat: 1.0);
+              }),
+              child: Text(tr('Сбросить')),
+            ),
+          ),
+        ],
+      ]),
     );
   }
 }

@@ -1,3 +1,4 @@
+import 'theme/backdrop_tint.dart';
 import 'gdrive/gdrive_service.dart';
 import 'widgets/app_lock_gate.dart';
 import 'services/secret_box.dart';
@@ -77,6 +78,7 @@ Future<void> main() async {
   }
   // Секреты (токены, ключи) шифруются ключом из защищённого хранилища системы.
   await SecretBox.init();
+  BackdropTint.load(db);
   SecretBox.migrate(db);
   RemoteConfig.loadCached(db);
   // Структура Google Диска подтягивается в фоне при запуске: к открытию модуля всё уже готово.
@@ -450,8 +452,11 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
                                     // Боковые поля продолжают фон верхнего экрана (у «Чемпионов» свой, золотой).
                                     ValueListenableBuilder<String>(
                                       valueListenable: AppBackdrop.active,
-                                      builder: (_, kind, __) => Image.asset(AppBackdrop.path(kind, Theme.of(ctx).brightness),
-                                          fit: BoxFit.cover, gaplessPlayback: true, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                                      builder: (_, kind, __) => BackdropTint.apply(
+                                        kind,
+                                        Image.asset(AppBackdrop.path(kind, Theme.of(ctx).brightness),
+                                            fit: BoxFit.cover, gaplessPlayback: true, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                                      ),
                                     ),
                                     Center(
                                       child: DecoratedBox(

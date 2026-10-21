@@ -1,0 +1,160 @@
+import 'dart:math' as math;
+import 'dart:ui' show PlatformDispatcher;
+
+import 'package:flutter/material.dart';
+
+import '../services/local_db_service.dart';
+
+/// Оттенок фоновых картинок под цвета приложения.
+///
+/// Картинки нарисованы в сине-голубой гамме. Вместо отдельных картинок под каждый пресет оттенок и
+/// насыщенность меняются на лету (поворот оттенка + насыщенность через цветовой фильтр):
+///  • `auto` — по акцентному цвету выбранного пресета (кнопки, а если они серые — текст кнопок);
+///    пока свои цвета не заданы, картинки остаются исходными;
+///  • `manual` — по ползункам «Оттенок» и «Насыщенность» в настройках;
+///  • `off` — исходные картинки.
+/// Золотые фоны «Чемпионов» и «Финалов» не перекрашиваются (золото — часть смысла).
+class BackdropTint {
+  BackdropTint._();
+
+  /// Оттенок исходных картинок (синий), градусы.
+  static const double baseHue = 212;
+
+  /// Фоны, которые не перекрашиваются.
+  static const Set<String> exempt = {'champions', 'finals'};
+
+  static const _kMode = 'backdrop_tint_mode';
+  static const _kHue = 'backdrop_tint_hue';
+  static const _kSat = 'backdrop_tint_sat';
+
+  static String mode = 'auto'; // auto | manual | off
+  static double hue = baseHue; // для manual
+  static double sat = 1.0; // для manual, 0..1.5
+
+  /// Текущий фильтр; `null` — картинки без изменений. На него подписаны фоны.
+  static final filter = ValueNotifier<ColorFilter?>(null);
+
+  static Color? _button;
+  static Color? _buttonText;
+
+  static void load(LocalDbService db) {
+    String? get(String k) {
+      final r = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [k]);
+      return r.isEmpty ? null : '${r.first['hex']}';
+    }
+
+    final m = get(_kMode);
+    if (m == 'auto' || m == 'manual' || m == 'off') mode = m!;
+    hue = (double.tryParse(get(_kHue) ?? '') ?? baseHue).clamp(0.0, 360.0).toDouble();
+    sat = (double.tryParse(get(_kSat) ?? '') ?? 1.0).clamp(0.0, 1.5).toDouble();
+    recompute();
+  }
+
+  static void save(LocalDbService db, {String? newMode, double? newHue, double? newSat}) {
+    void put(String k, String v) => db.db.execute(
+        'INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex', [k, v]);
+    if (newMode != null) {
+      mode = newMode;
+      put(_kMode, newMode);
+    }
+    if (newHue != null) {
+      hue = newHue.clamp(0.0, 360.0).toDouble();
+      put(_kHue, hue.toStringAsFixed(0));
+    }
+    if (newSat != null) {
+      sat = newSat.clamp(0.0, 1.5).toDouble();
+      put(_kSat, sat.toStringAsFixed(2));
+    }
+    recompute();
+  }
+
+  /// Акцентные цвета выбранного набора приложения (для режима `auto`); `null` — свои цвета не заданы.
+  static void setAccent(Color? button, Color? buttonText) {
+    _button = button;
+    _buttonText = buttonText;
+    recompute();
+  }
+
+  static void recompute() {
+    final f = _build();
+    // ColorFilter сравнивается по значению; лишние уведомления не нужны
+    if (f != filter.value) filter.value = f;
+  }
+
+  static double _norm180(double d) {
+    var x = d % 360;
+    if (x > 180) x -= 360;
+    if (x < -180) x += 360;
+    return x;
+  }
+
+  static ColorFilter? _build() {
+    if (mode == 'off') return null;
+    if (mode == 'manual') {
+      final shift = _norm180(hue - baseHue);
+      if (shift.abs() < 0.5 && (sat - 1).abs() < 0.01) return null;
+      return ColorFilter.matrix(matrix(shift, sat));
+    }
+    // auto
+    Color? accent;
+    for (final c in [_button, _buttonText]) {
+      if (c != null && HSLColor.fromColor(c).saturation >= 0.25) {
+        accent = c;
+        break;
+      }
+    }
+    if (_button == null && _buttonText == null) return null; // пресет не выбран — исходные картинки
+    if (accent == null) return ColorFilter.matrix(matrix(0, 0.45)); // нейтральный пресет: приглушаем
+    final hsl = HSLColor.fromColor(accent);
+    final shift = _norm180(hsl.hue - baseHue);
+    final s = (hsl.saturation * 1.5).clamp(0.45, 1.15).toDouble();
+    return ColorFilter.matrix(matrix(shift, s));
+  }
+
+  /// Матрица 4×5: насыщенность [s], затем поворот оттенка на [hueDeg] градусов (сохраняет яркость).
+  static List<double> matrix(double hueDeg, double s) {
+    final r = hueDeg * math.pi / 180;
+    final c = math.cos(r), n = math.sin(r);
+    // поворот оттенка
+    final h = <double>[
+      0.213 + c * 0.787 - n * 0.213, 0.715 - c * 0.715 - n * 0.715, 0.072 - c * 0.072 + n * 0.928,
+      0.213 - c * 0.213 + n * 0.143, 0.715 + c * 0.285 + n * 0.140, 0.072 - c * 0.072 - n * 0.283,
+      0.213 - c * 0.213 - n * 0.787, 0.715 - c * 0.715 + n * 0.715, 0.072 + c * 0.928 + n * 0.072,
+    ];
+    // насыщенность
+    final sr = 0.213, sg = 0.715, sb = 0.072;
+    final sm = <double>[
+      sr * (1 - s) + s, sg * (1 - s), sb * (1 - s),
+      sr * (1 - s), sg * (1 - s) + s, sb * (1 - s),
+      sr * (1 - s), sg * (1 - s), sb * (1 - s) + s,
+    ];
+    // итог = h · sm (3×3)
+    final m3 = List<double>.filled(9, 0);
+    for (var i = 0; i < 3; i++) {
+      for (var j = 0; j < 3; j++) {
+        for (var k = 0; k < 3; k++) {
+          m3[i * 3 + j] += h[i * 3 + k] * sm[k * 3 + j];
+        }
+      }
+    }
+    return [
+      m3[0], m3[1], m3[2], 0, 0,
+      m3[3], m3[4], m3[5], 0, 0,
+      m3[6], m3[7], m3[8], 0, 0,
+      0, 0, 0, 1, 0,
+    ];
+  }
+
+  /// Применить фильтр к картинке фона [kind] (золотые фоны не трогаем).
+  static Widget apply(String kind, Widget image) {
+    if (exempt.contains(kind)) return image;
+    return ValueListenableBuilder<ColorFilter?>(
+      valueListenable: filter,
+      builder: (_, f, child) => f == null ? child! : ColorFiltered(colorFilter: f, child: child),
+      child: image,
+    );
+  }
+
+  /// Яркость, с которой сейчас рисуется интерфейс (для выбора набора цветов тёмной/светлой темы).
+  static Brightness systemBrightness() => PlatformDispatcher.instance.platformBrightness;
+}

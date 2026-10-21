@@ -1,3 +1,4 @@
+import '../theme/backdrop_tint.dart';
 import '../logic/friendly_error.dart';
 import 'dart:ui' show Color, Locale;
 import 'package:flutter/foundation.dart';
@@ -191,6 +192,16 @@ class PersonalizationViewModel extends ChangeNotifier {
   }
 
   /// Пресет применяется к набору СВОЕЙ темы.
+  /// Любое изменение набора цветов обновляет оттенок фоновых картинок (режим «авто»).
+  @override
+  void notifyListeners() {
+    super.notifyListeners();
+    final b = _themeMode == ThemeMode.dark
+        ? Brightness.dark
+        : (_themeMode == ThemeMode.light ? Brightness.light : BackdropTint.systemBrightness());
+    BackdropTint.setAccent(appButtonFor(b), appButtonTextFor(b));
+  }
+
   void applyAppColorPreset(AppColorPreset preset) {
     final b = preset.dark ? Brightness.dark : Brightness.light;
     for (final (base, c) in [

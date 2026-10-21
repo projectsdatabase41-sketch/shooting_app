@@ -68,7 +68,7 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
           ),
         ],
       ),
-      body: ListView(
+      body: AppBackdrop(kind: 'settings', child: ListView(
         padding:
             EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 16),
         children: [
@@ -195,7 +195,7 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
             ],
           ),
         ],
-      ),
+      )),
     );
   }
 

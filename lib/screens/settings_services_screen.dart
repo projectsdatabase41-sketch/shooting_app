@@ -1,3 +1,4 @@
+import '../widgets/app_backdrop.dart';
 import 'package:flutter/material.dart';
 
 import '../services/custom_services_repository.dart';
@@ -36,7 +37,7 @@ class SettingsServicesScreen extends StatelessWidget {
               ),
             ],
           ),
-          body: services.isEmpty
+          body: AppBackdrop(kind: 'settings', child: services.isEmpty
               ? ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: EdgeInsets.only(top: topInset + GlassHeader.height),
@@ -68,7 +69,7 @@ class SettingsServicesScreen extends StatelessWidget {
                       ),
                     );
                   },
-                ),
+                )),
         );
       },
     );

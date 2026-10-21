@@ -1,3 +1,4 @@
+import '../theme/backdrop_tint.dart';
 import 'package:flutter/foundation.dart' show ValueNotifier, kIsWeb;
 import 'package:flutter/material.dart';
 
@@ -61,8 +62,11 @@ class _AppBackdropState extends State<AppBackdrop> {
       OverflowBox(
         minWidth: w,
         maxWidth: w,
-        child: Image.asset(AppBackdrop.path(widget.kind, b),
-            width: w, fit: BoxFit.cover, gaplessPlayback: true, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+        child: BackdropTint.apply(
+          widget.kind,
+          Image.asset(AppBackdrop.path(widget.kind, b),
+              width: w, fit: BoxFit.cover, gaplessPlayback: true, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+        ),
       ),
       widget.child,
     ]);

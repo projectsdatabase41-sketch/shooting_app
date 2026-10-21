@@ -1,3 +1,5 @@
+import '../widgets/app_backdrop.dart';
+import '../theme/backdrop_tint.dart';
 import '../logic/friendly_error.dart';
 import '../theme/app_transitions.dart';
 import '../widgets/home_tabs_bar.dart' show TileStyle;
@@ -90,6 +92,7 @@ class SettingsAppearanceScreen extends StatelessWidget {
       onRestored: () {
         personalization.loadFromDb();
         final db = context.read<AppDataStore>().db;
+        BackdropTint.load(db);
         AnimSettings.load(db);
         AnimSettings.revision.value++;
       },
@@ -103,7 +106,7 @@ class SettingsAppearanceScreen extends StatelessWidget {
                 ?.copyWith(fontWeight: FontWeight.w600)),
         actions: [Builder(builder: (ctx) => SettingsDraftScope.confirmButton(ctx, tooltip: tr('Сохранить')))],
       ),
-      body: ListView(
+      body: AppBackdrop(kind: 'settings', child: ListView(
         padding: EdgeInsets.only(top: topInset + GlassHeader.height),
         children: [
           // Видео-заставка при запуске (звук играет на Android и компьютере;
@@ -229,7 +232,7 @@ class SettingsAppearanceScreen extends StatelessWidget {
             ),
           ),
         ],
-      ),
+      )),
     ));
   }
 }

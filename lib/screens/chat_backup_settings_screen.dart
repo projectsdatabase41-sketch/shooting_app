@@ -1,3 +1,4 @@
+import '../widgets/app_backdrop.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -174,7 +175,7 @@ class _ChatBackupSettingsScreenState extends State<ChatBackupSettingsScreen> {
         title: Text(tr('Сохранение переписок'),
             style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
       ),
-      body: ListView(
+      body: AppBackdrop(kind: 'settings', child: ListView(
         padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + GlassHeader.height),
         children: [
           ListTile(
@@ -285,7 +286,7 @@ class _ChatBackupSettingsScreenState extends State<ChatBackupSettingsScreen> {
             ),
           ],
         ],
-      ),
+      )),
     );
   }
 }

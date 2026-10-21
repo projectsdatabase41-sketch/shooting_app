@@ -1,3 +1,4 @@
+import '../widgets/app_backdrop.dart';
 import '../widgets/app_loader.dart';
 import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
@@ -138,7 +139,7 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
             style: theme.textTheme.titleMedium
                 ?.copyWith(fontWeight: FontWeight.w600)),
       ),
-      body: _loading
+      body: AppBackdrop(kind: 'settings', child: _loading
           ? const AppLoader()
           : RefreshIndicator(
               onRefresh: _reload,
@@ -269,7 +270,7 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
                       ),
                 ],
               ),
-            ),
+            )),
     );
   }
 }

@@ -1,3 +1,4 @@
+import '../widgets/app_backdrop.dart';
 import '../logic/friendly_error.dart';
 import 'db_check_screen.dart';
 import '../services/chat_auth_service.dart';
@@ -45,7 +46,7 @@ class _SettingsDataScreenState extends State<SettingsDataScreen> {
                 .titleMedium
                 ?.copyWith(fontWeight: FontWeight.w600)),
       ),
-      body: ListView(
+      body: AppBackdrop(kind: 'settings', child: ListView(
         padding: EdgeInsets.fromLTRB(0, topInset + GlassHeader.height, 0, 32),
         children: [
           ListTile(
@@ -139,7 +140,7 @@ class _SettingsDataScreenState extends State<SettingsDataScreen> {
             const ShareTokensSection(),
           ],
         ],
-      ),
+      )),
     );
   }
 

@@ -1,3 +1,4 @@
+import '../widgets/app_backdrop.dart';
 import 'finals_voice_settings_screen.dart';
 import '../logic/friendly_error.dart';
 import '../widgets/glass_pill.dart';
@@ -312,7 +313,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
               onTap: _save),
         ],
       ),
-      body: ListView(
+      body: AppBackdrop(kind: 'settings', child: ListView(
         padding:
             EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 32),
         children: [
@@ -698,7 +699,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             Text(_message!, style: theme.textTheme.bodySmall),
           ],
         ],
-      ),
+      )),
     );
   }
 }

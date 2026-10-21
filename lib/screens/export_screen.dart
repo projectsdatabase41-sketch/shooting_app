@@ -1,3 +1,4 @@
+import '../widgets/app_backdrop.dart';
 import '../logic/friendly_error.dart';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -63,7 +64,7 @@ class _ExportScreenState extends State<ExportScreen> {
       return Scaffold(
         extendBodyBehindAppBar: true,
         appBar: header,
-        body: ListView(
+        body: AppBackdrop(kind: 'settings', child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: EdgeInsets.only(top: topInset + GlassHeader.height),
           children: [
@@ -73,7 +74,7 @@ class _ExportScreenState extends State<ExportScreen> {
                   'Экспортировать пока нечего — нет ни одной записанной тренировки.'),
             ),
           ],
-        ),
+        )),
       );
     }
 
@@ -83,7 +84,7 @@ class _ExportScreenState extends State<ExportScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: header,
-      body: ListView(
+      body: AppBackdrop(kind: 'settings', child: ListView(
         padding:
             EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 32),
         children: [
@@ -140,7 +141,7 @@ class _ExportScreenState extends State<ExportScreen> {
             Text(_message!, style: Theme.of(context).textTheme.bodySmall),
           ],
         ],
-      ),
+      )),
     );
   }
 
