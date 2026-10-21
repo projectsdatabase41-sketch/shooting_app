@@ -238,6 +238,104 @@ what must not be touched. Do NOT delete or "simplify" it: the next AI learns the
 on conflict (entry_key) do update
   set kind = excluded.kind, title = excluded.title, body = excluded.body, updated_at = now();
 
+insert into table_docs (entry_key, kind, title, body) values
+  ('guide:overview', 'rule', 'App guide - read this to explain the app to the user',
+'Nexus is a shooting-sports app (training log, target, results analysis, assistant, messenger, coach tools).
+This table_docs block (entries named guide:*) describes WHAT the app can do and WHERE it is configured, so that an
+external AI can explain it to the owner. Rules for such explanations:
+- Describe only what is written here or what the owner shows you. If unsure, say so and suggest looking in Settings.
+- Interface labels are translated (the app has its own language setting), so refer to items by meaning.
+- Most things are configured in Settings (gear icon at the top right of the home screen) or inside the section itself.
+- Never ask the owner for passwords or keys in chat; keys are typed into the app by the owner.
+Entries: guide:home, guide:training, guide:finals, guide:assistant, guide:messenger, guide:coach, guide:appearance,
+guide:security, guide:data, guide:drive, guide:updates, guide:languages, guide:planned.'),
+
+  ('guide:home', 'rule', 'Home screen and sections',
+'The home screen is a grid of tiles; a tile opens its section. Sections: Training (exercises), Statistics, Tasks (coach
+assignments), Athletes (coach mode), Assistant (AI chat), Notes (knowledge base and diary notes), Finals, Messenger,
+Google Drive, and the owner''s own service tiles. Settings open with the gear icon at the top right.
+Tiles can be rearranged and shown or hidden (Settings -> modules); the target tile always stays first.
+Each section has its own wallpaper with icons matching the section (assistant - robots, notes - sticky notes,
+messenger - chat/video call/phone, drive - clouds, and so on). Deep settings screens share one mixed wallpaper.'),
+
+  ('guide:training', 'rule', 'Training and the target',
+'A training is one long page: the target is pinned at the top, series and results below. A shot is placed by tapping
+the target; holding the finger first shows a loupe so the hit can be placed precisely, then dragging scrolls normally.
+A wheel under the target moves between shots (and picks tenths while editing). Series can be limited by shot count or
+by time. Exercises come from templates (target type, number of shots, series); the assistant can propose a new one.
+Results are stored in the personal database (training_packages, exercises, shots) and synced when signed in.'),
+
+  ('guide:finals', 'rule', 'Finals, champions, voice',
+'Finals: a final-style competition against bots with a podium, results, complaints and an appeal. Champions: the board
+of winners. Finals have voice settings: voice packs for announcements and AI voice options, configured per voice.
+Announcer and crowd audio plans are partly planned, not everything is implemented.'),
+
+  ('guide:assistant', 'rule', 'AI assistant',
+'Assistant tab = chat with an AI model. Providers and keys are set in the AI settings; the owner may use the built-in
+key or their own. Modes: fast (short answer), normal, think (reasons longer). The assistant sees the open training or
+shot as context, reads the owner''s notes (knowledge base) and past conversations, and can draw charts and tables.
+It can PROPOSE (the owner confirms with a button, nothing happens silently): a new exercise, a note, an app
+feedback text, and an appearance change (blur, mask transparency, colour mode, hue, saturation) with an Undo button.
+Which database tables the built-in assistant may read is chosen in Settings -> Data and sync -> Account -> Tables for AI.
+An external AI (like you) connects through the database: read table_docs, follow rule:* entries, write as the owner.'),
+
+  ('guide:messenger', 'rule', 'Messenger, calls, coach chat',
+'Messenger: chats between app users, with a friends list, attachments, reactions, voice and round video messages, push
+notifications. Audio and video calls exist (peer-to-peer, with a call server); their quality depends on the network and
+setup. Privacy and appearance of chats are in the messenger settings. Chat backup (Settings -> Data and sync) copies
+messages to the personal database table chat_backup. Coach <-> athletes chat is a separate channel from the messenger and
+from comments under a training.'),
+
+  ('guide:coach', 'rule', 'Coach mode and tasks',
+'A coach can see athletes through share tokens with a policy (basic or extended access to the diary) and give tasks:
+a task has stages and steps (exercise, time limit, sighting shots, notes mode). Athletes run the task step by step; results
+and reports go back to the coach. Tokens and policies live in the personal database (share_grants and related tables).'),
+
+  ('guide:appearance', 'rule', 'Appearance: colours, wallpapers, glass',
+'Settings -> Appearance (colours): colour presets for the app and for the target; tile style; animations.
+Wallpapers: each section has a ready black-and-white wallpaper (light and dark theme) and a colour MASK on top:
+- Tint mode: As preset (mask colour follows the chosen colour preset), Manual (one hue and saturation for the whole
+  interface: background, tiles, buttons, text, outlines), Original (no mask, plain black-and-white).
+- Mask transparency: higher = less colour. Blur: softens the wallpaper. Hue / saturation: manual mode only.
+- Own wallpaper: pick a picture; brightness, contrast, hue and vignette are adjustable; it can be switched off or removed.
+Gold wallpapers of Champions and Finals stay gold. When tiles are transparent (glass), buttons and popup windows become
+translucent too. The knobs are horizontal wheels: drag left or right. The assistant can change the wallpaper settings on
+request (the owner presses Apply, Undo is available).'),
+
+  ('guide:security', 'rule', 'Security and app lock',
+'Settings -> Security: app lock with a PIN, a graphic key (pattern) and/or biometrics, asked on every start. Local secrets
+(keys, tokens) are kept in encrypted storage; the messenger vault is encrypted. Never paste passwords into chats with an AI.
+Database access: the personal database is protected by row level security; only the owner (signed in) writes
+(see rule:protection).'),
+
+  ('guide:data', 'rule', 'Data, sync and backups',
+'Settings -> Data and sync: sign-in to the personal Supabase database (URL, key, email, password), manual and background
+sync, export, and backups: database backup, chat backup, backup to Google Drive and to a phone folder. The install SQL of the
+personal database is copied from the app (Copy SQL) and checked on the Database check screen. Data stays on the phone first
+and is copied to the cloud when signed in; web builds keep data in the browser, so sign in to sync.'),
+
+  ('guide:drive', 'rule', 'Google Drive module',
+'A Drive tile shows the owner''s Google Drive through a small Google Apps Script that the owner creates from inside the app
+(the app shows the script text and the steps; the resulting URL is pasted back). It lists folders and files, caches the index
+in the background, refreshes on pull-down, and can attach descriptions for the AI. Gmail is not connected on purpose.'),
+
+  ('guide:updates', 'rule', 'Updates and versions',
+'Android: the app checks for a new build once a day and shows a notification with an Update button; Settings -> Check for
+updates does it manually. The version is shown as 0.N (N grows by one with every build) together with the build date.
+A downloaded package is kept for installation for at most one hour, only one at a time. The web version is always the latest.
+There is no rollback to an older build.'),
+
+  ('guide:languages', 'rule', 'Interface language',
+'Russian is the base language; English, German and Chinese dictionaries are built in and about ten more languages can be
+downloaded. Choose the language in Settings; missing phrases fall back to Russian.'),
+
+  ('guide:planned', 'rule', 'Planned, not implemented yet',
+'Device layer (Argus sensor, smart trigger, target installation): tables exist, features are planned. Communities and a
+showcase from a Google Drive folder, crowd reactions and announcer in finals, task stages push notifications - ideas only.
+Do not promise these to the owner as working features.')
+on conflict (entry_key) do update
+  set kind = excluded.kind, title = excluded.title, body = excluded.body, updated_at = now();
+
 create or replace view table_protection with (security_invoker = on) as
 select c.relname                                   as table_name,
        c.relrowsecurity                            as rls_enabled,
