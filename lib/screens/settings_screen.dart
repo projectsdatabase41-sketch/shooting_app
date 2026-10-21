@@ -153,7 +153,6 @@ class SettingsScreen extends StatelessWidget {
                     builder: (_) => SettingsServicesScreen(repo: services)),
               ),
             ),
-          if (friendlyErrorDevMode)
           ValueListenableBuilder<bool>(
             valueListenable: DemoMode.enabled,
             builder: (context, on, _) => SwitchListTile(

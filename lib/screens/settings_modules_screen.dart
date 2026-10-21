@@ -7,6 +7,7 @@ import '../services/modules_settings.dart';
 import '../state/app_data_store.dart';
 import '../state/home_tabs_view_model.dart';
 import '../widgets/glass_pill.dart';
+import '../widgets/settings_draft_scope.dart';
 import '../widgets/home_tabs_bar.dart';
 
 /// «Модули»: все рабочие пространства приложения в одном списке. Режимов
@@ -120,10 +121,17 @@ class _SettingsModulesScreenState extends State<SettingsModulesScreen> {
           );
         }
 
-        return Scaffold(
+        return SettingsDraftScope(
+          db: db,
+          onRestored: () {
+            tabs.reload();
+            ModulesSettings.revision.value++;
+          },
+          child: Scaffold(
           extendBodyBehindAppBar: true,
           appBar: GlassHeader(
             title: Text(tr('Модули'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+            actions: [Builder(builder: (ctx) => SettingsDraftScope.confirmButton(ctx, tooltip: tr('Сохранить')))],
           ),
           body: CustomScrollView(
             slivers: [
@@ -189,7 +197,7 @@ class _SettingsModulesScreenState extends State<SettingsModulesScreen> {
               const SliverToBoxAdapter(child: SizedBox(height: 24)),
             ],
           ),
-        );
+        ));
       },
     );
   }

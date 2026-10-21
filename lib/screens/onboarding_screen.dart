@@ -109,6 +109,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           leading: widget.editing ? null : const SizedBox.shrink(),
           title: Text(tr('Мой профиль'),
               style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+          actions: [
+            if (widget.editing) GlassCircleButton(icon: const BoldIcon(Icons.check), tooltip: tr('Сохранить'), onTap: _valid ? _submit : null),
+          ],
         ),
         body: Column(
           children: [
@@ -252,6 +255,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ],
               ),
             ),
+            if (!widget.editing)
             SafeArea(
               top: false,
               child: Padding(

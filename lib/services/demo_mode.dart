@@ -124,8 +124,12 @@ class DemoMode {
           },
           body: jsonEncode(b),
         ).timeout(const Duration(seconds: 15));
-    final res = await go({...body, 'app_version': appVersion});
-    return res.statusCode == 400 ? go(body) : res;
+    // Колонки app_version и demo могут быть ещё не созданы в базе (sql/app-feedback-version.sql,
+    // sql/app-feedback-demo.sql) — тогда повторяем без них.
+    var res = await go({...body, 'app_version': appVersion, 'demo': enabled.value});
+    if (res.statusCode == 400) res = await go({...body, 'app_version': appVersion});
+    if (res.statusCode == 400) res = await go(body);
+    return res;
   }
 
   static DateTime? _lastSent;

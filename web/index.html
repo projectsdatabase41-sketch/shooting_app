@@ -38,6 +38,9 @@
     html, body { position: fixed; inset: 0; width: 100%; overflow: hidden; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
     #loading { position: fixed; inset: 0; background: #000; display: flex; align-items: center; justify-content: center; }
     #loading img { width: 100%; height: 100%; object-fit: contain; }
+    /* Лёгкая пульсация заставки (1 с в цикле), пока грузится приложение. */
+    @keyframes nexus-pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.035); opacity: 0.88; } }
+    #loading img { animation: nexus-pulse 1s ease-in-out infinite; }
     @media (prefers-color-scheme: light) { html, body, #loading { background: #f4f6f8; } }
     /* Запасная крутилка — только если видео не запустилось. */
     #loading .target { position: absolute; width: 64px; height: 64px; }

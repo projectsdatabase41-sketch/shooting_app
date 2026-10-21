@@ -7,6 +7,7 @@ import '../i18n/i18n.dart';
 import '../state/app_data_store.dart';
 import '../state/personalization_view_model.dart';
 import '../widgets/glass_pill.dart';
+import '../widgets/settings_draft_scope.dart';
 import '../widgets/splash_gate.dart';
 import 'color_personalization_screen.dart';
 
@@ -84,7 +85,15 @@ class SettingsAppearanceScreen extends StatelessWidget {
     final personalization = context.watch<PersonalizationViewModel>();
 
     final topInset = MediaQuery.paddingOf(context).top;
-    return Scaffold(
+    return SettingsDraftScope(
+      db: context.read<AppDataStore>().db,
+      onRestored: () {
+        personalization.loadFromDb();
+        final db = context.read<AppDataStore>().db;
+        AnimSettings.load(db);
+        AnimSettings.revision.value++;
+      },
+      child: Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
         title: Text(tr('Внешний вид'),
@@ -92,6 +101,7 @@ class SettingsAppearanceScreen extends StatelessWidget {
                 .textTheme
                 .titleMedium
                 ?.copyWith(fontWeight: FontWeight.w600)),
+        actions: [Builder(builder: (ctx) => SettingsDraftScope.confirmButton(ctx, tooltip: tr('Сохранить')))],
       ),
       body: ListView(
         padding: EdgeInsets.only(top: topInset + GlassHeader.height),
@@ -220,6 +230,6 @@ class SettingsAppearanceScreen extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ));
   }
 }

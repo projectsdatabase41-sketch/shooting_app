@@ -543,27 +543,40 @@ class AiService {
   /// везде в приложении, "универсальный язык" вместо отдельного формата
   /// для чата).
   static (String, Map<String, dynamic>?) splitChart(String raw) {
-    final matches =
-        RegExp(r'```chart\s*([\s\S]*?)```').allMatches(raw).toList();
-    if (matches.isEmpty) return (raw, null);
+    // Блок ```chart — как просили в промпте; а ```json, внутри которого настоящая спецификация
+    // графика (модель часто так и отвечает), тоже превращается в график, а не остаётся сырым кодом.
+    final all = RegExp(r'```(chart|json)\s*([\s\S]*?)```').allMatches(raw).toList();
+    if (all.isEmpty) return (raw, null);
 
-    // Текст без всех chart-блоков.
+    Map<String, dynamic>? parse(String body) {
+      try {
+        final decoded = jsonDecode(body.trim());
+        if (decoded is Map<String, dynamic> && chartTypes.contains('${decoded['type']}'.toLowerCase())) return decoded;
+      } catch (_) {
+        // некорректный JSON — не график
+      }
+      return null;
+    }
+
+    // Убираем из текста все ```chart и те ```json, что оказались графиком.
+    final remove = <RegExpMatch>[];
+    Map<String, dynamic>? last;
+    for (final m in all) {
+      final spec = parse(m.group(2)!);
+      if (m.group(1) == 'chart') {
+        remove.add(m);
+        if (spec != null) last = spec; // последний годный блок — итог, ранние — черновики
+      } else if (spec != null) {
+        remove.add(m);
+        last = spec;
+      }
+    }
+    if (remove.isEmpty) return (raw, null);
     var text = raw;
-    for (final m in matches.reversed) {
+    for (final m in remove.reversed) {
       text = text.replaceRange(m.start, m.end, '');
     }
-    text = text.trim();
-
-    try {
-      final decoded = jsonDecode(matches.last.group(1)!.trim());
-      if (decoded is Map<String, dynamic> &&
-          chartTypes.contains('${decoded['type']}'.toLowerCase())) {
-        return (text, decoded);
-      }
-    } catch (_) {
-      // некорректный JSON — молча оставляем только текст
-    }
-    return (text, null);
+    return (text.trim(), last);
   }
 
   /// Мишени, которые модель вправе называть в предложенном упражнении —

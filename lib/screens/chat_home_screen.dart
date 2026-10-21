@@ -196,10 +196,18 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
   /// после переустановки или на новом телефоне их ещё нет только в
   /// локальном `chat_contacts`, здесь пробел восполняется при входе.
   Future<void> _syncFriends() async {
-    await _sync.syncGroups();
+    // Сначала список друзей (быстрый запрос) — он нужен на экране; группы грузятся параллельно,
+    // а долгие сверки (тренеры/спортсмены, переезд сервера) идут уже после показа списка.
+    final groups = _sync.syncGroups();
+    await _loadFriendList();
+    await groups;
     if (mounted) _reload();
     await _linkCoachesAndAthletes();
     await _remapStaleContacts();
+    if (mounted) _reload();
+  }
+
+  Future<void> _loadFriendList() async {
     try {
       await _auth.myBlocks();
       final people = await _auth.friendOverview();

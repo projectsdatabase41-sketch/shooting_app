@@ -191,6 +191,16 @@ class HomeTabsViewModel extends ChangeNotifier {
   String get _keyVisible => 'home_tabs_visible_$mode';
   String get _keyHidden => 'home_tabs_hidden_$mode';
 
+  /// Перечитать порядок и видимость из базы (после отмены правок в настройках).
+  void reload() {
+    _visible = List.of(allIds);
+    _hidden = {};
+    _tileColumns = 2;
+    _tileMaxPx = 240;
+    _load();
+    notifyListeners();
+  }
+
   void _load() {
     var savedLayout = _readRaw('home_tabs_layout_$mode');
     // Единый набор вкладок ('all') унаследовал настройки спортсмена
