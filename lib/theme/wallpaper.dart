@@ -19,15 +19,9 @@ class WallpaperStyle {
   final double frontOpacity; // 0..1
   final double vignette; // 0..1
   final double blur; // размытие заднего листа, px
-  final String eraseShape;
-  final double eraseSoft;
-  final double eraseStrength;
-  final double eraseSize;
+  final List<EraseShape> shapes;
   const WallpaperStyle({
-    this.eraseShape = 'none',
-    this.eraseSoft = 0.6,
-    this.eraseStrength = 0.7,
-    this.eraseSize = 0.8,
+    this.shapes = const [],
     required this.front,
     required this.backDark,
     required this.backGlow,
@@ -44,29 +38,22 @@ class WallpaperStyle {
     final s = gold ? 1.0 : BackdropTint.effectiveSat();
     double q(double v) => (v * s).clamp(0.0, 1.0).toDouble();
     Color hsl(double sat, double l) => HSLColor.fromAHSL(1, hue % 360, q(sat), l).toColor();
-    final es = BackdropTint.eraseShape;
-    final eSoft = BackdropTint.eraseSoft, eStr = BackdropTint.eraseStrength, eSize = BackdropTint.eraseSize;
+    final shp = [for (final e in BackdropTint.shapes) e.copy()];
     return dark
         ? WallpaperStyle(
-            eraseShape: es,
-            eraseSoft: eSoft,
-            eraseStrength: eStr,
-            eraseSize: eSize,
+            shapes: shp,
             front: hsl(gold ? 0.35 : 0.28, 0.045),
-            backDark: hsl(0.62, 0.16),
-            backGlow: hsl(0.92, gold ? 0.58 : 0.60),
+            backDark: hsl(0.42, 0.06),
+            backGlow: hsl(0.62, gold ? 0.40 : 0.22),
             frontOpacity: BackdropTint.frontOpacity,
             vignette: BackdropTint.vignette,
             blur: BackdropTint.blur,
           )
         : WallpaperStyle(
-            eraseShape: es,
-            eraseSoft: eSoft,
-            eraseStrength: eStr,
-            eraseSize: eSize,
+            shapes: shp,
             front: hsl(0.28, 0.975),
-            backDark: hsl(0.55, 0.58),
-            backGlow: hsl(0.85, gold ? 0.40 : 0.46),
+            backDark: hsl(0.45, 0.45),
+            backGlow: hsl(0.60, gold ? 0.44 : 0.36),
             frontOpacity: BackdropTint.frontOpacity,
             vignette: BackdropTint.vignette * 0.6,
             blur: BackdropTint.blur,
@@ -86,10 +73,16 @@ class Wallpaper extends StatelessWidget {
     return RepaintBoundary(
       child: ValueListenableBuilder<int>(
         valueListenable: BackdropTint.revision,
-        builder: (_, __, ___) => CustomPaint(
-          painter: WallpaperPainter(kind, WallpaperStyle.of(kind, b), b),
-          size: Size.infinite,
-        ),
+        builder: (_, __, ___) {
+          final custom = BackdropTint.customImage;
+          if (BackdropTint.customOn && custom != null) {
+            return CustomPaint(painter: _CustomWallpaperPainter(custom, BackdropTint.customMatrix(), BackdropTint.cVignette), size: Size.infinite);
+          }
+          return CustomPaint(
+            painter: WallpaperPainter(kind, WallpaperStyle.of(kind, b), b),
+            size: Size.infinite,
+          );
+        },
       ),
     );
   }
@@ -108,40 +101,44 @@ class WallpaperPainter extends CustomPainter {
     final rect = Offset.zero & size;
     final glow = _glowCenter(size);
 
-    // 1. Задний лист (виден только в прорезях): градиент со свечением; может быть размыт.
-    if (style.blur > 0.1) {
-      canvas.saveLayer(rect, Paint()..imageFilter = ui.ImageFilter.blur(sigmaX: style.blur, sigmaY: style.blur, tileMode: TileMode.clamp));
+    // Размытие — всех обоев целиком (прорези становятся мягкими); масштабируется с шириной экрана.
+    final sigma = style.blur * (w / 400);
+    if (sigma > 0.3) {
+      canvas.saveLayer(rect, Paint()..imageFilter = ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma, tileMode: TileMode.clamp));
     } else {
       canvas.save();
     }
+
+    // 1. Задний лист (виден только в прорезях): градиент со свечением.
     canvas.drawRect(rect, Paint()..color = style.backDark);
     canvas.drawRect(
       rect,
       Paint()
         ..shader = ui.Gradient.radial(glow, math.max(w, h) * 0.95, [style.backGlow, style.backGlow.withValues(alpha: 0)], [0.0, 1.0]),
     );
-    canvas.restore();
 
     // 2. Передний лист с вырезами: вырезы стираются режимом clear внутри отдельного слоя.
     canvas.saveLayer(rect, Paint());
     canvas.drawRect(rect, Paint()..color = style.front.withValues(alpha: style.frontOpacity));
     _cutouts(canvas, size);
     _erase(canvas, size, glow);
-    canvas.restore();
-
-    // 3. Виньетка: затемнение к краям.
+    // Виньетка переднего листа: к центру лист истончается (проглядывает задний), к краям остаётся плотным.
     if (style.vignette > 0.01) {
       canvas.drawRect(
         rect,
         Paint()
+          ..blendMode = BlendMode.dstOut
           ..shader = ui.Gradient.radial(
-            rect.center,
-            math.max(w, h) * 0.78,
-            [Colors.transparent, Colors.black.withValues(alpha: 0.65 * style.vignette)],
-            [0.55, 1.0],
+            glow,
+            math.max(w, h) * 0.85,
+            [Colors.black.withValues(alpha: 0.85 * style.vignette), Colors.black.withValues(alpha: 0)],
+            [0.0, 1.0],
           ),
       );
     }
+    canvas.restore();
+
+    canvas.restore(); // конец размытия
   }
 
   Offset _glowCenter(Size s) => switch (kind) {
@@ -153,63 +150,69 @@ class WallpaperPainter extends CustomPainter {
         _ => Offset(s.width / 2, s.height * 0.40),
       };
 
-  /// «Стирание» переднего листа выбранной фигурой/стороной с мягким краем: чем сильнее, тем больше
-  /// просвечивает задний лист. Рисуется режимом dstOut (стирает пропорционально прозрачности).
-  void _erase(Canvas canvas, Size s, Offset c) {
-    final shape = style.eraseShape;
-    if (shape == 'none' || style.eraseStrength < 0.01) return;
+  /// «Стирание» переднего листа фигурами пользователя (их ставят в редакторе обоев). Режим dstOut:
+  /// стирает пропорционально прозрачности, края мягкие.
+  void _erase(Canvas canvas, Size s, Offset glowCenter) {
     final w = s.width, h = s.height, m = math.min(w, h);
-    final k = style.eraseSize, soft = style.eraseSoft, a = style.eraseStrength;
-    final color = Colors.black.withValues(alpha: a);
-    Paint fill() {
-      final p = Paint()
-        ..color = color
+    for (final e in style.shapes) {
+      if (e.strength < 0.01) continue;
+      final color = Colors.black.withValues(alpha: e.strength);
+      final r = m * 0.5 * e.size;
+      Paint fill() {
+        final p = Paint()
+          ..color = color
+          ..blendMode = BlendMode.dstOut
+          ..isAntiAlias = true;
+        final sigma = e.soft * r * 0.35;
+        if (sigma > 0.3) p.maskFilter = MaskFilter.blur(BlurStyle.normal, sigma);
+        return p;
+      }
+
+      Paint ramp(Offset from, Offset to) => Paint()
         ..blendMode = BlendMode.dstOut
-        ..isAntiAlias = true;
-      final sigma = soft * m * 0.10;
-      if (sigma > 0.3) p.maskFilter = MaskFilter.blur(BlurStyle.normal, sigma);
-      return p;
-    }
+        ..shader = ui.Gradient.linear(from, to, [color, color.withValues(alpha: 0)], [0.0, math.min(1.0, 0.25 + 0.75 * e.soft)]);
 
-    Paint ramp(Offset from, Offset to) => Paint()
-      ..blendMode = BlendMode.dstOut
-      ..shader = ui.Gradient.linear(from, to, [color, color.withValues(alpha: 0)], [0.0, 0.25 + 0.75 * soft > 1 ? 1.0 : 0.25 + 0.75 * soft]);
-
-    switch (shape) {
-      case 'left':
-        canvas.drawRect(Offset.zero & s, ramp(Offset(0, 0), Offset(w * k * 0.9, 0)));
-      case 'right':
-        canvas.drawRect(Offset.zero & s, ramp(Offset(w, 0), Offset(w - w * k * 0.9, 0)));
-      case 'top':
-        canvas.drawRect(Offset.zero & s, ramp(Offset(0, 0), Offset(0, h * k * 0.6)));
-      case 'bottom':
-        canvas.drawRect(Offset.zero & s, ramp(Offset(0, h), Offset(0, h - h * k * 0.6)));
-      case 'circle':
-        canvas.drawCircle(c, m * 0.42 * k, fill());
-      case 'square':
-        canvas.drawRect(Rect.fromCenter(center: c, width: m * 0.72 * k, height: m * 0.72 * k), fill());
-      case 'band':
-        canvas.drawRect(Rect.fromCenter(center: c, width: w * 1.2, height: h * 0.16 * k), fill());
-      case 'triangle':
-        final r = m * 0.46 * k;
-        canvas.drawPath(
-          Path()
-            ..moveTo(c.dx, c.dy - r)
-            ..lineTo(c.dx + r * 0.87, c.dy + r * 0.5)
-            ..lineTo(c.dx - r * 0.87, c.dy + r * 0.5)
-            ..close(),
-          fill(),
-        );
-      case 'star':
-        final r = m * 0.46 * k;
-        final path = Path();
-        for (var i = 0; i < 10; i++) {
-          final ang = -math.pi / 2 + i * math.pi / 5;
-          final rr = i.isEven ? r : r * 0.42;
-          final pt = Offset(c.dx + rr * math.cos(ang), c.dy + rr * math.sin(ang));
-          i == 0 ? path.moveTo(pt.dx, pt.dy) : path.lineTo(pt.dx, pt.dy);
-        }
-        canvas.drawPath(path..close(), fill());
+      switch (e.type) {
+        case 'left':
+          canvas.drawRect(Offset.zero & s, ramp(const Offset(0, 0), Offset(w * e.size * 0.9, 0)));
+        case 'right':
+          canvas.drawRect(Offset.zero & s, ramp(Offset(w, 0), Offset(w - w * e.size * 0.9, 0)));
+        case 'top':
+          canvas.drawRect(Offset.zero & s, ramp(const Offset(0, 0), Offset(0, h * e.size * 0.6)));
+        case 'bottom':
+          canvas.drawRect(Offset.zero & s, ramp(Offset(0, h), Offset(0, h - h * e.size * 0.6)));
+        default:
+          canvas.save();
+          canvas.translate(e.x * w, e.y * h);
+          canvas.rotate(e.rot);
+          switch (e.type) {
+            case 'circle':
+              canvas.drawCircle(Offset.zero, r, fill());
+            case 'square':
+              canvas.drawRect(Rect.fromCenter(center: Offset.zero, width: r * 1.8, height: r * 1.8), fill());
+            case 'band':
+              canvas.drawRect(Rect.fromCenter(center: Offset.zero, width: math.max(w, h) * 1.6, height: r * 0.7), fill());
+            case 'triangle':
+              canvas.drawPath(
+                Path()
+                  ..moveTo(0, -r)
+                  ..lineTo(r * 0.87, r * 0.5)
+                  ..lineTo(-r * 0.87, r * 0.5)
+                  ..close(),
+                fill(),
+              );
+            case 'star':
+              final path = Path();
+              for (var i = 0; i < 10; i++) {
+                final ang = -math.pi / 2 + i * math.pi / 5;
+                final rr = i.isEven ? r : r * 0.42;
+                final pt = Offset(rr * math.cos(ang), rr * math.sin(ang));
+                i == 0 ? path.moveTo(pt.dx, pt.dy) : path.lineTo(pt.dx, pt.dy);
+              }
+              canvas.drawPath(path..close(), fill());
+          }
+          canvas.restore();
+      }
     }
   }
 
@@ -235,12 +238,14 @@ class WallpaperPainter extends CustomPainter {
 
   void _cutouts(Canvas canvas, Size s) {
     final w = s.width, h = s.height;
-    final slit = math.max(2.0, w * 0.0042);
+    final slit = math.max(1.1, w * 0.0021);
     switch (kind) {
       case 'settings':
         _rings(canvas, Offset(w / 2, 0), s, List.generate(10, (i) => i + 2), slit);
+        _icons(canvas, s, slit, 7);
       case 'ai':
         _rings(canvas, Offset(w / 2, h * 0.22), s, List.generate(7, (i) => i + 1), slit * 1.2);
+        _icons(canvas, s, slit, 11);
       case 'messenger':
         _pattern(canvas, s, slit);
       case 'champions':
@@ -254,11 +259,55 @@ class WallpaperPainter extends CustomPainter {
     }
   }
 
+  static const _tileIcons = [
+    Icons.gps_fixed,
+    Icons.bar_chart,
+    Icons.menu_book,
+    Icons.chat_bubble_outline,
+    Icons.smart_toy_outlined,
+    Icons.settings_outlined,
+    Icons.emoji_events_outlined,
+    Icons.timer_outlined,
+  ];
+
+  /// Прорези в виде значков кнопок главного экрана: контуры глифов, редкая сетка с разбросом и поворотом.
+  void _icons(Canvas canvas, Size s, double slit, int seed) {
+    final cell = s.width * 0.34;
+    final rnd = math.Random(seed);
+    for (var row = 0; row < s.height / cell + 1; row++) {
+      for (var c = 0; c < s.width / cell + 1; c++) {
+        final icon = _tileIcons[rnd.nextInt(_tileIcons.length)];
+        final size = cell * (0.38 + rnd.nextDouble() * 0.2);
+        final pos = Offset((c + 0.5 + (row.isOdd ? 0.5 : 0) + (rnd.nextDouble() - 0.5) * 0.3) * cell, (row + 0.5 + (rnd.nextDouble() - 0.5) * 0.3) * cell);
+        final tp = TextPainter(
+          text: TextSpan(
+            text: String.fromCharCode(icon.codePoint),
+            style: TextStyle(
+              fontFamily: icon.fontFamily,
+              package: icon.fontPackage,
+              fontSize: size,
+              foreground: Paint()
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = math.max(1.0, slit * 0.8)
+                ..blendMode = BlendMode.clear,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        canvas.save();
+        canvas.translate(pos.dx, pos.dy);
+        canvas.rotate((rnd.nextDouble() - 0.5) * 0.5);
+        tp.paint(canvas, Offset(-tp.width / 2, -tp.height / 2));
+        canvas.restore();
+      }
+    }
+  }
+
   /// Узор мессенджера: мишени, прицелы, ромбы и кольца в шахматном порядке.
   void _pattern(Canvas canvas, Size s, double slit) {
     final cell = s.width * 0.15;
     final u = cell * 0.17;
-    final p = _slit(math.max(1.5, slit * 0.8));
+    final p = _slit(math.max(1.0, slit * 0.8));
     final rnd = math.Random(3);
     for (var row = 0; row < s.height / cell + 2; row++) {
       for (var c = 0; c < s.width / cell + 2; c++) {
@@ -346,8 +395,47 @@ class WallpaperPainter extends CustomPainter {
       a.frontOpacity != b.frontOpacity ||
       a.vignette != b.vignette ||
       a.blur != b.blur ||
-      a.eraseShape != b.eraseShape ||
-      a.eraseSoft != b.eraseSoft ||
-      a.eraseStrength != b.eraseStrength ||
-      a.eraseSize != b.eraseSize;
+      a.shapes.length != b.shapes.length ||
+      _shapesDiffer(a.shapes, b.shapes);
+
+  static bool _shapesDiffer(List<EraseShape> a, List<EraseShape> b) {
+    for (var i = 0; i < a.length; i++) {
+      final x = a[i], y = b[i];
+      if (x.type != y.type || x.x != y.x || x.y != y.y || x.size != y.size || x.rot != y.rot || x.soft != y.soft || x.strength != y.strength) return true;
+    }
+    return false;
+  }
+}
+
+/// Свои обои: фото по размеру экрана (cover) с яркостью, контрастом, оттенком и виньеткой.
+class _CustomWallpaperPainter extends CustomPainter {
+  final ui.Image image;
+  final List<double> matrix;
+  final double vignette;
+  _CustomWallpaperPainter(this.image, this.matrix, this.vignette);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final src = Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
+    final scale = math.max(size.width / src.width, size.height / src.height);
+    final dw = src.width * scale, dh = src.height * scale;
+    final dst = Rect.fromLTWH((size.width - dw) / 2, (size.height - dh) / 2, dw, dh);
+    canvas.drawImageRect(image, src, dst, Paint()..colorFilter = ColorFilter.matrix(matrix)..filterQuality = FilterQuality.medium);
+    if (vignette > 0.01) {
+      final rect = Offset.zero & size;
+      canvas.drawRect(
+        rect,
+        Paint()
+          ..shader = ui.Gradient.radial(
+            rect.center,
+            math.max(size.width, size.height) * 0.75,
+            [Colors.transparent, Colors.black.withValues(alpha: 0.8 * vignette)],
+            [0.5, 1.0],
+          ),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_CustomWallpaperPainter old) => old.image != image || old.vignette != vignette || old.matrix.toString() != matrix.toString();
 }

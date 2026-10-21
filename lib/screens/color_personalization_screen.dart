@@ -1,3 +1,4 @@
+import '../widgets/value_wheel.dart';
 import '../widgets/glass_route.dart';
 import 'dart:async';
 import '../widgets/app_backdrop.dart';
@@ -1015,6 +1016,24 @@ class _BackdropTintSectionState extends State<_BackdropTintSection> {
             _changed();
           },
         ),
+        // Две главные регулировки (в любом режиме): размытие всех обоев и «цветность» (прозрачность переднего листа).
+        const SizedBox(height: 6),
+        ValueWheel(
+          label: tr('Размытость'),
+          value: BackdropTint.blur / 30,
+          onChanged: (v) {
+            BackdropTint.save(db, newBlur: v * 30);
+            setState(() {});
+          },
+        ),
+        ValueWheel(
+          label: tr('Цветность'),
+          value: BackdropTint.colorfulness,
+          onChanged: (v) {
+            BackdropTint.save(db, newFront: 1 - 0.7 * v);
+            setState(() {});
+          },
+        ),
         if (mode == 'auto')
           Padding(
             padding: const EdgeInsets.only(top: 6),
@@ -1023,30 +1042,17 @@ class _BackdropTintSectionState extends State<_BackdropTintSection> {
         const SizedBox(height: 12),
         Text(tr('Слои обоев'), style: theme.textTheme.titleSmall),
         Text(tr('Обои — два листа: передний с прорезями и цветной задний, виден в прорезях и там, где передний «стёрт».'), style: theme.textTheme.bodySmall),
-        Text(tr('Прозрачность переднего листа: {p}%', {'p': (BackdropTint.frontOpacity * 100).round()}), style: theme.textTheme.bodySmall),
-        Slider(
-          min: 0.3,
-          max: 1.0,
-          value: BackdropTint.frontOpacity,
-          onChanged: (v) {
-            BackdropTint.save(db, newFront: v);
-            setState(() {});
-          },
-        ),
-        Text(tr('Виньетка (затемнение к краям): {p}%', {'p': (BackdropTint.vignette * 100).round()}), style: theme.textTheme.bodySmall),
-        Slider(
-          min: 0,
-          max: 1.0,
+        ValueWheel(
+          label: tr('Виньетка переднего листа'),
           value: BackdropTint.vignette,
           onChanged: (v) {
             BackdropTint.save(db, newVignette: v);
             setState(() {});
           },
         ),
-        Text(tr('Стереть передний лист'), style: theme.textTheme.bodySmall),
+        Text(tr('Стереть передний лист: добавить фигуру'), style: theme.textTheme.bodySmall),
         Wrap(spacing: 6, runSpacing: 4, children: [
           for (final e in const [
-            ('none', 'Нет'),
             ('left', 'Слева'),
             ('right', 'Справа'),
             ('top', 'Сверху'),
@@ -1057,84 +1063,82 @@ class _BackdropTintSectionState extends State<_BackdropTintSection> {
             ('triangle', 'Треугольник'),
             ('star', 'Звезда'),
           ])
-            ChoiceChip(
+            ActionChip(
               label: Text(tr(e.$2)),
-              selected: BackdropTint.eraseShape == e.$1,
-              onSelected: (_) {
-                BackdropTint.save(db, newEraseShape: e.$1);
+              onPressed: () {
+                BackdropTint.saveShapes(db, [...BackdropTint.shapes, EraseShape(type: e.$1)]);
                 setState(() {});
               },
             ),
         ]),
-        if (BackdropTint.eraseShape != 'none') ...[
-          Text(tr('Размытие края: {p}%', {'p': (BackdropTint.eraseSoft * 100).round()}), style: theme.textTheme.bodySmall),
-          Slider(
-            min: 0,
-            max: 1,
-            value: BackdropTint.eraseSoft,
+        if (BackdropTint.shapes.isNotEmpty) ...[
+          ValueWheel(
+            label: tr('Размытие края (последняя фигура)'),
+            value: BackdropTint.shapes.last.soft,
             onChanged: (v) {
-              BackdropTint.save(db, newEraseSoft: v);
+              final l = [for (final e in BackdropTint.shapes) e.copy()];
+              l.last.soft = v;
+              BackdropTint.saveShapes(db, l);
               setState(() {});
             },
           ),
-          Text(tr('Сила стирания: {p}%', {'p': (BackdropTint.eraseStrength * 100).round()}), style: theme.textTheme.bodySmall),
-          Slider(
-            min: 0,
-            max: 1,
-            value: BackdropTint.eraseStrength,
+          ValueWheel(
+            label: tr('Сила стирания'),
+            value: BackdropTint.shapes.last.strength,
             onChanged: (v) {
-              BackdropTint.save(db, newEraseStrength: v);
+              final l = [for (final e in BackdropTint.shapes) e.copy()];
+              l.last.strength = v;
+              BackdropTint.saveShapes(db, l);
               setState(() {});
             },
           ),
-          Text(tr('Размер: {p}%', {'p': (BackdropTint.eraseSize * 100).round()}), style: theme.textTheme.bodySmall),
-          Slider(
-            min: 0.2,
-            max: 1.6,
-            value: BackdropTint.eraseSize,
+          ValueWheel(
+            label: tr('Размер'),
+            value: (BackdropTint.shapes.last.size - 0.05) / 1.55,
             onChanged: (v) {
-              BackdropTint.save(db, newEraseSize: v);
+              final l = [for (final e in BackdropTint.shapes) e.copy()];
+              l.last.size = 0.05 + v * 1.55;
+              BackdropTint.saveShapes(db, l);
               setState(() {});
             },
           ),
+          Row(children: [
+            TextButton(
+              onPressed: () {
+                BackdropTint.saveShapes(db, BackdropTint.shapes.sublist(0, BackdropTint.shapes.length - 1));
+                setState(() {});
+              },
+              child: Text(tr('Убрать последнюю')),
+            ),
+            TextButton(
+              onPressed: () {
+                BackdropTint.saveShapes(db, []);
+                setState(() {});
+              },
+              child: Text(tr('Очистить')),
+            ),
+          ]),
         ],
         if (mode == 'manual') ...[
           const SizedBox(height: 4),
           Text(tr('Один оттенок на весь вид: фон, плитки, кнопки, карточки и контуры. Цвета пресета в этом режиме не используются.'), style: theme.textTheme.bodySmall),
           const SizedBox(height: 8),
-          Text(tr('Оттенок: {h}°', {'h': BackdropTint.hue.round()}), style: theme.textTheme.bodySmall),
-          // Радужная полоса под ползунком — видно, какой цвет получится.
-          Stack(alignment: Alignment.center, children: [
-            Container(
-              height: 8,
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(4),
-                gradient: LinearGradient(colors: [for (var h = 0; h <= 360; h += 60) HSLColor.fromAHSL(1, h.toDouble(), 0.7, 0.5).toColor()]),
-              ),
-            ),
-            Slider(
-              min: 0,
-              max: 360,
-              value: BackdropTint.hue,
-              activeColor: Colors.transparent,
-              inactiveColor: Colors.transparent,
-              onChanged: (v) {
-                BackdropTint.save(db, newHue: v);
-                _changed();
-              },
-            ),
-          ]),
-          Text(tr('Насыщенность: {s}%', {'s': (BackdropTint.sat * 100).round()}), style: theme.textTheme.bodySmall),
-          Slider(
-            min: 0,
-            max: 1.5,
-            value: BackdropTint.sat,
-            onChanged: (v) {
-              BackdropTint.save(db, newSat: v);
-              _changed();
-            },
-          ),
+          ValueWheel(
+          label: tr('Оттенок'),
+          value: BackdropTint.hue / 360, wrap: true,
+          onChanged: (v) {
+            BackdropTint.save(db, newHue: v * 360);
+            _changed();
+          },
+        ),
+        ValueWheel(
+          label: tr('Насыщенность'),
+          value: BackdropTint.sat / 1.5,
+          onChanged: (v) {
+            BackdropTint.save(db, newSat: v * 1.5);
+            _changed();
+          },
+        ),
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton(

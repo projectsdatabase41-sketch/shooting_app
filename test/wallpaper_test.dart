@@ -34,7 +34,7 @@ void main() {
     BackdropTint.frontOpacity = 1.0;
     BackdropTint.vignette = 0;
     BackdropTint.blur = 0;
-    BackdropTint.eraseShape = 'none';
+    BackdropTint.shapes = [];
     BackdropTint.recompute();
   });
 
@@ -48,10 +48,7 @@ void main() {
 
   testWidgets('стирание переднего листа: сторона «слева» открывает задний лист, у «нет» — нет', (tester) async {
     final before = _lum(await _render(tester, 'home'), 6, 700);
-    BackdropTint.eraseShape = 'left';
-    BackdropTint.eraseSoft = 0.3;
-    BackdropTint.eraseStrength = 1.0;
-    BackdropTint.eraseSize = 1.0;
+    BackdropTint.shapes = [EraseShape(type: 'left', soft: 0.3, strength: 1.0, size: 1.0)];
     BackdropTint.recompute();
     final after = _lum(await _render(tester, 'home'), 6, 700);
     expect(after, greaterThan(before + 20));

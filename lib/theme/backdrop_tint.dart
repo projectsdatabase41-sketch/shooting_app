@@ -1,7 +1,12 @@
+import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
+
+import 'package:image/image.dart' as img;
 
 import '../services/local_db_service.dart';
 
@@ -34,22 +39,33 @@ class BackdropTint {
   // Слои обоев (см. wallpaper.dart).
   static double frontOpacity = 1.0; // прозрачность переднего листа с вырезами
   static double vignette = 0.35; // затемнение к краям
-  static double blur = 0; // размытие заднего листа, px
+  static double blur = 3; // размытие ВСЕХ обоев, px (на ширине 400; на больших экранах масштабируется)
   static const _kFront = 'wallpaper_front_opacity';
   static const _kVignette = 'wallpaper_vignette';
   static const _kBlur = 'wallpaper_blur';
 
-  /// «Стирание» переднего листа мягкой фигурой или с одной из сторон: сквозь стёртое место виден задний лист.
-  /// Форма: none | left | right | top | bottom | circle | star | square | band | triangle.
-  static const eraseShapes = ['none', 'left', 'right', 'top', 'bottom', 'circle', 'star', 'square', 'band', 'triangle'];
-  static String eraseShape = 'none';
-  static double eraseSoft = 0.6; // 0 — чёткий край … 1 — очень размытый
-  static double eraseStrength = 0.7; // 0..1, насколько стирается
-  static double eraseSize = 0.8; // 0.2..1.6, размер относительно экрана
-  static const _kEShape = 'wallpaper_erase_shape';
-  static const _kESoft = 'wallpaper_erase_soft';
-  static const _kEStrength = 'wallpaper_erase_strength';
-  static const _kESize = 'wallpaper_erase_size';
+  /// Фигуры, «стирающие» передний лист: ставятся вручную в редакторе обоев (палец — место, два пальца — размер).
+  static const eraseTypes = ['circle', 'star', 'triangle', 'square', 'band', 'left', 'right', 'top', 'bottom'];
+  static List<EraseShape> shapes = [];
+  static const _kShapes = 'wallpaper_shapes';
+
+  // Свои обои (фото пользователя): яркость, контраст, оттенок, виньетка.
+  static bool customOn = false;
+  static String? customB64;
+  static double cBright = 0; // -0.5..0.5
+  static double cContrast = 1; // 0.5..1.8
+  static double cHue = 0; // -180..180
+  static double cVignette = 0.3; // 0..1
+  static ui.Image? customImage;
+  static const _kCOn = 'wallpaper_custom_on';
+  static const _kCImg = 'wallpaper_custom_img';
+  static const _kCBright = 'wallpaper_custom_bright';
+  static const _kCContrast = 'wallpaper_custom_contrast';
+  static const _kCHue = 'wallpaper_custom_hue';
+  static const _kCVig = 'wallpaper_custom_vignette';
+
+  /// «Цветность»: насколько передний лист прозрачнее (0 — сплошной … 1 — просвечивает задний).
+  static double get colorfulness => ((1 - frontOpacity) / 0.7).clamp(0.0, 1.0).toDouble();
 
   /// Растёт при любом изменении параметров оформления — обои перерисовываются.
   static final revision = ValueNotifier<int>(0);
@@ -80,12 +96,20 @@ class BackdropTint {
     sat = (double.tryParse(get(_kSat) ?? '') ?? 1.0).clamp(0.0, 1.5).toDouble();
     frontOpacity = (double.tryParse(get(_kFront) ?? '') ?? 1.0).clamp(0.3, 1.0).toDouble();
     vignette = (double.tryParse(get(_kVignette) ?? '') ?? 0.35).clamp(0.0, 1.0).toDouble();
-    blur = (double.tryParse(get(_kBlur) ?? '') ?? 0).clamp(0.0, 30.0).toDouble();
-    final es = get(_kEShape);
-    eraseShape = eraseShapes.contains(es) ? es! : 'none';
-    eraseSoft = (double.tryParse(get(_kESoft) ?? '') ?? 0.6).clamp(0.0, 1.0).toDouble();
-    eraseStrength = (double.tryParse(get(_kEStrength) ?? '') ?? 0.7).clamp(0.0, 1.0).toDouble();
-    eraseSize = (double.tryParse(get(_kESize) ?? '') ?? 0.8).clamp(0.2, 1.6).toDouble();
+    blur = (double.tryParse(get(_kBlur) ?? '') ?? 3).clamp(0.0, 30.0).toDouble();
+    try {
+      final raw = get(_kShapes);
+      shapes = raw == null || raw.isEmpty ? [] : [for (final j in jsonDecode(raw) as List) EraseShape.fromJson(j as Map<String, dynamic>)];
+    } catch (_) {
+      shapes = [];
+    }
+    customOn = get(_kCOn) == '1';
+    customB64 = get(_kCImg);
+    cBright = (double.tryParse(get(_kCBright) ?? '') ?? 0).clamp(-0.5, 0.5).toDouble();
+    cContrast = (double.tryParse(get(_kCContrast) ?? '') ?? 1).clamp(0.5, 1.8).toDouble();
+    cHue = (double.tryParse(get(_kCHue) ?? '') ?? 0).clamp(-180.0, 180.0).toDouble();
+    cVignette = (double.tryParse(get(_kCVig) ?? '') ?? 0.3).clamp(0.0, 1.0).toDouble();
+    if (customOn && customB64 != null && customB64!.isNotEmpty) _decodeCustom();
     recompute();
   }
 
@@ -96,10 +120,11 @@ class BackdropTint {
       double? newFront,
       double? newVignette,
       double? newBlur,
-      String? newEraseShape,
-      double? newEraseSoft,
-      double? newEraseStrength,
-      double? newEraseSize}) {
+      bool? newCustomOn,
+      double? newCBright,
+      double? newCContrast,
+      double? newCHue,
+      double? newCVignette}) {
     void put(String k, String v) => db.db.execute(
         'INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex', [k, v]);
     if (newMode != null) {
@@ -126,23 +151,88 @@ class BackdropTint {
       blur = newBlur.clamp(0.0, 30.0).toDouble();
       put(_kBlur, blur.toStringAsFixed(1));
     }
-    if (newEraseShape != null && eraseShapes.contains(newEraseShape)) {
-      eraseShape = newEraseShape;
-      put(_kEShape, newEraseShape);
+    if (newCustomOn != null) {
+      customOn = newCustomOn;
+      put(_kCOn, newCustomOn ? '1' : '0');
+      if (newCustomOn && customImage == null && customB64 != null) _decodeCustom();
     }
-    if (newEraseSoft != null) {
-      eraseSoft = newEraseSoft.clamp(0.0, 1.0).toDouble();
-      put(_kESoft, eraseSoft.toStringAsFixed(2));
+    if (newCBright != null) {
+      cBright = newCBright.clamp(-0.5, 0.5).toDouble();
+      put(_kCBright, cBright.toStringAsFixed(2));
     }
-    if (newEraseStrength != null) {
-      eraseStrength = newEraseStrength.clamp(0.0, 1.0).toDouble();
-      put(_kEStrength, eraseStrength.toStringAsFixed(2));
+    if (newCContrast != null) {
+      cContrast = newCContrast.clamp(0.5, 1.8).toDouble();
+      put(_kCContrast, cContrast.toStringAsFixed(2));
     }
-    if (newEraseSize != null) {
-      eraseSize = newEraseSize.clamp(0.2, 1.6).toDouble();
-      put(_kESize, eraseSize.toStringAsFixed(2));
+    if (newCHue != null) {
+      cHue = newCHue.clamp(-180.0, 180.0).toDouble();
+      put(_kCHue, cHue.toStringAsFixed(0));
+    }
+    if (newCVignette != null) {
+      cVignette = newCVignette.clamp(0.0, 1.0).toDouble();
+      put(_kCVig, cVignette.toStringAsFixed(2));
     }
     recompute();
+  }
+
+  /// Фигуры стирания: предпросмотр (без записи в базу) и сохранение.
+  static void previewShapes(List<EraseShape> list) {
+    shapes = list;
+    revision.value++;
+  }
+
+  static void saveShapes(LocalDbService db, List<EraseShape> list) {
+    shapes = list;
+    db.db.execute('INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex',
+        [_kShapes, jsonEncode([for (final e in list) e.toJson()])]);
+    revision.value++;
+  }
+
+  /// Свои обои: файл уменьшается (длинная сторона до 1440 px), хранится в базе как JPEG; `false` — не картинка.
+  static Future<bool> setCustomImage(LocalDbService db, Uint8List bytes) async {
+    final decoded = img.decodeImage(bytes);
+    if (decoded == null) return false;
+    final longest = math.max(decoded.width, decoded.height);
+    final resized = longest > 1440 ? img.copyResize(decoded, width: decoded.width >= decoded.height ? 1440 : null, height: decoded.height > decoded.width ? 1440 : null) : decoded;
+    final b64 = base64Encode(img.encodeJpg(resized, quality: 82));
+    customB64 = b64;
+    db.db.execute('INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex', [_kCImg, b64]);
+    customImage = null;
+    await _decodeCustom();
+    save(db, newCustomOn: true);
+    return true;
+  }
+
+  static void clearCustomImage(LocalDbService db) {
+    customB64 = null;
+    customImage = null;
+    db.db.execute("DELETE FROM color_prefs WHERE key = ?", [_kCImg]);
+    save(db, newCustomOn: false);
+  }
+
+  static Future<void> _decodeCustom() async {
+    final b64 = customB64;
+    if (b64 == null || b64.isEmpty) return;
+    try {
+      final codec = await ui.instantiateImageCodec(base64Decode(b64));
+      customImage = (await codec.getNextFrame()).image;
+      revision.value++;
+    } catch (_) {
+      customImage = null;
+    }
+  }
+
+  /// Матрица цветового фильтра для своих обоев: оттенок, контраст, яркость.
+  static List<double> customMatrix() {
+    final h = matrix(cHue, 1);
+    final c = cContrast;
+    final off = ((1 - c) * 0.5 + cBright) * 255;
+    return [
+      h[0] * c, h[1] * c, h[2] * c, 0, off,
+      h[5] * c, h[6] * c, h[7] * c, 0, off,
+      h[10] * c, h[11] * c, h[12] * c, 0, off,
+      0, 0, 0, 1, 0,
+    ];
   }
 
   /// Акцентные цвета выбранного набора приложения (для режима `auto`); `null` — свои цвета не заданы.
@@ -289,4 +379,34 @@ class BackdropTint {
 
   /// Яркость, с которой сейчас рисуется интерфейс (для выбора набора цветов тёмной/светлой темы).
   static Brightness systemBrightness() => PlatformDispatcher.instance.platformBrightness;
+}
+
+/// Фигура на переднем листе обоев, «стирающая» его мягким краем. Положение и размер — доли экрана.
+class EraseShape {
+  String type; // см. BackdropTint.eraseTypes
+  double x; // 0..1 слева направо
+  double y; // 0..1 сверху вниз
+  double size; // 0.05..1.6 от половины меньшей стороны
+  double rot; // радианы
+  double soft; // 0 — чёткий край … 1 — очень размытый
+  double strength; // 0..1
+  EraseShape({required this.type, this.x = 0.5, this.y = 0.4, this.size = 0.4, this.rot = 0, this.soft = 0.5, this.strength = 0.8});
+
+  EraseShape copy() => EraseShape(type: type, x: x, y: y, size: size, rot: rot, soft: soft, strength: strength);
+
+  Map<String, dynamic> toJson() => {'t': type, 'x': x, 'y': y, 's': size, 'r': rot, 'f': soft, 'a': strength};
+
+  factory EraseShape.fromJson(Map<String, dynamic> j) {
+    double d(String k, double def) => (j[k] as num?)?.toDouble() ?? def;
+    final t = '${j['t']}';
+    return EraseShape(
+      type: BackdropTint.eraseTypes.contains(t) ? t : 'circle',
+      x: d('x', 0.5).clamp(0.0, 1.0).toDouble(),
+      y: d('y', 0.4).clamp(0.0, 1.0).toDouble(),
+      size: d('s', 0.4).clamp(0.05, 1.6).toDouble(),
+      rot: d('r', 0),
+      soft: d('f', 0.5).clamp(0.0, 1.0).toDouble(),
+      strength: d('a', 0.8).clamp(0.0, 1.0).toDouble(),
+    );
+  }
 }
