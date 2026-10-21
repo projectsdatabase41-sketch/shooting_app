@@ -1,3 +1,4 @@
+import '../widgets/app_backdrop.dart';
 import '../widgets/app_loader.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -288,7 +289,9 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(title: Text(tr('Чемпионы'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600))),
-      body: _loading
+      body: AppBackdrop(
+        kind: 'champions',
+        child: _loading
           ? const AppLoader()
           : ListView(
               padding: EdgeInsets.fromLTRB(16, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 16, 24),
@@ -391,6 +394,7 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
                 if (_more && !_busy) TextButton(onPressed: () => _loadChamps(more: true), child: Text(tr('Показать ещё'))),
               ],
             ),
+      ),
     );
   }
 }
@@ -437,7 +441,9 @@ class _ChampionProfileScreenState extends State<ChampionProfileScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(title: Text(widget.name, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600))),
-      body: rows == null
+      body: AppBackdrop(
+        kind: 'champions',
+        child: rows == null
           ? const AppLoader()
           : ListView(
               padding: EdgeInsets.fromLTRB(16, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 16, 24),
@@ -470,6 +476,7 @@ class _ChampionProfileScreenState extends State<ChampionProfileScreen> {
                   ),
               ],
             ),
+      ),
     );
   }
 }

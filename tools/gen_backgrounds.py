@@ -117,6 +117,21 @@ def make(kind, theme, w, h):
         cx, cy = W / 2, H * 0.22
         radial(img, cx, cy, int(W * 0.95), t['glow'], 0.70 if dark else 0.75)
         target(img, cx, cy, [step * k for k in range(1, 8)], ring, 0.55 if dark else 0.40, 0.82, lw)
+    elif kind == 'champions':
+        # Чемпионы: тёплое золотое свечение сверху, золотистые кольца и три ступени пьедестала внизу
+        gold = (255, 196, 84) if dark else (176, 120, 20)
+        img = vgrad(W, H, (12, 10, 8), (38, 28, 12)) if dark else vgrad(W, H, (253, 250, 243), (240, 226, 190))
+        cx, cy = W / 2, H * 0.24
+        radial(img, cx, cy, int(W * 0.95), gold, 0.42 if dark else 0.30)
+        target(img, cx, cy, [step * k for k in range(1, 8)], gold, 0.40 if dark else 0.30, 0.80, lw)
+        lay = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+        d = ImageDraw.Draw(lay)
+        bw = W * 0.24
+        base = H * 0.985
+        for i, (hh, off) in enumerate(((0.16, -1), (0.22, 0), (0.12, 1))):
+            x0 = W / 2 + off * bw - bw / 2 + off * W * 0.012
+            d.rectangle([x0, base - H * hh, x0 + bw, base], fill=gold + (30 if dark else 26,), outline=gold + (90 if dark else 70,), width=lw)
+        img = Image.alpha_composite(img.convert('RGBA'), lay).convert('RGB')
     elif kind == 'launch':
         # первый кадр заставки (совпадает с lib/widgets/splash_gate.dart): N в круге и кольца
         base = Image.new('RGB', (W, H), (0, 0, 0) if dark else (244, 246, 248))

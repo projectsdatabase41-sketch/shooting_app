@@ -447,12 +447,24 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
                               : ColoredBox(
                                   color: Theme.of(ctx).scaffoldBackgroundColor,
                                   child: Stack(fit: StackFit.expand, children: [
-                                    Image.asset(AppBackdrop.path('home', Theme.of(ctx).brightness),
-                                        fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                                    // Боковые поля продолжают фон верхнего экрана (у «Чемпионов» свой, золотой).
+                                    ValueListenableBuilder<String>(
+                                      valueListenable: AppBackdrop.active,
+                                      builder: (_, kind, __) => Image.asset(AppBackdrop.path(kind, Theme.of(ctx).brightness),
+                                          fit: BoxFit.cover, gaplessPlayback: true, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                                    ),
                                     Center(
-                                      child: ConstrainedBox(
-                                        constraints: const BoxConstraints(maxWidth: 1100),
-                                        child: child ?? const SizedBox.shrink(),
+                                      child: DecoratedBox(
+                                        // Колонка — как панель: тонкая рамка и тень по краям, чтобы экраны без обоев
+                                        // (чёрный фон) не «слипались» с боковыми полями.
+                                        decoration: BoxDecoration(
+                                          border: Border.symmetric(vertical: BorderSide(color: Colors.white.withValues(alpha: 0.10))),
+                                          boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 36)],
+                                        ),
+                                        child: ConstrainedBox(
+                                          constraints: const BoxConstraints(maxWidth: 1100),
+                                          child: child ?? const SizedBox.shrink(),
+                                        ),
                                       ),
                                     ),
                                   ]),
