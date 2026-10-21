@@ -31,6 +31,9 @@ class WorkspaceViewModel extends ChangeNotifier {
       if (!WorkspacePage.defaultVisible.contains(p)) p,
   };
 
+  /// Мишень всегда первая: выше неё ничего не бывает (одна длинная страница тренировки).
+  static List<WorkspacePage> _pinTarget(List<WorkspacePage> l) => [WorkspacePage.target, for (final p in l) if (p != WorkspacePage.target) p];
+
   /// Все страницы в пользовательском порядке, включая скрытые.
   List<WorkspacePage> get order => List.unmodifiable(_order);
 
@@ -69,16 +72,17 @@ class WorkspaceViewModel extends ChangeNotifier {
   /// на единицу, без неё перетаскивание вниз промахивается на позицию.
   void move(int oldIndex, int newIndex) {
     if (oldIndex < 0 || oldIndex >= _order.length) return;
+    if (_order[oldIndex] == WorkspacePage.target) return; // мишень не двигается
     var target = newIndex;
     if (target > oldIndex) target -= 1;
-    if (target < 0) target = 0;
+    if (target < 1) target = 1; // выше мишени (позиция 0) переставлять нельзя
     if (target >= _order.length) target = _order.length - 1;
     if (target == oldIndex) return;
 
     final list = [..._order];
     final page = list.removeAt(oldIndex);
     list.insert(target, page);
-    _order = list;
+    _order = _pinTarget(list);
     _persist();
     notifyListeners();
   }
@@ -109,7 +113,7 @@ class WorkspaceViewModel extends ChangeNotifier {
       for (final p in WorkspacePage.defaultOrder) {
         if (!parsed.contains(p)) parsed.add(p);
       }
-      _order = parsed;
+      _order = _pinTarget(parsed);
     }
 
     // ВАЖНО: проверяем «есть ли запись», а не «непустая ли она».

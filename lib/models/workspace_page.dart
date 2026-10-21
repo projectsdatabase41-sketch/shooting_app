@@ -31,8 +31,8 @@ enum WorkspacePage {
   /// разбор, справа — общение. Пользователь просил свайп влево к
   /// статистике и вправо к ассистенту — это ровно такой порядок.
   static const List<WorkspacePage> defaultOrder = [
+    WorkspacePage.target, // мишень закреплена наверху, остальное можно переставлять только ниже
     WorkspacePage.statistics,
-    WorkspacePage.target,
     WorkspacePage.assistant,
     WorkspacePage.shots,
     WorkspacePage.notes,

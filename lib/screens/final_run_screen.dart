@@ -438,20 +438,17 @@ class _ShotPadState extends State<ShotPad> {
     widget.onShot(mm);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (ctx, box) {
-      final size = Size(box.maxWidth, box.maxHeight);
-      final k = _k(size);
-      final f = _finger;
-      Widget? loupe;
-      if (f != null) {
+  /// Лупа над пальцем в координатах всего экрана (рисуется в слое Overlay поверх остальных окон).
+  Widget? _buildLoupe(Offset? f, Size size, {required Offset origin, required Size screen, required double safeTop}) {
+    Widget? loupe;
+    if (f != null) {
         final mm = _toMm(f, size);
         final score = formatScore(scoreForPoint(mm.dx, mm.dy, widget.face), widget.face);
-        // Лупа над пальцем; у верхнего края — под пальцем.
-        var cy = f.dy - _gap;
-        if (cy - _loupe / 2 < 0) cy = f.dy + _gap;
-        final cx = f.dx.clamp(_loupe / 2, size.width - _loupe / 2);
+        // Лупа ВСЕГДА над пальцем и поверх всех окон (в верхнем слое экрана), не прыгает вниз:
+        // у самого верха экрана просто упирается в его край.
+        final g = origin + f;
+        final cx = g.dx.clamp(_loupe / 2, screen.width - _loupe / 2);
+        final cy = math.max(g.dy - _gap, safeTop + _loupe / 2);
         final kz = _loupe / 2 * _zoom / widget.face.faceRadiusMm;
         final pan = Offset(-mm.dx * kz, mm.dy * kz); // точка выстрела — в центре лупы
         final lc = Offset(_loupe / 2, _loupe / 2) + pan;
@@ -531,7 +528,48 @@ class _ShotPadState extends State<ShotPad> {
             ]),
           ),
         );
-      }
+    }
+    return loupe;
+  }
+
+  OverlayEntry? _entry;
+  Size _padSize = Size.zero;
+
+  /// Показывает/прячет слой с лупой в зависимости от того, лежит ли палец на мишени.
+  void _syncOverlay() {
+    if (!mounted) return;
+    if (_finger != null && _entry == null) {
+      _entry = OverlayEntry(builder: (ctx) {
+        final box = context.findRenderObject();
+        if (box is! RenderBox || !box.attached) return const SizedBox.shrink();
+        final mq = MediaQuery.of(ctx);
+        final loupe = _buildLoupe(_finger, _padSize, origin: box.localToGlobal(Offset.zero), screen: mq.size, safeTop: mq.padding.top);
+        return Positioned.fill(child: IgnorePointer(child: Stack(clipBehavior: Clip.none, children: [if (loupe != null) loupe])));
+      });
+      Overlay.of(context, rootOverlay: true).insert(_entry!);
+    } else if (_finger == null && _entry != null) {
+      _entry!.remove();
+      _entry = null;
+    } else {
+      _entry?.markNeedsBuild();
+    }
+  }
+
+  @override
+  void dispose() {
+    _entry?.remove();
+    _entry = null;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (ctx, box) {
+      final size = Size(box.maxWidth, box.maxHeight);
+      final k = _k(size);
+      final f = _finger;
+      _padSize = size;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _syncOverlay());
       return Listener(
         onPointerDown: (e) => _down(e.localPosition, size),
         onPointerMove: (e) {
@@ -559,7 +597,6 @@ class _ShotPadState extends State<ShotPad> {
               painter: ShotMarkerPainter(widget.marks, k: k, center: Offset(size.width / 2, size.height / 2), finger: f, holeR: 4, labels: [for (final m in widget.marks) formatScore(scoreForPoint(m.dx, m.dy, widget.face), widget.face)]),
             ),
           ),
-          if (loupe != null) loupe,
         ]),
       );
     });

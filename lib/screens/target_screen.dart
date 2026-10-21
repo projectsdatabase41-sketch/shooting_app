@@ -388,8 +388,9 @@ class _WorkspaceOverview extends StatelessWidget {
                     child: ListTile(
                       leading: Icon(_iconFor(page)),
                       title: Text(page.title),
-                      subtitle:
-                          workspace.isHidden(page) ? Text(tr('скрыта')) : null,
+                      subtitle: page == WorkspacePage.target
+                          ? Text(tr('закреплена наверху'))
+                          : (workspace.isHidden(page) ? Text(tr('скрыта')) : null),
                       onTap: workspace.isHidden(page)
                           ? null
                           : () {
