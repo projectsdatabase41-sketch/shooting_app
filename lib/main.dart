@@ -1,3 +1,4 @@
+import 'gdrive/gdrive_service.dart';
 import 'widgets/app_lock_gate.dart';
 import 'services/secret_box.dart';
 import 'dart:async' show Timer;
@@ -78,6 +79,8 @@ Future<void> main() async {
   await SecretBox.init();
   SecretBox.migrate(db);
   RemoteConfig.loadCached(db);
+  // Структура Google Диска подтягивается в фоне при запуске: к открытию модуля всё уже готово.
+  Future<void>.delayed(const Duration(seconds: 4), () => GDriveSync.runIfConfigured(db).catchError((_) {}));
   RemoteConfig.refresh(db); // в фоне, без ожидания
   runApp(ShootingApp(db: db, showSplash: true));
 }

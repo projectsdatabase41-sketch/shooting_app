@@ -6,6 +6,7 @@ import 'package:flutter/services.dart' show HapticFeedback;
 import '../i18n/i18n.dart';
 import '../services/app_lock.dart';
 import '../services/local_db_service.dart';
+import 'app_backdrop.dart';
 
 /// Закрывает приложение экраном ввода PIN / биометрии, пока оно заблокировано
 /// (при запуске и после сворачивания на заданное в настройках время).
@@ -19,6 +20,9 @@ class AppLockGate extends StatefulWidget {
 }
 
 class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
+  /// Приложение уже открывали после запуска. Пока нет — содержимое (и заставка с анимацией) даже не
+  /// строится: анимация входа начинается ПОСЛЕ ввода PIN / отпечатка.
+  bool _everUnlocked = false;
   @override
   void initState() {
     super.initState();
@@ -44,11 +48,15 @@ class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) => ValueListenableBuilder<bool>(
         valueListenable: AppLock.locked,
-        builder: (_, locked, __) => Stack(children: [
-          // Пока заперто, содержимое не получает ни касаний, ни фокуса.
-          Positioned.fill(child: ExcludeFocus(excluding: locked, child: IgnorePointer(ignoring: locked, child: widget.child))),
-          if (locked) Positioned.fill(child: _LockScreen(db: widget.db)),
-        ]),
+        builder: (_, locked, __) {
+          if (!locked) _everUnlocked = true;
+          return Stack(children: [
+            // Пока заперто, содержимое не получает ни касаний, ни фокуса.
+            if (_everUnlocked)
+              Positioned.fill(child: ExcludeFocus(excluding: locked, child: IgnorePointer(ignoring: locked, child: widget.child))),
+            if (locked) Positioned.fill(child: _LockScreen(db: widget.db)),
+          ]);
+        },
       );
 }
 
@@ -126,9 +134,15 @@ class _LockScreenState extends State<_LockScreen> {
             ),
           ),
         );
+    // Фон экрана блокировки — обои приложения под лёгким затемнением: за системным окном
+    // отпечатка не пустота, а привычный фон.
     return Material(
       color: theme.scaffoldBackgroundColor,
-      child: SafeArea(
+      child: AppBackdrop(
+        kind: 'home',
+        child: ColoredBox(
+          color: theme.scaffoldBackgroundColor.withValues(alpha: 0.45),
+          child: SafeArea(
         child: Center(
           child: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -174,6 +188,8 @@ class _LockScreenState extends State<_LockScreen> {
               ]),
             ]),
           ),
+        ),
+      ),
         ),
       ),
     );

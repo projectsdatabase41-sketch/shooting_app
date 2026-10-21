@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -130,10 +131,40 @@ class _TargetCanvasState extends State<TargetCanvas> {
   /// Идёт выстрел касанием (см. [TargetCanvas.addByTouch]).
   bool _autoAdd = false;
 
+  /// Касание ещё не решено: короткий тап ставит выстрел, удержание начинает его с лупой, а быстрое
+  /// движение пальца — это прокрутка страницы (выстрел не ставится).
+  bool _pendingAdd = false;
+  Offset _downPos = Offset.zero;
+  Offset _lastPos = Offset.zero;
+  Timer? _holdTimer;
+  static const _holdDelay = Duration(milliseconds: 140);
+  static const _moveSlopPx = 10.0;
+
+  void _beginAddAt(TargetViewModel vm, Offset pos) {
+    vm.beginAddNew();
+    _autoAdd = vm.isEditing;
+    if (_autoAdd) {
+      _gestureOnCompass = false;
+      _applyEditDrag(pos, vm);
+      setState(() => _finger = pos);
+    }
+  }
+
+  void _cancelPending() {
+    _holdTimer?.cancel();
+    _pendingAdd = false;
+  }
+
+  @override
+  void dispose() {
+    _holdTimer?.cancel();
+    super.dispose();
+  }
+
   /// Лупа всегда показывает ОДНО увеличение — шаг десятой доли ≈ 4,5 px, независимо от
   /// ручного зума мишени (иначе зумы складывались и было непонятно, куда указываешь).
   static const double _loupePxPerStep = 4.5;
-  static const double _loupeSize = 170;
+  static const double _loupeSize = 220;
 
   @override
   Widget build(BuildContext context) {
@@ -158,28 +189,45 @@ class _TargetCanvasState extends State<TargetCanvas> {
                 showPauseAddHint(context);
                 return;
               }
-              vm.beginAddNew();
-              _autoAdd = vm.isEditing;
-              if (_autoAdd) {
-                _gestureOnCompass = false;
-                _applyEditDrag(e.localPosition, vm);
-                setState(() => _finger = e.localPosition);
-              }
-            } else if (_autoAdd && _activePointers >= 2) {
+              // Решаем по тому, что сделает палец: тап — выстрел, удержание — выстрел с лупой,
+              // быстрый сдвиг — прокрутка страницы.
+              _pendingAdd = true;
+              _downPos = _lastPos = e.localPosition;
+              _holdTimer?.cancel();
+              _holdTimer = Timer(_holdDelay, () {
+                if (!mounted || !_pendingAdd) return;
+                _pendingAdd = false;
+                _beginAddAt(vm, _lastPos);
+              });
+            } else if (_activePointers >= 2) {
               // Второй палец — это зум: выстрел не ставим.
-              _autoAdd = false;
-              vm.onTwoFingerGestureStarted();
-              setState(() => _finger = null);
+              _cancelPending();
+              if (_autoAdd) {
+                _autoAdd = false;
+                vm.onTwoFingerGestureStarted();
+                setState(() => _finger = null);
+              }
             }
           },
           onPointerMove: (e) {
+            _lastPos = e.localPosition;
+            if (_pendingAdd && (e.localPosition - _downPos).distance > _moveSlopPx) _cancelPending(); // прокрутка
             if (_autoAdd && _activePointers == 1) {
               _applyEditDrag(e.localPosition, vm);
               setState(() => _finger = e.localPosition);
             }
           },
-          onPointerUp: (_) {
-            if (_autoAdd && _activePointers == 1) {
+          onPointerUp: (e) {
+            if (_pendingAdd && _activePointers == 1) {
+              // Короткий тап: выстрел ставится сразу в точку касания.
+              _cancelPending();
+              _beginAddAt(vm, _downPos);
+              if (_autoAdd) {
+                _autoAdd = false;
+                if (vm.isEditing && vm.isAddingNew) vm.confirmEdit();
+                setState(() => _finger = null);
+              }
+            } else if (_autoAdd && _activePointers == 1) {
               _autoAdd = false;
               if (vm.isEditing && vm.isAddingNew) vm.confirmEdit();
               setState(() => _finger = null);
@@ -188,6 +236,7 @@ class _TargetCanvasState extends State<TargetCanvas> {
             _syncMultiTouch(vm);
           },
           onPointerCancel: (_) {
+            _cancelPending();
             if (_autoAdd) {
               _autoAdd = false;
               vm.cancelEditing();

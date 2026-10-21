@@ -154,4 +154,32 @@ void main() {
     expect(GDriveService.cached(db, 'c'), isNotNull);
     expect(calls.where((c) => c == 'listMany').isNotEmpty, isTrue);
   });
+
+  test('прерванный индекс продолжается, а не начинается заново', () async {
+    Map<String, dynamic> folder(String id, List<String> sub) => {
+          'id': id,
+          'name': id,
+          'stamp': 1,
+          'parent': null,
+          'folders': [for (final f in sub) {'id': f, 'name': f, 'mime': 'folder', 'size': 0, 'modified': 1, 'url': 'u', 'isFolder': true}],
+          'files': <dynamic>[],
+        };
+    final tree = {'root': folder('root', ['a', 'b']), 'a': folder('a', []), 'b': folder('b', [])};
+    final fetched = <String>[];
+    final db = await _db();
+    final svc = GDriveService(db, clientFactory: () => MockClient((req) async {
+          final body = jsonDecode(req.body) as Map<String, dynamic>;
+          fetched.addAll([...?(body['ids'] as List?)?.cast<String>()]);
+          return http.Response(jsonEncode({'ok': true, 'data': {for (final id in body['ids']) id: tree[id]}}), 200);
+        }));
+    // первый запуск прерывается после корня
+    await svc.syncIndex(batch: 1, cancelled: () => fetched.isNotEmpty);
+    expect(fetched, ['root']);
+    expect(GDriveService.indexedAt(db), isNull); // не завершён
+    fetched.clear();
+    await svc.syncIndex(batch: 1);
+    expect(fetched.contains('root'), isFalse); // корень уже в кэше — повторно не запрашивается
+    expect(fetched.toSet(), {'a', 'b'});
+    expect(GDriveService.indexedAt(db), isNotNull);
+  });
 }

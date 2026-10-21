@@ -697,7 +697,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   /// окна, а отступ уходит за экран — и последнее сообщение оказывается под полем ввода.
   double get _endAlignment {
     final h = MediaQuery.sizeOf(context).height;
-    return h <= 0 ? 0 : ((_barHeight + 36) / h).clamp(0.0, 0.5);
+    return h <= 0 ? 0 : ((_barHeight + 18) / h).clamp(0.0, 0.5);
   }
 
   /// Потянули ленту дальше нижнего края (как обновление свайпом, только наоборот) —
@@ -2345,7 +2345,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                     12,
                                     _selecting ? 12 : topInset,
                                     12,
-                                    _barHeight + 36), // запас: последнее сообщение не прячется под полем ввода
+                                    _barHeight + 18), // запас: последнее сообщение не прячется под полем ввода
                                 itemCount: _messages.length,
                                 itemBuilder: (context, i) {
                                   _ensureStacks();
@@ -2374,12 +2374,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                 builder: (_, on, __) => !on
                                     ? const SizedBox.shrink() // без скрытого индикатора: он анимируется постоянно
                                     : Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                        decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(16)),
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
                                         child: Row(mainAxisSize: MainAxisSize.min, children: [
                                           const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
-                                          const SizedBox(width: 8),
-                                          Text(tr('Проверяю новые сообщения…'), style: const TextStyle(color: Colors.white, fontSize: 12)),
                                         ]),
                                       ),
                               ),

@@ -2,6 +2,7 @@ import '../services/secret_box.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:http/http.dart' as http;
 
 import '../services/local_db_service.dart';
@@ -153,6 +154,9 @@ class GDriveService {
     db.db.execute("DELETE FROM color_prefs WHERE key LIKE '$_cachePrefix%' OR key = '$_indexedKey'");
   }
 
+  /// Помечает индекс устаревшим: следующая синхронизация пройдёт заново (уже скачанные папки возьмёт из кэша только при прерывании).
+  static void markIndexStale(LocalDbService db) => db.db.execute("DELETE FROM color_prefs WHERE key = '$_indexedKey'");
+
   static DateTime? indexedAt(LocalDbService db) => DateTime.tryParse(_get(db, _indexedKey) ?? '')?.toLocal();
 
   /// Поиск по названию в локальном индексе (все закэшированные папки). Мгновенно, без сети.
@@ -232,8 +236,10 @@ class GDriveService {
   /// открываются мгновенно. Идёт пакетами по [batch] папок; старый скрипт без пакетного вызова
   /// обслуживается по одной папке. [onProgress] — (сделано папок, всего известно на сейчас).
   Future<int> syncIndex({void Function(int done, int total)? onProgress, int batch = 20, bool Function()? cancelled}) async {
-    final n = await _crawl(['root'], onProgress: onProgress, batch: batch, cancelled: cancelled, skipKnown: false);
-    _put(db, _indexedKey, DateTime.now().toUtc().toIso8601String());
+    // Прерванный раньше индекс (нет отметки «готов») продолжается, а не начинается заново.
+    final resume = indexedAt(db) == null;
+    final n = await _crawl(['root'], onProgress: onProgress, batch: batch, cancelled: cancelled, skipKnown: false, resume: resume);
+    if (cancelled?.call() != true) _put(db, _indexedKey, DateTime.now().toUtc().toIso8601String());
     return n;
   }
 
@@ -299,16 +305,32 @@ class GDriveService {
   }
 
   Future<int> _crawl(List<String> start,
-      {void Function(int done, int total)? onProgress, int batch = 20, bool Function()? cancelled, required bool skipKnown}) async {
+      {void Function(int done, int total)? onProgress, int batch = 20, bool Function()? cancelled, required bool skipKnown, bool resume = false}) async {
     final queue = <String>[...start];
     final done = <String>{};
     var batchMode = true;
     while (queue.isNotEmpty) {
       if (cancelled?.call() == true) return done.length;
       final ids = <String>[];
+      final fromCache = <String, DriveListing>{};
       while (queue.isNotEmpty && ids.length < (batchMode ? batch : 1)) {
         final id = queue.removeLast();
-        if (done.add(id)) ids.add(id);
+        if (!done.add(id)) continue;
+        // Продолжение прерванного индекса: что уже скачано — берём из кэша, сеть не трогаем.
+        final c = resume ? cached(db, id) : null;
+        if (c != null) {
+          fromCache[id] = c;
+        } else {
+          ids.add(id);
+        }
+      }
+      if (fromCache.isNotEmpty) {
+        for (final l in fromCache.values) {
+          for (final f in l.folders) {
+            if (!done.contains(f.id)) queue.add(f.id);
+          }
+        }
+        onProgress?.call(done.length, done.length + queue.length);
       }
       if (ids.isEmpty) continue;
       final listings = <String, DriveListing?>{};
@@ -411,4 +433,60 @@ class GDriveService {
   Future<void> rename(String id, String name) => _call('rename', {'id': id, 'name': name});
   Future<void> trash(String id) => _call('trash', {'id': id});
   Future<void> move(String id, String toId) => _call('move', {'id': id, 'toId': toId});
+}
+
+/// Фоновая синхронизация структуры Диска: одна на приложение, не зависит от открытого экрана.
+/// Уходить с экрана можно — работа продолжается; прерванный индекс продолжается с того же места.
+class GDriveSync {
+  GDriveSync._();
+
+  /// Прогресс: null — не идёт; 0..1, либо -1 — доля неизвестна. [doneFolders] — сколько папок обработано.
+  static final progress = ValueNotifier<double?>(null);
+  static int doneFolders = 0;
+  static Future<void>? _running;
+
+  static bool get running => _running != null;
+
+  /// Запускает синхронизацию, если не идёт: быстрая сверка изменений; полный индекс — если его нет
+  /// или он старше суток ([forceFull] — принудительно).
+  static Future<void> run(LocalDbService db, {bool forceFull = false, http.Client Function()? clientFactory}) {
+    final cur = _running;
+    if (cur != null) return cur;
+    final f = _go(db, forceFull, clientFactory);
+    _running = f;
+    f.whenComplete(() {
+      _running = null;
+      progress.value = null;
+    });
+    return f;
+  }
+
+  /// При запуске приложения и при открытии модуля: тихо, если Диск подключён.
+  static Future<void> runIfConfigured(LocalDbService db) async {
+    if (!GDriveService.configured(db)) return;
+    await run(db);
+  }
+
+  static Future<void> _go(LocalDbService db, bool forceFull, http.Client Function()? clientFactory) async {
+    final svc = GDriveService(db, clientFactory: clientFactory);
+    progress.value = -1;
+    doneFolders = 0;
+    void onProgress(int done, int total) {
+      doneFolders = done;
+      progress.value = total > 0 ? (done / total).clamp(0.0, 1.0) : -1;
+    }
+
+    try {
+      final at = GDriveService.indexedAt(db);
+      final stale = at == null || DateTime.now().difference(at) > const Duration(days: 1);
+      if (forceFull || stale) {
+        if (forceFull) GDriveService.markIndexStale(db);
+        await svc.syncIndex(onProgress: onProgress);
+      } else {
+        await svc.syncChanges(onProgress: onProgress);
+      }
+    } catch (_) {
+      // сеть пропала — кэш остаётся, в следующий раз продолжим
+    }
+  }
 }
