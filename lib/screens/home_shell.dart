@@ -179,7 +179,7 @@ class _HomeShellState extends State<HomeShell> {
                       final icon = specs[id]?.icon;
                       final page = icon == null
                           ? _pageFor(id, store, tabs)
-                          : TileBackdropPage(icon: icon, child: _pageFor(id, store, tabs));
+                          : TileBackdropPage(id: id, icon: icon, child: _pageFor(id, store, tabs));
                       final from = TileOpen.rect;
                       if (AnimSettings.enabled && AnimSettings.type == AnimType.morph && icon != null && from != null) {
                         Navigator.of(context).push(MorphRoute(page: page, icon: icon, from: from));

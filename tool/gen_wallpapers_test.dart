@@ -42,7 +42,7 @@ void main() {
     final loader = FontLoader('MaterialIcons')..addFont(Future.value(ByteData.sublistView(bytes)));
     await loader.load();
     await Future(() async {
-      for (final k in ['home', 'settings', 'ai', 'messenger', 'champions', 'finals']) {
+      for (final k in ['home', 'settings', 'ai', 'messenger', 'champions', 'finals', 'exercises', 'statistics', 'tasks', 'athletes', 'notes', 'drive']) {
         for (final d in [true, false]) {
           for (final b in [false, true]) {
             await render(k, d, b);

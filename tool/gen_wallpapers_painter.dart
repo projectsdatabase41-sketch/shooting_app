@@ -108,14 +108,32 @@ class WallpaperPainter extends CustomPainter {
     final w = s.width, h = s.height;
     final slit = math.max(1.1, w * 0.0021);
     switch (kind) {
-      case 'settings':
+      case 'settings': // в глубине настроек: робот, заметки, настройки и др. вперемешку
         _rings(canvas, Offset(w / 2, 0), s, List.generate(10, (i) => i + 2), slit);
-        _icons(canvas, s, slit, 7);
+        _icons(canvas, s, slit, 7, _mixIcons);
       case 'ai':
         _rings(canvas, Offset(w / 2, h * 0.22), s, List.generate(7, (i) => i + 1), slit * 1.2);
-        _icons(canvas, s, slit, 11);
+        _icons(canvas, s, slit, 11, _aiIcons);
       case 'messenger':
-        _pattern(canvas, s, slit);
+        _icons(canvas, s, slit, 5, _chatIcons);
+      case 'exercises':
+        _rings(canvas, Offset(w / 2, 0), s, List.generate(8, (i) => i + 2), slit);
+        _icons(canvas, s, slit, 21, _trainIcons);
+      case 'statistics':
+        _rings(canvas, Offset(w / 2, 0), s, List.generate(8, (i) => i + 2), slit);
+        _icons(canvas, s, slit, 22, _statIcons);
+      case 'tasks':
+        _rings(canvas, Offset(w / 2, 0), s, List.generate(8, (i) => i + 2), slit);
+        _icons(canvas, s, slit, 23, _taskIcons);
+      case 'athletes':
+        _rings(canvas, Offset(w / 2, 0), s, List.generate(8, (i) => i + 2), slit);
+        _icons(canvas, s, slit, 24, _peopleIcons);
+      case 'notes':
+        _rings(canvas, Offset(w / 2, 0), s, List.generate(8, (i) => i + 2), slit);
+        _icons(canvas, s, slit, 25, _noteIcons);
+      case 'drive':
+        _rings(canvas, Offset(w / 2, 0), s, List.generate(8, (i) => i + 2), slit);
+        _icons(canvas, s, slit, 26, _driveIcons);
       case 'champions':
         _rings(canvas, Offset(w / 2, h * 0.36), s, List.generate(7, (i) => i + 2), slit * 0.9);
         _trophy(canvas, s, slit * 1.6);
@@ -127,24 +145,32 @@ class WallpaperPainter extends CustomPainter {
     }
   }
 
-  static const _tileIcons = [
+  static const _mixIcons = [
     Icons.gps_fixed,
     Icons.bar_chart,
     Icons.menu_book,
     Icons.chat_bubble_outline,
     Icons.smart_toy_outlined,
     Icons.settings_outlined,
-    Icons.emoji_events_outlined,
+    Icons.sticky_note_2_outlined,
     Icons.timer_outlined,
   ];
+  static const _aiIcons = [Icons.smart_toy_outlined, Icons.auto_awesome, Icons.psychology_outlined, Icons.lightbulb_outline];
+  static const _chatIcons = [Icons.chat_bubble_outline, Icons.videocam_outlined, Icons.call_outlined, Icons.forum_outlined];
+  static const _noteIcons = [Icons.sticky_note_2_outlined, Icons.edit_note, Icons.description_outlined, Icons.push_pin_outlined];
+  static const _driveIcons = [Icons.cloud_outlined, Icons.folder_open_outlined, Icons.cloud_upload_outlined, Icons.insert_drive_file_outlined, Icons.sync];
+  static const _trainIcons = [Icons.fitness_center, Icons.gps_fixed, Icons.timer_outlined, Icons.flag_outlined, Icons.track_changes];
+  static const _statIcons = [Icons.bar_chart, Icons.show_chart, Icons.pie_chart_outline, Icons.trending_up, Icons.analytics_outlined];
+  static const _taskIcons = [Icons.assignment_outlined, Icons.checklist, Icons.task_alt, Icons.event_note_outlined];
+  static const _peopleIcons = [Icons.groups_outlined, Icons.person_outline, Icons.emoji_people, Icons.military_tech_outlined];
 
   /// Прорези в виде значков кнопок главного экрана: контуры глифов, редкая сетка с разбросом и поворотом.
-  void _icons(Canvas canvas, Size s, double slit, int seed) {
+  void _icons(Canvas canvas, Size s, double slit, int seed, List<IconData> icons) {
     final cell = s.width * 0.34;
     final rnd = math.Random(seed);
     for (var row = 0; row < s.height / cell + 1; row++) {
       for (var c = 0; c < s.width / cell + 1; c++) {
-        final icon = _tileIcons[rnd.nextInt(_tileIcons.length)];
+        final icon = icons[rnd.nextInt(icons.length)];
         final size = cell * (0.38 + rnd.nextDouble() * 0.2);
         final pos = Offset((c + 0.5 + (row.isOdd ? 0.5 : 0) + (rnd.nextDouble() - 0.5) * 0.3) * cell, (row + 0.5 + (rnd.nextDouble() - 0.5) * 0.3) * cell);
         final tp = TextPainter(
@@ -167,39 +193,6 @@ class WallpaperPainter extends CustomPainter {
         canvas.rotate((rnd.nextDouble() - 0.5) * 0.5);
         tp.paint(canvas, Offset(-tp.width / 2, -tp.height / 2));
         canvas.restore();
-      }
-    }
-  }
-
-  /// Узор мессенджера: мишени, прицелы, ромбы и кольца в шахматном порядке.
-  void _pattern(Canvas canvas, Size s, double slit) {
-    final cell = s.width * 0.15;
-    final u = cell * 0.17;
-    final p = _slit(math.max(1.0, slit * 0.8));
-    final rnd = math.Random(3);
-    for (var row = 0; row < s.height / cell + 2; row++) {
-      for (var c = 0; c < s.width / cell + 2; c++) {
-        final x = c * cell + (row.isOdd ? cell / 2 : 0);
-        final y = row * cell;
-        final k = (row * 3 + c * 5 + rnd.nextInt(2)) % 6;
-        switch (k) {
-          case 0:
-            canvas.drawCircle(Offset(x, y), u, p);
-            canvas.drawCircle(Offset(x, y), u * 0.55, p);
-          case 1:
-            canvas.drawLine(Offset(x - u, y), Offset(x + u, y), p);
-            canvas.drawLine(Offset(x, y - u), Offset(x, y + u), p);
-          case 2:
-            canvas.drawCircle(Offset(x, y), u * 0.45, p);
-          case 3:
-            canvas.drawCircle(Offset(x, y), u * 0.8, p);
-          case 4:
-            final r = u * 0.8;
-            canvas.drawPath(Path()..moveTo(x, y - r)..lineTo(x + r, y)..lineTo(x, y + r)..lineTo(x - r, y)..close(), p);
-          default:
-            canvas.drawLine(Offset(x - u * 0.6, y), Offset(x + u * 0.6, y), p);
-            canvas.drawLine(Offset(x, y - u * 0.6), Offset(x, y + u * 0.6), p);
-        }
       }
     }
   }
