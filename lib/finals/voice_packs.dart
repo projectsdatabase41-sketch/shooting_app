@@ -12,7 +12,7 @@ import 'package:pointycastle/export.dart' show SHA256Digest;
 
 import '../i18n/i18n.dart';
 import '../services/local_db_service.dart';
-import '../services/secret_box.dart';
+import '../services/ai_settings.dart';
 import '../services/user_profile.dart';
 import 'voice_texts.dart';
 
@@ -47,7 +47,6 @@ class VoicePacks {
   VoicePacks._();
 
   static const _kUrl = 'finals_voice_url';
-  static const _kKey = 'finals_voice_key';
   static const _kModel = 'finals_voice_model';
   static const _kVoice = 'finals_voice_voice';
   static const _kOn = 'finals_voice_pack_on';
@@ -63,17 +62,43 @@ class VoicePacks {
   static void _put(LocalDbService db, String key, String v) => db.db.execute(
       'INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex', [key, v]);
 
-  static VoiceConfig config(LocalDbService db) => VoiceConfig(
-        url: _get(db, _kUrl) ?? '',
-        key: SecretBox.open(_get(db, _kKey) ?? ''),
-        model: _get(db, _kModel) ?? 'tts-1',
-        voice: _get(db, _kVoice) ?? 'alloy',
-        enabled: _get(db, _kOn) == '1',
-      );
+  static const _kNames = 'finals_voice_names';
 
-  static void saveConfig(LocalDbService db, {required String url, required String key, required String model, required String voice, required bool enabled}) {
-    _put(db, _kUrl, url.trim());
-    _put(db, _kKey, SecretBox.seal(key.trim()));
+  /// Имена, для которых готовились именные записи (свои, боты, чемпионы) — для списка «по одной».
+  static List<String> knownNames(LocalDbService db) {
+    try {
+      return [for (final n in jsonDecode(_get(db, _kNames) ?? '[]') as List) '$n'];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static void _rememberNames(LocalDbService db, Iterable<String> names) {
+    final all = {...knownNames(db), for (final n in names) VoiceTexts.spokenName(n)}..remove('');
+    _put(db, _kNames, jsonEncode(all.toList()));
+  }
+
+  static String urlOverride(LocalDbService db) => _get(db, _kUrl) ?? '';
+  static bool enabled(LocalDbService db) => _get(db, _kOn) == '1';
+
+  /// Озвучка моделью работает только со своим ключом ИИ (настройки ИИ → «Свой ключ»): ключ и
+  /// адрес берутся оттуда, адрес озвучки — `<адрес ИИ>/audio/speech`, если не задан свой.
+  static VoiceConfig config(LocalDbService db) {
+    final ai = AiSettings(db);
+    final own = ai.hasOwnKey;
+    final custom = urlOverride(db).trim();
+    final base = ai.apiBaseUrl.trim().replaceAll(RegExp(r'/+$'), '');
+    return VoiceConfig(
+      url: custom.isNotEmpty ? custom : (own ? '$base/audio/speech' : ''),
+      key: own ? ai.apiKey : '',
+      model: _get(db, _kModel) ?? 'tts-1',
+      voice: _get(db, _kVoice) ?? 'alloy',
+      enabled: enabled(db) && own,
+    );
+  }
+
+  static void saveSettings(LocalDbService db, {required String model, required String voice, required String urlOverride, required bool enabled}) {
+    _put(db, _kUrl, urlOverride.trim());
     _put(db, _kModel, model.trim().isEmpty ? 'tts-1' : model.trim());
     _put(db, _kVoice, voice.trim().isEmpty ? 'alloy' : voice.trim());
     _put(db, _kOn, enabled ? '1' : '0');
@@ -174,6 +199,7 @@ class VoicePacks {
         final s = VoiceTexts.spokenName(n);
         if (s.isNotEmpty) items.addAll(_namedItems(lang, s));
       }
+      _rememberNames(db, names);
       return await _ensureItems(c, lang, items, clientFactory: clientFactory);
     } finally {
       _busy = false;
@@ -188,10 +214,12 @@ class VoicePacks {
     try {
       final lang = _lang();
       final items = <String, String>{...VoiceTexts.common(lang)};
-      for (final n in [ownName(db), ...defaultBotNames]) {
+      final names = [ownName(db), ...defaultBotNames];
+      for (final n in names) {
         final s = VoiceTexts.spokenName(n);
         if (s.isNotEmpty) items.addAll(_namedItems(lang, s));
       }
+      _rememberNames(db, names);
       return await _ensureItems(c, lang, items, clientFactory: clientFactory);
     } finally {
       _busy = false;
@@ -225,6 +253,7 @@ class VoicePacks {
   static Future<void> forgetName(LocalDbService db, String name) async {
     final s = VoiceTexts.spokenName(name);
     if (s.isEmpty) return;
+    _put(db, _kNames, jsonEncode(knownNames(db).where((n) => n != s).toList()));
     final prefix = 'n_${_hash(s.toLowerCase())}_';
     try {
       final root = await _root();
@@ -233,6 +262,45 @@ class VoicePacks {
         if (e is File && p.basename(e.path).startsWith(prefix)) await e.delete();
       }
     } catch (_) {}
+  }
+
+  // ---------------- по одной записи ----------------
+
+  /// Группы записей для экрана «по одной»: общие и по каждому имени: (название, [(ссылка, текст)]).
+  static List<(String, List<(String, String)>)> groups(LocalDbService db) {
+    final lang = _lang();
+    final out = <(String, List<(String, String)>)>[
+      (tr('Общие (команды и числа)'), [for (final e in VoiceTexts.common(lang).entries) (e.key, e.value)]),
+    ];
+    final names = <String>{ownName(db), ...defaultBotNames, ...knownNames(db)}..remove('');
+    for (final n in names) {
+      final spoken = VoiceTexts.spokenName(n);
+      if (spoken.isEmpty) continue;
+      out.add((spoken, [for (final e in _namedItems(lang, spoken).entries) (e.key, e.value)]));
+    }
+    return out;
+  }
+
+  static Future<bool> clipExists(LocalDbService db, String ref) async {
+    final c = config(db);
+    return supported && c.usable && await (await fileFor(c, _lang(), ref)).exists();
+  }
+
+  /// Озвучивает ОДНУ запись заново (перезаписывает файл) — остальные не трогаются, лишнего трафика нет.
+  static Future<bool> regenerate(LocalDbService db, String ref, String text, {http.Client Function()? clientFactory}) async {
+    final c = config(db);
+    if (!supported || !c.usable) return false;
+    final bytes = await synthesize(c, text, clientFactory: clientFactory);
+    if (bytes == null) return false;
+    final f = await fileFor(c, _lang(), ref);
+    await f.parent.create(recursive: true);
+    await f.writeAsBytes(bytes);
+    return true;
+  }
+
+  static Future<void> deleteClip(LocalDbService db, String ref) async {
+    final f = await fileFor(config(db), _lang(), ref);
+    if (await f.exists()) await f.delete();
   }
 
   /// Удаляет все записи (смена сервиса, очистка места).

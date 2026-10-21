@@ -449,7 +449,7 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.record_voice_over_outlined),
                   title: Text(tr('Голос ИИ')),
-                  subtitle: Text(tr('Заранее готовые записи диктора, в том числе с вашим именем')),
+                  subtitle: Text(tr('Озвучка моделью ИИ: нужен свой ключ в настройках ИИ')),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => FinalsVoiceSettingsScreen(db: store.db))),
                 ),

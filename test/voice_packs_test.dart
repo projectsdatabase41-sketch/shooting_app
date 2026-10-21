@@ -6,6 +6,7 @@ import 'package:http/testing.dart';
 import 'package:shooting_app/finals/announcer.dart';
 import 'package:shooting_app/finals/voice_packs.dart';
 import 'package:shooting_app/finals/voice_texts.dart';
+import 'package:shooting_app/services/ai_settings.dart';
 import 'package:shooting_app/services/local_db_service.dart';
 
 void main() {
@@ -43,7 +44,12 @@ void main() {
     final dir = await Directory.systemTemp.createTemp('voice_test');
     addTearDown(() => dir.delete(recursive: true));
     VoicePacks.useRootForTest(dir);
-    VoicePacks.saveConfig(db, url: 'https://tts.example/v1/audio/speech', key: 'k', model: 'm', voice: 'v', enabled: true);
+    expect(VoicePacks.config(db).usable, isFalse); // без своего ключа ИИ озвучка моделью недоступна
+    AiSettings(db).apiKey = 'k';
+    AiSettings(db).apiBaseUrl = 'https://tts.example/v1/';
+    VoicePacks.saveSettings(db, model: 'm', voice: 'v', urlOverride: '', enabled: true);
+    expect(VoicePacks.config(db).url, 'https://tts.example/v1/audio/speech');
+    expect(VoicePacks.config(db).usable, isTrue);
     var calls = 0;
     final texts = <String>[];
     http.Client factory() => MockClient((req) async {
@@ -64,5 +70,35 @@ void main() {
     await VoicePacks.forgetName(db, 'Иванов');
     expect(await VoicePacks.canPlay(db, ['name:leads:Иванов']), isFalse);
     expect(await VoicePacks.canPlay(db, ['name:leads:Бывалый']), isTrue);
+  });
+
+  test('по одной записи: заново озвучивается только выбранная, остальные не трогаются', () async {
+    final db = LocalDbService();
+    await db.open(overridePath: ':memory:');
+    final dir = await Directory.systemTemp.createTemp('voice_test2');
+    addTearDown(() => dir.delete(recursive: true));
+    VoicePacks.useRootForTest(dir);
+    AiSettings(db).apiKey = 'k';
+    AiSettings(db).apiBaseUrl = 'https://tts.example/v1';
+    VoicePacks.saveSettings(db, model: 'm', voice: 'v', urlOverride: '', enabled: true);
+    var calls = 0;
+    http.Client factory() => MockClient((req) async {
+          calls++;
+          return http.Response.bytes(List.filled(400, calls), 200);
+        });
+    await VoicePacks.ensureNames(db, ['Иванов'], clientFactory: factory);
+    expect(calls, 9);
+    expect(VoicePacks.knownNames(db), ['Иванов']);
+    final groups = VoicePacks.groups(db);
+    expect(groups.first.$2.length, 37); // общие
+    expect(groups.any((g) => g.$1 == 'Иванов' && g.$2.length == 9), isTrue);
+    const ref = 'name:leads:Иванов';
+    expect(await VoicePacks.clipExists(db, ref), isTrue);
+    calls = 0;
+    expect(await VoicePacks.regenerate(db, ref, 'Лидирует Иванов.', clientFactory: factory), isTrue);
+    expect(calls, 1); // один запрос, а не девять
+    await VoicePacks.deleteClip(db, ref);
+    expect(await VoicePacks.clipExists(db, ref), isFalse);
+    expect(await VoicePacks.clipExists(db, 'name:p2:Иванов'), isTrue);
   });
 }
