@@ -61,7 +61,6 @@ jobs:
             --dart-define=OPENROUTER_KEY_3="${{ secrets.OPENROUTER_KEY_3 }}" \
             --dart-define=OPENROUTER_KEY_4="${{ secrets.OPENROUTER_KEY_4 }}" \
             --build-name="0.${{ github.run_number }}" \
-            --build-number=1000000 \
             --dart-define=APP_VERSION="0.${{ github.run_number }}" \
             --dart-define=GIT_SHA="${{ github.sha }}" \
             --dart-define=BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -80,38 +79,10 @@ jobs:
       # Маленький файл версии рядом с APK: приложение проверяет обновление по прямой
       # ссылке, а не через api.github.com (у API лимит 60 запросов/час на IP — в РФ с
       # общими адресами он быстро кончается, и проверка падала с 403).
-      # Версия «0.N»: N растёт на 1 с каждой сборкой. versionCode у всех сборок одинаковый (1000000),
-      # поэтому Android разрешает ставить более раннюю сборку поверх более поздней (откат из приложения).
-      # versions.json — последние 6 сборок (новые первыми) для списка отката; сами APK лежат в релизах v0.N.
-      - name: version.json и versions.json
-        env:
-          VER: 0.${{ github.run_number }}
-          REPO: ${{ github.repository }}
+      # Версия «0.N»: N растёт на 1 с каждой сборкой (номер запуска сборки).
+      - name: version.json
         run: |
-          d=build/app/outputs/flutter-apk
-          built="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          printf '{"sha":"%s","built":"%s","version":"%s"}' "${{ github.sha }}" "$built" "$VER" > $d/version.json
-          curl -sfL "https://github.com/$REPO/releases/download/latest-apk/versions.json" -o old.json || echo '[]' > old.json
-          python3 - <<PY
-          import json
-          try:
-              old = json.load(open('old.json'))
-          except Exception:
-              old = []
-          new = {"version": "$VER", "sha": "${{ github.sha }}", "built": "$built",
-                 "url": "https://github.com/$REPO/releases/download/v$VER/app-release.apk"}
-          rows = [new] + [e for e in old if e.get("sha") != new["sha"]]
-          json.dump(rows[:6], open('$d/versions.json', 'w'), ensure_ascii=False)
-          PY
-
-      # Архивный релиз этой версии (для отката).
-      - uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v0.${{ github.run_number }}
-          target_commitish: ${{ github.sha }}
-          name: Версия 0.${{ github.run_number }}
-          body: Автособрано из ${{ github.sha }}
-          files: build/app/outputs/flutter-apk/app-release.apk
+          printf '{"sha":"%s","built":"%s","version":"%s"}' "${{ github.sha }}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "0.${{ github.run_number }}" > build/app/outputs/flutter-apk/version.json
 
       - uses: softprops/action-gh-release@v2
         with:
@@ -121,13 +92,3 @@ jobs:
           files: |
             build/app/outputs/flutter-apk/app-release.apk
             build/app/outputs/flutter-apk/version.json
-            build/app/outputs/flutter-apk/versions.json
-
-      # Храним только 6 последних архивных релизов.
-      - name: Чистка старых версий
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release list --repo "${{ github.repository }}" --limit 100 --json tagName,createdAt \
-            --jq '[.[] | select(.tagName | test("^v0\\.[0-9]+$"))] | sort_by(.createdAt) | reverse | .[6:] | .[].tagName' \
-            | while read -r t; do gh release delete "$t" --repo "${{ github.repository }}" --cleanup-tag -y || true; done

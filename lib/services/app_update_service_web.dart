@@ -14,8 +14,6 @@ class AppUpdateService {
   static const bool supported = false;
   static const String currentSha = '';
   static const String appVersion = String.fromEnvironment('APP_VERSION');
-  static Future<List<AppUpdateInfo>> previousVersions() async => const [];
-  static void skipNotifying(LocalDbService db, String sha) {}
 
   /// Время сборки (ISO 8601, UTC) — подставляется в CI при деплое на
   /// GitHub Pages (--dart-define=BUILD_TIME), в локальной сборке пусто.
