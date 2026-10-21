@@ -3,7 +3,8 @@ import 'local_db_service.dart';
 import '../i18n/i18n.dart';
 
 class AppUpdateInfo {
-  const AppUpdateInfo({required this.downloadUrl, required this.sha, this.publishedAt});
+  const AppUpdateInfo({required this.downloadUrl, required this.sha, this.publishedAt, this.version});
+  final String? version;
   final DateTime? publishedAt;
   final String downloadUrl;
   final String sha;
@@ -12,6 +13,9 @@ class AppUpdateInfo {
 class AppUpdateService {
   static const bool supported = false;
   static const String currentSha = '';
+  static const String appVersion = String.fromEnvironment('APP_VERSION');
+  static Future<List<AppUpdateInfo>> previousVersions() async => const [];
+  static void skipNotifying(LocalDbService db, String sha) {}
 
   /// Время сборки (ISO 8601, UTC) — подставляется в CI при деплое на
   /// GitHub Pages (--dart-define=BUILD_TIME), в локальной сборке пусто.

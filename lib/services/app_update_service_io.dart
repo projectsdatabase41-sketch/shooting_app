@@ -12,9 +12,12 @@ import '../i18n/i18n.dart';
 /// [downloadUrl] — прямая ссылка на app-release.apk из GitHub Release;
 /// [sha] — коммит, из которого он собран (для показа/логов).
 class AppUpdateInfo {
-  const AppUpdateInfo({required this.downloadUrl, required this.sha, this.publishedAt});
+  const AppUpdateInfo({required this.downloadUrl, required this.sha, this.publishedAt, this.version});
   final String downloadUrl;
   final String sha;
+
+  /// Номер версии «0.N» (растёт на 1 с каждой сборкой); у старых сборок без номера — `null`.
+  final String? version;
 
   /// Когда опубликована новая сборка (для показа даты вместо номера).
   final DateTime? publishedAt;
@@ -38,6 +41,9 @@ class AppUpdateService {
   /// на этапе сборки (--dart-define=GIT_SHA=...), в локальной/дебажной
   /// сборке пусто.
   static const String currentSha = String.fromEnvironment('GIT_SHA');
+
+  /// Номер ЭТОЙ версии («0.N»), встраивается при сборке (--dart-define=APP_VERSION); локально пусто.
+  static const String appVersion = String.fromEnvironment('APP_VERSION');
 
   /// Только у веб-сборки (см. app_update_service_web.dart) — здесь
   /// обновление и так показывает currentSha/дату релиза через check().
@@ -91,8 +97,41 @@ class AppUpdateService {
       downloadUrl: 'https://github.com/$repo/releases/download/latest-apk/app-release.apk',
       sha: sha,
       publishedAt: DateTime.tryParse('${j['built']}')?.toLocal(),
+      version: j['version'] == null ? null : '${j['version']}',
     );
   }
+
+  /// Предыдущие версии для отката: `versions.json` рядом с APK — список последних сборок, новые первыми
+  /// `[{"version","sha","built","url"}]`. Текущая (по [currentSha]) в список не попадает.
+  static List<AppUpdateInfo> parseVersions(dynamic json, String currentSha) {
+    if (json is! List) return const [];
+    final out = <AppUpdateInfo>[];
+    for (final e in json) {
+      if (e is! Map) continue;
+      final sha = '${e['sha'] ?? ''}';
+      final url = '${e['url'] ?? ''}';
+      if (sha.length < 7 || !url.startsWith('https://') || sha == currentSha) continue;
+      out.add(AppUpdateInfo(
+        downloadUrl: url,
+        sha: sha,
+        publishedAt: DateTime.tryParse('${e['built']}')?.toLocal(),
+        version: e['version'] == null ? null : '${e['version']}',
+      ));
+    }
+    return out;
+  }
+
+  /// Скачивает список сборок для отката (сбой сети — исключение, чтобы не выглядело как «версий нет»).
+  static Future<List<AppUpdateInfo>> previousVersions() async {
+    final res = await http
+        .get(Uri.parse('https://github.com/$_repo/releases/download/latest-apk/versions.json'))
+        .timeout(const Duration(seconds: 15));
+    if (res.statusCode != 200) throw HttpException('HTTP ${res.statusCode}');
+    return parseVersions(jsonDecode(utf8.decode(res.bodyBytes)), currentSha);
+  }
+
+  /// После отката: эту (плохую) версию больше не предлагать уведомлением; ручная проверка её по-прежнему покажет.
+  static void skipNotifying(LocalDbService db, String sha) => _setPref(db, _kSkip, sha);
 
   /// Чистый разбор ответа GitHub Releases API — вынесено отдельно ради
   /// теста без сети (см. test/app_update_service_test.dart). Тело релиза —
@@ -209,6 +248,7 @@ class AppUpdateService {
 
   static const _kLastCheck = 'update_last_check';
   static const _kNotified = 'update_notified_sha';
+  static const _kSkip = 'update_skip_sha';
 
   static String? _pref(LocalDbService db, String k) {
     final r = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [k]);
@@ -228,7 +268,7 @@ class AppUpdateService {
     _setPref(db, _kLastCheck, DateTime.now().toUtc().toIso8601String());
     await cleanupStale();
     final info = await check();
-    if (info != null && notify != null && _pref(db, _kNotified) != info.sha) {
+    if (info != null && notify != null && _pref(db, _kNotified) != info.sha && _pref(db, _kSkip) != info.sha) {
       _setPref(db, _kNotified, info.sha);
       await notify(info);
     }

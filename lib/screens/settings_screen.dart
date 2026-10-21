@@ -166,6 +166,7 @@ class SettingsScreen extends StatelessWidget {
           ),
           const Divider(height: 24),
           const _UpdateTile(),
+          const _RollbackTile(),
         ],
       ),
       ),
@@ -325,7 +326,12 @@ class _UpdateTileState extends State<_UpdateTile> {
               ? Text(_myDate() == null
                   ? tr('У вас последняя версия')
                   : tr('У вас последняя версия, от {d}', {'d': _myDate()!}))
-              : (_myDate() == null ? null : Text(tr('Ваша версия от {d}', {'d': _myDate()!}))),
+              : (_myDate() == null && AppUpdateService.appVersion.isEmpty
+                  ? null
+                  : Text([
+                      if (AppUpdateService.appVersion.isNotEmpty) tr('Версия {v}', {'v': AppUpdateService.appVersion}),
+                      if (_myDate() != null) tr('от {d}', {'d': _myDate()!}),
+                    ].join(' · '))),
           onTap: _check,
         ),
       _UpdateStage.checking => ListTile(
@@ -340,9 +346,11 @@ class _UpdateTileState extends State<_UpdateTile> {
               const Icon(Icons.system_update_outlined, color: Colors.orange),
           title: Text(tr('Доступно обновление')),
           // Только дата новой версии (номер сборки не нужен).
-          subtitle: Text(_info!.publishedAt == null
-              ? tr('Вышла новая версия')
-              : tr('Версия от {d}', {'d': DateFormat('dd.MM.yyyy').format(_info!.publishedAt!)})),
+          subtitle: Text([
+            if (_info!.version != null) tr('Версия {v}', {'v': _info!.version}),
+            if (_info!.publishedAt != null) tr('от {d}', {'d': DateFormat('dd.MM.yyyy').format(_info!.publishedAt!)}),
+            if (_info!.version == null && _info!.publishedAt == null) tr('Вышла новая версия'),
+          ].join(' · ')),
           trailing:
               FilledButton(onPressed: _install, child: Text(tr('Обновить'))),
         ),
@@ -365,6 +373,105 @@ class _UpdateTileState extends State<_UpdateTile> {
           onTap: _info != null ? _install : _check,
         ),
     };
+  }
+}
+
+/// Откат к предыдущей версии, если прилетела плохая: список последних сборок, выбор, установка.
+class _RollbackTile extends StatefulWidget {
+  const _RollbackTile();
+
+  @override
+  State<_RollbackTile> createState() => _RollbackTileState();
+}
+
+class _RollbackTileState extends State<_RollbackTile> {
+  bool _busy = false;
+  double _progress = 0;
+
+  Future<void> _rollback() async {
+    final db = context.read<AppDataStore>().db;
+    setState(() => _busy = true);
+    List<AppUpdateInfo> list;
+    try {
+      list = await AppUpdateService.previousVersions();
+    } catch (e) {
+      if (mounted) {
+        setState(() => _busy = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Не удалось получить список версий: {e}', {'e': friendlyError(e)}))));
+      }
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (list.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Предыдущих версий пока нет'))));
+      return;
+    }
+    final fmt = DateFormat('dd.MM.yyyy HH:mm');
+    final picked = await showGlassDialog<AppUpdateInfo>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text(tr('Откатиться к версии')),
+        children: [
+          for (final v in list)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(ctx).pop(v),
+              child: Text([
+                v.version ?? v.sha.substring(0, 7),
+                if (v.publishedAt != null) fmt.format(v.publishedAt!),
+              ].join(' · ')),
+            ),
+        ],
+      ),
+    );
+    if (picked == null || !mounted) return;
+    final ok = await showGlassDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('Откатить приложение?')),
+        content: Text(tr(
+          'Будет скачана и установлена версия {v}. Данные остаются на месте. Если Android откажется ставить '
+          'старую версию поверх новой, ничего не потеряется — просто останется текущая.',
+          {'v': picked.version ?? picked.sha.substring(0, 7)},
+        )),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr('Отмена'))),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(tr('Откатить'))),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    // Плохую (самую новую) версию после отката не предлагаем уведомлением.
+    AppUpdateService.skipNotifying(db, (await AppUpdateService.check())?.sha ?? list.first.sha);
+    setState(() {
+      _busy = true;
+      _progress = 0;
+    });
+    try {
+      await AppUpdateService.downloadAndInstall(picked, onProgress: (p) {
+        if (mounted) setState(() => _progress = p);
+      });
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyError(e))));
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!AppUpdateService.supported) return const SizedBox.shrink();
+    if (_busy) {
+      return ListTile(
+        leading: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, value: _progress > 0 ? _progress : null)),
+        title: Text(_progress > 0 ? tr('Скачиваю… {percent}%', {'percent': (_progress * 100).round()}) : tr('Загружаю список версий…')),
+      );
+    }
+    return ListTile(
+      leading: const Icon(Icons.history),
+      title: Text(tr('Откатиться к предыдущей версии')),
+      subtitle: Text(tr('Если новая версия работает плохо')),
+      onTap: _rollback,
+    );
   }
 }
 
