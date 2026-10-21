@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import '../widgets/app_backdrop.dart';
 import '../widgets/app_loader.dart';
 import 'package:flutter/material.dart';
@@ -114,7 +115,7 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
   }
 
   Future<void> _report(Map<String, dynamic> r) async {
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Пожаловаться на результат?')),
@@ -195,7 +196,7 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
   /// Все фильтры и сортировка — в отдельном окне, а не россыпью на экране.
   Future<void> _openFilters() async {
     var fmt = _fmt, gender = _gender, ageMin = _ageMin, ageMax = _ageMax, sort = _sort;
-    final apply = await showModalBottomSheet<bool>(
+    final apply = await showGlassSheet<bool>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,

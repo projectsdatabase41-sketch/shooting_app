@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import '../widgets/app_backdrop.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -81,7 +82,7 @@ class _ChatBackupSettingsScreenState extends State<ChatBackupSettingsScreen> {
     final a = TextEditingController(), b = TextEditingController();
     String? error;
     bool busy = false;
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(

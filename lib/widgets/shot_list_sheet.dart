@@ -1,3 +1,4 @@
+import 'glass_route.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../logic/scoring.dart';
@@ -30,7 +31,7 @@ class ShotListSheet extends StatefulWidget {
   const ShotListSheet({super.key});
 
   static Future<void> show(BuildContext context) {
-    return showModalBottomSheet(
+    return showGlassSheet(
       context: context,
       isScrollControlled: true,
       builder: (_) => FractionallySizedBox(

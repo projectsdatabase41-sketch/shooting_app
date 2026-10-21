@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import 'dart:async' show unawaited;
 import 'dart:convert';
 import 'dart:math' as math;
@@ -159,7 +160,7 @@ class _GDriveScreenState extends State<GDriveScreen> {
 
   Future<String?> _ask(String title, {String initial = ''}) {
     final ctl = TextEditingController(text: initial);
-    return showDialog<String>(
+    return showGlassDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(title),
@@ -214,7 +215,7 @@ class _GDriveScreenState extends State<GDriveScreen> {
   }
 
   Future<void> _delete(DriveItem it) async {
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Удалить «{n}»?', {'n': it.name})),

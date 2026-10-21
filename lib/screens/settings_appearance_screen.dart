@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import '../widgets/app_backdrop.dart';
 import '../theme/backdrop_tint.dart';
 import '../logic/friendly_error.dart';
@@ -30,7 +31,7 @@ class SettingsAppearanceScreen extends StatelessWidget {
   static Future<void> pickLanguage(
       BuildContext context, PersonalizationViewModel personalization) async {
     final db = context.read<AppDataStore>().db;
-    final picked = await showModalBottomSheet<String?>(
+    final picked = await showGlassSheet<String?>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,

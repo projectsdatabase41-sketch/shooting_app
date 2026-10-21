@@ -1,3 +1,4 @@
+import 'glass_route.dart';
 import 'package:flutter/material.dart';
 
 import '../i18n/i18n.dart';
@@ -56,7 +57,7 @@ class LinkSignal extends StatelessWidget {
   const LinkSignal({super.key, required this.mode});
 
   static void explain(BuildContext context, LinkMode current) {
-    showDialog<void>(
+    showGlassDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Как идут сообщения')),

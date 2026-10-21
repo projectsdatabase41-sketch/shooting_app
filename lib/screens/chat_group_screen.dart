@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import '../logic/friendly_error.dart';
 import 'avatar_crop_screen.dart';
 import 'package:flutter/material.dart';
@@ -290,7 +291,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       return;
     }
     final picked = <String>{};
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocal) => AlertDialog(
@@ -327,7 +328,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
 
   Future<void> _memberActions(ChatGroupMember m) async {
     if (!_isAdmin || m.id == widget.auth.userId || m.role == 'owner') return;
-    final action = await showModalBottomSheet<String>(
+    final action = await showGlassSheet<String>(
       context: context,
       showDragHandle: true,
       builder: (ctx) => SafeArea(
@@ -361,7 +362,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
   }
 
   Future<void> _leave() async {
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Выйти из группы?')),

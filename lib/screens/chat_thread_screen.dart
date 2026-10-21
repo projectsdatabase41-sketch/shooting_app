@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import 'package:uuid/uuid.dart';
 import '../widgets/linked_text.dart';
 import '../widgets/ai_gate.dart';
@@ -893,7 +894,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   /// Ничего не отправляет само: текст и график показываются перед отправкой.
   Future<void> _composeWithAi() async {
     final ctrl = TextEditingController();
-    final instruction = await showDialog<String>(
+    final instruction = await showGlassDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Написать с ИИ')),
@@ -973,7 +974,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   /// (и график) в поле ввода — отправляет человек сам.
   Future<void> _showAiDraft(String message, String comment, Map<String, dynamic>? chart) async {
     final ctl = TextEditingController(text: message);
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Черновик сообщения')),
@@ -1337,7 +1338,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         .where(
             (m) => m.direction == ChatMessageDirection.outgoing && m.readByPeer)
         .length;
-    final choice = await showDialog<String>(
+    final choice = await showGlassDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(chosen.length == 1
@@ -1374,7 +1375,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Future<void> _edit(ChatMessage m) async {
     final ctrl = TextEditingController(text: m.text);
-    final newText = await showDialog<String>(
+    final newText = await showGlassDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Изменить сообщение')),
@@ -1566,7 +1567,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   /// Собеседник просит копию переписки — отдаём только с согласием.
   Future<void> _onHistoryRequest() async {
     if (!mounted) return;
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Передать переписку?')),
@@ -1666,7 +1667,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final meta = r.meta;
     if (meta != null && meta['att'] == 1) return _receiveInlineAttachment(r, meta);
     if (meta != null && meta['hist'] == 1) return _receiveHistory(r);
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(

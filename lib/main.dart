@@ -1,3 +1,6 @@
+import 'widgets/home_tabs_bar.dart' show TileStyle;
+import 'theme/glass.dart';
+import 'theme/wallpaper.dart';
 import 'theme/backdrop_tint.dart';
 import 'gdrive/gdrive_service.dart';
 import 'widgets/app_lock_gate.dart';
@@ -79,6 +82,7 @@ Future<void> main() async {
   // Секреты (токены, ключи) шифруются ключом из защищённого хранилища системы.
   await SecretBox.init();
   BackdropTint.load(db);
+  TileStyle.isGlass(db); // «стекло» плиток сообщаем теме до первого кадра
   SecretBox.migrate(db);
   RemoteConfig.loadCached(db);
   // Структура Google Диска подтягивается в фоне при запуске: к открытию модуля всё уже готово.
@@ -380,7 +384,7 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
       // цветов мишени — см. `AppTheme`), которые пользователь тоже может
       // поменять.
       child: Selector<PersonalizationViewModel,
-          (ThemeMode, (Color?, Color?, Color?), (Color?, Color?, Color?))>(
+          (ThemeMode, (Color?, Color?, Color?), (Color?, Color?, Color?), int, int)>(
         selector: (_, vm) => (
           vm.themeMode,
           (
@@ -393,12 +397,17 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
             vm.effectiveButton(Brightness.dark),
             vm.effectiveButtonText(Brightness.dark)
           ),
+          // общий оттенок и «стекло» тоже перестраивают тему (поверхности, кнопки, окна)
+          BackdropTint.revision.value,
+          GlassTheme.revision.value,
         ),
         builder: (context, data, _) {
           final (
             themeMode,
             (lightBg, lightButton, lightText),
-            (darkBg, darkButton, darkText)
+            (darkBg, darkButton, darkText),
+            _,
+            _
           ) = data;
           return MaterialApp(
             key: ValueKey(I18n.code),
@@ -452,11 +461,7 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
                                     // Боковые поля продолжают фон верхнего экрана (у «Чемпионов» свой, золотой).
                                     ValueListenableBuilder<String>(
                                       valueListenable: AppBackdrop.active,
-                                      builder: (_, kind, __) => BackdropTint.apply(
-                                        kind,
-                                        Image.asset(AppBackdrop.path(kind, Theme.of(ctx).brightness),
-                                            fit: BoxFit.cover, gaplessPlayback: true, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
-                                      ),
+                                      builder: (_, kind, __) => Wallpaper(kind: kind),
                                     ),
                                     Center(
                                       child: DecoratedBox(

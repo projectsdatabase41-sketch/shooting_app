@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -282,7 +283,7 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
 
   Future<void> _confirmUnlockFinished(
       BuildContext context, TargetViewModel vm) async {
-    final sure = await showDialog<bool>(
+    final sure = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Разблокировать правку?')),
@@ -317,7 +318,7 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
   /// Обзор страниц — как список запущенных приложений в Android.
   void _openOverview(BuildContext context) {
     final workspace = context.read<WorkspaceViewModel>();
-    showModalBottomSheet(
+    showGlassSheet(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,

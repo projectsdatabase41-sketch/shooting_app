@@ -31,6 +31,37 @@ class BackdropTint {
   static double hue = baseHue; // для manual
   static double sat = 1.0; // для manual, 0..1.5
 
+  // Слои обоев (см. wallpaper.dart).
+  static double frontOpacity = 1.0; // прозрачность переднего листа с вырезами
+  static double vignette = 0.35; // затемнение к краям
+  static double blur = 0; // размытие заднего листа, px
+  static const _kFront = 'wallpaper_front_opacity';
+  static const _kVignette = 'wallpaper_vignette';
+  static const _kBlur = 'wallpaper_blur';
+
+  /// «Стирание» переднего листа мягкой фигурой или с одной из сторон: сквозь стёртое место виден задний лист.
+  /// Форма: none | left | right | top | bottom | circle | star | square | band | triangle.
+  static const eraseShapes = ['none', 'left', 'right', 'top', 'bottom', 'circle', 'star', 'square', 'band', 'triangle'];
+  static String eraseShape = 'none';
+  static double eraseSoft = 0.6; // 0 — чёткий край … 1 — очень размытый
+  static double eraseStrength = 0.7; // 0..1, насколько стирается
+  static double eraseSize = 0.8; // 0.2..1.6, размер относительно экрана
+  static const _kEShape = 'wallpaper_erase_shape';
+  static const _kESoft = 'wallpaper_erase_soft';
+  static const _kEStrength = 'wallpaper_erase_strength';
+  static const _kESize = 'wallpaper_erase_size';
+
+  /// Растёт при любом изменении параметров оформления — обои перерисовываются.
+  static final revision = ValueNotifier<int>(0);
+
+  /// Оттенок и насыщенность, из которых строятся обои (с учётом режима).
+  static double effectiveHue() {
+    final t = current();
+    return t == null ? baseHue : (baseHue + t.shift) % 360;
+  }
+
+  static double effectiveSat() => current()?.sat ?? 1.0;
+
   /// Текущий фильтр; `null` — картинки без изменений. На него подписаны фоны.
   static final filter = ValueNotifier<ColorFilter?>(null);
 
@@ -47,10 +78,28 @@ class BackdropTint {
     if (m == 'auto' || m == 'manual' || m == 'off') mode = m!;
     hue = (double.tryParse(get(_kHue) ?? '') ?? baseHue).clamp(0.0, 360.0).toDouble();
     sat = (double.tryParse(get(_kSat) ?? '') ?? 1.0).clamp(0.0, 1.5).toDouble();
+    frontOpacity = (double.tryParse(get(_kFront) ?? '') ?? 1.0).clamp(0.3, 1.0).toDouble();
+    vignette = (double.tryParse(get(_kVignette) ?? '') ?? 0.35).clamp(0.0, 1.0).toDouble();
+    blur = (double.tryParse(get(_kBlur) ?? '') ?? 0).clamp(0.0, 30.0).toDouble();
+    final es = get(_kEShape);
+    eraseShape = eraseShapes.contains(es) ? es! : 'none';
+    eraseSoft = (double.tryParse(get(_kESoft) ?? '') ?? 0.6).clamp(0.0, 1.0).toDouble();
+    eraseStrength = (double.tryParse(get(_kEStrength) ?? '') ?? 0.7).clamp(0.0, 1.0).toDouble();
+    eraseSize = (double.tryParse(get(_kESize) ?? '') ?? 0.8).clamp(0.2, 1.6).toDouble();
     recompute();
   }
 
-  static void save(LocalDbService db, {String? newMode, double? newHue, double? newSat}) {
+  static void save(LocalDbService db,
+      {String? newMode,
+      double? newHue,
+      double? newSat,
+      double? newFront,
+      double? newVignette,
+      double? newBlur,
+      String? newEraseShape,
+      double? newEraseSoft,
+      double? newEraseStrength,
+      double? newEraseSize}) {
     void put(String k, String v) => db.db.execute(
         'INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex', [k, v]);
     if (newMode != null) {
@@ -64,6 +113,34 @@ class BackdropTint {
     if (newSat != null) {
       sat = newSat.clamp(0.0, 1.5).toDouble();
       put(_kSat, sat.toStringAsFixed(2));
+    }
+    if (newFront != null) {
+      frontOpacity = newFront.clamp(0.3, 1.0).toDouble();
+      put(_kFront, frontOpacity.toStringAsFixed(2));
+    }
+    if (newVignette != null) {
+      vignette = newVignette.clamp(0.0, 1.0).toDouble();
+      put(_kVignette, vignette.toStringAsFixed(2));
+    }
+    if (newBlur != null) {
+      blur = newBlur.clamp(0.0, 30.0).toDouble();
+      put(_kBlur, blur.toStringAsFixed(1));
+    }
+    if (newEraseShape != null && eraseShapes.contains(newEraseShape)) {
+      eraseShape = newEraseShape;
+      put(_kEShape, newEraseShape);
+    }
+    if (newEraseSoft != null) {
+      eraseSoft = newEraseSoft.clamp(0.0, 1.0).toDouble();
+      put(_kESoft, eraseSoft.toStringAsFixed(2));
+    }
+    if (newEraseStrength != null) {
+      eraseStrength = newEraseStrength.clamp(0.0, 1.0).toDouble();
+      put(_kEStrength, eraseStrength.toStringAsFixed(2));
+    }
+    if (newEraseSize != null) {
+      eraseSize = newEraseSize.clamp(0.2, 1.6).toDouble();
+      put(_kESize, eraseSize.toStringAsFixed(2));
     }
     recompute();
   }
@@ -79,6 +156,7 @@ class BackdropTint {
     final f = _build();
     // ColorFilter сравнивается по значению; лишние уведомления не нужны
     if (f != filter.value) filter.value = f;
+    revision.value++;
   }
 
   static double _norm180(double d) {

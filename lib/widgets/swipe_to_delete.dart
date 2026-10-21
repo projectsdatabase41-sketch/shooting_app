@@ -1,3 +1,4 @@
+import 'glass_route.dart';
 import 'package:flutter/material.dart';
 import '../i18n/i18n.dart';
 
@@ -100,7 +101,7 @@ class SwipeToDelete extends StatelessWidget {
       ),
       confirmDismiss: (_) async {
         // 0 = отмена/закрыли мимо, 1 = только с телефона, 2 = везде.
-        final choice = await showDialog<int>(
+        final choice = await showGlassDialog<int>(
           context: context,
           builder: (ctx) => AlertDialog(
             title: Text(title),

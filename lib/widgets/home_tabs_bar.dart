@@ -1,3 +1,4 @@
+import '../theme/glass.dart';
 import 'dart:math' as math;
 import '../theme/app_transitions.dart';
 import 'dart:ui' show ImageFilter;
@@ -286,17 +287,21 @@ class TileStyle {
     if (_cached != null) return _cached!;
     alpha = (double.tryParse(_get(db, 'tile_alpha') ?? '') ?? 1.0).clamp(0.2, 2.0).toDouble();
     shadow = (double.tryParse(_get(db, 'tile_shadow') ?? '') ?? 1.0).clamp(0.0, 2.0).toDouble();
-    return _cached = _get(db, 'tile_glass') == '1';
+    _cached = _get(db, 'tile_glass') == '1';
+    GlassTheme.sync(_cached!, alpha);
+    return _cached!;
   }
 
   static void setGlass(dynamic db, bool v) {
     _put(db, 'tile_glass', v ? '1' : '0');
     _cached = v;
     _glass.value = v;
+    GlassTheme.sync(v, alpha);
   }
 
   static void setAlpha(dynamic db, double v) {
     alpha = v;
+    GlassTheme.sync(_cached ?? false, v);
     _put(db, 'tile_alpha', '$v');
     _glass.value = _cached; // перерисовать плитки
     _bump();

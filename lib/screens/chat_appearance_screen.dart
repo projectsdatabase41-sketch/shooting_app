@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import '../logic/friendly_error.dart';
 import '../widgets/app_backdrop.dart';
 import '../widgets/ai_gate.dart';
@@ -56,7 +57,7 @@ class _ChatAppearanceScreenState extends State<ChatAppearanceScreen> {
         actions: [
           if (aiModuleOn(context))
           GlassCircleButton(
-            onTap: () => showModalBottomSheet(
+            onTap: () => showGlassSheet(
               context: context,
               isScrollControlled: true,
               showDragHandle: true,

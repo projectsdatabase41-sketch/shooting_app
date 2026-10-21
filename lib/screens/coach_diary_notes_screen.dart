@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import '../logic/friendly_error.dart';
 import 'knowledge_notes_screen.dart';
 import '../widgets/ai_gate.dart';
@@ -151,7 +152,7 @@ class _CoachDiaryNotesScreenState extends State<CoachDiaryNotesScreen> {
   }
 
   Future<void> _openAddDialog(BuildContext context) async {
-    final saved = await showDialog<CoachNote>(
+    final saved = await showGlassDialog<CoachNote>(
       context: context,
       builder: (ctx) => _AddNoteDialog(aiSettings: _aiSettings),
     );
@@ -368,7 +369,7 @@ class _NoteScreenState extends State<_NoteScreen> {
       await Navigator.of(context).push(MaterialPageRoute(
           builder: (_) => PdfViewerScreen(bytes: bytes, fileName: f.name)));
     } else if (f.isText) {
-      await showDialog<void>(
+      await showGlassDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
           title: Text(f.name),
@@ -410,7 +411,7 @@ class _NoteScreenState extends State<_NoteScreen> {
   /// ассистента (только содержимое, без рассуждений) заменяет текст
   /// заметки целиком.
   Future<void> _editWithAi() async {
-    final instruction = await showDialog<String>(
+    final instruction = await showGlassDialog<String>(
       context: context,
       builder: (ctx) {
         final ctrl = TextEditingController();

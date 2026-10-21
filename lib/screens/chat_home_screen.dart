@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import '../widgets/app_loader.dart';
 import 'avatar_crop_screen.dart';
 import '../logic/friendly_error.dart';
@@ -475,7 +476,7 @@ class _ChatContactsView extends StatelessWidget {
   Future<void> _editProfile(BuildContext context) async {
     final nickname = TextEditingController(text: auth.nickname);
     final about = TextEditingController(text: auth.about);
-    await showModalBottomSheet(
+    await showGlassSheet(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -850,7 +851,7 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
 
   Future<void> _forgotPassword() async {
     final emailCtrl = TextEditingController(text: _email.text);
-    final email = await showDialog<String>(
+    final email = await showGlassDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Восстановление пароля')),
@@ -905,7 +906,7 @@ class _ChatAuthScreenState extends State<_ChatAuthScreen> {
 
   Future<String?> _askSignupCode() {
     final ctl = TextEditingController();
-    return showDialog<String>(
+    return showGlassDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Код из письма')),

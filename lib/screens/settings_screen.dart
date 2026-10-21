@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import 'security_settings_screen.dart';
 import '../services/app_lock.dart';
 import '../logic/friendly_error.dart';
@@ -256,7 +257,7 @@ class _UpdateTileState extends State<_UpdateTile> {
     // установкой нового, а это стирает всю локальную базу (уже
     // случалось однажды). Предупреждаем и напоминаем синхронизироваться
     // заранее — само приложение это никак не обойти, решает Android.
-    final proceed = await showDialog<bool>(
+    final proceed = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Перед обновлением')),
@@ -388,7 +389,7 @@ class AccountTile extends StatelessWidget {
                 : tr('Своя база Supabase не подключена'),
       ),
       trailing: const Icon(Icons.chevron_right),
-      onTap: () => showModalBottomSheet<void>(
+      onTap: () => showGlassSheet<void>(
         context: context,
         isScrollControlled: true,
         useSafeArea: true,
@@ -529,7 +530,7 @@ class _AccountSheetState extends State<_AccountSheet> {
     final existing = {for (final t in settings.tables) t.name: t};
     final selected = {for (final n in names) n: existing.containsKey(n)};
 
-    final result = await showDialog<bool>(
+    final result = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
@@ -932,7 +933,7 @@ class _HiddenDevModeToggleState extends State<_HiddenDevModeToggle> {
     final personalization = context.read<PersonalizationViewModel>();
 
     if (personalization.devMode) {
-      final confirmed = await showDialog<bool>(
+      final confirmed = await showGlassDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
           title: Text(tr('Режим разработчика')),
@@ -985,7 +986,7 @@ Future<void> inviteAthleteViaMessenger(BuildContext context, AppDataStore store)
     msg.showSnackBar(SnackBar(content: Text(tr('Добавьте спортсмена в контакты мессенджера, затем повторите'))));
     return;
   }
-  final athlete = await showModalBottomSheet<ChatContact>(
+  final athlete = await showGlassSheet<ChatContact>(
     context: context,
     builder: (ctx) => ListView(children: [
       Padding(padding: const EdgeInsets.all(16), child: Text(tr('Кого пригласить?'), style: Theme.of(ctx).textTheme.titleMedium)),
@@ -995,7 +996,7 @@ Future<void> inviteAthleteViaMessenger(BuildContext context, AppDataStore store)
   if (athlete == null || !context.mounted) return;
   if (await auth.friendStatusWith(athlete.id) != 'accepted') {
     if (!context.mounted) return;
-    await showDialog<void>(
+    await showGlassDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Сначала добавьте в друзья')),
@@ -1028,7 +1029,7 @@ Future<void> addCoachViaMessenger(BuildContext context, AppDataStore store) asyn
     msg.showSnackBar(SnackBar(content: Text(tr('Добавьте тренера в контакты мессенджера, затем повторите'))));
     return;
   }
-  final coach = await showModalBottomSheet<ChatContact>(
+  final coach = await showGlassSheet<ChatContact>(
     context: context,
     builder: (ctx) => ListView(children: [
       Padding(padding: const EdgeInsets.all(16), child: Text(tr('Кто ваш тренер?'), style: Theme.of(ctx).textTheme.titleMedium)),
@@ -1036,7 +1037,7 @@ Future<void> addCoachViaMessenger(BuildContext context, AppDataStore store) asyn
     ]),
   );
   if (coach == null || !context.mounted) return;
-  final ok = await showDialog<bool>(
+  final ok = await showGlassDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
       title: Text(tr('Отправить запрос тренеру?')),
@@ -1052,7 +1053,7 @@ Future<void> addCoachViaMessenger(BuildContext context, AppDataStore store) asyn
   // (приходит только уведомление), поэтому запрос просим отправлять друзьям.
   if (await auth.friendStatusWith(coach.id) != 'accepted') {
     if (!context.mounted) return;
-    await showDialog<void>(
+    await showGlassDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Сначала добавьте в друзья')),

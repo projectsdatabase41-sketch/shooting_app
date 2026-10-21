@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import 'dart:math' as math;
 import '../logic/friendly_error.dart';
 import 'dart:typed_data';
@@ -133,7 +134,7 @@ class _ModelPickerButtonState extends State<_ModelPickerButton> {
   Future<void> _open() async {
     final s = widget.settings;
     if (!mounted) return;
-    final choice = await showModalBottomSheet<String>(
+    final choice = await showGlassSheet<String>(
       context: context,
       showDragHandle: true,
       builder: (ctx) {
@@ -224,7 +225,7 @@ class _AiChatBodyState extends State<_AiChatBody> {
   /// пользователя, пункт 10 списка правок).
   Future<void> _pickFormat(AiChatViewModel vm) async {
     if (_input.text.trim().isEmpty) return;
-    final format = await showModalBottomSheet<String>(
+    final format = await showGlassSheet<String>(
       context: context,
       builder: (ctx) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -288,7 +289,7 @@ class _AiChatBodyState extends State<_AiChatBody> {
     if (text.isEmpty) return;
     final vm = context.read<AiChatViewModel>();
     if (vm.service.settings.geminiKey.isEmpty) {
-      final openBrowser = await showDialog<bool>(
+      final openBrowser = await showGlassDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
           title: Text(tr('Поиск в интернете')),
@@ -578,7 +579,7 @@ class _AiChatBodyState extends State<_AiChatBody> {
   Future<void> _editMessage(
       BuildContext context, AiChatViewModel vm, int index) async {
     final controller = TextEditingController(text: vm.messages[index].text);
-    final text = await showDialog<String>(
+    final text = await showGlassDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Изменить вопрос')),
@@ -979,7 +980,7 @@ class _Bubble extends StatelessWidget {
   }
 
   void _showActions(BuildContext context) {
-    showModalBottomSheet(
+    showGlassSheet(
       context: context,
       builder: (ctx) => SafeArea(
         child: Column(

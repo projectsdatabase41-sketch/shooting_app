@@ -1,3 +1,4 @@
+import 'glass_route.dart';
 import 'package:flutter/material.dart';
 
 import '../i18n/i18n.dart';
@@ -53,7 +54,7 @@ class SelfieLightOverlay extends StatelessWidget {
 
 /// Панель настроек подсветки.
 Future<void> showSelfieLightSheet(BuildContext context, SelfieLightState light) {
-  return showModalBottomSheet<void>(
+  return showGlassSheet<void>(
     context: context,
     showDragHandle: true,
     builder: (ctx) => ListenableBuilder(

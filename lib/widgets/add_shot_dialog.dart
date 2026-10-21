@@ -1,3 +1,4 @@
+import 'glass_route.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
@@ -23,7 +24,7 @@ class AddShotDialog extends StatefulWidget {
   static Future<void> show(BuildContext context) {
     final vm = context.read<TargetViewModel>();
     final store = context.read<AppDataStore>();
-    return showDialog(
+    return showGlassDialog(
       context: context,
       builder: (_) => MultiProvider(
         providers: [

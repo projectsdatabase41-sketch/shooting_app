@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import '../logic/friendly_error.dart';
 import '../widgets/ai_gate.dart';
 import 'dart:convert';
@@ -182,7 +183,7 @@ class _AddServiceScreenState extends State<AddServiceScreen>
   /// собирать `{"headers": {"Authorization": ...}}`.
   Future<void> _fillWithAi() async {
     final controller = TextEditingController();
-    final pasted = await showDialog<String>(
+    final pasted = await showGlassDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Заполнить с ИИ')),

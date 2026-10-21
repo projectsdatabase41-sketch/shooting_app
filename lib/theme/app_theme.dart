@@ -1,3 +1,4 @@
+import 'glass.dart';
 import 'backdrop_tint.dart';
 import 'app_transitions.dart';
 import 'package:flutter/material.dart';
@@ -215,8 +216,12 @@ class AppTheme {
           side: BorderSide(color: cs.outlineVariant),
         ),
       ),
+      // Режим «стекло»: окна полупрозрачные (размытие за ними — в glass_route.dart), чуть мутнее плиток.
+      popupMenuTheme: GlassTheme.enabled
+          ? base.popupMenuTheme.copyWith(color: cs.surfaceContainerLow.withValues(alpha: (GlassTheme.windowAlpha + 0.1).clamp(0.5, 0.97).toDouble()), surfaceTintColor: Colors.transparent)
+          : base.popupMenuTheme,
       dialogTheme: base.dialogTheme.copyWith(
-        backgroundColor: cs.surfaceContainerLow,
+        backgroundColor: GlassTheme.enabled ? cs.surfaceContainerLow.withValues(alpha: GlassTheme.windowAlpha) : cs.surfaceContainerLow,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         shape: RoundedRectangleBorder(
@@ -293,7 +298,7 @@ class AppTheme {
         ),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
-        backgroundColor: filledBg,
+        backgroundColor: GlassTheme.enabled ? filledBg.withValues(alpha: (GlassTheme.buttonAlpha + 0.25).clamp(0.3, 0.95).toDouble()) : filledBg,
         foregroundColor: filledFg,
         elevation: 2,
         highlightElevation: 4,
@@ -330,7 +335,8 @@ class AppTheme {
             borderRadius: BorderRadius.circular(radiusMedium)),
       ),
       bottomSheetTheme: base.bottomSheetTheme.copyWith(
-        backgroundColor: cs.surfaceContainerLow,
+        backgroundColor: GlassTheme.enabled ? cs.surfaceContainerLow.withValues(alpha: GlassTheme.windowAlpha) : cs.surfaceContainerLow,
+        modalBackgroundColor: GlassTheme.enabled ? cs.surfaceContainerLow.withValues(alpha: GlassTheme.windowAlpha) : null,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         shape: const RoundedRectangleBorder(
@@ -353,20 +359,30 @@ class AppTheme {
   /// `color`/`textColor` — переопределение из настроек пользователя;
   /// `null` — оставить цвет по умолчанию (тема сама решает через
   /// `ColorScheme`, `color`/`textColor` здесь ничего не трогают).
-  static ButtonStyle _buttonStyle([Color? color, Color? textColor]) =>
-      ButtonStyle(
-        backgroundColor: color == null ? null : WidgetStatePropertyAll(color),
-        foregroundColor:
-            textColor == null ? null : WidgetStatePropertyAll(textColor),
-        minimumSize: const WidgetStatePropertyAll(Size(0, 44)),
-        padding:
-            const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 18)),
-        shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(radiusMedium)),
-        ),
-        textStyle: const WidgetStatePropertyAll(
-          TextStyle(fontWeight: FontWeight.w600, letterSpacing: 0.1),
-        ),
-      );
+  static ButtonStyle _buttonStyle([Color? color, Color? textColor]) {
+    final glass = GlassTheme.enabled;
+    return ButtonStyle(
+      // Режим «стекло»: кнопка прозрачная, заливка и размытие рисуются фоном-построителем.
+      backgroundColor: glass ? const WidgetStatePropertyAll(Colors.transparent) : (color == null ? null : WidgetStatePropertyAll(color)),
+      shadowColor: glass ? const WidgetStatePropertyAll(Colors.transparent) : null,
+      elevation: glass ? const WidgetStatePropertyAll(0) : null,
+      backgroundBuilder: glass
+          ? (context, states, child) => GlassFill(
+                color: (color ?? Colors.white).withValues(
+                    alpha: states.contains(WidgetState.disabled) ? 0.10 : (color == null ? 0.07 : GlassTheme.buttonAlpha)),
+                radius: radiusMedium,
+                child: child,
+              )
+          : null,
+      foregroundColor: textColor == null ? null : WidgetStatePropertyAll(textColor),
+      minimumSize: const WidgetStatePropertyAll(Size(0, 44)),
+      padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 18)),
+      shape: WidgetStatePropertyAll(
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(radiusMedium)),
+      ),
+      textStyle: const WidgetStatePropertyAll(
+        TextStyle(fontWeight: FontWeight.w600, letterSpacing: 0.1),
+      ),
+    );
+  }
 }

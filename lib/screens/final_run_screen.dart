@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import '../widgets/app_backdrop.dart';
 import 'dart:async';
 import 'dart:math' as math;
@@ -148,7 +149,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
 
   Future<bool> _confirmLeave() async {
     c.pause();
-    final leave = await showDialog<bool>(
+    final leave = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Выйти из финала?')),
@@ -857,7 +858,7 @@ class FinalResultScreen extends StatelessWidget {
       }
       coachId = coaches.first.chatUserId;
     }
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Публикация')),

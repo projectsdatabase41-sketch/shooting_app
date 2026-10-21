@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import 'dart:convert';
 
 import '../widgets/glass_pill.dart';
@@ -257,7 +258,7 @@ class _DemoFeedbackOverlayState extends State<DemoFeedbackOverlay> {
     if (ctx == null) return;
     final page = DemoMode.currentPage();
     final ctl = TextEditingController(text: _draft);
-    await showDialog<void>(
+    await showGlassDialog<void>(
       context: ctx,
       builder: (dctx) {
         var busy = false;

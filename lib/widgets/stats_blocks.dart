@@ -1,3 +1,4 @@
+import 'glass_route.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -59,7 +60,7 @@ class StatsBlocks {
 /// Кнопка-шестерёнка в шапке статистики: какие блоки показывать и в каком порядке.
 Future<void> showStatsBlocksSheet(BuildContext context) {
   final db = context.read<AppDataStore>().db;
-  return showModalBottomSheet<void>(
+  return showGlassSheet<void>(
     context: context,
     showDragHandle: true,
     isScrollControlled: true,

@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import 'package:flutter/material.dart';
 import '../widgets/ai_gate.dart';
 import 'package:intl/intl.dart';
@@ -148,7 +149,7 @@ class _DetailBody extends StatelessWidget {
 
   void _openBlockSettings(BuildContext context) {
     final blocks = context.read<ExerciseDetailViewModel>();
-    showModalBottomSheet(
+    showGlassSheet(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,

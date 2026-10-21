@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import 'package:flutter/material.dart';
 import 'settings_screen.dart' show inviteAthleteViaMessenger;
 import 'package:provider/provider.dart';
@@ -52,7 +53,7 @@ class _CoachAthletesScreenState extends State<CoachAthletesScreen> {
     final urlCtrl = TextEditingController(text: existing?.url ?? '');
     final keyCtrl = TextEditingController(text: existing?.anonKey ?? '');
     final tokenCtrl = TextEditingController(text: existing?.token ?? '');
-    final result = await showDialog<_AthleteDialogResult>(
+    final result = await showGlassDialog<_AthleteDialogResult>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(existing == null ? tr('Новый спортсмен') : tr('Спортсмен')),
@@ -214,7 +215,7 @@ class _CoachAthletesScreenState extends State<CoachAthletesScreen> {
       floatingActionButton: FloatingActionButton(
         tooltip: tr('Добавить спортсмена'),
         onPressed: () async {
-          final how = await showModalBottomSheet<String>(
+          final how = await showGlassSheet<String>(
             context: context,
             builder: (ctx) => SafeArea(
               child: Column(mainAxisSize: MainAxisSize.min, children: [

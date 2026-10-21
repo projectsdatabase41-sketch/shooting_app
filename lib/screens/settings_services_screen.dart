@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import '../widgets/app_backdrop.dart';
 import 'package:flutter/material.dart';
 
@@ -76,7 +77,7 @@ class SettingsServicesScreen extends StatelessWidget {
   }
 
   void _confirmDelete(BuildContext context, String id, String name) {
-    showDialog(
+    showGlassDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Удалить сервис?')),

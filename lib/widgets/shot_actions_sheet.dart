@@ -1,3 +1,4 @@
+import 'glass_route.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../logic/scoring.dart';
@@ -17,7 +18,7 @@ class ShotActionsSheet extends StatelessWidget {
   const ShotActionsSheet({super.key, required this.shot});
 
   static Future<void> show(BuildContext context, Shot shot) {
-    return showModalBottomSheet(
+    return showGlassSheet(
       context: context,
       builder: (_) => ChangeNotifierProvider.value(
         value: context.read<TargetViewModel>(),

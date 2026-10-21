@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import '../logic/friendly_error.dart';
 import 'chat_people_screen.dart' show confirmRemoveFriend;
 import 'dart:convert';
@@ -126,7 +127,7 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
 
   /// Чёрный список: сообщения от него перестают доходить, чат удаляется.
   Future<void> _block() async {
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Заблокировать {name}?', {'name': _contact.nickname})),
@@ -155,7 +156,7 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
   }
 
   Future<void> _removeContact() async {
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Удалить из контактов?')),

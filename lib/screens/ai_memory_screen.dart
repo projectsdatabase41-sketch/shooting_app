@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import '../widgets/app_loader.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -54,7 +55,7 @@ class _AiMemoryScreenState extends State<AiMemoryScreen> {
   /// Сброс пересказов прошлых разговоров в вашей базе.
   Future<void> _reset() async {
     final what = tr('память ИИ (пересказы прошлых разговоров)');
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Сбросить память ИИ?')),

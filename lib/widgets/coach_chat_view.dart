@@ -1,3 +1,4 @@
+import 'glass_route.dart';
 import '../logic/friendly_error.dart';
 import 'app_loader.dart';
 import 'dart:async';
@@ -93,7 +94,7 @@ class _CoachChatViewState extends State<CoachChatView> {
   }
 
   void _actions(CoachChatMessage m, bool mine) {
-    showModalBottomSheet(
+    showGlassSheet(
       context: context,
       builder: (ctx) => SafeArea(
         child: Column(
@@ -115,7 +116,7 @@ class _CoachChatViewState extends State<CoachChatView> {
                     style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
                 onTap: () async {
                   Navigator.of(ctx).pop();
-                  final ok = await showDialog<bool>(
+                  final ok = await showGlassDialog<bool>(
                     context: context,
                     builder: (d) => AlertDialog(
                       title: Text(tr('Удалить сообщение?')),

@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -280,7 +281,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 /// Предложение синхронизации с облаком (один раз после анкеты): зачем это
 /// нужно и три шага регистрации. Можно отложить.
 Future<void> showSyncOffer(BuildContext context) {
-  return showModalBottomSheet<void>(
+  return showGlassSheet<void>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,

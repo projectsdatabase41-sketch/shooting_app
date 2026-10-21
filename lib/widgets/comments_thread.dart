@@ -1,3 +1,4 @@
+import 'glass_route.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
@@ -58,11 +59,11 @@ class CommentsThreadSheet extends StatefulWidget {
   static Future<void> _show(BuildContext context, Widget child, {double heightFactor = 0.7}) {
     final vm = context.read<TargetViewModel>();
     final store = context.read<AppDataStore>();
-    return showModalBottomSheet(
+    return showGlassSheet(
       context: context,
       isScrollControlled: true,
       builder: (ctx) => Padding(
-        // Без этого поле ввода уезжало под клавиатуру — showModalBottomSheet
+        // Без этого поле ввода уезжало под клавиатуру — showGlassSheet
         // не подвигает свой контент сам (жалоба пользователя: "не видно,
         // что пишешь" в заметке к выстрелу и в чате с тренером).
         padding: EdgeInsets.only(bottom: kIsWeb ? 0 : MediaQuery.of(ctx).viewInsets.bottom),
@@ -209,7 +210,7 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
   /// Меню "Изменить"/"Удалить" по долгому нажатию (пункт 6 списка
   /// правок) — тот же приём, что уже есть у сообщений ассистента.
   void _showActions(BuildContext context, CommentsRepository repo, Comment c, bool mine) {
-    showModalBottomSheet(
+    showGlassSheet(
       context: context,
       builder: (ctx) => SafeArea(
         child: Column(
@@ -237,7 +238,7 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
               title: Text(tr('Удалить'), style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
               onTap: () async {
                 Navigator.of(ctx).pop();
-                final ok = await showDialog<bool>(
+                final ok = await showGlassDialog<bool>(
                   context: context,
                   builder: (d) => AlertDialog(
                     title: Text(tr('Удалить сообщение?')),
@@ -260,7 +261,7 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
 
   Future<void> _editComment(BuildContext context, CommentsRepository repo, Comment c) async {
     final controller = TextEditingController(text: c.text);
-    final text = await showDialog<String>(
+    final text = await showGlassDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Изменить сообщение')),

@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import '../widgets/app_backdrop.dart';
 import 'finals_voice_settings_screen.dart';
 import '../finals/voice_packs.dart';
@@ -114,7 +115,7 @@ class _FinalsScreenState extends State<FinalsScreen> {
                     tooltip: tr('Удалить финал'),
                     icon: const Icon(Icons.delete_outline),
                     onPressed: () async {
-                      final ok = await showDialog<bool>(
+                      final ok = await showGlassDialog<bool>(
                         context: context,
                         builder: (ctx) => AlertDialog(
                           title: Text(tr('Удалить финал?')),
@@ -253,7 +254,7 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('В таблице пока нет чемпионов'))));
       return;
     }
-    final champ = await showModalBottomSheet<Map<String, dynamic>>(
+    final champ = await showGlassSheet<Map<String, dynamic>>(
       context: context,
       builder: (ctx) => ListView(children: [
         for (final r in list)
@@ -266,7 +267,7 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
     );
     if (champ == null || !mounted) return;
     // Восьмой участник не помещается: предлагаем убрать лишнего.
-    final slot = await showDialog<int>(
+    final slot = await showGlassDialog<int>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Максимум 8 участников')),
@@ -312,7 +313,7 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
   /// Переименование соперника (удержание на строке).
   Future<void> _rename(int i) async {
     final ctl = TextEditingController(text: _opps[i].name);
-    final name = await showDialog<String>(
+    final name = await showGlassDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Имя соперника')),
@@ -506,7 +507,7 @@ class _Opp {
 
 extension on _FinalsScreenState {
   Future<void> _hostFinal(BuildContext context) async {
-    final f = await showModalBottomSheet<FinalFormat>(
+    final f = await showGlassSheet<FinalFormat>(
       context: context,
       builder: (ctx) => ListView(children: [
         for (final f in FinalFormat.all) ListTile(title: Text(tr(f.nameKey)), onTap: () => Navigator.pop(ctx, f)),

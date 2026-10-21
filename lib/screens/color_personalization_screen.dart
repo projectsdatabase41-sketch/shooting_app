@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import 'dart:async';
 import '../widgets/app_backdrop.dart';
 import '../theme/backdrop_tint.dart';
@@ -435,7 +436,7 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
   }
 
   void _confirmResetAll(BuildContext context, PersonalizationViewModel vm) {
-    showDialog(
+    showGlassDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(tr('Сбросить все цвета?')),
@@ -460,7 +461,7 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
   void _export(BuildContext context) {
     final vm = context.read<PersonalizationViewModel>();
     final json = vm.exportJson();
-    showDialog(
+    showGlassDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(tr('Экспорт цветовой схемы')),
@@ -491,7 +492,7 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
   void _import(BuildContext context) {
     final vm = context.read<PersonalizationViewModel>();
     final controller = TextEditingController();
-    showDialog(
+    showGlassDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(tr('Импорт цветовой схемы')),
@@ -570,7 +571,7 @@ class _ColorRow extends StatelessWidget {
   }
 
   void _confirmReset(BuildContext context, PersonalizationViewModel vm) {
-    showDialog(
+    showGlassDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(tr('Сбросить к умолчанию?')),
@@ -668,7 +669,7 @@ class _AppColorPresetsRow extends StatelessWidget {
               message: tr('Создать пресет'),
               child: InkWell(
                 borderRadius: BorderRadius.circular(12),
-                onTap: () => showModalBottomSheet(
+                onTap: () => showGlassSheet(
                   context: context,
                   isScrollControlled: true,
                   showDragHandle: true,
@@ -704,7 +705,7 @@ class _AppColorPresetsRow extends StatelessWidget {
             onTap: () => vm.applyAppColorPreset(preset),
             onLongPress: preset.custom
                 ? () async {
-                    final del = await showDialog<bool>(
+                    final del = await showGlassDialog<bool>(
                       context: context,
                       builder: (ctx) => AlertDialog(
                         title: Text(tr('Удалить пресет «{label}»?',
@@ -1019,6 +1020,84 @@ class _BackdropTintSectionState extends State<_BackdropTintSection> {
             padding: const EdgeInsets.only(top: 6),
             child: Text(tr('Фон и поверхности интерфейса подстраиваются под цвет кнопок выбранного пресета. Золотые фоны «Чемпионов» и «Финалов» не меняются.'), style: theme.textTheme.bodySmall),
           ),
+        const SizedBox(height: 12),
+        Text(tr('Слои обоев'), style: theme.textTheme.titleSmall),
+        Text(tr('Обои — два листа: передний с прорезями и цветной задний, виден в прорезях и там, где передний «стёрт».'), style: theme.textTheme.bodySmall),
+        Text(tr('Прозрачность переднего листа: {p}%', {'p': (BackdropTint.frontOpacity * 100).round()}), style: theme.textTheme.bodySmall),
+        Slider(
+          min: 0.3,
+          max: 1.0,
+          value: BackdropTint.frontOpacity,
+          onChanged: (v) {
+            BackdropTint.save(db, newFront: v);
+            setState(() {});
+          },
+        ),
+        Text(tr('Виньетка (затемнение к краям): {p}%', {'p': (BackdropTint.vignette * 100).round()}), style: theme.textTheme.bodySmall),
+        Slider(
+          min: 0,
+          max: 1.0,
+          value: BackdropTint.vignette,
+          onChanged: (v) {
+            BackdropTint.save(db, newVignette: v);
+            setState(() {});
+          },
+        ),
+        Text(tr('Стереть передний лист'), style: theme.textTheme.bodySmall),
+        Wrap(spacing: 6, runSpacing: 4, children: [
+          for (final e in const [
+            ('none', 'Нет'),
+            ('left', 'Слева'),
+            ('right', 'Справа'),
+            ('top', 'Сверху'),
+            ('bottom', 'Снизу'),
+            ('circle', 'Круг'),
+            ('square', 'Квадрат'),
+            ('band', 'Полоса'),
+            ('triangle', 'Треугольник'),
+            ('star', 'Звезда'),
+          ])
+            ChoiceChip(
+              label: Text(tr(e.$2)),
+              selected: BackdropTint.eraseShape == e.$1,
+              onSelected: (_) {
+                BackdropTint.save(db, newEraseShape: e.$1);
+                setState(() {});
+              },
+            ),
+        ]),
+        if (BackdropTint.eraseShape != 'none') ...[
+          Text(tr('Размытие края: {p}%', {'p': (BackdropTint.eraseSoft * 100).round()}), style: theme.textTheme.bodySmall),
+          Slider(
+            min: 0,
+            max: 1,
+            value: BackdropTint.eraseSoft,
+            onChanged: (v) {
+              BackdropTint.save(db, newEraseSoft: v);
+              setState(() {});
+            },
+          ),
+          Text(tr('Сила стирания: {p}%', {'p': (BackdropTint.eraseStrength * 100).round()}), style: theme.textTheme.bodySmall),
+          Slider(
+            min: 0,
+            max: 1,
+            value: BackdropTint.eraseStrength,
+            onChanged: (v) {
+              BackdropTint.save(db, newEraseStrength: v);
+              setState(() {});
+            },
+          ),
+          Text(tr('Размер: {p}%', {'p': (BackdropTint.eraseSize * 100).round()}), style: theme.textTheme.bodySmall),
+          Slider(
+            min: 0.2,
+            max: 1.6,
+            value: BackdropTint.eraseSize,
+            onChanged: (v) {
+              BackdropTint.save(db, newEraseSize: v);
+              setState(() {});
+            },
+          ),
+        ],
         if (mode == 'manual') ...[
           const SizedBox(height: 4),
           Text(tr('Один оттенок на весь вид: фон, плитки, кнопки, карточки и контуры. Цвета пресета в этом режиме не используются.'), style: theme.textTheme.bodySmall),

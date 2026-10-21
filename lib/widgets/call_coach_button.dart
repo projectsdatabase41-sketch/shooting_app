@@ -1,3 +1,4 @@
+import 'glass_route.dart';
 import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
 
@@ -40,7 +41,7 @@ class _CallCoachButtonState extends State<CallCoachButton> {
       fetchLinkedCoachContacts(_main, _auth, _repo);
 
   Future<String?> _pick(List<ChatContact> coaches) async {
-    final id = await showModalBottomSheet<String>(
+    final id = await showGlassSheet<String>(
       context: context,
       showDragHandle: true,
       builder: (ctx) => SafeArea(

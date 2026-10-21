@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import '../widgets/app_loader.dart';
 import '../widgets/ai_gate.dart';
 import '../logic/friendly_error.dart';
@@ -328,7 +329,7 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
       List<String> questions) async {
     final ctrls = [for (final _ in questions) TextEditingController()];
     var index = 0;
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
@@ -653,7 +654,7 @@ class _PlanEditor extends StatelessWidget {
                         },
                       ),
                       onTap: () async {
-                        await showDialog(
+                        await showGlassDialog(
                             context: context,
                             builder: (_) => _StepDialog(step: step));
                         onChanged();
@@ -664,7 +665,7 @@ class _PlanEditor extends StatelessWidget {
                       final s = TaskStep(
                           title: tr('Этап {n}', {'n': stage.steps.length + 1}));
                       stage.steps.add(s);
-                      await showDialog(
+                      await showGlassDialog(
                           context: context,
                           builder: (_) => _StepDialog(step: s));
                       onChanged();
@@ -886,7 +887,7 @@ class _CoachTaskGroupScreenState extends State<_CoachTaskGroupScreen> {
     final free = widget.athletes.where((a) => !have.contains(a.id)).toList();
     if (free.isEmpty) return;
     final chosen = <String>{};
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, set) => AlertDialog(

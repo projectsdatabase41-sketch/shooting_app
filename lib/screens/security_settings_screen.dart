@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import '../widgets/app_backdrop.dart';
 import 'package:flutter/material.dart';
 
@@ -32,7 +33,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
   Future<String?> _askNewPin() async {
     final a = TextEditingController(), b = TextEditingController();
     String? error;
-    final r = await showDialog<String>(
+    final r = await showGlassDialog<String>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => AlertDialog(
@@ -66,7 +67,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
   Future<String?> _askNewPattern() async {
     String? first;
     String? error;
-    return showDialog<String>(
+    return showGlassDialog<String>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => AlertDialog(
@@ -105,7 +106,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
   Future<bool> _confirmPin() async {
     if (AppLock.method(db) == 'pattern') {
       String? error;
-      final ok = await showDialog<bool>(
+      final ok = await showGlassDialog<bool>(
         context: context,
         builder: (ctx) => StatefulBuilder(
           builder: (ctx, setS) => AlertDialog(
@@ -132,7 +133,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
     }
     final c = TextEditingController();
     String? error;
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => AlertDialog(
@@ -161,7 +162,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
   Future<void> _toggle(bool on) async {
     if (on) {
       // Как защищать вход: PIN или графический ключ.
-      final m = await showDialog<String>(
+      final m = await showGlassDialog<String>(
         context: context,
         builder: (ctx) => SimpleDialog(
           title: Text(tr('Чем защитить вход')),

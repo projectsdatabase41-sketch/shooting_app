@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import '../widgets/app_backdrop.dart';
 import '../logic/friendly_error.dart';
 import 'db_check_screen.dart';
@@ -240,7 +241,7 @@ void _showImportDialog(BuildContext context) {
     'Claude': 'https://claude.ai',
     'Qwen': 'https://chat.qwen.ai',
   };
-  showDialog(
+  showGlassDialog(
     context: context,
     builder: (ctx) => AlertDialog(
       title: Text(tr('Импорт через ИИ-ассистента')),
@@ -396,7 +397,7 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
       'task_series_notes',
     };
 
-    return showDialog<({String label, String policy, List<String> tables})>(
+    return showGlassDialog<({String label, String policy, List<String> tables})>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocal) {

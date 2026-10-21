@@ -1,3 +1,4 @@
+import 'glass_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:provider/provider.dart';
@@ -39,7 +40,7 @@ class ColorPickerDialog extends StatefulWidget {
   /// Цвет из `TargetColorScheme` (мишень, пробоины, панель правки).
   static Future<void> showForTargetKey(BuildContext context, String colorKey, String title) {
     final vm = context.read<PersonalizationViewModel>();
-    return showDialog(
+    return showGlassDialog(
       context: context,
       builder: (_) => AnimatedBuilder(
         animation: vm,
@@ -64,7 +65,7 @@ class ColorPickerDialog extends StatefulWidget {
     required Color color,
     required ValueChanged<Color> onApply,
   }) {
-    return showDialog(
+    return showGlassDialog(
       context: context,
       builder: (_) => ColorPickerDialog._(title: title, initialColor: color, onApply: onApply),
     );

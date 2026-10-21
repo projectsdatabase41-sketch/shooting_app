@@ -1,3 +1,4 @@
+import 'glass_route.dart';
 import 'package:flutter/material.dart';
 import '../i18n/i18n.dart';
 
@@ -11,7 +12,7 @@ import '../i18n/i18n.dart';
 /// "назад" внутри диалога): вызывающий код должен остаться на месте,
 /// ничего не решая.
 Future<bool?> confirmFinishedEditExit(BuildContext context) {
-  return showDialog<bool>(
+  return showGlassDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
       title: Text(tr('Хотите применить изменения?')),

@@ -1,4 +1,4 @@
-import '../theme/backdrop_tint.dart';
+import '../theme/wallpaper.dart';
 import 'package:flutter/foundation.dart' show ValueNotifier, kIsWeb;
 import 'package:flutter/material.dart';
 
@@ -54,19 +54,14 @@ class _AppBackdropState extends State<AppBackdrop> {
 
   @override
   Widget build(BuildContext context) {
-    final b = Theme.of(context).brightness;
     final w = MediaQuery.sizeOf(context).width;
     return Stack(fit: StackFit.expand, children: [
-      // Широкий экран: колонка приложения уже окна — картинка растягивается на всё окно (по центру),
-      // чтобы бесшовно продолжаться на боковых полях (см. main.dart).
+      // Обои — слои (см. theme/wallpaper.dart): рисуются по размеру всего окна и по центру,
+      // чтобы бесшовно продолжаться на боковых полях широкого экрана (main.dart).
       OverflowBox(
         minWidth: w,
         maxWidth: w,
-        child: BackdropTint.apply(
-          widget.kind,
-          Image.asset(AppBackdrop.path(widget.kind, b),
-              width: w, fit: BoxFit.cover, gaplessPlayback: true, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
-        ),
+        child: SizedBox(width: w, child: Wallpaper(kind: widget.kind)),
       ),
       widget.child,
     ]);

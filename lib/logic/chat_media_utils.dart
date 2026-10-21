@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -120,7 +121,7 @@ class ChatMediaUtils {
     final windows = !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
     if (windows) return _pickFile();
 
-    final choice = await showModalBottomSheet<int>(
+    final choice = await showGlassSheet<int>(
       context: context,
       builder: (ctx) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [

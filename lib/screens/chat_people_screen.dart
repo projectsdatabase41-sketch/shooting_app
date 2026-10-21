@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import '../widgets/app_loader.dart';
 import '../logic/friendly_error.dart';
 import 'dart:async';
@@ -20,7 +21,7 @@ import '../i18n/i18n.dart';
 /// ждущие ответа. «+» — поиск по нику среди всех участников.
 /// Подтверждение «Убрать из друзей» для одного человека.
 Future<bool> confirmRemoveFriend(BuildContext context, String nickname) async {
-  final ok = await showDialog<bool>(
+  final ok = await showGlassDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
       title: Text(tr('Убрать {name} из друзей?', {'name': nickname})),
@@ -120,7 +121,7 @@ class _ChatContactsScreenState extends State<ChatContactsScreen> {
   /// В существующую группу (где я админ — иначе сервер откажет) или новую.
   Future<void> _addToGroup() async {
     final groups = widget.repo.listContacts().where((c) => c.isGroup).toList();
-    final target = await showModalBottomSheet<Object>(
+    final target = await showGlassSheet<Object>(
       context: context,
       showDragHandle: true,
       builder: (ctx) => SafeArea(
@@ -190,7 +191,7 @@ class _ChatContactsScreenState extends State<ChatContactsScreen> {
   }
 
   Future<void> _delete() async {
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(

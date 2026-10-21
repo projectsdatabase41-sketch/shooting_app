@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import '../widgets/app_backdrop.dart';
 import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
@@ -154,7 +155,7 @@ class ChatTranslationSettingsScreen extends StatelessWidget {
     final current = prefs.translationLanguage.isEmpty
         ? languages.first.code
         : prefs.translationLanguage;
-    final picked = await showModalBottomSheet<String>(
+    final picked = await showGlassSheet<String>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
@@ -346,7 +347,7 @@ class ChatAccountSettingsScreen extends StatelessWidget {
       {super.key, required this.auth, required this.onChanged});
 
   Future<void> _delete(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Удалить аккаунт мессенджера?')),

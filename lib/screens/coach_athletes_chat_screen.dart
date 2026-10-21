@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import 'package:flutter/material.dart';
 
 import '../logic/friendly_error.dart';
@@ -97,7 +98,7 @@ class _CoachAthletesChatScreenState extends State<CoachAthletesChatScreen> {
 
   Future<void> _writeToSelected() async {
     final ctrl = TextEditingController();
-    final text = await showDialog<String>(
+    final text = await showGlassDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(

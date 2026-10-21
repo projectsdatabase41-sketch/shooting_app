@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shooting_app/theme/wallpaper.dart';
 import 'package:shooting_app/widgets/app_backdrop.dart';
 import 'package:shooting_app/widgets/tile_backdrop.dart';
 
@@ -20,12 +21,7 @@ void main() {
       ),
     ));
     await tester.pumpAndSettle();
-    await tester.runAsync(() => precacheImage(AssetImage(AppBackdrop.path('ai', Brightness.dark)), tester.element(find.byType(Image).first)));
-    await tester.pump();
-    await tester.pump();
-    // картинка загрузилась (не сработал errorBuilder)
-    final img = tester.widget<Image>(find.byType(Image).first);
-    expect(img.image, isA<AssetImage>());
+    expect(find.byType(Wallpaper), findsWidgets); // обои рисуются слоями, не картинкой
     final boundary = tester.renderObject<RenderRepaintBoundary>(find.byKey(key));
     final image = await tester.runAsync(() => boundary.toImage());
     final data = (await tester.runAsync(() => image!.toByteData(format: ui.ImageByteFormat.rawRgba)))!;

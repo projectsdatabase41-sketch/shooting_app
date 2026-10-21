@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import 'dart:async';
 import '../widgets/app_loader.dart';
 import 'dart:math' as math;
@@ -83,7 +84,7 @@ class FinalRoomView extends StatelessWidget {
   });
 
   Future<void> _openInput(BuildContext context, Map<String, dynamic> row) async {
-    await showModalBottomSheet<void>(
+    await showGlassSheet<void>(
       context: context,
       isScrollControlled: true,
       builder: (_) => _InputSheet(snapshot: snapshot, who: '${row['id']}', name: '${row['name']}', onShoot: onShoot, onUndo: onUndo),
@@ -311,12 +312,12 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Нет контактов мессенджера для приглашения'))));
       return;
     }
-    final c = await showModalBottomSheet<ChatContact>(
+    final c = await showGlassSheet<ChatContact>(
       context: context,
       builder: (ctx) => ListView(children: [for (final c in contacts) ListTile(title: Text(c.nickname), onTap: () => Navigator.pop(ctx, c))]),
     );
     if (c == null || !mounted) return;
-    final role = await showDialog<FinalsRole>(
+    final role = await showGlassDialog<FinalsRole>(
       context: context,
       builder: (ctx) => SimpleDialog(title: Text(c.nickname), children: [
         SimpleDialogOption(onPressed: () => Navigator.pop(ctx, FinalsRole.athlete), child: Text(tr('Участник'))),
@@ -584,7 +585,7 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
 
   Future<void> _leave() async {
     c.pause();
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Завершить финал?')),
@@ -764,7 +765,7 @@ Future<void> offerFinalInvites(BuildContext context, AppDataStore store) async {
     FinalsRole.helper => tr('помощником'),
     FinalsRole.coach => tr('тренером'),
   };
-  final accept = await showDialog<bool>(
+  final accept = await showGlassDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
       title: Text(tr('Приглашение в финал')),

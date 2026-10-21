@@ -1,3 +1,4 @@
+import '../widgets/glass_route.dart';
 import '../widgets/app_loader.dart';
 import '../logic/friendly_error.dart';
 import 'dart:convert';
@@ -105,7 +106,7 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
     if (_response == null) return;
 
     final noteCtrl = TextEditingController();
-    final proceed = await showDialog<bool>(
+    final proceed = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Настроить вид с ИИ')),
@@ -177,7 +178,7 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
     if (rows == null || rows.isEmpty) return;
 
     final queryCtrl = TextEditingController();
-    final query = await showDialog<String>(
+    final query = await showGlassDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Спросить ИИ')),
@@ -245,7 +246,7 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
       );
 
   void _showFullCell(String column, String value) {
-    showDialog<void>(
+    showGlassDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(column),
