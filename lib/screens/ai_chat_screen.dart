@@ -1067,8 +1067,7 @@ class _AppearanceProposalCard extends StatelessWidget {
     'hue': 'Оттенок',
     'sat': 'Насыщенность',
     'blur': 'Размытость',
-    'colorfulness': 'Цветность',
-    'vignette': 'Виньетка',
+    'transparency': 'Прозрачность маски',
   };
 
   @override

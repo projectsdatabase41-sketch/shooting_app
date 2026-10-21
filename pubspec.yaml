@@ -120,6 +120,7 @@ flutter:
     - assets/video/
     # Фоновые картинки экранов (tools/gen_backgrounds.py).
     - assets/bg/web/
+    - assets/wall/
     - assets/bg/android/
     - assets/bg/chat/
 

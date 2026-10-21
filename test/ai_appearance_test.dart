@@ -16,12 +16,12 @@ void main() {
   test('применение и откат настроек оформления', () async {
     final db = LocalDbService();
     await db.open(overridePath: ':memory:');
-    BackdropTint.save(db, newBlur: 3, newVignette: 0.35);
-    final before = BackdropTint.applyAppearance(db, {'blur': 1.0, 'vignette': 0.0});
+    BackdropTint.save(db, newBlur: 3, newMask: 0.65);
+    final before = BackdropTint.applyAppearance(db, {'blur': 1.0, 'transparency': 1.0});
     expect(BackdropTint.blur, 30);
-    expect(BackdropTint.vignette, 0);
+    expect(BackdropTint.mask, 0);
     BackdropTint.restoreAppearance(db, before);
     expect(BackdropTint.blur, closeTo(3, 0.5));
-    expect(BackdropTint.vignette, closeTo(0.35, 0.01));
+    expect(BackdropTint.mask, closeTo(0.65, 0.01));
   });
 }

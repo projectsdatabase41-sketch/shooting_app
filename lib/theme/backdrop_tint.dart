@@ -36,18 +36,24 @@ class BackdropTint {
   static double hue = baseHue; // для manual
   static double sat = 1.0; // для manual, 0..1.5
 
-  // Слои обоев (см. wallpaper.dart).
-  static double frontOpacity = 1.0; // прозрачность переднего листа с вырезами
-  static double vignette = 0.35; // затемнение к краям
-  static double blur = 3; // размытие ВСЕХ обоев, px (на ширине 400; на больших экранах масштабируется)
-  static const _kFront = 'wallpaper_front_opacity';
-  static const _kVignette = 'wallpaper_vignette';
+  // Обои: чёрно-белая картинка + цветная маска (см. wallpaper.dart).
+  static double mask = 0.55; // непрозрачность маски 0..1 (прозрачность = 1 - mask)
+  static double blur = 9; // размытие обоев: 0..30 (доля подмешанной размытой копии)
+  static const _kMask = 'wallpaper_mask';
   static const _kBlur = 'wallpaper_blur';
 
-  /// Фигуры, «стирающие» передний лист: ставятся вручную в редакторе обоев (палец — место, два пальца — размер).
-  static const eraseTypes = ['circle', 'star', 'triangle', 'square', 'band', 'left', 'right', 'top', 'bottom'];
-  static List<EraseShape> shapes = [];
-  static const _kShapes = 'wallpaper_shapes';
+  /// Цвет маски для обоев [kind] или null (режим «Исходный» - картинка без цвета).
+  /// Золотые обои («Чемпионы», «Финалы») всегда золотые.
+  static Color? maskColor(String kind) {
+    if (mode == 'off') return null;
+    final gold = exempt.contains(kind);
+    final h = gold ? 42.0 : effectiveHue();
+    final s = gold ? 0.9 : (effectiveSat() * 0.7).clamp(0.0, 1.0).toDouble();
+    return HSLColor.fromAHSL(mask.clamp(0.0, 1.0).toDouble(), h % 360, s, 0.5).toColor();
+  }
+
+  /// Прозрачность маски 0..1 (для ползунка и ИИ).
+  static double get transparency => 1 - mask;
 
   // Свои обои (фото пользователя): яркость, контраст, оттенок, виньетка.
   static bool customOn = false;
@@ -63,9 +69,6 @@ class BackdropTint {
   static const _kCContrast = 'wallpaper_custom_contrast';
   static const _kCHue = 'wallpaper_custom_hue';
   static const _kCVig = 'wallpaper_custom_vignette';
-
-  /// «Цветность»: насколько передний лист прозрачнее (0 — сплошной … 1 — просвечивает задний).
-  static double get colorfulness => ((1 - frontOpacity) / 0.7).clamp(0.0, 1.0).toDouble();
 
   /// Растёт при любом изменении параметров оформления — обои перерисовываются.
   static final revision = ValueNotifier<int>(0);
@@ -94,15 +97,8 @@ class BackdropTint {
     if (m == 'auto' || m == 'manual' || m == 'off') mode = m!;
     hue = (double.tryParse(get(_kHue) ?? '') ?? baseHue).clamp(0.0, 360.0).toDouble();
     sat = (double.tryParse(get(_kSat) ?? '') ?? 1.0).clamp(0.0, 1.5).toDouble();
-    frontOpacity = (double.tryParse(get(_kFront) ?? '') ?? 1.0).clamp(0.3, 1.0).toDouble();
-    vignette = (double.tryParse(get(_kVignette) ?? '') ?? 0.35).clamp(0.0, 1.0).toDouble();
-    blur = (double.tryParse(get(_kBlur) ?? '') ?? 3).clamp(0.0, 30.0).toDouble();
-    try {
-      final raw = get(_kShapes);
-      shapes = raw == null || raw.isEmpty ? [] : [for (final j in jsonDecode(raw) as List) EraseShape.fromJson(j as Map<String, dynamic>)];
-    } catch (_) {
-      shapes = [];
-    }
+    mask = (double.tryParse(get(_kMask) ?? '') ?? 0.55).clamp(0.0, 1.0).toDouble();
+    blur = (double.tryParse(get(_kBlur) ?? '') ?? 9).clamp(0.0, 30.0).toDouble();
     customOn = get(_kCOn) == '1';
     customB64 = get(_kCImg);
     cBright = (double.tryParse(get(_kCBright) ?? '') ?? 0).clamp(-0.5, 0.5).toDouble();
@@ -117,8 +113,7 @@ class BackdropTint {
       {String? newMode,
       double? newHue,
       double? newSat,
-      double? newFront,
-      double? newVignette,
+      double? newMask,
       double? newBlur,
       bool? newCustomOn,
       double? newCBright,
@@ -139,13 +134,9 @@ class BackdropTint {
       sat = newSat.clamp(0.0, 1.5).toDouble();
       put(_kSat, sat.toStringAsFixed(2));
     }
-    if (newFront != null) {
-      frontOpacity = newFront.clamp(0.3, 1.0).toDouble();
-      put(_kFront, frontOpacity.toStringAsFixed(2));
-    }
-    if (newVignette != null) {
-      vignette = newVignette.clamp(0.0, 1.0).toDouble();
-      put(_kVignette, vignette.toStringAsFixed(2));
+    if (newMask != null) {
+      mask = newMask.clamp(0.0, 1.0).toDouble();
+      put(_kMask, mask.toStringAsFixed(2));
     }
     if (newBlur != null) {
       blur = newBlur.clamp(0.0, 30.0).toDouble();
@@ -181,13 +172,12 @@ class BackdropTint {
         'hue': hue.round(),
         'sat': double.parse(sat.toStringAsFixed(2)),
         'blur': double.parse((blur / 30).toStringAsFixed(2)),
-        'colorfulness': double.parse(colorfulness.toStringAsFixed(2)),
-        'vignette': double.parse(vignette.toStringAsFixed(2)),
+        'transparency': double.parse(transparency.toStringAsFixed(2)),
         'custom_wallpaper': customOn,
       };
 
   /// Что ИИ может менять (ключ -> диапазон). Остальное в блоке считается негодным.
-  static const aiKeys = {'blur': (0.0, 1.0), 'colorfulness': (0.0, 1.0), 'vignette': (0.0, 1.0), 'hue': (0.0, 360.0), 'sat': (0.0, 1.5)};
+  static const aiKeys = {'blur': (0.0, 1.0), 'transparency': (0.0, 1.0), 'hue': (0.0, 360.0), 'sat': (0.0, 1.5)};
 
   /// Проверка спецификации от ИИ: известные ключи, числа в диапазонах, режим из списка, хоть одно поле.
   static bool validAppearance(Map<String, dynamic> spec) {
@@ -214,8 +204,7 @@ class BackdropTint {
         newHue: d('hue'),
         newSat: d('sat'),
         newBlur: d('blur') == null ? null : d('blur')! * 30,
-        newFront: d('colorfulness') == null ? null : 1 - 0.7 * d('colorfulness')!,
-        newVignette: d('vignette'));
+        newMask: d('transparency') == null ? null : 1 - d('transparency')!);
     return before;
   }
 
@@ -226,21 +215,7 @@ class BackdropTint {
         newHue: (snap['hue'] as num).toDouble(),
         newSat: (snap['sat'] as num).toDouble(),
         newBlur: (snap['blur'] as num).toDouble() * 30,
-        newFront: 1 - 0.7 * (snap['colorfulness'] as num).toDouble(),
-        newVignette: (snap['vignette'] as num).toDouble());
-  }
-
-  /// Фигуры стирания: предпросмотр (без записи в базу) и сохранение.
-  static void previewShapes(List<EraseShape> list) {
-    shapes = list;
-    revision.value++;
-  }
-
-  static void saveShapes(LocalDbService db, List<EraseShape> list) {
-    shapes = list;
-    db.db.execute('INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex',
-        [_kShapes, jsonEncode([for (final e in list) e.toJson()])]);
-    revision.value++;
+        newMask: 1 - (snap['transparency'] as num).toDouble());
   }
 
   /// Свои обои: файл уменьшается (длинная сторона до 1440 px), хранится в базе как JPEG; `false` — не картинка.
@@ -434,34 +409,4 @@ class BackdropTint {
 
   /// Яркость, с которой сейчас рисуется интерфейс (для выбора набора цветов тёмной/светлой темы).
   static Brightness systemBrightness() => PlatformDispatcher.instance.platformBrightness;
-}
-
-/// Фигура на переднем листе обоев, «стирающая» его мягким краем. Положение и размер — доли экрана.
-class EraseShape {
-  String type; // см. BackdropTint.eraseTypes
-  double x; // 0..1 слева направо
-  double y; // 0..1 сверху вниз
-  double size; // 0.05..1.6 от половины меньшей стороны
-  double rot; // радианы
-  double soft; // 0 — чёткий край … 1 — очень размытый
-  double strength; // 0..1
-  EraseShape({required this.type, this.x = 0.5, this.y = 0.4, this.size = 0.4, this.rot = 0, this.soft = 0.5, this.strength = 0.8});
-
-  EraseShape copy() => EraseShape(type: type, x: x, y: y, size: size, rot: rot, soft: soft, strength: strength);
-
-  Map<String, dynamic> toJson() => {'t': type, 'x': x, 'y': y, 's': size, 'r': rot, 'f': soft, 'a': strength};
-
-  factory EraseShape.fromJson(Map<String, dynamic> j) {
-    double d(String k, double def) => (j[k] as num?)?.toDouble() ?? def;
-    final t = '${j['t']}';
-    return EraseShape(
-      type: BackdropTint.eraseTypes.contains(t) ? t : 'circle',
-      x: d('x', 0.5).clamp(0.0, 1.0).toDouble(),
-      y: d('y', 0.4).clamp(0.0, 1.0).toDouble(),
-      size: d('s', 0.4).clamp(0.05, 1.6).toDouble(),
-      rot: d('r', 0),
-      soft: d('f', 0.5).clamp(0.0, 1.0).toDouble(),
-      strength: d('a', 0.8).clamp(0.0, 1.0).toDouble(),
-    );
-  }
 }

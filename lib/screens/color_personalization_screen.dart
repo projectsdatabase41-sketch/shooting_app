@@ -1,6 +1,5 @@
 import '../widgets/value_wheel.dart';
 import '../logic/avatar_utils.dart';
-import 'wallpaper_editor_screen.dart';
 import '../widgets/glass_route.dart';
 import 'dart:async';
 import '../widgets/app_backdrop.dart';
@@ -1029,10 +1028,10 @@ class _BackdropTintSectionState extends State<_BackdropTintSection> {
           },
         ),
         ValueWheel(
-          label: tr('Цветность'),
-          value: BackdropTint.colorfulness,
+          label: tr('Прозрачность маски'),
+          value: BackdropTint.transparency,
           onChanged: (v) {
-            BackdropTint.save(db, newFront: 1 - 0.7 * v);
+            BackdropTint.save(db, newMask: 1 - v);
             setState(() {});
           },
         ),
@@ -1042,27 +1041,6 @@ class _BackdropTintSectionState extends State<_BackdropTintSection> {
             child: Text(tr('Фон и поверхности интерфейса подстраиваются под цвет кнопок выбранного пресета. Золотые фоны «Чемпионов» и «Финалов» не меняются.'), style: theme.textTheme.bodySmall),
           ),
         const SizedBox(height: 12),
-        Text(tr('Слои обоев'), style: theme.textTheme.titleSmall),
-        Text(tr('Обои — два листа: передний с прорезями и цветной задний, виден в прорезях и там, где передний «стёрт».'), style: theme.textTheme.bodySmall),
-        ValueWheel(
-          label: tr('Виньетка переднего листа'),
-          value: BackdropTint.vignette,
-          onChanged: (v) {
-            BackdropTint.save(db, newVignette: v);
-            setState(() {});
-          },
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: FilledButton.tonalIcon(
-            icon: const Icon(Icons.fullscreen),
-            label: Text(tr('Редактор обоев на весь экран')),
-            onPressed: () async {
-              await Navigator.push(context, MaterialPageRoute(builder: (_) => WallpaperEditorScreen(db: db)));
-              if (mounted) setState(() {});
-            },
-          ),
-        ),
         Text(tr('Свои обои'), style: theme.textTheme.titleSmall),
         Wrap(spacing: 6, children: [
           OutlinedButton.icon(
@@ -1126,75 +1104,6 @@ class _BackdropTintSectionState extends State<_BackdropTintSection> {
               setState(() {});
             },
           ),
-        ],
-        Text(tr('Стереть передний лист: добавить фигуру'), style: theme.textTheme.bodySmall),
-        Wrap(spacing: 6, runSpacing: 4, children: [
-          for (final e in const [
-            ('left', 'Слева'),
-            ('right', 'Справа'),
-            ('top', 'Сверху'),
-            ('bottom', 'Снизу'),
-            ('circle', 'Круг'),
-            ('square', 'Квадрат'),
-            ('band', 'Полоса'),
-            ('triangle', 'Треугольник'),
-            ('star', 'Звезда'),
-          ])
-            ActionChip(
-              label: Text(tr(e.$2)),
-              onPressed: () {
-                BackdropTint.saveShapes(db, [...BackdropTint.shapes, EraseShape(type: e.$1)]);
-                setState(() {});
-              },
-            ),
-        ]),
-        if (BackdropTint.shapes.isNotEmpty) ...[
-          ValueWheel(
-            label: tr('Размытие края (последняя фигура)'),
-            value: BackdropTint.shapes.last.soft,
-            onChanged: (v) {
-              final l = [for (final e in BackdropTint.shapes) e.copy()];
-              l.last.soft = v;
-              BackdropTint.saveShapes(db, l);
-              setState(() {});
-            },
-          ),
-          ValueWheel(
-            label: tr('Сила стирания'),
-            value: BackdropTint.shapes.last.strength,
-            onChanged: (v) {
-              final l = [for (final e in BackdropTint.shapes) e.copy()];
-              l.last.strength = v;
-              BackdropTint.saveShapes(db, l);
-              setState(() {});
-            },
-          ),
-          ValueWheel(
-            label: tr('Размер'),
-            value: (BackdropTint.shapes.last.size - 0.05) / 1.55,
-            onChanged: (v) {
-              final l = [for (final e in BackdropTint.shapes) e.copy()];
-              l.last.size = 0.05 + v * 1.55;
-              BackdropTint.saveShapes(db, l);
-              setState(() {});
-            },
-          ),
-          Row(children: [
-            TextButton(
-              onPressed: () {
-                BackdropTint.saveShapes(db, BackdropTint.shapes.sublist(0, BackdropTint.shapes.length - 1));
-                setState(() {});
-              },
-              child: Text(tr('Убрать последнюю')),
-            ),
-            TextButton(
-              onPressed: () {
-                BackdropTint.saveShapes(db, []);
-                setState(() {});
-              },
-              child: Text(tr('Очистить')),
-            ),
-          ]),
         ],
         if (mode == 'manual') ...[
           const SizedBox(height: 4),
