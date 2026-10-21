@@ -25,4 +25,25 @@ void main() {
     expect(AppLock.isEnabled(db), isFalse);
     expect(AppLock.lockoutLeft(db), isNull);
   });
+
+  test('графический ключ: проверка формата, хранение хешем, способ входа, смена на PIN', () async {
+    expect(AppLock.validPattern('0124'), isTrue);
+    expect(AppLock.validPattern('012'), isFalse); // меньше 4 точек
+    expect(AppLock.validPattern('0120'), isFalse); // повтор точки
+    expect(AppLock.validPattern('01239'), isFalse); // нет такой точки
+    final db = LocalDbService();
+    await db.open(overridePath: ':memory:');
+    expect(AppLock.method(db), 'pin');
+    await AppLock.setPattern(db, '01258');
+    expect(AppLock.method(db), 'pattern');
+    expect(AppLock.isEnabled(db), isTrue);
+    final stored = db.db.select("SELECT hex FROM color_prefs WHERE key = 'applock_pin'").first['hex'] as String;
+    expect(stored.contains('01258'), isFalse);
+    expect(await AppLock.verify(db, '01258'), isTrue);
+    expect(await AppLock.verify(db, '85210'), isFalse);
+    await AppLock.setPin(db, '4321');
+    expect(AppLock.method(db), 'pin');
+    expect(await AppLock.verify(db, '4321'), isTrue);
+    expect(AppLock.biometricAuto(db), isFalse); // системное окно отпечатка само не выезжает
+  });
 }

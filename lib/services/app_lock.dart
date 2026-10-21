@@ -21,6 +21,8 @@ class AppLock {
   static const _untilKey = 'applock_until';
   static const _iterations = 40000;
   static const _lenKey = 'applock_len';
+  static const _methodKey = 'applock_method';
+  static const _bioAutoKey = 'applock_bio_auto';
 
   /// Экран блокировки сейчас показан.
   static final locked = ValueNotifier<bool>(false);
@@ -36,6 +38,14 @@ class AppLock {
 
   static bool isEnabled(LocalDbService db) => (_get(db, _pinKey) ?? '').isNotEmpty;
 
+  /// Чем вход защищён: 'pin' или 'pattern' (графический ключ).
+  static String method(LocalDbService db) => _get(db, _methodKey) == 'pattern' ? 'pattern' : 'pin';
+
+  /// Сразу показывать системное окно отпечатка при открытии (по умолчанию нет: сначала наш экран,
+  /// отпечаток — по кнопке). Окно отпечатка рисует сама система, заменить его нельзя.
+  static bool biometricAuto(LocalDbService db) => _get(db, _bioAutoKey) == '1';
+  static void setBiometricAuto(LocalDbService db, bool v) => _put(db, _bioAutoKey, v ? '1' : '0');
+
   static bool biometricOn(LocalDbService db) => isEnabled(db) && _get(db, _bioKey) == '1';
   static void setBiometric(LocalDbService db, bool v) => _put(db, _bioKey, v ? '1' : '0');
 
@@ -48,7 +58,16 @@ class AppLock {
 
   static bool validPin(String pin) => RegExp(r'^\d{4,8}$').hasMatch(pin);
 
+  /// Графический ключ — номера точек 0…8 подряд, без повторов, от 4 до 9 точек.
+  static bool validPattern(String p) => RegExp(r'^[0-8]{4,9}$').hasMatch(p) && p.split('').toSet().length == p.length;
+
+  static Future<void> setPattern(LocalDbService db, String pattern) async {
+    await setPin(db, pattern);
+    _put(db, _methodKey, 'pattern');
+  }
+
   static Future<void> setPin(LocalDbService db, String pin) async {
+    _put(db, _methodKey, 'pin');
     final salt = Kdf.randomBytes(16);
     final hash = await Kdf.derive(pin, salt, iterations: _iterations);
     _put(db, _pinKey, SecretBox.seal('v1:${base64Encode(salt)}:${base64Encode(hash)}'));

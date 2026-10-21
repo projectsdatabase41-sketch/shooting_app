@@ -4,6 +4,7 @@ import '../i18n/i18n.dart';
 import '../services/app_lock.dart';
 import '../services/local_db_service.dart';
 import '../widgets/glass_pill.dart';
+import '../widgets/pattern_pad.dart';
 
 /// «Защита входа»: PIN при запуске приложения, вход по биометрии, время до повторной блокировки.
 class SecuritySettingsScreen extends StatefulWidget {
@@ -60,8 +61,74 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
     return r;
   }
 
+  /// Графический ключ дважды. `null` — отмена.
+  Future<String?> _askNewPattern() async {
+    String? first;
+    String? error;
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          title: Text(first == null ? tr('Нарисуйте ключ') : tr('Повторите ключ')),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            PatternPad(
+              size: 240,
+              error: error != null,
+              onComplete: (seq) {
+                if (!AppLock.validPattern(seq)) {
+                  setS(() => error = tr('От 4 до 9 разных точек'));
+                } else if (first == null) {
+                  setS(() {
+                    first = seq;
+                    error = null;
+                  });
+                } else if (first == seq) {
+                  Navigator.pop(ctx, seq);
+                } else {
+                  setS(() {
+                    first = null;
+                    error = tr('Не совпало, начните заново');
+                  });
+                }
+              },
+            ),
+            SizedBox(height: 24, child: Text(error ?? '', style: TextStyle(color: Theme.of(ctx).colorScheme.error))),
+          ]),
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Отмена')))],
+        ),
+      ),
+    );
+  }
+
   /// Подтверждение текущим PIN (перед отключением и сменой).
   Future<bool> _confirmPin() async {
+    if (AppLock.method(db) == 'pattern') {
+      String? error;
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setS) => AlertDialog(
+            title: Text(tr('Текущий ключ')),
+            content: Column(mainAxisSize: MainAxisSize.min, children: [
+              PatternPad(
+                size: 240,
+                error: error != null,
+                onComplete: (seq) async {
+                  if (await AppLock.verify(db, seq)) {
+                    if (ctx.mounted) Navigator.pop(ctx, true);
+                  } else {
+                    setS(() => error = AppLock.lockoutLeft(db) != null ? tr('Слишком много попыток, подождите') : tr('Неверный ключ'));
+                  }
+                },
+              ),
+              SizedBox(height: 24, child: Text(error ?? '', style: TextStyle(color: Theme.of(ctx).colorScheme.error))),
+            ]),
+            actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Отмена')))],
+          ),
+        ),
+      );
+      return ok == true;
+    }
     final c = TextEditingController();
     String? error;
     final ok = await showDialog<bool>(
@@ -92,9 +159,27 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
 
   Future<void> _toggle(bool on) async {
     if (on) {
-      final pin = await _askNewPin();
-      if (pin == null) return;
-      await AppLock.setPin(db, pin);
+      // Как защищать вход: PIN или графический ключ.
+      final m = await showDialog<String>(
+        context: context,
+        builder: (ctx) => SimpleDialog(
+          title: Text(tr('Чем защитить вход')),
+          children: [
+            SimpleDialogOption(onPressed: () => Navigator.pop(ctx, 'pin'), child: Text(tr('PIN-код (цифры)'))),
+            SimpleDialogOption(onPressed: () => Navigator.pop(ctx, 'pattern'), child: Text(tr('Графический ключ'))),
+          ],
+        ),
+      );
+      if (m == null || !mounted) return;
+      if (m == 'pattern') {
+        final p = await _askNewPattern();
+        if (p == null) return;
+        await AppLock.setPattern(db, p);
+      } else {
+        final pin = await _askNewPin();
+        if (pin == null) return;
+        await AppLock.setPin(db, pin);
+      }
     } else {
       if (!await _confirmPin()) return;
       AppLock.disable(db);
@@ -104,12 +189,18 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
 
   Future<void> _change() async {
     if (!await _confirmPin()) return;
-    final pin = await _askNewPin();
-    if (pin == null) return;
-    await AppLock.setPin(db, pin);
+    if (AppLock.method(db) == 'pattern') {
+      final p = await _askNewPattern();
+      if (p == null) return;
+      await AppLock.setPattern(db, p);
+    } else {
+      final pin = await _askNewPin();
+      if (pin == null) return;
+      await AppLock.setPin(db, pin);
+    }
     if (mounted) {
       setState(() {});
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('PIN изменён'))));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Защита входа изменена'))));
     }
   }
 
@@ -127,15 +218,15 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
         children: [
           SwitchListTile(
             secondary: const Icon(Icons.lock_outline),
-            title: Text(tr('PIN при входе')),
-            subtitle: Text(tr('Без PIN приложение не откроется. Забытый PIN не восстановить — придётся переустановить приложение.')),
+            title: Text(tr('Защита входа')),
+            subtitle: Text(AppLock.isEnabled(db) ? (AppLock.method(db) == 'pattern' ? tr('Графический ключ') : tr('PIN-код')) : tr('PIN-код или графический ключ. Забытый не восстановить — придётся переустановить приложение.')),
             value: enabled,
             onChanged: _toggle,
           ),
           if (enabled) ...[
             ListTile(
               leading: const Icon(Icons.password_outlined),
-              title: Text(tr('Сменить PIN')),
+              title: Text(AppLock.method(db) == 'pattern' ? tr('Сменить ключ') : tr('Сменить PIN')),
               onTap: _change,
             ),
             SwitchListTile(
@@ -151,6 +242,17 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                       if (mounted) setState(() {});
                     },
             ),
+            if (AppLock.biometricOn(db))
+              SwitchListTile(
+                secondary: const Icon(Icons.open_in_new),
+                title: Text(tr('Сразу показывать окно отпечатка')),
+                subtitle: Text(tr('Окно рисует сама система (снизу), заменить его нельзя. Выключено: сначала наш экран, отпечаток — по кнопке.')),
+                value: AppLock.biometricAuto(db),
+                onChanged: (v) {
+                  AppLock.setBiometricAuto(db, v);
+                  setState(() {});
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.timer_outlined),
               title: Text(tr('Просить вход снова')),

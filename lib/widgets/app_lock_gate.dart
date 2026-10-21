@@ -7,6 +7,7 @@ import '../i18n/i18n.dart';
 import '../services/app_lock.dart';
 import '../services/local_db_service.dart';
 import 'app_backdrop.dart';
+import 'pattern_pad.dart';
 
 /// Закрывает приложение экраном ввода PIN / биометрии, пока оно заблокировано
 /// (при запуске и после сворачивания на заданное в настройках время).
@@ -80,7 +81,7 @@ class _LockScreenState extends State<_LockScreen> {
     _tick = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted && AppLock.lockoutLeft(widget.db) != null) setState(() {});
     });
-    if (AppLock.biometricOn(widget.db)) WidgetsBinding.instance.addPostFrameCallback((_) => _biometric());
+    if (AppLock.biometricOn(widget.db) && AppLock.biometricAuto(widget.db)) WidgetsBinding.instance.addPostFrameCallback((_) => _biometric());
   }
 
   @override
@@ -91,6 +92,24 @@ class _LockScreenState extends State<_LockScreen> {
 
   Future<void> _biometric() async {
     if (await AppLock.biometricAuth(tr('Вход в Nexus'))) AppLock.locked.value = false;
+  }
+
+  Future<void> _pattern(String seq) async {
+    if (_busy || AppLock.lockoutLeft(widget.db) != null) return;
+    if (seq.length < 4) {
+      setState(() => _error = tr('Соедините минимум 4 точки'));
+      return;
+    }
+    _busy = true;
+    final ok = await AppLock.verify(widget.db, seq);
+    _busy = false;
+    if (!mounted) return;
+    if (ok) {
+      AppLock.locked.value = false;
+    } else {
+      HapticFeedback.heavyImpact();
+      setState(() => _error = tr('Неверный ключ'));
+    }
   }
 
   Future<void> _digit(String d) async {
@@ -150,8 +169,9 @@ class _LockScreenState extends State<_LockScreen> {
               const SizedBox(height: 12),
               Text('Nexus', style: theme.textTheme.titleLarge),
               const SizedBox(height: 4),
-              Text(tr('Введите PIN'), style: theme.textTheme.bodyMedium),
+              Text(AppLock.method(widget.db) == 'pattern' ? tr('Нарисуйте графический ключ') : tr('Введите PIN'), style: theme.textTheme.bodyMedium),
               const SizedBox(height: 16),
+              if (AppLock.method(widget.db) == 'pin')
               Row(mainAxisSize: MainAxisSize.min, children: [
                 for (var i = 0; i < AppLock.pinLength(widget.db); i++)
                   Container(
@@ -173,6 +193,14 @@ class _LockScreenState extends State<_LockScreen> {
                   ),
                 ),
               ),
+              if (AppLock.method(widget.db) == 'pattern') ...[
+                PatternPad(onComplete: _pattern, error: _error != null),
+                if (AppLock.biometricOn(widget.db))
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: TextButton.icon(onPressed: _biometric, icon: const Icon(Icons.fingerprint), label: Text(tr('Отпечаток / лицо'))),
+                  ),
+              ] else ...[
               for (final row in const [
                 ['1', '2', '3'],
                 ['4', '5', '6'],
@@ -186,6 +214,7 @@ class _LockScreenState extends State<_LockScreen> {
                       if (_pin.isNotEmpty) _pin = _pin.substring(0, _pin.length - 1);
                     })),
               ]),
+              ],
             ]),
           ),
         ),
