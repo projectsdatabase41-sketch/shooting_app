@@ -1,3 +1,4 @@
+import 'backdrop_tint.dart';
 import 'app_transitions.dart';
 import 'package:flutter/material.dart';
 
@@ -61,7 +62,9 @@ class AppTheme {
           buttonColor: buttonColor,
           buttonTextColor: buttonTextColor);
 
-  static ColorScheme _scheme(Brightness brightness) {
+  static ColorScheme _scheme(Brightness brightness) => BackdropTint.tintScheme(_baseScheme(brightness));
+
+  static ColorScheme _baseScheme(Brightness brightness) {
     final base =
         ColorScheme.fromSeed(seedColor: _slate, brightness: brightness);
     if (brightness == Brightness.light) {

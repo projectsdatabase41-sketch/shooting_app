@@ -1,3 +1,4 @@
+import 'dart:async';
 import '../widgets/app_backdrop.dart';
 import '../theme/backdrop_tint.dart';
 import '../logic/friendly_error.dart';
@@ -974,6 +975,22 @@ class _BackdropTintSection extends StatefulWidget {
 }
 
 class _BackdropTintSectionState extends State<_BackdropTintSection> {
+  Timer? _debounce;
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  /// Картинки фона меняются сразу; тему (цвета интерфейса) пересобираем с небольшой задержкой.
+  void _changed() {
+    setState(() {});
+    final vm = context.read<PersonalizationViewModel>();
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 120), vm.refreshTint);
+  }
+
   @override
   Widget build(BuildContext context) {
     final db = context.read<AppDataStore>().db;
@@ -992,14 +1009,19 @@ class _BackdropTintSectionState extends State<_BackdropTintSection> {
             ButtonSegment(value: 'off', label: Text(tr('Исходный'))),
           ],
           selected: {mode},
-          onSelectionChanged: (v) => setState(() => BackdropTint.save(db, newMode: v.first)),
+          onSelectionChanged: (v) {
+            BackdropTint.save(db, newMode: v.first);
+            _changed();
+          },
         ),
         if (mode == 'auto')
           Padding(
             padding: const EdgeInsets.only(top: 6),
-            child: Text(tr('Фон подстраивается под цвет кнопок выбранного пресета. Золотые фоны «Чемпионов» и «Финалов» не меняются.'), style: theme.textTheme.bodySmall),
+            child: Text(tr('Фон и поверхности интерфейса подстраиваются под цвет кнопок выбранного пресета. Золотые фоны «Чемпионов» и «Финалов» не меняются.'), style: theme.textTheme.bodySmall),
           ),
         if (mode == 'manual') ...[
+          const SizedBox(height: 4),
+          Text(tr('Один оттенок на весь вид: фон, плитки, кнопки, карточки и контуры. Цвета пресета в этом режиме не используются.'), style: theme.textTheme.bodySmall),
           const SizedBox(height: 8),
           Text(tr('Оттенок: {h}°', {'h': BackdropTint.hue.round()}), style: theme.textTheme.bodySmall),
           // Радужная полоса под ползунком — видно, какой цвет получится.
@@ -1018,7 +1040,10 @@ class _BackdropTintSectionState extends State<_BackdropTintSection> {
               value: BackdropTint.hue,
               activeColor: Colors.transparent,
               inactiveColor: Colors.transparent,
-              onChanged: (v) => setState(() => BackdropTint.save(db, newHue: v)),
+              onChanged: (v) {
+                BackdropTint.save(db, newHue: v);
+                _changed();
+              },
             ),
           ]),
           Text(tr('Насыщенность: {s}%', {'s': (BackdropTint.sat * 100).round()}), style: theme.textTheme.bodySmall),
@@ -1026,14 +1051,18 @@ class _BackdropTintSectionState extends State<_BackdropTintSection> {
             min: 0,
             max: 1.5,
             value: BackdropTint.sat,
-            onChanged: (v) => setState(() => BackdropTint.save(db, newSat: v)),
+            onChanged: (v) {
+              BackdropTint.save(db, newSat: v);
+              _changed();
+            },
           ),
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton(
-              onPressed: () => setState(() {
+              onPressed: () {
                 BackdropTint.save(db, newHue: BackdropTint.baseHue, newSat: 1.0);
-              }),
+                _changed();
+              },
               child: Text(tr('Сбросить')),
             ),
           ),

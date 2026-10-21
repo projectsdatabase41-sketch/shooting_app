@@ -384,14 +384,14 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
         selector: (_, vm) => (
           vm.themeMode,
           (
-            vm.appBackgroundFor(Brightness.light),
-            vm.appButtonFor(Brightness.light),
-            vm.appButtonTextFor(Brightness.light)
+            vm.effectiveBackground(Brightness.light),
+            vm.effectiveButton(Brightness.light),
+            vm.effectiveButtonText(Brightness.light)
           ),
           (
-            vm.appBackgroundFor(Brightness.dark),
-            vm.appButtonFor(Brightness.dark),
-            vm.appButtonTextFor(Brightness.dark)
+            vm.effectiveBackground(Brightness.dark),
+            vm.effectiveButton(Brightness.dark),
+            vm.effectiveButtonText(Brightness.dark)
           ),
         ),
         builder: (context, data, _) {

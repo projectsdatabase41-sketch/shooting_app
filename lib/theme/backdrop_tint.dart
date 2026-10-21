@@ -89,13 +89,21 @@ class BackdropTint {
   }
 
   static ColorFilter? _build() {
+    final t = current();
+    return t == null ? null : ColorFilter.matrix(matrix(t.shift, t.sat));
+  }
+
+  /// Действующий сдвиг оттенка и насыщенность для ВСЕГО оформления (картинки фона, цвета
+  /// интерфейса); `null` — без изменений.
+  static ({double shift, double sat})? current() {
     if (mode == 'off') return null;
     if (mode == 'manual') {
       final shift = _norm180(hue - baseHue);
       if (shift.abs() < 0.5 && (sat - 1).abs() < 0.01) return null;
-      return ColorFilter.matrix(matrix(shift, sat));
+      return (shift: shift, sat: sat);
     }
     // auto
+    if (_button == null && _buttonText == null) return null; // пресет не выбран — исходное оформление
     Color? accent;
     for (final c in [_button, _buttonText]) {
       if (c != null && HSLColor.fromColor(c).saturation >= 0.25) {
@@ -103,12 +111,58 @@ class BackdropTint {
         break;
       }
     }
-    if (_button == null && _buttonText == null) return null; // пресет не выбран — исходные картинки
-    if (accent == null) return ColorFilter.matrix(matrix(0, 0.45)); // нейтральный пресет: приглушаем
+    if (accent == null) return (shift: 0, sat: 0.45); // нейтральный пресет: приглушаем
     final hsl = HSLColor.fromColor(accent);
-    final shift = _norm180(hsl.hue - baseHue);
-    final s = (hsl.saturation * 1.5).clamp(0.45, 1.15).toDouble();
-    return ColorFilter.matrix(matrix(shift, s));
+    return (shift: _norm180(hsl.hue - baseHue), sat: (hsl.saturation * 1.5).clamp(0.45, 1.15).toDouble());
+  }
+
+  /// Цвет, прогнанный через тот же сдвиг оттенка и насыщенность, что и картинки фона.
+  static Color tint(Color c, ({double shift, double sat}) t) {
+    final m = matrix(t.shift, t.sat);
+    final r = c.r, g = c.g, b = c.b;
+    double ch(double v) => v.clamp(0.0, 1.0).toDouble();
+    return Color.from(
+      alpha: c.a,
+      red: ch(m[0] * r + m[1] * g + m[2] * b),
+      green: ch(m[5] * r + m[6] * g + m[7] * b),
+      blue: ch(m[10] * r + m[11] * g + m[12] * b),
+    );
+  }
+
+  /// Цветовая схема интерфейса с общим оттенком: сине-серое семейство (основной цвет, поверхности,
+  /// контуры) смещается вместе с фоном; янтарный акцент, зелёный и красный (ошибка) не трогаем.
+  static ColorScheme tintScheme(ColorScheme cs) {
+    final t = current();
+    if (t == null) return cs;
+    Color k(Color c) => tint(c, t);
+    return cs.copyWith(
+      primary: k(cs.primary),
+      onPrimary: k(cs.onPrimary),
+      primaryContainer: k(cs.primaryContainer),
+      onPrimaryContainer: k(cs.onPrimaryContainer),
+      surface: k(cs.surface),
+      onSurface: k(cs.onSurface),
+      surfaceContainerLowest: k(cs.surfaceContainerLowest),
+      surfaceContainerLow: k(cs.surfaceContainerLow),
+      surfaceContainer: k(cs.surfaceContainer),
+      surfaceContainerHigh: k(cs.surfaceContainerHigh),
+      surfaceContainerHighest: k(cs.surfaceContainerHighest),
+      onSurfaceVariant: k(cs.onSurfaceVariant),
+      outline: k(cs.outline),
+      outlineVariant: k(cs.outlineVariant),
+    );
+  }
+
+  /// Ручной режим: основные цвета интерфейса (фон, кнопки, текст на кнопках) собираются из одного
+  /// оттенка — вместе с картинками получается цельный вид. В авто-режиме `null` (работают цвета пресета).
+  static ({Color background, Color button, Color buttonText})? derivedColors(Brightness b) {
+    if (mode != 'manual') return null;
+    final s = sat.clamp(0.0, 1.5).toDouble();
+    double q(double v) => (v * s).clamp(0.0, 1.0).toDouble();
+    Color hsl(double sat0, double l) => HSLColor.fromAHSL(1, hue % 360, q(sat0), l).toColor();
+    return b == Brightness.dark
+        ? (background: hsl(0.22, 0.06), button: hsl(0.42, 0.30), buttonText: hsl(0.50, 0.90))
+        : (background: hsl(0.30, 0.965), button: hsl(0.48, 0.34), buttonText: Colors.white);
   }
 
   /// Матрица 4×5: насыщенность [s], затем поворот оттенка на [hueDeg] градусов (сохраняет яркость).

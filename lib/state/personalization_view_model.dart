@@ -202,6 +202,14 @@ class PersonalizationViewModel extends ChangeNotifier {
     BackdropTint.setAccent(appButtonFor(b), appButtonTextFor(b));
   }
 
+  /// Цвета для темы: в ручном режиме оттенка — производные от одного оттенка, иначе цвета пресета.
+  Color? effectiveBackground(Brightness b) => BackdropTint.derivedColors(b)?.background ?? appBackgroundFor(b);
+  Color? effectiveButton(Brightness b) => BackdropTint.derivedColors(b)?.button ?? appButtonFor(b);
+  Color? effectiveButtonText(Brightness b) => BackdropTint.derivedColors(b)?.buttonText ?? appButtonTextFor(b);
+
+  /// Оттенок/режим фона изменили — пересобрать тему.
+  void refreshTint() => notifyListeners();
+
   void applyAppColorPreset(AppColorPreset preset) {
     final b = preset.dark ? Brightness.dark : Brightness.light;
     for (final (base, c) in [
