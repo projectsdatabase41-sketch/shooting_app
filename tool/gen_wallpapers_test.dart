@@ -13,7 +13,7 @@ import 'gen_wallpapers_painter.dart';
 Color g(double l) => HSLColor.fromAHSL(1, 0, 0, l).toColor();
 
 Future<void> render(String kind, bool dark, bool blurred) async {
-  final w = blurred ? 270 : 720, h = blurred ? 540 : 1440;
+  final w = blurred ? 360 : 1440, h = blurred ? 720 : 2880;
   final style = WallpaperStyle(
     front: g(dark ? 0.07 : 0.96),
     backDark: g(dark ? 0.30 : 0.70),
@@ -32,7 +32,7 @@ Future<void> render(String kind, bool dark, bool blurred) async {
     final v = bd.getUint8(i * 4);
     gray.setPixelRgb(i % w, i ~/ w, v, v, v);
   }
-  File('assets/wall/${kind}_${dark ? 'dark' : 'light'}${blurred ? '_b' : ''}.jpg').writeAsBytesSync(img.encodeJpg(gray, quality: blurred ? 80 : 86));
+  File('assets/wall/${kind}_${dark ? 'dark' : 'light'}${blurred ? '_b' : ''}.jpg').writeAsBytesSync(img.encodeJpg(gray, quality: blurred ? 80 : 90));
 }
 
 void main() {

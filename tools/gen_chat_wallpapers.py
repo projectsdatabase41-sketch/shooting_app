@@ -1,6 +1,6 @@
 """Обои переписки: цветные градиенты с узором из простых значков (в духе Telegram).
 Запуск из корня репозитория: python tools/gen_chat_wallpapers.py
-Результат: assets/bg/chat/<id>.webp (720x1280). Список id/названий — в ChatPreferences.imageWallpapers.
+Результат: assets/bg/chat/<id>.webp (1440x2560). Список id/названий — в ChatPreferences.imageWallpapers.
 """
 import math
 import os
@@ -8,7 +8,7 @@ import random
 
 from PIL import Image, ImageChops, ImageDraw
 
-W, H, SS = 720, 1280, 2
+W, H, SS = 1440, 2560, 2
 
 # id: (верх-лево, низ-право, тёмный фон?, узор)
 SETS = {

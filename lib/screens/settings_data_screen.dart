@@ -1,3 +1,4 @@
+import '../services/modules_settings.dart';
 import '../widgets/glass_route.dart';
 import '../widgets/app_backdrop.dart';
 import '../logic/friendly_error.dart';
@@ -631,6 +632,7 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
               ),
             ),
           ),
+        if (ModulesSettings.isOn(store.db, AppModule.messenger))
         ListTile(
           leading: const Icon(Icons.how_to_reg_outlined),
           title: Text(tr('Добавить тренера')),

@@ -93,6 +93,7 @@ class SettingsScreen extends StatelessWidget {
                   builder: (_) => const SettingsAppearanceScreen()),
             ),
           ),
+          if (ModulesSettings.isOn(store.db, AppModule.assistant))
           ListTile(
             leading: const Icon(Icons.auto_awesome_outlined),
             title: Text(tr('ИИ Ассистент')),

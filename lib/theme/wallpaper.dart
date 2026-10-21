@@ -14,10 +14,30 @@ class Wallpaper extends StatelessWidget {
   final String kind;
   const Wallpaper({super.key, required this.kind});
 
+  /// Ширина декодирования: по ширине экрана в пикселях (без лишней памяти и ресайза на лету).
+  static int cacheWidthFor(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    return (mq.size.width * mq.devicePixelRatio).round().clamp(360, 1440);
+  }
+
+  /// Кладёт в кэш картинки главного экрана заранее - первый показ без декодирования.
+  static Future<void> warmUp(BuildContext context) async {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final w = cacheWidthFor(context);
+    for (final k in const ['home', 'settings']) {
+      final name = 'assets/wall/${k}_${dark ? 'dark' : 'light'}';
+      for (final suffix in const ['.jpg', '_b.jpg']) {
+        if (!context.mounted) return;
+        await precacheImage(ResizeImage(AssetImage('$name$suffix'), width: w), context).catchError((_) {});
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final name = 'assets/wall/${kind}_${dark ? 'dark' : 'light'}';
+    final cw = cacheWidthFor(context);
     return RepaintBoundary(
       child: ValueListenableBuilder<int>(
         valueListenable: BackdropTint.revision,
@@ -29,9 +49,9 @@ class Wallpaper extends StatelessWidget {
           final blur = (BackdropTint.blur / 30).clamp(0.0, 1.0).toDouble();
           final mask = BackdropTint.maskColor(kind);
           Widget stack = Stack(fit: StackFit.expand, children: [
-            Image.asset('$name.jpg', fit: BoxFit.cover, gaplessPlayback: true, filterQuality: FilterQuality.medium),
+            Image.asset('$name.jpg', fit: BoxFit.cover, gaplessPlayback: true, filterQuality: FilterQuality.medium, cacheWidth: cw),
             if (blur > 0.01)
-              Opacity(opacity: blur, child: Image.asset('${name}_b.jpg', fit: BoxFit.cover, gaplessPlayback: true, filterQuality: FilterQuality.medium)),
+              Opacity(opacity: blur, child: Image.asset('${name}_b.jpg', fit: BoxFit.cover, gaplessPlayback: true, filterQuality: FilterQuality.medium, cacheWidth: cw)),
           ]);
           if (mask != null) stack = ColorFiltered(colorFilter: ColorFilter.mode(mask, BlendMode.color), child: stack);
           return stack;

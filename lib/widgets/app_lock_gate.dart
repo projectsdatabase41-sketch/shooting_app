@@ -1,3 +1,6 @@
+import '../theme/wallpaper.dart';
+import 'splash_gate.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -24,15 +27,33 @@ class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
   /// Приложение уже открывали после запуска. Пока нет — содержимое (и заставка с анимацией) даже не
   /// строится: анимация входа начинается ПОСЛЕ ввода PIN / отпечатка.
   bool _everUnlocked = false;
+
+  /// Экран ввода показан. В вебе его включаем после заставки: пока она идёт, приложение под ней уже
+  /// строится и прогревается, и после ввода пароля нет задержки.
+  bool _lockShown = true;
+  Timer? _lockTimer;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     AppLock.lockOnStart(widget.db);
+    // Обои главного экрана - в кэш заранее, пока приложение грузится.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) Wallpaper.warmUp(context);
+    });
+    if (kIsWeb && AppLock.locked.value && SplashGate.isOn(widget.db)) {
+      _everUnlocked = true; // содержимое (с заставкой) строится сразу
+      _lockShown = false;
+      _lockTimer = Timer(const Duration(milliseconds: SplashGate.maxMs + 80), () {
+        if (mounted) setState(() => _lockShown = true);
+      });
+    }
   }
 
   @override
   void dispose() {
+    _lockTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -55,7 +76,7 @@ class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
             // Пока заперто, содержимое не получает ни касаний, ни фокуса.
             if (_everUnlocked)
               Positioned.fill(child: ExcludeFocus(excluding: locked, child: IgnorePointer(ignoring: locked, child: widget.child))),
-            if (locked) Positioned.fill(child: _LockScreen(db: widget.db)),
+            if (locked && _lockShown) Positioned.fill(child: _LockScreen(db: widget.db)),
           ]);
         },
       );
@@ -141,18 +162,67 @@ class _LockScreenState extends State<_LockScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final left = AppLock.lockoutLeft(widget.db);
+    final cs = theme.colorScheme;
+    // Круглая клавиша с объёмом (светлая грань сверху, тень снизу) и мягким свечением цвета приложения.
     Widget key(String label, {VoidCallback? onTap, IconData? icon}) => Padding(
           padding: const EdgeInsets.all(6),
-          child: SizedBox(
-            width: 72,
-            height: 72,
-            child: TextButton(
-              style: TextButton.styleFrom(shape: const CircleBorder(), backgroundColor: theme.colorScheme.surfaceContainerHighest),
-              onPressed: onTap,
-              child: icon != null ? Icon(icon) : Text(label, style: theme.textTheme.headlineSmall),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color.lerp(cs.surfaceContainerHighest, Colors.white, 0.14)!, Color.lerp(cs.surfaceContainerHighest, Colors.black, 0.22)!],
+              ),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+              boxShadow: [
+                BoxShadow(color: cs.primary.withValues(alpha: 0.38), blurRadius: 16, spreadRadius: 0.5),
+                BoxShadow(color: Colors.black.withValues(alpha: 0.45), blurRadius: 6, offset: const Offset(0, 4)),
+              ],
+            ),
+            child: SizedBox(
+              width: 72,
+              height: 72,
+              child: TextButton(
+                style: TextButton.styleFrom(shape: const CircleBorder(), padding: EdgeInsets.zero),
+                onPressed: onTap,
+                child: icon != null
+                    ? Icon(icon, size: 36)
+                    : Text(label, style: theme.textTheme.headlineSmall?.copyWith(fontSize: (theme.textTheme.headlineSmall?.fontSize ?? 24) * 1.5, fontWeight: FontWeight.w600)),
+              ),
             ),
           ),
         );
+    final header = Column(mainAxisSize: MainAxisSize.min, children: [
+      const Icon(Icons.lock_outline, size: 40),
+      const SizedBox(height: 12),
+      Text('Nexus', style: theme.textTheme.titleLarge),
+      const SizedBox(height: 4),
+      Text(AppLock.method(widget.db) == 'pattern' ? tr('Нарисуйте графический ключ') : tr('Введите PIN'), style: theme.textTheme.bodyMedium),
+      const SizedBox(height: 16),
+      if (AppLock.method(widget.db) == 'pin')
+        Row(mainAxisSize: MainAxisSize.min, children: [
+          for (var i = 0; i < AppLock.pinLength(widget.db); i++)
+            Container(
+              width: 12,
+              height: 12,
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: i < _pin.length ? theme.colorScheme.primary : theme.colorScheme.outlineVariant,
+              ),
+            ),
+        ]),
+      SizedBox(
+        height: 28,
+        child: Center(
+          child: Text(
+            left != null ? tr('Слишком много попыток. Подождите {s} с', {'s': left.inSeconds + 1}) : (_error ?? ''),
+            style: TextStyle(color: theme.colorScheme.error),
+          ),
+        ),
+      ),
+    ]);
     // Фон экрана блокировки — обои приложения под лёгким затемнением: за системным окном
     // отпечатка не пустота, а привычный фон.
     return Material(
@@ -162,37 +232,10 @@ class _LockScreenState extends State<_LockScreen> {
         child: ColoredBox(
           color: theme.scaffoldBackgroundColor.withValues(alpha: 0.45),
           child: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.lock_outline, size: 40),
-              const SizedBox(height: 12),
-              Text('Nexus', style: theme.textTheme.titleLarge),
-              const SizedBox(height: 4),
-              Text(AppLock.method(widget.db) == 'pattern' ? tr('Нарисуйте графический ключ') : tr('Введите PIN'), style: theme.textTheme.bodyMedium),
-              const SizedBox(height: 16),
-              if (AppLock.method(widget.db) == 'pin')
-              Row(mainAxisSize: MainAxisSize.min, children: [
-                for (var i = 0; i < AppLock.pinLength(widget.db); i++)
-                  Container(
-                    width: 12,
-                    height: 12,
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: i < _pin.length ? theme.colorScheme.primary : theme.colorScheme.outlineVariant,
-                    ),
-                  ),
-              ]),
-              SizedBox(
-                height: 28,
-                child: Center(
-                  child: Text(
-                    left != null ? tr('Слишком много попыток. Подождите {s} с', {'s': left.inSeconds + 1}) : (_error ?? ''),
-                    style: TextStyle(color: theme.colorScheme.error),
-                  ),
-                ),
-              ),
+        // Заголовок по центру свободного места, клавиатура внизу и ещё ряд кнопок (84 px) до края.
+        child: Column(children: [
+          Expanded(child: Center(child: SingleChildScrollView(child: header))),
+          Column(mainAxisSize: MainAxisSize.min, children: [
               if (AppLock.method(widget.db) == 'pattern') ...[
                 PatternPad(onComplete: _pattern, error: _error != null),
                 if (AppLock.biometricOn(widget.db))
@@ -215,9 +258,9 @@ class _LockScreenState extends State<_LockScreen> {
                     })),
               ]),
               ],
-            ]),
-          ),
-        ),
+          ]),
+          const SizedBox(height: 84),
+        ]),
       ),
         ),
       ),
