@@ -1,3 +1,4 @@
+import '../widgets/app_backdrop.dart';
 import 'finals_voice_settings_screen.dart';
 import '../finals/voice_packs.dart';
 import 'dart:math' as math;
@@ -42,7 +43,7 @@ class _FinalsScreenState extends State<FinalsScreen> {
       appBar: GlassHeader(
         title: Text(tr('Финалы'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
       ),
-      body: ListView(
+      body: AppBackdrop(kind: 'finals', child: ListView(
         padding: EdgeInsets.fromLTRB(16, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 16, 24),
         children: [
           Text(tr('Выберите финал'), style: theme.textTheme.titleSmall),
@@ -132,7 +133,7 @@ class _FinalsScreenState extends State<FinalsScreen> {
                 ),
               ),
         ],
-      ),
+      )),
     );
   }
 }
@@ -351,7 +352,7 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
       appBar: GlassHeader(
         title: Text(tr(f.nameKey), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
       ),
-      body: Column(
+      body: AppBackdrop(kind: 'finals', child: Column(
         children: [
           Expanded(
             child: ListView(
@@ -492,7 +493,7 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
             ),
           ),
         ],
-      ),
+      )),
     );
   }
 }

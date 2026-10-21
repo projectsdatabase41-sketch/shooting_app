@@ -1,3 +1,4 @@
+import '../widgets/app_backdrop.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -890,7 +891,7 @@ class FinalResultScreen extends StatelessWidget {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(title: Text(title ?? tr('Итоги финала'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600))),
-      body: ListView(
+      body: AppBackdrop(kind: 'finals', child: ListView(
         padding: EdgeInsets.fromLTRB(16, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 16, 24),
         children: [
           _protocol(context, st),
@@ -918,7 +919,7 @@ class FinalResultScreen extends StatelessWidget {
             label: Text(tr('Опубликовать среди чемпионов')),
           ),
         ],
-      ),
+      )),
     );
   }
 }

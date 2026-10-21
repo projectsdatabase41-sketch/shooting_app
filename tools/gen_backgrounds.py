@@ -118,7 +118,59 @@ def make(kind, theme, w, h):
         radial(img, cx, cy, int(W * 0.95), t['glow'], 0.70 if dark else 0.75)
         target(img, cx, cy, [step * k for k in range(1, 8)], ring, 0.55 if dark else 0.40, 0.82, lw)
     elif kind == 'champions':
-        # Чемпионы: тёплое золотое свечение сверху, золотистые кольца и три ступени пьедестала внизу
+        # Чемпионы: золотое свечение, кольца и кубок по центру
+        gold = (255, 196, 84) if dark else (176, 120, 20)
+        img = vgrad(W, H, (12, 10, 8), (38, 28, 12)) if dark else vgrad(W, H, (253, 250, 243), (240, 226, 190))
+        cx, cy = W / 2, H * 0.36
+        radial(img, cx, cy, int(W * 0.95), gold, 0.40 if dark else 0.28)
+        target(img, cx, cy, [step * k for k in range(2, 9)], gold, 0.30 if dark else 0.24, 0.80, lw)
+        lay = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+        d = ImageDraw.Draw(lay)
+        fill = gold + (46 if dark else 40,)
+        line = gold + (150 if dark else 120,)
+        lwc = lw * 2
+        top = H * 0.25
+        cw = W * 0.34          # ширина чаши
+        ch = H * 0.17          # высота чаши
+        x0, x1 = cx - cw / 2, cx + cw / 2
+        # чаша: один контур — ровный верх и скруглённое дно (без шва)
+        bowl = []
+        steps_n = 60
+        for i in range(steps_n + 1):
+            t = i / steps_n
+            hw_t = (cw / 2) * (1 - t ** 2.3) ** 0.5
+            bowl.append((cx - hw_t, top + ch * t))
+        for i in range(steps_n, -1, -1):
+            t = i / steps_n
+            hw_t = (cw / 2) * (1 - t ** 2.3) ** 0.5
+            bowl.append((cx + hw_t, top + ch * t))
+        d.polygon(bowl, fill=fill, outline=line, width=lwc)
+        d.line([(x0, top), (x1, top)], fill=line, width=lwc)
+        # ручки
+        for sx in (-1, 1):
+            xo = cx + sx * cw / 2
+            hw = cw * 0.26
+            bbox = [xo - hw, top + ch * 0.10, xo + hw, top + ch * 0.62]
+            d.arc(bbox, 90 if sx < 0 else 270, 270 if sx < 0 else 90, fill=line, width=lwc * 2)
+        # ножка (расширяется книзу) и основание ступенями
+        sw = W * 0.05
+        stem_top = top + ch * 1.0
+        stem_bot = stem_top + H * 0.05
+        d.polygon([(cx - sw / 2, stem_top), (cx + sw / 2, stem_top), (cx + sw * 0.9, stem_bot), (cx - sw * 0.9, stem_bot)], fill=fill, outline=line, width=lwc)
+        d.rectangle([cx - cw * 0.30, stem_bot, cx + cw * 0.30, stem_bot + H * 0.016], fill=fill, outline=line, width=lwc)
+        d.rectangle([cx - cw * 0.42, stem_bot + H * 0.016, cx + cw * 0.42, stem_bot + H * 0.038], fill=fill, outline=line, width=lwc)
+        # звезда на чаше
+        sr = cw * 0.11
+        scy = top + ch * 0.38
+        pts = []
+        for i in range(10):
+            ang = -math.pi / 2 + i * math.pi / 5
+            rr = sr if i % 2 == 0 else sr * 0.42
+            pts.append((cx + rr * math.cos(ang), scy + rr * math.sin(ang)))
+        d.polygon(pts, fill=gold + (110 if dark else 90,))
+        img = Image.alpha_composite(img.convert('RGBA'), lay).convert('RGB')
+    elif kind == 'finals':
+        # Финалы: тёплое золотое свечение сверху, золотистые кольца и три ступени пьедестала внизу
         gold = (255, 196, 84) if dark else (176, 120, 20)
         img = vgrad(W, H, (12, 10, 8), (38, 28, 12)) if dark else vgrad(W, H, (253, 250, 243), (240, 226, 190))
         cx, cy = W / 2, H * 0.24
