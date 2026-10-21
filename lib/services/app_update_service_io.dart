@@ -1,3 +1,4 @@
+import '../services/local_db_service.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -26,6 +27,12 @@ class AppUpdateService {
   static const bool supported = true;
   static const _repo = 'projectsdatabase41-sketch/shooting_app';
   static const _taskId = 'app-update';
+  static const _fileName = 'pusl-update.apk';
+  static const _metaName = 'pusl-update.json';
+
+  /// Скачанный пакет хранится до установки, но не дольше часа и только один.
+  static const keepFor = Duration(hours: 1);
+  static String? _pendingSha;
 
   /// SHA коммита, из которого собран ЭТОТ запущенный APK — встраивается
   /// на этапе сборки (--dart-define=GIT_SHA=...), в локальной/дебажной
@@ -140,30 +147,92 @@ class AppUpdateService {
   /// (после запуска установщика приложение не может узнать, нажал ли
   /// пользователь «Установить»: заново открывшийся апп удаляет то, что
   /// осталось, при следующей проверке). Идущую сейчас загрузку не трогает.
-  static Future<void> cleanupStale() async {
+  ///
+  /// Скачанный и ещё свежий пакет (не старше [keepFor], той же версии [keepSha]) остаётся — его можно
+  /// установить без повторной загрузки; устаревший, уже установленный или от другой версии удаляется.
+  static Future<void> cleanupStale({String? keepSha}) async {
     try {
       await _initDownloader();
       final active = await FileDownloader().database.recordForId(_taskId);
-      final skip = active != null &&
-              (active.status == TaskStatus.running ||
-                  active.status == TaskStatus.enqueued)
-          ? 'pusl-update.apk'
-          : null;
+      final downloading = active != null && (active.status == TaskStatus.running || active.status == TaskStatus.enqueued);
+      final meta = await _readMeta();
+      final fresh = meta != null &&
+          DateTime.now().difference(meta.$2) < keepFor &&
+          meta.$1 != currentSha && // уже установлена — пакет не нужен
+          (keepSha == null || meta.$1 == keepSha);
       final d = await _dir();
       await for (final f in d.list()) {
-        if (f is File && f.path.endsWith('.apk') && p.basename(f.path) != skip)
-          await f.delete();
+        if (f is! File) continue;
+        final name = p.basename(f.path);
+        if (name == _fileName && (downloading || fresh)) continue;
+        if (name == _metaName && fresh) continue;
+        if (f.path.endsWith('.apk') || name == _metaName) await f.delete();
       }
     } catch (_) {}
+  }
+
+  static Future<(String, DateTime)?> _readMeta() async {
+    try {
+      final f = File(p.join((await _dir()).path, _metaName));
+      if (!await f.exists()) return null;
+      final j = jsonDecode(await f.readAsString()) as Map<String, dynamic>;
+      final at = DateTime.tryParse('${j['at']}');
+      return at == null ? null : ('${j['sha']}', at.toLocal());
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> _writeMeta(String sha) async {
+    final f = File(p.join((await _dir()).path, _metaName));
+    await f.writeAsString(jsonEncode({'sha': sha, 'at': DateTime.now().toUtc().toIso8601String()}));
+  }
+
+  /// Скачанный пакет этой версии, если он есть и не старше часа.
+  static Future<File?> _freshPackage(String sha) async {
+    final meta = await _readMeta();
+    if (meta == null || meta.$1 != sha || DateTime.now().difference(meta.$2) >= keepFor) return null;
+    final f = File(p.join((await _dir()).path, _fileName));
+    return await f.exists() ? f : null;
   }
 
   static Future<void> cleanupAfterFailure() async {
     try {
       await FileDownloader().cancelTaskWithId(_taskId);
       await FileDownloader().database.deleteRecordWithId(_taskId);
-      final f = File(p.join((await _dir()).path, 'pusl-update.apk'));
+      final f = File(p.join((await _dir()).path, _fileName));
       if (await f.exists()) await f.delete();
     } catch (_) {}
+  }
+
+  // ---------------- автопроверка раз в сутки ----------------
+
+  static const _kLastCheck = 'update_last_check';
+  static const _kNotified = 'update_notified_sha';
+
+  static String? _pref(LocalDbService db, String k) {
+    final r = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [k]);
+    return r.isEmpty ? null : '${r.first['hex']}';
+  }
+
+  static void _setPref(LocalDbService db, String k, String v) => db.db.execute(
+      'INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex', [k, v]);
+
+  /// Не чаще раза в сутки: чистит устаревший пакет и проверяет версию (один маленький запрос к
+  /// version.json на GitHub — базы данных не затрагиваются). Есть новая — уведомление с кнопкой
+  /// «Обновить» (один раз на версию). Возвращает найденное обновление.
+  static Future<AppUpdateInfo?> checkDaily(LocalDbService db, {Future<void> Function(AppUpdateInfo info)? notify}) async {
+    if (!Platform.isAndroid || currentSha.isEmpty) return null;
+    final last = DateTime.tryParse(_pref(db, _kLastCheck) ?? '');
+    if (last != null && DateTime.now().difference(last) < const Duration(hours: 24)) return null;
+    _setPref(db, _kLastCheck, DateTime.now().toUtc().toIso8601String());
+    await cleanupStale();
+    final info = await check();
+    if (info != null && notify != null && _pref(db, _kNotified) != info.sha) {
+      _setPref(db, _kNotified, info.sha);
+      await notify(info);
+    }
+    return info;
   }
 
   /// Уже идёт (в том числе начатая до пересборки экрана — свернули
@@ -190,6 +259,15 @@ class AppUpdateService {
     if (!Platform.isAndroid)
       throw UnsupportedError(tr('Обновление APK доступно только на Android'));
     await _initDownloader();
+    // Уже скачан и ещё свежий (закрыли уведомление, не нажав «Установить») — ставим тот же файл.
+    final ready = await _freshPackage(info.sha);
+    if (ready != null) {
+      onProgress(1);
+      final opened = await FileDownloader().openFile(filePath: ready.path, mimeType: 'application/vnd.android.package-archive');
+      if (!opened) throw StateError(tr('Не удалось открыть установщик'));
+      return;
+    }
+    _pendingSha = info.sha;
     final existing = await FileDownloader().database.recordForId(_taskId);
     if (existing != null &&
         (existing.status == TaskStatus.running ||
@@ -208,7 +286,7 @@ class AppUpdateService {
       }
       if (resumed) return _finishDownload(await _waitFor(_taskId, onProgress));
     }
-    await cleanupStale();
+    await cleanupStale(keepSha: info.sha);
     final task = DownloadTask(
       taskId: _taskId,
       url: info.downloadUrl,
@@ -258,6 +336,8 @@ class AppUpdateService {
       throw HttpException(result.exception?.description ??
           tr('загрузка не удалась ({name})', {'name': result.status.name}));
     }
+    final sha = _pendingSha;
+    if (sha != null) await _writeMeta(sha); // пакет запомнен: час можно ставить без повторной загрузки
     final opened = await FileDownloader().openFile(
         task: result.task, mimeType: 'application/vnd.android.package-archive');
     if (!opened) throw StateError(tr('Не удалось открыть установщик'));

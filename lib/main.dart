@@ -1,3 +1,5 @@
+import 'services/app_update_service.dart';
+import 'dart:async';
 import 'widgets/home_tabs_bar.dart' show TileStyle;
 import 'theme/glass.dart';
 import 'theme/wallpaper.dart';
@@ -85,6 +87,15 @@ Future<void> main() async {
   TileStyle.isGlass(db); // «стекло» плиток сообщаем теме до первого кадра
   SecretBox.migrate(db);
   RemoteConfig.loadCached(db);
+  // Обновление приложения: кнопка «Обновить» в уведомлении; проверка раз в сутки (в фоне, не мешает запуску).
+  updateActionHandler = (url, sha) {
+    AppUpdateService.downloadAndInstall(AppUpdateInfo(downloadUrl: url, sha: sha), onProgress: (_) {}).catchError((_) {});
+  };
+  Future<void> dailyUpdateCheck() => AppUpdateService
+      .checkDaily(db, notify: (i) => showUpdateAvailableNotification(url: i.downloadUrl, sha: i.sha))
+      .then((_) {}, onError: (_) {});
+  Future<void>.delayed(const Duration(seconds: 8), dailyUpdateCheck);
+  Timer.periodic(const Duration(hours: 1), (_) => dailyUpdateCheck()); // само проверяет, прошли ли сутки
   // Структура Google Диска подтягивается в фоне при запуске: к открытию модуля всё уже готово.
   Future<void>.delayed(const Duration(seconds: 4), () => GDriveSync.runIfConfigured(db).catchError((_) {}));
   RemoteConfig.refresh(db); // в фоне, без ожидания

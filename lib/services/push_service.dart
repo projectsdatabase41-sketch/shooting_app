@@ -63,6 +63,9 @@ bool _foregroundRegistered = false;
 /// Тап по push задания — открыть это задание (задаёт корень приложения).
 void Function(String taskId)? pushTaskTapHandler;
 
+/// Кнопка «Обновить» в уведомлении о новой версии (или тап по нему): (адрес APK, код версии).
+void Function(String url, String sha)? updateActionHandler;
+
 /// Push-уведомления чата через Firebase (FCM) — ДОБАВКА к Supabase, не
 /// замена: сообщения/контакты/вход остаются там же, Firebase здесь
 /// только доставляет сигнал "новое сообщение" в закрытое приложение
@@ -85,6 +88,8 @@ class PushService {
   const PushService(this.auth);
 
   static const String callChannelId = 'coach_call';
+  static const String updateChannelId = 'updates';
+  static const int _updateNotificationId = 4242;
   static const String messageChannelId = 'chat_messages';
   static const int _incomingCallNotificationId = 9002;
 
@@ -543,7 +548,41 @@ Future<void> _initLocalNotifications() async {
 final Int64List _callVibrationPattern =
     Int64List.fromList([0, 800, 400, 800, 400, 800]);
 
+/// Уведомление «Доступно обновление» с кнопкой «Обновить».
+Future<void> showUpdateAvailableNotification({required String url, required String sha}) async {
+  try {
+    await _initLocalNotifications();
+    await _localNotifications.show(
+      PushService._updateNotificationId,
+      tr('Доступно обновление Nexus'),
+      tr('Нажмите «Обновить» — установка начнётся сразу'),
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          PushService.updateChannelId,
+          tr('Обновления'),
+          channelDescription: tr('Новые версии приложения'),
+          importance: Importance.defaultImportance,
+          priority: Priority.defaultPriority,
+          actions: [AndroidNotificationAction('update', tr('Обновить'), showsUserInterface: true)],
+        ),
+      ),
+      payload: 'update:$sha:$url',
+    );
+  } catch (_) {}
+}
+
 void _onNotificationAction(NotificationResponse response) {
+  final upd = response.payload ?? '';
+  if (upd.startsWith('update:')) {
+    // payload: update:<sha>:<url>; кнопка «Обновить» и тап по самому уведомлению делают одно и то же.
+    final rest = upd.substring(7);
+    final i = rest.indexOf(':');
+    if (i > 0) {
+      _localNotifications.cancel(PushService._updateNotificationId);
+      updateActionHandler?.call(rest.substring(i + 1), rest.substring(0, i));
+    }
+    return;
+  }
   if (response.actionId == 'decline') {
     _localNotifications.cancel(PushService._callNotificationId);
     return;
