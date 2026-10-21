@@ -1,3 +1,4 @@
+import '../theme/backdrop_tint.dart';
 import 'dart:convert';
 
 import '../models/ai_memory_summary.dart';
@@ -211,6 +212,8 @@ Exercise: only when explicitly asked to create one, as an ```exercise block at t
 - Custom series: {"name":"Sighters + match","target_face_code":"pistol_10m","series":[{"name":"Sighters","time_limit_min":15,"counts":false},{"name":"Match","shot_count":40,"counts":true}]}
 Use either total_shots+series_size or series, never both; each series has exactly one of shot_count/time_limit_min. Before the block, confirm briefly without retelling the JSON.
 
+Appearance: only when asked to change the app's look, as an ```appearance block at the end (JSON, only changed keys; the user presses "Apply", can undo). Current: CONTEXT "appearance_settings". Keys: "blur" 0..1 (wallpaper blur); "colorfulness" 0..1 (more colour shows through); "vignette" 0..1; "mode" auto|manual|off (preset tint | one hue | original); "hue" 0..360, "sat" 0..1.5 (need mode manual). Greyer = lower colorfulness, sat.
+
 Feedback: only when explicitly asked, as a ```feedback block {"text":"..."} at the end: the user's dictated wording (rephrase by meaning if rough), anonymous — no names, trainings or personal data. You cannot send it; the user presses the button. Word the text before the block as a proposal ("press «Send feedback» below"), never as done.
 ''';
 
@@ -284,6 +287,8 @@ The user has a notes module. Only when explicitly asked to save/create a note, a
         for (final s in pastSummaries) '${_dt(s.periodStart)}: ${s.summary}',
       ];
     }
+
+    map['appearance_settings'] = BackdropTint.snapshot();
 
     if (existingExercises.isNotEmpty) {
       map['exercises_on_device'] = [

@@ -43,6 +43,10 @@ class AiMessage {
   final Map<String, dynamic>? feedback;
   final bool feedbackSent;
 
+  /// Предложенные настройки оформления и отметка «применено».
+  final Map<String, dynamic>? appearance;
+  final bool appearanceApplied;
+
   /// Фото, приложенное к своему вопросу (только у `fromUser`) — показывается
   /// в пузыре как обычное вложение. Не сохраняется (весь разговор
   /// эфемерный, см. докстринг класса), уходит модели один раз, при отправке.
@@ -62,11 +66,13 @@ class AiMessage {
     this.noteCreated = false,
     this.feedback,
     this.feedbackSent = false,
+    this.appearance,
+    this.appearanceApplied = false,
     this.imageBytes,
   });
 
   AiMessage copyWith(
-          {bool? exerciseCreated, bool? noteCreated, bool? feedbackSent}) =>
+          {bool? exerciseCreated, bool? noteCreated, bool? feedbackSent, bool? appearanceApplied}) =>
       AiMessage(
         fromUser: fromUser,
         text: text,
@@ -81,6 +87,8 @@ class AiMessage {
         noteCreated: noteCreated ?? this.noteCreated,
         feedback: feedback,
         feedbackSent: feedbackSent ?? this.feedbackSent,
+        appearance: appearance,
+        appearanceApplied: appearanceApplied ?? this.appearanceApplied,
       );
 }
 
@@ -294,6 +302,7 @@ class AiChatViewModel extends ChangeNotifier {
         exercise: reply.exercise,
         note: reply.note,
         feedback: reply.feedback,
+        appearance: reply.appearance,
       ));
       // Пишем КАЖДЫЙ обмен как есть, без лишнего вызова модели на
       // сжатие (решение пользователя, пункт 10: "лучше в раг каждый
@@ -467,6 +476,12 @@ class AiChatViewModel extends ChangeNotifier {
   void markNoteCreated(int index) {
     if (index < 0 || index >= messages.length) return;
     messages[index] = messages[index].copyWith(noteCreated: true);
+    notifyListeners();
+  }
+
+  void markAppearanceApplied(int index, bool applied) {
+    if (index < 0 || index >= messages.length) return;
+    messages[index] = messages[index].copyWith(appearanceApplied: applied);
     notifyListeners();
   }
 

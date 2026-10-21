@@ -1,3 +1,4 @@
+import '../theme/backdrop_tint.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -33,6 +34,9 @@ class AiReply {
   /// правок — тоже показ-на-подтверждение, не отправляется молча.
   final Map<String, dynamic>? feedback;
 
+  /// Предложенные настройки оформления (```appearance) - применяются кнопкой, с отменой.
+  final Map<String, dynamic>? appearance;
+
   const AiReply({
     required this.text,
     required this.model,
@@ -41,6 +45,7 @@ class AiReply {
     this.exercise,
     this.note,
     this.feedback,
+    this.appearance,
   });
 }
 
@@ -482,7 +487,8 @@ class AiService {
 
     final parsedChart = splitChart(split.$1);
     final parsedExercise = _splitExercise(parsedChart.$1);
-    final parsedNote = _splitNote(parsedExercise.$1);
+    final parsedApp = splitAppearance(parsedExercise.$1);
+    final parsedNote = _splitNote(parsedApp.$1);
     final parsedFeedback = _splitFeedback(parsedNote.$1);
 
     // Модель зарассуждалась и до ответа не дошла. Это не ответ, а
@@ -498,6 +504,7 @@ class AiService {
       exercise: parsedExercise.$2,
       note: parsedNote.$2,
       feedback: parsedFeedback.$2,
+      appearance: parsedApp.$2,
       model: model,
       reasoning: reasoning.isEmpty ? null : reasoning,
     );
@@ -655,6 +662,23 @@ class AiService {
         totalShots > 0 &&
         seriesSize is num &&
         seriesSize > 0;
+  }
+
+  /// Отделяет блок ```appearance (настройки оформления) - тот же принцип, что у `_splitExercise`;
+  /// ключи и диапазоны проверяет `BackdropTint.validAppearance`.
+  static (String, Map<String, dynamic>?) splitAppearance(String raw) {
+    final matches = RegExp(r'```appearance\s*([\s\S]*?)```').allMatches(raw).toList();
+    if (matches.isEmpty) return (raw, null);
+    var text = raw;
+    for (final m in matches.reversed) {
+      text = text.replaceRange(m.start, m.end, '');
+    }
+    text = text.trim();
+    try {
+      final decoded = jsonDecode(matches.last.group(1)!.trim());
+      if (decoded is Map<String, dynamic> && BackdropTint.validAppearance(decoded)) return (text, decoded);
+    } catch (_) {}
+    return (text, null);
   }
 
   /// Отделяет блок ```note (предложенная заметка в дневник тренера) от

@@ -175,6 +175,61 @@ class BackdropTint {
     recompute();
   }
 
+  /// Текущие настройки оформления для ИИ: доли 0..1 (оттенок — градусы, насыщенность 0..1.5).
+  static Map<String, dynamic> snapshot() => {
+        'mode': mode,
+        'hue': hue.round(),
+        'sat': double.parse(sat.toStringAsFixed(2)),
+        'blur': double.parse((blur / 30).toStringAsFixed(2)),
+        'colorfulness': double.parse(colorfulness.toStringAsFixed(2)),
+        'vignette': double.parse(vignette.toStringAsFixed(2)),
+        'custom_wallpaper': customOn,
+      };
+
+  /// Что ИИ может менять (ключ -> диапазон). Остальное в блоке считается негодным.
+  static const aiKeys = {'blur': (0.0, 1.0), 'colorfulness': (0.0, 1.0), 'vignette': (0.0, 1.0), 'hue': (0.0, 360.0), 'sat': (0.0, 1.5)};
+
+  /// Проверка спецификации от ИИ: известные ключи, числа в диапазонах, режим из списка, хоть одно поле.
+  static bool validAppearance(Map<String, dynamic> spec) {
+    var any = false;
+    for (final e in spec.entries) {
+      if (e.key == 'mode') {
+        if (!const {'auto', 'manual', 'off'}.contains(e.value)) return false;
+      } else {
+        final r = aiKeys[e.key];
+        final v = e.value;
+        if (r == null || v is! num || v < r.$1 || v > r.$2) return false;
+      }
+      any = true;
+    }
+    return any;
+  }
+
+  /// Применяет спецификацию; возвращает снимок «до» для отмены.
+  static Map<String, dynamic> applyAppearance(LocalDbService db, Map<String, dynamic> spec) {
+    final before = snapshot();
+    double? d(String k) => (spec[k] as num?)?.toDouble();
+    save(db,
+        newMode: spec['mode'] as String?,
+        newHue: d('hue'),
+        newSat: d('sat'),
+        newBlur: d('blur') == null ? null : d('blur')! * 30,
+        newFront: d('colorfulness') == null ? null : 1 - 0.7 * d('colorfulness')!,
+        newVignette: d('vignette'));
+    return before;
+  }
+
+  /// Откат к снимку из [applyAppearance].
+  static void restoreAppearance(LocalDbService db, Map<String, dynamic> snap) {
+    save(db,
+        newMode: snap['mode'] as String,
+        newHue: (snap['hue'] as num).toDouble(),
+        newSat: (snap['sat'] as num).toDouble(),
+        newBlur: (snap['blur'] as num).toDouble() * 30,
+        newFront: 1 - 0.7 * (snap['colorfulness'] as num).toDouble(),
+        newVignette: (snap['vignette'] as num).toDouble());
+  }
+
   /// Фигуры стирания: предпросмотр (без записи в базу) и сохранение.
   static void previewShapes(List<EraseShape> list) {
     shapes = list;

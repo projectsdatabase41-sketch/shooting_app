@@ -1,3 +1,4 @@
+import '../theme/backdrop_tint.dart';
 import '../widgets/glass_route.dart';
 import 'dart:math' as math;
 import '../logic/friendly_error.dart';
@@ -474,6 +475,7 @@ class _AiChatBodyState extends State<_AiChatBody> {
           onSaveNote: (message.note != null && !message.noteCreated)
               ? () => _saveNote(context, vm, i)
               : null,
+          onApplyAppearance: (message.appearance != null && !message.appearanceApplied) ? () => _applyAppearance(context, vm, i) : null,
           onSendFeedback: (message.feedback != null && !message.feedbackSent)
               ? () => _sendFeedback(context, vm, i)
               : null,
@@ -552,6 +554,27 @@ class _AiChatBodyState extends State<_AiChatBody> {
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(
           content: Text(tr('Упражнение «{name}» создано', {'name': ex.name}))));
+  }
+
+  /// Применяет настройки оформления от ИИ по кнопке; в уведомлении - «Отменить».
+  void _applyAppearance(BuildContext context, AiChatViewModel vm, int index) {
+    final spec = vm.messages[index].appearance;
+    if (spec == null) return;
+    final db = context.read<AppDataStore>().db;
+    final before = BackdropTint.applyAppearance(db, spec);
+    vm.markAppearanceApplied(index, true);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(tr('Оформление изменено')),
+        action: SnackBarAction(
+          label: tr('Отменить'),
+          onPressed: () {
+            BackdropTint.restoreAppearance(db, before);
+            vm.markAppearanceApplied(index, false);
+          },
+        ),
+      ));
   }
 
   /// Сохраняет заметку, которую предложил ассистент, в дневник тренера —
@@ -820,6 +843,9 @@ class _Bubble extends StatelessWidget {
   /// отправлен.
   final VoidCallback? onSendFeedback;
 
+  /// `null`, если в сообщении нет настроек оформления или они уже применены.
+  final VoidCallback? onApplyAppearance;
+
   /// Все графики разговора и позиция графика ЭТОГО сообщения среди них —
   /// для листания в полноэкранном просмотре (`ChartGalleryScreen`).
   /// `null`/пусто, если в сообщении графика нет вовсе.
@@ -834,6 +860,7 @@ class _Bubble extends StatelessWidget {
     this.onCreateExercise,
     this.onSaveNote,
     this.onSendFeedback,
+    this.onApplyAppearance,
     this.chartGallery,
     this.chartGalleryIndex = 0,
   });
@@ -910,6 +937,10 @@ class _Bubble extends StatelessWidget {
                   created: message.exerciseCreated,
                   onCreate: onCreateExercise,
                 ),
+              ],
+              if (message.appearance != null) ...[
+                const SizedBox(height: 8),
+                _AppearanceProposalCard(spec: message.appearance!, applied: message.appearanceApplied, onApply: onApplyAppearance),
               ],
               if (message.note != null) ...[
                 const SizedBox(height: 8),
@@ -1024,6 +1055,52 @@ class _Bubble extends StatelessWidget {
 /// Карточка предложенного ассистентом упражнения — показ результата на
 /// подтверждение, а не тихое создание: пользователь видит, что именно
 /// заведётся, прежде чем это попадёт в список упражнений.
+/// Карточка настроек оформления от ассистента: что изменится и кнопка «Применить» (потом можно отменить).
+class _AppearanceProposalCard extends StatelessWidget {
+  final Map<String, dynamic> spec;
+  final bool applied;
+  final VoidCallback? onApply;
+  const _AppearanceProposalCard({required this.spec, required this.applied, required this.onApply});
+
+  static const _names = {
+    'mode': 'Режим оттенка',
+    'hue': 'Оттенок',
+    'sat': 'Насыщенность',
+    'blur': 'Размытость',
+    'colorfulness': 'Цветность',
+    'vignette': 'Виньетка',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: cs.surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: cs.outlineVariant)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        Row(children: [
+          Icon(Icons.palette_outlined, size: 18, color: cs.primary),
+          const SizedBox(width: 6),
+          Text(tr('Изменить оформление'), style: theme.textTheme.titleSmall),
+        ]),
+        const SizedBox(height: 4),
+        for (final e in spec.entries)
+          Text('· ${tr(_names[e.key] ?? e.key)}: ${e.value is num && e.key != 'hue' ? '${((e.value as num) * 100).round()}%' : e.value}', style: theme.textTheme.bodySmall),
+        const SizedBox(height: 10),
+        if (applied)
+          Row(children: [
+            Icon(Icons.check_circle, size: 18, color: cs.primary),
+            const SizedBox(width: 6),
+            Text(tr('Применено'), style: theme.textTheme.bodySmall?.copyWith(color: cs.primary)),
+          ])
+        else
+          Raised3DButton(dense: true, icon: Icons.palette_outlined, label: tr('Применить'), baseColor: cs.primary, onTap: onApply),
+      ]),
+    );
+  }
+}
+
 class _ExerciseProposalCard extends StatelessWidget {
   final Map<String, dynamic> spec;
   final bool created;
