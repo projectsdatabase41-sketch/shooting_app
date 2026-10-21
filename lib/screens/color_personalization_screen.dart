@@ -1,4 +1,6 @@
 import '../widgets/value_wheel.dart';
+import '../logic/avatar_utils.dart';
+import 'wallpaper_editor_screen.dart';
 import '../widgets/glass_route.dart';
 import 'dart:async';
 import '../widgets/app_backdrop.dart';
@@ -1050,6 +1052,81 @@ class _BackdropTintSectionState extends State<_BackdropTintSection> {
             setState(() {});
           },
         ),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: FilledButton.tonalIcon(
+            icon: const Icon(Icons.fullscreen),
+            label: Text(tr('Редактор обоев на весь экран')),
+            onPressed: () async {
+              await Navigator.push(context, MaterialPageRoute(builder: (_) => WallpaperEditorScreen(db: db)));
+              if (mounted) setState(() {});
+            },
+          ),
+        ),
+        Text(tr('Свои обои'), style: theme.textTheme.titleSmall),
+        Wrap(spacing: 6, children: [
+          OutlinedButton.icon(
+            icon: const Icon(Icons.image_outlined),
+            label: Text(tr('Выбрать картинку')),
+            onPressed: () async {
+              final bytes = await AvatarUtils.pickBytes();
+              if (bytes == null) return;
+              final ok = await BackdropTint.setCustomImage(db, bytes);
+              if (!ok && mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Не удалось открыть картинку'))));
+              if (mounted) setState(() {});
+            },
+          ),
+          if (BackdropTint.customB64 != null)
+            Switch(
+              value: BackdropTint.customOn,
+              onChanged: (v) {
+                BackdropTint.save(db, newCustomOn: v);
+                setState(() {});
+              },
+            ),
+          if (BackdropTint.customB64 != null)
+            TextButton(
+              onPressed: () {
+                BackdropTint.clearCustomImage(db);
+                setState(() {});
+              },
+              child: Text(tr('Убрать')),
+            ),
+        ]),
+        if (BackdropTint.customOn) ...[
+          ValueWheel(
+            label: tr('Яркость'),
+            value: BackdropTint.cBright + 0.5,
+            onChanged: (v) {
+              BackdropTint.save(db, newCBright: v - 0.5);
+              setState(() {});
+            },
+          ),
+          ValueWheel(
+            label: tr('Контраст'),
+            value: (BackdropTint.cContrast - 0.5) / 1.3,
+            onChanged: (v) {
+              BackdropTint.save(db, newCContrast: 0.5 + v * 1.3);
+              setState(() {});
+            },
+          ),
+          ValueWheel(
+            label: tr('Оттенок'),
+            value: (BackdropTint.cHue + 180) / 360,
+            onChanged: (v) {
+              BackdropTint.save(db, newCHue: v * 360 - 180);
+              setState(() {});
+            },
+          ),
+          ValueWheel(
+            label: tr('Виньетка'),
+            value: BackdropTint.cVignette,
+            onChanged: (v) {
+              BackdropTint.save(db, newCVignette: v);
+              setState(() {});
+            },
+          ),
+        ],
         Text(tr('Стереть передний лист: добавить фигуру'), style: theme.textTheme.bodySmall),
         Wrap(spacing: 6, runSpacing: 4, children: [
           for (final e in const [
