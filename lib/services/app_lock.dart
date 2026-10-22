@@ -19,7 +19,8 @@ class AppLock {
   static const _delayKey = 'applock_delay';
   static const _failsKey = 'applock_fails';
   static const _untilKey = 'applock_until';
-  static const _iterations = 40000;
+  static const _iterations = 40000; // v1 (старые записи)
+  static const _iterationsV2 = 8000; // v2: быстрый ответ на экране входа; от перебора защищает пауза после ошибок
   static const _lenKey = 'applock_len';
   static const _methodKey = 'applock_method';
   static const _bioAutoKey = 'applock_bio_auto';
@@ -69,8 +70,8 @@ class AppLock {
   static Future<void> setPin(LocalDbService db, String pin) async {
     _put(db, _methodKey, 'pin');
     final salt = Kdf.randomBytes(16);
-    final hash = await Kdf.derive(pin, salt, iterations: _iterations);
-    _put(db, _pinKey, SecretBox.seal('v1:${base64Encode(salt)}:${base64Encode(hash)}'));
+    final hash = await Kdf.derive(pin, salt, iterations: _iterationsV2);
+    _put(db, _pinKey, SecretBox.seal('v2:${base64Encode(salt)}:${base64Encode(hash)}'));
     _put(db, _lenKey, '${pin.length}');
     _put(db, _failsKey, '0');
     _put(db, _untilKey, '');
@@ -97,9 +98,15 @@ class AppLock {
     final stored = SecretBox.open(_get(db, _pinKey) ?? '');
     final parts = stored.split(':');
     var ok = false;
-    if (parts.length == 3 && parts[0] == 'v1') {
-      final hash = await Kdf.derive(pin, base64Decode(parts[1]), iterations: _iterations);
+    if (parts.length == 3 && (parts[0] == 'v1' || parts[0] == 'v2')) {
+      final hash = await Kdf.derive(pin, base64Decode(parts[1]), iterations: parts[0] == 'v1' ? _iterations : _iterationsV2);
       ok = Kdf.equal(hash, base64Decode(parts[2]));
+      if (ok && parts[0] == 'v1') {
+        // Старая медленная запись — тихо переводим на быструю (PIN в руках только сейчас).
+        final salt = Kdf.randomBytes(16);
+        final h2 = await Kdf.derive(pin, salt, iterations: _iterationsV2);
+        _put(db, _pinKey, SecretBox.seal('v2:${base64Encode(salt)}:${base64Encode(h2)}'));
+      }
     }
     if (ok) {
       _put(db, _failsKey, '0');
@@ -140,11 +147,32 @@ class AppLock {
     if (isEnabled(db)) locked.value = true;
   }
 
-  static void onPaused() => _pausedAt = DateTime.now();
+  static int _external = 0;
+  static DateTime? _graceUntil;
+
+  /// Внешнее окно системы (выбор файла/фото, разрешения, «Поделиться»): приложение при этом сворачивается,
+  /// но блокировать его при возврате не нужно — пользователь никуда не уходил.
+  static Future<T> external<T>(Future<T> Function() action) async {
+    _external++;
+    try {
+      return await action();
+    } finally {
+      _external--;
+      _pausedAt = null;
+      _graceUntil = DateTime.now().add(const Duration(seconds: 3));
+    }
+  }
+
+  static void onPaused() {
+    if (_external > 0) return;
+    _pausedAt = DateTime.now();
+  }
 
   static void onResumed(LocalDbService db) {
     final at = _pausedAt;
     _pausedAt = null;
+    final grace = _graceUntil;
+    if (_external > 0 || (grace != null && DateTime.now().isBefore(grace))) return;
     if (!isEnabled(db) || at == null || locked.value) return;
     if (DateTime.now().difference(at).inSeconds >= delaySec(db)) locked.value = true;
   }

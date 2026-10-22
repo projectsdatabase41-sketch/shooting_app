@@ -26,7 +26,8 @@ class _ValueWheelState extends State<ValueWheel> {
     final dv = d.delta.dx / _pxPerFull;
     var v = widget.value + dv;
     v = widget.wrap ? v - v.floorToDouble() : v.clamp(0.0, 1.0);
-    setState(() => _drag += dv);
+    // Барабан поворачивается ровно на столько, на сколько изменилось значение: у упора он останавливается.
+    setState(() => _drag += widget.wrap ? dv : v - widget.value);
     widget.onChanged(v);
   }
 
@@ -36,7 +37,7 @@ class _ValueWheelState extends State<ValueWheel> {
     return Padding(
       padding: const EdgeInsets.only(top: 4),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('${widget.label}: ${(widget.value * 100).round()}%', style: Theme.of(context).textTheme.bodySmall),
+        Text(widget.wrap ? widget.label : '${widget.label}: ${(widget.value * 100).round()}%', style: Theme.of(context).textTheme.bodySmall),
         const SizedBox(height: 2),
         GestureDetector(
           behavior: HitTestBehavior.opaque,
@@ -52,6 +53,8 @@ class _ValueWheelState extends State<ValueWheel> {
                 tick: cs.onSurfaceVariant,
                 marker: AppTheme.accentFor(cs),
                 outline: cs.outlineVariant,
+                atMin: !widget.wrap && widget.value <= 0.0001,
+                atMax: !widget.wrap && widget.value >= 0.9999,
               ),
             ),
           ),
@@ -64,7 +67,8 @@ class _ValueWheelState extends State<ValueWheel> {
 class _WheelPainter extends CustomPainter {
   final double phase; // в делениях, бесконечный
   final Color barrel, barrelEdge, tick, marker, outline;
-  _WheelPainter({required this.phase, required this.barrel, required this.barrelEdge, required this.tick, required this.marker, required this.outline});
+  final bool atMin, atMax; // упор: значение на краю диапазона, дальше крутить нечего
+  _WheelPainter({required this.phase, required this.barrel, required this.barrelEdge, required this.tick, required this.marker, required this.outline, this.atMin = false, this.atMax = false});
 
   static const _perHalf = 14;
 
@@ -103,6 +107,9 @@ class _WheelPainter extends CustomPainter {
       ..color = marker.withValues(alpha: 0.85)
       ..strokeWidth = 2
       ..strokeCap = StrokeCap.round);
+    final stop = Paint()..color = marker.withValues(alpha: 0.9);
+    if (atMin) canvas.drawRRect(RRect.fromRectAndCorners(Rect.fromLTWH(1, 1, 7, size.height - 2), topLeft: const Radius.circular(12), bottomLeft: const Radius.circular(12)), stop);
+    if (atMax) canvas.drawRRect(RRect.fromRectAndCorners(Rect.fromLTWH(size.width - 8, 1, 7, size.height - 2), topRight: const Radius.circular(12), bottomRight: const Radius.circular(12)), stop);
     canvas.drawRRect(rr, Paint()
       ..color = outline
       ..style = PaintingStyle.stroke
@@ -110,5 +117,5 @@ class _WheelPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_WheelPainter o) => o.phase != phase || o.barrel != barrel || o.tick != tick || o.marker != marker;
+  bool shouldRepaint(_WheelPainter o) => o.phase != phase || o.barrel != barrel || o.tick != tick || o.marker != marker || o.atMin != atMin || o.atMax != atMax;
 }

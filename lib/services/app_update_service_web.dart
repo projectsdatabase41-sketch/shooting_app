@@ -25,6 +25,7 @@ class AppUpdateService {
   static Future<AppUpdateInfo?> check({bool strict = false}) async => null;
   static Future<bool> downloadActive() async => false;
   static Future<void> cleanupStale({String? keepSha}) async {}
+  static Future<void> cancelDownload() async {}
   static Future<AppUpdateInfo?> checkDaily(LocalDbService db, {Future<void> Function(AppUpdateInfo info)? notify}) async => null;
   static Future<bool> attachToActiveDownload(
           {required void Function(double progress) onProgress}) async =>

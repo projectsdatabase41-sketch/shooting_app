@@ -1,3 +1,4 @@
+import '../widgets/series_shot_tiles.dart';
 import '../widgets/glass_route.dart';
 import '../widgets/app_loader.dart';
 import '../widgets/ai_gate.dart';
@@ -13,7 +14,6 @@ import '../models/exercise_detail_block.dart';
 import '../models/shot.dart';
 import '../models/target_face.dart';
 import '../models/training_session.dart';
-import '../painters/target_painter.dart';
 import '../services/coach_access_service.dart';
 import '../services/coach_data_mapper.dart';
 import '../state/app_data_store.dart';
@@ -371,7 +371,14 @@ class _SeriesBlock extends StatelessWidget {
                     'p': s.total.toStringAsFixed(1),
                     'p2': s.average.toStringAsFixed(1)
                   })),
-                  trailing: const Icon(Icons.chevron_right),
+                  trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                    SeriesNotesBadge(
+                      count: comments
+                          .where((c) => c['level'] == 'shot' && session.shots.any((sh) => sh.seriesNo == s.seriesNo && '${c['shot_id']}' == sh.id))
+                          .length,
+                    ),
+                    const Icon(Icons.chevron_right),
+                  ]),
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(
                     builder: (_) => _SeriesShotsScreen(
                       session: session,
@@ -428,14 +435,9 @@ class _SeriesShotsScreen extends StatelessWidget {
               itemCount: shots.length,
               itemBuilder: (context, i) {
                 final shot = shots[i];
-                return ListTile(
-                  title: Text(
-                      '№${shot.shotNumber} — ${shot.score.toStringAsFixed(1)}'),
-                  subtitle: Text(tr('X: {p} мм · Y: {p2} мм', {
-                    'p': shot.xMm.toStringAsFixed(1),
-                    'p2': shot.yMm.toStringAsFixed(1)
-                  })),
-                  trailing: const Icon(Icons.chevron_right),
+                return SeriesShotRow(
+                  shot: shot,
+                  notes: comments.where((c) => c['level'] == 'shot' && '${c['shot_id']}' == shot.id).length,
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(
                     builder: (_) => _SingleShotScreen(
                         shot: shot, face: face, comments: comments),
@@ -470,7 +472,7 @@ class _SingleShotScreen extends StatelessWidget {
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
         title: Text(
-            tr('Выстрел №{shotNumber}', {'shotNumber': shot.shotNumber}),
+            tr('Выстрел {n}', {'n': shot.shotNumber}),
             style: Theme.of(context)
                 .textTheme
                 .titleMedium
@@ -480,21 +482,7 @@ class _SingleShotScreen extends StatelessWidget {
         padding: EdgeInsets.fromLTRB(16,
             MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 16, 16),
         children: [
-          AspectRatio(
-            aspectRatio: 1,
-            child: CustomPaint(
-              painter: TargetPainter(
-                face: face,
-                colors: colors,
-                visibleShots: [shot],
-                selectedShot: shot,
-                currentSeriesNo: shot.seriesNo,
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(tr('Результат: {p}', {'p': shot.score.toStringAsFixed(1)}),
-              style: Theme.of(context).textTheme.titleMedium),
+          SingleShotInfo(shot: shot, face: face, colors: colors),
           const SizedBox(height: 12),
           Text(tr('Заметки'), style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 6),

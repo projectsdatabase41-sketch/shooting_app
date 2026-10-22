@@ -364,7 +364,7 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(color: cs.surfaceContainerHigh, borderRadius: BorderRadius.circular(18)),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(tr(f.hasOpenStage ? 'По правилам ISSF (п. 6.17.3)' : 'По правилам ISSF (п. 6.17.2)'), style: theme.textTheme.titleSmall),
+                    Text(f.hasOpenStage ? tr('По правилам ISSF (п. 6.17.3)') : tr('По правилам ISSF (п. 6.17.2)'), style: theme.textTheme.titleSmall),
                     const SizedBox(height: 6),
                     Text(
                       f.hasOpenStage

@@ -94,6 +94,7 @@ class _LockScreenState extends State<_LockScreen> {
   String _pin = '';
   String? _error;
   bool _busy = false;
+  bool _checking = false; // идёт проверка ключа/PIN: показываем «Проверяю…», повторный ввод не принимаем
   Timer? _tick;
 
   @override
@@ -122,9 +123,14 @@ class _LockScreenState extends State<_LockScreen> {
       return;
     }
     _busy = true;
+    setState(() {
+      _checking = true;
+      _error = null;
+    });
     final ok = await AppLock.verify(widget.db, seq);
     _busy = false;
     if (!mounted) return;
+    setState(() => _checking = false);
     if (ok) {
       AppLock.locked.value = false;
     } else {
@@ -187,7 +193,7 @@ class _LockScreenState extends State<_LockScreen> {
         height: 28,
         child: Center(
           child: Text(
-            left != null ? tr('Слишком много попыток. Подождите {s} с', {'s': left.inSeconds + 1}) : (_error ?? ''),
+            left != null ? tr('Слишком много попыток. Подождите {s} с', {'s': left.inSeconds + 1}) : (_checking ? tr('Проверяю…') : (_error ?? '')),
             style: TextStyle(color: theme.colorScheme.error),
           ),
         ),
@@ -207,7 +213,7 @@ class _LockScreenState extends State<_LockScreen> {
           Expanded(child: Center(child: SingleChildScrollView(child: header))),
           Column(mainAxisSize: MainAxisSize.min, children: [
               if (AppLock.method(widget.db) == 'pattern') ...[
-                PatternPad(onComplete: _pattern, error: _error != null),
+                PatternPad(onComplete: _pattern, error: _error != null, enabled: !_checking),
                 if (AppLock.biometricOn(widget.db))
                   Padding(
                     padding: const EdgeInsets.only(top: 12),

@@ -1,3 +1,4 @@
+import '../services/app_lock.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -58,13 +59,13 @@ class _ImportScreenState extends State<ImportScreen> {
     });
     FilePickerResult? result;
     try {
-      result = await FilePicker.platform.pickFiles(
+      result = await AppLock.external(() => FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: const ['pdf', 'json'],
         allowMultiple: true,
         // Байты просим всегда (в вебе файла на диске нет, dart:io туда не компилируется).
         withData: true,
-      );
+      ));
     } catch (e) {
       setState(() => _error = friendlyError(e));
       return;

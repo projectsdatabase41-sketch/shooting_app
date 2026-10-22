@@ -1,3 +1,4 @@
+import '../services/app_lock.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -36,10 +37,10 @@ class AvatarUtils {
     final windows = !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
     final Uint8List? bytes;
     if (windows) {
-      final result = await FilePicker.platform.pickFiles(type: FileType.image, withData: true);
+      final result = await AppLock.external(() => FilePicker.platform.pickFiles(type: FileType.image, withData: true));
       bytes = result?.files.first.bytes;
     } else {
-      final file = await ImagePicker().pickImage(source: ImageSource.gallery);
+      final file = await AppLock.external(() => ImagePicker().pickImage(source: ImageSource.gallery));
       bytes = file == null ? null : await file.readAsBytes();
     }
     return bytes;

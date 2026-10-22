@@ -127,7 +127,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
       _syncFriends();
       // Приглашения в финал: предлагаем принять при открытии мессенджера.
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && friendlyErrorDevMode) offerFinalInvites(context, context.read<AppDataStore>());
+        if (mounted) offerFinalInvites(context, context.read<AppDataStore>());
       });
     } else if (_mainAuth.isSignedIn && !_auth.manuallySignedOut) {
       _autoProvisioning = true;

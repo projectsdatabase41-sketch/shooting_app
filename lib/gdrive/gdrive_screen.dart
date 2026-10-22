@@ -1,3 +1,4 @@
+import '../services/app_lock.dart';
 import '../widgets/glass_route.dart';
 import 'dart:async' show unawaited;
 import 'dart:convert';
@@ -180,7 +181,7 @@ class _GDriveScreenState extends State<GDriveScreen> {
   }
 
   Future<void> _upload() async {
-    final r = await FilePicker.platform.pickFiles(withData: true);
+    final r = await AppLock.external(() => FilePicker.platform.pickFiles(withData: true));
     final f = r?.files.firstOrNull;
     final bytes = f?.bytes;
     if (f == null || bytes == null) return;

@@ -1,3 +1,4 @@
+import 'app_lock.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -55,9 +56,9 @@ class ChatVault {
   static Future<bool> ensureAccess() async {
     if (!supported) return false;
     if (await Permission.manageExternalStorage.isGranted || await Permission.storage.isGranted) return true;
-    final r = await Permission.manageExternalStorage.request();
+    final r = await AppLock.external(() => Permission.manageExternalStorage.request());
     if (r.isGranted) return true;
-    return (await Permission.storage.request()).isGranted;
+    return (await AppLock.external(() => Permission.storage.request())).isGranted;
   }
 
   static Future<bool> exists() async {

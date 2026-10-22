@@ -1,3 +1,4 @@
+import '../services/app_lock.dart';
 import '../widgets/glass_route.dart';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -146,13 +147,13 @@ class ChatMediaUtils {
     if (choice == null) return null;
     if (choice == 2) return _pickFile();
 
-    final xfile = await ImagePicker().pickImage(source: choice == 0 ? ImageSource.camera : ImageSource.gallery);
+    final xfile = await AppLock.external(() => ImagePicker().pickImage(source: choice == 0 ? ImageSource.camera : ImageSource.gallery));
     if (xfile == null) return null;
     return ChatAttachmentPick(await xfile.readAsBytes(), xfile.name);
   }
 
   static Future<ChatAttachmentPick?> _pickFile() async {
-    final result = await FilePicker.platform.pickFiles(withData: true);
+    final result = await AppLock.external(() => FilePicker.platform.pickFiles(withData: true));
     final file = result?.files.first;
     final bytes = file?.bytes;
     if (file == null || bytes == null) return null;
@@ -164,7 +165,7 @@ class ChatMediaUtils {
   /// личном чате, см. `ChatThreadScreen._attachLarge`), намеренно без
   /// сжатия/предпросмотра: `withData: false` не читает файл в память.
   static Future<ChatLargeFilePick?> pickLargeFile() async {
-    final result = await FilePicker.platform.pickFiles(withData: false);
+    final result = await AppLock.external(() => FilePicker.platform.pickFiles(withData: false));
     final file = result?.files.first;
     final path = file?.path;
     if (file == null || path == null) return null;
@@ -176,16 +177,16 @@ class ChatMediaUtils {
   /// уже есть в зависимостях, работает на всех платформах без отдельных
   /// разрешений на хранилище, и пользователь сам решает, куда сохранить.
   static Future<void> shareAttachment(Uint8List bytes, String fileName, String? mime) {
-    return SharePlus.instance.share(ShareParams(
+    return AppLock.external(() => SharePlus.instance.share(ShareParams(
       files: [XFile.fromData(bytes, name: fileName, mimeType: mime)],
-    ));
+    )));
   }
 
   /// То же самое, но для уже скачанного НА ДИСК большого вложения
   /// (Google Drive, см. `ChatDriveService`) — по пути, а не по байтам в
   /// памяти: гигабайты через `Uint8List` не гоняют.
   static Future<void> shareAttachmentPath(String path, String? mime) {
-    return SharePlus.instance.share(ShareParams(files: [XFile(path, mimeType: mime)]));
+    return AppLock.external(() => SharePlus.instance.share(ShareParams(files: [XFile(path, mimeType: mime)])));
   }
 
   /// Читаемый размер — "2.4 МБ" вместо голого числа байт.

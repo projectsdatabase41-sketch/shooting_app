@@ -307,6 +307,11 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
                 _contact.isGroup ? chatGroupColor(_contact.color) : null,
           ),
         ),
+        if (!_contact.isGroup && _contact.nickname != _contact.realNickname)
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Text(tr('Настоящее имя: {n}', {'n': _contact.realNickname}), style: theme.textTheme.bodySmall),
+          ),
         const SizedBox(height: 12),
         if (_contact.isGroup)
           Text(tr('Участников: {length}', {'length': _contact.members.length}),

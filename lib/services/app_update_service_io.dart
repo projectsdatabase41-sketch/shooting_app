@@ -157,6 +157,16 @@ class AppUpdateService {
   ///
   /// Скачанный и ещё свежий пакет (не старше [keepFor], той же версии [keepSha]) остаётся — его можно
   /// установить без повторной загрузки; устаревший, уже установленный или от другой версии удаляется.
+  /// Отменить текущую загрузку (зависла, пропала связь) и убрать её следы.
+  static Future<void> cancelDownload() async {
+    try {
+      await _initDownloader();
+      await FileDownloader().cancelTaskWithId(_taskId);
+      await FileDownloader().database.deleteRecordWithId(_taskId);
+    } catch (_) {}
+    await cleanupStale();
+  }
+
   static Future<void> cleanupStale({String? keepSha}) async {
     try {
       await _initDownloader();

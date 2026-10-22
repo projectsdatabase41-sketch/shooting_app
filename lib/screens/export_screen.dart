@@ -1,3 +1,4 @@
+import '../services/app_lock.dart';
 import '../widgets/app_backdrop.dart';
 import '../logic/friendly_error.dart';
 import 'dart:convert';
@@ -262,14 +263,14 @@ class _ExportScreenState extends State<ExportScreen> {
       final name =
           'shooting_export_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.json';
 
-      await SharePlus.instance.share(
+      await AppLock.external(() => SharePlus.instance.share(
         ShareParams(
           files: [
             XFile.fromData(bytes, mimeType: 'application/json', name: name)
           ],
           subject: tr('Экспорт тренировок'),
         ),
-      );
+      ));
     } catch (e) {
       if (mounted) setState(() => _message = friendlyError(e));
     } finally {

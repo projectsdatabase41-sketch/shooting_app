@@ -28,15 +28,13 @@ class SettingsServicesScreen extends StatelessWidget {
           extendBodyBehindAppBar: true,
           appBar: GlassHeader(
             title: Text(tr('Сервисы'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-            actions: [
-              GlassCircleButton(
-                icon: const BoldIcon(Icons.add),
-                tooltip: tr('Добавить сервис'),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => AddServiceScreen(repo: repo)),
-                ),
-              ),
-            ],
+          ),
+          floatingActionButton: FloatingActionButton(
+            tooltip: tr('Добавить сервис'),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => AddServiceScreen(repo: repo)),
+            ),
+            child: const Icon(Icons.add),
           ),
           body: AppBackdrop(kind: 'settings', child: services.isEmpty
               ? ListView(
@@ -45,7 +43,7 @@ class SettingsServicesScreen extends StatelessWidget {
                   children: [
                     EmptyState(
                       icon: Icons.dashboard_customize_outlined,
-                      text: tr('Сервисов пока нет — подключите Google Диск, Supabase, заметки или что-то ещё, и на главном экране появится своя плитка.'),
+                      text: tr('Подключите свой сервис'),
                     ),
                   ],
                 )

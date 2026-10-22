@@ -1,3 +1,4 @@
+import '../services/app_lock.dart';
 import '../theme/backdrop_tint.dart';
 import '../widgets/glass_route.dart';
 import 'dart:math' as math;
@@ -272,8 +273,8 @@ class _AiChatBodyState extends State<_AiChatBody> {
       }
       return;
     }
-    final xfile = await ImagePicker().pickImage(
-        source: ImageSource.gallery, maxWidth: 1600, imageQuality: 85);
+    final xfile = await AppLock.external(() => ImagePicker().pickImage(
+        source: ImageSource.gallery, maxWidth: 1600, imageQuality: 85));
     if (xfile == null || !mounted) return;
     setState(() => _pendingImage =
         null); // сброс, пока читаем — не путать со старым превью при ошибке

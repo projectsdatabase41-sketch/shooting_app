@@ -1,3 +1,4 @@
+import 'dart:async';
 import '../widgets/glass_route.dart';
 import 'security_settings_screen.dart';
 import '../services/app_lock.dart';
@@ -197,6 +198,48 @@ class _UpdateTileState extends State<_UpdateTile> {
   AppUpdateInfo? _info;
   double _progress = 0;
   String? _error;
+  Timer? _watch;
+  DateTime _lastMove = DateTime.now();
+
+  void _onProgress(double p) {
+    if (!mounted) return;
+    if (p != _progress) _lastMove = DateTime.now();
+    setState(() => _progress = p);
+  }
+
+  /// Сторож: загрузка 60 с без движения (обрыв связи, зависшая задача) — сбрасываем и даём повторить.
+  void _startWatch() {
+    _watch?.cancel();
+    _lastMove = DateTime.now();
+    _watch = Timer.periodic(const Duration(seconds: 10), (_) async {
+      if (!mounted || _stage != _UpdateStage.downloading) {
+        _watch?.cancel();
+        return;
+      }
+      if (DateTime.now().difference(_lastMove) > const Duration(seconds: 60)) {
+        _watch?.cancel();
+        await AppUpdateService.cancelDownload();
+        if (mounted) {
+          setState(() {
+            _stage = _UpdateStage.error;
+            _error = tr('Загрузка зависла (нет связи). Нажмите, чтобы повторить.');
+          });
+        }
+      }
+    });
+  }
+
+  Future<void> _cancel() async {
+    _watch?.cancel();
+    await AppUpdateService.cancelDownload();
+    if (mounted) setState(() => _stage = _UpdateStage.idle);
+  }
+
+  @override
+  void dispose() {
+    _watch?.cancel();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -211,9 +254,10 @@ class _UpdateTileState extends State<_UpdateTile> {
   Future<void> _attachIfDownloading() async {
     if (!await AppUpdateService.downloadActive()) return;
     if (mounted) setState(() => _stage = _UpdateStage.downloading);
+    _startWatch();
     try {
       await AppUpdateService.attachToActiveDownload(onProgress: (p) {
-        if (mounted) setState(() => _progress = p);
+        _onProgress(p);
       });
       if (mounted) setState(() => _stage = _UpdateStage.idle);
     } catch (e) {
@@ -282,9 +326,10 @@ class _UpdateTileState extends State<_UpdateTile> {
       _stage = _UpdateStage.downloading;
       _progress = 0;
     });
+    _startWatch();
     try {
       await AppUpdateService.downloadAndInstall(info, onProgress: (p) {
-        if (mounted) setState(() => _progress = p);
+        _onProgress(p);
       });
       // Дальше решает системный установщик — экран можно просто оставить
       // как есть, приложение необязательно будет перезапущено сразу.
@@ -363,6 +408,7 @@ class _UpdateTileState extends State<_UpdateTile> {
           ),
           title: Text(tr(
               'Скачиваю… {percent}%', {'percent': (_progress * 100).round()})),
+          trailing: IconButton(icon: const Icon(Icons.close), tooltip: tr('Отменить загрузку'), onPressed: _cancel),
         ),
       _UpdateStage.error => ListTile(
           leading: const Icon(Icons.error_outline, color: Colors.red),

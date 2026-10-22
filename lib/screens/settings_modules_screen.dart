@@ -1,5 +1,4 @@
 import '../widgets/app_backdrop.dart';
-import '../logic/friendly_error.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -96,17 +95,18 @@ class _SettingsModulesScreenState extends State<SettingsModulesScreen> {
       builder: (context, _) {
         // Без «Настроек» (они всегда на месте) и без вкладок, которых нет
         // у этого пользователя (финалы — только в режиме разработчика).
+        String labelOf(String id) => id == 'athletes' ? tr('Я тренер') : (widget.specs[id]?.label == null ? id : tr(widget.specs[id]!.label));
+        // По алфавиту: порядок плиток меняют на главном экране, здесь только включают и выключают.
         final ids = [
           for (final id in tabs.order)
-            if (id != 'settings' && (id != 'finals' || friendlyErrorDevMode)) id,
-        ];
+            if (id != 'settings') id,
+        ]..sort((a, b) => labelOf(a).toLowerCase().compareTo(labelOf(b).toLowerCase()));
         Widget row(String id, int index) {
           final spec = widget.specs[id];
           final needs = _needs(id, store);
           final on = _on(id, store);
-          return ReorderableDelayedDragStartListener(
+          return KeyedSubtree(
             key: ValueKey(id),
-            index: index,
             child: Card(
               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               child: ListTile(
@@ -115,7 +115,6 @@ class _SettingsModulesScreenState extends State<SettingsModulesScreen> {
                 subtitle: needs != null ? Text(needs) : (on ? null : Text(tr('выключено'))),
                 trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                   Switch(value: on && needs == null, onChanged: needs != null ? null : (v) => _toggle(id, v, store)),
-                  const Icon(Icons.drag_handle),
                 ]),
               ),
             ),
@@ -137,15 +136,6 @@ class _SettingsModulesScreenState extends State<SettingsModulesScreen> {
           body: AppBackdrop(kind: 'settings', child: CustomScrollView(
             slivers: [
               SliverToBoxAdapter(child: SizedBox(height: MediaQuery.paddingOf(context).top + GlassHeader.height + 8)),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                sliver: SliverToBoxAdapter(
-                  child: Text(
-                    tr('Включайте нужные модули и расставляйте их по приоритету: удержите строку, затем перетащите (простой свайп просто листает список). Режима «спортсмен / тренер» нет — «Тренировка» и «Спортсмены» можно включить вместе или по отдельности. Выключенный модуль скрыт и не работает в фоне.'),
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ),
-              ),
               // Размер плиток главного экрана: на широком экране (ноутбук) они не растягиваются.
               SliverToBoxAdapter(
                 child: Padding(
@@ -153,31 +143,20 @@ class _SettingsModulesScreenState extends State<SettingsModulesScreen> {
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(tr('Размер плиток'), style: theme.textTheme.labelLarge),
                     const SizedBox(height: 6),
-                    SegmentedButton<int>(
-                      showSelectedIcon: false,
-                      segments: [
-                        ButtonSegment(value: 160, label: Text(tr('Мелкие'))),
-                        ButtonSegment(value: 240, label: Text(tr('Средние'))),
-                        ButtonSegment(value: 360, label: Text(tr('Крупные'))),
-                      ],
-                      selected: {
-                        [160, 240, 360].reduce((a, b) => (a - tabs.tileMaxPx).abs() <= (b - tabs.tileMaxPx).abs() ? a : b)
-                      },
-                      onSelectionChanged: (v) => tabs.tileMaxPx = v.first,
-                    ),
+                    Wrap(spacing: 10, runSpacing: 10, children: [
+                      for (final e in const [('xs', 140), ('s', 180), ('m', 240), ('l', 300), ('xl', 360), ('xxl', 420)])
+                        _SizeButton(
+                          label: e.$1,
+                          selected: const [140, 180, 240, 300, 360, 420].reduce((a, b) => (a - tabs.tileMaxPx).abs() <= (b - tabs.tileMaxPx).abs() ? a : b) == e.$2,
+                          glass: TileStyle.isGlass(db),
+                          onTap: () => tabs.tileMaxPx = e.$2,
+                        ),
+                    ]),
                   ]),
                 ),
               ),
-              SliverReorderableList(
+              SliverList.builder(
                 itemCount: ids.length,
-                onReorder: (oldIndex, newIndex) {
-                  final list = List.of(ids);
-                  var target = newIndex;
-                  if (target > oldIndex) target -= 1;
-                  final moved = list.removeAt(oldIndex);
-                  list.insert(target.clamp(0, list.length), moved);
-                  tabs.setOrder([...list, 'settings']);
-                },
                 itemBuilder: (context, i) => row(ids[i], i),
               ),
               SliverToBoxAdapter(
@@ -200,6 +179,31 @@ class _SettingsModulesScreenState extends State<SettingsModulesScreen> {
           )),
         ));
       },
+    );
+  }
+}
+
+/// Круглая кнопка размера плиток («xs … xxl»): цвет как у остальных кнопок, при «стекле» — прозрачная с контуром.
+class _SizeButton extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final bool glass;
+  final VoidCallback onTap;
+  const _SizeButton({required this.label, required this.selected, required this.glass, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final fill = selected ? cs.primary.withValues(alpha: glass ? 0.55 : 1) : (glass ? Colors.transparent : cs.surfaceContainerHighest);
+    final fg = selected ? cs.onPrimary : cs.onSurface;
+    return Material(
+      color: fill,
+      shape: CircleBorder(side: BorderSide(color: selected && !glass ? Colors.transparent : cs.outline.withValues(alpha: 0.55))),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(width: 46, height: 46, child: Center(child: Text(label, style: TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: 13)))),
+      ),
     );
   }
 }

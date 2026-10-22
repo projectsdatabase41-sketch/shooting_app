@@ -34,7 +34,6 @@ import 'settings_screen.dart';
 import 'statistics_screen.dart';
 import 'target_screen.dart';
 import '../i18n/i18n.dart';
-import '../logic/friendly_error.dart';
 
 /// Домашняя оболочка с нижней навигацией. Состав вкладок задают включённые
 /// модули (режима «спортсмен / тренер» больше нет). Порядок и видимость каждой
@@ -125,7 +124,7 @@ class _HomeShellState extends State<HomeShell> {
       if (!on(AppModule.drive)) 'drive',
       if (!on(AppModule.notes)) 'notes',
       // Финалы — только в режиме разработчика и при включённом модуле.
-      if (!friendlyErrorDevMode || !on(AppModule.finals)) 'finals',
+      if (!on(AppModule.finals)) 'finals',
       if (!on(AppModule.services))
         for (final s in _services.list()) '$serviceTabPrefix${s.id}',
       // «Настройки» живут в шапке справа вверху, а не плиткой.

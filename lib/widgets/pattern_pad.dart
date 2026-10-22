@@ -8,7 +8,10 @@ class PatternPad extends StatefulWidget {
   final ValueChanged<String> onComplete;
   final double size;
   final bool error;
-  const PatternPad({super.key, required this.onComplete, this.size = 260, this.error = false});
+
+  /// false — идёт проверка: касания игнорируются.
+  final bool enabled;
+  const PatternPad({super.key, required this.onComplete, this.size = 260, this.error = false, this.enabled = true});
 
   @override
   State<PatternPad> createState() => _PatternPadState();
@@ -37,7 +40,9 @@ class _PatternPadState extends State<PatternPad> {
   @override
   Widget build(BuildContext context) {
     final color = widget.error ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.primary;
-    return SizedBox(
+    return IgnorePointer(
+      ignoring: !widget.enabled,
+      child: SizedBox(
       width: widget.size,
       height: widget.size,
       child: GestureDetector(
@@ -58,6 +63,7 @@ class _PatternPadState extends State<PatternPad> {
         child: CustomPaint(
           painter: _PatternPainter(path: List.of(_path), finger: _finger, centers: [for (var i = 0; i < 9; i++) _center(i)], color: color, dot: Theme.of(context).colorScheme.outline),
         ),
+      ),
       ),
     );
   }

@@ -1,3 +1,4 @@
+import '../services/app_lock.dart';
 import '../widgets/glass_route.dart';
 import '../logic/friendly_error.dart';
 import 'knowledge_notes_screen.dart';
@@ -331,7 +332,7 @@ class _NoteScreenState extends State<_NoteScreen> {
 
   /// Прикрепить файл к ЭТОЙ заметке: PDF, Word, TXT или изображение.
   Future<void> _attach() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await AppLock.external(() => FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: const [
         'pdf',
@@ -344,7 +345,7 @@ class _NoteScreenState extends State<_NoteScreen> {
         'webp'
       ],
       withData: true,
-    );
+    ));
     final f = result?.files.single;
     final bytes = f?.bytes;
     if (f == null || bytes == null || !mounted) return;
