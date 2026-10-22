@@ -31,7 +31,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('dlg'), findsOneWidget);
     expect(find.byType(BackdropFilter), findsNothing); // без стекла окно обычное
-    await tester.tap(find.byType(ModalBarrier).last);
+    Navigator.of(tester.element(find.text('dlg'))).pop();
     await tester.pumpAndSettle();
 
     GlassTheme.sync(true, 1.0);
