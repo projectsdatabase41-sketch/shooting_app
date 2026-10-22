@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -125,6 +126,45 @@ class ChatDriveService {
       }
       final fileId = (jsonDecode(body) as Map<String, dynamic>)['id'] as String?;
       if (fileId == null) throw Exception(tr('Диск не вернул id файла: {body}', {'body': body}));
+      return fileId;
+    } finally {
+      client.close();
+    }
+  }
+
+  /// То же из памяти (веб: файла на диске нет). Один PUT с телом из [bytes].
+  Future<String> uploadBytes({
+    required Uint8List bytes,
+    required String fileName,
+    required String mime,
+  }) async {
+    final (accessToken, folderId) = await _getUploadToken();
+    final client = clientFactory();
+    try {
+      final initRes = await client
+          .post(
+            Uri.parse('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable'),
+            headers: {
+              'Authorization': 'Bearer $accessToken',
+              'Content-Type': 'application/json; charset=UTF-8',
+              'X-Upload-Content-Type': mime,
+            },
+            body: jsonEncode({
+              'name': fileName,
+              'parents': [folderId],
+            }),
+          )
+          .timeout(_timeout);
+      final sessionUri = initRes.headers['location'];
+      if (initRes.statusCode >= 300 || sessionUri == null) {
+        throw Exception(tr('Не удалось начать загрузку на Диск ({statusCode}): {body}', {'statusCode': initRes.statusCode, 'body': initRes.body}));
+      }
+      final res = await client.put(Uri.parse(sessionUri), headers: {'Content-Type': mime}, body: bytes).timeout(_transferTimeout);
+      if (res.statusCode >= 300) {
+        throw Exception(tr('Не удалось загрузить файл на Диск ({statusCode}): {body}', {'statusCode': res.statusCode, 'body': res.body}));
+      }
+      final fileId = (jsonDecode(res.body) as Map<String, dynamic>)['id'] as String?;
+      if (fileId == null) throw Exception(tr('Диск не вернул id файла: {body}', {'body': res.body}));
       return fileId;
     } finally {
       client.close();

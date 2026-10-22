@@ -8,7 +8,6 @@ import 'package:http/http.dart' as http;
 
 import 'app_update_service.dart';
 import '../i18n/i18n.dart';
-import '../logic/friendly_error.dart';
 import 'chat_settings.dart';
 import 'local_db_service.dart';
 
@@ -320,8 +319,8 @@ class _DemoFeedbackOverlayState extends State<DemoFeedbackOverlay> {
       ValueListenableBuilder<bool>(
         valueListenable: DemoMode.enabled,
         builder: (context, on, _) {
-          // Кнопка отзыва — только в режиме разработчика.
-          if (!on || !friendlyErrorDevMode) return const SizedBox.shrink();
+          // Кнопка отзыва видна при включённом «Режиме Демо» (режим разработчика не нужен).
+          if (!on) return const SizedBox.shrink();
           final size = MediaQuery.sizeOf(context);
           final pos = _pos ?? const Offset(8, 120);
           return Positioned(

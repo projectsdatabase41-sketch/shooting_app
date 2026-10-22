@@ -26,7 +26,10 @@ class ChatLargeFilePick {
   final String path;
   final String name;
   final int size;
-  const ChatLargeFilePick(this.path, this.name, this.size);
+
+  /// Только в вебе: файла на диске нет, он целиком в памяти браузера.
+  final Uint8List? bytes;
+  const ChatLargeFilePick(this.path, this.name, this.size, {this.bytes});
 }
 
 /// Подготовка фото для отправки в чат — в отличие от аватара
@@ -48,6 +51,9 @@ class ChatMediaUtils {
   /// Потолок для файла через Google Drive: 1,5 ГБ. Больше — только напрямую
   /// между устройствами (P2P), когда эта возможность подключена.
   static const int maxDriveBytes = 1536 * 1024 * 1024;
+
+  /// В вебе файл держится в памяти вкладки — предел меньше.
+  static const int maxWebDriveBytes = 400 * 1024 * 1024;
 
   /// `null`, если файл не распознан как изображение — тогда стоит
   /// отправить как есть, типом `file`, а не `image`.
@@ -165,6 +171,13 @@ class ChatMediaUtils {
   /// личном чате, см. `ChatThreadScreen._attachLarge`), намеренно без
   /// сжатия/предпросмотра: `withData: false` не читает файл в память.
   static Future<ChatLargeFilePick?> pickLargeFile() async {
+    if (kIsWeb) {
+      // В браузере пути к файлу нет — читаем в память (поэтому у веба свой, меньший предел).
+      final r = await FilePicker.platform.pickFiles(withData: true);
+      final f = r?.files.first;
+      if (f == null || f.bytes == null) return null;
+      return ChatLargeFilePick('', f.name, f.size, bytes: f.bytes);
+    }
     final result = await AppLock.external(() => FilePicker.platform.pickFiles(withData: false));
     final file = result?.files.first;
     final path = file?.path;

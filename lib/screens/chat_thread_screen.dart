@@ -1414,12 +1414,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (!mounted || picked == null) return;
     final bytes = picked.bytes;
     if (bytes.length > ChatMediaUtils.maxAttachmentBytes) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(tr('Слишком большой файл — до {p}', {
-            'p': ChatMediaUtils.formatSize(ChatMediaUtils.maxAttachmentBytes)
-          })),
-        ));
+      // Большой файл: не отказываем, а отправляем через Google Диск (как «долгое нажатие» на скрепке).
+      if (!mounted) return;
+      if (kIsWeb) {
+        await _sendLargeCloud(ChatLargeFilePick('', picked.name, bytes.length, bytes: bytes));
+      } else {
+        final dir = await getApplicationDocumentsDirectory();
+        final keep = p.join(dir.path, 'chat_media', '${DateTime.now().millisecondsSinceEpoch}_${picked.name}');
+        await Directory(p.dirname(keep)).create(recursive: true);
+        await File(keep).writeAsBytes(bytes);
+        await _sendLargeCloud(ChatLargeFilePick(keep, picked.name, bytes.length));
       }
       return;
     }
@@ -1718,7 +1722,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (!mounted || picked == null) return;
     // Приоритет: P2P (если оба на линии) → облако. В облако уходим только
     // если прямая передача не удалась — второй раз то же не отправляется.
-    if (!_contact.isGroup && _live?.isDirect == true) {
+    if (!kIsWeb && !_contact.isGroup && _live?.isDirect == true) {
       _sendFileP2p(picked, cloudFallback: true);
       return;
     }
@@ -1726,6 +1730,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _sendLargeCloud(ChatLargeFilePick picked) async {
+    if (kIsWeb && picked.size > ChatMediaUtils.maxWebDriveBytes) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(tr('В веб-версии файл больше {p} не отправить — отправьте его с телефона', {'p': ChatMediaUtils.formatSize(ChatMediaUtils.maxWebDriveBytes)}))));
+      return;
+    }
     if (picked.size > ChatMediaUtils.maxDriveBytes) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(tr('Файл больше 1,5 ГБ: через облако такой не отправить. Для очень больших файлов нужна прямая передача (P2P).'))));
@@ -1735,6 +1744,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     setState(() => _sending = true);
     try {
       await widget.sync.sendLargeAttachment(
+        bytes: picked.bytes,
         contactId: _contact.id,
         filePath: picked.path,
         fileName: picked.name,

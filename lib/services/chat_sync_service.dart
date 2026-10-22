@@ -367,7 +367,11 @@ class ChatSyncService {
   /// (выбран через `ChatMediaUtils.pickLargeFile`, байты в память не
   /// читаются). Дальше та же схема статусов sending/sent/error, что и у
   /// обычного вложения — `retry` умеет повторить именно эту загрузку.
+  /// Файлы, ушедшие в облако из памяти (веб): повторная отправка возможна, пока открыта вкладка.
+  final Map<String, Uint8List> _largeBytes = {};
+
   Future<ChatMessage> sendLargeAttachment({
+    Uint8List? bytes,
     required String contactId,
     required String filePath,
     required String fileName,
@@ -377,8 +381,9 @@ class ChatSyncService {
     String? caption,
     bool downloadAllowed = true,
   }) async {
+    final msgId = _uuid.v4();
     final message = ChatMessage(
-      id: _uuid.v4(),
+      id: msgId,
       clientMessageId: _uuid.v4(),
       contactId: contactId,
       direction: ChatMessageDirection.outgoing,
@@ -388,10 +393,11 @@ class ChatSyncService {
       attachmentName: fileName,
       attachmentMime: mime,
       attachmentSize: fileSize,
-      attachmentLocalPath: filePath,
+      attachmentLocalPath: bytes == null ? filePath : 'mem:$msgId',
       downloadAllowed: downloadAllowed,
       createdAt: DateTime.now(),
     );
+    if (bytes != null) _largeBytes[msgId] = bytes;
     repo.addMessage(message);
     await retry(message);
     return message;
@@ -542,11 +548,26 @@ class ChatSyncService {
     try {
       var driveFileId = message.driveFileId;
       if (driveFileId == null) {
-        driveFileId = await drive.upload(
-          filePath: message.attachmentLocalPath!,
-          fileName: message.attachmentName ?? 'file',
-          mime: message.attachmentMime ?? 'application/octet-stream',
-        );
+        final lp = message.attachmentLocalPath!;
+        if (lp.startsWith('mem:')) {
+          final b = _largeBytes[message.id];
+          if (b == null) {
+            repo.updateStatus(message.id, ChatMessageStatus.error);
+            throw Exception(tr('Файл больше не в памяти — выберите его заново'));
+          }
+          driveFileId = await drive.uploadBytes(
+            bytes: b,
+            fileName: message.attachmentName ?? 'file',
+            mime: message.attachmentMime ?? 'application/octet-stream',
+          );
+          _largeBytes.remove(message.id);
+        } else {
+          driveFileId = await drive.upload(
+            filePath: lp,
+            fileName: message.attachmentName ?? 'file',
+            mime: message.attachmentMime ?? 'application/octet-stream',
+          );
+        }
         repo.updateDriveFileId(message.id, driveFileId);
       }
 
