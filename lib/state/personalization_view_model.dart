@@ -8,9 +8,6 @@ import 'package:flutter/material.dart' show Brightness, Color, ThemeMode;
 import '../models/app_color_presets.dart';
 import '../models/color_presets.dart';
 import '../models/target_color_scheme.dart';
-import '../services/ai_settings.dart';
-import 'home_tabs_view_model.dart';
-import 'workspace_view_model.dart';
 import '../services/local_db_service.dart';
 
 /// Персонализация цвета (часть A логики-спека). Грузит `color_prefs` при
@@ -423,22 +420,13 @@ class PersonalizationViewModel extends ChangeNotifier {
   /// нажимая "сбросить все цвета".
   void resetAll() {
     _scheme = TargetColorScheme.defaultScheme;
-    // Чистим ТОЛЬКО цветовые строки. В той же key-value таблице лежат
-    // тема интерфейса и настройки ИИ (ключ, модели, адрес книг) — снести
-    // их вместе с цветами было бы неожиданностью для того, кто нажал
-    // "сбросить все цвета".
-    final protected = [
-      themeModeKey,
-      localeKey,
-      devModeKey,
-      ...AiSettings.allKeys,
-      ...WorkspaceViewModel.allKeys,
-      ...HomeTabsViewModel.allKeys,
-      ...appColorKeys,
-    ];
-    final placeholders = List.filled(protected.length, '?').join(', ');
-    db.db.execute(
-        'DELETE FROM color_prefs WHERE key NOT IN ($placeholders)', protected);
+    // Удаляем ТОЛЬКО цвета мишени (список ключей), всё остальное в key-value таблице
+    // (прозрачность и размер плиток, модули, обои, защита входа, ИИ, язык) не трогаем.
+    // Раньше удалялось «всё, кроме защищённого списка», и сброс цветов заодно сбрасывал
+    // эти настройки.
+    final keys = [...TargetColorScheme.allKeys, 'shot_number_text_auto'];
+    final placeholders = List.filled(keys.length, '?').join(', ');
+    db.db.execute('DELETE FROM color_prefs WHERE key IN ($placeholders)', keys);
     notifyListeners();
   }
 

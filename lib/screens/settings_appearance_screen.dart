@@ -94,6 +94,7 @@ class SettingsAppearanceScreen extends StatelessWidget {
         personalization.loadFromDb();
         final db = context.read<AppDataStore>().db;
         BackdropTint.load(db);
+        TileStyle.reload(db);
         AnimSettings.load(db);
         AnimSettings.revision.value++;
       },

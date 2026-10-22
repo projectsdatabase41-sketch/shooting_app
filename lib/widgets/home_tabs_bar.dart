@@ -292,6 +292,13 @@ class TileStyle {
     return _cached!;
   }
 
+  /// Перечитать из базы (после отмены правок в настройках): память и база снова совпадают.
+  static void reload(dynamic db) {
+    _cached = null;
+    isGlass(db);
+    _bump();
+  }
+
   static void setGlass(dynamic db, bool v) {
     _put(db, 'tile_glass', v ? '1' : '0');
     _cached = v;
