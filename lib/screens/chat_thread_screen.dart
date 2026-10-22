@@ -66,7 +66,6 @@ import '../widgets/glass_pill.dart';
 import 'attachment_compose_screen.dart';
 import 'call_screen.dart';
 import 'chat_contact_panel_screen.dart';
-import 'chat_home_screen.dart';
 import 'dart:typed_data' show Uint8List;
 import 'photo_viewer_screen.dart';
 import '../i18n/i18n.dart';
@@ -1804,12 +1803,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             tooltip: tr('Вызвать тренера'),
             onTap: _callCoach,
           )
-        else
-          GlassCircleButton(
-            icon: const BoldIcon(Icons.close),
-            tooltip: tr('Свернуть мессенджер'),
-            onTap: () => ChatHomeScreen.close(context),
-          ),
       ],
       titlePadding: const EdgeInsets.fromLTRB(4, 4, 18, 4),
       title: ValueListenableBuilder(

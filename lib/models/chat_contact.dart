@@ -17,7 +17,12 @@ class ChatGroupMember {
 /// история переписки работают для неё без отдельного кода.
 class ChatContact {
   final String id;
+
+  /// Имя, которое видит владелец: своё (alias), если задал, иначе настоящее.
   final String nickname;
+
+  /// Имя с сервера (его и сохраняем при обновлении контакта).
+  final String realNickname;
   final String chatCode;
   final String? avatarBase64;
 
@@ -42,7 +47,8 @@ class ChatContact {
     this.isGroup = false,
     this.members = const [],
     this.color = '',
-  });
+    String? realNickname,
+  }) : realNickname = realNickname ?? nickname;
 
   ChatGroupMember? member(String userId) {
     for (final m in members) {
@@ -67,7 +73,8 @@ class ChatContact {
     }
     return ChatContact(
       id: row['id'] as String,
-      nickname: row['nickname'] as String,
+      nickname: ((row['alias'] as String?) ?? '').trim().isNotEmpty ? (row['alias'] as String).trim() : row['nickname'] as String,
+      realNickname: row['nickname'] as String,
       chatCode: row['chat_code'] as String,
       avatarBase64: row['avatar_base64'] as String?,
       about: (row['about'] as String?) ?? '',

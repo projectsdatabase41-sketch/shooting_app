@@ -53,6 +53,9 @@ class Wallpaper extends StatelessWidget {
             if (blur > 0.01)
               Opacity(opacity: blur, child: Image.asset('${name}_b.jpg', fit: BoxFit.cover, gaplessPlayback: true, filterQuality: FilterQuality.medium, cacheWidth: cw)),
           ]);
+          if (BackdropTint.wBright != 0 || BackdropTint.wContrast != 1) {
+            stack = ColorFiltered(colorFilter: ColorFilter.matrix(BackdropTint.wallpaperMatrix()), child: stack);
+          }
           if (mask != null) stack = ColorFiltered(colorFilter: ColorFilter.mode(mask, BlendMode.color), child: stack);
           return stack;
         },

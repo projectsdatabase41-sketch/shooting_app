@@ -39,7 +39,7 @@ class ChatMessagesRepository {
       'group_json = excluded.group_json',
       [
         c.id,
-        c.nickname,
+        c.realNickname,
         c.chatCode,
         c.avatarBase64,
         c.about,
@@ -48,6 +48,10 @@ class ChatMessagesRepository {
       ],
     );
   }
+
+  /// Своё имя контакта: видно только на этом устройстве, сервер не затрагивается; пусто - вернуть настоящее.
+  void setAlias(String id, String alias) =>
+      db.db.execute('UPDATE chat_contacts SET alias = ? WHERE id = ?', [alias.trim(), id]);
 
   /// Собеседник получил новый id (переезд сервера мессенджера) — переносим
   /// контакт и всю переписку на него.

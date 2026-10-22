@@ -112,6 +112,30 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
     }
   }
 
+  /// Своё имя для контакта: видно только владельцу, во всех чатах; пустое - вернуть настоящее.
+  Future<void> _rename() async {
+    final ctrl = TextEditingController(text: _contact.nickname == _contact.realNickname ? '' : _contact.nickname);
+    final name = await showGlassDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('Новое имя')),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: InputDecoration(hintText: _contact.realNickname),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr('Отмена'))),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(ctrl.text), child: Text(tr('Сохранить'))),
+        ],
+      ),
+    );
+    if (name == null || !mounted) return;
+    widget.repo.setAlias(_contact.id, name);
+    final fresh = widget.repo.contactById(_contact.id);
+    if (fresh != null) setState(() => _contact = fresh);
+  }
+
   /// Убрать из друзей (переписка остаётся).
   Future<void> _removeFriend() async {
     if (!await confirmRemoveFriend(context, _contact.nickname)) return;
@@ -284,9 +308,6 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        Text(_contact.nickname,
-            style: theme.textTheme.titleLarge
-                ?.copyWith(fontWeight: FontWeight.w700)),
         if (_contact.isGroup)
           Text(tr('Участников: {length}', {'length': _contact.members.length}),
               style: theme.textTheme.bodySmall),
@@ -296,6 +317,13 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
           child: Row(children: [for (final t in tiles) Expanded(child: t)]),
         ),
         const SizedBox(height: 8),
+        if (!_contact.isGroup)
+          ListTile(
+            leading: const Icon(Icons.edit_outlined),
+            title: Text(tr('Переименовать')),
+            subtitle: Text(tr('Новое имя видно только вам, во всех чатах')),
+            onTap: _rename,
+          ),
         if (!_contact.isGroup)
           ListTile(
             leading: const Icon(Icons.tag),
@@ -345,7 +373,7 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
 
     return Scaffold(
       appBar: GlassHeader(
-        title: const SizedBox.shrink(),
+        title: Text(_contact.nickname, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
         actions: [
           if (!_contact.isGroup)
             GlassPill(

@@ -177,7 +177,7 @@ class LocalDbService {
         'peer_read': 'INTEGER NOT NULL DEFAULT 0',
         'read_reported': 'INTEGER NOT NULL DEFAULT 0',
       },
-      'chat_contacts': {'about': "TEXT NOT NULL DEFAULT ''", 'kind': "TEXT NOT NULL DEFAULT 'person'", 'group_json': 'TEXT'},
+      'chat_contacts': {'alias': "TEXT NOT NULL DEFAULT ''", 'about': "TEXT NOT NULL DEFAULT ''", 'kind': "TEXT NOT NULL DEFAULT 'person'", 'group_json': 'TEXT'},
       'chat_global_cache': {
         'download_allowed': 'INTEGER NOT NULL DEFAULT 1',
         'chart_json': 'TEXT',

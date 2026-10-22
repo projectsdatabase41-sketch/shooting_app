@@ -37,9 +37,13 @@ class BackdropTint {
   static double sat = 1.0; // для manual, 0..1.5
 
   // Обои: чёрно-белая картинка + цветная маска (см. wallpaper.dart).
-  static double mask = 0.55; // непрозрачность маски 0..1 (прозрачность = 1 - mask)
+  static double mask = 0.4; // непрозрачность маски 0..1 (прозрачность = 1 - mask)
+  static double wBright = 0; // яркость обоев -0.5..0.5 (обе темы)
+  static double wContrast = 1; // контраст обоев 0.5..1.5
   static double blur = 9; // размытие обоев: 0..30 (доля подмешанной размытой копии)
   static const _kMask = 'wallpaper_mask';
+  static const _kWBright = 'wallpaper_bright';
+  static const _kWContrast = 'wallpaper_contrast';
   static const _kBlur = 'wallpaper_blur';
 
   /// Цвет маски для обоев [kind] или null (режим «Исходный» - картинка без цвета).
@@ -50,6 +54,13 @@ class BackdropTint {
     final h = gold ? 42.0 : effectiveHue();
     final s = gold ? 0.9 : (effectiveSat() * 0.7).clamp(0.0, 1.0).toDouble();
     return HSLColor.fromAHSL(mask.clamp(0.0, 1.0).toDouble(), h % 360, s, 0.5).toColor();
+  }
+
+  /// Матрица яркости и контраста для готовых обоев.
+  static List<double> wallpaperMatrix() {
+    final c = wContrast;
+    final off = ((1 - c) * 0.5 + wBright) * 255;
+    return [c, 0, 0, 0, off, 0, c, 0, 0, off, 0, 0, c, 0, off, 0, 0, 0, 1, 0];
   }
 
   /// Прозрачность маски 0..1 (для ползунка и ИИ).
@@ -97,7 +108,9 @@ class BackdropTint {
     if (m == 'auto' || m == 'manual' || m == 'off') mode = m!;
     hue = (double.tryParse(get(_kHue) ?? '') ?? baseHue).clamp(0.0, 360.0).toDouble();
     sat = (double.tryParse(get(_kSat) ?? '') ?? 1.0).clamp(0.0, 1.5).toDouble();
-    mask = (double.tryParse(get(_kMask) ?? '') ?? 0.55).clamp(0.0, 1.0).toDouble();
+    mask = (double.tryParse(get(_kMask) ?? '') ?? 0.4).clamp(0.0, 1.0).toDouble();
+    wBright = (double.tryParse(get(_kWBright) ?? '') ?? 0).clamp(-0.5, 0.5).toDouble();
+    wContrast = (double.tryParse(get(_kWContrast) ?? '') ?? 1).clamp(0.5, 1.5).toDouble();
     blur = (double.tryParse(get(_kBlur) ?? '') ?? 9).clamp(0.0, 30.0).toDouble();
     customOn = get(_kCOn) == '1';
     customB64 = get(_kCImg);
@@ -114,6 +127,8 @@ class BackdropTint {
       double? newHue,
       double? newSat,
       double? newMask,
+      double? newWBright,
+      double? newWContrast,
       double? newBlur,
       bool? newCustomOn,
       double? newCBright,
@@ -137,6 +152,14 @@ class BackdropTint {
     if (newMask != null) {
       mask = newMask.clamp(0.0, 1.0).toDouble();
       put(_kMask, mask.toStringAsFixed(2));
+    }
+    if (newWBright != null) {
+      wBright = newWBright.clamp(-0.5, 0.5).toDouble();
+      put(_kWBright, wBright.toStringAsFixed(2));
+    }
+    if (newWContrast != null) {
+      wContrast = newWContrast.clamp(0.5, 1.5).toDouble();
+      put(_kWContrast, wContrast.toStringAsFixed(2));
     }
     if (newBlur != null) {
       blur = newBlur.clamp(0.0, 30.0).toDouble();

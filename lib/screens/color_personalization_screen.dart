@@ -83,7 +83,6 @@ class ColorPersonalizationScreen extends StatefulWidget {
 class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tab;
-  bool _showPreviewOnNarrow = false;
 
   static const _sections = <String, List<String>>{
     /*tr*/ 'МИШЕНЬ': [
@@ -190,50 +189,12 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
                     ],
                   );
                 }
-                return Stack(
-                  children: [
-                    list,
-                    if (_showPreviewOnNarrow)
-                      Positioned.fill(
-                        child: Container(
-                          color: Colors.black54,
-                          child: Column(
-                            children: [
-                              Expanded(child: _buildFullPreview(context)),
-                              SafeArea(
-                                child: TextButton(
-                                  onPressed: () => setState(
-                                      () => _showPreviewOnNarrow = false),
-                                  child: Text(tr('Скрыть мишень'),
-                                      style:
-                                          const TextStyle(color: Colors.white)),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                  ],
-                );
+                return list;
               },
             ),
           ),
         ],
       )),
-      bottomNavigationBar: Builder(builder: (context) {
-        final wide = MediaQuery.of(context).size.width >= 700;
-        if (wide) return const SizedBox.shrink();
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(8),
-            child: OutlinedButton.icon(
-              icon: const Icon(Icons.gps_fixed),
-              label: Text(tr('Показать мишень')),
-              onPressed: () => setState(() => _showPreviewOnNarrow = true),
-            ),
-          ),
-        );
-      }),
     );
   }
 
@@ -242,7 +203,6 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
     final brightness = Theme.of(context).brightness;
     return ListView(
       children: [
-        if (!wide) SizedBox(height: 160, child: _buildMiniPreview(context)),
         // Тема интерфейса (светлая/тёмная/системная) переехала сюда из
         // общих настроек (решение пользователя, пункт 4 списка правок:
         // "оформление цветов" и "персонализация цвета мишени" — одно и
@@ -393,25 +353,6 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
           ),
         );
       }).toList(),
-    );
-  }
-
-  Widget _buildMiniPreview(BuildContext context) {
-    final vm = context.watch<PersonalizationViewModel>();
-    // SizedBox.expand — та же причина, что и в _buildFullPreview ниже:
-    // CustomPaint без явного `size` схлопывается в 0 по любой свободной
-    // оси констрейнтов, .expand принудительно занимает всё доступное
-    // место по обеим осям.
-    return SizedBox.expand(
-      child: CustomPaint(
-        painter: TargetPainter(
-          face: TargetFace.rifle10m,
-          colors: vm.scheme,
-          visibleShots: const [],
-          selectedShot: null,
-          currentSeriesNo: 1,
-        ),
-      ),
     );
   }
 
@@ -1024,6 +965,22 @@ class _BackdropTintSectionState extends State<_BackdropTintSection> {
           value: BackdropTint.blur / 30,
           onChanged: (v) {
             BackdropTint.save(db, newBlur: v * 30);
+            setState(() {});
+          },
+        ),
+        ValueWheel(
+          label: tr('Яркость обоев'),
+          value: BackdropTint.wBright + 0.5,
+          onChanged: (v) {
+            BackdropTint.save(db, newWBright: v - 0.5);
+            setState(() {});
+          },
+        ),
+        ValueWheel(
+          label: tr('Контраст обоев'),
+          value: BackdropTint.wContrast - 0.5,
+          onChanged: (v) {
+            BackdropTint.save(db, newWContrast: v + 0.5);
             setState(() {});
           },
         ),

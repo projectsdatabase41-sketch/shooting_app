@@ -162,37 +162,7 @@ class _LockScreenState extends State<_LockScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final left = AppLock.lockoutLeft(widget.db);
-    final cs = theme.colorScheme;
-    // Круглая клавиша с объёмом (светлая грань сверху, тень снизу) и мягким свечением цвета приложения.
-    Widget key(String label, {VoidCallback? onTap, IconData? icon}) => Padding(
-          padding: const EdgeInsets.all(6),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color.lerp(cs.surfaceContainerHighest, Colors.white, 0.14)!, Color.lerp(cs.surfaceContainerHighest, Colors.black, 0.22)!],
-              ),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
-              boxShadow: [
-                BoxShadow(color: cs.primary.withValues(alpha: 0.38), blurRadius: 16, spreadRadius: 0.5),
-                BoxShadow(color: Colors.black.withValues(alpha: 0.45), blurRadius: 6, offset: const Offset(0, 4)),
-              ],
-            ),
-            child: SizedBox(
-              width: 72,
-              height: 72,
-              child: TextButton(
-                style: TextButton.styleFrom(shape: const CircleBorder(), padding: EdgeInsets.zero),
-                onPressed: onTap,
-                child: icon != null
-                    ? Icon(icon, size: 36)
-                    : Text(label, style: theme.textTheme.headlineSmall?.copyWith(fontSize: (theme.textTheme.headlineSmall?.fontSize ?? 24) * 1.5, fontWeight: FontWeight.w600)),
-              ),
-            ),
-          ),
-        );
+    Widget key(String label, {VoidCallback? onTap, IconData? icon}) => _LockKey(label: label, icon: icon, onTap: onTap);
     final header = Column(mainAxisSize: MainAxisSize.min, children: [
       const Icon(Icons.lock_outline, size: 40),
       const SizedBox(height: 12),
@@ -262,6 +232,61 @@ class _LockScreenState extends State<_LockScreen> {
           const SizedBox(height: 84),
         ]),
       ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Круглая клавиша с объёмом (светлая грань сверху, тень снизу); свечение цвета приложения - только пока нажата.
+class _LockKey extends StatefulWidget {
+  final String label;
+  final IconData? icon;
+  final VoidCallback? onTap;
+  const _LockKey({required this.label, this.icon, this.onTap});
+
+  @override
+  State<_LockKey> createState() => _LockKeyState();
+}
+
+class _LockKeyState extends State<_LockKey> {
+  bool _down = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.all(6),
+      child: Listener(
+        onPointerDown: (_) => setState(() => _down = true),
+        onPointerUp: (_) => setState(() => _down = false),
+        onPointerCancel: (_) => setState(() => _down = false),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color.lerp(cs.surfaceContainerHighest, Colors.white, _down ? 0.04 : 0.14)!, Color.lerp(cs.surfaceContainerHighest, Colors.black, _down ? 0.1 : 0.22)!],
+            ),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+            boxShadow: [
+              if (_down) BoxShadow(color: cs.primary.withValues(alpha: 0.6), blurRadius: 20, spreadRadius: 2),
+              BoxShadow(color: Colors.black.withValues(alpha: _down ? 0.2 : 0.45), blurRadius: _down ? 3 : 6, offset: Offset(0, _down ? 1 : 4)),
+            ],
+          ),
+          child: SizedBox(
+            width: 72,
+            height: 72,
+            child: TextButton(
+              style: TextButton.styleFrom(shape: const CircleBorder(), padding: EdgeInsets.zero),
+              onPressed: widget.onTap,
+              child: widget.icon != null
+                  ? Icon(widget.icon, size: 36)
+                  : Text(widget.label, style: theme.textTheme.headlineSmall?.copyWith(fontSize: (theme.textTheme.headlineSmall?.fontSize ?? 24) * 1.5, fontWeight: FontWeight.w600)),
+            ),
+          ),
         ),
       ),
     );
