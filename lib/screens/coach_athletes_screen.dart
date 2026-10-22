@@ -174,10 +174,11 @@ class _CoachAthletesScreenState extends State<CoachAthletesScreen> {
             )
           : GridView.builder(
               padding: EdgeInsets.fromLTRB(12, topInset + GlassHeader.height + 12, 12, 80),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
+              // Компактные плитки: на телефоне три в ряд.
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 128,
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
                 childAspectRatio: 1,
               ),
               // Первая плитка — «Чат» со спортсменами, дальше сами спортсмены.
@@ -193,8 +194,8 @@ class _CoachAthletesScreenState extends State<CoachAthletesScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.forum_outlined, size: 28, color: Theme.of(context).colorScheme.primary),
-                          const SizedBox(height: 8),
+                          Icon(Icons.forum_outlined, size: 24, color: Theme.of(context).colorScheme.primary),
+                          const SizedBox(height: 6),
                           Text(tr('Чат'), style: Theme.of(context).textTheme.titleSmall),
                         ],
                       ),
@@ -269,12 +270,12 @@ class _AthleteCell extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(12),
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(8),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.person_outline, size: 28),
-                const SizedBox(height: 8),
+                const Icon(Icons.person_outline, size: 24),
+                const SizedBox(height: 6),
                 Text(
                   athlete.name,
                   textAlign: TextAlign.center,
@@ -303,7 +304,7 @@ class _AthleteCell extends StatelessWidget {
         feedback: Material(
           elevation: 4,
           borderRadius: BorderRadius.circular(12),
-          child: SizedBox(width: 150, height: 150, child: _card(context)),
+          child: SizedBox(width: 110, height: 110, child: _card(context)),
         ),
         childWhenDragging: Opacity(opacity: 0.3, child: _card(context)),
         child: _card(context),
