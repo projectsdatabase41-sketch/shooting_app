@@ -248,7 +248,16 @@ class SessionImport {
   static int apply(AppDataStore store, ImportBundle bundle) {
     var added = 0;
     for (final s in bundle.sessions) {
-      if (alreadyHave(store, s)) continue; // повторный импорт того же файла дублей не создаёт
+      final old = existingMatch(store, s);
+      if (old != null) {
+        // Уже есть. Если это менее точная копия (занесена ИИ или вручную, без ключа отчёта), а у нас точные
+        // данные из отчёта — заменяем её; иначе повторный импорт дублей не создаёт.
+        if (old.extra?['импорт_ключ'] == null && s.session.extra?['импорт_ключ'] != null) {
+          store.deleteSession(old.id);
+        } else {
+          continue;
+        }
+      }
       final exercise = _findOrCreateExercise(store, s);
       store.upsertSession(s.session.copyWith(exerciseId: exercise.id));
       added++;
@@ -258,21 +267,16 @@ class SessionImport {
 
   /// Такая тренировка уже есть: тот же ключ импорта либо то же время (до полутора минут), число
   /// выстрелов и сумма. Второе ловит и тренировки, пришедшие из облака после импорта другим путём.
-  static bool alreadyHave(AppDataStore store, ImportedSession s) {
+  static bool alreadyHave(AppDataStore store, ImportedSession s) => existingMatch(store, s) != null;
+
+  /// Уже имеющаяся такая же тренировка (тот же ключ импорта либо `AppDataStore.sameTraining`).
+  static TrainingSession? existingMatch(AppDataStore store, ImportedSession s) {
     final key = s.session.extra?['импорт_ключ'];
-    final start = s.session.startedAt;
-    final n = s.session.shots.length;
-    final total = s.session.totalScore;
     for (final e in store.sessions) {
-      if (key != null && e.extra?['импорт_ключ'] == key) return true;
-      final es = e.startedAt;
-      if (start == null || es == null || e.shots.length != n || (e.totalScore - total).abs() >= 0.05) continue;
-      final dt = es.difference(start).abs();
-      // То же время (до полутора минут) либо тот же день и та же сумма: у тренировок, занесённых раньше
-      // другим способом, время могло сдвинуться на часовой пояс.
-      if (dt.inSeconds <= 90 || dt.inHours <= 14) return true;
+      if (key != null && e.extra?['импорт_ключ'] == key) return e;
+      if (AppDataStore.sameTraining(e, s.session)) return e;
     }
-    return false;
+    return null;
   }
 
   static const _stanceWords = ['лёжа', 'колена', 'стоя', 'положения'];

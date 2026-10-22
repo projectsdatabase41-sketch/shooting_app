@@ -38,13 +38,14 @@ void main() {
 
     // одна из тренировок уже есть, но с временем, сдвинутым на 5 часов (как у раннего импорта через ИИ)
     final first = bundleOf(parsedAll.first).sessions.first;
-    store.upsertSession(first.session.copyWith(id: 'old1', exerciseId: air.id, startedAt: first.session.startedAt!.add(const Duration(hours: 5))));
+    store.upsertSession(first.session.copyWith(id: 'old1', exerciseId: air.id, extra: <String, dynamic>{'источник': 'ИИ'}, startedAt: first.session.startedAt!.add(const Duration(hours: 5))));
 
     var written = 0;
     for (final r in parsedAll) {
       written += SessionImport.apply(store, bundleOf(r));
     }
-    expect(written, rep.length - 1, reason: 'сдвинутая по времени — дубль, остальные записаны');
+    expect(written, rep.length, reason: 'менее точная копия со сдвинутым временем заменена отчётом, остальные записаны');
+    expect(store.sessions.any((x) => x.id == 'old1'), isFalse);
     expect(store.sessions.length, rep.length);
     expect(store.exercises.length, before, reason: 'новых упражнений создаваться не должно');
 
@@ -52,10 +53,10 @@ void main() {
     for (var i = 0; i < rep.length; i++) {
       final h = rep[i]['header'] as Map<String, dynamic>;
       final key = parsedAll[i]['key'];
-      final s = store.sessions.firstWhere((x) => x.extra?['импорт_ключ'] == key || (i == 0 && x.id == 'old1'));
+      final s = store.sessions.firstWhere((x) => x.extra?['импорт_ключ'] == key);
       expect(s.shots.length, h['n_shots']);
       expect(s.totalScore, closeTo((h['total'] as num).toDouble(), 0.051), reason: '${rep[i]['file']}');
-      if (s.id != 'old1') {
+      {
         expect(s.finishedAt!.isAfter(s.startedAt!) || s.finishedAt == s.startedAt, isTrue);
         expect(s.shots.every((x) => x.counts), isTrue);
         expect(s.shots.first.extra?['scatt'], isNotNull, reason: 'показатели выстрела сохранены');

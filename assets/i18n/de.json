@@ -1756,6 +1756,7 @@
   "тёмная": "dunkel",
   "у спортсмена нет мессенджера, доступ отозван или база недоступна": "der Sportler hat keinen Messenger, der Zugriff wurde entzogen oder die Datenbank ist nicht erreichbar",
   "у файла нет имени": "Die Datei hat keinen Namen",
+  "убрано дублей и пустых: {n}": "Duplikate und leere entfernt: {n}",
   "удалено: {deleted}": "gelöscht: {deleted}",
   "уже есть в базе": "bereits in der Datenbank",
   "уже есть: {n}": "bereits vorhanden: {n}",

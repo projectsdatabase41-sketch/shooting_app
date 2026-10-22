@@ -31,18 +31,23 @@ class SyncResult {
   final int pulledSessions;
   final int pulledComments;
 
+  /// Убрано при наведении порядка: пустые тренировки и дубли.
+  final int removedDuplicates;
+
   const SyncResult({
     this.pushedSessions = 0,
     this.pulledExercises = 0,
     this.pulledSessions = 0,
     this.pulledComments = 0,
+    this.removedDuplicates = 0,
   });
 
   bool get isEmpty =>
       pushedSessions == 0 &&
       pulledExercises == 0 &&
       pulledSessions == 0 &&
-      pulledComments == 0;
+      pulledComments == 0 &&
+      removedDuplicates == 0;
 }
 
 /// Мост между локальной моделью приложения и РЕАЛЬНОЙ схемой Supabase —
@@ -160,17 +165,28 @@ class SupabaseSyncService {
     return count;
   }
 
+  /// Читает все строки таблицы страницами по 1000: сервер отдаёт за раз не больше (по умолчанию), и раньше
+  /// «загрузить из облака» молча получало только первую тысячу выстрелов.
   Future<List<Map<String, dynamic>>> _select(String token, String path) async {
     final client = clientFactory();
     try {
-      final res = await client
-          .get(Uri.parse('${auth.url}/rest/v1/$path'), headers: _headers(token))
-          .timeout(const Duration(seconds: 30));
-      if (res.statusCode >= 400) {
-        throw SupabaseSyncException(_errorMessage(res.body, res.statusCode));
+      final out = <Map<String, dynamic>>[];
+      const page = 1000;
+      for (var offset = 0;; offset += page) {
+        final sep = path.contains('?') ? '&' : '?';
+        // Стабильный порядок нужен, чтобы страницы не пересекались и ничего не пропускали.
+        final order = path.contains('order=') ? '' : '&order=id';
+        final res = await client
+            .get(Uri.parse('${auth.url}/rest/v1/$path${sep}limit=$page&offset=$offset$order'), headers: _headers(token))
+            .timeout(const Duration(seconds: 30));
+        if (res.statusCode >= 400) {
+          throw SupabaseSyncException(_errorMessage(res.body, res.statusCode));
+        }
+        final rows = (jsonDecode(utf8.decode(res.bodyBytes)) as List).cast<Map<String, dynamic>>();
+        out.addAll(rows);
+        if (rows.length < page || out.length > 2000000) break;
       }
-      final decoded = jsonDecode(utf8.decode(res.bodyBytes));
-      return (decoded as List).cast<Map<String, dynamic>>();
+      return out;
     } finally {
       client.close();
     }
@@ -300,7 +316,35 @@ class SupabaseSyncService {
       store.markSessionSynced(session.id);
       count++;
     }
+    // Порядок в облаке: удалённое здесь (дубли, пустышки) уходит, а мусор, оставшийся в базе от прежних
+    // импортов, стирается. Сбой уборки отправку не ломает.
+    try {
+      await pushDeletions(store);
+      await _tidyCloud(token, store);
+    } catch (_) {}
     return count;
+  }
+
+  /// Чистит облако: тренировки без упражнения или без выстрелов (пустышки) и шаблоны упражнений, удалённые
+  /// на этом телефоне «насовсем». Тренировки с выстрелами не трогает.
+  Future<void> _tidyCloud(String token, AppDataStore store) async {
+    final packages = await _select(token, 'training_packages?select=id&order=id');
+    final exercises = await _select(token, 'exercises?select=id,package_id&order=id');
+    final shotOwners = {for (final r in await _select(token, 'shots?select=exercise_id&order=id')) '${r['exercise_id']}'};
+    final childByPackage = {for (final r in exercises) '${r['package_id']}': '${r['id']}'};
+    for (final p in packages) {
+      final id = '${p['id']}';
+      final child = childByPackage[id];
+      if (child != null && shotOwners.contains(child)) continue;
+      await _deleteWhere(token, 'comments', 'package_id', id);
+      await _deleteWhere(token, 'exercises', 'package_id', id);
+      await _deleteWhere(token, 'training_packages', 'id', id);
+    }
+    for (final id in store.foreverDeletedExerciseIds) {
+      try {
+        await _deleteWhere(token, 'exercise_templates', 'id', id);
+      } catch (_) {}
+    }
   }
 
   Map<String, dynamic> _exerciseTemplateJson(
@@ -486,6 +530,9 @@ class SupabaseSyncService {
       ));
     }
 
+    // Порядок локально: пустые и повторяющиеся тренировки убираются (в облаке их удалит следующая отправка).
+    final tidied = store.tidySessions();
+
     final commentRows = await _select(token, 'comments?select=*');
     final repo = CommentsRepository(store.db);
     final existingCommentIds = {
@@ -514,6 +561,7 @@ class SupabaseSyncService {
       pulledExercises: store.exercises.length - beforeExercises,
       pulledSessions: store.sessions.length - beforeSessions,
       pulledComments: pulledComments,
+      removedDuplicates: tidied,
     );
   }
 

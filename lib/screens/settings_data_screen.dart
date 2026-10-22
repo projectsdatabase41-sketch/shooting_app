@@ -173,6 +173,8 @@ class _SettingsDataScreenState extends State<SettingsDataScreen> {
       if (result.pulledComments > 0)
         parts.add(tr('комментариев: {pulledComments}',
             {'pulledComments': result.pulledComments}));
+      if (result.removedDuplicates > 0)
+        parts.add(tr('убрано дублей и пустых: {n}', {'n': result.removedDuplicates}));
       setState(() => _syncMessage = parts.isEmpty
           ? tr('Готово, новых данных не было')
           : tr('Готово — {p}', {'p': parts.join(', ')}));
@@ -203,6 +205,8 @@ class _SettingsDataScreenState extends State<SettingsDataScreen> {
       if (result.pulledComments > 0)
         parts.add(tr('комментариев: {pulledComments}',
             {'pulledComments': result.pulledComments}));
+      if (result.removedDuplicates > 0)
+        parts.add(tr('убрано дублей и пустых: {n}', {'n': result.removedDuplicates}));
       setState(() => _syncMessage = parts.isEmpty
           ? tr('Готово, новых данных не было')
           : tr('Готово — {p}', {'p': parts.join(', ')}));

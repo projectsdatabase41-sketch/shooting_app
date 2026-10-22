@@ -263,6 +263,52 @@ class AppDataStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  int _quality(TrainingSession s) {
+    var q = 0;
+    if (s.extra?['импорт_ключ'] != null) q += 10; // занесена из отчёта прибора: точные координаты и время
+    if (s.shots.any((x) => x.extra?['scatt'] != null)) q += 5;
+    if (exerciseForId(s.exerciseId) != null) q += 1;
+    return q;
+  }
+
+  /// Та же тренировка: та же мишень, число выстрелов и сумма, начало в пределах 14 часов (занесённые раньше
+  /// другим способом записи могли сместиться на часовой пояс).
+  static bool sameTraining(TrainingSession a, TrainingSession b) {
+    if (a.targetFaceCode != b.targetFaceCode || a.shots.length != b.shots.length || a.shots.isEmpty) return false;
+    if ((a.totalScore - b.totalScore).abs() >= 0.05) return false;
+    final x = a.startedAt, y = b.startedAt;
+    return x != null && y != null && x.difference(y).abs().inHours <= 14;
+  }
+
+  /// Убирает пустые тренировки и дубли: из группы одинаковых остаётся лучшая (занесённая из отчёта
+  /// прибора, затем с существующим упражнением), остальные удаляются — синхронно с облаком (при отправке).
+  /// Возвращает число удалённых.
+  int tidySessions() {
+    var removed = 0;
+    for (final s in [...sessions]) {
+      if (s.shots.isEmpty) {
+        deleteSession(s.id);
+        removed++;
+      }
+    }
+    final ordered = [...sessions]..sort((a, b) {
+        final d = _quality(b) - _quality(a);
+        return d != 0 ? d : a.id.compareTo(b.id);
+      });
+    final kept = <TrainingSession>[];
+    for (final s in ordered) {
+      if (kept.any((k) => sameTraining(k, s))) {
+        deleteSession(s.id);
+        removed++;
+      } else {
+        kept.add(s);
+      }
+    }
+    return removed;
+  }
+
+  Exercise? exerciseForId(String id) => exercises.where((e) => e.id == id).firstOrNull;
+
   void deleteExerciseForever(String id) {
     db.db.execute('DELETE FROM exercises WHERE id = ?', [id]);
     // Без метки следующий pull() снова принёс бы этот шаблон из облака
