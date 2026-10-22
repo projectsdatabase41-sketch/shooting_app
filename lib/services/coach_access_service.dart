@@ -265,6 +265,27 @@ class CoachAccessService {
   /// `validate_share_token` НАПРЯМУЮ (не переопределяет её, просто
   /// читает результат), а не выводит статус из того, пуст ли список
   /// тренировок. См. `ShareTokenStatus`.
+  /// То же для конкретного спортсмена (не переключая активное подключение).
+  Future<ShareTokenStatus> checkTokenStatusFor(CoachAthlete a) async {
+    final client = clientFactory();
+    try {
+      final res = await client
+          .post(
+            Uri.parse('${a.url}/rest/v1/rpc/validate_share_token'),
+            headers: {'apikey': a.anonKey, 'Authorization': 'Bearer ${a.anonKey}', 'Content-Type': 'application/json'},
+            body: jsonEncode({'p_token': a.token}),
+          )
+          .timeout(const Duration(seconds: 20));
+      if (res.statusCode >= 400) return ShareTokenStatus.unknown;
+      if (res.bodyBytes.isEmpty) return ShareTokenStatus.revoked;
+      return jsonDecode(utf8.decode(res.bodyBytes)) == null ? ShareTokenStatus.revoked : ShareTokenStatus.valid;
+    } catch (_) {
+      return ShareTokenStatus.unknown;
+    } finally {
+      client.close();
+    }
+  }
+
   Future<ShareTokenStatus> checkTokenStatus() async {
     if (!hasConnection) return ShareTokenStatus.unknown;
     final client = clientFactory();
