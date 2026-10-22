@@ -97,12 +97,12 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
                         ? tr(
                             '«{name}» будет удалено насовсем — или можно просто скрыть его из списка.',
                             {
-                                'name': ex.name
+                                'name': ex.shownName
                               })
                         : tr(
                             '«{name}»: {used} {p} останутся в истории. «Скрыть» — можно вернуть кнопкой «Восстановить всё из облака»; «Удалить навсегда» — стирает упражнение без возможности восстановить, тренировки останутся без его названия.',
                             {
-                                'name': ex.name,
+                                'name': ex.shownName,
                                 'used': used,
                                 'p': _sessionsWord(used)
                               }),
@@ -111,7 +111,7 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
                     onConfirmed: () => store.deleteExerciseForever(ex.id),
                     onConfirmedLocalOnly: () => _deleteExercise(context, ex),
                     child: _ExerciseCard(
-                      name: ex.name,
+                      name: ex.shownName,
                       faceName: face.name,
                       totalShots: ex.totalShots,
                       seriesSize: ex.seriesSize,
@@ -159,7 +159,7 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
       SnackBar(
-        content: Text(tr('Упражнение «{name}» удалено', {'name': ex.name})),
+        content: Text(tr('Упражнение «{name}» удалено', {'name': ex.shownName})),
         action: SnackBarAction(
           label: tr('Отменить'),
           onPressed: () => store.restoreExercise(ex.id),

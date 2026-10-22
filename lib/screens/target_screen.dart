@@ -167,7 +167,7 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
       },
       child: Scaffold(
         appBar: GlassHeader(
-          title: Text(vm.exercise.name,
+          title: Text(vm.exercise.shownName,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
               overflow: TextOverflow.ellipsis),
           actions: [
@@ -218,6 +218,8 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
                     child: Column(
                       children: [
                         for (final page in pages)
+                          // Пустую статистику (нет зачётных выстрелов) не показываем вовсе.
+                          if (!(page == WorkspacePage.statistics && vm.session.countingShots.isEmpty))
                           KeyedSubtree(
                             key: _keyOf(page),
                             child: page == WorkspacePage.target
@@ -225,6 +227,7 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
                                 : _Section(
                                     title: page.title,
                                     height: sectionH,
+                                    scroll: _scroll,
                                     child: _pageBody(page, vm),
                                   ),
                           ),
@@ -249,7 +252,7 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
         return _StatisticsPage(
           session: vm.session,
           face: vm.face,
-          exerciseName: vm.exercise.name,
+          exerciseName: vm.exercise.shownName,
         );
       case WorkspacePage.shots:
         return const ShotListSheet();
@@ -335,18 +338,47 @@ class _Section extends StatelessWidget {
   final String title;
   final double height;
   final Widget child;
-  const _Section({required this.title, required this.height, required this.child});
+
+  /// Прокрутка всей страницы: вложенные списки сами её не листают, поэтому заголовок раздела
+  /// тянется пальцем (двигает страницу), а упор вложенного списка в край передаёт остаток
+  /// движения странице. Иначе из нижнего раздела нельзя было вернуться вверх.
+  final ScrollController scroll;
+  const _Section({required this.title, required this.height, required this.child, required this.scroll});
+
+  void _by(double dy) {
+    if (!scroll.hasClients) return;
+    final p = scroll.position;
+    scroll.jumpTo((p.pixels + dy).clamp(p.minScrollExtent, p.maxScrollExtent).toDouble());
+  }
 
   @override
   Widget build(BuildContext context) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Divider(height: 24),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-            child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onVerticalDragUpdate: (d) => _by(-d.delta.dy),
+            child: Column(children: [
+              const Divider(height: 24),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+                child: Row(children: [
+                  Expanded(child: Text(title, style: Theme.of(context).textTheme.titleMedium)),
+                  Icon(Icons.drag_handle, size: 20, color: Theme.of(context).hintColor),
+                ]),
+              ),
+            ]),
           ),
-          SizedBox(height: height, child: child),
+          SizedBox(
+            height: height,
+            child: NotificationListener<OverscrollNotification>(
+              onNotification: (n) {
+                if (n.metrics.axis == Axis.vertical && n.overscroll != 0) _by(n.overscroll);
+                return false;
+              },
+              child: child,
+            ),
+          ),
         ],
       );
 }
