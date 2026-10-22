@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 
 import '../i18n/i18n.dart';
 import '../import/scatt_pdf.dart';
+import '../i18n/known_names.dart';
 import '../logic/friendly_error.dart';
 import '../models/target_face.dart';
 import '../services/session_import.dart';
@@ -202,6 +203,26 @@ class _ImportScreenState extends State<ImportScreen> {
             const SizedBox(height: 12),
             Text(_error!, style: TextStyle(color: cs.error)),
           ],
+          Builder(builder: (context) {
+            final store = context.watch<AppDataStore>();
+            final merges = SessionImport.plannedMerges(store, scattExerciseNames.toSet());
+            if (merges.isEmpty) return const SizedBox.shrink();
+            return Card(
+              margin: const EdgeInsets.only(top: 12),
+              child: ListTile(
+                leading: const Icon(Icons.merge_type),
+                title: Text(tr('Лишние упражнения от импорта: {n}', {'n': merges.length})),
+                subtitle: Text(tr('Тренировки будут перенесены в ваши упражнения на той же мишени, лишние удалены')),
+                trailing: FilledButton(
+                  onPressed: () {
+                    final n = SessionImport.applyMerges(store, merges);
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Объединено упражнений: {n}', {'n': n}))));
+                  },
+                  child: Text(tr('Объединить')),
+                ),
+              ),
+            );
+          }),
           if (_applied != null) ...[
             const SizedBox(height: 12),
             Card(

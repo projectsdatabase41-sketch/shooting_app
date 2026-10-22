@@ -266,11 +266,73 @@ class SessionImport {
     for (final e in store.sessions) {
       if (key != null && e.extra?['импорт_ключ'] == key) return true;
       final es = e.startedAt;
-      if (start != null && es != null && es.difference(start).inSeconds.abs() <= 90 && e.shots.length == n && (e.totalScore - total).abs() < 0.05) {
-        return true;
-      }
+      if (start == null || es == null || e.shots.length != n || (e.totalScore - total).abs() >= 0.05) continue;
+      final dt = es.difference(start).abs();
+      // То же время (до полутора минут) либо тот же день и та же сумма: у тренировок, занесённых раньше
+      // другим способом, время могло сдвинуться на часовой пояс.
+      if (dt.inSeconds <= 90 || dt.inHours <= 14) return true;
     }
     return false;
+  }
+
+  static const _stanceWords = ['лёжа', 'колена', 'стоя', 'положения'];
+
+  /// Лучшее из УЖЕ имеющихся упражнений на той же мишени (для отчётов приборов, где название придумано
+  /// приложением): по положению (лёжа/с колена/стоя/3 положения), числу выстрелов, затем самое используемое.
+  /// `null` — подходящего нет, тогда создаётся новое.
+  static Exercise? bestExistingFor(AppDataStore store, ImportedSession s) =>
+      _bestFor(store, s.targetFaceCode, s.exerciseName, s.session.shots.length);
+
+  static Exercise? _bestFor(AppDataStore store, String face, String stanceName, int n, {String? excludeId}) {
+    final candidates = [for (final e in store.activeExercises) if (e.targetFaceCode == face && e.id != excludeId) e];
+    if (candidates.isEmpty) return null;
+    final want = _stanceWords.where((w) => stanceName.toLowerCase().contains(w)).toSet();
+    int usage(Exercise e) => store.sessions.where((x) => x.exerciseId == e.id).length;
+    int score(Exercise e) {
+      final name = e.name.toLowerCase();
+      var v = 0;
+      if (want.isNotEmpty) {
+        final has = _stanceWords.where((w) => name.contains(w)).toSet();
+        if (has.contains('положения')) {
+          v += 3; // «3 положения» включает и лёжа, и с колена, и стоя
+        } else if (has.any(want.contains)) {
+          v += 4;
+        } else if (has.isNotEmpty) {
+          v -= 4; // явно другое положение
+        }
+      }
+      if (e.totalShots == n) v += 2;
+      return v;
+    }
+
+    candidates.sort((a, b) {
+      final d = score(b) - score(a);
+      return d != 0 ? d : usage(b) - usage(a);
+    });
+    final best = candidates.first;
+    return score(best) < 0 ? null : best;
+  }
+
+  /// Лишние упражнения, которые импорт мог создать раньше (названия вида «МВ 50 м, лёжа»), и куда их слить.
+  static List<(Exercise, Exercise)> plannedMerges(AppDataStore store, Set<String> importedNames) {
+    final out = <(Exercise, Exercise)>[];
+    for (final e in store.activeExercises) {
+      if (!importedNames.contains(e.name)) continue;
+      final to = _bestFor(store, e.targetFaceCode, e.name, e.totalShots, excludeId: e.id);
+      if (to != null && !importedNames.contains(to.name)) out.add((e, to));
+    }
+    return out;
+  }
+
+  /// Переносит тренировки лишних упражнений на подходящие и удаляет пустые лишние. Возвращает число слитых.
+  static int applyMerges(AppDataStore store, List<(Exercise, Exercise)> merges) {
+    var n = 0;
+    for (final (from, to) in merges) {
+      store.moveSessionsToExercise(from.id, to.id);
+      store.deleteExerciseForever(from.id);
+      n++;
+    }
+    return n;
   }
 
   static Exercise _findOrCreateExercise(AppDataStore store, ImportedSession s) {
@@ -282,6 +344,11 @@ class SessionImport {
           e.seriesSize == s.seriesSize) {
         return e;
       }
+    }
+    // Название придумало приложение (импорт отчётов прибора) — не плодим лишних упражнений.
+    if ('${s.session.extra?['импортировано_из']}'.contains('SCATT')) {
+      final existing = bestExistingFor(store, s);
+      if (existing != null) return existing;
     }
     return store.createExercise(
       name: s.exerciseName,

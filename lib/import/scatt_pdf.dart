@@ -128,7 +128,7 @@ class ScattReport {
         'series_size': 10,
       },
       'started_at': startedIso,
-      'finished_at': startedIso,
+      'finished_at': started.add(_totalDuration(summary['total_time'])).toIso8601String(),
       'extra': {
         'импорт_ключ': key,
         'scatt': {
@@ -167,6 +167,13 @@ class ScattReport {
 }
 
 // ---------------------------------------------------------------------------
+
+Duration _totalDuration(String? s) {
+  final m = RegExp(r'^(\d+):(\d{2})(?::(\d{2}))?$').firstMatch((s ?? '').trim());
+  if (m == null) return Duration.zero;
+  final a = int.parse(m[1]!), b = int.parse(m[2]!), c = m[3] == null ? null : int.parse(m[3]!);
+  return c == null ? Duration(minutes: a, seconds: b) : Duration(hours: a, minutes: b, seconds: c);
+}
 
 final _numRe = RegExp(r'^\d+\*?$');
 

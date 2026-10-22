@@ -252,6 +252,17 @@ class AppDataStore extends ChangeNotifier {
   /// Тренировки по нему НЕ трогаются (внешний ключ на exercises у
   /// training_sessions есть только в схеме — контроль внешних ключей в
   /// sqlite выключен), просто перестанут находить имя упражнения.
+  /// Переносит все тренировки упражнения [fromId] на упражнение [toId] (upsertSession связь не меняет:
+  /// при конфликте обновляются не все колонки) и помечает их к повторной отправке в облако.
+  void moveSessionsToExercise(String fromId, String toId) {
+    db.db.execute('UPDATE training_sessions SET exercise_id = ?, synced_to_cloud = 0 WHERE exercise_id = ?', [toId, fromId]);
+    sessions = [
+      for (final s in sessions)
+        if (s.exerciseId == fromId) s.copyWith(exerciseId: toId, syncedToCloud: false) else s
+    ];
+    notifyListeners();
+  }
+
   void deleteExerciseForever(String id) {
     db.db.execute('DELETE FROM exercises WHERE id = ?', [id]);
     // Без метки следующий pull() снова принёс бы этот шаблон из облака
