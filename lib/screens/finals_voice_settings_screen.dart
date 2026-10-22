@@ -20,7 +20,7 @@ class FinalsVoiceSettingsScreen extends StatelessWidget {
             title: Text(tr('Голос ИИ для финалов'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600))),
         body: ListView(
           padding: EdgeInsets.fromLTRB(16, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 16, 32),
-          children: [FinalsVoicePanel(db: db)],
+          children: [FinalsVoicePanel(db: db, standalone: true)],
         ),
       );
 }
@@ -30,7 +30,11 @@ class FinalsVoiceSettingsScreen extends StatelessWidget {
 /// настроек ИИ, а здесь выбираются модель озвучки и голос.
 class FinalsVoicePanel extends StatefulWidget {
   final LocalDbService db;
-  const FinalsVoicePanel({super.key, required this.db});
+
+  /// Отдельный экран (из финалов): без своего ключа ИИ показывается только подсказка.
+  /// Внутри настроек ИИ без ключа панель скрыта целиком (ключ вводится рядом).
+  final bool standalone;
+  const FinalsVoicePanel({super.key, required this.db, this.standalone = false});
 
   @override
   State<FinalsVoicePanel> createState() => _FinalsVoicePanelState();
@@ -80,6 +84,12 @@ class _FinalsVoicePanelState extends State<FinalsVoicePanel> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final hasKey = AiSettings(widget.db).hasOwnKey;
+    // Настройки озвучки видны только со своим ключом ИИ.
+    if (!hasKey) {
+      return widget.standalone
+          ? Text(tr('Добавьте свой ключ в настройках ИИ ассистента — тогда здесь появятся настройки озвучки.'), style: theme.textTheme.bodyMedium)
+          : const SizedBox.shrink();
+    }
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(
         tr('Сейчас диктор говорит голосом телефона. Со своим ключом ИИ можно включить озвучку моделью: записи (команды, числа и фразы с именами, своим и ботов) создаются заранее, в финале только проигрываются. Нет записи — говорит голос телефона.'),
@@ -88,7 +98,7 @@ class _FinalsVoicePanelState extends State<FinalsVoicePanel> {
       if (!hasKey)
         Padding(
           padding: const EdgeInsets.only(top: 8),
-          child: Text(tr('Добавьте свой ключ ИИ выше — тогда эти настройки заработают.'), style: TextStyle(color: theme.colorScheme.error)),
+          child: Text(tr('Добавьте свой ключ в настройках ИИ ассистента — тогда здесь появятся настройки озвучки.'), style: TextStyle(color: theme.colorScheme.error)),
         ),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,

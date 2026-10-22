@@ -728,7 +728,10 @@ class ShotMarkerPainter extends CustomPainter {
     }
     final f = finger;
     if (f != null && lens) {
-      final rr = holeR.clamp(4.0, 16.0);
+      // Кольцо точно по размеру пробоины (в масштабе лупы) и маленький кружок в центре
+      // (диаметр 10% от диаметра пробоины) — для точного прицеливания.
+      final rr = math.max(3.0, holeR);
+      final dotR = math.max(1.2, rr * 0.1);
       final white = Paint()
         ..color = Colors.white
         ..style = PaintingStyle.stroke
@@ -739,11 +742,9 @@ class ShotMarkerPainter extends CustomPainter {
         ..strokeWidth = 3.2;
       for (final p in [dark, white]) {
         canvas.drawCircle(f, rr, p);
-        canvas.drawLine(f - Offset(rr + 14, 0), f - Offset(rr + 2, 0), p);
-        canvas.drawLine(f + Offset(rr + 2, 0), f + Offset(rr + 14, 0), p);
-        canvas.drawLine(f - Offset(0, rr + 14), f - Offset(0, rr + 2), p);
-        canvas.drawLine(f + Offset(0, rr + 2), f + Offset(0, rr + 14), p);
       }
+      canvas.drawCircle(f, dotR + 0.9, Paint()..color = Colors.black.withValues(alpha: 0.7));
+      canvas.drawCircle(f, dotR, Paint()..color = Colors.white);
     } else if (f != null) {
       final rr = holeR < 3 ? 3.0 : holeR;
       canvas.drawCircle(f, rr, Paint()..color = Colors.red.withValues(alpha: 0.8));
