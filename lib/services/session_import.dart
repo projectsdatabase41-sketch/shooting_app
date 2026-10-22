@@ -248,11 +248,29 @@ class SessionImport {
   static int apply(AppDataStore store, ImportBundle bundle) {
     var added = 0;
     for (final s in bundle.sessions) {
+      if (alreadyHave(store, s)) continue; // повторный импорт того же файла дублей не создаёт
       final exercise = _findOrCreateExercise(store, s);
       store.upsertSession(s.session.copyWith(exerciseId: exercise.id));
       added++;
     }
     return added;
+  }
+
+  /// Такая тренировка уже есть: тот же ключ импорта либо то же время (до полутора минут), число
+  /// выстрелов и сумма. Второе ловит и тренировки, пришедшие из облака после импорта другим путём.
+  static bool alreadyHave(AppDataStore store, ImportedSession s) {
+    final key = s.session.extra?['импорт_ключ'];
+    final start = s.session.startedAt;
+    final n = s.session.shots.length;
+    final total = s.session.totalScore;
+    for (final e in store.sessions) {
+      if (key != null && e.extra?['импорт_ключ'] == key) return true;
+      final es = e.startedAt;
+      if (start != null && es != null && es.difference(start).inSeconds.abs() <= 90 && e.shots.length == n && (e.totalScore - total).abs() < 0.05) {
+        return true;
+      }
+    }
+    return false;
   }
 
   static Exercise _findOrCreateExercise(AppDataStore store, ImportedSession s) {

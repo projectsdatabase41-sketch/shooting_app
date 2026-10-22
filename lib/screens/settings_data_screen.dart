@@ -17,6 +17,7 @@ import '../state/app_data_store.dart';
 import '../widgets/glass_pill.dart';
 import '../widgets/section_header.dart';
 import 'export_screen.dart';
+import 'import_screen.dart';
 import 'settings_screen.dart' show AccountTile, addCoachViaMessenger;
 import '../i18n/i18n.dart';
 
@@ -54,7 +55,14 @@ class _SettingsDataScreenState extends State<SettingsDataScreen> {
           ListTile(
             leading: const Icon(Icons.file_download_outlined),
             title: Text(tr('Импорт тренировок')),
-            subtitle: Text(tr('Загрузка тренировок из других источников')),
+            subtitle: Text(tr('Загрузка тренировок из файлов')),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ImportScreen())),
+          ),
+          ListTile(
+            leading: const Icon(Icons.auto_awesome_outlined),
+            title: Text(tr('Импорт через ИИ-ассистента')),
+            subtitle: Text(tr('Для любых других форматов: ИИ приведёт файл к нужному виду')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => _showImportDialog(context),
           ),
@@ -258,11 +266,6 @@ void _showImportDialog(BuildContext context) {
             ),
             const SizedBox(height: 8),
           ],
-          const SizedBox(height: 8),
-          Text(
-            tr('Импорт внутри самого приложения пока в разработке.'),
-            style: Theme.of(ctx).textTheme.bodySmall,
-          ),
         ],
       ),
       actions: [
