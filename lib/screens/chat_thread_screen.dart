@@ -1882,6 +1882,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   // ---- Голосовые и кружки ----
   final _voice = VoiceRecorder();
   bool _voiceRecording = false;
+  bool _recVideo = false; // кнопка записи: false - голос, true - кружок
+  bool _recLocked = false; // запись закреплена свайпом вверх
+  double? _recStartY;
+  final _circleFinish = ValueNotifier<int>(0);
   int _voiceSecs = 0;
   Timer? _voiceTimer;
 
@@ -1943,9 +1947,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   /// «Кружок»: полноэкранная запись видео в круге до 2 минут.
-  Future<void> _recordCircle() async {
+  Future<void> _recordCircle({bool hold = false}) async {
     final r = await Navigator.of(context).push<CircleResult>(
-        MaterialPageRoute(builder: (_) => const CircleRecorderScreen()));
+        MaterialPageRoute(builder: (_) => CircleRecorderScreen(autoStart: hold, finishSignal: hold ? _circleFinish : null)));
     if (r == null || !mounted) return;
     final isWebm = r.file.name.toLowerCase().endsWith('.webm');
     await _sendRecorded(
@@ -2223,11 +2227,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                       CircularProgressIndicator(strokeWidth: 2))
                               : const Icon(Icons.auto_awesome_outlined),
                         ),
-                        IconButton(
-                          onPressed: _sending ? null : _recordCircle,
-                          tooltip: tr('Кружок (видео до 2 минут)'),
-                          icon: const Icon(Icons.videocam_outlined),
-                        ),
                         GestureDetector(
                           // Долгое нажатие — большой файл через Google Drive,
                           // в обход лимита обычных вложений (см. `_attachLarge`).
@@ -2249,13 +2248,45 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   valueListenable: _input,
                   builder: (_, v, __) {
                     final empty = v.text.trim().isEmpty && _pendingChart == null;
-                    return GlassCircleButton(
+                    final button = GlassCircleButton(
                       size: 50,
                       color: cs.primary.withValues(alpha: 0.85),
-                      tooltip: empty ? tr('Голосовое сообщение') : null,
-                      onTap: _sending ? null : (empty ? _startVoice : _send),
-                      icon: Icon(empty ? Icons.mic : Icons.send,
+                      tooltip: empty ? tr('Нажмите — звук или видео, удерживайте — запись') : null,
+                      onTap: _sending ? null : (empty ? () => setState(() => _recVideo = !_recVideo) : _send),
+                      icon: Icon(empty ? (_recVideo ? Icons.videocam : Icons.mic) : Icons.send,
                           color: cs.onPrimary),
+                    );
+                    if (!empty || _sending) return button;
+                    // Удержание: запись звука/видео, отпустили — отправка; провели вверх — запись закрепляется
+                    // и останавливается только кнопкой.
+                    return GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onLongPressStart: (d) {
+                        _recLocked = false;
+                        _recStartY = d.globalPosition.dy;
+                        HapticFeedback.mediumImpact();
+                        if (_recVideo) {
+                          _recordCircle(hold: true);
+                        } else {
+                          _startVoice();
+                        }
+                      },
+                      onLongPressMoveUpdate: (d) {
+                        final y = _recStartY;
+                        if (!_recLocked && y != null && y - d.globalPosition.dy > 70) {
+                          setState(() => _recLocked = true);
+                          HapticFeedback.heavyImpact();
+                        }
+                      },
+                      onLongPressEnd: (_) {
+                        if (_recLocked) return; // закреплено: остановит сам пользователь
+                        if (_recVideo) {
+                          _circleFinish.value++;
+                        } else if (_voiceRecording) {
+                          _finishVoice(send: true);
+                        }
+                      },
+                      child: button,
                     );
                   },
                 ),

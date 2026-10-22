@@ -30,6 +30,15 @@ class SettingsModulesScreen extends StatefulWidget {
 class _SettingsModulesScreenState extends State<SettingsModulesScreen> {
   HomeTabsViewModel get tabs => widget.tabs;
 
+  // Роли («Тренировки» / «Я тренер») лежат не в таблице настроек, а в настройках профиля, поэтому
+  // отмена экрана их сама не откатывает — запоминаем вход и возвращаем вручную.
+  bool? _athlete0, _coach0;
+
+  void _rememberRoles(AppDataStore store) {
+    _athlete0 ??= store.isAthlete;
+    _coach0 ??= store.isCoach;
+  }
+
   /// Какой модуль отвечает за вкладку; `null` — отдельного модуля нет
   /// (вкладку можно просто скрыть).
   AppModule? _moduleOf(String id) => switch (id) {
@@ -88,6 +97,7 @@ class _SettingsModulesScreenState extends State<SettingsModulesScreen> {
   @override
   Widget build(BuildContext context) {
     final store = context.watch<AppDataStore>();
+    _rememberRoles(store);
     final theme = Theme.of(context);
     final db = store.db;
     return AnimatedBuilder(
@@ -124,6 +134,12 @@ class _SettingsModulesScreenState extends State<SettingsModulesScreen> {
         return SettingsDraftScope(
           db: db,
           onRestored: () {
+            if (_athlete0 != null && (store.isAthlete != _athlete0 || store.isCoach != _coach0)) {
+              store.isAthlete = _athlete0!;
+              store.isCoach = _coach0!;
+              store.saveSettings();
+              store.refreshView();
+            }
             tabs.reload();
             ModulesSettings.revision.value++;
           },

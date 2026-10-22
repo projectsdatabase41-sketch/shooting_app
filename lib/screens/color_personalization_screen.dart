@@ -83,6 +83,7 @@ class ColorPersonalizationScreen extends StatefulWidget {
 class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tab;
+  String? _appMode; // 'preset' | 'manual': что показывать для цветов приложения
 
   static const _sections = <String, List<String>>{
     /*tr*/ 'МИШЕНЬ': [
@@ -244,8 +245,22 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ),
-        const _AppColorPresetsRow(),
+        // Готовые наборы или ручная настройка — показывается что-то одно.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: SegmentedButton<String>(
+            showSelectedIcon: false,
+            segments: [
+              ButtonSegment(value: 'preset', label: Text(tr('Готовые'))),
+              ButtonSegment(value: 'manual', label: Text(tr('Вручную'))),
+            ],
+            selected: {_appMode ?? (vm.hasCustomAppColors(brightness) ? 'manual' : 'preset')},
+            onSelectionChanged: (v) => setState(() => _appMode = v.first),
+          ),
+        ),
+        if ((_appMode ?? (vm.hasCustomAppColors(brightness) ? 'manual' : 'preset')) == 'preset') const _AppColorPresetsRow(),
         const _BackdropTintSection(),
+        if ((_appMode ?? (vm.hasCustomAppColors(brightness) ? 'manual' : 'preset')) == 'manual') ...[
         _AppColorRow(
           title: tr('Фон приложения'),
           color: vm.appBackgroundFor(brightness),
@@ -261,7 +276,8 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
           color: vm.appButtonTextFor(brightness),
           onChanged: (c) => vm.setAppButtonTextColor(c, brightness),
         ),
-        if (vm.hasCustomAppColors(brightness))
+        ],
+        if ((_appMode ?? (vm.hasCustomAppColors(brightness) ? 'manual' : 'preset')) == 'manual' && vm.hasCustomAppColors(brightness))
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
             child: Align(

@@ -2,7 +2,7 @@ import 'dart:async';
 
 import '../widgets/selfie_light.dart';
 import 'package:camera/camera.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show ValueListenable, kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../i18n/i18n.dart';
@@ -21,7 +21,12 @@ class CircleResult {
 /// квадратный (круг режется при показе), качество среднее (≈480p), чтобы
 /// ролик был небольшим. Возвращает [CircleResult] или `null`, если отменили.
 class CircleRecorderScreen extends StatefulWidget {
-  const CircleRecorderScreen({super.key});
+  /// Запись начинается сама, как только камера готова (кнопка в чате зажата).
+  final bool autoStart;
+
+  /// Сигнал «кнопку отпустили»: запись завершается и отправляется (или, если камера ещё не готова, экран закрывается).
+  final ValueListenable<int>? finishSignal;
+  const CircleRecorderScreen({super.key, this.autoStart = false, this.finishSignal});
 
   static const int maxSeconds = 120;
 
@@ -60,7 +65,21 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
   @override
   void initState() {
     super.initState();
-    _init();
+    widget.finishSignal?.addListener(_onSignal);
+    _init().then((_) {
+      if (widget.autoStart && !_released && mounted) _start();
+    });
+  }
+
+  bool _released = false;
+
+  void _onSignal() {
+    _released = true;
+    if (_recording) {
+      _finish(send: true);
+    } else if (mounted && !_finishing) {
+      Navigator.of(context).pop(); // отпустили до начала записи — ничего не записано
+    }
   }
 
   Future<void> _init({CameraLensDirection prefer = CameraLensDirection.front}) async {
@@ -153,6 +172,7 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
 
   @override
   void dispose() {
+    widget.finishSignal?.removeListener(_onSignal);
     _ticker?.cancel();
     _controller?.dispose();
     _light.dispose();
