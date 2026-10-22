@@ -43,20 +43,22 @@ class GlassFill extends StatelessWidget {
   const GlassFill({super.key, required this.color, this.radius = 12, this.blur = GlassTheme.buttonBlur, this.child});
 
   @override
-  Widget build(BuildContext context) => ClipRRect(
+  Widget build(BuildContext context) {
+    final box = DecoratedBox(
+      decoration: BoxDecoration(
+        color: color,
         borderRadius: BorderRadius.circular(radius),
-        child: BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(radius),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
-            ),
-            child: child,
-          ),
-        ),
-      );
+        border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+      ),
+      child: child,
+    );
+    // blur <= 0 — без размытия подложки: у кнопок в прокручиваемом списке размытие «мигало» светлыми
+    // пятнами проезжающего под ними содержимого.
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: blur <= 0 ? box : BackdropFilter(filter: ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur), child: box),
+    );
+  }
 }
 
 /// Размытие того, что за всплывающим окном (только в режиме «стекло»).
