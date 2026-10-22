@@ -467,6 +467,8 @@ class GDriveSync {
     await run(db);
   }
 
+  static DateTime? _lastRun;
+
   static Future<void> _go(LocalDbService db, bool forceFull, http.Client Function()? clientFactory) async {
     final svc = GDriveService(db, clientFactory: clientFactory);
     progress.value = -1;
@@ -478,12 +480,15 @@ class GDriveSync {
 
     try {
       final at = GDriveService.indexedAt(db);
-      final stale = at == null || DateTime.now().difference(at) > const Duration(days: 1);
-      if (forceFull || stale) {
+      // Полный индекс — только когда его ещё нет или попросили; иначе достаточно изменений, и не чаще
+      // раза в 10 минут (закрыли и снова открыли Диск — не качаем заново).
+      if (forceFull || at == null) {
         if (forceFull) GDriveService.markIndexStale(db);
         await svc.syncIndex(onProgress: onProgress);
-      } else {
+        _lastRun = DateTime.now();
+      } else if (_lastRun == null || DateTime.now().difference(_lastRun!) > const Duration(minutes: 10)) {
         await svc.syncChanges(onProgress: onProgress);
+        _lastRun = DateTime.now();
       }
     } catch (_) {
       // сеть пропала — кэш остаётся, в следующий раз продолжим

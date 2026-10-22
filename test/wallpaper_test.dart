@@ -19,6 +19,7 @@ Future<ByteData> _render(WidgetTester tester, String kind, {Brightness b = Brigh
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
     await tester.pump();
   }
+  await tester.pump(const Duration(milliseconds: 700)); // плавное появление обоев
   final boundary = tester.renderObject<RenderRepaintBoundary>(find.byKey(key));
   final image = (await tester.runAsync(() => boundary.toImage()))!;
   return (await tester.runAsync(() => image.toByteData(format: ui.ImageByteFormat.rawRgba)))!;

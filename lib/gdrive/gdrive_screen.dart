@@ -69,7 +69,13 @@ class _GDriveScreenState extends State<GDriveScreen> {
       if (!silent) _busy = true;
       _error = null;
       _found = null;
-      if (c != null) _listing = c;
+      // Сразу сохранённое для ЭТОЙ папки; нет его — пусто (идёт загрузка), а не список прежней папки,
+      // который потом «перескакивал» на новый.
+      if (c != null) {
+        _listing = c;
+      } else if (!silent) {
+        _listing = null;
+      }
     });
     try {
       final l = await _svc.list(_cur);

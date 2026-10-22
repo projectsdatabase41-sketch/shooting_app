@@ -153,10 +153,10 @@ class _HomeShellState extends State<HomeShell> {
           appBar: GlassHeader(
               title: const Text('Nexus', style: TextStyle(fontWeight: FontWeight.w600)),
               actions: [
-                IconButton(
+                GlassCircleButton(
                   tooltip: tr('Настройки'),
                   icon: const Icon(Icons.settings_outlined),
-                  onPressed: () => Navigator.of(context).push(
+                  onTap: () => Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => _pageFor('settings', store, tabs))),
                 ),
               ]),

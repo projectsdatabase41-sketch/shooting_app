@@ -14,6 +14,10 @@ class Wallpaper extends StatelessWidget {
   final String kind;
   const Wallpaper({super.key, required this.kind});
 
+  /// Пока картинка не декодирована — ничего (виден обычный фон экрана), потом плавное появление.
+  static Widget _frame(BuildContext context, Widget child, int? frame, bool wasSynchronouslyLoaded) =>
+      AnimatedOpacity(opacity: (wasSynchronouslyLoaded || frame != null) ? 1 : 0, duration: const Duration(milliseconds: 600), curve: Curves.easeOut, child: child);
+
   /// Ширина декодирования: по ширине экрана в пикселях (без лишней памяти и ресайза на лету).
   static int cacheWidthFor(BuildContext context) {
     final mq = MediaQuery.of(context);
@@ -49,9 +53,9 @@ class Wallpaper extends StatelessWidget {
           final blur = (BackdropTint.blur / 30).clamp(0.0, 1.0).toDouble();
           final mask = BackdropTint.maskColor(kind);
           Widget stack = Stack(fit: StackFit.expand, children: [
-            Image.asset('$name.jpg', fit: BoxFit.cover, gaplessPlayback: true, filterQuality: FilterQuality.medium, cacheWidth: cw),
+            Image.asset('$name.jpg', fit: BoxFit.cover, gaplessPlayback: true, filterQuality: FilterQuality.medium, cacheWidth: cw, frameBuilder: _frame),
             if (blur > 0.01)
-              Opacity(opacity: blur, child: Image.asset('${name}_b.jpg', fit: BoxFit.cover, gaplessPlayback: true, filterQuality: FilterQuality.medium, cacheWidth: cw)),
+              Opacity(opacity: blur, child: Image.asset('${name}_b.jpg', fit: BoxFit.cover, gaplessPlayback: true, filterQuality: FilterQuality.medium, cacheWidth: cw, frameBuilder: _frame)),
           ]);
           if (BackdropTint.wBright != 0 || BackdropTint.wContrast != 1) {
             stack = ColorFiltered(colorFilter: ColorFilter.matrix(BackdropTint.wallpaperMatrix()), child: stack);

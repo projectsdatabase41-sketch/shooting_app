@@ -369,7 +369,7 @@ class AppTheme {
       backgroundBuilder: glass
           ? (context, states, child) => GlassFill(
                 color: (color ?? Colors.white).withValues(
-                    alpha: states.contains(WidgetState.disabled) ? 0.10 : (color == null ? 0.07 : GlassTheme.buttonAlpha)),
+                    alpha: states.contains(WidgetState.disabled) ? 0.10 : (color == null ? 0.07 : (GlassTheme.buttonAlpha < 0.55 ? 0.55 : GlassTheme.buttonAlpha))),
                 radius: radiusMedium,
                 blur: 0,
                 child: child,

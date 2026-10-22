@@ -2261,7 +2261,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                     final button = GlassCircleButton(
                       size: 50,
                       color: cs.primary.withValues(alpha: 0.85),
-                      tooltip: empty ? tr('Нажмите — звук или видео, удерживайте — запись') : null,
                       onTap: _sending ? null : (empty ? () => setState(() => _recVideo = !_recVideo) : _send),
                       icon: Icon(empty ? (_recVideo ? Icons.videocam : Icons.mic) : Icons.send,
                           color: cs.onPrimary),

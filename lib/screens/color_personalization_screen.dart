@@ -145,21 +145,10 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
                 .titleMedium
                 ?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
-          GlassPill(
-            radius: 24,
-            child: SizedBox(
-              width: 48,
-              height: 48,
-              child: PopupMenuButton<String>(
-                icon: const BoldIcon(Icons.more_vert),
-                onSelected: (v) =>
-                    v == 'export' ? _export(context) : _import(context),
-                itemBuilder: (_) => [
-                  PopupMenuItem(value: 'export', child: Text(tr('Экспорт'))),
-                  PopupMenuItem(value: 'import', child: Text(tr('Импорт'))),
-                ],
-              ),
-            ),
+          GlassCircleButton(
+            icon: const BoldIcon(Icons.check),
+            tooltip: tr('Сохранить'),
+            onTap: () => Navigator.of(context).pop(),
           ),
         ],
       ),
@@ -311,6 +300,14 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
             onPressed: () => _confirmResetAll(context, vm),
             child: Text(tr('Сбросить все')),
           ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Row(children: [
+            Expanded(child: OutlinedButton.icon(onPressed: () => _export(context), icon: const Icon(Icons.upload_outlined), label: Text(tr('Экспорт')))),
+            const SizedBox(width: 12),
+            Expanded(child: OutlinedButton.icon(onPressed: () => _import(context), icon: const Icon(Icons.download_outlined), label: Text(tr('Импорт')))),
+          ]),
         ),
       ],
     );

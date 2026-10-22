@@ -398,7 +398,7 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
 
   String _offsetText(ShotAnalytics a) {
     final mm = a.meanOffsetMm.toStringAsFixed(1);
-    final dir = directionName(a.meanPoint);
+    final dir = directionArrow(a.meanPoint);
     return dir == null ? tr('{mm} мм', {'mm': mm}) : tr('{mm} мм {dir}', {'mm': mm, 'dir': dir});
   }
 
@@ -407,7 +407,7 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
     final base = spread == null
         ? tr('Кольца: радиус СТП и половина попаданий')
         : tr('Пунктир — поперечник {p} мм', {'p': spread.toStringAsFixed(1)});
-    final dir = directionName(a.meanPoint);
+    final dir = directionArrow(a.meanPoint);
     return dir == null ? base : tr('{base} · снос {dir}', {'base': base, 'dir': dir});
   }
 
