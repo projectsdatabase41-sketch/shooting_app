@@ -37,10 +37,10 @@ void main() {
     GlassTheme.sync(true, 1.0);
     await tester.pumpWidget(app());
     await tester.pump();
-    expect(find.byType(BackdropFilter), findsOneWidget); // кнопка — стеклянная
+    expect(find.byType(BackdropFilter), findsNothing); // кнопка стеклянная, но без размытия (не мигает при прокрутке)
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
-    expect(find.byType(BackdropFilter), findsNWidgets(2)); // + размытие за окном
+    expect(find.byType(BackdropFilter), findsOneWidget); // размытие за окном
     expect(GlassTheme.windowAlpha, greaterThan(GlassTheme.buttonAlpha)); // окна плотнее кнопок
   });
 }
