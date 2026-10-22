@@ -203,6 +203,7 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
     final vm = context.watch<PersonalizationViewModel>();
     final brightness = Theme.of(context).brightness;
     return ListView(
+      padding: const EdgeInsets.only(bottom: 16),
       children: [
         // Тема интерфейса (светлая/тёмная/системная) переехала сюда из
         // общих настроек (решение пользователя, пункт 4 списка правок:
@@ -351,6 +352,7 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
                       visibleShots: const [],
                       selectedShot: null,
                       currentSeriesNo: 1,
+                      denseLabels: true,
                     ),
                   ),
                 ),
@@ -388,6 +390,7 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
             visibleShots: const [],
             selectedShot: null,
             currentSeriesNo: 1,
+            denseLabels: true,
           ),
         ),
       ),

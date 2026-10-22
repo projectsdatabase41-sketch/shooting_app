@@ -39,6 +39,9 @@ class TargetPainter extends CustomPainter {
   final double zoom;
   final Offset pan;
 
+  /// Мелкая картинка (пресеты, превью): подписи колец рисуются и на узких полосах, мелким шрифтом.
+  final bool denseLabels;
+
   TargetPainter({
     required this.face,
     required this.colors,
@@ -51,6 +54,7 @@ class TargetPainter extends CustomPainter {
     this.draftShotNumber,
     this.zoom = 1.0,
     this.pan = Offset.zero,
+    this.denseLabels = false,
   });
 
   @override
@@ -214,11 +218,11 @@ class TargetPainter extends CustomPainter {
       final bandPx = (outerMm - innerMm) * mmToPx;
       // Слишком узкая полоса (сильно отдалённая мишень) — цифра
       // превратится в кашу, лучше не рисовать.
-      if (bandPx < 8) continue;
+      if (bandPx < (denseLabels ? 3.5 : 8)) continue;
 
       final midMm = (outerMm + innerMm) / 2;
       final rPx = midMm * mmToPx;
-      final fontSize = (bandPx * 0.7).clamp(8.0, 48.0);
+      final fontSize = (bandPx * 0.7).clamp(denseLabels ? 5.0 : 8.0, 48.0);
       final onBullseye = midMm <= face.bullseyeRadiusMm;
       final color = face.isArchery
           ? (_isDark(archeryZoneColor(ring)) ? Colors.white : Colors.black)
