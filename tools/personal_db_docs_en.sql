@@ -312,7 +312,10 @@ Database access: the personal database is protected by row level security; only 
 'Settings -> Data and sync: sign-in to the personal Supabase database (URL, key, email, password), manual and background
 sync, export, and backups: database backup, chat backup, backup to Google Drive and to a phone folder. The install SQL of the
 personal database is copied from the app (Copy SQL) and checked on the Database check screen. Data stays on the phone first
-and is copied to the cloud when signed in; web builds keep data in the browser, so sign in to sync.'),
+and is copied to the cloud when signed in; web builds keep data in the browser, so sign in to sync.
+Import of trainings (Settings -> Data and sync -> Import trainings): pick one or many files (PDF or JSON); the app finds
+the trainings itself, shows each one (target, series) and writes only after confirmation; files it cannot read or that
+fail its checks are skipped, repeated imports do not create duplicates.'),
 
   ('guide:drive', 'rule', 'Google Drive module',
 'A Drive tile shows the owner''s Google Drive through a small Google Apps Script that the owner creates from inside the app
