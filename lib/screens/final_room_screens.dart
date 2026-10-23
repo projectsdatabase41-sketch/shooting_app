@@ -1,3 +1,4 @@
+import 'dart:convert';
 import '../widgets/glass_route.dart';
 import 'dart:async';
 import '../widgets/app_loader.dart';
@@ -517,6 +518,7 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
       final profile = '${UserProfile.firstNameOf(_store.db)} ${UserProfile.lastNameOf(_store.db)}'.trim();
       _boardId = await FinalsBoardService(_auth).create(
           hostName: profile.isNotEmpty ? profile : _auth.nickname,
+          region: UserProfile.regionOf(_store.db),
           formatId: widget.format.id,
           key: _book.key,
           url: _book.url,
@@ -787,6 +789,7 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
   final _cheers = CheerFeed();
   late final _board = FinalsBoardService(widget.service.auth);
   bool _boardLive = false;
+  String _boardPeople = '';
   int _tick = 0;
   DateTime _quietUntil = DateTime.fromMillisecondsSinceEpoch(0); // диктор говорит — кричалки без звука
 
@@ -810,6 +813,15 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
       c.hostSilent = widget.hostCompetitorId != null && _members.any((m) => m.role == FinalsRole.coach && m.status == 'accepted');
       // Зрителей много — состояние реже, чтобы не упереться в лимит сообщений.
       _host?.minInterval = _members.length > 14 ? const Duration(seconds: 1) : const Duration(milliseconds: 150);
+      // Состав на табло обновляется, когда кто-то подключился.
+      if (widget.boardId != null) {
+        final people = _people();
+        final sig = jsonEncode(people);
+        if (sig != _boardPeople) {
+          _boardPeople = sig;
+          _board.update(widget.boardId!, people: people);
+        }
+      }
       // Раз в минуту «жив» на табло.
       if (++_tick % 20 == 0 && widget.boardId != null && c.phase != RunPhase.finished) {
         _board.update(widget.boardId!, status: _boardLive ? 'live' : 'preparing');
@@ -934,6 +946,12 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
     }
     setState(() {});
   }
+
+  /// Жюри и участники для табло (только имена, без токенов).
+  Map<String, dynamic> _people() => {
+        'jury': [for (final m in _members) if (m.role == FinalsRole.coach && m.status == 'accepted') m.name],
+        'athletes': [for (final m in _members) if (m.role == FinalsRole.athlete && m.status == 'accepted') m.name],
+      };
 
   /// Финал окончен: гости получают «ended», токены приглашений стираются — старые приглашения не откроют ничего.
   void _endSession() {
@@ -1118,6 +1136,7 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
         if (!mounted) return;
         final g = _guest;
         if (g != null && (g.ended || g.denied)) {
+          FinalsInviteStore.markEnded(context.read<AppDataStore>().db, widget.member.userId);
           if (!_saved) _closeWith(g.denied ? (g.deniedFull ? tr('Мест для зрителей нет') : tr('Приглашение недействительно: финал уже окончен')) : tr('Финал окончен'));
           return;
         }
@@ -1282,10 +1301,18 @@ Future<void> enterFinalByCode(BuildContext context, AppDataStore store) async {
 }
 
 /// Войти зрителем в публичный финал с табло (приглашение не нужно: токен зритель создаёт сам).
+/// Секретное имя канала выдаёт сервер только для ещё не оконченного финала и нигде не показывается.
 Future<void> joinPublicFinal(BuildContext context, AppDataStore store, FinalsBoardRow row) async {
-  final nick = ChatAuthService(store.db).nickname;
-  final member = FinalsMember(row.key, newFinalsToken(), FinalsRole.spectator, null, nick.isNotEmpty ? nick : tr('Зритель'), 'accepted');
+  final auth = ChatAuthService(store.db);
+  final data = await FinalsBoardService(auth).join(row.id);
+  if (!context.mounted) return;
+  if (data == null) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Финал уже недоступен'))));
+    return;
+  }
+  final nick = auth.nickname;
+  final member = FinalsMember(data.key, newFinalsToken(), FinalsRole.spectator, null, nick.isNotEmpty ? nick : tr('Зритель'), 'accepted');
   await Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => FinalGuestScreen(
-          member: member, service: FinalsSessionService(ChatAuthService(store.db)), url: row.url, anonKey: row.anonKey)));
+          member: member, service: FinalsSessionService(ChatAuthService(store.db)), url: data.url, anonKey: data.anonKey)));
 }

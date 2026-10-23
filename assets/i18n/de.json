@@ -1,6 +1,7 @@
 {
   " от {p}": " von {p}",
   "(без текста)": "(kein Text)",
+  "(приглашение в финал больше не действует)": "(Einladung zum Finale nicht mehr gültig)",
   "1 разряд": "1. Klasse",
   "1 юношеский": "Jugend 1",
   "1. Кому": "1. An wen",
@@ -522,6 +523,7 @@
   "Источники:": "Quellen:",
   "Источники: {p}": "Quellen: {p}",
   "Исходный": "Original",
+  "Итог": "Ergebnis",
   "Итоги финала": "Finalergebnisse",
   "Ищу информацию": "Suche Informationen",
   "К сообщению добавится график": "Der Nachricht wird ein Diagramm hinzugefügt",
@@ -1558,6 +1560,7 @@
   "Финал окончен": "Finale beendet",
   "Финал с участниками": "Finale mit Teilnehmern",
   "Финал спортсменов онлайн без тренера: вы ведёте команды и стреляете сами": "Online-Finale der Sportler ohne Trainer: Sie geben die Kommandos und schießen selbst",
+  "Финал уже недоступен": "Das Finale ist nicht mehr verfügbar",
   "Финал: винтовка 50 м, три положения": "Finale: Gewehr 50 m, drei Stellungen",
   "Финал: пневматическая винтовка 10 м": "Finale: Luftgewehr 10 m",
   "Финал: пневматический пистолет 10 м": "Finale: Luftpistole 10 m",

@@ -629,6 +629,43 @@ class _PublicBoardState extends State<_PublicBoard> {
   Widget build(BuildContext context) {
     if (_rows.isEmpty) return const SizedBox.shrink();
     final theme = Theme.of(context);
+    String formatName(FinalsBoardRow r) =>
+        tr(FinalFormat.all.firstWhere((f) => f.id == r.formatId, orElse: () => FinalFormat.airRifle10m).nameKey);
+
+    Future<void> details(FinalsBoardRow r) => showGlassDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text(formatName(r)),
+            content: SingleChildScrollView(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                if (r.region.isNotEmpty) Text(r.region, style: theme.textTheme.bodySmall),
+                const SizedBox(height: 8),
+                Text(tr('Жюри'), style: theme.textTheme.labelLarge),
+                Text(r.jury.isEmpty ? '—' : r.jury.join(', ')),
+                const SizedBox(height: 8),
+                Text(tr('Участники'), style: theme.textTheme.labelLarge),
+                Text(r.athletes.isEmpty ? '—' : r.athletes.join(', ')),
+                if (r.status == 'finished' && r.top.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(tr('Итог'), style: theme.textTheme.labelLarge),
+                  for (final t in r.top) Text('${t['place']}. ${t['name']}  ${(t['total'] as num).toStringAsFixed(1)}'),
+                ],
+              ]),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Закрыть'))),
+              if (r.status != 'finished')
+                FilledButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    joinPublicFinal(context, widget.store, r);
+                  },
+                  child: Text(tr('Смотреть')),
+                ),
+            ],
+          ),
+        );
+
     Widget group(String title, String status) {
       final list = [for (final r in _rows) if (r.status == status) r];
       if (list.isEmpty) return const SizedBox.shrink();
@@ -642,13 +679,10 @@ class _PublicBoardState extends State<_PublicBoard> {
                 'finished' => Icons.emoji_events_outlined,
                 _ => Icons.hourglass_empty,
               }),
-              title: Text(tr(FinalFormat.all.firstWhere((f) => f.id == r.formatId, orElse: () => FinalFormat.airRifle10m).nameKey)),
-              subtitle: Text(status == 'finished' && r.top.isNotEmpty
-                  ? [for (final t in r.top.take(3)) '${t['place']}. ${t['name']} ${(t['total'] as num).toStringAsFixed(1)}'].join('  ')
-                  : r.hostName),
-              trailing: status == 'finished'
-                  ? null
-                  : FilledButton(onPressed: () => joinPublicFinal(context, widget.store, r), child: Text(tr('Смотреть'))),
+              title: Text(formatName(r)),
+              subtitle: Text(r.region.isNotEmpty ? r.region : r.hostName),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => details(r),
             ),
           ),
       ]);

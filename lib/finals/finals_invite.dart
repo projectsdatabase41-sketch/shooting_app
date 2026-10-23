@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 
+import '../i18n/i18n.dart';
 import '../services/local_db_service.dart';
 import 'finals_session_service.dart' show FinalsMember, FinalsRole;
 
@@ -17,6 +18,7 @@ String _rand(int bytes) {
 class FinalsInvite {
   static const prefix = 'nexus-final:';
   static final _re = RegExp('${RegExp.escape(prefix)}([A-Za-z0-9_=-]+)');
+  static RegExp get codePattern => _re;
 
   final String key; // секретное имя канала финала
   final String token; // личный токен приглашённого
@@ -125,6 +127,48 @@ class FinalsInviteStore {
   FinalsInviteStore._();
   static const _key = 'finals_invites_seen';
 
+  static const _kEnded = 'finals_invites_ended';
+
+  static Set<String> _read(LocalDbService db, String key) {
+    final rows = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [key]);
+    return rows.isEmpty ? {} : '${rows.first['hex']}'.split(',').where((s) => s.isNotEmpty).toSet();
+  }
+
+  static void _write(LocalDbService db, String key, Iterable<String> v) => db.db.execute(
+        'INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex',
+        [key, v.join(',')],
+      );
+
+  /// Финал по этому приглашению окончен (ведущий сообщил или отказал): код при уборке стирается.
+  static void markEnded(LocalDbService db, String token) {
+    final all = {..._read(db, _kEnded), token};
+    _write(db, _kEnded, all.length > 60 ? all.skip(all.length - 60) : all);
+  }
+
+  /// Стирает из сообщений коды приглашений, которые уже не действуют (срок вышел или финал окончен),
+  /// и забывает их токены. Сами сообщения, чаты и контакты (в том числе тренер) не трогаются.
+  /// Возвращает число очищенных сообщений.
+  static int purge(LocalDbService db) {
+    final ended = _read(db, _kEnded);
+    final rows = db.db.select("SELECT id, text FROM chat_local_messages WHERE text LIKE ?", ['%${FinalsInvite.prefix}%']);
+    var n = 0;
+    final dropped = <String>{};
+    for (final r in rows) {
+      final text = '${r['text']}';
+      final i = FinalsInvite.parse(text);
+      if (i == null || !(i.expired || ended.contains(i.token))) continue;
+      final cleaned = text.replaceAll(FinalsInvite.codePattern, tr('(приглашение в финал больше не действует)'));
+      db.db.execute('UPDATE chat_local_messages SET text = ? WHERE id = ?', [cleaned, r['id']]);
+      dropped.add(i.token);
+      n++;
+    }
+    if (dropped.isNotEmpty) {
+      _write(db, _key, seen(db).difference(dropped));
+      _write(db, _kEnded, ended.difference(dropped));
+    }
+    return n;
+  }
+
   static Set<String> seen(LocalDbService db) {
     final rows = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [_key]);
     return rows.isEmpty ? {} : '${rows.first['hex']}'.split(',').where((s) => s.isNotEmpty).toSet();
@@ -148,7 +192,7 @@ class FinalsInviteStore {
     final out = <FinalsInvite>[];
     for (final r in rows) {
       final i = FinalsInvite.parse('${r['text']}');
-      if (i != null && !i.expired && !used.contains(i.token) && !out.any((o) => o.token == i.token)) out.add(i);
+      if (i != null && !i.expired && !used.contains(i.token) && !_read(db, _kEnded).contains(i.token) && !out.any((o) => o.token == i.token)) out.add(i);
     }
     return out;
   }

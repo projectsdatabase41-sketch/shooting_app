@@ -1,6 +1,7 @@
 import '../gdrive/gdrive_screen.dart';
 import 'dart:async' show Timer;
 import 'package:flutter/material.dart';
+import '../finals/finals_invite.dart' show FinalsInviteStore;
 import 'final_room_screens.dart' show offerFinalInvites;
 import '../theme/app_transitions.dart';
 import '../widgets/tile_backdrop.dart';
@@ -72,6 +73,10 @@ class _HomeShellState extends State<HomeShell> {
     });
     _syncChatPoll();
     ModulesSettings.revision.addListener(_syncChatPoll);
+    // Не действующие приглашения в финал (код со ссылкой) из сообщений стираются — ключи не хранятся.
+    try {
+      FinalsInviteStore.purge(db);
+    } catch (_) {}
   }
 
   /// Фоновый опрос нужен только при включённом мессенджере и входе в него
@@ -86,6 +91,9 @@ class _HomeShellState extends State<HomeShell> {
     _inviteTimer = null;
     if (on) {
       _inviteTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+        try {
+          FinalsInviteStore.purge(context.read<AppDataStore>().db);
+        } catch (_) {}
         if (mounted && !ChatHomeScreen.isOpen) offerFinalInvites(context, context.read<AppDataStore>());
       });
     }
