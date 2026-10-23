@@ -105,6 +105,9 @@ class PhaseAnnouncer {
   String? update(String phase, {required int secondsLeft, required bool announcing}) {
     String? say;
     lastRef = null;
+    // Сброс при входе в этап — до проверки «Заряжай», иначе флаг сбрасывался сразу после
+    // команды и она звучала второй раз на следующем тике.
+    if (phase != _last && phase == 'loading') _loadingCalled = false;
     if (phase == 'loading' && !announcing && !_loadingCalled && _last != null) {
       _loadingCalled = true;
       say = 'Заряжай.';
@@ -123,7 +126,6 @@ class PhaseAnnouncer {
         say = 'Финал окончен.';
         lastRef = 'cmd_finished';
       }
-      if (phase == 'loading') _loadingCalled = false;
       if (phase == 'sighting' && _last == null) {
         say = 'Пристрелка.';
         lastRef = 'cmd_sighting';

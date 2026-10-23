@@ -651,9 +651,7 @@ class FinalGuestScreen extends StatefulWidget {
 
 class _FinalGuestScreenState extends State<FinalGuestScreen> {
   FinalsGuest? _guest;
-  final _tracker = AnnounceTracker();
-  final _phaseVoice = PhaseAnnouncer();
-  FinalsSnapshot? _last; // последнее известное состояние (показываем при обрыве)
+    FinalsSnapshot? _last; // последнее известное состояние (показываем при обрыве)
   Timer? _hello;
   Timer? _retry;
   int _attempt = 0;
@@ -693,15 +691,7 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
       ..addListener(() {
         if (!mounted) return;
         final snap = _guest?.snapshot;
-        if (snap != null) {
-          final cmd = _phaseVoice.update(snap.phase, secondsLeft: snap.secondsLeft, announcing: snap.phase == 'loading' && snap.secondsLeft > 5);
-          if (cmd != null) FinalsAnnouncer.say(context.read<AppDataStore>().db, cmd, refs: _phaseVoice.lastRef == null ? null : [_phaseVoice.lastRef!]);
-          final text = _tracker.update(
-            [for (final r in snap.rows) AnnounceRow('${r['name']}', (r['total'] as num).toDouble(), r['active'] == true, isMe: r['id'] == widget.member.targetId)],
-            announcing: snap.phase == 'loading' && snap.secondsLeft > 5,
-          );
-          if (text != null) FinalsAnnouncer.say(context.read<AppDataStore>().db, text, refs: _tracker.lastRefs);
-        }
+        // Озвучка и команды — только у ведущего (одна на всех); у гостя тишина.
         setState(() => _last = snap ?? _last);
       });
     _guest = g;
