@@ -172,20 +172,31 @@ void main() {
     expect(c.secondsLeft, FinalRunController.announcerSeconds + 5);
   });
 
-  test('50 м, три положения: полный финал с открытым этапом на 20 выстрелов', () {
+  test('50 м, три положения: 45 выстрелов, серии с разным временем, длинная пауза на смене положения', () {
     final c = _make(21, format: FinalFormat.rifle3p50m);
     c.skipSighting();
     for (var i = 0; i < 5; i++) {
       c.tick();
     }
-    expect(c.roundLabel, 'open');
-    expect(c.shotsPerShooter, 20);
-    expect(c.roundLimit, 1320);
-    _run(c, aim: (0.0, 0.0), maxTicks: 40000);
+    expect(c.roundLabel, 'series:1');
+    expect(c.shotsPerShooter, 5);
+    expect(c.roundLimit, 200);
+    var sawChange = false;
+    var guard = 0;
+    while (c.phase != RunPhase.finished && guard++ < 60000) {
+      c.tick();
+      if (c.phase == RunPhase.loading && c.secondsLeft > 400) sawChange = true;
+      if (c.userCanShoot) {
+        while (c.userShotsLeft > 0) {
+          c.submitUserShot(0, 0);
+        }
+      }
+    }
+    expect(sawChange, isTrue);
     expect(c.phase, RunPhase.finished);
     final places = [for (final x in c.engine.competitors) x.place];
     expect(places.toSet(), {1, 2, 3, 4, 5, 6, 7, 8});
-    expect(c.engine.competitors.firstWhere((x) => x.place == 1).shots.length, 35);
+    expect(c.engine.competitors.firstWhere((x) => x.place == 1).shots.length, 45);
   });
 
   test('выбыл — боты стреляют дальше; «Завершить результат» доигрывает остаток', () {

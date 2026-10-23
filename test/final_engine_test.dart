@@ -168,38 +168,39 @@ void main() {
 
   group('50 м, три положения (п. 6.17.3)', () {
     const f = FinalFormat.rifle3p50m;
-    test('формат: 35 выстрелов, после 30-го выбывают двое', () {
-      expect(f.totalShots, 35);
-      expect(f.eliminationAfter, [30, 31, 32, 33, 34]);
+    test('формат: 45 выстрелов, после 40-го выбывают двое', () {
+      expect(f.totalShots, 45);
+      expect(f.eliminationAfter, [40, 41, 42, 43, 44]);
       expect(f.eliminationsAt(0), 2);
-      expect(f.secondsForShot(0), 1320);
-      expect(f.secondsForShot(20), 250);
-      expect(f.secondsForShot(30), 50);
+      expect(f.secondsForShot(0), 200); // колено
+      expect(f.secondsForShot(15), 150); // лёжа
+      expect(f.secondsForShot(30), 250); // стоя
+      expect(f.secondsForShot(40), 50);
     });
 
-    test('места и число выстрелов: 8-й и 7-й — 30, 6-й — 31, … победители — 35', () {
+    test('места и число выстрелов: 8-й и 7-й — 40, 6-й — 41, … победители — 45', () {
       final cs = [for (var i = 0; i < 8; i++) FinalCompetitor('c$i', 'C$i')];
       final e = FinalEngine(f, cs);
-      for (var n = 0; n < 35; n++) {
+      for (var n = 0; n < 45; n++) {
         for (var i = 0; i < 8; i++) {
           if (cs[i].active && !e.isFinished) e.submit('c$i', 10.9 - i * 0.1);
         }
       }
       expect(e.isFinished, isTrue);
       expect([for (final c in cs) c.place], [1, 2, 3, 4, 5, 6, 7, 8]);
-      expect([for (final c in cs) c.shots.length], [35, 35, 34, 33, 32, 31, 30, 30]);
+      expect([for (final c in cs) c.shots.length], [45, 45, 44, 43, 42, 41, 40, 40]);
     });
 
-    test('ничья двоих внизу после 30-го — по счёту серий, без перестрелки', () {
+    test('ничья двоих внизу после 40-го — по счёту серий, без перестрелки', () {
       final cs = [for (var i = 0; i < 8; i++) FinalCompetitor('c$i', 'C$i')];
       final e = FinalEngine(f, cs);
-      // c6: 25×10.0 + 5×9.0 = 295; c7: 25×9.8 + 5×10.0 = 295 — сумма равна,
+      // c6: 35×10.0 + 5×9.0 = 395; c7: 30×10.0 + 5×9.0 + 5×10.0 = 395 — сумма равна,
       // но в последней серии c7 сильнее, значит c6 выбывает 8-м.
-      for (var n = 0; n < 30; n++) {
+      for (var n = 0; n < 40; n++) {
         for (var i = 0; i < 8; i++) {
           final v = switch (i) {
-            6 => n < 25 ? 10.0 : 9.0,
-            7 => n < 25 ? 9.8 : 10.0,
+            6 => n < 35 ? 10.0 : 9.0,
+            7 => (n >= 30 && n < 35) ? 9.0 : 10.0,
             _ => 10.9 - i * 0.1,
           };
           e.submit('c$i', v);

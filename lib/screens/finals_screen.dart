@@ -364,11 +364,11 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(color: cs.surfaceContainerHigh, borderRadius: BorderRadius.circular(18)),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(f.hasOpenStage ? tr('По правилам ISSF (п. 6.17.3)') : tr('По правилам ISSF (п. 6.17.2)'), style: theme.textTheme.titleSmall),
+                    Text(f.id == 'rifle_3p_50m' ? tr('По правилам ISSF (п. 6.17.3)') : tr('По правилам ISSF (п. 6.17.2)'), style: theme.textTheme.titleSmall),
                     const SizedBox(height: 6),
                     Text(
-                      f.hasOpenStage
-                          ? tr('Подготовка и пристрелка 5 минут, затем 10 выстрелов с колена и 10 лёжа за 22 минуты. Стоя две серии по 5 выстрелов (по 250 с), после 30-го выстрела выбывают двое, дальше одиночные по 50 с: после каждого выбывает самый слабый. Десятые доли, всего 35 выстрелов.')
+                      f.id == 'rifle_3p_50m'
+                          ? tr('Подготовка и пристрелка 5 минут. С колена 3 серии по 5 выстрелов (по 200 с), смена и пристрелка 7 минут, лёжа 3 серии по 5 (по 150 с), смена и пристрелка 9 минут, стоя 2 серии по 5 (по 250 с). После 40-го выстрела выбывают двое, дальше 5 одиночных по 50 с: после каждого выбывает самый слабый. Десятые доли, всего 45 выстрелов.')
                           : tr('Подготовка и пристрелка 5 минут, затем две серии по 5 выстрелов (по 250 с) и 14 одиночных выстрелов (по 50 с). Десятые доли. После 12-го выстрела и далее после каждых двух выбывает самый слабый; при ничьей — перестрелка.'),
                       style: theme.textTheme.bodySmall,
                     ),

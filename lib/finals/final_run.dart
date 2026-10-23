@@ -272,7 +272,7 @@ class FinalRunController extends ChangeNotifier {
       roundLimit = format.singleSeconds;
     } else if (roundIndex < format.seriesShots.length) {
       shotsPerShooter = format.seriesShots[roundIndex];
-      roundLimit = (roundIndex == 0 && format.hasOpenStage) ? format.openSeconds : format.seriesSeconds;
+      roundLimit = format.secondsForSeries(roundIndex);
     } else {
       shotsPerShooter = 1;
       roundLimit = format.singleSeconds;
@@ -414,7 +414,12 @@ class FinalRunController extends ChangeNotifier {
       ? engine.phase == FinalPhase.shootOff && engine.shootOffShooters.any((c) => c.id == id)
       : engine.phase == FinalPhase.match && engine.byId(id).active;
 
-  void _beginLoadingForNextRound() => _beginLoading(announcerSeconds + 5);
+  /// Между сериями — комментарий диктора и «Заряжай»; при смене положения (колено → лёжа → стоя)
+  /// пауза длиннее: смена изготовки и пристрелка по правилам.
+  void _beginLoadingForNextRound() {
+    final change = inShootOff ? null : format.changeAfterSeries[roundIndex - 1];
+    _beginLoading(change ?? (announcerSeconds + 5));
+  }
 
   /// Живая таблица: активные — по среднему выстрелу (у всех разное число
   /// выстрелов, пока раунд идёт), включая уже отмеченные, но ещё не закрытые

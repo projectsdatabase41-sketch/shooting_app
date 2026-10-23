@@ -1,5 +1,7 @@
 import '../gdrive/gdrive_screen.dart';
+import 'dart:async' show Timer;
 import 'package:flutter/material.dart';
+import 'final_room_screens.dart' show offerFinalInvites;
 import '../theme/app_transitions.dart';
 import '../widgets/tile_backdrop.dart';
 import '../widgets/app_backdrop.dart';
@@ -52,6 +54,7 @@ class _HomeShellState extends State<HomeShell> {
   late final CustomServicesRepository _services;
   late final PersonalizationViewModel _personalization;
   ChatBackgroundPoll? _chatPoll;
+  Timer? _inviteTimer;
 
   @override
   void initState() {
@@ -78,12 +81,21 @@ class _HomeShellState extends State<HomeShell> {
     final on = ModulesSettings.isOn(db, AppModule.messenger) &&
         ChatAuthService(db).isSignedIn;
     on ? _chatPoll?.start() : _chatPoll?.stop();
+    // Приглашения в финал предлагаем принять с любого экрана, а не только в мессенджере.
+    _inviteTimer?.cancel();
+    _inviteTimer = null;
+    if (on) {
+      _inviteTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+        if (mounted && !ChatHomeScreen.isOpen) offerFinalInvites(context, context.read<AppDataStore>());
+      });
+    }
   }
 
   @override
   void dispose() {
     ModulesSettings.revision.removeListener(_syncChatPoll);
     _chatPoll?.stop();
+    _inviteTimer?.cancel();
     _services.removeListener(_onServicesChanged);
     _personalization.removeListener(_onServicesChanged);
     super.dispose();

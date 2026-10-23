@@ -39,6 +39,13 @@ class FinalFormat {
   /// [seriesShots] идёт [openSeconds] секунд, стреляют в своём темпе.
   final int openSeconds;
 
+  /// Время каждой серии отдельно (если положения разные): с колена 200 с, лёжа 150 с, стоя 250 с.
+  /// `null` — у всех серий [seriesSeconds].
+  final List<int>? seriesSecondsList;
+
+  /// Смена изготовки: после серии с номером (с нуля) — сколько секунд занимает смена и пристрелка.
+  final Map<int, int> changeAfterSeries;
+
   /// Размеры блоков для разрыва ничьей по счёту при выбывании двоих
   /// (последняя серия, предыдущая серия, затем отдельные выстрелы назад).
   final List<int> countbackBlocks;
@@ -56,6 +63,8 @@ class FinalFormat {
     this.eliminationAfter = const [12, 14, 16, 18, 20, 22],
     this.eliminationCounts,
     this.openSeconds = 0,
+    this.seriesSecondsList,
+    this.changeAfterSeries = const {},
     this.countbackBlocks = const [],
   });
 
@@ -68,10 +77,17 @@ class FinalFormat {
 
   /// Лимит времени на выстрел с номером [shotIndex] (с нуля): в сериях —
   /// общий лимит серии, дальше — на каждый выстрел.
+  /// Лимит времени серии [i] (с нуля).
+  int secondsForSeries(int i) {
+    if (i == 0 && hasOpenStage) return openSeconds;
+    final l = seriesSecondsList;
+    return (l != null && i < l.length) ? l[i] : seriesSeconds;
+  }
+
   int secondsForShot(int shotIndex) {
     var left = shotIndex;
     for (var i = 0; i < seriesShots.length; i++) {
-      if (left < seriesShots[i]) return (i == 0 && hasOpenStage) ? openSeconds : seriesSeconds;
+      if (left < seriesShots[i]) return secondsForSeries(i);
       left -= seriesShots[i];
     }
     return singleSeconds;
@@ -91,17 +107,19 @@ class FinalFormat {
     faceCode: 'pistol_10m',
   );
 
-  /// Винтовка 50 м, три положения (п. 6.17.3): 10 выстрелов с колена и 10 лёжа
-  /// за 22 минуты, затем стоя две серии по 5 по 250 с (после 30-го выстрела
-  /// выбывают двое), далее одиночные по 50 с. Всего 35 выстрелов.
+  /// Винтовка 50 м, три положения (п. 6.17.3): по 15 выстрелов с колена (3×5 по 200 с),
+  /// лёжа (3×5 по 150 с; смена и пристрелка 7 мин) и стоя (2×5 по 250 с; смена и пристрелка 9 мин).
+  /// После 40-го выстрела выбывают двое, затем 5 одиночных по 50 с, после каждого выбывает
+  /// самый слабый. Всего 45 выстрелов.
   static const rifle3p50m = FinalFormat(
     id: 'rifle_3p_50m',
     nameKey: /*tr*/ 'Финал: винтовка 50 м, три положения',
     faceCode: 'rifle_50m',
-    seriesShots: [20, 5, 5],
+    seriesShots: [5, 5, 5, 5, 5, 5, 5, 5],
+    seriesSecondsList: [200, 200, 200, 150, 150, 150, 250, 250],
+    changeAfterSeries: {2: 420, 5: 540},
     singleShots: 5,
-    openSeconds: 1320,
-    eliminationAfter: [30, 31, 32, 33, 34],
+    eliminationAfter: [40, 41, 42, 43, 44],
     eliminationCounts: [2, 1, 1, 1, 1],
     countbackBlocks: [5, 5],
   );

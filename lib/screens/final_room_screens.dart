@@ -149,7 +149,7 @@ class FinalRoomView extends StatelessWidget {
               child: ShotPad(
                 face: TargetFace.byCode(s.face),
                 marks: [for (final m in (own['staged'] as List? ?? const [])) Offset((m[0] as num).toDouble(), (m[1] as num).toDouble())],
-                enabled: own['can'] == true && !s.paused,
+                enabled: own['can'] == true && !s.paused && (own['staged'] as List).length < s.shotsPerShooter,
                 onHold: (_) {},
                 onShot: (mm) => onShoot('$ownId', mm),
               ),
@@ -256,7 +256,7 @@ class _InputSheetState extends State<_InputSheet> {
               child: ShotPad(
                 face: TargetFace.byCode(s.face),
                 marks: marks,
-                enabled: row?['can'] == true && !s.paused,
+                enabled: row?['can'] == true && !s.paused && marks.length < s.shotsPerShooter,
                 onHold: (_) {},
                 onShot: (mm) {
                   widget.onShoot(widget.who, mm);
@@ -745,9 +745,22 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
 /// Проверяет приглашения в финалы и, если есть ожидающие ответа, предлагает
 /// принять — работает из любого места (например, при открытии мессенджера),
 /// не зависит от того, включён ли модуль «Финалы».
+bool _offeringInvite = false;
+final Set<String> _laterInvites = {}; // «Позже» — до перезапуска не напоминаем
+
 Future<void> offerFinalInvites(BuildContext context, AppDataStore store) async {
+  if (_offeringInvite) return;
+  _offeringInvite = true;
+  try {
+    await _offerFinalInvites(context, store);
+  } finally {
+    _offeringInvite = false;
+  }
+}
+
+Future<void> _offerFinalInvites(BuildContext context, AppDataStore store) async {
   final svc = FinalsSessionService(ChatAuthService(store.db));
-  final list = [for (final m in await svc.myInvitations()) if (m.status == 'invited') m];
+  final list = [for (final m in await svc.myInvitations()) if (m.status == 'invited' && !_laterInvites.contains(m.sessionId)) m];
   if (list.isEmpty || !context.mounted) return;
   final m = list.first;
   final role = switch (m.role) {
@@ -766,7 +779,11 @@ Future<void> offerFinalInvites(BuildContext context, AppDataStore store) async {
       ],
     ),
   );
-  if (accept != true || !context.mounted) return;
+  if (accept != true) {
+    if (accept == false) _laterInvites.add(m.sessionId);
+    return;
+  }
+  if (!context.mounted) return;
   if (!await svc.answer(m, accept: true) || !context.mounted) return;
   await Navigator.of(context).push(MaterialPageRoute(builder: (_) => FinalGuestScreen(member: m, service: svc)));
 }
