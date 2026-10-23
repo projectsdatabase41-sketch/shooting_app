@@ -10,6 +10,7 @@ import 'dart:math';
 void main() {
   personalDbTest();
   spectatorTest();
+  publicTest();
   test('код приглашения: кодируется и читается из текста сообщения', () {
     final book = FinalsInviteBook();
     final inv = book.create(role: FinalsRole.athlete, name: 'Иван', targetId: 'u_1');
@@ -125,5 +126,24 @@ void spectatorTest() {
     await Future<void>.delayed(const Duration(milliseconds: 50));
     expect(seenByHost.length, 1);
     host.dispose();
+  });
+}
+
+void publicTest() {
+  test('публичный финал: зрители заходят сами по своему токену до лимита, остальным отказ', () {
+    final book = FinalsInviteBook()
+      ..isPublic = true
+      ..maxSpectators = 2;
+    final t = [for (var i = 0; i < 3; i++) newFinalsToken()];
+    expect(book.accept(t[0], 'A'), isTrue);
+    expect(book.accept(t[1], 'B'), isTrue);
+    expect(book.full, isTrue);
+    expect(book.accept(t[2], 'C'), isFalse); // мест нет
+    expect(book.accept(t[0], 'A'), isTrue); // свой токен работает и при полном зале
+    expect(book.accept('коротко', 'X'), isFalse); // мусорный токен
+    // зритель из публики не может стрелять
+    expect(FinalsSessionService.scopeFor(t[0], '', book.members), isEmpty);
+    // непубличный финал чужих не пускает
+    expect((FinalsInviteBook()..maxSpectators = 5).accept(newFinalsToken(), 'Z'), isFalse);
   });
 }

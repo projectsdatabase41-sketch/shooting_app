@@ -121,6 +121,9 @@ class FinalRunController extends ChangeNotifier {
   bool voiceAll = false;
   bool hostSilent = false;
 
+  /// Публичный финал: итог уходит в таблицу чемпионов, ход виден на табло.
+  bool isPublic = false;
+
   /// Начало токена главного из жюри (гость по нему узнаёт, что говорить должен он).
   String? chiefHint;
 

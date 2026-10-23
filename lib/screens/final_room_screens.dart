@@ -22,6 +22,9 @@ import '../services/chat_sync_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/glass_pill.dart';
 import '../finals/cheers.dart';
+import '../services/user_profile.dart';
+import '../finals/final_publish.dart';
+import '../finals/finals_board.dart';
 import '../finals/finals_invite.dart';
 import '../services/supabase_auth_service.dart';
 import '../finals/round_label.dart';
@@ -427,6 +430,10 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
   List<FinalsMember> _members = [];
   final _book = FinalsInviteBook(); // временные приглашения: хранятся только здесь
   FinalsChannel? _lobbyCh;
+  bool _public = false;
+  int _maxSpec = 50;
+  String? _boardId;
+  bool _handedOff = false; // дальше табло ведёт экран ведущего
   bool _busy = false;
   bool _hostShoots =
       false; // ведущий сам стреляет (финал спортсменов без тренера)
@@ -434,6 +441,8 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
   @override
   void dispose() {
     _lobbyCh?.close();
+    // Передумали до начала — публичный финал с табло снимаем.
+    if (_boardId != null && !_handedOff) FinalsBoardService(_auth).remove(_boardId!);
     super.dispose();
   }
 
@@ -502,6 +511,18 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
       return;
     }
     _lobbyCh = ch;
+    if (_public) {
+      _book.isPublic = true;
+      _book.maxSpectators = _maxSpec;
+      final profile = '${UserProfile.firstNameOf(_store.db)} ${UserProfile.lastNameOf(_store.db)}'.trim();
+      _boardId = await FinalsBoardService(_auth).create(
+          hostName: profile.isNotEmpty ? profile : _auth.nickname,
+          formatId: widget.format.id,
+          key: _book.key,
+          url: _book.url,
+          anonKey: _book.anonKey,
+          maxSpectators: _maxSpec);
+    }
     for (final p in _picks) {
       final inv = _book.create(
           role: p.role,
@@ -585,11 +606,14 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
       rng: rng,
       manual: true,
     );
+    controller.isPublic = _public;
+    _handedOff = true;
     _lobbyCh?.close();
     _lobbyCh = null;
     Navigator.of(context).pushReplacement(MaterialPageRoute(
       builder: (_) => FinalHostScreen(
           book: _book,
+          boardId: _boardId,
           controller: controller,
           sessionId: sid,
           service: _svc,
@@ -637,6 +661,28 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
                 onChanged:
                     started ? null : (v) => setState(() => _hostShoots = v),
               ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(tr('Публичный финал')),
+                subtitle: Text(_auth.isSignedIn
+                    ? tr('Появится на табло: любой может смотреть и болеть, результаты участников попадут в таблицу чемпионов')
+                    : tr('Нужен вход в мессенджер')),
+                value: _public,
+                onChanged: started || !_auth.isSignedIn ? null : (v) => setState(() => _public = v),
+              ),
+              if (_public)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(tr('Зрителей до {n}', {'n': _maxSpec})),
+                  subtitle: Slider(
+                    min: 10,
+                    max: 150,
+                    divisions: 14,
+                    value: _maxSpec.toDouble(),
+                    label: '$_maxSpec',
+                    onChanged: started ? null : (v) => setState(() => _maxSpec = v.round()),
+                  ),
+                ),
               Text(tr('Участники'), style: theme.textTheme.titleSmall),
               for (final p in _picks)
                 ListTile(
@@ -711,6 +757,9 @@ class FinalHostScreen extends StatefulWidget {
   /// Временные приглашения этого финала; после финала стираются.
   final FinalsInviteBook book;
 
+  /// Строка на табло публичных финалов (если финал публичный).
+  final String? boardId;
+
   /// Если ведущий сам стреляет — его id участника; иначе `null` (он только ведёт).
   final String? hostCompetitorId;
   const FinalHostScreen(
@@ -721,6 +770,7 @@ class FinalHostScreen extends StatefulWidget {
       required this.store,
       required this.members,
       required this.book,
+      this.boardId,
       this.hostCompetitorId});
 
   @override
@@ -735,6 +785,10 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
   late final String _me = widget.service.auth.userId;
   bool _saved = false;
   final _cheers = CheerFeed();
+  late final _board = FinalsBoardService(widget.service.auth);
+  bool _boardLive = false;
+  int _tick = 0;
+  DateTime _quietUntil = DateTime.fromMillisecondsSinceEpoch(0); // диктор говорит — кричалки без звука
 
   FinalRunController get c => widget.controller;
 
@@ -754,6 +808,12 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
       _members = widget.book.members;
       c.chiefHint = widget.book.chiefHint;
       c.hostSilent = widget.hostCompetitorId != null && _members.any((m) => m.role == FinalsRole.coach && m.status == 'accepted');
+      // Зрителей много — состояние реже, чтобы не упереться в лимит сообщений.
+      _host?.minInterval = _members.length > 14 ? const Duration(seconds: 1) : const Duration(milliseconds: 150);
+      // Раз в минуту «жив» на табло.
+      if (++_tick % 20 == 0 && widget.boardId != null && c.phase != RunPhase.finished) {
+        _board.update(widget.boardId!, status: _boardLive ? 'live' : 'preparing');
+      }
     });
   }
 
@@ -803,10 +863,13 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
         }
         return null;
       },
+      isFull: () => widget.book.full,
       onCheer: (name, kind) {
         _cheers.add(name, kind);
-        // Диктор (у ведущего) озвучивает реакцию, если озвучка включена.
-        if (FinalsPrefs.voice(widget.store.db)) FinalsAnnouncer.speak(CheerFeed.kinds[kind]!.$2, queue: true);
+        // Смайлики идут всегда, а голосом реакцию озвучиваем только вне объявлений судьи — чтобы не перебивать.
+        if (FinalsPrefs.voice(widget.store.db) && !c.announcing && DateTime.now().isAfter(_quietUntil)) {
+          FinalsAnnouncer.speak(CheerFeed.kinds[kind]!.$2, queue: true);
+        }
       },
       // Токен проверяется по списку приглашений: стёртый или чужой — отказ.
       onHello: (a, name) {
@@ -829,6 +892,7 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
     if (FinalsPrefs.voice(widget.store.db) && (!c.hostSilent || c.voiceAll)) {
       final cmd = _phaseVoice.update(c.phase.name,
           secondsLeft: c.secondsLeft, announcing: c.announcing);
+      if (cmd != null) _quietUntil = DateTime.now().add(const Duration(seconds: 4));
       if (cmd != null)
         FinalsAnnouncer.say(widget.store.db, cmd,
             refs: _phaseVoice.lastRef == null ? null : [_phaseVoice.lastRef!]);
@@ -839,12 +903,28 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
       if (text != null)
         FinalsAnnouncer.say(widget.store.db, text, refs: _tracker.lastRefs);
     }
+    if (c.phase == RunPhase.shooting && !_boardLive) {
+      _boardLive = true;
+      if (widget.boardId != null) _board.update(widget.boardId!, status: 'live');
+    }
     if (c.phase == RunPhase.finished && !_saved) {
       _saved = true;
       _timer?.cancel();
+      final isPublic = widget.book.isPublic;
       final rec = c.toRecord()
-        ..['custom'] = true; // финал тренера в рейтинг не идёт
+        ..['custom'] = !isPublic // непубличный финал тренера в рейтинг не идёт
+        ..['public'] = isPublic;
       FinalsRepository(widget.store.db).save(rec);
+      if (isPublic) {
+        if (widget.boardId != null) {
+          _board.update(widget.boardId!, status: 'finished', top: [
+            for (final st in (rec['standings'] as List).cast<Map<String, dynamic>>().take(8))
+              {'name': st['name'], 'place': st['place'], 'total': st['total']}
+          ]);
+        }
+        // Ведущий, если сам стрелял, публикует свой результат так же, как остальные участники.
+        if (widget.hostCompetitorId != null) autoPublishFinal(widget.store, rec).then((_) {}, onError: (_) {});
+      }
       Future.delayed(const Duration(seconds: 2), () {
         _endSession();
         if (mounted)
@@ -857,6 +937,8 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
 
   /// Финал окончен: гости получают «ended», токены приглашений стираются — старые приглашения не откроют ничего.
   void _endSession() {
+    // Досрочно закончили — публичный финал снимаем с табло (оконченный остаётся с итогом).
+    if (widget.boardId != null && c.phase != RunPhase.finished) _board.remove(widget.boardId!);
     _host?.end();
     widget.book.erase();
   }
@@ -967,17 +1049,22 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
     if (_saved) return;
     _saved = true;
     final rows = [...snap.rows]..sort((a, b) => ((a['place'] ?? 99) as num).compareTo((b['place'] ?? 99) as num));
+    final full = snap.data['shots'] as List?; // с координатами — в конце финала присылает ведущий
+    final isPublic = snap.data['pub'] == true;
     final rec = <String, dynamic>{
       'format': snap.format,
       'face': snap.face,
       'finishedAt': DateTime.now().toUtc().toIso8601String(),
-      'custom': true,
-      'partial': true,
+      'custom': !isPublic,
+      'public': isPublic,
+      'partial': full == null,
       'standings': [
         for (final r in rows)
           {'id': r['id'], 'name': r['name'], 'place': r['place'], 'total': r['total'], 'user': r['id'] == widget.member.targetId}
       ],
-      'shots': [
+      'shots': full != null
+          ? [for (final x in full) (x as Map).cast<String, dynamic>()]
+          : [
         for (final r in rows)
           for (var i = 0; i < (r['shots'] as List).length; i++)
             {'who': r['id'], 'i': i, 'x': 0.0, 'y': 0.0, 's': (r['shots'] as List)[i], 't': 0}
@@ -986,6 +1073,10 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
     };
     final db = context.read<AppDataStore>().db;
     FinalsRepository(db).save(rec);
+    // Публичный финал: результат участника сам уходит в таблицу чемпионов.
+    if (isPublic && widget.member.role == FinalsRole.athlete) {
+      autoPublishFinal(context.read<AppDataStore>(), rec).then((_) {}, onError: (_) {});
+    }
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => FinalResultScreen(record: rec, readOnly: true)));
     });
@@ -1027,7 +1118,7 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
         if (!mounted) return;
         final g = _guest;
         if (g != null && (g.ended || g.denied)) {
-          if (!_saved) _closeWith(g.denied ? tr('Приглашение недействительно: финал уже окончен') : tr('Финал окончен'));
+          if (!_saved) _closeWith(g.denied ? (g.deniedFull ? tr('Мест для зрителей нет') : tr('Приглашение недействительно: финал уже окончен')) : tr('Финал окончен'));
           return;
         }
         final snap = _guest?.snapshot;
@@ -1188,4 +1279,13 @@ Future<void> enterFinalByCode(BuildContext context, AppDataStore store) async {
     return;
   }
   await joinFinal(context, store, inv);
+}
+
+/// Войти зрителем в публичный финал с табло (приглашение не нужно: токен зритель создаёт сам).
+Future<void> joinPublicFinal(BuildContext context, AppDataStore store, FinalsBoardRow row) async {
+  final nick = ChatAuthService(store.db).nickname;
+  final member = FinalsMember(row.key, newFinalsToken(), FinalsRole.spectator, null, nick.isNotEmpty ? nick : tr('Зритель'), 'accepted');
+  await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => FinalGuestScreen(
+          member: member, service: FinalsSessionService(ChatAuthService(store.db)), url: row.url, anonKey: row.anonKey)));
 }

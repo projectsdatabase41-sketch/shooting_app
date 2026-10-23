@@ -143,6 +143,9 @@ class FinalsSnapshot {
       'vm': c.voiceAll ? 'all' : 'chief',
       'hs': c.hostSilent,
       'ch': c.chiefHint,
+      'pub': c.isPublic,
+      // В конце финала участникам уходят все выстрелы с координатами — из них у каждого собирается протокол.
+      if (c.phase == RunPhase.finished) 'shots': [for (final s in c.shots) s.toJson()],
       'rows': [
         for (final r in live)
           {
@@ -173,6 +176,7 @@ class FinalsHost {
     required this.allowed,
     this.canControl,
     this.onHello,
+    this.isFull,
     this.cheerName,
     this.onCheer,
   }) {
@@ -195,10 +199,13 @@ class FinalsHost {
   DateTime _last = DateTime.fromMillisecondsSinceEpoch(0);
 
   /// Не чаще раза в 150 мс; последнее состояние всегда уходит.
+  /// Не чаще раза в [minInterval]: при сотне зрителей ведущий шлёт реже, чтобы не упереться в лимит сообщений.
+  Duration minInterval = const Duration(milliseconds: 150);
+
   void _scheduleBroadcast() {
     if (_pending) return;
     _pending = true;
-    final wait = const Duration(milliseconds: 150) - DateTime.now().difference(_last);
+    final wait = minInterval - DateTime.now().difference(_last);
     Timer(wait.isNegative ? Duration.zero : wait, () {
       _pending = false;
       broadcast();
@@ -212,6 +219,9 @@ class FinalsHost {
 
   /// Проверка приглашения при подключении гостя ([author] — его токен); `false` — отказ.
   final bool Function(String author, String name)? onHello;
+
+  /// Мест для зрителей нет (сообщается в отказе).
+  final bool Function()? isFull;
 
   /// Финал завершён: гости узнают об этом, их приглашения перестают работать.
   void end() => channel.send('ended', const {});
@@ -240,7 +250,7 @@ class FinalsHost {
     }
     if (event == 'hello') {
       if (onHello?.call(author, '${p['name'] ?? ''}') == false) {
-        channel.send('denied', {'to': author});
+        channel.send('denied', {'to': author, if (isFull?.call() == true) 'full': true});
         return;
       }
       broadcast(); // подключившийся сразу получает состояние
@@ -282,6 +292,7 @@ class FinalsGuest extends ChangeNotifier {
         notifyListeners();
       } else if (e == 'denied' && p['to'] == userId) {
         denied = true;
+        deniedFull = p['full'] == true;
         notifyListeners();
       }
     };
@@ -298,6 +309,7 @@ class FinalsGuest extends ChangeNotifier {
   /// Ведущий завершил финал / не признал приглашение.
   bool ended = false;
   bool denied = false;
+  bool deniedFull = false;
 
   /// Запросить текущее состояние (после входа в канал).
   void hello() => channel.send('hello', {'author': userId, 'who': '', 'name': name});

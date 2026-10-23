@@ -4,6 +4,9 @@ import 'dart:math';
 import '../services/local_db_service.dart';
 import 'finals_session_service.dart' show FinalsMember, FinalsRole;
 
+/// Новый случайный токен (зритель публичного финала создаёт себе сам).
+String newFinalsToken() => _rand(16);
+
 String _rand(int bytes) {
   final r = Random.secure();
   return base64Url.encode([for (var i = 0; i < bytes; i++) r.nextInt(256)]).replaceAll('=', '');
@@ -77,6 +80,13 @@ class FinalsInviteBook {
   String? url;
   String? anonKey;
 
+  /// Публичный финал: зрители подключаются сами (до [maxSpectators]), токен им выдаёт не ведущий.
+  bool isPublic = false;
+  int maxSpectators = 0;
+
+  int get spectators => _m.values.where((m) => m.role == FinalsRole.spectator && m.status == 'accepted').length;
+  bool get full => isPublic && spectators >= maxSpectators;
+
   FinalsInvite create({required FinalsRole role, required String name, String? targetId, Duration ttl = const Duration(hours: 12)}) {
     final token = _rand(16);
     _m[token] = FinalsMember(key, token, role, targetId, name, 'invited');
@@ -88,7 +98,12 @@ class FinalsInviteBook {
   /// Гость с токеном подключился. `false` — токена нет (стёрт или чужой).
   bool accept(String token, String name) {
     final m = _m[token];
-    if (m == null) return false;
+    if (m == null) {
+      // Публичный финал: незнакомый токен — зритель, пока есть места; больше он ничего не может.
+      if (!isPublic || token.length < 16 || full) return false;
+      _m[token] = FinalsMember(key, token, FinalsRole.spectator, null, name.isEmpty ? 'Зритель' : name, 'accepted');
+      return true;
+    }
     _m[token] = FinalsMember(m.sessionId, m.userId, m.role, m.targetId, m.name.isEmpty ? name : m.name, 'accepted');
     return true;
   }

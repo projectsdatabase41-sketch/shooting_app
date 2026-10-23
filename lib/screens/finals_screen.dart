@@ -1,3 +1,4 @@
+import 'dart:async';
 import '../widgets/glass_route.dart';
 import '../widgets/app_backdrop.dart';
 import 'finals_voice_settings_screen.dart';
@@ -20,6 +21,7 @@ import '../services/chat_auth_service.dart';
 import '../finals/finals_session_service.dart';
 import '../services/user_profile.dart';
 import 'champions_screen.dart';
+import '../finals/finals_board.dart';
 import '../finals/finals_invite.dart';
 import 'final_room_screens.dart';
 import 'final_run_screen.dart';
@@ -84,6 +86,7 @@ class _FinalsScreenState extends State<FinalsScreen> {
             ),
           ),
           _Invites(store: store),
+          _PublicBoard(store: store),
           Card(
             child: ListTile(
               leading: const Icon(Icons.military_tech_outlined),
@@ -586,6 +589,77 @@ class _InvitesState extends State<_Invites> {
         title: Text(tr('Войти по коду приглашения')),
         onTap: () => enterFinalByCode(context, widget.store),
       ),
+    ]);
+  }
+}
+
+/// Табло публичных финалов: готовятся, идут, окончены. Зритель входит одним нажатием.
+class _PublicBoard extends StatefulWidget {
+  final AppDataStore store;
+  const _PublicBoard({required this.store});
+
+  @override
+  State<_PublicBoard> createState() => _PublicBoardState();
+}
+
+class _PublicBoardState extends State<_PublicBoard> {
+  late final FinalsBoardService _svc = FinalsBoardService(ChatAuthService(widget.store.db));
+  List<FinalsBoardRow> _rows = [];
+  Timer? _t;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+    _t = Timer.periodic(const Duration(seconds: 20), (_) => _load());
+  }
+
+  @override
+  void dispose() {
+    _t?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    final l = await _svc.list();
+    if (mounted) setState(() => _rows = l);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_rows.isEmpty) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    Widget group(String title, String status) {
+      final list = [for (final r in _rows) if (r.status == status) r];
+      if (list.isEmpty) return const SizedBox.shrink();
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(padding: const EdgeInsets.only(top: 8, bottom: 4), child: Text(title, style: theme.textTheme.labelLarge)),
+        for (final r in list)
+          Card(
+            child: ListTile(
+              leading: Icon(switch (status) {
+                'live' => Icons.sensors,
+                'finished' => Icons.emoji_events_outlined,
+                _ => Icons.hourglass_empty,
+              }),
+              title: Text(tr(FinalFormat.all.firstWhere((f) => f.id == r.formatId, orElse: () => FinalFormat.airRifle10m).nameKey)),
+              subtitle: Text(status == 'finished' && r.top.isNotEmpty
+                  ? [for (final t in r.top.take(3)) '${t['place']}. ${t['name']} ${(t['total'] as num).toStringAsFixed(1)}'].join('  ')
+                  : r.hostName),
+              trailing: status == 'finished'
+                  ? null
+                  : FilledButton(onPressed: () => joinPublicFinal(context, widget.store, r), child: Text(tr('Смотреть'))),
+            ),
+          ),
+      ]);
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const SizedBox(height: 8),
+      Text(tr('Публичные финалы'), style: theme.textTheme.titleSmall),
+      group(tr('Готовятся'), 'preparing'),
+      group(tr('Идут'), 'live'),
+      group(tr('Окончены'), 'finished'),
     ]);
   }
 }
