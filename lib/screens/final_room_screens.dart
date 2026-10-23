@@ -22,6 +22,7 @@ import '../services/chat_sync_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/glass_pill.dart';
 import '../finals/finals_invite.dart';
+import '../services/supabase_auth_service.dart';
 import '../finals/round_label.dart';
 import 'final_run_screen.dart';
 
@@ -440,7 +441,12 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
     if (_busy) return;
     setState(() => _busy = true);
     // Канал по секретному имени: приглашённые подключаются с личным токеном, в базу ничего не пишется.
-    final ch = FinalsSessionService.publicChannel(_book.key);
+    final personal = SupabaseAuthService(_store.db);
+    if (personal.hasBase) {
+      _book.url = personal.url;
+      _book.anonKey = personal.anonKey;
+    }
+    final ch = FinalsSessionService.publicChannel(_book.key, url: _book.url, anonKey: _book.anonKey);
     ch.onMessage = (e, p) {
       if (e != 'hello') return;
       final who = '${p['author']}';
@@ -732,7 +738,7 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
   }
 
   Future<void> _connect() async {
-    final ch = FinalsSessionService.publicChannel(widget.sessionId);
+    final ch = FinalsSessionService.publicChannel(widget.sessionId, url: widget.book.url, anonKey: widget.book.anonKey);
     ch.onClosed = _scheduleReconnect;
     final ok = await ch.join();
     if (!mounted) return;
@@ -873,8 +879,11 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
 class FinalGuestScreen extends StatefulWidget {
   final FinalsMember member;
   final FinalsSessionService service;
+  /// База, на которой ведущий открыл канал (из приглашения); `null` — база мессенджера.
+  final String? url;
+  final String? anonKey;
   const FinalGuestScreen(
-      {super.key, required this.member, required this.service});
+      {super.key, required this.member, required this.service, this.url, this.anonKey});
 
   @override
   State<FinalGuestScreen> createState() => _FinalGuestScreenState();
@@ -951,7 +960,7 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
   }
 
   Future<void> _join() async {
-    final ch = FinalsSessionService.publicChannel(widget.member.sessionId);
+    final ch = FinalsSessionService.publicChannel(widget.member.sessionId, url: widget.url, anonKey: widget.anonKey);
     ch.onClosed = _scheduleReconnect;
     final ok = await ch.join();
     if (!mounted) return;
@@ -1091,7 +1100,8 @@ Future<void> joinFinal(BuildContext context, AppDataStore store, FinalsInvite in
   }
   FinalsInviteStore.markSeen(store.db, inv.token);
   await Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => FinalGuestScreen(member: inv.member, service: FinalsSessionService(ChatAuthService(store.db)))));
+      builder: (_) => FinalGuestScreen(
+          member: inv.member, service: FinalsSessionService(ChatAuthService(store.db)), url: inv.url, anonKey: inv.anonKey)));
 }
 
 /// Вставить код приглашения вручную (если пришёл не через мессенджер).

@@ -137,14 +137,20 @@ class FinalsSessionService {
 
   /// Публичный канал финала по секретному имени (без входа в мессенджер и без таблиц в базе):
   /// доступ у того, кто получил приглашение с этим именем. Имя знает только ведущий и приглашённые.
-  static FinalsChannel publicChannel(String key) => RealtimeFinalsChannel(
-        baseUrl: ChatSettings.url,
-        anonKey: ChatSettings.anonKey,
-        sessionId: key,
-        userId: 'p${DateTime.now().microsecondsSinceEpoch}',
-        token: () async => ChatSettings.anonKey,
-        isPrivate: false,
-      );
+  /// [url]/[anonKey] — личная база ведущего (так число подключений не упирается в лимит общей базы);
+  /// без них — база мессенджера.
+  static FinalsChannel publicChannel(String key, {String? url, String? anonKey}) {
+    final u = (url != null && anonKey != null) ? url : ChatSettings.url;
+    final k = (url != null && anonKey != null) ? anonKey : ChatSettings.anonKey;
+    return RealtimeFinalsChannel(
+      baseUrl: u,
+      anonKey: k,
+      sessionId: key,
+      userId: 'p${DateTime.now().microsecondsSinceEpoch}',
+      token: () async => k,
+      isPrivate: false,
+    );
+  }
 
   /// Канал реального времени сессии.
   FinalsChannel channel(String sessionId) => RealtimeFinalsChannel(

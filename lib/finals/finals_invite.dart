@@ -21,7 +21,11 @@ class FinalsInvite {
   final FinalsRole role;
   final String? targetId;
   final DateTime expires;
-  const FinalsInvite(this.key, this.token, this.name, this.role, this.targetId, this.expires);
+
+  /// База, на которой ведущий открыл канал (его личная); `null` — публичная база мессенджера.
+  final String? url;
+  final String? anonKey;
+  const FinalsInvite(this.key, this.token, this.name, this.role, this.targetId, this.expires, {this.url, this.anonKey});
 
   bool get expired => DateTime.now().isAfter(expires);
 
@@ -36,6 +40,8 @@ class FinalsInvite {
         'r': role.name,
         if (targetId != null) 'a': targetId,
         'e': expires.millisecondsSinceEpoch ~/ 1000,
+        if (url != null && anonKey != null) 'u': url,
+        if (url != null && anonKey != null) 'ak': anonKey,
       })));
 
   /// Ищет код приглашения в тексте (сообщение мессенджера или вставленный текст).
@@ -51,6 +57,8 @@ class FinalsInvite {
         FinalsRole.values.firstWhere((r) => r.name == j['r'], orElse: () => FinalsRole.athlete),
         j['a'] as String?,
         DateTime.fromMillisecondsSinceEpoch((j['e'] as num).toInt() * 1000),
+        url: j['u'] as String?,
+        anonKey: j['ak'] as String?,
       );
     } catch (_) {
       return null;
@@ -64,10 +72,15 @@ class FinalsInviteBook {
   final String key = _rand(16);
   final Map<String, FinalsMember> _m = {};
 
+  /// Личная база ведущего для канала финала (нагрузка идёт на неё, а не на общую базу мессенджера).
+  /// `null` — у ведущего своей базы нет, используется база мессенджера.
+  String? url;
+  String? anonKey;
+
   FinalsInvite create({required FinalsRole role, required String name, String? targetId, Duration ttl = const Duration(hours: 12)}) {
     final token = _rand(16);
     _m[token] = FinalsMember(key, token, role, targetId, name, 'invited');
-    return FinalsInvite(key, token, name, role, targetId, DateTime.now().add(ttl));
+    return FinalsInvite(key, token, name, role, targetId, DateTime.now().add(ttl), url: url, anonKey: anonKey);
   }
 
   List<FinalsMember> get members => List.unmodifiable(_m.values);

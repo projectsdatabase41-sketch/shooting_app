@@ -8,6 +8,7 @@ import 'package:shooting_app/models/target_face.dart';
 import 'dart:math';
 
 void main() {
+  personalDbTest();
   test('код приглашения: кодируется и читается из текста сообщения', () {
     final book = FinalsInviteBook();
     final inv = book.create(role: FinalsRole.athlete, name: 'Иван', targetId: 'u_1');
@@ -69,5 +70,18 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 50));
     expect(ok.ended, isTrue);
     host.dispose();
+  });
+}
+
+void personalDbTest() {
+  test('приглашение несёт личную базу ведущего', () {
+    final book = FinalsInviteBook()
+      ..url = 'https://abc.supabase.co'
+      ..anonKey = 'sb_publishable_x';
+    final inv = book.create(role: FinalsRole.athlete, name: 'A', targetId: 'u_a');
+    final back = FinalsInvite.parse(inv.encode())!;
+    expect(back.url, 'https://abc.supabase.co');
+    expect(back.anonKey, 'sb_publishable_x');
+    expect(FinalsInvite.parse(FinalsInviteBook().create(role: FinalsRole.coach, name: 'J').encode())!.url, isNull);
   });
 }
