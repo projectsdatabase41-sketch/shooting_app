@@ -20,6 +20,7 @@ import '../services/chat_auth_service.dart';
 import '../finals/finals_session_service.dart';
 import '../services/user_profile.dart';
 import 'champions_screen.dart';
+import '../finals/finals_invite.dart';
 import 'final_room_screens.dart';
 import 'final_run_screen.dart';
 
@@ -548,51 +549,42 @@ class _Invites extends StatefulWidget {
 }
 
 class _InvitesState extends State<_Invites> {
-  late final FinalsSessionService _svc = FinalsSessionService(ChatAuthService(widget.store.db));
-  List<FinalsMember> _list = [];
+  List<FinalsInvite> _list = [];
 
   @override
   void initState() {
     super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    final l = await _svc.myInvitations();
-    if (mounted) setState(() => _list = l);
-  }
-
-  Future<void> _open(FinalsMember m, {required bool accept}) async {
-    if (m.status == 'invited' && !await _svc.answer(m, accept: accept)) return;
-    if (!accept) {
-      _load();
-      return;
-    }
-    if (!mounted) return;
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => FinalGuestScreen(member: m, service: _svc)));
-    _load();
+    _list = FinalsInviteStore.pending(widget.store.db);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_list.isEmpty) return const SizedBox.shrink();
     return Column(children: [
-      for (final m in _list)
+      for (final i in _list)
         Card(
           child: ListTile(
             leading: const Icon(Icons.mail_outline),
-            title: Text(m.status == 'invited' ? tr('Приглашение в финал') : tr('Идёт финал')),
-            subtitle: Text(switch (m.role) {
+            title: Text(tr('Приглашение в финал')),
+            subtitle: Text(switch (i.role) {
               FinalsRole.athlete => tr('Вы — финалист'),
               FinalsRole.helper => tr('Вы — помощник'),
-              FinalsRole.coach => tr('Вы — тренер'),
+              FinalsRole.coach => tr('Вы — жюри'),
             }),
-            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-              if (m.status == 'invited') TextButton(onPressed: () => _open(m, accept: false), child: Text(tr('Отказ'))),
-              FilledButton(onPressed: () => _open(m, accept: true), child: Text(m.status == 'invited' ? tr('Принять') : tr('Войти'))),
-            ]),
+            trailing: FilledButton(
+              onPressed: () async {
+                await joinFinal(context, widget.store, i);
+                if (mounted) setState(() => _list = FinalsInviteStore.pending(widget.store.db));
+              },
+              child: Text(tr('Войти')),
+            ),
           ),
         ),
+      ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.vpn_key_outlined),
+        title: Text(tr('Войти по коду приглашения')),
+        onTap: () => enterFinalByCode(context, widget.store),
+      ),
     ]);
   }
 }

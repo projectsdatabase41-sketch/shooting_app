@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../services/chat_auth_service.dart';
+import '../services/chat_settings.dart';
 import '../services/demo_mode.dart';
 import 'finals_net.dart';
 
@@ -133,6 +134,17 @@ class FinalsSessionService {
     final r = await _call('PATCH', 'finals_sessions?id=eq.$sessionId', body: {'ended_at': DateTime.now().toUtc().toIso8601String()});
     return r != null;
   }
+
+  /// Публичный канал финала по секретному имени (без входа в мессенджер и без таблиц в базе):
+  /// доступ у того, кто получил приглашение с этим именем. Имя знает только ведущий и приглашённые.
+  static FinalsChannel publicChannel(String key) => RealtimeFinalsChannel(
+        baseUrl: ChatSettings.url,
+        anonKey: ChatSettings.anonKey,
+        sessionId: key,
+        userId: 'p${DateTime.now().microsecondsSinceEpoch}',
+        token: () async => ChatSettings.anonKey,
+        isPrivate: false,
+      );
 
   /// Канал реального времени сессии.
   FinalsChannel channel(String sessionId) => RealtimeFinalsChannel(

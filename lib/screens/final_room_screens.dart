@@ -21,6 +21,7 @@ import '../services/chat_messages_repository.dart';
 import '../services/chat_sync_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/glass_pill.dart';
+import '../finals/finals_invite.dart';
 import '../finals/round_label.dart';
 import 'final_run_screen.dart';
 
@@ -367,6 +368,7 @@ class _InputSheetState extends State<_InputSheet> {
 // Лобби тренера: состав, приглашения, начало финала.
 
 class _Pick {
+  FinalsInvite? invite;
   final ChatContact contact;
   FinalsRole role;
   _Pick(this.contact, this.role);
@@ -388,14 +390,15 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
   final List<_Pick> _picks = [];
   String? _sessionId;
   List<FinalsMember> _members = [];
-  Timer? _poll;
+  final _book = FinalsInviteBook(); // временные приглашения: хранятся только здесь
+  FinalsChannel? _lobbyCh;
   bool _busy = false;
   bool _hostShoots =
       false; // ведущий сам стреляет (финал спортсменов без тренера)
 
   @override
   void dispose() {
-    _poll?.cancel();
+    _lobbyCh?.close();
     super.dispose();
   }
 
@@ -436,34 +439,41 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
   Future<void> _createAndInvite() async {
     if (_busy) return;
     setState(() => _busy = true);
-    final sid = await _svc.create(widget.format.id);
-    if (sid == null) {
+    // Канал по секретному имени: приглашённые подключаются с личным токеном, в базу ничего не пишется.
+    final ch = FinalsSessionService.publicChannel(_book.key);
+    ch.onMessage = (e, p) {
+      if (e != 'hello') return;
+      final who = '${p['author']}';
+      if (_book.accept(who, '${p['name'] ?? ''}')) {
+        if (mounted) setState(() => _members = _book.members);
+      } else {
+        ch.send('denied', {'to': who});
+      }
+    };
+    if (!await ch.join()) {
       if (mounted) {
         setState(() => _busy = false);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(tr(
-                'Не удалось создать финал. Мы уже получили отчёт — попробуйте позже'))));
+            content: Text(tr('Не удалось создать финал. Мы уже получили отчёт — попробуйте позже'))));
       }
       return;
     }
+    _lobbyCh = ch;
     for (final p in _picks) {
-      await _svc.invite(sid,
-          userId: p.contact.id,
+      final inv = _book.create(
           role: p.role,
-          targetId: p.role == FinalsRole.athlete ? p.targetId : null,
-          name: p.contact.nickname);
-      // Приглашение дублируем сообщением в мессенджере — оно приходит push-уведомлением.
+          name: p.contact.nickname,
+          targetId: p.role == FinalsRole.athlete ? p.targetId : null);
+      p.invite = inv;
+      // Приглашение уходит сообщением мессенджера (push) вместе с кодом; в базу финала оно не пишется.
       try {
         await ChatSyncService(_auth, ChatMessagesRepository(_store.db)).send(
             p.contact.id,
-            tr('Приглашаю в финал! Откройте мессенджер или вкладку «Финалы» (модуль «Финалы» должен быть включён в настройках) и примите приглашение.'));
+            '${tr('Приглашаю в финал! Приложение предложит принять приглашение; если нет — вставьте код во вкладке «Финалы».')}\n${inv.encode()}');
       } catch (_) {}
     }
-    _sessionId = sid;
-    _poll = Timer.periodic(const Duration(seconds: 2), (_) async {
-      final m = await _svc.members(sid);
-      if (mounted) setState(() => _members = m);
-    });
+    _sessionId = _book.key;
+    _members = _book.members;
     if (mounted) setState(() => _busy = false);
   }
 
@@ -532,9 +542,11 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
       rng: rng,
       manual: true,
     );
-    _poll?.cancel();
+    _lobbyCh?.close();
+    _lobbyCh = null;
     Navigator.of(context).pushReplacement(MaterialPageRoute(
       builder: (_) => FinalHostScreen(
+          book: _book,
           controller: controller,
           sessionId: sid,
           service: _svc,
@@ -595,7 +607,7 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
                   }),
                   trailing: started
                       ? Text(_members
-                          .where((m) => m.userId == p.contact.id)
+                          .where((m) => m.userId == p.invite?.token)
                           .map((m) => switch (m.status) {
                                 'accepted' => tr('в сети'),
                                 'declined' => tr('отказ'),
@@ -652,6 +664,9 @@ class FinalHostScreen extends StatefulWidget {
   final AppDataStore store;
   final List<FinalsMember> members;
 
+  /// Временные приглашения этого финала; после финала стираются.
+  final FinalsInviteBook book;
+
   /// Если ведущий сам стреляет — его id участника; иначе `null` (он только ведёт).
   final String? hostCompetitorId;
   const FinalHostScreen(
@@ -661,6 +676,7 @@ class FinalHostScreen extends StatefulWidget {
       required this.service,
       required this.store,
       required this.members,
+      required this.book,
       this.hostCompetitorId});
 
   @override
@@ -686,10 +702,13 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
     c.addListener(_onChange);
     _timer = Timer.periodic(const Duration(seconds: 1), (_) => c.tick());
     _connect();
-    // Состав и права обновляем — приглашённые могут присоединиться позже.
-    _refresh = Timer.periodic(const Duration(seconds: 5), (_) async {
-      final m = await widget.service.members(widget.sessionId);
-      if (mounted && m.isNotEmpty) _members = m;
+    // Состав и главный из жюри обновляются — приглашённые подключаются по ходу.
+    c.chiefHint = widget.book.chiefHint;
+    _refresh = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (!mounted) return;
+      _members = widget.book.members;
+      c.chiefHint = widget.book.chiefHint;
+      c.hostSilent = widget.hostCompetitorId != null && _members.any((m) => m.role == FinalsRole.coach && m.status == 'accepted');
     });
   }
 
@@ -713,7 +732,7 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
   }
 
   Future<void> _connect() async {
-    final ch = widget.service.channel(widget.sessionId);
+    final ch = FinalsSessionService.publicChannel(widget.sessionId);
     ch.onClosed = _scheduleReconnect;
     final ok = await ch.join();
     if (!mounted) return;
@@ -733,6 +752,15 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
       channel: ch,
       allowed: (a) => FinalsSessionService.scopeFor(a, _me, _members),
       canControl: (a) => FinalsSessionService.canControl(a, _me, _members),
+      // Токен проверяется по списку приглашений: стёртый или чужой — отказ.
+      onHello: (a, name) {
+        final ok = widget.book.accept(a, name);
+        if (ok) {
+          _members = widget.book.members;
+          c.chiefHint = widget.book.chiefHint;
+        }
+        return ok;
+      },
     );
     _host!.broadcast();
   }
@@ -761,14 +789,20 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
       final rec = c.toRecord()
         ..['custom'] = true; // финал тренера в рейтинг не идёт
       FinalsRepository(widget.store.db).save(rec);
-      widget.service.end(widget.sessionId);
       Future.delayed(const Duration(seconds: 2), () {
+        _endSession();
         if (mounted)
           Navigator.of(context).pushReplacement(MaterialPageRoute(
               builder: (_) => FinalResultScreen(record: rec)));
       });
     }
     setState(() {});
+  }
+
+  /// Финал окончен: гости получают «ended», токены приглашений стираются — старые приглашения не откроют ничего.
+  void _endSession() {
+    _host?.end();
+    widget.book.erase();
   }
 
   Future<void> _leave() async {
@@ -791,7 +825,8 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
     );
     if (ok == true) {
       _saved = true;
-      widget.service.end(widget.sessionId);
+      _endSession();
+      await Future.delayed(const Duration(milliseconds: 400)); // 'ended' успеет уйти гостям
       if (mounted) Navigator.of(context).pop();
     } else {
       c.resume();
@@ -855,20 +890,14 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
   bool _online = false;
   final _tracker = AnnounceTracker();
   final _phaseVoice = PhaseAnnouncer();
-  bool _chief = false; // главный из жюри: из жюри с наименьшим id (одинаково на всех телефонах)
+  int _helloTicks = 0;
+  bool _closing = false;
   bool _saved = false;
 
   @override
   void initState() {
     super.initState();
-    _findChief();
     _join();
-  }
-
-  Future<void> _findChief() async {
-    final all = await widget.service.members(widget.member.sessionId);
-    final jury = [for (final m in all) if (m.role == FinalsRole.coach && m.status == 'accepted') m.userId]..sort();
-    if (mounted) _chief = jury.isNotEmpty && jury.first == widget.member.userId;
   }
 
   /// Итог у участника: сохраняется в «Финалы» (по очкам из таблицы; координат выстрелов у гостя нет).
@@ -900,6 +929,13 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
     });
   }
 
+  void _closeWith(String msg) {
+    if (_closing) return;
+    _closing = true;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    Navigator.of(context).maybePop();
+  }
+
   void _scheduleReconnect() {
     if (!mounted || _retry != null) return;
     setState(() => _online = false);
@@ -915,7 +951,7 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
   }
 
   Future<void> _join() async {
-    final ch = widget.service.channel(widget.member.sessionId);
+    final ch = FinalsSessionService.publicChannel(widget.member.sessionId);
     ch.onClosed = _scheduleReconnect;
     final ok = await ch.join();
     if (!mounted) return;
@@ -924,14 +960,19 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
       return;
     }
     _attempt = 0;
-    final g = FinalsGuest(channel: ch, userId: widget.service.auth.userId)
+    final g = FinalsGuest(channel: ch, userId: widget.member.userId, name: widget.member.name)
       ..addListener(() {
         if (!mounted) return;
+        final g = _guest;
+        if (g != null && (g.ended || g.denied)) {
+          if (!_saved) _closeWith(g.denied ? tr('Приглашение недействительно: финал уже окончен') : tr('Финал окончен'));
+          return;
+        }
         final snap = _guest?.snapshot;
         if (snap != null) {
           final db = context.read<AppDataStore>().db;
           // Говорит ведущий; у гостя — только если включено «у всех» или он главный из жюри, а ведущий молчит.
-          final speak = FinalsPrefs.voice(db) && (snap.data['vm'] == 'all' || (snap.data['hs'] == true && _chief));
+          final speak = FinalsPrefs.voice(db) && (snap.data['vm'] == 'all' || (snap.data['hs'] == true && widget.member.role == FinalsRole.coach && snap.data['ch'] == FinalsInviteBook.hint(widget.member.userId)));
           final announcing = snap.phase == 'loading' && snap.secondsLeft > 5;
           final cmd = _phaseVoice.update(snap.phase, secondsLeft: snap.secondsLeft, announcing: announcing);
           final text = _tracker.update(
@@ -951,7 +992,10 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
     // Пока состояния нет (хозяин ещё не в сети) — повторяем запрос.
     _hello?.cancel();
     _hello = Timer.periodic(const Duration(seconds: 3), (_) {
-      if (g.snapshot == null) g.hello();
+      if (g.snapshot == null) {
+        g.hello();
+        if (++_helloTicks == 6 && mounted) setState(() {});
+      }
     });
     setState(() => _online = true);
   }
@@ -975,7 +1019,9 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             const AppLoader(),
             const SizedBox(height: 12),
-            Text(_attempt > 2
+            Text(_helloTicks >= 6
+                ? tr('Ведущего нет в сети. Возможно, финал уже окончен.')
+                : _attempt > 2
                 ? tr('Нет связи, пробуем снова…')
                 : tr('Ждём ведущего…')),
           ]),
@@ -1001,52 +1047,73 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
 bool _offeringInvite = false;
 final Set<String> _laterInvites = {}; // «Позже» — до перезапуска не напоминаем
 
+/// Приглашения в финал из входящих сообщений (действующие, неиспользованные) — предлагаем принять.
 Future<void> offerFinalInvites(BuildContext context, AppDataStore store) async {
   if (_offeringInvite) return;
   _offeringInvite = true;
   try {
-    await _offerFinalInvites(context, store);
+    final list = [for (final i in FinalsInviteStore.pending(store.db)) if (!_laterInvites.contains(i.token)) i];
+    if (list.isEmpty || !context.mounted) return;
+    final inv = list.first;
+    final accept = await showGlassDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('Приглашение в финал')),
+        content: Text(tr('Вас приглашают участвовать {r}. Войти сейчас?', {'r': _roleWord(inv.role)})),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Позже'))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Принять'))),
+        ],
+      ),
+    );
+    if (accept != true) {
+      if (accept == false) _laterInvites.add(inv.token);
+      return;
+    }
+    if (!context.mounted) return;
+    await joinFinal(context, store, inv);
   } finally {
     _offeringInvite = false;
   }
 }
 
-Future<void> _offerFinalInvites(
-    BuildContext context, AppDataStore store) async {
-  final svc = FinalsSessionService(ChatAuthService(store.db));
-  final list = [
-    for (final m in await svc.myInvitations())
-      if (m.status == 'invited' && !_laterInvites.contains(m.sessionId)) m
-  ];
-  if (list.isEmpty || !context.mounted) return;
-  final m = list.first;
-  final role = switch (m.role) {
-    FinalsRole.athlete => tr('финалистом'),
-    FinalsRole.helper => tr('помощником'),
-    FinalsRole.coach => tr('тренером'),
-  };
-  final accept = await showGlassDialog<bool>(
+String _roleWord(FinalsRole r) => switch (r) {
+      FinalsRole.athlete => tr('финалистом'),
+      FinalsRole.helper => tr('помощником'),
+      FinalsRole.coach => tr('жюри'),
+    };
+
+/// Войти в финал по приглашению. Просроченное — сразу «финал окончен».
+Future<void> joinFinal(BuildContext context, AppDataStore store, FinalsInvite inv) async {
+  if (inv.expired) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Приглашение недействительно: финал уже окончен'))));
+    return;
+  }
+  FinalsInviteStore.markSeen(store.db, inv.token);
+  await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => FinalGuestScreen(member: inv.member, service: FinalsSessionService(ChatAuthService(store.db)))));
+}
+
+/// Вставить код приглашения вручную (если пришёл не через мессенджер).
+Future<void> enterFinalByCode(BuildContext context, AppDataStore store) async {
+  final ctl = TextEditingController();
+  final text = await showGlassDialog<String>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: Text(tr('Приглашение в финал')),
-      content: Text(
-          tr('Вас приглашают участвовать {r}. Войти сейчас?', {'r': role})),
+      title: Text(tr('Код приглашения')),
+      content: TextField(controller: ctl, autofocus: true, minLines: 1, maxLines: 4, decoration: InputDecoration(hintText: FinalsInvite.prefix)),
       actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(tr('Позже'))),
-        TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(tr('Принять'))),
+        TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Закрыть'))),
+        TextButton(onPressed: () => Navigator.pop(ctx, ctl.text), child: Text(tr('Войти'))),
       ],
     ),
   );
-  if (accept != true) {
-    if (accept == false) _laterInvites.add(m.sessionId);
+  ctl.dispose();
+  if (text == null || !context.mounted) return;
+  final inv = FinalsInvite.parse(text);
+  if (inv == null) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Код не распознан'))));
     return;
   }
-  if (!context.mounted) return;
-  if (!await svc.answer(m, accept: true) || !context.mounted) return;
-  await Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => FinalGuestScreen(member: m, service: svc)));
+  await joinFinal(context, store, inv);
 }

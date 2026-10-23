@@ -121,6 +121,9 @@ class FinalRunController extends ChangeNotifier {
   bool voiceAll = false;
   bool hostSilent = false;
 
+  /// Начало токена главного из жюри (гость по нему узнаёт, что говорить должен он).
+  String? chiefHint;
+
   FinalCompetitor get user => engine.byId(userId);
 
   /// Может ли человек сейчас ставить выстрел.

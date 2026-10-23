@@ -24,11 +24,13 @@ class RealtimeFinalsChannel implements FinalsChannel {
     required String sessionId,
     required String userId,
     required this.token,
+    bool isPrivate = true,
   }) : _client = RealtimeChannelClient(
           baseUrl: baseUrl,
           anonKey: anonKey,
           topic: 'final:$sessionId',
           presenceKey: userId,
+          private: isPrivate,
         );
 
   final RealtimeChannelClient _client;
@@ -139,6 +141,7 @@ class FinalsSnapshot {
       'fmt': c.format.id,
       'vm': c.voiceAll ? 'all' : 'chief',
       'hs': c.hostSilent,
+      'ch': c.chiefHint,
       'rows': [
         for (final r in live)
           {
@@ -168,6 +171,7 @@ class FinalsHost {
     required this.channel,
     required this.allowed,
     this.canControl,
+    this.onHello,
   }) {
     channel.onMessage = _onMessage;
     controller.addListener(_scheduleBroadcast);
@@ -203,12 +207,22 @@ class FinalsHost {
     channel.send('state', FinalsSnapshot.of(controller).data);
   }
 
+  /// Проверка приглашения при подключении гостя ([author] — его токен); `false` — отказ.
+  final bool Function(String author, String name)? onHello;
+
+  /// Финал завершён: гости узнают об этом, их приглашения перестают работать.
+  void end() => channel.send('ended', const {});
+
   void _onMessage(String event, Map<String, dynamic> p) {
+    final author = '${p['author']}';
     if (event == 'hello') {
+      if (onHello?.call(author, '${p['name'] ?? ''}') == false) {
+        channel.send('denied', {'to': author});
+        return;
+      }
       broadcast(); // подключившийся сразу получает состояние
       return;
     }
-    final author = '${p['author']}';
     if (event == 'next') {
       if (canControl?.call(author) == true) controller.advance();
       return;
@@ -233,10 +247,16 @@ class FinalsHost {
 /// Участник финала (спортсмен, тренер, помощник): получает состояние и шлёт
 /// выстрелы хозяину.
 class FinalsGuest extends ChangeNotifier {
-  FinalsGuest({required this.channel, required this.userId}) {
+  FinalsGuest({required this.channel, required this.userId, this.name = ''}) {
     channel.onMessage = (e, p) {
       if (e == 'state') {
         snapshot = FinalsSnapshot(p);
+        notifyListeners();
+      } else if (e == 'ended') {
+        ended = true;
+        notifyListeners();
+      } else if (e == 'denied' && p['to'] == userId) {
+        denied = true;
         notifyListeners();
       }
     };
@@ -244,10 +264,15 @@ class FinalsGuest extends ChangeNotifier {
 
   final FinalsChannel channel;
   final String userId;
+  final String name;
   FinalsSnapshot? snapshot;
 
+  /// Ведущий завершил финал / не признал приглашение.
+  bool ended = false;
+  bool denied = false;
+
   /// Запросить текущее состояние (после входа в канал).
-  void hello() => channel.send('hello', {'author': userId, 'who': ''});
+  void hello() => channel.send('hello', {'author': userId, 'who': '', 'name': name});
 
   bool shoot(String who, double x, double y) => channel.send('shot', {'author': userId, 'who': who, 'x': x, 'y': y});
   /// Команда тренера «Далее» (заряжай / старт / стоп).

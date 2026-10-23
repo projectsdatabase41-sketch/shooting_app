@@ -17,6 +17,7 @@ class RealtimeChannelClient {
     required this.anonKey,
     required this.topic,
     required this.presenceKey,
+    this.private = true,
     this.connect = _defaultConnect,
     this.heartbeat = const Duration(seconds: 25),
     this.joinTimeout = const Duration(seconds: 8),
@@ -30,6 +31,9 @@ class RealtimeChannelClient {
 
   /// Ключ в Presence — id пользователя.
   final String presenceKey;
+
+  /// `false` — публичный канал без входа (доступ только по секретному имени).
+  final bool private;
   final WebSocketChannel Function(Uri) connect;
   final Duration heartbeat;
   final Duration joinTimeout;
@@ -72,7 +76,7 @@ class RealtimeChannelClient {
         'config': {
           'broadcast': {'self': false, 'ack': false},
           'presence': {'key': presenceKey},
-          'private': true,
+          'private': private,
         },
         'access_token': accessToken,
       }, ref: _joinRef);
