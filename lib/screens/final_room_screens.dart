@@ -23,6 +23,7 @@ import '../services/chat_sync_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/glass_pill.dart';
 import '../finals/cheers.dart';
+import '../services/local_db_service.dart';
 import '../services/user_profile.dart';
 import '../finals/final_publish.dart';
 import '../finals/finals_board.dart';
@@ -1051,6 +1052,7 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
   bool _online = false;
   final _tracker = AnnounceTracker();
   final _phaseVoice = PhaseAnnouncer();
+  late final LocalDbService _db;
   int _helloTicks = 0;
   bool _closing = false;
   final _cheers = CheerFeed();
@@ -1059,6 +1061,7 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
   @override
   void initState() {
     super.initState();
+    _db = context.read<AppDataStore>().db;
     _join();
   }
 
@@ -1175,6 +1178,14 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
 
   @override
   void dispose() {
+    // Посмотрели финал — жюри и зрителям ссылка и ключ больше не нужны: код приглашения стирается сразу.
+    // Остаётся только у участников (до окончания финала или срока) и у ведущего.
+    if (widget.member.role != FinalsRole.athlete) {
+      try {
+        FinalsInviteStore.markEnded(_db, widget.member.userId);
+        FinalsInviteStore.purge(_db);
+      } catch (_) {}
+    }
     _cheers.dispose();
     _hello?.cancel();
     _retry?.cancel();
