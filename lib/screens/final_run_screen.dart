@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../finals/announcer.dart';
+import '../finals/round_label.dart';
 import '../finals/final_engine.dart';
 import '../finals/final_run.dart';
 import '../finals/bot.dart';
@@ -113,8 +114,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
         final l = c.roundLabel;
         if (l == 'shootoff') return tr('Перестрелка');
         if (l == 'open') return tr('С колена и лёжа: 20 выстрелов');
-        final n = l.split(':')[1];
-        return l.startsWith('series') ? tr('Серия {n}', {'n': n}) : tr('Выстрел {n}', {'n': n});
+        return finalRoundLabel(c.format.id, l);
     }
   }
 

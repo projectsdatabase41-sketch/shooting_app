@@ -21,6 +21,7 @@ import '../services/chat_messages_repository.dart';
 import '../services/chat_sync_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/glass_pill.dart';
+import '../finals/round_label.dart';
 import 'final_run_screen.dart';
 
 String _bannerOf(FinalsSnapshot s) {
@@ -36,10 +37,7 @@ String _bannerOf(FinalsSnapshot s) {
     default:
       if (s.round == 'shootoff') return tr('Перестрелка');
       if (s.round == 'open') return tr('С колена и лёжа: 20 выстрелов');
-      final n = s.round.split(':').last;
-      return s.round.startsWith('series')
-          ? tr('Серия {n}', {'n': n})
-          : tr('Выстрел {n}', {'n': n});
+      return finalRoundLabel(s.format, s.round);
   }
 }
 
