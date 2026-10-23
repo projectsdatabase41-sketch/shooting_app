@@ -569,6 +569,7 @@ class _InvitesState extends State<_Invites> {
               FinalsRole.athlete => tr('Вы — финалист'),
               FinalsRole.helper => tr('Вы — помощник'),
               FinalsRole.coach => tr('Вы — жюри'),
+              FinalsRole.spectator => tr('Вы — зритель'),
             }),
             trailing: FilledButton(
               onPressed: () async {

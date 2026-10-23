@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../services/demo_mode.dart';
 import '../services/realtime_client.dart';
+import 'cheers.dart';
 import 'final_run.dart';
 
 /// Канал совместного финала: «хозяин» шлёт состояние, участники — выстрелы.
@@ -172,6 +173,8 @@ class FinalsHost {
     required this.allowed,
     this.canControl,
     this.onHello,
+    this.cheerName,
+    this.onCheer,
   }) {
     channel.onMessage = _onMessage;
     controller.addListener(_scheduleBroadcast);
@@ -213,8 +216,28 @@ class FinalsHost {
   /// Финал завершён: гости узнают об этом, их приглашения перестают работать.
   void end() => channel.send('ended', const {});
 
+  /// Имя участника по токену (`null` — токена нет, кричалка не принимается).
+  final String? Function(String author)? cheerName;
+
+  /// Кричалка принята (показать и у ведущего).
+  final void Function(String name, String kind)? onCheer;
+  final Map<String, DateTime> _lastCheer = {};
+
   void _onMessage(String event, Map<String, dynamic> p) {
     final author = '${p['author']}';
+    if (event == 'cheer') {
+      final name = cheerName?.call(author);
+      final kind = '${p['k']}';
+      if (name == null || !CheerFeed.kinds.containsKey(kind)) return;
+      final now = DateTime.now();
+      final last = _lastCheer[author];
+      if (last != null && now.difference(last) < const Duration(milliseconds: 1500)) return; // не чаще раза в 1,5 с
+      _lastCheer[author] = now;
+      final shown = name.length > 24 ? name.substring(0, 24) : name;
+      channel.send('cheer', {'name': shown, 'k': kind});
+      onCheer?.call(shown, kind);
+      return;
+    }
     if (event == 'hello') {
       if (onHello?.call(author, '${p['name'] ?? ''}') == false) {
         channel.send('denied', {'to': author});
@@ -252,6 +275,8 @@ class FinalsGuest extends ChangeNotifier {
       if (e == 'state') {
         snapshot = FinalsSnapshot(p);
         notifyListeners();
+      } else if (e == 'cheer') {
+        onCheer?.call('${p['name']}', '${p['k']}');
       } else if (e == 'ended') {
         ended = true;
         notifyListeners();
@@ -267,6 +292,9 @@ class FinalsGuest extends ChangeNotifier {
   final String name;
   FinalsSnapshot? snapshot;
 
+  /// Чужая кричалка (показать на экране).
+  void Function(String name, String kind)? onCheer;
+
   /// Ведущий завершил финал / не признал приглашение.
   bool ended = false;
   bool denied = false;
@@ -275,6 +303,8 @@ class FinalsGuest extends ChangeNotifier {
   void hello() => channel.send('hello', {'author': userId, 'who': '', 'name': name});
 
   bool shoot(String who, double x, double y) => channel.send('shot', {'author': userId, 'who': who, 'x': x, 'y': y});
+  bool cheer(String kind) => channel.send('cheer', {'author': userId, 'k': kind});
+
   /// Команда тренера «Далее» (заряжай / старт / стоп).
   bool next() => channel.send('next', {'author': userId, 'who': ''});
   bool undo(String who) => channel.send('undo', {'author': userId, 'who': who});

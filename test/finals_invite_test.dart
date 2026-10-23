@@ -9,6 +9,7 @@ import 'dart:math';
 
 void main() {
   personalDbTest();
+  spectatorTest();
   test('код приглашения: кодируется и читается из текста сообщения', () {
     final book = FinalsInviteBook();
     final inv = book.create(role: FinalsRole.athlete, name: 'Иван', targetId: 'u_1');
@@ -83,5 +84,46 @@ void personalDbTest() {
     expect(back.url, 'https://abc.supabase.co');
     expect(back.anonKey, 'sb_publishable_x');
     expect(FinalsInvite.parse(FinalsInviteBook().create(role: FinalsRole.coach, name: 'J').encode())!.url, isNull);
+  });
+}
+
+void spectatorTest() {
+  test('зритель: кричалка доходит до всех, не чаще раза в 1,5 с, выстрелить зритель не может', () async {
+    final book = FinalsInviteBook();
+    final spec = book.create(role: FinalsRole.spectator, name: 'Зритель');
+    book.accept(spec.token, 'Зритель');
+    expect(FinalsSessionService.scopeFor(spec.token, '', book.members), isEmpty);
+    expect(FinalsSessionService.canControl(spec.token, '', book.members), isFalse);
+
+    final (hostCh, guestCh) = MemoryFinalsChannel.pair();
+    final fmt = FinalFormat.airRifle10m;
+    final c = FinalRunController(
+      format: fmt,
+      face: TargetFace.byCode(fmt.faceCode),
+      engine: FinalEngine(fmt, [for (var i = 0; i < 8; i++) FinalCompetitor('b$i', 'N$i')]),
+      userId: 'b0',
+      bots: const {},
+      rng: Random(1),
+      manual: true,
+    );
+    final seenByHost = <String>[];
+    final host = FinalsHost(
+      controller: c,
+      channel: hostCh,
+      allowed: (a) => FinalsSessionService.scopeFor(a, '', book.members),
+      cheerName: (a) => book.members.where((m) => m.userId == a).map((m) => m.name).firstOrNull,
+      onCheer: (n, k) => seenByHost.add('$n:$k'),
+    );
+    final seenByGuest = <String>[];
+    final g = FinalsGuest(channel: guestCh, userId: spec.token, name: 'Зритель')..onCheer = (n, k) => seenByGuest.add('$n:$k');
+    g.cheer('clap');
+    g.cheer('fire'); // слишком быстро — игнор
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect(seenByHost, ['Зритель:clap']);
+    expect(seenByGuest, ['Зритель:clap']);
+    final stranger = FinalsGuest(channel: guestCh, userId: 'чужой')..cheer('cup');
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect(seenByHost.length, 1);
+    host.dispose();
   });
 }

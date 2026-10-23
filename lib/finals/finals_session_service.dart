@@ -8,7 +8,7 @@ import '../services/demo_mode.dart';
 import 'finals_net.dart';
 
 /// Роль в совместном финале.
-enum FinalsRole { athlete, coach, helper }
+enum FinalsRole { athlete, coach, helper, spectator }
 
 /// Участник сессии (приглашение или принятое участие).
 class FinalsMember {

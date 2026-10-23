@@ -21,6 +21,7 @@ import '../services/chat_messages_repository.dart';
 import '../services/chat_sync_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/glass_pill.dart';
+import '../finals/cheers.dart';
 import '../finals/finals_invite.dart';
 import '../services/supabase_auth_service.dart';
 import '../finals/round_label.dart';
@@ -71,6 +72,10 @@ class FinalRoomView extends StatelessWidget {
   final VoidCallback? onPause;
   final VoidCallback? onLeave;
 
+  /// Кричалки: лента реакций у всех, кнопки — у зрителя.
+  final CheerFeed? cheers;
+  final void Function(String kind)? onCheer;
+
   /// Нет связи: показываем последнее состояние и предупреждение.
   final bool offline;
 
@@ -84,6 +89,8 @@ class FinalRoomView extends StatelessWidget {
     this.onNext,
     this.onPause,
     this.onLeave,
+    this.cheers,
+    this.onCheer,
     this.offline = false,
   });
 
@@ -168,6 +175,33 @@ class FinalRoomView extends StatelessWidget {
                           fontSize: 20, fontWeight: FontWeight.w800)),
                 ),
               ),
+            ),
+          if (cheers != null)
+            ListenableBuilder(
+              listenable: cheers!,
+              builder: (_, __) => cheers!.items.isEmpty
+                  ? const SizedBox.shrink()
+                  : Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Wrap(spacing: 6, runSpacing: 4, children: [
+                        for (final i in cheers!.items)
+                          Chip(
+                            visualDensity: VisualDensity.compact,
+                            label: Text('${CheerFeed.kinds[i.kind]!.$1} ${i.name}'),
+                          ),
+                      ]),
+                    ),
+            ),
+          if (onCheer != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+                for (final e in CheerFeed.kinds.entries)
+                  IconButton.filledTonal(
+                    onPressed: () => onCheer!(e.key),
+                    icon: Text(e.value.$1, style: const TextStyle(fontSize: 24)),
+                  ),
+              ]),
             ),
           if (s.paused)
             Padding(
@@ -432,6 +466,9 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
         SimpleDialogOption(
             onPressed: () => Navigator.pop(ctx, FinalsRole.coach),
             child: Text(tr('Жюри (команды и ввод результатов)'))),
+        SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, FinalsRole.spectator),
+            child: Text(tr('Зритель (болеет, кричалки)'))),
       ]),
     );
     if (role != null) setState(() => _picks.add(_Pick(c, role)));
@@ -610,6 +647,7 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
                     FinalsRole.athlete => tr('Участник'),
                     FinalsRole.helper => tr('Жюри'),
                     FinalsRole.coach => tr('Жюри'),
+                    FinalsRole.spectator => tr('Зритель'),
                   }),
                   trailing: started
                       ? Text(_members
@@ -696,6 +734,7 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
   late List<FinalsMember> _members = widget.members;
   late final String _me = widget.service.auth.userId;
   bool _saved = false;
+  final _cheers = CheerFeed();
 
   FinalRunController get c => widget.controller;
 
@@ -758,6 +797,17 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
       channel: ch,
       allowed: (a) => FinalsSessionService.scopeFor(a, _me, _members),
       canControl: (a) => FinalsSessionService.canControl(a, _me, _members),
+      cheerName: (a) {
+        for (final m in _members) {
+          if (m.userId == a && m.status == 'accepted') return m.name;
+        }
+        return null;
+      },
+      onCheer: (name, kind) {
+        _cheers.add(name, kind);
+        // Диктор (у ведущего) озвучивает реакцию, если озвучка включена.
+        if (FinalsPrefs.voice(widget.store.db)) FinalsAnnouncer.speak(CheerFeed.kinds[kind]!.$2, queue: true);
+      },
       // Токен проверяется по списку приглашений: стёртый или чужой — отказ.
       onHello: (a, name) {
         final ok = widget.book.accept(a, name);
@@ -841,6 +891,7 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
 
   @override
   void dispose() {
+    _cheers.dispose();
     _timer?.cancel();
     _refresh?.cancel();
     _retry?.cancel();
@@ -867,6 +918,7 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
         onNext: c.advance,
         onPause: c.paused ? c.resume : c.pause,
         onLeave: _leave,
+        cheers: _cheers,
         offline: !_online,
       ),
     );
@@ -901,6 +953,7 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
   final _phaseVoice = PhaseAnnouncer();
   int _helloTicks = 0;
   bool _closing = false;
+  final _cheers = CheerFeed();
   bool _saved = false;
 
   @override
@@ -996,6 +1049,7 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
         }
         setState(() => _last = snap ?? _last);
       });
+    g.onCheer = _cheers.add;
     _guest = g;
     g.hello();
     // Пока состояния нет (хозяин ещё не в сети) — повторяем запрос.
@@ -1011,6 +1065,7 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
 
   @override
   void dispose() {
+    _cheers.dispose();
     _hello?.cancel();
     _retry?.cancel();
     _guest?.dispose();
@@ -1045,6 +1100,12 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
       onShoot: (who, mm) => g?.shoot(who, mm.dx, mm.dy),
       onUndo: (who) => g?.undo(who),
       onNext: role == FinalsRole.coach ? () => g?.next() : null,
+      cheers: _cheers,
+      onCheer: role == FinalsRole.spectator
+          ? (kind) {
+              if (g?.cheer(kind) == true) _cheers.add(widget.member.name.isEmpty ? '' : widget.member.name, kind);
+            }
+          : null,
       offline: !_online,
     );
   }
@@ -1090,6 +1151,7 @@ String _roleWord(FinalsRole r) => switch (r) {
       FinalsRole.athlete => tr('финалистом'),
       FinalsRole.helper => tr('помощником'),
       FinalsRole.coach => tr('жюри'),
+      FinalsRole.spectator => tr('зрителем'),
     };
 
 /// Войти в финал по приглашению. Просроченное — сразу «финал окончен».
