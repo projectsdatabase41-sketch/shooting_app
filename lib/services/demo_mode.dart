@@ -56,6 +56,47 @@ class DemoMode {
     return t == null || !name.contains('HomeShell') ? name : '$name / $t';
   }
 
+  /// Данные с экрана текстом (вместо скриншота): видимые надписи, состояние переключателей и
+  /// флажков. Поля ввода не читаются (там может быть личное). Не больше [maxChars] знаков.
+  static String screenSnapshot({int maxChars = 2500}) {
+    final route = DemoRouteObserver.instance.top;
+    final ctx = route is ModalRoute ? route.subtreeContext : null;
+    if (ctx == null) return '';
+    final lines = <String>[];
+    final seen = <String>{};
+    var visited = 0;
+    var size = 0;
+    void add(String s) {
+      final t = s.replaceAll(RegExp(r'\s+'), ' ').trim();
+      if (t.isEmpty || !seen.add(t) || size > maxChars) return;
+      size += t.length + 1;
+      lines.add(t);
+    }
+
+    void walk(Element e) {
+      if (visited++ > 6000 || size > maxChars) return;
+      final w = e.widget;
+      if (w is Offstage && w.offstage) return;
+      if (w is Opacity && w.opacity == 0) return;
+      if (w is EditableText) return; // поля ввода не читаем
+      if (w is Text) {
+        final ro = e.renderObject;
+        if (ro is RenderBox && ro.hasSize && ro.size.isEmpty) return;
+        add(w.data ?? w.textSpan?.toPlainText() ?? '');
+      } else if (w is Switch) {
+        add('[переключатель: ${w.value ? 'вкл' : 'выкл'}]');
+      } else if (w is Checkbox) {
+        add('[флажок: ${w.value == true ? 'да' : 'нет'}]');
+      } else if (w is Slider) {
+        add('[ползунок: ${w.value.toStringAsFixed(2)}]');
+      }
+      e.visitChildren(walk);
+    }
+
+    (ctx as Element).visitChildren(walk);
+    return lines.join('\n');
+  }
+
   /// Текст заголовка экрана (AppBar / GlassHeader): первый Text внутри шапки.
   static String? _findTitle(BuildContext ctx) {
     String? result;
@@ -147,8 +188,12 @@ class DemoMode {
     if (last != null && DateTime.now().difference(last) < const Duration(seconds: 2)) return null;
     _lastError = DateTime.now();
     final st = (stack?.toString() ?? '').split('\n').take(12).join('\n');
+    var screen = '';
+    try {
+      screen = screenSnapshot(maxChars: 1000);
+    } catch (_) {}
     final text = '[ОШИБКА] $error\nТип: ${error.runtimeType}\nГде: $where'
-        '${extra == null ? '' : '\n$extra'}${st.isEmpty ? '' : '\n--- стек ---\n$st'}';
+        '${extra == null ? '' : '\n$extra'}${st.isEmpty ? '' : '\n--- стек ---\n$st'}${screen.isEmpty ? '' : '\n--- экран ---\n$screen'}';
     final client = http.Client();
     try {
       final res = await _post(client, {
@@ -260,6 +305,11 @@ class _DemoFeedbackOverlayState extends State<DemoFeedbackOverlay> {
     final ctx = widget.navigatorKey.currentContext;
     if (ctx == null) return;
     final page = DemoMode.currentPage();
+    var screen = '';
+    try {
+      screen = DemoMode.screenSnapshot();
+    } catch (_) {}
+    var attach = screen.isNotEmpty;
     final ctl = TextEditingController(text: _draft);
     await showGlassDialog<void>(
       context: ctx,
@@ -282,6 +332,14 @@ class _DemoFeedbackOverlayState extends State<DemoFeedbackOverlay> {
                   maxLength: 4000,
                   decoration: InputDecoration(hintText: tr('Что не так или что улучшить?')),
                 ),
+                if (screen.isNotEmpty)
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    value: attach,
+                    onChanged: (v) => setS(() => attach = v ?? false),
+                    title: Text(tr('Приложить данные экрана (текстом, без полей ввода)'), style: Theme.of(dctx).textTheme.bodySmall),
+                  ),
                 if (error != null) Text(error!, style: TextStyle(color: Theme.of(dctx).colorScheme.error)),
               ]),
             ),
@@ -292,7 +350,8 @@ class _DemoFeedbackOverlayState extends State<DemoFeedbackOverlay> {
                     ? null
                     : () async {
                         setS(() => busy = true);
-                        final err = await DemoMode.send(ctl.text, page);
+                        final body = attach ? '${ctl.text.trim()}\n\n--- экран ---\n$screen' : ctl.text;
+                        final err = await DemoMode.send(body, page);
                         if (!dctx.mounted) return;
                         if (err == null) {
                           ctl.clear();
