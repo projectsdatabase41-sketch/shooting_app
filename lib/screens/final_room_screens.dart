@@ -336,7 +336,7 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
     if (sid == null) {
       if (mounted) {
         setState(() => _busy = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('Не удалось создать финал')}: ${_svc.lastError ?? '?'}')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Не удалось создать финал. Мы уже получили отчёт — попробуйте позже'))));
       }
       return;
     }

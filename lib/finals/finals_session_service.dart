@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../services/chat_auth_service.dart';
+import '../services/demo_mode.dart';
 import 'finals_net.dart';
 
 /// Роль в совместном финале.
@@ -73,12 +74,14 @@ class FinalsSessionService {
       final res = await req.timeout(const Duration(seconds: 15));
       if (res.statusCode >= 400) {
         lastError = '${res.statusCode}: ${utf8.decode(res.bodyBytes)}';
+        DemoMode.sendError('Finals $method $path', lastError!);
         return null;
       }
       if (res.body.isEmpty) return const [];
       return jsonDecode(utf8.decode(res.bodyBytes));
     } catch (e) {
       lastError = '$e';
+      DemoMode.sendError('Finals $method $path', e);
       return null;
     } finally {
       client.close();

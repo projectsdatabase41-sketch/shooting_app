@@ -10,6 +10,8 @@ import 'services/secret_box.dart';
 import 'dart:async' show Timer;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'theme/app_transitions.dart';
+import 'dart:ui' show PlatformDispatcher;
+import 'logic/friendly_error.dart' show friendlyErrorReporter;
 import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
@@ -69,6 +71,17 @@ Future<void> main() async {
           defaultTargetPlatform == TargetPlatform.iOS)) {
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   }
+  // Любой необработанный сбой тихо уходит разработчику в отзывы; пользователю ничего не показываем.
+  final prevOnError = FlutterError.onError;
+  FlutterError.onError = (d) {
+    prevOnError?.call(d);
+    DemoMode.sendError('FlutterError', d.exception, d.stack);
+  };
+  PlatformDispatcher.instance.onError = (e, st) {
+    DemoMode.sendError('Uncaught', e, st);
+    return true;
+  };
+  friendlyErrorReporter = (e) => DemoMode.sendError('handled', e);
   final db = LocalDbService();
   try {
     // На вебе открытие идёт через IndexedDB + wasm-сборку sqlite (см.

@@ -6,8 +6,11 @@ import '../i18n/i18n.dart';
 /// со всеми подробностями. Выставляет `PersonalizationViewModel`.
 bool friendlyErrorDevMode = false;
 
-/// Понятное пользователю описание ошибки. В режиме разработчика —
-/// исходный текст. Обычным пользователям не нужны «HTTP 403» и
+/// Куда тихо уходит исходная ошибка (подключается в main: отзывы разработчику).
+/// Пользователь подробностей не видит никогда, в любом режиме.
+void Function(Object error)? friendlyErrorReporter;
+
+/// Понятное пользователю описание ошибки; исходный текст уходит разработчику. Обычным пользователям не нужны «HTTP 403» и
 /// «[firebase_messaging/...]», нужно понимать, что делать.
 String friendlyError(Object e) {
   final raw = '$e'
@@ -16,7 +19,9 @@ String friendlyError(Object e) {
               r'^(Exception|AuthException|AiException|StateError|FormatException): '),
           '')
       .trim();
-  if (friendlyErrorDevMode) return raw;
+  try {
+    friendlyErrorReporter?.call(e);
+  } catch (_) {}
   final s = raw.toLowerCase();
 
   if (e is TimeoutException ||

@@ -134,13 +134,17 @@ class DemoMode {
 
   static DateTime? _lastSent;
   static DateTime? _lastError;
+  static final Set<String> _sentErrors = {};
 
   /// Отчёт об ошибке в ту же таблицу отзывов: что случилось, где, технические
   /// подробности (тип ошибки, стек, платформа) — без личных данных.
   static Future<String?> sendError(String where, Object error, [StackTrace? stack, String? extra]) async {
     if (!ChatSettings.isConfigured) return tr('Сервер отзывов не настроен');
+    // Одну и ту же ошибку за сеанс шлём один раз; разные — не чаще раза в 2 с.
+    final key = '$where|${'$error'.length > 160 ? '$error'.substring(0, 160) : '$error'}';
+    if (!_sentErrors.add(key)) return null;
     final last = _lastError;
-    if (last != null && DateTime.now().difference(last) < const Duration(seconds: 5)) return null;
+    if (last != null && DateTime.now().difference(last) < const Duration(seconds: 2)) return null;
     _lastError = DateTime.now();
     final st = (stack?.toString() ?? '').split('\n').take(12).join('\n');
     final text = '[ОШИБКА] $error\nТип: ${error.runtimeType}\nГде: $where'
@@ -167,7 +171,7 @@ class DemoMode {
     // Отчёт уходит сам всегда (так разработчик видит сбои у всех); в режиме
     // разработчика человек видит это и в сообщении.
     sendError(where, error, stack);
-    messenger?.showSnackBar(SnackBar(content: Text('$message\n${tr('Отчёт об ошибке отправлен разработчику')}')));
+    messenger?.showSnackBar(SnackBar(content: Text(message)));
   }
 
   /// Отправка отзыва. Возвращает текст ошибки или `null`.
