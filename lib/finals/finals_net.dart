@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../services/demo_mode.dart';
 import '../services/realtime_client.dart';
 import 'final_run.dart';
 
@@ -41,10 +42,16 @@ class RealtimeFinalsChannel implements FinalsChannel {
   @override
   Future<bool> join() async {
     final t = await token();
-    if (t == null) return false;
+    if (t == null) {
+      DemoMode.sendError('Finals realtime join', 'нет токена мессенджера');
+      return false;
+    }
     _client.onBroadcast = (e, p) => onMessage?.call(e, p);
     _client.onClosed = () => onClosed?.call();
-    return _client.join(t);
+    final ok = await _client.join(t);
+    // Тихо сообщаем разработчику, если подключиться к каналу не удалось (причина «ждём ведущего»).
+    if (!ok) DemoMode.sendError('Finals realtime join', 'канал не открылся ');
+    return ok;
   }
 
   @override
