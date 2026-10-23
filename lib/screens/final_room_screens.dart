@@ -37,12 +37,16 @@ String _bannerOf(FinalsSnapshot s) {
       if (s.round == 'shootoff') return tr('Перестрелка');
       if (s.round == 'open') return tr('С колена и лёжа: 20 выстрелов');
       final n = s.round.split(':').last;
-      return s.round.startsWith('series') ? tr('Серия {n}', {'n': n}) : tr('Выстрел {n}', {'n': n});
+      return s.round.startsWith('series')
+          ? tr('Серия {n}', {'n': n})
+          : tr('Выстрел {n}', {'n': n});
   }
 }
 
 String _timeOf(FinalsSnapshot s) {
-  final v = s.phase == 'shooting' ? (s.roundLimit - s.roundSeconds).clamp(0, 9999) : s.secondsLeft;
+  final v = s.phase == 'shooting'
+      ? (s.roundLimit - s.roundSeconds).clamp(0, 9999)
+      : s.secondsLeft;
   return '${v ~/ 60}:${(v % 60).toString().padLeft(2, '0')}';
 }
 
@@ -83,11 +87,17 @@ class FinalRoomView extends StatelessWidget {
     this.offline = false,
   });
 
-  Future<void> _openInput(BuildContext context, Map<String, dynamic> row) async {
+  Future<void> _openInput(
+      BuildContext context, Map<String, dynamic> row) async {
     await showGlassSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => _InputSheet(snapshot: snapshot, who: '${row['id']}', name: '${row['name']}', onShoot: onShoot, onUndo: onUndo),
+      builder: (_) => _InputSheet(
+          snapshot: snapshot,
+          who: '${row['id']}',
+          name: '${row['name']}',
+          onShoot: onShoot,
+          onUndo: onUndo),
     );
   }
 
@@ -98,31 +108,52 @@ class FinalRoomView extends StatelessWidget {
     final s = snapshot;
     final rows = s.rows;
     final own = ownId == null ? null : s.row(ownId!);
-    final inputRows = [for (final r in rows) if (r['human'] == true) r];
+    final inputRows = [
+      for (final r in rows)
+        if (r['human'] == true) r
+    ];
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
         title: Row(children: [
-          Expanded(child: Text(_bannerOf(s), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
-          Text(_timeOf(s), style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+          Expanded(
+              child: Text(_bannerOf(s),
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                  overflow: TextOverflow.ellipsis)),
+          Text(_timeOf(s),
+              style: theme.textTheme.titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w800)),
         ]),
         actions: [
-          if (onPause != null) IconButton(icon: Icon(s.paused ? Icons.play_arrow : Icons.pause), onPressed: onPause),
-          if (onLeave != null) IconButton(tooltip: tr('Покинуть финал'), icon: const Icon(Icons.logout), onPressed: onLeave),
+          if (onPause != null)
+            IconButton(
+                icon: Icon(s.paused ? Icons.play_arrow : Icons.pause),
+                onPressed: onPause),
+          if (onLeave != null)
+            IconButton(
+                tooltip: tr('Покинуть финал'),
+                icon: const Icon(Icons.logout),
+                onPressed: onLeave),
         ],
       ),
       body: ListView(
-        padding: EdgeInsets.fromLTRB(12, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 12, 24),
+        padding: EdgeInsets.fromLTRB(12,
+            MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 12, 24),
         children: [
           if (offline)
             Container(
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: cs.errorContainer, borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(
+                  color: cs.errorContainer,
+                  borderRadius: BorderRadius.circular(12)),
               child: Row(children: [
                 Icon(Icons.wifi_off, color: cs.onErrorContainer, size: 18),
                 const SizedBox(width: 8),
-                Expanded(child: Text(tr('Нет связи — подключаемся снова'), style: TextStyle(color: cs.onErrorContainer))),
+                Expanded(
+                    child: Text(tr('Нет связи — подключаемся снова'),
+                        style: TextStyle(color: cs.onErrorContainer))),
               ]),
             ),
           if (onNext != null && s.phase != 'finished')
@@ -132,24 +163,34 @@ class FinalRoomView extends StatelessWidget {
                 height: 56,
                 child: FilledButton(
                   onPressed: onNext,
-                  child: Text(_nextLabel(s.phase), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                  child: Text(_nextLabel(s.phase),
+                      style: const TextStyle(
+                          fontSize: 20, fontWeight: FontWeight.w800)),
                 ),
               ),
             ),
           if (s.paused)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: Text(tr('Пауза'), textAlign: TextAlign.center, style: theme.textTheme.titleMedium),
+              child: Text(tr('Пауза'),
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleMedium),
             ),
           // Спортсмен: своя мишень сразу.
           if (role == FinalsRole.athlete && own != null) ...[
-            Text('${own['name']}', textAlign: TextAlign.center, style: theme.textTheme.titleSmall),
+            Text('${own['name']}',
+                textAlign: TextAlign.center, style: theme.textTheme.titleSmall),
             SizedBox(
               height: MediaQuery.sizeOf(context).height * 0.40,
               child: ShotPad(
                 face: TargetFace.byCode(s.face),
-                marks: [for (final m in (own['staged'] as List? ?? const [])) Offset((m[0] as num).toDouble(), (m[1] as num).toDouble())],
-                enabled: own['can'] == true && !s.paused && (own['staged'] as List).length < s.shotsPerShooter,
+                marks: [
+                  for (final m in (own['staged'] as List? ?? const []))
+                    Offset((m[0] as num).toDouble(), (m[1] as num).toDouble())
+                ],
+                enabled: own['can'] == true &&
+                    !s.paused &&
+                    (own['staged'] as List).length < s.shotsPerShooter,
                 onHold: (_) {},
                 onShot: (mm) => onShoot('$ownId', mm),
               ),
@@ -158,12 +199,19 @@ class FinalRoomView extends StatelessWidget {
               Expanded(
                 child: Text(
                   own['can'] == true
-                      ? tr('Осталось выстрелов: {n}', {'n': s.shotsPerShooter - (own['staged'] as List).length})
-                      : (own['active'] == true ? tr('Ждите команды') : tr('Вы выбыли')),
+                      ? tr('Осталось выстрелов: {n}', {
+                          'n':
+                              s.shotsPerShooter - (own['staged'] as List).length
+                        })
+                      : (own['active'] == true
+                          ? tr('Ждите команды')
+                          : tr('Вы выбыли')),
                 ),
               ),
               TextButton.icon(
-                onPressed: ((own['staged'] as List?) ?? const []).isEmpty ? null : () => onUndo('$ownId'),
+                onPressed: ((own['staged'] as List?) ?? const []).isEmpty
+                    ? null
+                    : () => onUndo('$ownId'),
                 icon: const Icon(Icons.undo),
                 label: Text(tr('Назад')),
               ),
@@ -174,29 +222,60 @@ class FinalRoomView extends StatelessWidget {
           for (var i = 0; i < rows.length; i++)
             Opacity(
               opacity: rows[i]['active'] == true ? 1 : 0.5,
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 4),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: rows[i]['id'] == ownId ? cs.primary.withValues(alpha: 0.16) : cs.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(12),
+              child: InkWell(
+                // Жюри: нажали на спортсмена в списке — открылась его мишень для ввода выстрелов.
+                borderRadius: BorderRadius.circular(12),
+                onTap:
+                    (role == FinalsRole.coach || role == FinalsRole.helper) &&
+                            rows[i]['human'] == true &&
+                            rows[i]['active'] == true
+                        ? () => _openInput(context, rows[i])
+                        : null,
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: rows[i]['id'] == ownId
+                        ? cs.primary.withValues(alpha: 0.16)
+                        : cs.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(children: [
+                    SizedBox(
+                        width: 26,
+                        child: Text('${rows[i]['place'] ?? (i + 1)}',
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w800))),
+                    Expanded(
+                        child: Text('${rows[i]['name']}',
+                            overflow: TextOverflow.ellipsis)),
+                    Text(
+                        ((rows[i]['shots'] as List).isEmpty)
+                            ? ''
+                            : '${tr('ср')} ${(rows[i]['avg'] as num).toStringAsFixed(2)}  ',
+                        style: theme.textTheme.bodySmall),
+                    Text((rows[i]['total'] as num).toStringAsFixed(1),
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                    if ((role == FinalsRole.coach ||
+                            role == FinalsRole.helper) &&
+                        rows[i]['human'] == true &&
+                        rows[i]['active'] == true)
+                      IconButton(
+                        tooltip: tr('Ввести выстрел'),
+                        icon: Icon(Icons.gps_fixed,
+                            color: rows[i]['can'] == true ? cs.primary : null),
+                        onPressed: () => _openInput(context, rows[i]),
+                      ),
+                  ]),
                 ),
-                child: Row(children: [
-                  SizedBox(width: 26, child: Text('${rows[i]['place'] ?? (i + 1)}', style: const TextStyle(fontWeight: FontWeight.w800))),
-                  Expanded(child: Text('${rows[i]['name']}', overflow: TextOverflow.ellipsis)),
-                  Text(((rows[i]['shots'] as List).isEmpty) ? '' : '${tr('ср')} ${(rows[i]['avg'] as num).toStringAsFixed(2)}  ', style: theme.textTheme.bodySmall),
-                  Text((rows[i]['total'] as num).toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.w700)),
-                  if ((role == FinalsRole.coach || role == FinalsRole.helper) && rows[i]['human'] == true && rows[i]['active'] == true)
-                    IconButton(
-                      tooltip: tr('Ввести выстрел'),
-                      icon: Icon(Icons.gps_fixed, color: rows[i]['can'] == true ? cs.primary : null),
-                      onPressed: () => _openInput(context, rows[i]),
-                    ),
-                ]),
               ),
             ),
-          if ((role == FinalsRole.coach || role == FinalsRole.helper) && inputRows.isEmpty)
-            Padding(padding: const EdgeInsets.all(12), child: Text(tr('Нет участников-людей'))),
+          if ((role == FinalsRole.coach || role == FinalsRole.helper) &&
+              inputRows.isEmpty)
+            Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text(tr('Нет участников-людей'))),
         ],
       ),
     );
@@ -210,7 +289,12 @@ class _InputSheet extends StatefulWidget {
   final String name;
   final void Function(String who, Offset mm) onShoot;
   final void Function(String who) onUndo;
-  const _InputSheet({required this.snapshot, required this.who, required this.name, required this.onShoot, required this.onUndo});
+  const _InputSheet(
+      {required this.snapshot,
+      required this.who,
+      required this.name,
+      required this.onShoot,
+      required this.onUndo});
 
   @override
   State<_InputSheet> createState() => _InputSheetState();
@@ -224,7 +308,10 @@ class _InputSheetState extends State<_InputSheet> {
   Widget build(BuildContext context) {
     final s = widget.snapshot;
     final row = s.row(widget.who);
-    final staged = [for (final m in (row?['staged'] as List? ?? const [])) Offset((m[0] as num).toDouble(), (m[1] as num).toDouble())];
+    final staged = [
+      for (final m in (row?['staged'] as List? ?? const []))
+        Offset((m[0] as num).toDouble(), (m[1] as num).toDouble())
+    ];
     final marks = staged.length >= _local.length ? staged : _local;
     return SafeArea(
       child: SizedBox(
@@ -233,8 +320,11 @@ class _InputSheetState extends State<_InputSheet> {
           Padding(
             padding: const EdgeInsets.all(12),
             child: Row(children: [
-              Expanded(child: Text(widget.name, style: Theme.of(context).textTheme.titleMedium)),
-              Text(tr('Выстрелов: {n}/{m}', {'n': marks.length, 'm': s.shotsPerShooter})),
+              Expanded(
+                  child: Text(widget.name,
+                      style: Theme.of(context).textTheme.titleMedium)),
+              Text(tr('Выстрелов: {n}/{m}',
+                  {'n': marks.length, 'm': s.shotsPerShooter})),
               TextButton.icon(
                 onPressed: marks.isEmpty
                     ? null
@@ -247,7 +337,9 @@ class _InputSheetState extends State<_InputSheet> {
                 icon: const Icon(Icons.undo),
                 label: Text(tr('Назад')),
               ),
-              IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+              IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context)),
             ]),
           ),
           Expanded(
@@ -256,7 +348,9 @@ class _InputSheetState extends State<_InputSheet> {
               child: ShotPad(
                 face: TargetFace.byCode(s.face),
                 marks: marks,
-                enabled: row?['can'] == true && !s.paused && marks.length < s.shotsPerShooter,
+                enabled: row?['can'] == true &&
+                    !s.paused &&
+                    marks.length < s.shotsPerShooter,
                 onHold: (_) {},
                 onShot: (mm) {
                   widget.onShoot(widget.who, mm);
@@ -298,7 +392,8 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
   List<FinalsMember> _members = [];
   Timer? _poll;
   bool _busy = false;
-  bool _hostShoots = false; // ведущий сам стреляет (финал спортсменов без тренера)
+  bool _hostShoots =
+      false; // ведущий сам стреляет (финал спортсменов без тренера)
 
   @override
   void dispose() {
@@ -307,23 +402,34 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
   }
 
   Future<void> _addPerson() async {
-    final contacts = [for (final c in ChatMessagesRepository(_store.db).listContacts()) if (!c.isGroup && !_picks.any((p) => p.contact.id == c.id)) c];
+    final contacts = [
+      for (final c in ChatMessagesRepository(_store.db).listContacts())
+        if (!c.isGroup && !_picks.any((p) => p.contact.id == c.id)) c
+    ];
     if (contacts.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Нет контактов мессенджера для приглашения'))));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(tr('Нет контактов мессенджера для приглашения'))));
       return;
     }
     final c = await showGlassSheet<ChatContact>(
       context: context,
-      builder: (ctx) => ListView(children: [for (final c in contacts) ListTile(title: Text(c.nickname), onTap: () => Navigator.pop(ctx, c))]),
+      builder: (ctx) => ListView(children: [
+        for (final c in contacts)
+          ListTile(title: Text(c.nickname), onTap: () => Navigator.pop(ctx, c))
+      ]),
     );
     if (c == null || !mounted) return;
     final role = await showGlassDialog<FinalsRole>(
       context: context,
       builder: (ctx) => SimpleDialog(title: Text(c.nickname), children: [
-        SimpleDialogOption(onPressed: () => Navigator.pop(ctx, FinalsRole.athlete), child: Text(tr('Участник'))),
+        SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, FinalsRole.athlete),
+            child: Text(tr('Участник'))),
         // Жюри: объявляют команды и вносят результаты, права равные; кто чем занят —
         // договариваются сами (отдельных ролей внутри жюри нет).
-        SimpleDialogOption(onPressed: () => Navigator.pop(ctx, FinalsRole.coach), child: Text(tr('Жюри (команды и ввод результатов)'))),
+        SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, FinalsRole.coach),
+            child: Text(tr('Жюри (команды и ввод результатов)'))),
       ]),
     );
     if (role != null) setState(() => _picks.add(_Pick(c, role)));
@@ -336,17 +442,23 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
     if (sid == null) {
       if (mounted) {
         setState(() => _busy = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Не удалось создать финал. Мы уже получили отчёт — попробуйте позже'))));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(tr(
+                'Не удалось создать финал. Мы уже получили отчёт — попробуйте позже'))));
       }
       return;
     }
     for (final p in _picks) {
       await _svc.invite(sid,
-          userId: p.contact.id, role: p.role, targetId: p.role == FinalsRole.athlete ? p.targetId : null, name: p.contact.nickname);
+          userId: p.contact.id,
+          role: p.role,
+          targetId: p.role == FinalsRole.athlete ? p.targetId : null,
+          name: p.contact.nickname);
       // Приглашение дублируем сообщением в мессенджере — оно приходит push-уведомлением.
       try {
-        await ChatSyncService(_auth, ChatMessagesRepository(_store.db))
-            .send(p.contact.id, tr('Приглашаю в финал! Откройте мессенджер или вкладку «Финалы» (модуль «Финалы» должен быть включён в настройках) и примите приглашение.'));
+        await ChatSyncService(_auth, ChatMessagesRepository(_store.db)).send(
+            p.contact.id,
+            tr('Приглашаю в финал! Откройте мессенджер или вкладку «Финалы» (модуль «Финалы» должен быть включён в настройках) и примите приглашение.'));
       } catch (_) {}
     }
     _sessionId = sid;
@@ -359,12 +471,20 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
 
   void _start() {
     final sid = _sessionId!;
-    final accepted = [for (final m in _members) if (m.status == 'accepted') m];
-    final guests = [for (final m in accepted) if (m.role == FinalsRole.athlete) m];
+    final accepted = [
+      for (final m in _members)
+        if (m.status == 'accepted') m
+    ];
+    final guests = [
+      for (final m in accepted)
+        if (m.role == FinalsRole.athlete) m
+    ];
     final hostId = _hostShoots ? 'u_${_auth.userId}' : null;
     // Ведущий, если стреляет, — первый участник.
     final athletes = [
-      if (hostId != null) FinalsMember(sid, _auth.userId, FinalsRole.athlete, hostId, _auth.nickname, 'accepted'),
+      if (hostId != null)
+        FinalsMember(sid, _auth.userId, FinalsRole.athlete, hostId,
+            _auth.nickname, 'accepted'),
       ...guests,
     ];
     if (athletes.isEmpty) return;
@@ -375,14 +495,31 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
       'rifle_50m' => const ShotStats(0, 0, 6.0, 6.0, 0),
       _ => const ShotStats(0, 0, 3.5, 3.5, 0),
     };
-    const names = ['Бывалый', 'Татошка', 'Кость', 'Я в свое время тоже стрельбой занимался', 'Рыцарь', 'Сахарок', 'Усталый'];
+    const names = [
+      'Бывалый',
+      'Татошка',
+      'Кость',
+      'Я в свое время тоже стрельбой занимался',
+      'Рыцарь',
+      'Сахарок',
+      'Усталый'
+    ];
     final rng = math.Random();
     final competitors = [
       for (final a in athletes) FinalCompetitor(a.targetId!, a.name),
-      for (var i = 0; i < f.finalists - athletes.length; i++) FinalCompetitor('b$i', '${names[i % names.length]} (Bot)'),
+      for (var i = 0; i < f.finalists - athletes.length; i++)
+        FinalCompetitor('b$i', '${names[i % names.length]} (Bot)'),
     ];
     final botCount = f.finalists - athletes.length;
-    final levels = [BotDifficulty.easy, BotDifficulty.medium, BotDifficulty.medium, BotDifficulty.hard, BotDifficulty.hard, BotDifficulty.unpredictable, BotDifficulty.easy];
+    final levels = [
+      BotDifficulty.easy,
+      BotDifficulty.medium,
+      BotDifficulty.medium,
+      BotDifficulty.hard,
+      BotDifficulty.hard,
+      BotDifficulty.unpredictable,
+      BotDifficulty.easy
+    ];
     final controller = FinalRunController(
       format: f,
       face: face,
@@ -391,14 +528,21 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
       otherHumans: {for (final a in athletes.skip(1)) a.targetId!},
       bots: {
         for (var i = 0; i < botCount; i++)
-          'b$i': BotShooter(fallback, levels[i % levels.length], face, math.Random(rng.nextInt(1 << 30))),
+          'b$i': BotShooter(fallback, levels[i % levels.length], face,
+              math.Random(rng.nextInt(1 << 30))),
       },
       rng: rng,
       manual: true,
     );
     _poll?.cancel();
     Navigator.of(context).pushReplacement(MaterialPageRoute(
-      builder: (_) => FinalHostScreen(controller: controller, sessionId: sid, service: _svc, store: _store, members: _members, hostCompetitorId: hostId),
+      builder: (_) => FinalHostScreen(
+          controller: controller,
+          sessionId: sid,
+          service: _svc,
+          store: _store,
+          members: _members,
+          hostCompetitorId: hostId),
     ));
   }
 
@@ -406,25 +550,39 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final started = _sessionId != null;
-    final accepted = _members.where((m) => m.status == 'accepted' && m.role == FinalsRole.athlete).length;
+    final accepted = _members
+        .where((m) => m.status == 'accepted' && m.role == FinalsRole.athlete)
+        .length;
     return Scaffold(
       extendBodyBehindAppBar: true,
-      appBar: GlassHeader(title: Text(tr('Финал с участниками'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600))),
+      appBar: GlassHeader(
+          title: Text(tr('Финал с участниками'),
+              style: theme.textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w600))),
       body: Column(children: [
         Expanded(
           child: ListView(
-            padding: EdgeInsets.fromLTRB(16, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 16, 16),
+            padding: EdgeInsets.fromLTRB(
+                16,
+                MediaQuery.paddingOf(context).top + GlassHeader.height + 8,
+                16,
+                16),
             children: [
-              Text(tr(widget.format.nameKey), style: theme.textTheme.titleMedium),
+              Text(tr(widget.format.nameKey),
+                  style: theme.textTheme.titleMedium),
               const SizedBox(height: 6),
-              Text(tr('Вы ведёте финал: подаёте команды кнопкой «Далее», остальных финалистов до 8 заменят боты.'), style: theme.textTheme.bodySmall),
+              Text(
+                  tr('Вы ведёте финал: подаёте команды кнопкой «Далее», остальных финалистов до 8 заменят боты.'),
+                  style: theme.textTheme.bodySmall),
               const SizedBox(height: 16),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text(tr('Я тоже стреляю')),
-                subtitle: Text(tr('Финал спортсменов онлайн без тренера: вы ведёте команды и стреляете сами')),
+                subtitle: Text(tr(
+                    'Финал спортсменов онлайн без тренера: вы ведёте команды и стреляете сами')),
                 value: _hostShoots,
-                onChanged: started ? null : (v) => setState(() => _hostShoots = v),
+                onChanged:
+                    started ? null : (v) => setState(() => _hostShoots = v),
               ),
               Text(tr('Участники'), style: theme.textTheme.titleSmall),
               for (final p in _picks)
@@ -438,15 +596,23 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
                     FinalsRole.coach => tr('Жюри'),
                   }),
                   trailing: started
-                      ? Text(_members.where((m) => m.userId == p.contact.id).map((m) => switch (m.status) {
-                            'accepted' => tr('в сети'),
-                            'declined' => tr('отказ'),
-                            _ => tr('ждём'),
-                          }).join(', '))
-                      : IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _picks.remove(p))),
+                      ? Text(_members
+                          .where((m) => m.userId == p.contact.id)
+                          .map((m) => switch (m.status) {
+                                'accepted' => tr('в сети'),
+                                'declined' => tr('отказ'),
+                                _ => tr('ждём'),
+                              })
+                          .join(', '))
+                      : IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => setState(() => _picks.remove(p))),
                 ),
               if (!started)
-                OutlinedButton.icon(onPressed: _addPerson, icon: const Icon(Icons.person_add_alt), label: Text(tr('Пригласить'))),
+                OutlinedButton.icon(
+                    onPressed: _addPerson,
+                    icon: const Icon(Icons.person_add_alt),
+                    label: Text(tr('Пригласить'))),
             ],
           ),
         ),
@@ -462,8 +628,13 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
                     ? null
                     : started
                         ? (accepted > 0 || _hostShoots ? _start : null)
-                        : (_hostShoots || _picks.any((p) => p.role == FinalsRole.athlete) ? _createAndInvite : null),
-                child: Text(started ? tr('Начать финал ({n} принял)', {'n': accepted}) : tr('Разослать приглашения')),
+                        : (_hostShoots ||
+                                _picks.any((p) => p.role == FinalsRole.athlete)
+                            ? _createAndInvite
+                            : null),
+                child: Text(started
+                    ? tr('Начать финал ({n} принял)', {'n': accepted})
+                    : tr('Разослать приглашения')),
               ),
             ),
           ),
@@ -485,7 +656,14 @@ class FinalHostScreen extends StatefulWidget {
 
   /// Если ведущий сам стреляет — его id участника; иначе `null` (он только ведёт).
   final String? hostCompetitorId;
-  const FinalHostScreen({super.key, required this.controller, required this.sessionId, required this.service, required this.store, required this.members, this.hostCompetitorId});
+  const FinalHostScreen(
+      {super.key,
+      required this.controller,
+      required this.sessionId,
+      required this.service,
+      required this.store,
+      required this.members,
+      this.hostCompetitorId});
 
   @override
   State<FinalHostScreen> createState() => _FinalHostScreenState();
@@ -540,7 +718,9 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
     if (!mounted) return;
     if (!ok) {
       if (_attempt == 0) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Нет связи с участниками — финал идёт только на этом телефоне'))));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(tr(
+                'Нет связи с участниками — финал идёт только на этом телефоне'))));
       }
       _scheduleReconnect();
       return;
@@ -562,22 +742,29 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
   void _onChange() {
     if (!mounted) return;
     if (FinalsPrefs.voice(widget.store.db)) {
-      final cmd = _phaseVoice.update(c.phase.name, secondsLeft: c.secondsLeft, announcing: c.announcing);
-      if (cmd != null) FinalsAnnouncer.say(widget.store.db, cmd, refs: _phaseVoice.lastRef == null ? null : [_phaseVoice.lastRef!]);
+      final cmd = _phaseVoice.update(c.phase.name,
+          secondsLeft: c.secondsLeft, announcing: c.announcing);
+      if (cmd != null)
+        FinalsAnnouncer.say(widget.store.db, cmd,
+            refs: _phaseVoice.lastRef == null ? null : [_phaseVoice.lastRef!]);
       final text = _tracker.update(
         [for (final r in c.live) AnnounceRow(r.c.name, r.total, r.c.active)],
         announcing: c.announcing,
       );
-      if (text != null) FinalsAnnouncer.say(widget.store.db, text, refs: _tracker.lastRefs);
+      if (text != null)
+        FinalsAnnouncer.say(widget.store.db, text, refs: _tracker.lastRefs);
     }
     if (c.phase == RunPhase.finished && !_saved) {
       _saved = true;
       _timer?.cancel();
-      final rec = c.toRecord()..['custom'] = true; // финал тренера в рейтинг не идёт
+      final rec = c.toRecord()
+        ..['custom'] = true; // финал тренера в рейтинг не идёт
       FinalsRepository(widget.store.db).save(rec);
       widget.service.end(widget.sessionId);
       Future.delayed(const Duration(seconds: 2), () {
-        if (mounted) Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => FinalResultScreen(record: rec)));
+        if (mounted)
+          Navigator.of(context).pushReplacement(MaterialPageRoute(
+              builder: (_) => FinalResultScreen(record: rec)));
       });
     }
     setState(() {});
@@ -589,10 +776,15 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Завершить финал?')),
-        content: Text(tr('Финал будет прекращён для всех, результаты не сохранятся.')),
+        content: Text(
+            tr('Финал будет прекращён для всех, результаты не сохранятся.')),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Остаться'))),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Завершить'))),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(tr('Остаться'))),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(tr('Завершить'))),
         ],
       ),
     );
@@ -624,7 +816,9 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
       },
       child: FinalRoomView(
         snapshot: FinalsSnapshot.of(c),
-        role: widget.hostCompetitorId == null ? FinalsRole.coach : FinalsRole.athlete,
+        role: widget.hostCompetitorId == null
+            ? FinalsRole.coach
+            : FinalsRole.athlete,
         ownId: widget.hostCompetitorId,
         onShoot: (who, mm) => c.submitShotFor(who, mm.dx, mm.dy),
         onUndo: (who) => c.undoShotFor(who),
@@ -643,7 +837,8 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
 class FinalGuestScreen extends StatefulWidget {
   final FinalsMember member;
   final FinalsSessionService service;
-  const FinalGuestScreen({super.key, required this.member, required this.service});
+  const FinalGuestScreen(
+      {super.key, required this.member, required this.service});
 
   @override
   State<FinalGuestScreen> createState() => _FinalGuestScreenState();
@@ -651,7 +846,8 @@ class FinalGuestScreen extends StatefulWidget {
 
 class _FinalGuestScreenState extends State<FinalGuestScreen> {
   FinalsGuest? _guest;
-    FinalsSnapshot? _last; // последнее известное состояние (показываем при обрыве)
+  FinalsSnapshot?
+      _last; // последнее известное состояние (показываем при обрыве)
   Timer? _hello;
   Timer? _retry;
   int _attempt = 0;
@@ -723,7 +919,9 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             const AppLoader(),
             const SizedBox(height: 12),
-            Text(_attempt > 2 ? tr('Нет связи, пробуем снова…') : tr('Ждём ведущего…')),
+            Text(_attempt > 2
+                ? tr('Нет связи, пробуем снова…')
+                : tr('Ждём ведущего…')),
           ]),
         ),
       );
@@ -741,7 +939,6 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
   }
 }
 
-
 /// Проверяет приглашения в финалы и, если есть ожидающие ответа, предлагает
 /// принять — работает из любого места (например, при открытии мессенджера),
 /// не зависит от того, включён ли модуль «Финалы».
@@ -758,9 +955,13 @@ Future<void> offerFinalInvites(BuildContext context, AppDataStore store) async {
   }
 }
 
-Future<void> _offerFinalInvites(BuildContext context, AppDataStore store) async {
+Future<void> _offerFinalInvites(
+    BuildContext context, AppDataStore store) async {
   final svc = FinalsSessionService(ChatAuthService(store.db));
-  final list = [for (final m in await svc.myInvitations()) if (m.status == 'invited' && !_laterInvites.contains(m.sessionId)) m];
+  final list = [
+    for (final m in await svc.myInvitations())
+      if (m.status == 'invited' && !_laterInvites.contains(m.sessionId)) m
+  ];
   if (list.isEmpty || !context.mounted) return;
   final m = list.first;
   final role = switch (m.role) {
@@ -772,10 +973,15 @@ Future<void> _offerFinalInvites(BuildContext context, AppDataStore store) async 
     context: context,
     builder: (ctx) => AlertDialog(
       title: Text(tr('Приглашение в финал')),
-      content: Text(tr('Вас приглашают участвовать {r}. Войти сейчас?', {'r': role})),
+      content: Text(
+          tr('Вас приглашают участвовать {r}. Войти сейчас?', {'r': role})),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Позже'))),
-        TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Принять'))),
+        TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(tr('Позже'))),
+        TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(tr('Принять'))),
       ],
     ),
   );
@@ -785,5 +991,6 @@ Future<void> _offerFinalInvites(BuildContext context, AppDataStore store) async 
   }
   if (!context.mounted) return;
   if (!await svc.answer(m, accept: true) || !context.mounted) return;
-  await Navigator.of(context).push(MaterialPageRoute(builder: (_) => FinalGuestScreen(member: m, service: svc)));
+  await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => FinalGuestScreen(member: m, service: svc)));
 }

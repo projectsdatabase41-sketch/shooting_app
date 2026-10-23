@@ -386,6 +386,14 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
                   ('unpredictable', tr('Непредсказуемые')),
                   ('champions', tr('Чемпионы (недостающих заменят боты)')),
                 ], _level, (v) => _level = v),
+                const SizedBox(height: 6),
+                Text(switch (_level) {
+                  'easy' => tr('Лёгкие: стреляют чуть хуже вас — средняя точка дальше от центра, разброс больше.'),
+                  'medium' => tr('Средние: стреляют как вы — по вашей манере и разбросу.'),
+                  'hard' => tr('Сложные: стреляют чуть лучше вас — точка ближе к центру, разброс меньше.'),
+                  'unpredictable' => tr('Непредсказуемые: в каждом финале у бота случайный «день» — то лучше, то хуже вас, с колебаниями по ходу.'),
+                  _ => tr('Боты разной силы: от чуть слабее вас до чуть сильнее.'),
+                }, style: theme.textTheme.bodySmall),
                 const SizedBox(height: 18),
                 // Участники.
                 Text(tr('Участники'), style: theme.textTheme.titleSmall),
