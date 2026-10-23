@@ -336,7 +336,7 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
     if (sid == null) {
       if (mounted) {
         setState(() => _busy = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Не удалось создать финал: нужен вход в мессенджер и выполненный SQL'))));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('Не удалось создать финал')}: ${_svc.lastError ?? '?'}')));
       }
       return;
     }

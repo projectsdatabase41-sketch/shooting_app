@@ -51,7 +51,8 @@ language sql stable security definer set search_path = public as $$
 $$;
 
 drop policy if exists fs_read on finals_sessions;
-create policy fs_read on finals_sessions for select using (finals_is_member(id));
+-- host_id = auth.uid() напрямую: иначе INSERT ... RETURNING не видит только что вставленную строку.
+create policy fs_read on finals_sessions for select using (host_id = auth.uid() or finals_is_member(id));
 drop policy if exists fs_insert on finals_sessions;
 create policy fs_insert on finals_sessions for insert with check (host_id = auth.uid());
 drop policy if exists fs_update on finals_sessions;

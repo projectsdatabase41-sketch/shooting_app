@@ -37,10 +37,19 @@ class FinalsSessionService {
 
   http.Client Function() clientFactory = http.Client.new;
 
+  /// Причина последней неудачи (для показа пользователю).
+  String? lastError;
+
   Future<Map<String, String>?> _headers({bool returnRows = false}) async {
-    if (!auth.isSignedIn) return null;
+    if (!auth.isSignedIn) {
+      lastError = 'нет входа в мессенджер';
+      return null;
+    }
     final token = await auth.ensureFreshToken();
-    if (token == null) return null;
+    if (token == null) {
+      lastError = 'сессия мессенджера устарела, войдите заново';
+      return null;
+    }
     return {
       'apikey': auth.anonKey,
       'Authorization': 'Bearer $token',
@@ -62,10 +71,14 @@ class FinalsSessionService {
         _ => throw ArgumentError(method),
       };
       final res = await req.timeout(const Duration(seconds: 15));
-      if (res.statusCode >= 400) return null;
+      if (res.statusCode >= 400) {
+        lastError = '${res.statusCode}: ${utf8.decode(res.bodyBytes)}';
+        return null;
+      }
       if (res.body.isEmpty) return const [];
       return jsonDecode(utf8.decode(res.bodyBytes));
-    } catch (_) {
+    } catch (e) {
+      lastError = '$e';
       return null;
     } finally {
       client.close();
