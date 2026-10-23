@@ -325,17 +325,23 @@ class SupabaseSyncService {
     return count;
   }
 
-  /// Чистит облако: тренировки без упражнения или без выстрелов (пустышки) и шаблоны упражнений, удалённые
+  /// Чистит облако: тренировки без упражнения (пустышки) и шаблоны упражнений, удалённые
   /// на этом телефоне «насовсем». Тренировки с выстрелами не трогает.
   Future<void> _tidyCloud(String token, AppDataStore store) async {
+    // Не чаще раза в 6 часов и без выгрузки выстрелов: достаточно тренировок без упражнения.
+    final at = store.db.db.select("SELECT hex FROM color_prefs WHERE key = 'sync_tidy_cloud_at'");
+    final last = at.isEmpty ? null : DateTime.tryParse('${at.first['hex']}');
+    if (last != null && DateTime.now().difference(last) < const Duration(hours: 6)) return;
+    store.db.db.execute(
+      "INSERT INTO color_prefs (key, hex) VALUES ('sync_tidy_cloud_at', ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex",
+      [DateTime.now().toIso8601String()],
+    );
     final packages = await _select(token, 'training_packages?select=id&order=id');
     final exercises = await _select(token, 'exercises?select=id,package_id&order=id');
-    final shotOwners = {for (final r in await _select(token, 'shots?select=exercise_id&order=id')) '${r['exercise_id']}'};
     final childByPackage = {for (final r in exercises) '${r['package_id']}': '${r['id']}'};
     for (final p in packages) {
       final id = '${p['id']}';
-      final child = childByPackage[id];
-      if (child != null && shotOwners.contains(child)) continue;
+      if (childByPackage[id] != null) continue;
       await _deleteWhere(token, 'comments', 'package_id', id);
       await _deleteWhere(token, 'exercises', 'package_id', id);
       await _deleteWhere(token, 'training_packages', 'id', id);
@@ -482,13 +488,27 @@ class SupabaseSyncService {
       store.upsertExerciseFromRemote(ex);
     }
 
-    final packageRows = await _select(token, 'training_packages?select=*');
-    final exerciseChildRows = await _select(token, 'exercises?select=*');
+    // Только то, чего нет на устройстве: сначала идут одни id тренировок (крошечный ответ), полные строки,
+    // упражнения и выстрелы запрашиваются лишь для недостающих. Раньше каждая загрузка тянула ВСЮ базу выстрелов.
+    final haveIds = {for (final r in store.db.db.select('SELECT id FROM training_sessions')) r['id'] as String};
+    final cloudIds = [for (final r in await _select(token, 'training_packages?select=id')) '${r['id']}'];
+    final missingIds = [for (final id in cloudIds) if (!haveIds.contains(id)) id];
+    final packageRows = <Map<String, dynamic>>[];
+    final exerciseChildRows = <Map<String, dynamic>>[];
+    final shotRows = <Map<String, dynamic>>[];
+    for (var i = 0; i < missingIds.length; i += 40) {
+      final list = missingIds.sublist(i, math.min(i + 40, missingIds.length)).join(',');
+      packageRows.addAll(await _select(token, 'training_packages?select=*&id=in.($list)'));
+      final children = await _select(token, 'exercises?select=*&package_id=in.($list)');
+      exerciseChildRows.addAll(children);
+      if (children.isNotEmpty) {
+        shotRows.addAll(await _select(token, 'shots?select=*&exercise_id=in.(${children.map((c) => '${c['id']}').join(',')})'));
+      }
+    }
     final childByPackage = {
       for (final r in exerciseChildRows) '${r['package_id']}': r
     };
 
-    final shotRows = await _select(token, 'shots?select=*');
     final shotsByExercise = <String, List<Map<String, dynamic>>>{};
     for (final row in shotRows) {
       (shotsByExercise['${row['exercise_id']}'] ??= []).add(row);
@@ -533,7 +553,19 @@ class SupabaseSyncService {
     // Порядок локально: пустые и повторяющиеся тренировки убираются (в облаке их удалит следующая отправка).
     final tidied = store.tidySessions();
 
-    final commentRows = await _select(token, 'comments?select=*');
+    // Комментарии: новые с прошлой загрузки (с запасом в сутки) и все комментарии только что полученных тренировок.
+    final sinceRow = store.db.db.select("SELECT hex FROM color_prefs WHERE key = 'sync_comments_since'");
+    final since = sinceRow.isEmpty ? null : '${sinceRow.first['hex']}';
+    final commentRows = <Map<String, dynamic>>[
+      ...await _select(token, since == null ? 'comments?select=*' : 'comments?select=*&created_at=gt.$since'),
+    ];
+    for (var i = 0; i < missingIds.length; i += 40) {
+      commentRows.addAll(await _select(token, 'comments?select=*&package_id=in.(${missingIds.sublist(i, math.min(i + 40, missingIds.length)).join(',')})'));
+    }
+    store.db.db.execute(
+      "INSERT INTO color_prefs (key, hex) VALUES ('sync_comments_since', ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex",
+      [DateTime.now().subtract(const Duration(days: 1)).toUtc().toIso8601String()],
+    );
     final repo = CommentsRepository(store.db);
     final existingCommentIds = {
       for (final row in store.db.db.select('SELECT id FROM comments'))

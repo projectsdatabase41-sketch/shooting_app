@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../i18n/i18n.dart';
 import '../logic/friendly_error.dart';
 import '../widgets/glass_pill.dart';
+import '../widgets/splash_gate.dart' show NexusPulse;
 import '../widgets/voice_bubble.dart' show formatClock;
 
 /// Записанный «кружок».
@@ -223,7 +224,9 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
                           child: SizedBox(
                             width: d,
                             height: d,
-                            child: c == null || !c.value.isInitialized
+                            child: _switching
+                                ? ColoredBox(color: Colors.black, child: Center(child: NexusPulse(size: d * 0.6)))
+                                : c == null || !c.value.isInitialized
                                 ? const Center(child: CircularProgressIndicator())
                                 : AnimatedOpacity(
                                     opacity: _switching ? 0 : 1,

@@ -99,6 +99,16 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
             (match.group(0)!, m),
       ];
 
+  /// Отменить отправленную заявку в друзья.
+  Future<void> _cancelRequest() async {
+    try {
+      await widget.auth.cancelFriendRequest(_contact.id);
+      if (mounted) setState(() => _friend = null);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyError(e))));
+    }
+  }
+
   /// Явная заявка; встречная заявка сразу даёт дружбу (request_friend).
   Future<void> _addFriend() async {
     try {
@@ -370,8 +380,8 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
                     onPressed: _removeFriend,
                     child: Text(tr('Убрать')),
                   )
-                : null,
-            onTap: _friendLoaded && _friend == null ? _addFriend : null,
+                : (_friend == 'pending' ? TextButton(onPressed: _cancelRequest, child: Text(tr('Отменить'))) : null),
+            onTap: _friendLoaded && _friend == null ? _addFriend : (_friend == 'pending' ? _cancelRequest : null),
           ),
       ],
     );

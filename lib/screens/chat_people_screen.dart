@@ -608,6 +608,23 @@ class _ChatDirectoryScreenState extends State<ChatDirectoryScreen> {
                         // Тап — написать; кнопка — заявка в друзья.
                         trailing: ChatAuthService.friendIds.contains(p.userId)
                             ? const Icon(Icons.how_to_reg, size: 20)
+                            : ChatAuthService.outgoingIds.contains(p.userId)
+                                // Заявка отправлена: кнопка остаётся активной, повторное нажатие отменяет её.
+                                ? FilledButton.tonalIcon(
+                                    style: FilledButton.styleFrom(visualDensity: VisualDensity.compact),
+                                    icon: const Icon(Icons.hourglass_top, size: 18),
+                                    label: Text(tr('Заявка отправлена')),
+                                    onPressed: () async {
+                                      final messenger = ScaffoldMessenger.of(context);
+                                      try {
+                                        await widget.auth.cancelFriendRequest(p.userId);
+                                        messenger.showSnackBar(SnackBar(content: Text(tr('Заявка отменена'))));
+                                        if (mounted) setState(() {});
+                                      } catch (e) {
+                                        messenger.showSnackBar(SnackBar(content: Text(friendlyError(e))));
+                                      }
+                                    },
+                                  )
                             : OutlinedButton.icon(
                                 style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
                                 icon: const Icon(Icons.person_add_alt_1, size: 18),

@@ -14,6 +14,7 @@ import '../widgets/swipe_to_delete.dart';
 import 'exercise_editor_screen.dart';
 import 'trainings_history_screen.dart';
 import '../i18n/i18n.dart';
+import '../services/user_profile.dart';
 
 /// Список упражнений-шаблонов (решение пользователя: "Упражнения" и
 /// "Тренировки" объединены визуально в одну плитку) — тап по упражнению
@@ -44,7 +45,13 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
     final store = context.watch<AppDataStore>();
     // Считаем один раз: activeExercises каждый раз строит новый список,
     // а itemBuilder вызывается на каждую строку.
-    final list = store.activeExercises;
+    // Только спортсмену: упражнения, подходящие по данным профиля (вид стрельбы, пол) либо уже с тренировками.
+    final list = store.isCoach
+        ? store.activeExercises
+        : [
+            for (final e in store.activeExercises)
+              if (UserProfile.exerciseRelevant(store.db, e.targetFaceCode, e.gender.name) || store.sessions.any((s) => s.exerciseId == e.id)) e
+          ];
     final topInset = MediaQuery.paddingOf(context).top;
     return Scaffold(
       extendBodyBehindAppBar: true,

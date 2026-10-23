@@ -1894,7 +1894,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   bool _voiceRecording = false;
   bool _recVideo = false; // кнопка записи: false - голос, true - кружок
   bool _recLocked = false; // запись закреплена свайпом вверх
-  double? _recStartY;
   final _circleFinish = ValueNotifier<int>(0);
   int _voiceSecs = 0;
   Timer? _voiceTimer;
@@ -2258,36 +2257,30 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   valueListenable: _input,
                   builder: (_, v, __) {
                     final empty = v.text.trim().isEmpty && _pendingChart == null;
-                    final button = GlassCircleButton(
-                      size: 50,
+                    if (!empty || _sending) {
+                      return GlassCircleButton(
+                        size: 50,
+                        color: cs.primary.withValues(alpha: 0.85),
+                        onTap: _sending ? null : _send,
+                        icon: Icon(Icons.send, color: cs.onPrimary),
+                      );
+                    }
+                    // Тап — звук/видео; удержание: кнопка растёт вдвое, круг загрузки заполняется (до 0,7 с),
+                    // затем идёт запись; отпустили — отправка; провели вверх — запись закрепляется.
+                    return _RecordHold(
+                      icon: Icon(_recVideo ? Icons.videocam : Icons.mic, color: cs.onPrimary),
                       color: cs.primary.withValues(alpha: 0.85),
-                      onTap: _sending ? null : (empty ? () => setState(() => _recVideo = !_recVideo) : _send),
-                      icon: Icon(empty ? (_recVideo ? Icons.videocam : Icons.mic) : Icons.send,
-                          color: cs.onPrimary),
-                    );
-                    if (!empty || _sending) return button;
-                    // Удержание: запись звука/видео, отпустили — отправка; провели вверх — запись закрепляется
-                    // и останавливается только кнопкой.
-                    return GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onLongPressStart: (d) {
+                      onTap: () => setState(() => _recVideo = !_recVideo),
+                      onStart: () {
                         _recLocked = false;
-                        _recStartY = d.globalPosition.dy;
-                        HapticFeedback.mediumImpact();
                         if (_recVideo) {
                           _recordCircle(hold: true);
                         } else {
                           _startVoice();
                         }
                       },
-                      onLongPressMoveUpdate: (d) {
-                        final y = _recStartY;
-                        if (!_recLocked && y != null && y - d.globalPosition.dy > 70) {
-                          setState(() => _recLocked = true);
-                          HapticFeedback.heavyImpact();
-                        }
-                      },
-                      onLongPressEnd: (_) {
+                      onLock: () => setState(() => _recLocked = true),
+                      onEnd: () {
                         if (_recLocked) return; // закреплено: остановит сам пользователь
                         if (_recVideo) {
                           _circleFinish.value++;
@@ -2295,7 +2288,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                           _finishVoice(send: true);
                         }
                       },
-                      child: button,
                     );
                   },
                 ),
@@ -3374,5 +3366,101 @@ class _InputSafeArea extends StatelessWidget {
         top: false,
         bottom: !emojiOpen && MediaQuery.viewInsetsOf(context).bottom == 0,
         child: child,
+      );
+}
+
+/// Кнопка записи: тап, удержание с анимацией (рост в 2 раза и круг загрузки), свайп вверх — закрепить.
+class _RecordHold extends StatefulWidget {
+  final Widget icon;
+  final Color color;
+  final VoidCallback onTap;
+  final VoidCallback onStart;
+  final VoidCallback onLock;
+  final VoidCallback onEnd;
+  const _RecordHold({required this.icon, required this.color, required this.onTap, required this.onStart, required this.onLock, required this.onEnd});
+
+  @override
+  State<_RecordHold> createState() => _RecordHoldState();
+}
+
+class _RecordHoldState extends State<_RecordHold> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 700));
+  bool _down = false, _started = false, _locked = false;
+  double _downY = 0;
+  DateTime _downAt = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    _c.addStatusListener((s) {
+      if (s == AnimationStatus.completed && _down && !_started) {
+        _started = true;
+        HapticFeedback.mediumImpact();
+        widget.onStart();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  void _up() {
+    if (!_down) return;
+    _down = false;
+    if (_started) {
+      if (!_locked) widget.onEnd();
+    } else if (DateTime.now().difference(_downAt) < const Duration(milliseconds: 300)) {
+      widget.onTap();
+    }
+    _started = false;
+    _locked = false;
+    _c.reverse();
+  }
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: 50,
+        height: 50,
+        child: Listener(
+          behavior: HitTestBehavior.opaque,
+          onPointerDown: (e) {
+            _down = true;
+            _started = false;
+            _locked = false;
+            _downY = e.position.dy;
+            _downAt = DateTime.now();
+            _c.forward();
+          },
+          onPointerMove: (e) {
+            if (_started && !_locked && _downY - e.position.dy > 70) {
+              _locked = true;
+              HapticFeedback.heavyImpact();
+              widget.onLock();
+            }
+          },
+          onPointerUp: (_) => _up(),
+          onPointerCancel: (_) => _up(),
+          child: AnimatedBuilder(
+            animation: _c,
+            builder: (_, __) {
+              final scale = 1 + _c.value; // до 2x
+              return OverflowBox(
+                maxWidth: 110,
+                maxHeight: 110,
+                child: Transform.scale(
+                  scale: scale,
+                  child: Stack(alignment: Alignment.center, children: [
+                    GlassCircleButton(size: 50, color: widget.color, icon: widget.icon),
+                    if (_c.value > 0 && !_started)
+                      SizedBox(width: 50, height: 50, child: CircularProgressIndicator(value: _c.value, strokeWidth: 2.5, color: Colors.white)),
+                  ]),
+                ),
+              );
+            },
+          ),
+        ),
       );
 }

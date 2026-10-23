@@ -141,10 +141,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     context,
                     '1',
                     tr('Имя и фамилия'),
-                    Row(children: [
+                    AutofillGroup(child: Row(children: [
                       Expanded(
                         child: TextField(
                           controller: _first,
+                          autofillHints: const [AutofillHints.givenName],
                           textCapitalization: TextCapitalization.words,
                           decoration: InputDecoration(hintText: tr('Имя')),
                           onChanged: (_) => setState(() {}),
@@ -154,12 +155,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       Expanded(
                         child: TextField(
                           controller: _last,
+                          autofillHints: const [AutofillHints.familyName],
                           textCapitalization: TextCapitalization.words,
                           decoration: InputDecoration(hintText: tr('Фамилия')),
                           onChanged: (_) => setState(() {}),
                         ),
                       ),
-                    ]),
+                    ])),
                   ),
                   // 2. Вид стрельбы.
                   _section(

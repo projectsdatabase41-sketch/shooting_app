@@ -77,6 +77,23 @@ class UserProfile {
   static String firstNameOf(LocalDbService db) => _read(db, _kFirst);
   static String lastNameOf(LocalDbService db) => _read(db, _kLast);
   static String genderOf(LocalDbService db) => _read(db, _kGender); // 'm' | 'f'
+
+  /// Подходит ли упражнение по данным профиля (вид стрельбы и пол). Профиль не заполнен — подходит всё.
+  static bool exerciseRelevant(LocalDbService db, String targetFaceCode, String genderName) {
+    final disc = disciplinesOf(db);
+    if (disc.isNotEmpty) {
+      final group = targetFaceCode.startsWith('rifle')
+          ? 'rifle'
+          : targetFaceCode.startsWith('pistol')
+              ? 'pistol'
+              : null;
+      if (group != null && !disc.contains(group)) return false;
+    }
+    final g = genderOf(db);
+    if (g == 'm' && genderName == 'female') return false;
+    if (g == 'f' && genderName == 'male') return false;
+    return true;
+  }
   static int? birthYearOf(LocalDbService db) => birthDateOf(db)?.year ?? int.tryParse(_read(db, _kYear));
 
   /// Полная дата рождения; `null`, если указан только год (старый профиль).

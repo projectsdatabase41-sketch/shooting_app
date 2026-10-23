@@ -744,8 +744,22 @@ class ChatAuthService {
 
   /// Добавить в друзья: 'accepted' (встречная заявка — сразу дружба),
   /// 'pending' (ждём ответа) или 'blocked'.
-  Future<String> requestFriend(String userId) async =>
-      '${await _rpc('request_friend', {'p_user': userId})}'.replaceAll('"', '');
+  /// Мои отправленные заявки (ждут ответа) — чтобы кнопка показывала «отправлено» и умела отменять.
+  static Set<String> outgoingIds = {};
+
+  Future<String> requestFriend(String userId) async {
+    final r = '${await _rpc('request_friend', {'p_user': userId})}'.replaceAll('"', '');
+    if (r == 'pending') {
+      outgoingIds.add(userId);
+    } else if (r == 'accepted') {
+      outgoingIds.remove(userId);
+      friendIds.add(userId);
+    }
+    return r;
+  }
+
+  /// Отменить свою заявку (и убрать из друзей): сервер удаляет связь в любом состоянии.
+  Future<void> cancelFriendRequest(String userId) => removeFriend(userId);
 
   Future<void> respondFriend(String userId, bool accept) =>
       _rpc('respond_friend', {'p_user': userId, 'p_accept': accept});
@@ -753,6 +767,7 @@ class ChatAuthService {
   Future<void> removeFriend(String userId) async {
     await _rpc('remove_friend', {'p_user': userId});
     friendIds.remove(userId);
+    outgoingIds.remove(userId);
   }
 
   /// Все связи: state — friend | incoming | outgoing.
@@ -779,6 +794,10 @@ class ChatAuthService {
     friendIds = {
       for (final f in list)
         if (f.state == 'friend') f.userId
+    };
+    outgoingIds = {
+      for (final f in list)
+        if (f.state == 'outgoing') f.userId
     };
     return list;
   }
