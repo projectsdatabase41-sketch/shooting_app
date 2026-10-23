@@ -130,6 +130,8 @@ class FinalsSnapshot {
       'spp': c.shotsPerShooter,
       'face': c.face.code,
       'fmt': c.format.id,
+      'vm': c.voiceAll ? 'all' : 'chief',
+      'hs': c.hostSilent,
       'rows': [
         for (final r in live)
           {

@@ -680,6 +680,9 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
   @override
   void initState() {
     super.initState();
+    c.voiceAll = FinalsPrefs.voiceAll(widget.store.db);
+    // Ведущий стреляет сам и есть жюри — говорит главный из жюри, у ведущего тишина.
+    c.hostSilent = widget.hostCompetitorId != null && widget.members.any((m) => m.role == FinalsRole.coach && m.status == 'accepted');
     c.addListener(_onChange);
     _timer = Timer.periodic(const Duration(seconds: 1), (_) => c.tick());
     _connect();
@@ -739,7 +742,7 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
 
   void _onChange() {
     if (!mounted) return;
-    if (FinalsPrefs.voice(widget.store.db)) {
+    if (FinalsPrefs.voice(widget.store.db) && (!c.hostSilent || c.voiceAll)) {
       final cmd = _phaseVoice.update(c.phase.name,
           secondsLeft: c.secondsLeft, announcing: c.announcing);
       if (cmd != null)
@@ -850,11 +853,51 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
   Timer? _retry;
   int _attempt = 0;
   bool _online = false;
+  final _tracker = AnnounceTracker();
+  final _phaseVoice = PhaseAnnouncer();
+  bool _chief = false; // главный из жюри: из жюри с наименьшим id (одинаково на всех телефонах)
+  bool _saved = false;
 
   @override
   void initState() {
     super.initState();
+    _findChief();
     _join();
+  }
+
+  Future<void> _findChief() async {
+    final all = await widget.service.members(widget.member.sessionId);
+    final jury = [for (final m in all) if (m.role == FinalsRole.coach && m.status == 'accepted') m.userId]..sort();
+    if (mounted) _chief = jury.isNotEmpty && jury.first == widget.member.userId;
+  }
+
+  /// Итог у участника: сохраняется в «Финалы» (по очкам из таблицы; координат выстрелов у гостя нет).
+  void _saveResult(FinalsSnapshot snap) {
+    if (_saved) return;
+    _saved = true;
+    final rows = [...snap.rows]..sort((a, b) => ((a['place'] ?? 99) as num).compareTo((b['place'] ?? 99) as num));
+    final rec = <String, dynamic>{
+      'format': snap.format,
+      'face': snap.face,
+      'finishedAt': DateTime.now().toUtc().toIso8601String(),
+      'custom': true,
+      'partial': true,
+      'standings': [
+        for (final r in rows)
+          {'id': r['id'], 'name': r['name'], 'place': r['place'], 'total': r['total'], 'user': r['id'] == widget.member.targetId}
+      ],
+      'shots': [
+        for (final r in rows)
+          for (var i = 0; i < (r['shots'] as List).length; i++)
+            {'who': r['id'], 'i': i, 'x': 0.0, 'y': 0.0, 's': (r['shots'] as List)[i], 't': 0}
+      ],
+      'log': const [],
+    };
+    final db = context.read<AppDataStore>().db;
+    FinalsRepository(db).save(rec);
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => FinalResultScreen(record: rec, readOnly: true)));
+    });
   }
 
   void _scheduleReconnect() {
@@ -885,7 +928,22 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
       ..addListener(() {
         if (!mounted) return;
         final snap = _guest?.snapshot;
-        // Озвучка и команды — только у ведущего (одна на всех); у гостя тишина.
+        if (snap != null) {
+          final db = context.read<AppDataStore>().db;
+          // Говорит ведущий; у гостя — только если включено «у всех» или он главный из жюри, а ведущий молчит.
+          final speak = FinalsPrefs.voice(db) && (snap.data['vm'] == 'all' || (snap.data['hs'] == true && _chief));
+          final announcing = snap.phase == 'loading' && snap.secondsLeft > 5;
+          final cmd = _phaseVoice.update(snap.phase, secondsLeft: snap.secondsLeft, announcing: announcing);
+          final text = _tracker.update(
+            [for (final r in snap.rows) AnnounceRow('${r['name']}', (r['total'] as num).toDouble(), r['active'] == true, isMe: r['id'] == widget.member.targetId)],
+            announcing: announcing,
+          );
+          if (speak) {
+            if (cmd != null) FinalsAnnouncer.say(db, cmd, refs: _phaseVoice.lastRef == null ? null : [_phaseVoice.lastRef!]);
+            if (text != null) FinalsAnnouncer.say(db, text, refs: _tracker.lastRefs);
+          }
+          if (snap.phase == 'finished') _saveResult(snap);
+        }
         setState(() => _last = snap ?? _last);
       });
     _guest = g;

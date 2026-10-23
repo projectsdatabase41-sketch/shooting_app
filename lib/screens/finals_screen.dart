@@ -167,6 +167,7 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
         )
       : widget.format;
   late bool _voice = FinalsPrefs.voice(context.read<AppDataStore>().db);
+  late bool _voiceAll = FinalsPrefs.voiceAll(context.read<AppDataStore>().db);
 
   // Семь соперников: обычные боты или чемпионы (по их статистике).
   late final List<_Opp> _opps = [for (final n in _names) _Opp(n)];
@@ -455,6 +456,17 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
                     FinalsPrefs.setVoice(store.db, v);
                   },
                 ),
+                if (_voice)
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(tr('Озвучка у всех участников')),
+                    subtitle: Text(tr('Выключено: говорит только ведущий (если он стреляет — главный из жюри)')),
+                    value: _voiceAll,
+                    onChanged: (v) {
+                      setState(() => _voiceAll = v);
+                      FinalsPrefs.setVoiceAll(store.db, v);
+                    },
+                  ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.record_voice_over_outlined),

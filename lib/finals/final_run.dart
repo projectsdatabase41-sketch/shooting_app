@@ -117,6 +117,10 @@ class FinalRunController extends ChangeNotifier {
   })  : humans = {userId, ...otherHumans},
         secondsLeft = format.sightingSeconds;
 
+  /// Озвучка у всех участников / ведущий молчит (говорит главный жюри) — раздаётся гостям в снимке.
+  bool voiceAll = false;
+  bool hostSilent = false;
+
   FinalCompetitor get user => engine.byId(userId);
 
   /// Может ли человек сейчас ставить выстрел.

@@ -73,6 +73,19 @@ class FinalsPrefs {
     return rows.isEmpty || '${rows.first['hex']}' != '0';
   }
 
+  static const _kVoiceAll = 'finals_voice_all';
+
+  /// Озвучка у всех участников (иначе — только у ведущего или, если он стреляет сам, у главного жюри).
+  static bool voiceAll(LocalDbService db) {
+    final rows = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [_kVoiceAll]);
+    return rows.isNotEmpty && '${rows.first['hex']}' == '1';
+  }
+
+  static void setVoiceAll(LocalDbService db, bool v) => db.db.execute(
+        'INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex',
+        [_kVoiceAll, v ? '1' : '0'],
+      );
+
   static void setVoice(LocalDbService db, bool v) => db.db.execute(
         'INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex',
         [_kVoice, v ? '1' : '0'],
