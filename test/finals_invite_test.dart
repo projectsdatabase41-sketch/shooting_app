@@ -122,7 +122,7 @@ void spectatorTest() {
     await Future<void>.delayed(const Duration(milliseconds: 50));
     expect(seenByHost, ['Зритель:clap']);
     expect(seenByGuest, ['Зритель:clap']);
-    final stranger = FinalsGuest(channel: guestCh, userId: 'чужой')..cheer('cup');
+    FinalsGuest(channel: guestCh, userId: 'чужой')..cheer('cup');
     await Future<void>.delayed(const Duration(milliseconds: 50));
     expect(seenByHost.length, 1);
     host.dispose();
