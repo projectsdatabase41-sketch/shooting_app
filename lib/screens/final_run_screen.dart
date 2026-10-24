@@ -3,7 +3,7 @@ import '../widgets/app_backdrop.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
 
 import '../finals/announcer.dart';
@@ -95,11 +95,10 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
     super.dispose();
   }
 
-  /// «Готов»: только теперь идёт отсчёт, звучат команды и начинается финал.
+  /// «Готов»: только теперь идёт отсчёт — начинается пристрелка (5 минут), звучит «Пристрелка», затем команды.
   void _begin() {
     if (_started) return;
     setState(() => _started = true);
-    c.skipSighting();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) => c.tick());
   }
 
@@ -297,7 +296,9 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
           Expanded(
             child: Text(
               sighting
-                  ? tr('Освойтесь с мишенью — выстрелы не идут в зачёт. Время и команды начнутся после «Готов»')
+                  ? (_started
+                      ? tr('Пристрелка: выстрелы не идут в зачёт')
+                      : tr('Освойтесь с мишенью — выстрелы не идут в зачёт. Время и команды начнутся после «Готов»'))
                   : c.userCanShoot
                       ? tr('Осталось выстрелов: {n}', {'n': c.userShotsLeft}) +
                           (marks.isEmpty
@@ -307,7 +308,8 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
               style: theme.textTheme.bodyMedium,
             ),
           ),
-          if (sighting) FilledButton(onPressed: _begin, child: Text(tr('Готов'))),
+          if (sighting && !_started) FilledButton(onPressed: _begin, child: Text(tr('Готов'))),
+          if (sighting && _started) TextButton(onPressed: c.skipSighting, child: Text(tr('Пропустить пристрелку'))),
           if (!c.user.active && c.phase != RunPhase.finished)
             TextButton(onPressed: c.fastForward, child: Text(tr('Завершить результат'))),
           TextButton.icon(
@@ -415,13 +417,17 @@ class _ShotPadState extends State<ShotPad> {
 
   double _k(Size s) => s.shortestSide / 2 / widget.face.faceRadiusMm;
 
+  /// Для тестов: текущий масштаб.
+  @visibleForTesting
+  double get debugScale => _scale;
+
   Offset _toMm(Offset p, Size s) {
     final k = _k(s) * _scale;
     return Offset((p.dx - s.width / 2 - _pan.dx) / k, -(p.dy - s.height / 2 - _pan.dy) / k);
   }
 
   Offset _clampPan(Offset p, Size s) {
-    final lim = (_scale - 1) * s.shortestSide / 2 + s.shortestSide * 0.1;
+    final lim = (_scale - 1) * s.shortestSide / 2;
     return Offset(p.dx.clamp(-lim, lim).toDouble(), p.dy.clamp(-lim, lim).toDouble());
   }
 
@@ -665,7 +671,7 @@ class _ShotPadState extends State<ShotPad> {
                         k: k * _scale,
                         center: center,
                         finger: f,
-                        holeR: 4,
+                        holeR: math.max(3.0, 2.25 * k * _scale),
                         labels: [for (final m in widget.marks) formatScore(scoreForPoint(m.dx, m.dy, widget.face), widget.face)]),
                   ),
                 ),

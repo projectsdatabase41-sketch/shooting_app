@@ -42,6 +42,8 @@ String friendlyError(Object e) {
   // Сообщение, которое мы сами написали по-русски и коротко, — уже человеческое.
   if (RegExp(r'[А-Яа-яЁё]').hasMatch(raw) &&
       raw.length < 200 &&
+      !raw.contains('{') &&
+      !s.contains('script') &&
       !s.contains('exception')) return raw;
 
   if (RegExp(r'\b(401|403)\b').hasMatch(s) ||

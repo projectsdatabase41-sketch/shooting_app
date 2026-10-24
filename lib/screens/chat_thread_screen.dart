@@ -1079,7 +1079,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       await widget.sync.retry(m);
     } catch (e, st) {
       if (mounted) {
-        DemoMode.reportError(context, tr('Не отправлено: {e}', {'e': friendlyError(e)}), 'ChatThreadScreen', e, st);
+        DemoMode.reportError(context, tr('Ошибка отправки сообщения'), 'ChatThreadScreen', e, st);
       }
     } finally {
       _reload();
@@ -1463,7 +1463,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _scrollToEnd();
     } catch (e, st) {
       if (mounted) {
-        DemoMode.reportError(context, tr('Не отправлено: {e}', {'e': friendlyError(e)}), 'ChatThreadScreen', e, st);
+        DemoMode.reportError(context, tr('Ошибка отправки сообщения'), 'ChatThreadScreen', e, st);
       }
     } finally {
       if (mounted) {
@@ -1761,7 +1761,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _scrollToEnd();
     } catch (e, st) {
       if (mounted) {
-        DemoMode.reportError(context, tr('Не отправлено: {e}', {'e': friendlyError(e)}), 'ChatThreadScreen', e, st);
+        DemoMode.reportError(context, tr('Ошибка отправки сообщения'), 'ChatThreadScreen', e, st);
       }
     } finally {
       if (mounted) {
@@ -2030,7 +2030,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _scrollToEnd();
     } catch (e, st) {
       if (mounted) {
-        DemoMode.reportError(context, tr('Не отправлено: {e}', {'e': friendlyError(e)}), 'ChatThreadScreen', e, st);
+        DemoMode.reportError(context, tr('Ошибка отправки сообщения'), 'ChatThreadScreen', e, st);
       }
     } finally {
       if (mounted) {
