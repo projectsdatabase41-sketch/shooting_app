@@ -419,11 +419,90 @@ class _ShotPadState extends State<ShotPad> {
   static const double _gap = 125; // от пальца до центра лупы
   Offset? _finger; // px
 
+  /// Зум мишени: масштаб (1…6) и сдвиг центра в пикселях. Один палец — лупа и выстрел; второй палец —
+  /// лупа пропадает, щипок меняет масштаб; выстрела нет, пока не отпустят все пальцы и не будет нового одиночного касания.
+  double _scale = 1;
+  Offset _pan = Offset.zero;
+  final Map<int, Offset> _pointers = {};
+  bool _zoomMode = false;
+  double _zStartDist = 1, _zStartScale = 1;
+  Offset _zStartPan = Offset.zero, _zStartFocal = Offset.zero;
+  static const double _maxScale = 6;
+
   double _k(Size s) => s.shortestSide / 2 / widget.face.faceRadiusMm;
 
   Offset _toMm(Offset p, Size s) {
-    final k = _k(s);
-    return Offset((p.dx - s.width / 2) / k, -(p.dy - s.height / 2) / k);
+    final k = _k(s) * _scale;
+    return Offset((p.dx - s.width / 2 - _pan.dx) / k, -(p.dy - s.height / 2 - _pan.dy) / k);
+  }
+
+  Offset _clampPan(Offset p, Size s) {
+    final lim = (_scale - 1) * s.shortestSide / 2 + s.shortestSide * 0.1;
+    return Offset(p.dx.clamp(-lim, lim).toDouble(), p.dy.clamp(-lim, lim).toDouble());
+  }
+
+  void _setScale(double v, Size s) {
+    setState(() {
+      _scale = v.clamp(1.0, _maxScale).toDouble();
+      _pan = _clampPan(_pan, s);
+    });
+  }
+
+  void _pointerDown(PointerDownEvent e, Size s) {
+    _pointers[e.pointer] = e.localPosition;
+    if (_pointers.length >= 2) {
+      // Появился второй палец: лупа пропадает, включается зум.
+      final pts = _pointers.values.take(2).toList();
+      _zoomMode = true;
+      _zStartDist = math.max((pts[0] - pts[1]).distance, 1);
+      _zStartScale = _scale;
+      _zStartPan = _pan;
+      _zStartFocal = (pts[0] + pts[1]) / 2;
+      if (_finger != null) setState(() => _finger = null);
+      widget.onHold(true);
+      return;
+    }
+    if (_zoomMode) return; // остался один палец после зума: лупа не включается
+    _down(e.localPosition, s);
+  }
+
+  void _pointerMove(PointerMoveEvent e, Size s) {
+    if (!_pointers.containsKey(e.pointer)) return;
+    _pointers[e.pointer] = e.localPosition;
+    if (_zoomMode) {
+      if (_pointers.length >= 2) {
+        final pts = _pointers.values.take(2).toList();
+        final dist = math.max((pts[0] - pts[1]).distance, 1);
+        final focal = (pts[0] + pts[1]) / 2;
+        final ns = (_zStartScale * dist / _zStartDist).clamp(1.0, _maxScale).toDouble();
+        final c = Offset(s.width / 2, s.height / 2);
+        // Точка мишени под начальной серединой пальцев остаётся под их текущей серединой.
+        final world = (_zStartFocal - c - _zStartPan) / _zStartScale;
+        setState(() {
+          _scale = ns;
+          _pan = _clampPan(focal - c - world * ns, s);
+        });
+      }
+      return;
+    }
+    if (_finger != null) setState(() => _finger = e.localPosition);
+  }
+
+  void _pointerUp(PointerEvent e, Size s, {required bool cancel}) {
+    _pointers.remove(e.pointer);
+    if (_zoomMode) {
+      if (_pointers.isEmpty) {
+        _zoomMode = false; // всё отпущено: выстрела нет, лупа — только на новое одиночное касание
+        widget.onHold(false);
+      }
+      return;
+    }
+    if (cancel) {
+      setState(() => _finger = null);
+      widget.onHold(false);
+    } else {
+      _up(s);
+    }
   }
 
   void _down(Offset f, Size s) {
@@ -573,35 +652,58 @@ class _ShotPadState extends State<ShotPad> {
       final f = _finger;
       _padSize = size;
       WidgetsBinding.instance.addPostFrameCallback((_) => _syncOverlay());
-      return Listener(
-        onPointerDown: (e) => _down(e.localPosition, size),
-        onPointerMove: (e) {
-          if (_finger != null) setState(() => _finger = e.localPosition);
-        },
-        onPointerUp: (_) => _up(size),
-        onPointerCancel: (_) {
-          setState(() => _finger = null);
-          widget.onHold(false);
-        },
-        child: Stack(clipBehavior: Clip.none, children: [
-          Positioned.fill(
-            child: CustomPaint(
-              painter: TargetPainter(
-                face: widget.face,
-                colors: TargetColorScheme.defaultScheme,
-                visibleShots: const [],
-                selectedShot: null,
-                currentSeriesNo: 1,
-              ),
+      final center = Offset(size.width / 2, size.height / 2) + _pan;
+      return Stack(clipBehavior: Clip.none, children: [
+        Positioned.fill(
+          child: Listener(
+            onPointerDown: (e) => _pointerDown(e, size),
+            onPointerMove: (e) => _pointerMove(e, size),
+            onPointerUp: (e) => _pointerUp(e, size, cancel: false),
+            onPointerCancel: (e) => _pointerUp(e, size, cancel: true),
+            child: ClipRect(
+              child: Stack(clipBehavior: Clip.none, children: [
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: TargetPainter(
+                      face: widget.face,
+                      colors: TargetColorScheme.defaultScheme,
+                      visibleShots: const [],
+                      selectedShot: null,
+                      currentSeriesNo: 1,
+                      zoom: _scale,
+                      pan: _pan,
+                    ),
+                  ),
+                ),
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: ShotMarkerPainter(widget.marks,
+                        k: k * _scale,
+                        center: center,
+                        finger: f,
+                        holeR: 4,
+                        labels: [for (final m in widget.marks) formatScore(scoreForPoint(m.dx, m.dy, widget.face), widget.face)]),
+                  ),
+                ),
+              ]),
             ),
           ),
-          Positioned.fill(
-            child: CustomPaint(
-              painter: ShotMarkerPainter(widget.marks, k: k, center: Offset(size.width / 2, size.height / 2), finger: f, holeR: 4, labels: [for (final m in widget.marks) formatScore(scoreForPoint(m.dx, m.dy, widget.face), widget.face)]),
+        ),
+        // Справа вертикальный ползунок зума (то же, что щипок двумя пальцами).
+        Positioned(
+          right: 0,
+          top: size.height * 0.15,
+          bottom: size.height * 0.15,
+          width: 36,
+          child: RotatedBox(
+            quarterTurns: 3,
+            child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(trackHeight: 3, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 9)),
+              child: Slider(min: 1, max: _maxScale, value: _scale, onChanged: (v) => _setScale(v, size)),
             ),
           ),
-        ]),
-      );
+        ),
+      ]);
     });
   }
 }

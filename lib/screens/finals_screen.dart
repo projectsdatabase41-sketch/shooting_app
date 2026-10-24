@@ -573,7 +573,7 @@ class _InvitesState extends State<_Invites> {
             subtitle: Text(switch (i.role) {
               FinalsRole.athlete => tr('Вы — финалист'),
               FinalsRole.helper => tr('Вы — помощник'),
-              FinalsRole.coach => tr('Вы — жюри'),
+              FinalsRole.coach => tr('Вы — судья'),
               FinalsRole.spectator => tr('Вы — зритель'),
             }),
             trailing: FilledButton(
@@ -636,7 +636,7 @@ class _PublicBoardState extends State<_PublicBoard> {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
                 if (r.region.isNotEmpty) Text(r.region, style: theme.textTheme.bodySmall),
                 const SizedBox(height: 8),
-                Text(tr('Жюри'), style: theme.textTheme.labelLarge),
+                Text(tr('Судья'), style: theme.textTheme.labelLarge),
                 Text(r.jury.isEmpty ? '—' : r.jury.join(', ')),
                 const SizedBox(height: 8),
                 Text(tr('Участники'), style: theme.textTheme.labelLarge),

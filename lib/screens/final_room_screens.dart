@@ -16,7 +16,9 @@ import '../finals/finals_repository.dart';
 import '../finals/finals_session_service.dart';
 import '../i18n/i18n.dart';
 import '../models/chat_contact.dart';
+import '../models/target_color_scheme.dart';
 import '../models/target_face.dart';
+import '../painters/target_painter.dart';
 import '../services/chat_auth_service.dart';
 import '../services/chat_messages_repository.dart';
 import '../services/chat_sync_service.dart';
@@ -64,17 +66,19 @@ String _nextLabel(String phase) => switch (phase) {
       _ => '',
     };
 
-/// Общий экран финала для всех ролей: хозяин (состояние из своего контроллера)
-/// и гости (состояние по сети). Спортсмен видит свою мишень, тренер и помощник
-/// — список всех людей-участников и вводят выстрелы за любого.
-class FinalRoomView extends StatelessWidget {
+/// Общий экран финала для всех ролей, устроен как в пневматике: справа (главная страница) своя мишень
+/// и мишени соперников, слева (свайп вправо) таблица результатов по среднему выстрелу.
+/// Судья (красная рамка на весь финал) нажимает на спортсмена в таблице и вводит выстрелы на его мишени
+/// на той же странице, без выезжающих окон. Зритель видит мишени всех и жмёт кричалки.
+class FinalRoomView extends StatefulWidget {
   final FinalsSnapshot snapshot;
   final FinalsRole role;
   final String? ownId; // спортсмен: его id в финале
   final void Function(String who, Offset mm) onShoot;
   final void Function(String who) onUndo;
   final VoidCallback? onNext; // команды: заряжай / старт / стоп
-  final VoidCallback? onPause;
+  final VoidCallback? onPause; // судья и ведущий: остановить/продолжить время
+  final VoidCallback? onRequestPause; // спортсмен: остановить время при неисправности
   final VoidCallback? onLeave;
 
   /// Кричалки: лента реакций у всех, кнопки — у зрителя.
@@ -93,313 +97,375 @@ class FinalRoomView extends StatelessWidget {
     this.ownId,
     this.onNext,
     this.onPause,
+    this.onRequestPause,
     this.onLeave,
     this.cheers,
     this.onCheer,
     this.offline = false,
   });
 
-  Future<void> _openInput(
-      BuildContext context, Map<String, dynamic> row) async {
-    await showGlassSheet<void>(
+  @override
+  State<FinalRoomView> createState() => _FinalRoomViewState();
+}
+
+class _FinalRoomViewState extends State<FinalRoomView> {
+  final _page = PageController(initialPage: 1);
+  String? _sel; // судья: чьи выстрелы вводит
+  bool _holding = false;
+  final Map<String, List<Offset>> _local = {}; // свои отметки сразу, не дожидаясь снимка от ведущего
+  String _localKey = '';
+
+  bool get _judge => widget.role == FinalsRole.coach || widget.role == FinalsRole.helper;
+
+  @override
+  void dispose() {
+    _page.dispose();
+    super.dispose();
+  }
+
+  String? _selectedId(FinalsSnapshot s) {
+    if (!_judge) return widget.ownId;
+    final cur = _sel == null ? null : s.row(_sel!);
+    if (cur != null && cur['human'] == true && cur['active'] == true) return _sel;
+    for (final r in s.rows) {
+      if (r['human'] == true && r['active'] == true) return '${r['id']}';
+    }
+    return null;
+  }
+
+  List<Offset> _marks(String id, Map<String, dynamic>? row) {
+    final staged = [for (final m in (row?['staged'] as List? ?? const [])) Offset((m[0] as num).toDouble(), (m[1] as num).toDouble())];
+    final local = _local[id] ?? const <Offset>[];
+    return staged.length >= local.length ? staged : local;
+  }
+
+  void _shoot(String id, Offset mm) {
+    widget.onShoot(id, mm);
+    setState(() => (_local[id] ??= []).add(mm));
+  }
+
+  void _undo(String id) {
+    widget.onUndo(id);
+    setState(() {
+      final l = _local[id];
+      if (l != null && l.isNotEmpty) l.removeLast();
+    });
+  }
+
+  Future<void> _askPause() async {
+    final ok = await showGlassDialog<bool>(
       context: context,
-      isScrollControlled: true,
-      builder: (_) => _InputSheet(
-          snapshot: snapshot,
-          who: '${row['id']}',
-          name: '${row['name']}',
-          onShoot: onShoot,
-          onUndo: onUndo),
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('Остановить время (неисправность)')),
+        content: Text(tr('Остановить время для всех? Продолжит судья.')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Отмена'))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Остановить'))),
+        ],
+      ),
     );
+    if (ok == true) widget.onRequestPause?.call();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final s = snapshot;
-    final rows = s.rows;
-    final own = ownId == null ? null : s.row(ownId!);
-    final inputRows = [
-      for (final r in rows)
-        if (r['human'] == true) r
-    ];
-    return Scaffold(
+    final s = widget.snapshot;
+    final key = '${s.round}:${s.phase}';
+    if (key != _localKey) {
+      _local.clear(); // новый раунд — отметки снова берутся из снимка
+      _localKey = key;
+    }
+    final canRequestPause = widget.onRequestPause != null && !s.paused && (s.phase == 'shooting' || s.phase == 'grace');
+    final own = widget.ownId == null ? null : s.row(widget.ownId!);
+    final label = _judge
+        ? tr('Судья')
+        : widget.role == FinalsRole.spectator
+            ? tr('Зритель')
+            : tr('Участник') + (own == null ? '' : ' · ${own['name']}');
+    final body = Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
         title: Row(children: [
-          Expanded(
-              child: Text(_bannerOf(s),
-                  style: theme.textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w600),
-                  overflow: TextOverflow.ellipsis)),
-          Text(_timeOf(s),
-              style: theme.textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w800)),
+          Expanded(child: Text(_bannerOf(s), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
+          Text(_timeOf(s), style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
         ]),
         actions: [
-          if (onPause != null)
-            IconButton(
-                icon: Icon(s.paused ? Icons.play_arrow : Icons.pause),
-                onPressed: onPause),
-          if (onLeave != null)
-            IconButton(
-                tooltip: tr('Покинуть финал'),
-                icon: const Icon(Icons.logout),
-                onPressed: onLeave),
+          if (widget.onPause != null) IconButton(icon: Icon(s.paused ? Icons.play_arrow : Icons.pause), onPressed: widget.onPause),
+          if (canRequestPause) IconButton(tooltip: tr('Остановить время (неисправность)'), icon: const Icon(Icons.pause_circle_outline), onPressed: _askPause),
+          if (widget.onLeave != null) IconButton(tooltip: tr('Покинуть финал'), icon: const Icon(Icons.logout), onPressed: widget.onLeave),
         ],
       ),
-      body: ListView(
-        padding: EdgeInsets.fromLTRB(12,
-            MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 12, 24),
-        children: [
-          if (offline)
-            Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                  color: cs.errorContainer,
-                  borderRadius: BorderRadius.circular(12)),
-              child: Row(children: [
-                Icon(Icons.wifi_off, color: cs.onErrorContainer, size: 18),
-                const SizedBox(width: 8),
-                Expanded(
-                    child: Text(tr('Нет связи — подключаемся снова'),
-                        style: TextStyle(color: cs.onErrorContainer))),
-              ]),
+      body: Column(children: [
+        Expanded(
+          child: PageView(
+            controller: _page,
+            physics: _holding ? const NeverScrollableScrollPhysics() : null,
+            children: [_table(context, s), _main(context, s)],
+          ),
+        ),
+        SafeArea(
+          top: false,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            color: _judge ? Colors.red.shade700 : theme.colorScheme.primaryContainer,
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w800, color: _judge ? Colors.white : theme.colorScheme.onPrimaryContainer),
             ),
-          if (onNext != null && s.phase != 'finished')
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: SizedBox(
-                height: 56,
-                child: FilledButton(
-                  onPressed: onNext,
-                  child: Text(_nextLabel(s.phase),
-                      style: const TextStyle(
-                          fontSize: 20, fontWeight: FontWeight.w800)),
+          ),
+        ),
+      ]),
+    );
+    if (!_judge) return body;
+    // Судье — красная рамка экрана на всём протяжении финала.
+    return Stack(children: [
+      body,
+      Positioned.fill(
+        child: IgnorePointer(
+          child: DecoratedBox(decoration: BoxDecoration(border: Border.all(color: Colors.red.shade700, width: 5))),
+        ),
+      ),
+    ]);
+  }
+
+  EdgeInsets _pad(BuildContext context) =>
+      EdgeInsets.fromLTRB(12, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 12, 12);
+
+  /// Слева: таблица по среднему выстрелу. Судья нажимает на спортсмена — открывается его мишень.
+  Widget _table(BuildContext context, FinalsSnapshot s) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final rows = s.rows;
+    final sel = _selectedId(s);
+    return ListView(
+      padding: _pad(context),
+      children: [
+        if (_judge)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(tr('Нажмите на спортсмена — откроется его мишень'), style: theme.textTheme.bodySmall),
+          ),
+        for (var i = 0; i < rows.length; i++)
+          Opacity(
+            opacity: rows[i]['active'] == true ? 1 : 0.5,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: _judge && rows[i]['human'] == true && rows[i]['active'] == true
+                  ? () {
+                      setState(() => _sel = '${rows[i]['id']}');
+                      _page.animateToPage(1, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+                    }
+                  : null,
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: rows[i]['id'] == widget.ownId || rows[i]['id'] == sel
+                      ? cs.primary.withValues(alpha: 0.16)
+                      : cs.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(12),
                 ),
+                child: Row(children: [
+                  SizedBox(width: 26, child: Text('${rows[i]['place'] ?? (i + 1)}', style: const TextStyle(fontWeight: FontWeight.w800))),
+                  Expanded(child: Text('${rows[i]['name']}', overflow: TextOverflow.ellipsis)),
+                  Text(((rows[i]['shots'] as List).isEmpty) ? '' : '${tr('ср')} ${(rows[i]['avg'] as num).toStringAsFixed(2)}  ', style: theme.textTheme.bodySmall),
+                  Text((rows[i]['total'] as num).toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.w700)),
+                ]),
               ),
             ),
-          if (cheers != null)
-            ListenableBuilder(
-              listenable: cheers!,
-              builder: (_, __) => cheers!.items.isEmpty
-                  ? const SizedBox.shrink()
-                  : Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Wrap(spacing: 6, runSpacing: 4, children: [
-                        for (final i in cheers!.items)
-                          Chip(
-                            visualDensity: VisualDensity.compact,
-                            label: Text('${CheerFeed.kinds[i.kind]!.$1} ${i.name}'),
-                          ),
-                      ]),
-                    ),
+          ),
+      ],
+    );
+  }
+
+  Widget _cardsRow(TargetFace face, List<Map<String, dynamic>> list, double height) => SizedBox(
+        height: height,
+        child: Row(children: [
+          for (final r in list) Expanded(child: _RoomCard(face: face, row: r, me: r['id'] == widget.ownId)),
+        ]),
+      );
+
+  /// Справа: мишени. Спортсмен/судья — крупная мишень, вокруг мишени остальных; зритель — все мишени сеткой.
+  Widget _main(BuildContext context, FinalsSnapshot s) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final h = MediaQuery.sizeOf(context).height;
+    final face = TargetFace.byCode(s.face);
+    final selId = widget.role == FinalsRole.spectator ? null : _selectedId(s);
+    final selRow = selId == null ? null : s.row(selId);
+    final others = [for (final r in s.rows) if ('${r['id']}' != selId) r];
+    final top = others.take(3).toList();
+    final rest = others.skip(3).toList();
+    final top0 = MediaQuery.paddingOf(context).top + GlassHeader.height;
+    final marks = selId == null ? const <Offset>[] : _marks(selId, selRow);
+    final canShoot = selRow != null && selRow['can'] == true && !s.paused && marks.length < s.shotsPerShooter;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(8, top0 + 4, 8, 4),
+      child: Column(children: [
+        if (widget.offline)
+          Container(
+            margin: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: cs.errorContainer, borderRadius: BorderRadius.circular(12)),
+            child: Row(children: [
+              Icon(Icons.wifi_off, color: cs.onErrorContainer, size: 18),
+              const SizedBox(width: 8),
+              Expanded(child: Text(tr('Нет связи — подключаемся снова'), style: TextStyle(color: cs.onErrorContainer))),
+            ]),
+          ),
+        if (widget.onNext != null && s.phase != 'finished')
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: SizedBox(
+              height: 48,
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: widget.onNext,
+                child: Text(_nextLabel(s.phase), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+              ),
             ),
-          if (onCheer != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-                for (final e in CheerFeed.kinds.entries)
-                  IconButton.filledTonal(
-                    onPressed: () => onCheer!(e.key),
-                    icon: Text(e.value.$1, style: const TextStyle(fontSize: 24)),
+          ),
+        if (s.paused)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(
+              s.data['pb'] != null ? tr('Пауза: время остановил {name}', {'name': s.data['pb']}) : tr('Пауза'),
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleMedium,
+            ),
+          ),
+        if (widget.cheers != null)
+          ListenableBuilder(
+            listenable: widget.cheers!,
+            builder: (_, __) => widget.cheers!.items.isEmpty
+                ? const SizedBox.shrink()
+                : Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Wrap(spacing: 6, runSpacing: 4, children: [
+                      for (final i in widget.cheers!.items)
+                        Chip(visualDensity: VisualDensity.compact, label: Text('${CheerFeed.kinds[i.kind]!.$1} ${i.name}')),
+                    ]),
                   ),
-              ]),
+          ),
+        if (widget.onCheer != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+              for (final e in CheerFeed.kinds.entries)
+                IconButton.filledTonal(onPressed: () => widget.onCheer!(e.key), icon: Text(e.value.$1, style: const TextStyle(fontSize: 24))),
+            ]),
+          ),
+        if (widget.role == FinalsRole.spectator)
+          Expanded(
+            child: GridView.count(
+              crossAxisCount: 2,
+              childAspectRatio: 1.0,
+              children: [for (final r in s.rows) _RoomCard(face: face, row: r, me: false)],
             ),
-          if (s.paused)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(tr('Пауза'),
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.titleMedium),
-            ),
-          // Спортсмен: своя мишень сразу.
-          if (role == FinalsRole.athlete && own != null) ...[
-            Text('${own['name']}',
-                textAlign: TextAlign.center, style: theme.textTheme.titleSmall),
-            SizedBox(
-              height: MediaQuery.sizeOf(context).height * 0.40,
+          )
+        else ...[
+          if (top.isNotEmpty) _cardsRow(face, top, h * 0.13),
+          if (selRow != null) ...[
+            Text('${selRow['name']}', style: theme.textTheme.titleSmall),
+            Expanded(
               child: ShotPad(
-                face: TargetFace.byCode(s.face),
-                marks: [
-                  for (final m in (own['staged'] as List? ?? const []))
-                    Offset((m[0] as num).toDouble(), (m[1] as num).toDouble())
-                ],
-                enabled: own['can'] == true &&
-                    !s.paused &&
-                    (own['staged'] as List).length < s.shotsPerShooter,
-                onHold: (_) {},
-                onShot: (mm) => onShoot('$ownId', mm),
+                face: face,
+                marks: marks,
+                enabled: canShoot,
+                onHold: (v) => setState(() => _holding = v),
+                onShot: (mm) => _shoot(selId!, mm),
               ),
             ),
             Row(children: [
               Expanded(
                 child: Text(
-                  own['can'] == true
-                      ? tr('Осталось выстрелов: {n}', {
-                          'n':
-                              s.shotsPerShooter - (own['staged'] as List).length
-                        })
-                      : (own['active'] == true
-                          ? tr('Ждите команды')
-                          : tr('Вы выбыли')),
+                  selRow['can'] == true
+                      ? tr('Осталось выстрелов: {n}', {'n': math.max(0, s.shotsPerShooter - marks.length)})
+                      : (selRow['active'] == true ? tr('Ждите команды') : tr('Вы выбыли')),
                 ),
               ),
               TextButton.icon(
-                onPressed: ((own['staged'] as List?) ?? const []).isEmpty
-                    ? null
-                    : () => onUndo('$ownId'),
+                onPressed: marks.isEmpty ? null : () => _undo(selId!),
                 icon: const Icon(Icons.undo),
                 label: Text(tr('Назад')),
               ),
             ]),
-            const SizedBox(height: 8),
-          ],
-          // Таблица (у тренера и помощника — с кнопкой ввода).
-          for (var i = 0; i < rows.length; i++)
-            Opacity(
-              opacity: rows[i]['active'] == true ? 1 : 0.5,
-              child: InkWell(
-                // Жюри: нажали на спортсмена в списке — открылась его мишень для ввода выстрелов.
-                borderRadius: BorderRadius.circular(12),
-                onTap:
-                    (role == FinalsRole.coach || role == FinalsRole.helper) &&
-                            rows[i]['human'] == true &&
-                            rows[i]['active'] == true
-                        ? () => _openInput(context, rows[i])
-                        : null,
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 4),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: rows[i]['id'] == ownId
-                        ? cs.primary.withValues(alpha: 0.16)
-                        : cs.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(children: [
-                    SizedBox(
-                        width: 26,
-                        child: Text('${rows[i]['place'] ?? (i + 1)}',
-                            style:
-                                const TextStyle(fontWeight: FontWeight.w800))),
-                    Expanded(
-                        child: Text('${rows[i]['name']}',
-                            overflow: TextOverflow.ellipsis)),
-                    Text(
-                        ((rows[i]['shots'] as List).isEmpty)
-                            ? ''
-                            : '${tr('ср')} ${(rows[i]['avg'] as num).toStringAsFixed(2)}  ',
-                        style: theme.textTheme.bodySmall),
-                    Text((rows[i]['total'] as num).toStringAsFixed(1),
-                        style: const TextStyle(fontWeight: FontWeight.w700)),
-                    if ((role == FinalsRole.coach ||
-                            role == FinalsRole.helper) &&
-                        rows[i]['human'] == true &&
-                        rows[i]['active'] == true)
-                      IconButton(
-                        tooltip: tr('Ввести выстрел'),
-                        icon: Icon(Icons.gps_fixed,
-                            color: rows[i]['can'] == true ? cs.primary : null),
-                        onPressed: () => _openInput(context, rows[i]),
-                      ),
-                  ]),
-                ),
+          ] else
+            Expanded(
+              child: Center(
+                child: Text(_judge ? tr('Нет участников-людей') : tr('Вы выбыли'), style: theme.textTheme.titleMedium),
               ),
             ),
-          if ((role == FinalsRole.coach || role == FinalsRole.helper) &&
-              inputRows.isEmpty)
-            Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text(tr('Нет участников-людей'))),
+          for (var i = 0; i < rest.length; i += 4)
+            _cardsRow(face, [...rest.skip(i).take(4)], h * 0.12),
         ],
-      ),
+      ]),
     );
   }
 }
 
-/// Нижнее окно ввода выстрела за выбранного участника (тренер, помощник).
-class _InputSheet extends StatefulWidget {
-  final FinalsSnapshot snapshot;
-  final String who;
-  final String name;
-  final void Function(String who, Offset mm) onShoot;
-  final void Function(String who) onUndo;
-  const _InputSheet(
-      {required this.snapshot,
-      required this.who,
-      required this.name,
-      required this.onShoot,
-      required this.onUndo});
-
-  @override
-  State<_InputSheet> createState() => _InputSheetState();
-}
-
-class _InputSheetState extends State<_InputSheet> {
-  // Локальная отметка до следующего состояния от хозяина.
-  final List<Offset> _local = [];
+/// Мишень другого участника: имя, последняя пробоина (мишень приближена к центру), значение.
+class _RoomCard extends StatelessWidget {
+  final TargetFace face;
+  final Map<String, dynamic> row;
+  final bool me;
+  const _RoomCard({required this.face, required this.row, required this.me});
 
   @override
   Widget build(BuildContext context) {
-    final s = widget.snapshot;
-    final row = s.row(widget.who);
-    final staged = [
-      for (final m in (row?['staged'] as List? ?? const []))
-        Offset((m[0] as num).toDouble(), (m[1] as num).toDouble())
-    ];
-    final marks = staged.length >= _local.length ? staged : _local;
-    return SafeArea(
-      child: SizedBox(
-        height: MediaQuery.sizeOf(context).height * 0.72,
-        child: Column(children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(children: [
-              Expanded(
-                  child: Text(widget.name,
-                      style: Theme.of(context).textTheme.titleMedium)),
-              Text(tr('Выстрелов: {n}/{m}',
-                  {'n': marks.length, 'm': s.shotsPerShooter})),
-              TextButton.icon(
-                onPressed: marks.isEmpty
-                    ? null
-                    : () {
-                        widget.onUndo(widget.who);
-                        setState(() {
-                          if (_local.isNotEmpty) _local.removeLast();
-                        });
-                      },
-                icon: const Icon(Icons.undo),
-                label: Text(tr('Назад')),
-              ),
-              IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.pop(context)),
-            ]),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(8),
-              child: ShotPad(
-                face: TargetFace.byCode(s.face),
-                marks: marks,
-                enabled: row?['can'] == true &&
-                    !s.paused &&
-                    marks.length < s.shotsPerShooter,
-                onHold: (_) {},
-                onShot: (mm) {
-                  widget.onShoot(widget.who, mm);
-                  setState(() => _local.add(mm));
-                },
-              ),
-            ),
-          ),
-        ]),
-      ),
+    final theme = Theme.of(context);
+    final pts = [for (final p in (row['pts'] as List? ?? const [])) Offset((p[0] as num).toDouble(), (p[1] as num).toDouble())];
+    final last = pts.isEmpty ? null : pts.last;
+    final shots = (row['shots'] as List? ?? const []);
+    final score = shots.isEmpty ? null : (shots.last as num).toDouble();
+    return Opacity(
+      opacity: row['active'] == true ? 1 : 0.45,
+      child: Column(children: [
+        Text('${row['name']}', style: theme.textTheme.labelSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+        Expanded(
+          child: LayoutBuilder(builder: (ctx, box) {
+            final dist = last == null ? 0.0 : math.sqrt(last.dx * last.dx + last.dy * last.dy);
+            final zoom = last == null ? 1.0 : (face.faceRadiusMm * 0.85 / math.max(dist, 1.0)).clamp(1.0, 8.0);
+            final k = box.biggest.shortestSide / 2 * zoom / face.faceRadiusMm;
+            return ClipRect(
+              child: Stack(children: [
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: TargetPainter(
+                      face: face,
+                      colors: TargetColorScheme.defaultScheme,
+                      visibleShots: const [],
+                      selectedShot: null,
+                      currentSeriesNo: 1,
+                      zoom: zoom,
+                    ),
+                  ),
+                ),
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: ShotMarkerPainter(
+                      last == null ? const [] : [last],
+                      ghosts: [for (final g in pts.take(math.max(0, pts.length - 1))) g],
+                      k: k,
+                      center: Offset(box.maxWidth / 2, box.maxHeight / 2),
+                    ),
+                  ),
+                ),
+              ]),
+            );
+          }),
+        ),
+        SizedBox(
+          height: 18,
+          child: score == null
+              ? null
+              : Center(child: Text(score.toStringAsFixed(1), style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700))),
+        ),
+      ]),
     );
   }
 }
@@ -476,7 +542,7 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
         // договариваются сами (отдельных ролей внутри жюри нет).
         SimpleDialogOption(
             onPressed: () => Navigator.pop(ctx, FinalsRole.coach),
-            child: Text(tr('Жюри (команды и ввод результатов)'))),
+            child: Text(tr('Судья (команды и ввод результатов)'))),
         SimpleDialogOption(
             onPressed: () => Navigator.pop(ctx, FinalsRole.spectator),
             child: Text(tr('Зритель (болеет, кричалки)'))),
@@ -694,8 +760,8 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
                   title: Text(p.contact.nickname),
                   subtitle: Text(switch (p.role) {
                     FinalsRole.athlete => tr('Участник'),
-                    FinalsRole.helper => tr('Жюри'),
-                    FinalsRole.coach => tr('Жюри'),
+                    FinalsRole.helper => tr('Судья'),
+                    FinalsRole.coach => tr('Судья'),
                     FinalsRole.spectator => tr('Зритель'),
                   }),
                   trailing: started
@@ -877,6 +943,7 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
         return null;
       },
       isFull: () => widget.book.full,
+      canPause: (a) => _members.any((m) => m.userId == a && m.status == 'accepted' && m.role != FinalsRole.spectator),
       onCheer: (name, kind) {
         _cheers.add(name, kind);
         // Смайлики идут всегда, а голосом реакцию озвучиваем только вне объявлений судьи — чтобы не перебивать.
@@ -1221,6 +1288,10 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
       onShoot: (who, mm) => g?.shoot(who, mm.dx, mm.dy),
       onUndo: (who) => g?.undo(who),
       onNext: role == FinalsRole.coach ? () => g?.next() : null,
+      onPause: (role == FinalsRole.coach || role == FinalsRole.helper)
+          ? () => snap.paused ? g?.resume() : g?.pause()
+          : null,
+      onRequestPause: role == FinalsRole.athlete ? () => g?.pause() : null,
       cheers: _cheers,
       onCheer: role == FinalsRole.spectator
           ? (kind) {
@@ -1271,7 +1342,7 @@ Future<void> offerFinalInvites(BuildContext context, AppDataStore store) async {
 String _roleWord(FinalsRole r) => switch (r) {
       FinalsRole.athlete => tr('финалистом'),
       FinalsRole.helper => tr('помощником'),
-      FinalsRole.coach => tr('жюри'),
+      FinalsRole.coach => tr('судьёй'),
       FinalsRole.spectator => tr('зрителем'),
     };
 

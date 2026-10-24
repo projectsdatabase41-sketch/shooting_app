@@ -127,8 +127,12 @@ class FinalsSnapshot {
   static FinalsSnapshot of(FinalRunController c) {
     final live = c.live;
     final lastShot = <String, RunShot>{};
+    final pts = <String, List<List<double>>>{};
     for (final s in c.shots) {
-      if (!s.shootOff) lastShot[s.who] = s;
+      if (!s.shootOff) {
+        lastShot[s.who] = s;
+        (pts[s.who] ??= []).add([s.x, s.y]);
+      }
     }
     return FinalsSnapshot({
       'phase': c.phase.name,
@@ -144,6 +148,7 @@ class FinalsSnapshot {
       'hs': c.hostSilent,
       'ch': c.chiefHint,
       'pub': c.isPublic,
+      'pb': c.pausedBy,
       // В конце финала участникам уходят все выстрелы с координатами — из них у каждого собирается протокол.
       if (c.phase == RunPhase.finished) 'shots': [for (final s in c.shots) s.toJson()],
       'rows': [
@@ -158,6 +163,7 @@ class FinalsSnapshot {
             'avg': r.avg,
             'shots': r.shots,
             if (lastShot[r.c.id] != null) 'last': [lastShot[r.c.id]!.x, lastShot[r.c.id]!.y],
+            if (pts[r.c.id] != null) 'pts': pts[r.c.id],
             if (c.humans.contains(r.c.id))
               'staged': [for (final st in c.stagedOf(r.c.id)) [st.x, st.y]],
             if (c.humans.contains(r.c.id)) 'can': c.canShootFor(r.c.id),
@@ -177,6 +183,7 @@ class FinalsHost {
     this.canControl,
     this.onHello,
     this.isFull,
+    this.canPause,
     this.cheerName,
     this.onCheer,
   }) {
@@ -220,6 +227,9 @@ class FinalsHost {
   /// Проверка приглашения при подключении гостя ([author] — его токен); `false` — отказ.
   final bool Function(String author, String name)? onHello;
 
+  /// Кто может остановить время (спортсмен при неисправности, судья).
+  final bool Function(String author)? canPause;
+
   /// Мест для зрителей нет (сообщается в отказе).
   final bool Function()? isFull;
 
@@ -235,6 +245,17 @@ class FinalsHost {
 
   void _onMessage(String event, Map<String, dynamic> p) {
     final author = '${p['author']}';
+    if (event == 'pause') {
+      if (canPause?.call(author) == true && !controller.paused) {
+        controller.pausedBy = cheerName?.call(author);
+        controller.pause();
+      }
+      return;
+    }
+    if (event == 'resume') {
+      if (canControl?.call(author) == true) controller.resume();
+      return;
+    }
     if (event == 'cheer') {
       final name = cheerName?.call(author);
       final kind = '${p['k']}';
@@ -315,6 +336,10 @@ class FinalsGuest extends ChangeNotifier {
   void hello() => channel.send('hello', {'author': userId, 'who': '', 'name': name});
 
   bool shoot(String who, double x, double y) => channel.send('shot', {'author': userId, 'who': who, 'x': x, 'y': y});
+  /// Остановить время (по правилам — при неисправности); продолжает судья.
+  bool pause() => channel.send('pause', {'author': userId});
+  bool resume() => channel.send('resume', {'author': userId});
+
   bool cheer(String kind) => channel.send('cheer', {'author': userId, 'k': kind});
 
   /// Команда тренера «Далее» (заряжай / старт / стоп).

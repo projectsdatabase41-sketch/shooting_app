@@ -11,6 +11,7 @@ void main() {
   personalDbTest();
   spectatorTest();
   publicTest();
+  pauseTest();
   test('код приглашения: кодируется и читается из текста сообщения', () {
     final book = FinalsInviteBook();
     final inv = book.create(role: FinalsRole.athlete, name: 'Иван', targetId: 'u_1');
@@ -145,5 +146,47 @@ void publicTest() {
     expect(FinalsSessionService.scopeFor(t[0], '', book.members), isEmpty);
     // непубличный финал чужих не пускает
     expect((FinalsInviteBook()..maxSpectators = 5).accept(newFinalsToken(), 'Z'), isFalse);
+  });
+}
+
+void pauseTest() {
+  test('пауза: спортсмен останавливает время для всех, продолжает только судья', () async {
+    final book = FinalsInviteBook();
+    final a = book.create(role: FinalsRole.athlete, name: 'Анна', targetId: 'u_a');
+    final j = book.create(role: FinalsRole.coach, name: 'Судья');
+    book.accept(a.token, 'Анна');
+    book.accept(j.token, 'Судья');
+    final (hostCh, guestCh) = MemoryFinalsChannel.pair();
+    final fmt = FinalFormat.airRifle10m;
+    final c = FinalRunController(
+      format: fmt,
+      face: TargetFace.byCode(fmt.faceCode),
+      engine: FinalEngine(fmt, [for (var i = 0; i < 8; i++) FinalCompetitor(i == 0 ? 'u_a' : 'b$i', 'N$i')]),
+      userId: 'u_a',
+      bots: const {},
+      rng: Random(1),
+      manual: true,
+    );
+    final host = FinalsHost(
+      controller: c,
+      channel: hostCh,
+      allowed: (x) => FinalsSessionService.scopeFor(x, '', book.members),
+      canControl: (x) => FinalsSessionService.canControl(x, '', book.members),
+      canPause: (x) => book.members.any((m) => m.userId == x && m.status == 'accepted' && m.role != FinalsRole.spectator),
+      cheerName: (x) => book.members.where((m) => m.userId == x).map((m) => m.name).firstOrNull,
+    );
+    Future<void> settle() => Future<void>.delayed(const Duration(milliseconds: 50));
+    FinalsGuest(channel: guestCh, userId: a.token).pause();
+    await settle();
+    expect(c.paused, isTrue);
+    expect(c.pausedBy, 'Анна');
+    FinalsGuest(channel: guestCh, userId: a.token).resume(); // спортсмен продолжить не может
+    await settle();
+    expect(c.paused, isTrue);
+    FinalsGuest(channel: guestCh, userId: j.token).resume();
+    await settle();
+    expect(c.paused, isFalse);
+    expect(c.pausedBy, isNull);
+    host.dispose();
   });
 }

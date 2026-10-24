@@ -47,7 +47,8 @@ void main() {
     expect(find.text('Заряжай'), findsOneWidget);
     await tester.tap(find.text('Заряжай'));
     expect(next, 1);
-    expect(find.byIcon(Icons.gps_fixed), findsNWidgets(2)); // два человека
+    expect(find.text('Судья'), findsWidgets); // подпись роли внизу
+    expect(find.byIcon(Icons.gps_fixed), findsNothing); // ввод — на странице, без выезжающих окон
 
     await tester.pumpWidget(MaterialApp(
       home: FinalRoomView(
@@ -59,6 +60,6 @@ void main() {
       ),
     ));
     expect(find.text('Назад'), findsOneWidget);
-    expect(find.byIcon(Icons.gps_fixed), findsNothing);
+    expect(find.text('Участник · Анна'), findsOneWidget);
   });
 }

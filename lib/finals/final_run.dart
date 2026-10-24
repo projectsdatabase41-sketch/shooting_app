@@ -121,6 +121,9 @@ class FinalRunController extends ChangeNotifier {
   bool voiceAll = false;
   bool hostSilent = false;
 
+  /// Кто остановил время (спортсмен при неисправности или судья); сбрасывается при продолжении.
+  String? pausedBy;
+
   /// Публичный финал: итог уходит в таблицу чемпионов, ход виден на табло.
   bool isPublic = false;
 
@@ -178,6 +181,7 @@ class FinalRunController extends ChangeNotifier {
   }
 
   void resume() {
+    pausedBy = null;
     if (!paused) return;
     paused = false;
     log.add({'e': 'resume', 't': clock});
