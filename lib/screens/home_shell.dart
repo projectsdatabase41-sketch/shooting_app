@@ -90,7 +90,7 @@ class _HomeShellState extends State<HomeShell> {
     _inviteTimer?.cancel();
     _inviteTimer = null;
     if (on) {
-      _inviteTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      _inviteTimer = Timer.periodic(const Duration(seconds: 30), (_) {
         try {
           FinalsInviteStore.purge(context.read<AppDataStore>().db);
         } catch (_) {}
