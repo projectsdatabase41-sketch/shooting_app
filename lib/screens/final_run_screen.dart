@@ -465,12 +465,11 @@ class _ShotPadState extends State<ShotPad> {
         final dist = math.max((pts[0] - pts[1]).distance, 1);
         final focal = (pts[0] + pts[1]) / 2;
         final ns = (_zStartScale * dist / _zStartDist).clamp(1.0, _maxScale).toDouble();
-        final c = Offset(s.width / 2, s.height / 2);
-        // Точка мишени под начальной серединой пальцев остаётся под их текущей серединой.
-        final world = (_zStartFocal - c - _zStartPan) / _zStartScale;
+        // Масштаб — относительно центра мишени (она остаётся по центру), а двумя пальцами её можно
+        // подвинуть: сдвиг равен перемещению середины между пальцами.
         setState(() {
           _scale = ns;
-          _pan = _clampPan(focal - c - world * ns, s);
+          _pan = _clampPan(_zStartPan * (ns / _zStartScale) + (focal - _zStartFocal), s);
         });
       }
       return;
@@ -794,7 +793,7 @@ class ShotMarkerPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final r = (k * 2.25).clamp(3.0, 14.0); // калибр 4,5 мм
+    final r = math.max(3.0, k * 2.25); // калибр 4,5 мм: растёт вместе с мишенью, без потолка
     final fill = Paint()..color = Colors.orange.withValues(alpha: 0.85);
     final edge = Paint()
       ..color = Colors.black

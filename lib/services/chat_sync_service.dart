@@ -597,7 +597,9 @@ class ChatSyncService {
               })),
             )
             .timeout(_timeout);
-        if (res.statusCode >= 300) {
+        // 409 / 23505: строка этого сообщения уже есть на сервере (прошлая попытка дошла) — это успех.
+        final already = res.statusCode == 409 && res.body.contains('23505');
+        if (res.statusCode >= 300 && !already) {
           throw Exception(_sendError(res.statusCode, res.body));
         }
         repo.updateStatus(message.id, ChatMessageStatus.sent);
