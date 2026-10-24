@@ -1,3 +1,5 @@
+import '../services/chat_sync_service.dart';
+import '../services/chat_messages_repository.dart';
 import 'dart:async';
 import '../widgets/glass_route.dart';
 import '../widgets/app_backdrop.dart';
@@ -555,6 +557,38 @@ class _Invites extends StatefulWidget {
 
 class _InvitesState extends State<_Invites> {
   List<FinalsInvite> _list = [];
+  bool _listening = false;
+  Timer? _listen;
+
+  /// «Ждать приглашение»: пока экран открыт, входящие запрашиваются каждые 3 секунды,
+  /// и приглашение от ведущего всплывает почти сразу (без этого — раз в десятки секунд).
+  void _setListening(bool v) {
+    setState(() => _listening = v);
+    _listen?.cancel();
+    _listen = null;
+    if (!v) return;
+    final db = widget.store.db;
+    final auth = ChatAuthService(db);
+    if (!auth.isSignedIn) return;
+    final sync = ChatSyncService(auth, ChatMessagesRepository(db));
+    Future<void> tick() async {
+      try {
+        await sync.pollIncoming();
+      } catch (_) {}
+      if (!mounted) return;
+      setState(() => _list = FinalsInviteStore.pending(db));
+      await offerFinalInvites(context, widget.store);
+    }
+
+    tick();
+    _listen = Timer.periodic(const Duration(seconds: 3), (_) => tick());
+  }
+
+  @override
+  void dispose() {
+    _listen?.cancel();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -565,6 +599,15 @@ class _InvitesState extends State<_Invites> {
   @override
   Widget build(BuildContext context) {
     return Column(children: [
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: Text(tr('Ждать приглашение в финал')),
+        subtitle: Text(ChatAuthService(widget.store.db).isSignedIn
+            ? tr('Пока включено и экран открыт, приглашение приходит почти сразу')
+            : tr('Нужен вход в мессенджер')),
+        value: _listening,
+        onChanged: ChatAuthService(widget.store.db).isSignedIn ? _setListening : null,
+      ),
       for (final i in _list)
         Card(
           child: ListTile(
