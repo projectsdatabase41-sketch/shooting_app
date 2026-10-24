@@ -428,8 +428,11 @@ class _RoomCard extends StatelessWidget {
         Text('${row['name']}', style: theme.textTheme.labelSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
         Expanded(
           child: LayoutBuilder(builder: (ctx, box) {
-            final dist = last == null ? 0.0 : math.sqrt(last.dx * last.dx + last.dy * last.dy);
-            final zoom = last == null ? 1.0 : (face.faceRadiusMm * 0.85 / math.max(dist, 1.0)).clamp(1.0, 8.0);
+            var far = 0.0;
+            for (final p in pts) {
+              far = math.max(far, math.sqrt(p.dx * p.dx + p.dy * p.dy));
+            }
+            final zoom = math.min(2.5, face.faceRadiusMm * 0.85 / math.max(far, 1.0)).clamp(1.0, 2.5).toDouble();
             final k = box.biggest.shortestSide / 2 * zoom / face.faceRadiusMm;
             return ClipRect(
               child: Stack(children: [
@@ -442,6 +445,7 @@ class _RoomCard extends StatelessWidget {
                       selectedShot: null,
                       currentSeriesNo: 1,
                       zoom: zoom,
+                      denseLabels: true,
                     ),
                   ),
                 ),

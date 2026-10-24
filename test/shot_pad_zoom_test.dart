@@ -47,7 +47,7 @@ void main() {
     await tester.pump();
     expect(shots.length, 2);
 
-    // Ползунок зума справа есть.
-    expect(find.byType(Slider), findsOneWidget);
+    // На телефоне зум только щипком: ползунок есть лишь в веб-версии.
+    expect(find.byType(Slider), findsNothing);
   });
 }

@@ -3,6 +3,7 @@ import '../widgets/app_backdrop.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../finals/announcer.dart';
@@ -73,7 +74,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
       });
       return;
     }
-    if (_voice) {
+    if (_voice && _started) {
       final cmd = _phaseVoice.update(c.phase.name, secondsLeft: c.secondsLeft, announcing: c.announcing);
       if (cmd != null) FinalsAnnouncer.say(widget.store.db, cmd, refs: _phaseVoice.lastRef == null ? null : [_phaseVoice.lastRef!]);
       final text = _tracker.update(
@@ -94,13 +95,16 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
     super.dispose();
   }
 
+  /// «Готов»: только теперь идёт отсчёт, звучат команды и начинается финал.
   void _begin() {
     if (_started) return;
     setState(() => _started = true);
+    c.skipSighting();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) => c.tick());
   }
 
   String _banner() {
+    if (!_started) return tr('Подготовка: время не идёт');
     switch (c.phase) {
       case RunPhase.sighting:
         return tr('Подготовка и пристрелка');
@@ -119,6 +123,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
   }
 
   String _time() {
+    if (!_started) return '';
     final s = switch (c.phase) {
       RunPhase.shooting => (c.roundLimit - c.roundSeconds).clamp(0, 9999),
       _ => c.secondsLeft,
@@ -227,27 +232,6 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
               children: [_layout == 'table' ? _botsPage(context) : _table(context), _main(context)],
             ),
           ),
-          if (!_started)
-            Positioned.fill(
-              child: ColoredBox(
-                color: Colors.black.withValues(alpha: 0.72),
-                child: Center(
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.emoji_events_outlined, color: Colors.white, size: 52),
-                    const SizedBox(height: 12),
-                    Text(tr('Всё готово'), style: theme.textTheme.headlineSmall?.copyWith(color: Colors.white)),
-                    const SizedBox(height: 6),
-                    Text(tr('Подготовка и пристрелка начнутся после нажатия'), style: const TextStyle(color: Colors.white70)),
-                    const SizedBox(height: 20),
-                    FilledButton.icon(
-                      onPressed: _begin,
-                      icon: const Icon(Icons.play_arrow),
-                      label: Text(tr('Начать финал')),
-                    ),
-                  ]),
-                ),
-              ),
-            ),
         ]),
       ),
     );
@@ -313,7 +297,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
           Expanded(
             child: Text(
               sighting
-                  ? tr('Пристрелка: выстрелы не идут в зачёт')
+                  ? tr('Освойтесь с мишенью — выстрелы не идут в зачёт. Время и команды начнутся после «Готов»')
                   : c.userCanShoot
                       ? tr('Осталось выстрелов: {n}', {'n': c.userShotsLeft}) +
                           (marks.isEmpty
@@ -323,7 +307,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
               style: theme.textTheme.bodyMedium,
             ),
           ),
-          if (sighting) TextButton(onPressed: c.skipSighting, child: Text(tr('Готов'))),
+          if (sighting) FilledButton(onPressed: _begin, child: Text(tr('Готов'))),
           if (!c.user.active && c.phase != RunPhase.finished)
             TextButton(onPressed: c.fastForward, child: Text(tr('Завершить результат'))),
           TextButton.icon(
@@ -689,7 +673,8 @@ class _ShotPadState extends State<ShotPad> {
             ),
           ),
         ),
-        // Справа вертикальный ползунок зума (то же, что щипок двумя пальцами).
+        // В вебе справа вертикальный ползунок зума; на телефоне зум — щипком двумя пальцами.
+        if (kIsWeb)
         Positioned(
           right: 0,
           top: size.height * 0.15,
@@ -727,8 +712,13 @@ class _BotCard extends StatelessWidget {
           child: LayoutBuilder(builder: (ctx, box) {
             // Мишень соперника приближается к центру, пока пробоина умещается;
             // сильный промах уменьшает зум, чтобы пробоина осталась видна.
-            final dist = last == null ? 0.0 : math.sqrt(last.x * last.x + last.y * last.y);
-            final zoom = last == null ? 1.0 : (c.face.faceRadiusMm * 0.85 / math.max(dist, 1.0)).clamp(1.0, 8.0);
+            // Зум постоянный (видна кучность возле центра), уменьшается только если выстрел ушёл далеко:
+            // после команды «Старт» мишени не «прыгают».
+            var far = 0.0;
+            for (final sh in mine) {
+              far = math.max(far, math.sqrt(sh.x * sh.x + sh.y * sh.y));
+            }
+            final zoom = math.min(2.5, c.face.faceRadiusMm * 0.85 / math.max(far, 1.0)).clamp(1.0, 2.5).toDouble();
             final k = box.biggest.shortestSide / 2 * zoom / c.face.faceRadiusMm;
             return ClipRect(
                 child: Stack(children: [
@@ -741,6 +731,7 @@ class _BotCard extends StatelessWidget {
                     selectedShot: null,
                     currentSeriesNo: 1,
                     zoom: zoom,
+                    denseLabels: true,
                   ),
                 ),
               ),

@@ -177,7 +177,11 @@ class AppTheme {
     //    обычный цвет текста.
     final appBg = background ?? cs.surface;
     final filledBg = buttonColor ?? cs.primary;
-    final filledFg = readableOn(filledBg, buttonTextColor ?? cs.onPrimary);
+    // В режиме «стекло» кнопка полупрозрачная: текст считаем по её цвету на фоне, а не по чистому цвету кнопки.
+    final filledEff = GlassTheme.enabled
+        ? Color.alphaBlend(filledBg.withValues(alpha: GlassTheme.buttonAlpha < 0.55 ? 0.55 : GlassTheme.buttonAlpha), appBg)
+        : filledBg;
+    final filledFg = readableOn(filledEff, buttonTextColor ?? cs.onPrimary);
     final linkFg =
         readableOn(appBg, buttonColor ?? cs.primary, fallback: cs.onSurface);
 
