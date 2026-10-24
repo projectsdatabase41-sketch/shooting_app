@@ -18,6 +18,14 @@ class Wallpaper extends StatelessWidget {
   static Widget _frame(BuildContext context, Widget child, int? frame, bool wasSynchronouslyLoaded) =>
       AnimatedOpacity(opacity: (wasSynchronouslyLoaded || frame != null) ? 1 : 0, duration: const Duration(milliseconds: 600), curve: Curves.easeOut, child: child);
 
+  /// Цвет подложки под картинкой: оттенок маски на яркости обоев (тёмной или светлой темы).
+  static Color _baseColor(Color? mask, bool dark) {
+    final l = dark ? 0.09 : 0.93;
+    if (mask == null) return HSLColor.fromAHSL(1, 0, 0, l).toColor();
+    final h = HSLColor.fromColor(mask);
+    return HSLColor.fromAHSL(1, h.hue, h.saturation, l).toColor();
+  }
+
   /// Ширина декодирования: по ширине экрана в пикселях (без лишней памяти и ресайза на лету).
   static int cacheWidthFor(BuildContext context) {
     final mq = MediaQuery.of(context);
@@ -61,7 +69,9 @@ class Wallpaper extends StatelessWidget {
             stack = ColorFiltered(colorFilter: ColorFilter.matrix(BackdropTint.wallpaperMatrix()), child: stack);
           }
           if (mask != null) stack = ColorFiltered(colorFilter: ColorFilter.mode(mask, BlendMode.color), child: stack);
-          return stack;
+          // Сначала сразу ложится маска (тот же цвет и тон, что будет у обоев), а картинка плавно проявляется
+          // поверх неё: при переходе между страницами нет вспышки «цветная картинка, потом тёмная маска».
+          return Stack(fit: StackFit.expand, children: [ColoredBox(color: _baseColor(mask, dark)), stack]);
         },
       ),
     );

@@ -90,11 +90,11 @@ class _HomeShellState extends State<HomeShell> {
     _inviteTimer?.cancel();
     _inviteTimer = null;
     if (on) {
-      _inviteTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+      _inviteTimer = Timer.periodic(const Duration(seconds: 5), (_) {
         try {
           FinalsInviteStore.purge(context.read<AppDataStore>().db);
         } catch (_) {}
-        if (mounted && !ChatHomeScreen.isOpen) offerFinalInvites(context, context.read<AppDataStore>());
+        if (mounted) offerFinalInvites(context, context.read<AppDataStore>());
       });
     }
   }
