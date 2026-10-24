@@ -381,7 +381,8 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
                     width: 26,
                     child: Text('${rows[i].c.place ?? (i + 1)}', style: const TextStyle(fontWeight: FontWeight.w800))),
                 Expanded(child: Text(rows[i].c.name, overflow: TextOverflow.ellipsis)),
-                Text(rows[i].shots.isEmpty ? '' : '${rows[i].shots.last.toStringAsFixed(1)}  ', style: theme.textTheme.bodySmall),
+                // Места идут по среднему выстрелу — оно и показано (у всех разное число выстрелов, пока раунд идёт).
+                Text(rows[i].shots.isEmpty ? '' : '${tr('ср')} ${rows[i].avg.toStringAsFixed(2)}  ', style: theme.textTheme.bodySmall),
                 Text(rows[i].total.toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.w700)),
               ]),
             ),
@@ -625,7 +626,7 @@ class _BotCard extends StatelessWidget {
             // Мишень соперника приближается к центру, пока пробоина умещается;
             // сильный промах уменьшает зум, чтобы пробоина осталась видна.
             final dist = last == null ? 0.0 : math.sqrt(last.x * last.x + last.y * last.y);
-            final zoom = last == null ? 1.0 : (c.face.faceRadiusMm * 0.8 / math.max(dist, 1.0)).clamp(1.0, 4.0);
+            final zoom = last == null ? 1.0 : (c.face.faceRadiusMm * 0.85 / math.max(dist, 1.0)).clamp(1.0, 8.0);
             final k = box.biggest.shortestSide / 2 * zoom / c.face.faceRadiusMm;
             return ClipRect(
                 child: Stack(children: [

@@ -52,7 +52,9 @@ class _FinalsScreenState extends State<FinalsScreen> {
         children: [
           Text(tr('Выберите финал'), style: theme.textTheme.titleSmall),
           const SizedBox(height: 8),
+          // Спортсмену — только финалы его вида стрельбы (по анкете); тренеру — все.
           for (final f in FinalFormat.all)
+            if (store.isCoach || UserProfile.exerciseRelevant(store.db, f.faceCode, ''))
             Card(
               margin: const EdgeInsets.only(bottom: 10),
               child: ListTile(
@@ -583,12 +585,6 @@ class _InvitesState extends State<_Invites> {
             ),
           ),
         ),
-      ListTile(
-        contentPadding: EdgeInsets.zero,
-        leading: const Icon(Icons.vpn_key_outlined),
-        title: Text(tr('Войти по коду приглашения')),
-        onTap: () => enterFinalByCode(context, widget.store),
-      ),
     ]);
   }
 }

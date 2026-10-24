@@ -57,6 +57,8 @@ import '../services/live_chat_session.dart';
 import '../services/remote_config.dart';
 import '../services/webrtc_peer_link.dart';
 import '../state/app_data_store.dart';
+import '../finals/finals_invite.dart';
+import 'final_room_screens.dart' show joinFinal, finalRoleWord;
 import '../widgets/ai_chart_view.dart';
 import '../widgets/chat_avatar.dart';
 import '../widgets/chat_quick_menu.dart';
@@ -2656,8 +2658,68 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
+  /// Приглашение в финал: вместо длинного кода — карточка с кнопками «Подключиться» и «Отказаться».
+  Widget _finalInviteItem(ChatMessage m, FinalsInvite inv) {
+    final mine = m.direction == ChatMessageDirection.outgoing;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final db = context.read<AppDataStore>().db;
+    final usable = !inv.expired && !FinalsInviteStore.isEnded(db, inv.token);
+    final intro = (m.text ?? '').replaceAll(FinalsInvite.codePattern, '').trim();
+    return Align(
+      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 300),
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: cs.primary.withValues(alpha: 0.35)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.emoji_events_outlined, size: 18, color: cs.primary),
+            const SizedBox(width: 8),
+            Flexible(child: Text(mine ? tr('Приглашение в финал отправлено') : tr('Приглашение в финал'), style: theme.textTheme.titleSmall)),
+          ]),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(tr('Вас приглашают участвовать {r}', {'r': finalRoleWord(inv.role)}), style: theme.textTheme.bodySmall),
+          ),
+          if (!usable)
+            Padding(padding: const EdgeInsets.only(top: 4), child: Text(tr('Приглашение больше не действует'), style: theme.textTheme.bodySmall))
+          else if (!mine)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Wrap(spacing: 8, runSpacing: 6, children: [
+                FilledButton(
+                  onPressed: () async {
+                    await joinFinal(context, context.read<AppDataStore>(), inv);
+                    if (mounted) setState(() {});
+                  },
+                  child: Text(tr('Подключиться')),
+                ),
+                OutlinedButton(
+                  onPressed: () {
+                    FinalsInviteStore.markEnded(db, inv.token);
+                    FinalsInviteStore.purge(db);
+                    _reload();
+                  },
+                  child: Text(tr('Отказаться')),
+                ),
+              ]),
+            ),
+          if (intro.isNotEmpty && mine) Padding(padding: const EdgeInsets.only(top: 6), child: Text(tr('Получатель увидит кнопки подключения'), style: theme.textTheme.labelSmall)),
+        ]),
+      ),
+    );
+  }
+
   Widget _item(ChatMessage m) {
     if (CoachLink.isCard(m.text)) return _coachCardItem(m);
+    final finalInv = FinalsInvite.parse(m.text ?? '');
+    if (finalInv != null) return _finalInviteItem(m, finalInv);
     final selected = _selected.contains(m.id);
     final mine = m.direction == ChatMessageDirection.outgoing;
     return Align(

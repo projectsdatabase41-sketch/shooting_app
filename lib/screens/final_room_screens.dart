@@ -1287,29 +1287,8 @@ Future<void> joinFinal(BuildContext context, AppDataStore store, FinalsInvite in
           member: inv.member, service: FinalsSessionService(ChatAuthService(store.db)), url: inv.url, anonKey: inv.anonKey)));
 }
 
-/// Вставить код приглашения вручную (если пришёл не через мессенджер).
-Future<void> enterFinalByCode(BuildContext context, AppDataStore store) async {
-  final ctl = TextEditingController();
-  final text = await showGlassDialog<String>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: Text(tr('Код приглашения')),
-      content: TextField(controller: ctl, autofocus: true, minLines: 1, maxLines: 4, decoration: InputDecoration(hintText: FinalsInvite.prefix)),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Закрыть'))),
-        TextButton(onPressed: () => Navigator.pop(ctx, ctl.text), child: Text(tr('Войти'))),
-      ],
-    ),
-  );
-  ctl.dispose();
-  if (text == null || !context.mounted) return;
-  final inv = FinalsInvite.parse(text);
-  if (inv == null) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Код не распознан'))));
-    return;
-  }
-  await joinFinal(context, store, inv);
-}
+/// Слово роли для текста приглашения («финалистом», «жюри»…).
+String finalRoleWord(FinalsRole r) => _roleWord(r);
 
 /// Войти зрителем в публичный финал с табло (приглашение не нужно: токен зритель создаёт сам).
 /// Секретное имя канала выдаёт сервер только для ещё не оконченного финала и нигде не показывается.

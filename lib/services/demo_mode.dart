@@ -63,12 +63,13 @@ class DemoMode {
     final ctx = route is ModalRoute ? route.subtreeContext : null;
     if (ctx == null) return '';
     final lines = <String>[];
-    final seen = <String>{};
+    String? prev;
     var visited = 0;
     var size = 0;
     void add(String s) {
       final t = s.replaceAll(RegExp(r'\s+'), ' ').trim();
-      if (t.isEmpty || !seen.add(t) || size > maxChars) return;
+      if (t.isEmpty || t == prev || size > maxChars) return;
+      prev = t;
       size += t.length + 1;
       lines.add(t);
     }

@@ -145,6 +145,8 @@ class FinalsInviteStore {
     _write(db, _kEnded, all.length > 60 ? all.skip(all.length - 60) : all);
   }
 
+  static bool isEnded(LocalDbService db, String token) => _read(db, _kEnded).contains(token);
+
   /// Стирает из сообщений коды приглашений, которые уже не действуют (срок вышел или финал окончен),
   /// и забывает их токены. Сами сообщения, чаты и контакты (в том числе тренер) не трогаются.
   /// Возвращает число очищенных сообщений.
