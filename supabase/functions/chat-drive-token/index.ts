@@ -52,6 +52,14 @@ Deno.serve(async (req: Request) => {
   // Apps Script Web App иногда отвечает редиректом (302) на сам себя —
   // fetch с redirect: 'follow' (по умолчанию) уже это разруливает.
   const res = await fetch(url.toString());
-  const json = await res.json().catch(() => ({ error: 'bad response from script' }));
+  // Ответ скрипта читаем текстом: если это не JSON (страница входа Google, ошибка развёртывания, квота),
+  // отдаём код и начало ответа — по ним видно причину (скрипт не развёрнут для «Всех», слетела авторизация и т.п.).
+  const text = await res.text();
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch (_) {
+    json = { error: `bad response from script (HTTP ${res.status}, ${res.headers.get('content-type') ?? '?'}): ${text.replace(/\s+/g, ' ').slice(0, 160)}` };
+  }
   return new Response(JSON.stringify(json), { headers: { 'Content-Type': 'application/json' } });
 });
