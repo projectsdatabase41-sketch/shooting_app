@@ -1455,7 +1455,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     setState(() => _sending = true);
     try {
       final compressed =
-          isImage ? ChatMediaUtils.compressImage(finalBytes) : null;
+          isImage ? ChatMediaUtils.compressImage(finalBytes, hd: result.hd) : null;
       await widget.sync.sendAttachment(
         contactId: _contact.id,
         bytes: compressed ?? finalBytes,
@@ -3011,10 +3011,16 @@ class _Bubble extends StatelessWidget {
           ),
           const SizedBox(height: 4),
         ] else if (message.type == ChatMessageType.video) ...[
-          CircleVideo(
-            durationSec:
-                _ChatThreadScreenState._secondsFromName(message.attachmentName),
-            load: onLoadMedia,
+          ValueListenableBuilder<Map<String, double>>(
+            valueListenable: ChatSyncService.uploadProgress,
+            builder: (_, map, __) => CircleVideo(
+              durationSec:
+                  _ChatThreadScreenState._secondsFromName(message.attachmentName),
+              load: onLoadMedia,
+              // Свой кружок, пока уходит, и чужой, пока скачивается, — плавная анимация передачи.
+              busy: downloading || (mine && message.status == ChatMessageStatus.sending),
+              progress: map[message.clientMessageId],
+            ),
           ),
           const SizedBox(height: 4),
         ] else if (!isImage && message.type == ChatMessageType.file) ...[
@@ -3043,7 +3049,8 @@ class _Bubble extends StatelessWidget {
             valueListenable: ChatSyncService.uploadProgress,
             builder: (_, map, __) {
               final pr = map[message.clientMessageId];
-              if (pr == null || message.attachmentBase64 != null) return const SizedBox.shrink();
+              final sendingNow = mine && message.status == ChatMessageStatus.sending;
+              if ((pr == null && !sendingNow) || (message.attachmentBase64 != null && !sendingNow)) return const SizedBox.shrink();
               return Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: ClipRRect(

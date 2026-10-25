@@ -123,6 +123,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     _tick?.cancel();
     _autoClose?.cancel();
     _pulse.dispose();
+    _light.release();
     _light.dispose();
     s.removeListener(_onChange);
     if (CallSession.current == s && s.isEnded) CallSession.current = null;

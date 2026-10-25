@@ -10,20 +10,50 @@ class CircleVideo extends StatefulWidget {
   final int durationSec;
   final Future<MediaSource?> Function() load;
   final double size;
-  const CircleVideo({super.key, required this.durationSec, required this.load, this.size = 200});
+
+  /// Идёт отправка (свой кружок) или скачивание (чужой): плавная пульсация и бегущая дуга вместо кнопки «играть».
+  final bool busy;
+
+  /// Доля передачи 0…1, если известна (прямая передача); иначе дуга бежит по кругу.
+  final double? progress;
+  const CircleVideo({super.key, required this.durationSec, required this.load, this.size = 200, this.busy = false, this.progress});
 
   @override
   State<CircleVideo> createState() => _CircleVideoState();
 }
 
-class _CircleVideoState extends State<CircleVideo> {
+class _CircleVideoState extends State<CircleVideo> with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400));
   static _CircleVideoState? _active;
 
   VideoPlayerController? _c;
   bool _loading = false;
 
   @override
+  void didUpdateWidget(CircleVideo old) {
+    super.didUpdateWidget(old);
+    _syncPulse();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _syncPulse();
+  }
+
+  bool get _working => widget.busy || _loading;
+
+  void _syncPulse() {
+    if (_working && !_pulse.isAnimating) {
+      _pulse.repeat(reverse: true);
+    } else if (!_working && _pulse.isAnimating) {
+      _pulse.animateTo(0, duration: const Duration(milliseconds: 300));
+    }
+  }
+
+  @override
   void dispose() {
+    _pulse.dispose();
     _c?.removeListener(_onTick);
     _c?.dispose();
     if (_active == this) _active = null;
@@ -39,6 +69,7 @@ class _CircleVideoState extends State<CircleVideo> {
     var c = _c;
     if (c == null) {
       setState(() => _loading = true);
+      _syncPulse();
       try {
         final src = await widget.load();
         if (src == null) return;
@@ -49,7 +80,10 @@ class _CircleVideoState extends State<CircleVideo> {
       } catch (_) {
         c = null;
       } finally {
-        if (mounted) setState(() => _loading = false);
+        if (mounted) {
+          setState(() => _loading = false);
+          _syncPulse();
+        }
       }
       if (c == null) return;
     }
@@ -90,10 +124,15 @@ class _CircleVideoState extends State<CircleVideo> {
           alignment: Alignment.center,
           children: [
             ClipOval(
-              child: Container(
-                width: s - 8,
-                height: s - 8,
-                color: Colors.black87,
+              child: AnimatedBuilder(
+                animation: _pulse,
+                builder: (_, child) => Container(
+                  width: s - 8,
+                  height: s - 8,
+                  // Пока идёт передача, фон мягко «дышит».
+                  color: Color.lerp(Colors.black87, Colors.blueGrey.shade800, _pulse.value * 0.7),
+                  child: child,
+                ),
                 child: ready
                     ? FittedBox(
                         fit: BoxFit.cover,
@@ -109,17 +148,34 @@ class _CircleVideoState extends State<CircleVideo> {
             SizedBox(
               width: s,
               height: s,
-              child: CircularProgressIndicator(
-                value: total <= 0 ? 0 : (pos / total).clamp(0.0, 1.0),
-                strokeWidth: 3,
-                color: Colors.white,
-                backgroundColor: Colors.white24,
-              ),
+              child: _working
+                  // Передача: известная доля — полоса по кругу, иначе дуга бежит.
+                  ? TweenAnimationBuilder<double?>(
+                      tween: Tween<double?>(end: widget.progress),
+                      duration: const Duration(milliseconds: 300),
+                      builder: (_, v, __) => CircularProgressIndicator(
+                        value: v,
+                        strokeWidth: 3,
+                        color: Colors.white,
+                        backgroundColor: Colors.white24,
+                      ),
+                    )
+                  : CircularProgressIndicator(
+                      value: total <= 0 ? 0 : (pos / total).clamp(0.0, 1.0),
+                      strokeWidth: 3,
+                      color: Colors.white,
+                      backgroundColor: Colors.white24,
+                    ),
             ),
-            if (_loading)
-              const CircularProgressIndicator(color: Colors.white)
-            else if (!playing)
-              const Icon(Icons.play_circle_fill, size: 52, color: Colors.white70),
+            // Значок меняется плавно: «играть» ⇄ облако передачи.
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              child: _working
+                  ? Icon(widget.busy ? Icons.cloud_sync_outlined : Icons.downloading, key: const ValueKey('work'), size: 40, color: Colors.white70)
+                  : (!playing
+                      ? const Icon(Icons.play_circle_fill, key: ValueKey('play'), size: 52, color: Colors.white70)
+                      : const SizedBox.shrink(key: ValueKey('none'))),
+            ),
             Positioned(
               bottom: 12,
               child: Container(

@@ -1,5 +1,7 @@
 import 'glass_route.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:screen_brightness/screen_brightness.dart';
 
 import '../i18n/i18n.dart';
 
@@ -15,7 +17,34 @@ class SelfieLightState extends ChangeNotifier {
 
   void update(void Function() f) {
     f();
+    _syncScreen();
     notifyListeners();
+  }
+
+  /// Пока подсветка включена, яркость экрана выкручивается на максимум (на фронтальной камере вспышки нет,
+  /// светит сам экран); при выключении возвращается прежняя. На вебе системной яркости нет — только свечение рамки.
+  bool _maxed = false;
+  Future<void> _syncScreen() async {
+    if (kIsWeb) return;
+    try {
+      if (on && !_maxed) {
+        _maxed = true;
+        await ScreenBrightness().setApplicationScreenBrightness(1.0);
+      } else if (!on && _maxed) {
+        _maxed = false;
+        await ScreenBrightness().resetApplicationScreenBrightness();
+      }
+    } catch (_) {
+      // яркость недоступна на этом устройстве — остаётся свечение рамки
+    }
+  }
+
+  /// Вернуть яркость при закрытии экрана съёмки.
+  void release() {
+    if (_maxed) {
+      on = false;
+      _syncScreen();
+    }
   }
 
   Color get color {
@@ -41,8 +70,8 @@ class SelfieLightOverlay extends StatelessWidget {
               decoration: BoxDecoration(
                 gradient: RadialGradient(
                   radius: 0.95,
-                  colors: [c.withValues(alpha: 0), c.withValues(alpha: 0.15 * light.brightness), c.withValues(alpha: 0.95 * light.brightness)],
-                  stops: const [0.45, 0.75, 1.0],
+                  colors: [c.withValues(alpha: 0.04 * light.brightness), c.withValues(alpha: 0.4 * light.brightness), c.withValues(alpha: light.brightness)],
+                  stops: const [0.3, 0.62, 1.0],
                 ),
               ),
               child: const SizedBox.expand(),

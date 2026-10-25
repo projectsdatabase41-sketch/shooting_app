@@ -57,16 +57,21 @@ class ChatMediaUtils {
 
   /// `null`, если файл не распознан как изображение — тогда стоит
   /// отправить как есть, типом `file`, а не `image`.
-  static Uint8List? compressImage(Uint8List bytes) {
+  /// Фото в HD: длинная сторона до [maxSideHd], качество выше (файл заметно тяжелее).
+  static const int maxSideHd = 3200;
+  static const int jpegQualityHd = 92;
+
+  static Uint8List? compressImage(Uint8List bytes, {bool hd = false}) {
     final decoded = img.decodeImage(bytes);
     if (decoded == null) return null;
+    final maxSide = hd ? maxSideHd : ChatMediaUtils.maxSide;
     final longSide = decoded.width > decoded.height ? decoded.width : decoded.height;
     final resized = longSide <= maxSide
         ? decoded
         : (decoded.width >= decoded.height
             ? img.copyResize(decoded, width: maxSide)
             : img.copyResize(decoded, height: maxSide));
-    return img.encodeJpg(resized, quality: jpegQuality);
+    return img.encodeJpg(resized, quality: hd ? jpegQualityHd : jpegQuality);
   }
 
   /// По расширению имени файла — простая, но достаточная для решения

@@ -67,6 +67,8 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
   final Map<int, Offset> _ptr = {};
   double _pinchDist = 1, _pinchZoom = 1;
 
+  bool _hd = false; // HD: видео выше разрешением (тяжелее); меняется до начала записи
+
   bool _switching =
       false; // идёт смена камеры — картинку прячем, чтобы не мелькал кадр «вверх ногами»
   int _elapsed = 0;
@@ -110,7 +112,7 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
     final old = _controller;
     final c = CameraController(
       cam,
-      ResolutionPreset.medium,
+      _hd ? ResolutionPreset.high : ResolutionPreset.medium,
       enableAudio: true,
       imageFormatGroup: kIsWeb ? null : ImageFormatGroup.yuv420,
     );
@@ -221,6 +223,7 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
     widget.finishSignal?.removeListener(_onSignal);
     _ticker?.cancel();
     _controller?.dispose();
+    _light.release();
     _light.dispose();
     super.dispose();
   }
@@ -374,6 +377,23 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
                                 ),
                               ),
                             ),
+                          ),
+                          GlassCircleButton(
+                            size: 52,
+                            icon: Text('HD', style: TextStyle(fontWeight: FontWeight.w900, color: _hd ? Theme.of(context).colorScheme.primary : null)),
+                            tooltip: _hd ? tr('Высокое качество включено') : tr('Включить высокое качество (HD)'),
+                            onTap: _recording
+                                ? null
+                                : () async {
+                                    setState(() {
+                                      _hd = !_hd;
+                                      _switching = true;
+                                    });
+                                    try {
+                                      await _open(_cameras[_camIndex]);
+                                    } catch (_) {}
+                                    if (mounted) setState(() => _switching = false);
+                                  },
                           ),
                           GlassCircleButton(
                             size: 52,

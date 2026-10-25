@@ -9,7 +9,7 @@ import '../i18n/i18n.dart';
 
 /// Что возвращает [AttachmentComposeScreen] по «Отправить» — исходные или
 /// отредактированные байты плюс подпись. `null` — открепили без отправки.
-typedef AttachmentComposeResult = ({Uint8List bytes, String caption});
+typedef AttachmentComposeResult = ({Uint8List bytes, String caption, bool hd});
 
 /// Предпросмотр фото/файла перед отправкой — подпись пишется здесь, а не
 /// добавляется отдельным сообщением потом (решение пользователя: фото
@@ -30,6 +30,7 @@ class AttachmentComposeScreen extends StatefulWidget {
 class _AttachmentComposeScreenState extends State<AttachmentComposeScreen> {
   final _caption = TextEditingController();
   late Uint8List _bytes = widget.bytes;
+  bool _hd = false; // качество: обычное (до 1600 px) или HD (до 3200 px, файл тяжелее)
 
   @override
   void dispose() {
@@ -64,6 +65,12 @@ class _AttachmentComposeScreenState extends State<AttachmentComposeScreen> {
         title: Text(widget.isImage ? tr('Фото') : tr('Файл'),
             style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
+          if (widget.isImage)
+            GlassCircleButton(
+              icon: Text('HD', style: TextStyle(fontWeight: FontWeight.w900, color: _hd ? Theme.of(context).colorScheme.primary : null)),
+              tooltip: _hd ? tr('Высокое качество включено') : tr('Включить высокое качество (HD)'),
+              onTap: () => setState(() => _hd = !_hd),
+            ),
           if (widget.isImage)
             GlassCircleButton(icon: const BoldIcon(Icons.tune), tooltip: tr('Редактировать'), onTap: _edit),
         ],
@@ -116,7 +123,7 @@ class _AttachmentComposeScreenState extends State<AttachmentComposeScreen> {
                   const SizedBox(width: 8),
                   IconButton.filled(
                     onPressed: () => Navigator.of(context)
-                        .pop<AttachmentComposeResult>((bytes: _bytes, caption: _caption.text.trim())),
+                        .pop<AttachmentComposeResult>((bytes: _bytes, caption: _caption.text.trim(), hd: _hd)),
                     icon: const Icon(Icons.send),
                   ),
                 ],
