@@ -171,6 +171,23 @@ class ChatDriveService {
     }
   }
 
+  /// Веб: файла на диске нет — скачивает [fileId] целиком в память (лимит — `ChatMediaUtils.maxWebDriveBytes`).
+  Future<Uint8List> downloadBytes({required String fileId}) async {
+    final (accessToken, _) = await _getUploadToken();
+    final client = clientFactory();
+    try {
+      final res = await client
+          .get(Uri.parse('https://www.googleapis.com/drive/v3/files/$fileId?alt=media'), headers: {'Authorization': 'Bearer $accessToken'})
+          .timeout(_transferTimeout);
+      if (res.statusCode >= 300) {
+        throw Exception(tr('Не удалось скачать файл ({statusCode}): {body}', {'statusCode': res.statusCode, 'body': res.body}));
+      }
+      return res.bodyBytes;
+    } finally {
+      client.close();
+    }
+  }
+
   /// Скачивает файл [fileId] потоково в [destPath] — пишет на диск по
   /// мере получения, не копит гигабайты в памяти. [onProgress] — сколько
   /// байт уже получено (второй параметр — общий размер, если известен).

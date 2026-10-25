@@ -1115,6 +1115,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (_downloading.contains(m.id)) return;
     try {
       var msg = m;
+      if (kIsWeb && msg.attachmentBase64 == null && msg.driveFileId != null) {
+        // Веб: папки приложения нет — большой файл скачивается в память и открывается сразу.
+        setState(() => _downloading.add(m.id));
+        try {
+          final bytes = await widget.sync.downloadLargeBytes(m);
+          if (!mounted) return;
+          await AttachmentViewer.open(context, name: m.attachmentName ?? 'file', bytes: bytes, mime: m.attachmentMime);
+        } finally {
+          if (mounted) setState(() => _downloading.remove(m.id));
+        }
+        return;
+      }
       if (msg.attachmentBase64 == null &&
           !(msg.attachmentLocalPath != null &&
               File(msg.attachmentLocalPath!).existsSync()) &&
@@ -2045,6 +2057,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<MediaSource?> _mediaSource(ChatMessage m) async {
     try {
       var msg = m;
+      if (kIsWeb && msg.attachmentBase64 == null && msg.driveFileId != null) {
+        final bytes = await widget.sync.downloadLargeBytes(m);
+        return MediaSource(bytes: bytes, mime: m.attachmentMime ?? 'application/octet-stream');
+      }
       if (msg.attachmentBase64 == null &&
           !(msg.attachmentLocalPath != null &&
               File(msg.attachmentLocalPath!).existsSync()) &&

@@ -633,6 +633,17 @@ class ChatSyncService {
     unawaited(drive.deleteFile(fileId));
   }
 
+  /// Веб: большое вложение с Диска в память (на диск в браузере писать некуда). Проверка безопасности та же;
+  /// с Диска файл здесь НЕ удаляем — иначе после закрытия вкладки он пропал бы совсем.
+  Future<Uint8List> downloadLargeBytes(ChatMessage message) async {
+    final fileId = message.driveFileId;
+    if (fileId == null) throw Exception(tr('Нечего скачивать'));
+    final bytes = await drive.downloadBytes(fileId: fileId);
+    final verdict = AttachmentGuard.check(bytes, message.attachmentName ?? 'file');
+    if (!verdict.ok) throw Exception(tr('Файл заблокирован: {reason}', {'reason': verdict.reason}));
+    return bytes;
+  }
+
   /// Забирает новые входящие сообщения ОТ ВСЕХ контактов разом — вызывать
   /// периодически, пока открыто приложение (решение пользователя:
   /// редкий опрос вместо push, тот убран в MVP). Вложение (если есть)
