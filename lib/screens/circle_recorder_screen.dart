@@ -27,7 +27,8 @@ class CircleRecorderScreen extends StatefulWidget {
 
   /// Сигнал «кнопку отпустили»: запись завершается и отправляется (или, если камера ещё не готова, экран закрывается).
   final ValueListenable<int>? finishSignal;
-  const CircleRecorderScreen({super.key, this.autoStart = false, this.finishSignal});
+  const CircleRecorderScreen(
+      {super.key, this.autoStart = false, this.finishSignal});
 
   static const int maxSeconds = 120;
 
@@ -44,7 +45,9 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
   bool _finishing = false;
   final _light = SelfieLightState();
   bool _torch = false;
-  bool get _isFront => _cameras.isNotEmpty && _cameras[_camIndex].lensDirection == CameraLensDirection.front;
+  bool get _isFront =>
+      _cameras.isNotEmpty &&
+      _cameras[_camIndex].lensDirection == CameraLensDirection.front;
 
   Future<void> _toggleLight() async {
     if (_isFront) {
@@ -59,7 +62,13 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
     } catch (_) {}
   }
 
-  bool _switching = false; // идёт смена камеры — картинку прячем, чтобы не мелькал кадр «вверх ногами»
+  // Зум двумя пальцами (щипок) на кружке: уровень камеры от минимума до максимума, сбрасывается при смене камеры.
+  double _zoom = 1, _minZoom = 1, _maxZoom = 1;
+  final Map<int, Offset> _ptr = {};
+  double _pinchDist = 1, _pinchZoom = 1;
+
+  bool _switching =
+      false; // идёт смена камеры — картинку прячем, чтобы не мелькал кадр «вверх ногами»
   int _elapsed = 0;
   Timer? _ticker;
 
@@ -79,11 +88,13 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
     if (_recording) {
       _finish(send: true);
     } else if (mounted && !_finishing) {
-      Navigator.of(context).pop(); // отпустили до начала записи — ничего не записано
+      Navigator.of(context)
+          .pop(); // отпустили до начала записи — ничего не записано
     }
   }
 
-  Future<void> _init({CameraLensDirection prefer = CameraLensDirection.front}) async {
+  Future<void> _init(
+      {CameraLensDirection prefer = CameraLensDirection.front}) async {
     try {
       if (_cameras.isEmpty) _cameras = await availableCameras();
       if (_cameras.isEmpty) throw StateError(tr('Камера не найдена'));
@@ -108,8 +119,41 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
       await c.dispose();
       return;
     }
+    try {
+      _minZoom = await c.getMinZoomLevel();
+      _maxZoom = await c.getMaxZoomLevel();
+      _zoom = _minZoom;
+      await c.setZoomLevel(_zoom);
+    } catch (_) {
+      _minZoom = _maxZoom = _zoom = 1; // на этой камере зум недоступен
+    }
     setState(() => _controller = c);
     await old?.dispose();
+  }
+
+  void _pinchDown(PointerDownEvent e) {
+    _ptr[e.pointer] = e.localPosition;
+    if (_ptr.length == 2) {
+      final p = _ptr.values.toList();
+      _pinchDist = (p[0] - p[1]).distance.clamp(1.0, 5000.0);
+      _pinchZoom = _zoom;
+    }
+  }
+
+  Future<void> _pinchMove(PointerMoveEvent e) async {
+    if (!_ptr.containsKey(e.pointer)) return;
+    _ptr[e.pointer] = e.localPosition;
+    final c = _controller;
+    if (_ptr.length < 2 || c == null || _maxZoom <= _minZoom) return;
+    final p = _ptr.values.take(2).toList();
+    final z = (_pinchZoom * (p[0] - p[1]).distance / _pinchDist)
+        .clamp(_minZoom, _maxZoom)
+        .toDouble();
+    if ((z - _zoom).abs() < 0.02) return;
+    setState(() => _zoom = z);
+    try {
+      await c.setZoomLevel(z);
+    } catch (_) {}
   }
 
   Future<void> _flip() async {
@@ -165,7 +209,8 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
       final file = await c.stopVideoRecording();
       final seconds = _elapsed;
       if (!mounted) return;
-      Navigator.of(context).pop(send && seconds >= 1 ? CircleResult(file, seconds) : null);
+      Navigator.of(context)
+          .pop(send && seconds >= 1 ? CircleResult(file, seconds) : null);
     } catch (e) {
       if (mounted) setState(() => _error = friendlyError(e));
     }
@@ -183,134 +228,176 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
   @override
   Widget build(BuildContext context) {
     final c = _controller;
-    final d = (MediaQuery.sizeOf(context).shortestSide * 0.82).clamp(200.0, 360.0);
+    final d =
+        (MediaQuery.sizeOf(context).shortestSide * 0.82).clamp(200.0, 360.0);
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(fit: StackFit.expand, children: [
         // подсветка экрана по краям (фронтальная камера) — под интерфейсом
         SelfieLightOverlay(light: _light),
         SafeArea(
-        child: _error != null
-            ? Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white)),
-                    const SizedBox(height: 16),
-                    FilledButton(onPressed: () => Navigator.of(context).pop(), child: Text(tr('Закрыть'))),
-                  ]),
-                ),
-              )
-            : Column(
-                children: [
-                  const Spacer(),
-                  SizedBox(
-                    width: d + 12,
-                    height: d + 12,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        SizedBox(
-                          width: d + 12,
-                          height: d + 12,
-                          child: CircularProgressIndicator(
-                            value: _recording ? _elapsed / CircleRecorderScreen.maxSeconds : 0,
-                            strokeWidth: 4,
-                            color: Colors.redAccent,
-                            backgroundColor: Colors.white24,
-                          ),
-                        ),
-                        ClipOval(
-                          child: SizedBox(
-                            width: d,
-                            height: d,
-                            child: _switching
-                                ? ColoredBox(color: Colors.black, child: Center(child: NexusPulse(size: d * 0.6)))
-                                : c == null || !c.value.isInitialized
-                                ? const Center(child: CircularProgressIndicator())
-                                : AnimatedOpacity(
-                                    opacity: _switching ? 0 : 1,
-                                    duration: const Duration(milliseconds: 150),
-                                    child: FittedBox(
-                                    fit: BoxFit.cover,
-                                    child: SizedBox(
-                                      width: d,
-                                      height: d * c.value.aspectRatio,
-                                      child: CameraPreview(c),
-                                    ),
-                                  )),
-                          ),
-                        ),
-                      ],
-                    ),
+          child: _error != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      Text(_error!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.white)),
+                      const SizedBox(height: 16),
+                      FilledButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: Text(tr('Закрыть'))),
+                    ]),
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    _recording
-                        ? '${formatClock(_elapsed)} / ${formatClock(CircleRecorderScreen.maxSeconds)}'
-                        : tr('Кружок до {m} мин', {'m': CircleRecorderScreen.maxSeconds ~/ 60}),
-                    style: const TextStyle(color: Colors.white70),
-                  ),
-                  const Spacer(),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 24),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        GlassCircleButton(
-                          size: 52,
-                          icon: const Icon(Icons.close),
-                          tooltip: tr('Отмена'),
-                          onTap: () async {
-                            if (_recording) {
-                              await _finish(send: false);
-                            } else if (mounted) {
-                              Navigator.of(context).pop();
-                            }
-                          },
-                        ),
-                        GestureDetector(
-                          onTap: c == null || !c.value.isInitialized
-                              ? null
-                              : (_recording ? () => _finish(send: true) : _start),
-                          child: Container(
-                            width: 76,
-                            height: 76,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 4),
+                )
+              : Column(
+                  children: [
+                    const Spacer(),
+                    SizedBox(
+                      width: d + 12,
+                      height: d + 12,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          SizedBox(
+                            width: d + 12,
+                            height: d + 12,
+                            child: CircularProgressIndicator(
+                              value: _recording
+                                  ? _elapsed / CircleRecorderScreen.maxSeconds
+                                  : 0,
+                              strokeWidth: 4,
+                              color: Colors.redAccent,
+                              backgroundColor: Colors.white24,
                             ),
-                            alignment: Alignment.center,
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 150),
-                              width: _recording ? 28 : 58,
-                              height: _recording ? 28 : 58,
-                              decoration: BoxDecoration(
-                                color: Colors.redAccent,
-                                borderRadius: BorderRadius.circular(_recording ? 6 : 29),
+                          ),
+                          Listener(
+                            onPointerDown: _pinchDown,
+                            onPointerMove: _pinchMove,
+                            onPointerUp: (e) => _ptr.remove(e.pointer),
+                            onPointerCancel: (e) => _ptr.remove(e.pointer),
+                            child: ClipOval(
+                              child: SizedBox(
+                                width: d,
+                                height: d,
+                                child: _switching
+                                    ? ColoredBox(
+                                        color: Colors.black,
+                                        child: Center(
+                                            child: NexusPulse(size: d * 0.6)))
+                                    : c == null || !c.value.isInitialized
+                                        ? const Center(
+                                            child: CircularProgressIndicator())
+                                        : AnimatedOpacity(
+                                            opacity: _switching ? 0 : 1,
+                                            duration: const Duration(
+                                                milliseconds: 150),
+                                            child: FittedBox(
+                                              fit: BoxFit.cover,
+                                              child: SizedBox(
+                                                width: d,
+                                                height: d * c.value.aspectRatio,
+                                                child: CameraPreview(c),
+                                              ),
+                                            )),
                               ),
                             ),
                           ),
-                        ),
-                        GlassCircleButton(
-                          size: 52,
-                          icon: const Icon(Icons.cameraswitch_outlined),
-                          tooltip: tr('Сменить камеру'),
-                          onTap: _cameras.length < 2 ? null : _flip,
-                        ),
-                        // Свет: задняя камера — фонарик, фронтальная — подсветка экрана.
-                        GlassCircleButton(
-                          size: 52,
-                          icon: Icon(_isFront ? Icons.wb_incandescent_outlined : (_torch ? Icons.flashlight_on : Icons.flashlight_off)),
-                          tooltip: tr('Свет'),
-                          onTap: _toggleLight,
-                        ),
-                      ],
+                          if (_zoom > _minZoom + 0.05)
+                            Positioned(
+                              bottom: 10,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 2),
+                                decoration: BoxDecoration(
+                                    color: Colors.black54,
+                                    borderRadius: BorderRadius.circular(12)),
+                                child: Text(
+                                    '×${(_zoom / _minZoom).toStringAsFixed(1)}',
+                                    style:
+                                        const TextStyle(color: Colors.white)),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-      ),
+                    const SizedBox(height: 16),
+                    Text(
+                      _recording
+                          ? '${formatClock(_elapsed)} / ${formatClock(CircleRecorderScreen.maxSeconds)}'
+                          : tr('Кружок до {m} мин',
+                              {'m': CircleRecorderScreen.maxSeconds ~/ 60}),
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                    const Spacer(),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 24),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          GlassCircleButton(
+                            size: 52,
+                            icon: const Icon(Icons.close),
+                            tooltip: tr('Отмена'),
+                            onTap: () async {
+                              if (_recording) {
+                                await _finish(send: false);
+                              } else if (mounted) {
+                                Navigator.of(context).pop();
+                              }
+                            },
+                          ),
+                          GestureDetector(
+                            onTap: c == null || !c.value.isInitialized
+                                ? null
+                                : (_recording
+                                    ? () => _finish(send: true)
+                                    : _start),
+                            child: Container(
+                              width: 76,
+                              height: 76,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border:
+                                    Border.all(color: Colors.white, width: 4),
+                              ),
+                              alignment: Alignment.center,
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 150),
+                                width: _recording ? 28 : 58,
+                                height: _recording ? 28 : 58,
+                                decoration: BoxDecoration(
+                                  color: Colors.redAccent,
+                                  borderRadius: BorderRadius.circular(
+                                      _recording ? 6 : 29),
+                                ),
+                              ),
+                            ),
+                          ),
+                          GlassCircleButton(
+                            size: 52,
+                            icon: const Icon(Icons.cameraswitch_outlined),
+                            tooltip: tr('Сменить камеру'),
+                            onTap: _cameras.length < 2 ? null : _flip,
+                          ),
+                          // Свет: задняя камера — фонарик, фронтальная — подсветка экрана.
+                          GlassCircleButton(
+                            size: 52,
+                            icon: Icon(_isFront
+                                ? Icons.wb_incandescent_outlined
+                                : (_torch
+                                    ? Icons.flashlight_on
+                                    : Icons.flashlight_off)),
+                            tooltip: tr('Свет'),
+                            onTap: _toggleLight,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+        ),
       ]),
     );
   }
