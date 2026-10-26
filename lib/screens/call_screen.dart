@@ -244,6 +244,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
         if (s.video) ...[
           _button(s.cameraOff ? Icons.videocam_off : Icons.videocam_outlined, tr('Камера'), s.toggleCamera, on: s.cameraOff),
           _button(Icons.cameraswitch_outlined, tr('Сменить'), s.switchCamera),
+          _button(Icons.hd_outlined, s.hd ? tr('HD вкл.') : tr('HD выкл.'), () => s.setHd(!s.hd), on: s.hd),
           // Задняя камера — фонарик; фронтальная — подсветка экрана (яркость, теплота, RGB).
           _button(s.frontCamera ? Icons.wb_incandescent_outlined : (s.torchOn ? Icons.flashlight_on : Icons.flashlight_off), tr('Свет'),
               () => s.frontCamera ? showSelfieLightSheet(context, _light) : s.toggleTorch(),

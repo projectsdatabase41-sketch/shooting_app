@@ -83,6 +83,9 @@ class CallSession extends ChangeNotifier {
   bool speaker = false;
   bool cameraOff = false;
   bool frontCamera = true;
+
+  /// Высокое качество видео. Меняется в ходе звонка: при слабой связи выключают, потом снова включают.
+  bool hd = true;
   bool torchOn = false; // фонарик (только задняя камера)
   bool remoteVideo = false;
 
@@ -127,7 +130,8 @@ class CallSession extends ChangeNotifier {
     await remoteRenderer.initialize();
     _local = await navigator.mediaDevices.getUserMedia({
       'audio': true,
-      'video': video ? {'facingMode': 'user'} : false,
+      // HD по умолчанию: 720p/30; выключается кнопкой «HD» (слабая связь) — тогда резче сжимается и кадров меньше.
+      'video': video ? {'facingMode': 'user', 'width': {'ideal': 1280}, 'height': {'ideal': 720}, 'frameRate': {'ideal': 30}} : false,
     });
     localRenderer.srcObject = _local;
     final pc = await createPeerConnection({'iceServers': await _service.iceServers()});
@@ -373,6 +377,29 @@ class CallSession extends ChangeNotifier {
       t.enabled = !cameraOff;
     }
     notifyListeners();
+  }
+
+  /// HD вкл/выкл на лету: меняется потолок скорости, частота кадров и масштаб отправляемого видео, камера не
+  /// перезапускается (картинка не мигает).
+  Future<void> setHd(bool v) async {
+    hd = v;
+    notifyListeners();
+    try {
+      for (final sender in await _pc?.getSenders() ?? const <RTCRtpSender>[]) {
+        if (sender.track?.kind != 'video') continue;
+        final p = sender.parameters;
+        final encodings = (p.encodings == null || p.encodings!.isEmpty) ? [RTCRtpEncoding()] : p.encodings!;
+        for (final e in encodings) {
+          e.maxBitrate = v ? 2500000 : 450000;
+          e.maxFramerate = v ? 30 : 15;
+          e.scaleResolutionDownBy = v ? 1.0 : 2.0;
+        }
+        p.encodings = encodings;
+        await sender.setParameters(p);
+      }
+    } catch (_) {
+      // платформа не поддерживает смену параметров на лету — остаётся прежнее качество
+    }
   }
 
   Future<void> switchCamera() async {

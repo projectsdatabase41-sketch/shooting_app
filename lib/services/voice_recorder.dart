@@ -56,6 +56,9 @@ class VoiceRecorder {
     return out.toString();
   }
 
+  /// Высокое качество голосовых: 128 кбит/с, 44,1 кГц (обычное — 48 кбит/с, 22 кГц); файл примерно втрое тяжелее.
+  static bool hd = false;
+
   bool get isRecording => _startedAt != null;
 
   /// Прошло секунд с начала записи.
@@ -76,7 +79,7 @@ class VoiceRecorder {
       path = p.join(dir.path, 'voice_${DateTime.now().millisecondsSinceEpoch}.$ext');
     }
     await _rec.start(
-      RecordConfig(encoder: encoder, bitRate: 48000, sampleRate: 22050, numChannels: 1),
+      RecordConfig(encoder: encoder, bitRate: hd ? 128000 : 48000, sampleRate: hd ? 44100 : 22050, numChannels: 1),
       path: path,
     );
     _startedAt = DateTime.now();

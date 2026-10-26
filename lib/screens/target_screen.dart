@@ -4,6 +4,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../widgets/ai_gate.dart';
 import 'focus_training_screen.dart';
+import '../voice/voice_control.dart';
+import '../voice/voice_grammar.dart';
+import 'package:uuid/uuid.dart';
 import 'package:provider/provider.dart';
 import '../logic/ai_context.dart';
 import '../logic/shot_photo_detection.dart';
@@ -26,7 +29,6 @@ import '../widgets/athlete_coach_chat.dart';
 import '../widgets/shot_wheel.dart';
 import '../services/comments_repository.dart';
 import '../logic/friendly_error.dart' show friendlyErrorDevMode;
-import 'package:uuid/uuid.dart';
 import '../widgets/target_canvas.dart';
 import 'ai_chat_screen.dart';
 import 'photo_scan_screen.dart';
@@ -134,7 +136,71 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
   final Map<WorkspacePage, GlobalKey> _keys = {};
 
   @override
+  void initState() {
+    super.initState();
+    // Голос: команды тренировки действуют, пока открыт этот экран.
+    final vm = context.read<TargetViewModel>();
+    VoiceControl.instance.register(this, {
+      VoiceAction.trainingStart: (i) {
+        if (!vm.canEdit) return tr('Тренировку сейчас начать нельзя');
+        vm.start();
+        return tr('Тренировка начата');
+      },
+      VoiceAction.trainingPause: (i) {
+        vm.pause();
+        return tr('Пауза');
+      },
+      VoiceAction.trainingResume: (i) {
+        vm.resume();
+        return tr('Продолжаем');
+      },
+      VoiceAction.trainingFinish: (i) async {
+        // Завершение подтверждается на экране: ошибка распознавания не должна закрыть тренировку.
+        final ok = await showGlassDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text(tr('Завершить тренировку?')),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Отмена'))),
+              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Завершить'))),
+            ],
+          ),
+        );
+        if (ok == true) vm.finish();
+        return ok == true ? tr('Тренировка завершена') : tr('Отменено');
+      },
+      VoiceAction.undoShot: (i) {
+        if (vm.session.shots.isEmpty) return tr('Выстрелов нет');
+        vm.undoLastShot();
+        return tr('Последний выстрел отменён');
+      },
+      VoiceAction.focusMode: (i) {
+        FocusTrainingScreen.open(context);
+        return tr('Режим концентрации');
+      },
+      VoiceAction.addNote: (i) {
+        final text = i.text;
+        if (text == null || text.isEmpty) return tr('Скажите: «заметка» и текст');
+        final store = context.read<AppDataStore>();
+        final shot = vm.selectedShot ?? (vm.session.shots.isEmpty ? null : vm.session.shots.last);
+        CommentsRepository(store.db).add(Comment(
+          id: const Uuid().v4(),
+          sessionId: vm.session.id,
+          level: shot == null ? CommentLevel.session : CommentLevel.shot,
+          shotId: shot?.id,
+          authorRole: store.workMode == WorkMode.coach ? AuthorRole.coach : AuthorRole.athlete,
+          text: text,
+          createdAt: DateTime.now(),
+        ));
+        vm.noteExternalEdit();
+        return tr('Заметка сохранена');
+      },
+    });
+  }
+
+  @override
   void dispose() {
+    VoiceControl.instance.unregister(this);
     _scroll.dispose();
     super.dispose();
   }

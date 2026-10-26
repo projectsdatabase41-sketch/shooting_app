@@ -78,5 +78,9 @@
 	<string>Bluetooth нужен для связи устройств в одном тире во время финала.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>Bluetooth нужен для связи устройств в одном тире во время финала.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Распознавание речи нужно для голосового управления приложением.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Микрофон нужен для голосовых сообщений, звонков и голосового управления.</string>
 </dict>
 </plist>

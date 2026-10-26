@@ -2,6 +2,8 @@ import '../gdrive/gdrive_screen.dart';
 import 'dart:async' show Timer;
 import 'package:flutter/material.dart';
 import '../finals/finals_invite.dart' show FinalsInviteStore;
+import '../voice/voice_control.dart';
+import '../voice/voice_grammar.dart';
 import 'final_room_screens.dart' show offerFinalInvites;
 import '../theme/app_transitions.dart';
 import '../widgets/tile_backdrop.dart';
@@ -73,6 +75,20 @@ class _HomeShellState extends State<HomeShell> {
     });
     _syncChatPoll();
     ModulesSettings.revision.addListener(_syncChatPoll);
+    // Голос: «открой настройки / финалы…», «назад».
+    VoiceControl.instance.register(this, {
+      VoiceAction.open: (i) {
+        final store = context.read<AppDataStore>();
+        final id = i.target;
+        if (id == null) return null;
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => _pageFor(id, store, _tabs)));
+        return tr('Открываю');
+      },
+      VoiceAction.back: (i) {
+        Navigator.of(context).maybePop();
+        return tr('Назад');
+      },
+    });
     // Не действующие приглашения в финал (код со ссылкой) из сообщений стираются — ключи не хранятся.
     try {
       FinalsInviteStore.purge(db);
@@ -101,6 +117,7 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   void dispose() {
+    VoiceControl.instance.unregister(this);
     ModulesSettings.revision.removeListener(_syncChatPoll);
     _chatPoll?.stop();
     _inviteTimer?.cancel();

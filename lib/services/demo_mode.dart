@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import '../voice/voice_overlay.dart';
 import 'app_update_service.dart';
 import '../i18n/i18n.dart';
 import 'chat_settings.dart';
@@ -379,7 +380,7 @@ class _DemoFeedbackOverlayState extends State<DemoFeedbackOverlay> {
   @override
   Widget build(BuildContext context) {
     return Stack(children: [
-      Positioned.fill(child: widget.child),
+      Positioned.fill(child: VoiceOverlay(navigatorKey: widget.navigatorKey, child: widget.child)),
       ValueListenableBuilder<bool>(
         valueListenable: DemoMode.enabled,
         builder: (context, on, _) {

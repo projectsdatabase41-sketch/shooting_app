@@ -2241,6 +2241,26 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                             ),
                           ),
                         ),
+                        // Качество голосовых: HD (тяжелее, чище) или обычное; видно, пока поле пустое.
+                        ValueListenableBuilder<TextEditingValue>(
+                          valueListenable: _input,
+                          builder: (_, v, __) => v.text.trim().isNotEmpty
+                              ? const SizedBox.shrink()
+                              : Tooltip(
+                                  message: VoiceRecorder.hd ? tr('Голосовые в HD') : tr('Голосовые в обычном качестве'),
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(12),
+                                    onTap: () => setState(() => VoiceRecorder.hd = !VoiceRecorder.hd),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                      child: Text('HD',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.w900,
+                                              color: VoiceRecorder.hd ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant)),
+                                    ),
+                                  ),
+                                ),
+                        ),
                         if (aiModuleOn(context))
                           IconButton(
                           onPressed:

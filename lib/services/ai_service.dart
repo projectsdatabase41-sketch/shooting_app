@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:http/http.dart' as http;
 
 import '../i18n/i18n.dart';
+import '../voice/voice_control.dart' show VoiceSettings;
 import 'ai_settings.dart';
 
 /// Ответ модели: текст плюс, если был, разобранный блок графика или
@@ -212,6 +213,11 @@ class AiService {
             'UI language: "${I18n.code}" — reply in it unless the user writes in another language.');
     }
 
+    // Голосовой помощник — отдельная модель (настраивается в «Голосовом управлении»), только выбор действия.
+    if (task == 'voice') {
+      final vm = VoiceSettings.model(settings.db);
+      if (vm != 'auto') return _askCloud(system.toString(), history, onlyModel: vm, rotateKeys: rotateKeys);
+    }
     // Ручной выбор модели в чате (AiSettings.chatModelChoice) — только для
     // task == 'chat'; конкретный id — конкретная облачная модель без перебора.
     final chatChoice = task == 'chat' ? settings.chatModelChoice : 'auto';

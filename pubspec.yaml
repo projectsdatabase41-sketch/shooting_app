@@ -97,6 +97,7 @@ dependencies:
   pointycastle: ^3.9.1
   screen_brightness: ^2.1.11
   bluetooth_low_energy: ^6.2.1
+  speech_to_text: ^7.4.0
 
 dev_dependencies:
   flutter_test:

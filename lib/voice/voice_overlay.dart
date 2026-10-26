@@ -1,0 +1,98 @@
+import 'package:flutter/material.dart';
+
+import '../i18n/i18n.dart';
+import '../services/ai_service.dart';
+import '../services/ai_settings.dart';
+import 'voice_ai.dart';
+import 'voice_control.dart';
+import 'voice_grammar.dart';
+
+/// Кнопка микрофона поверх приложения (если голосовое управление включено в настройках): нажали, сказали команду,
+/// приложение разобрало её и выполнило на текущем экране. Кнопку можно перетащить.
+class VoiceOverlay extends StatefulWidget {
+  final GlobalKey<NavigatorState> navigatorKey;
+  final Widget child;
+  const VoiceOverlay({super.key, required this.navigatorKey, required this.child});
+
+  @override
+  State<VoiceOverlay> createState() => _VoiceOverlayState();
+}
+
+class _VoiceOverlayState extends State<VoiceOverlay> {
+  Offset _pos = const Offset(12, 220); // от правого нижнего угла
+
+  void _say(String text) {
+    final ctx = widget.navigatorKey.currentContext;
+    if (ctx == null) return;
+    ScaffoldMessenger.maybeOf(ctx)
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(text), duration: const Duration(seconds: 3)));
+  }
+
+  Future<void> _tap() async {
+    final vc = VoiceControl.instance;
+    final phrase = await vc.listenOnce();
+    if (phrase == null || phrase.trim().isEmpty) {
+      _say(tr('Не расслышал — нажмите микрофон и повторите'));
+      return;
+    }
+    var intent = VoiceGrammar.parse(phrase);
+    // Грамматика не поняла — ИИ-помощник (отдельная модель) выбирает действие из закрытого списка.
+    final db = VoiceSettings.db;
+    if (intent == null && db != null && VoiceSettings.aiOn(db)) {
+      intent = await VoiceAi(AiService(AiSettings(db))).interpret(phrase);
+    }
+    if (intent == null) {
+      _say(tr('Не понял команду: «{p}»', {'p': phrase}));
+      return;
+    }
+    _say(await vc.execute(intent));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(children: [
+      Positioned.fill(child: widget.child),
+      ValueListenableBuilder<bool>(
+        valueListenable: VoiceSettings.enabled,
+        builder: (context, on, _) {
+          if (!on) return const SizedBox.shrink();
+          final size = MediaQuery.sizeOf(context);
+          return Positioned(
+            right: _pos.dx,
+            bottom: _pos.dy,
+            child: GestureDetector(
+              onPanUpdate: (d) => setState(() {
+                _pos = Offset((_pos.dx - d.delta.dx).clamp(0.0, size.width - 56), (_pos.dy - d.delta.dy).clamp(0.0, size.height - 120));
+              }),
+              child: ValueListenableBuilder<bool>(
+                valueListenable: VoiceControl.instance.listening,
+                builder: (context, listening, _) => Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end, children: [
+                  if (listening)
+                    ValueListenableBuilder<String>(
+                      valueListenable: VoiceControl.instance.heard,
+                      builder: (_, t, __) => Container(
+                        constraints: const BoxConstraints(maxWidth: 240),
+                        margin: const EdgeInsets.only(bottom: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(12)),
+                        child: Text(t.isEmpty ? tr('Говорите…') : t, style: const TextStyle(color: Colors.white)),
+                      ),
+                    ),
+                  FloatingActionButton.small(
+                    heroTag: 'voice-control',
+                    tooltip: tr('Голосовое управление'),
+                    backgroundColor: listening ? Colors.redAccent : Theme.of(context).colorScheme.primaryContainer,
+                    foregroundColor: listening ? Colors.white : Theme.of(context).colorScheme.onPrimaryContainer,
+                    onPressed: _tap,
+                    child: Icon(listening ? Icons.mic : Icons.mic_none),
+                  ),
+                ]),
+              ),
+            ),
+          );
+        },
+      ),
+    ]);
+  }
+}

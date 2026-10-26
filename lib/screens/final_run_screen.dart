@@ -7,6 +7,8 @@ import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
 
 import '../finals/announcer.dart';
+import '../voice/voice_control.dart';
+import '../voice/voice_grammar.dart';
 import '../finals/second_ticker.dart';
 import '../finals/round_label.dart';
 import '../finals/final_engine.dart';
@@ -59,6 +61,13 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
   void initState() {
     super.initState();
     c.addListener(_onChange);
+    VoiceControl.instance.register(this, {
+      VoiceAction.finalReady: (i) {
+        if (_started) return tr('Финал уже идёт');
+        _begin();
+        return tr('Начинаем');
+      },
+    });
   }
 
   void _onChange() {
@@ -89,6 +98,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
 
   @override
   void dispose() {
+    VoiceControl.instance.unregister(this);
     FinalsAnnouncer.stop();
     _timer?.cancel();
     _page.dispose();
