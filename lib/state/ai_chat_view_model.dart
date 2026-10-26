@@ -7,6 +7,7 @@ import '../logic/ai_context.dart';
 import '../models/ai_memory_summary.dart';
 import '../services/ai_memory_service.dart';
 import '../services/ai_service.dart';
+import '../logic/source_quotes.dart';
 import '../services/knowledge_service.dart';
 import '../services/web_search_service.dart';
 import '../i18n/i18n.dart';
@@ -239,6 +240,7 @@ class AiChatViewModel extends ChangeNotifier {
           : rawCtx.withPastSummaries(pastSummaries);
       _setPhase(/*tr*/ 'Ищу информацию');
       var chunks = await knowledge.search(trimmed);
+      var extraTerms = const <String>[];
       // Поиск по базе одинаков во всех режимах (режимы — про рассуждение, а
       // не про поиск). Если по словам вопроса и синонимам нашлось мало,
       // модель подсказывает ещё термины, и поиск повторяется с ними.
@@ -247,6 +249,7 @@ class AiChatViewModel extends ChangeNotifier {
           !KnowledgeService.isSmallTalk(trimmed)) {
         final terms = await _expandQuery(trimmed);
         if (terms.isNotEmpty) {
+          extraTerms = terms;
           final more = await knowledge.search(trimmed, extraTerms: terms);
           final seen = {for (final c in chunks) c.text};
           chunks = [...chunks, ...more.where((c) => !seen.contains(c.text))];
@@ -292,9 +295,18 @@ class AiChatViewModel extends ChangeNotifier {
         rotateKeys: mode == 'think',
         preferReasoning: mode == 'think',
       );
+      // Содержание книг показывает само приложение дословными цитатами (универсальное правило отбора, без модели):
+      // пересказ моделью — «как я поняла прочитанное» — путает термины и выдумывает. Модель отвечает только по данным пользователя.
+      final quotes = SourceQuotes.pick(
+        chunks,
+        KnowledgeService.withSynonyms(KnowledgeService.withExtraTerms(KnowledgeService.keywords(trimmed), extraTerms)),
+        excludeTables: {for (final t in knowledge.settings.tables) t.name},
+      );
+      final quoteBlock = SourceQuotes.render(quotes, heading: tr('Из материалов (дословно):'));
+      final answerText = quoteBlock.isEmpty ? reply.text : (reply.text.trim().isEmpty ? quoteBlock : '${reply.text.trim()}\n\n$quoteBlock');
       messages.add(AiMessage(
         fromUser: false,
-        text: reply.text,
+        text: answerText,
         chart: reply.chart,
         model: reply.model,
         reasoning: reply.reasoning,
