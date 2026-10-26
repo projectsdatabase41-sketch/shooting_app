@@ -32,7 +32,13 @@ class VoicePlayerBar extends StatefulWidget {
 
   /// Настоящая огибающая громкости записи (hex 0–f); пусто — волна по умолчанию.
   final String wave;
-  const VoicePlayerBar({super.key, required this.durationSec, required this.fg, required this.load, this.seed = '', this.wave = ''});
+  const VoicePlayerBar(
+      {super.key,
+      required this.durationSec,
+      required this.fg,
+      required this.load,
+      this.seed = '',
+      this.wave = ''});
 
   @override
   State<VoicePlayerBar> createState() => _VoicePlayerBarState();
@@ -41,6 +47,10 @@ class VoicePlayerBar extends StatefulWidget {
 class _VoicePlayerBarState extends State<VoicePlayerBar> {
   static _VoicePlayerBarState? _active;
 
+  /// Играющий плеер переживает пересборку ленты: при приходе нового сообщения пузыри могут пересоздаться,
+  /// и воспроизведение «резко замолкало». Пузырь с тем же seed подхватывает плеер.
+  static final Map<String, (AudioPlayer, MediaSource?)> _orphans = {};
+
   AudioPlayer? _player;
   MediaSource? _source;
   bool _loading = false;
@@ -48,15 +58,39 @@ class _VoicePlayerBarState extends State<VoicePlayerBar> {
   Duration _pos = Duration.zero;
   Duration? _total;
   double _speed = 1;
-  double? _drag; // доля 0…1, пока палец ведёт по волне (позицию плеера не слушаем)
+  double?
+      _drag; // доля 0…1, пока палец ведёт по волне (позицию плеера не слушаем)
   final List<StreamSubscription<dynamic>> _subs = [];
+
+  @override
+  void initState() {
+    super.initState();
+    // Старый пузырь освобождается в конце кадра — подхватываем играющий плеер после него.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _player == null && widget.seed.isNotEmpty && _orphans.containsKey(widget.seed)) setState(_ensurePlayer);
+    });
+  }
 
   @override
   void dispose() {
     for (final s in _subs) {
       s.cancel();
     }
-    _player?.dispose();
+    final pl = _player;
+    if (pl != null && _playing && widget.seed.isNotEmpty) {
+      _orphans[widget.seed] = (pl, _source);
+      final seed = widget.seed;
+      pl.onPlayerStateChanged
+          .firstWhere((s) => s != PlayerState.playing)
+          .then((_) {
+        if (_orphans[seed]?.$1 == pl) {
+          _orphans.remove(seed);
+          pl.dispose();
+        }
+      });
+    } else {
+      pl?.dispose();
+    }
     if (_active == this) _active = null;
     super.dispose();
   }
@@ -64,8 +98,19 @@ class _VoicePlayerBarState extends State<VoicePlayerBar> {
   AudioPlayer _ensurePlayer() {
     final existing = _player;
     if (existing != null) return existing;
-    final pl = AudioPlayer();
+    final kept = widget.seed.isEmpty ? null : _orphans.remove(widget.seed);
+    final pl = kept?.$1 ?? AudioPlayer();
     _player = pl;
+    if (kept != null) {
+      _source = kept.$2;
+      _playing = true;
+      _active = this;
+      pl.getDuration().then(
+          (d) => mounted && d != null ? setState(() => _total = d) : null);
+      pl
+          .getCurrentPosition()
+          .then((d) => mounted && d != null ? setState(() => _pos = d) : null);
+    }
     _subs
       ..add(pl.onPositionChanged.listen((d) {
         if (mounted) setState(() => _pos = d);
@@ -119,7 +164,8 @@ class _VoicePlayerBarState extends State<VoicePlayerBar> {
 
   void _seekTo(double frac, int total) {
     if (_source == null || total <= 0) return;
-    _player?.seek(Duration(milliseconds: (frac.clamp(0.0, 1.0) * total).round()));
+    _player
+        ?.seek(Duration(milliseconds: (frac.clamp(0.0, 1.0) * total).round()));
   }
 
   /// Волна как в Telegram: столбики, проигранная часть закрашена; тап и
@@ -127,13 +173,16 @@ class _VoicePlayerBarState extends State<VoicePlayerBar> {
   Widget _wave(Color fg, int total) {
     return LayoutBuilder(builder: (context, box) {
       final w = box.maxWidth;
-      final progress = total <= 0 ? 0.0 : (_pos.inMilliseconds / total).clamp(0.0, 1.0);
+      final progress =
+          total <= 0 ? 0.0 : (_pos.inMilliseconds / total).clamp(0.0, 1.0);
       double frac(double dx) => (dx / w).clamp(0.0, 1.0);
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTapUp: (d) => _seekTo(frac(d.localPosition.dx), total),
-        onHorizontalDragStart: (d) => setState(() => _drag = frac(d.localPosition.dx)),
-        onHorizontalDragUpdate: (d) => setState(() => _drag = frac(d.localPosition.dx)),
+        onHorizontalDragStart: (d) =>
+            setState(() => _drag = frac(d.localPosition.dx)),
+        onHorizontalDragUpdate: (d) =>
+            setState(() => _drag = frac(d.localPosition.dx)),
         onHorizontalDragEnd: (_) {
           final f = _drag;
           setState(() => _drag = null);
@@ -161,8 +210,11 @@ class _VoicePlayerBarState extends State<VoicePlayerBar> {
   @override
   Widget build(BuildContext context) {
     final fg = widget.fg;
-    final total = (_total ?? Duration(seconds: widget.durationSec)).inMilliseconds;
-    final shown = _playing || _pos > Duration.zero ? _pos : Duration(seconds: widget.durationSec);
+    final total =
+        (_total ?? Duration(seconds: widget.durationSec)).inMilliseconds;
+    final shown = _playing || _pos > Duration.zero
+        ? _pos
+        : Duration(seconds: widget.durationSec);
     return SizedBox(
       width: 230,
       child: Row(
@@ -173,17 +225,20 @@ class _VoicePlayerBarState extends State<VoicePlayerBar> {
             child: Container(
               width: 40,
               height: 40,
-              decoration: BoxDecoration(shape: BoxShape.circle, color: fg.withValues(alpha: 0.18)),
+              decoration: BoxDecoration(
+                  shape: BoxShape.circle, color: fg.withValues(alpha: 0.18)),
               child: _loading
                   ? Padding(
                       padding: const EdgeInsets.all(11),
-                      child: CircularProgressIndicator(strokeWidth: 2, color: fg),
+                      child:
+                          CircularProgressIndicator(strokeWidth: 2, color: fg),
                     )
                   : Icon(_playing ? Icons.pause : Icons.play_arrow, color: fg),
             ),
           ),
           Expanded(child: _wave(fg, total)),
-          Text(formatClock(shown.inSeconds), style: TextStyle(color: fg, fontSize: 12)),
+          Text(formatClock(shown.inSeconds),
+              style: TextStyle(color: fg, fontSize: 12)),
           const SizedBox(width: 6),
           InkWell(
             onTap: _cycleSpeed,
@@ -191,7 +246,8 @@ class _VoicePlayerBarState extends State<VoicePlayerBar> {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
               child: Text(_speed == 1 ? '1×' : (_speed == 1.5 ? '1.5×' : '2×'),
-                  style: TextStyle(color: fg, fontSize: 12, fontWeight: FontWeight.w700)),
+                  style: TextStyle(
+                      color: fg, fontSize: 12, fontWeight: FontWeight.w700)),
             ),
           ),
         ],
@@ -207,20 +263,31 @@ class _WavePainter extends CustomPainter {
   final Color rest;
   final bool active;
   final String wave;
-  _WavePainter({required this.seed, required this.progress, required this.played, required this.rest, required this.active, this.wave = ''});
+  _WavePainter(
+      {required this.seed,
+      required this.progress,
+      required this.played,
+      required this.rest,
+      required this.active,
+      this.wave = ''});
 
   @override
   void paint(Canvas canvas, Size size) {
     const bar = 3.0, gap = 2.0;
     final n = math.max(8, (size.width / (bar + gap)).floor());
     final rnd = math.Random(seed);
-    final paint = Paint()..strokeCap = StrokeCap.round..strokeWidth = bar;
+    final paint = Paint()
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = bar;
     for (var i = 0; i < n; i++) {
       // Плавные «речевые» столбики: огибающая и случайность.
       double h;
       if (wave.isNotEmpty) {
         // Реальная громкость: берём ближайшее значение огибающей.
-        final v = int.tryParse(wave[(i * wave.length / n).floor().clamp(0, wave.length - 1)], radix: 16) ?? 4;
+        final v = int.tryParse(
+                wave[(i * wave.length / n).floor().clamp(0, wave.length - 1)],
+                radix: 16) ??
+            4;
         h = size.height * (0.14 + 0.86 * v / 15);
       } else {
         final env = 0.45 + 0.55 * math.sin(i / n * math.pi);
@@ -229,7 +296,8 @@ class _WavePainter extends CustomPainter {
       final x = i * (bar + gap) + bar / 2;
       final done = (i + 0.5) / n <= progress;
       // Столбик под проигрываемой позицией чуть «пульсирует».
-      if (active && ((i + 0.5) / n - progress).abs() < 0.04) h = math.min(size.height, h * 1.25);
+      if (active && ((i + 0.5) / n - progress).abs() < 0.04)
+        h = math.min(size.height, h * 1.25);
       paint.color = done ? played : rest;
       final cy = size.height / 2;
       canvas.drawLine(Offset(x, cy - h / 2), Offset(x, cy + h / 2), paint);
@@ -237,5 +305,9 @@ class _WavePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_WavePainter old) => old.progress != progress || old.active != active || old.played != played || old.wave != wave;
+  bool shouldRepaint(_WavePainter old) =>
+      old.progress != progress ||
+      old.active != active ||
+      old.played != played ||
+      old.wave != wave;
 }

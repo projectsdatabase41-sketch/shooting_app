@@ -1,3 +1,4 @@
+import '../services/economy_mode.dart';
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -40,7 +41,7 @@ class GlassPill extends StatelessWidget {
     );
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius ?? 999),
-      child: kIsWeb
+      child: kIsWeb || EconomyMode.on
           ? body
           : BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),

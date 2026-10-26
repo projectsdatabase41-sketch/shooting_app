@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
+import '../logic/session_filter.dart';
 import '../models/exercise.dart';
 import '../models/training_session.dart';
 import '../services/supabase_auth_service.dart';
@@ -11,6 +12,7 @@ import '../state/app_data_store.dart';
 import '../theme/app_theme.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/glass_pill.dart';
+import '../widgets/session_filter_sheet.dart';
 import '../widgets/swipe_to_delete.dart';
 import 'exercise_history_detail_screen.dart';
 import 'target_screen.dart';
@@ -30,18 +32,36 @@ import '../i18n/i18n.dart';
 /// Оформление: карточки вместо голых `ListTile` — в списке важны три
 /// вещи сразу (что за упражнение, когда, с каким результатом) плюс
 /// статус, а `ListTile` с `trailing: Text` их не различал по важности.
-class TrainingsHistoryScreen extends StatelessWidget {
+class TrainingsHistoryScreen extends StatefulWidget {
   final Exercise? exercise;
   const TrainingsHistoryScreen({super.key, this.exercise});
+
+  @override
+  State<TrainingsHistoryScreen> createState() => _TrainingsHistoryScreenState();
+}
+
+class _TrainingsHistoryScreenState extends State<TrainingsHistoryScreen> {
+  SessionFilter _filter = SessionFilter();
+
+  Future<void> _openFilter(AppDataStore store) async {
+    final r = await showSessionFilterSheet(context, _filter, store.db);
+    if (r != null && mounted) setState(() => _filter = r);
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final store = context.watch<AppDataStore>();
-    final ex = exercise;
-    final sessions = ex == null
+    final ex = widget.exercise;
+    final all = ex == null
         ? store.sessions
         : store.sessions.where((s) => s.exerciseId == ex.id).toList();
+    // Заметки к выстрелам нужны только фильтру «с заметками».
+    final noted = <String>{
+      if (_filter.onlyWithNotes)
+        for (final r in store.db.db.select("SELECT DISTINCT session_id FROM comments WHERE level = 'shot'")) '${r['session_id']}',
+    };
+    final sessions = _filter.isEmpty ? all : [for (final s in all) if (_filter.matches(s, hasNotes: noted.contains(s.id))) s];
     final df = DateFormat('dd.MM.yyyy · HH:mm');
     final topInset = MediaQuery.paddingOf(context).top;
 
@@ -52,6 +72,16 @@ class TrainingsHistoryScreen extends StatelessWidget {
             style: theme.textTheme.titleMedium
                 ?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
+          Badge(
+            isLabelVisible: !_filter.isEmpty,
+            label: Text('${_filter.count}'),
+            child: GlassCircleButton(
+              icon: const BoldIcon(Icons.filter_list),
+              tooltip: tr('Фильтр'),
+              onTap: () => _openFilter(store),
+            ),
+          ),
+          if (ex != null) const SizedBox(width: 6),
           if (ex != null)
             GlassCircleButton(
               icon: const BoldIcon(Icons.add),
@@ -69,12 +99,16 @@ class TrainingsHistoryScreen extends StatelessWidget {
                 children: [
                   EmptyState(
                     icon: Icons.history,
-                    text: ex == null
+                    text: all.isNotEmpty
+                        ? tr('По фильтру ничего не найдено.')
+                        : ex == null
                         ? tr(
                             'Тренировок пока нет. Начните первую на вкладке «Упражнения».')
                         : tr('У «{label}» пока нет тренировок.',
                             {'label': ex.label}),
-                    action: ex == null
+                    action: all.isNotEmpty
+                        ? TextButton(onPressed: () => setState(() => _filter = SessionFilter()), child: Text(tr('Сбросить фильтр')))
+                        : ex == null
                         ? null
                         : FilledButton.icon(
                             icon: const Icon(Icons.add),

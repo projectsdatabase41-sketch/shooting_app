@@ -7,6 +7,7 @@ import '../models/comment.dart';
 import '../models/target_color_scheme.dart';
 import '../services/comments_repository.dart';
 import '../state/app_data_store.dart';
+import '../state/personalization_view_model.dart';
 import '../state/target_view_model.dart';
 import 'final_run_screen.dart' show ShotPad;
 
@@ -33,9 +34,6 @@ class FocusTrainingScreen extends StatefulWidget {
 
 class _FocusTrainingScreenState extends State<FocusTrainingScreen> {
   bool _holding = false;
-
-  /// Мишень на чёрном: колец до последнего видно, лист не рисуется квадратом (круг вырезается по краю мишени).
-  static final TargetColorScheme _scheme = TargetColorScheme.defaultScheme;
 
   Future<void> _note(TargetViewModel vm) async {
     final shot = vm.selectedShot ?? (vm.session.shots.isEmpty ? null : vm.session.shots.last);
@@ -78,13 +76,8 @@ class _FocusTrainingScreenState extends State<FocusTrainingScreen> {
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<TargetViewModel>();
-    // Кнопки яркие: белая заливка, чёрный значок/текст.
-    final bright = FilledButton.styleFrom(
-      backgroundColor: Colors.white,
-      foregroundColor: Colors.black,
-      minimumSize: const Size(0, 48),
-      textStyle: const TextStyle(fontWeight: FontWeight.w800),
-    );
+    // Мишень в теме, выбранной в настройках (на чёрном фоне круг вырезается по краю мишени).
+    final scheme = context.watch<PersonalizationViewModel>().scheme;
     final series = vm.session.shots.where((s) => s.seriesNo == vm.currentSeriesNo).toList();
     final canShoot = vm.canAddShotNow && !vm.isEditing;
     return Scaffold(
@@ -105,7 +98,8 @@ class _FocusTrainingScreenState extends State<FocusTrainingScreen> {
                         color: Colors.black,
                         child: ShotPad(
                           face: vm.face,
-                          colors: _scheme,
+                          colors: scheme,
+                          lockCenter: true,
                           marks: [for (final s in series) Offset(s.xMm, s.yMm)],
                           enabled: canShoot,
                           onHold: (v) => setState(() => _holding = v),
@@ -117,29 +111,34 @@ class _FocusTrainingScreenState extends State<FocusTrainingScreen> {
                 );
               }),
             ),
+            // Кнопки снизу — маленькие, круглые, со значком действия.
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 4),
-              child: SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  style: bright,
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                IconButton.filled(
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.black,
+                    disabledBackgroundColor: Colors.white24,
+                    minimumSize: const Size(52, 52),
+                  ),
+                  tooltip: tr('Заметка'),
                   onPressed: vm.session.shots.isEmpty ? null : () => _note(vm),
                   icon: const Icon(Icons.edit_note),
-                  label: Text(tr('Заметка')),
                 ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 4, 24, 12),
-              child: SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  style: bright,
+                const SizedBox(width: 28),
+                IconButton.filled(
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.black,
+                    disabledBackgroundColor: Colors.white24,
+                    minimumSize: const Size(52, 52),
+                  ),
+                  tooltip: tr('Отменить выстрел'),
                   onPressed: vm.session.shots.isEmpty || !vm.canEditShots ? null : vm.undoLastShot,
                   icon: const Icon(Icons.undo),
-                  label: Text(tr('Отменить выстрел')),
                 ),
-              ),
+              ]),
             ),
           ]),
           // Свернуть режим — круглая яркая кнопка справа вверху.

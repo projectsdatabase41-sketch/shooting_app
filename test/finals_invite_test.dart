@@ -226,8 +226,12 @@ void lateShotsTest() {
     expect(c.stagedOf('u_a').length, 1, reason: 'последний выстрел после «Стоп» принят');
 
     // раунд закрыт; запоздалый выстрел со старым номером раунда в новый раунд не попадает
-    c.advance(); // конец окна → загрузка следующей серии
-    c.advance();
+    while (c.canShootFor('u_a')) {
+      c.markMiss('u_a'); // остальные выстрелы не сделаны — «Промах»
+    }
+    c.advance(); // конец окна → комментарий диктора
+    c.advance(); // «Заряжай»
+    c.advance(); // «Старт»
     expect(c.phase, RunPhase.shooting);
     expect(c.roundId, isNot(rid0));
     hostCh.onMessage?.call('shot', {'author': 'x', 'who': 'u_a', 'x': 2.0, 'y': 2.0, 'rid': rid0});

@@ -32,7 +32,8 @@ class RunShot {
   final double y;
   final double score;
   final int atSecond; // время от начала зачётной части
-  const RunShot(this.who, this.index, this.shootOff, this.x, this.y, this.score, this.atSecond);
+  const RunShot(this.who, this.index, this.shootOff, this.x, this.y, this.score,
+      this.atSecond);
 
   Map<String, dynamic> toJson() => {
         'who': who,
@@ -101,7 +102,8 @@ class FinalRunController extends ChangeNotifier {
   /// Пристрелочные выстрелы ботов (не в зачёт): показываются бледно на их мишенях.
   final Map<String, List<(double, double)>> sightShots = {};
 
-  final Map<String, List<int>> _botTimes = {}; // секунды раунда, когда стреляет бот
+  final Map<String, List<int>> _botTimes =
+      {}; // секунды раунда, когда стреляет бот
   final Map<String, int> _roundFired = {};
   List<String> _shooters = [];
 
@@ -160,7 +162,8 @@ class FinalRunController extends ChangeNotifier {
   /// таблицу и движок уходят при закрытии раунда.
   final Map<String, List<({double x, double y, int t})>> _staged = {};
 
-  List<({double x, double y, int t})> stagedOf(String id) => _staged.putIfAbsent(id, () => []);
+  List<({double x, double y, int t})> stagedOf(String id) =>
+      _staged.putIfAbsent(id, () => []);
 
   /// Отмеченные выстрелы самого спортсмена.
   List<({double x, double y, int t})> get staged => stagedOf(userId);
@@ -173,7 +176,8 @@ class FinalRunController extends ChangeNotifier {
   String get roundLabel {
     if (inShootOff) return 'shootoff';
     if (roundIndex == 0 && format.hasOpenStage) return 'open';
-    if (roundIndex < format.seriesShots.length) return 'series:${roundIndex + 1}';
+    if (roundIndex < format.seriesShots.length)
+      return 'series:${roundIndex + 1}';
     return 'single:${roundIndex - format.seriesShots.length + 1}';
   }
 
@@ -207,9 +211,11 @@ class FinalRunController extends ChangeNotifier {
         // Боты тоже пристреливаются: до 5 выстрелов, примерно раз в 3–6 секунд.
         for (final e in bots.entries) {
           final list = sightShots.putIfAbsent(e.key, () => []);
-          if (list.length < 5 && rng.nextInt(5) == 0) list.add(e.value.shotPoint());
+          if (list.length < 5 && rng.nextInt(5) == 0)
+            list.add(e.value.shotPoint());
         }
-        if (--secondsLeft <= 0 && !manual) _beginLoading(pauseAfterSighting + 5);
+        if (--secondsLeft <= 0 && !manual)
+          _beginLoading(pauseAfterSighting + 5);
       case RunPhase.loading:
         if (--secondsLeft <= 0 && !manual) _beginRound();
       case RunPhase.shooting:
@@ -224,8 +230,13 @@ class FinalRunController extends ChangeNotifier {
           _doneTicks = 0;
         }
       case RunPhase.grace:
-        clock++;
-        if (--secondsLeft <= 0 || _humansDone()) _endRound();
+        if (_humansDone()) {
+          _endRound();
+        } else if (secondsLeft > 0) {
+          clock++;
+          secondsLeft--;
+        }
+      // Время на отметку вышло, а выстрел не указан: дальше не идём — ждём результат («Промах» или исключение).
       case RunPhase.finished:
         break;
     }
@@ -240,11 +251,21 @@ class FinalRunController extends ChangeNotifier {
       case RunPhase.sighting:
         _beginLoading(5);
       case RunPhase.loading:
-        _beginRound();
+        // Идёт комментарий диктора: «Далее» подаёт «Заряжай» (не перескакиваем сразу к «Старт»).
+        if (announcing) {
+          secondsLeft = 5;
+        } else {
+          _beginRound();
+        }
       case RunPhase.shooting:
         _stopRound();
       case RunPhase.grace:
-        _endRound();
+        if (_humansDone()) {
+          _endRound();
+        } else {
+          secondsLeft =
+              0; // выстрел не указан — переход только после результата, «Промаха» или исключения
+        }
       case RunPhase.finished:
         return;
     }
@@ -254,7 +275,7 @@ class FinalRunController extends ChangeNotifier {
   /// Что сделает «Далее» сейчас (для подписи кнопки): load / start / stop / next.
   String get nextCommand => switch (phase) {
         RunPhase.sighting => 'load',
-        RunPhase.loading => 'start',
+        RunPhase.loading => announcing ? 'load' : 'start',
         RunPhase.shooting => 'stop',
         RunPhase.grace => 'next',
         RunPhase.finished => '',
@@ -309,7 +330,9 @@ class FinalRunController extends ChangeNotifier {
       for (var k = 0; k < shotsPerShooter; k++) {
         // Равномерно по времени серии с разбросом; никто не стреляет на последней секунде.
         final slot = roundLimit / shotsPerShooter;
-        final t = (slot * k + bot.delaySeconds(slot.round()) + 1).round().clamp(1, roundLimit - 1);
+        final t = (slot * k + bot.delaySeconds(slot.round()) + 1)
+            .round()
+            .clamp(1, roundLimit - 1);
         times.add(t);
       }
       times.sort();
@@ -366,7 +389,9 @@ class FinalRunController extends ChangeNotifier {
 
   bool undoShotFor(String id) {
     final l = stagedOf(id);
-    if (l.isEmpty || paused || (phase != RunPhase.shooting && phase != RunPhase.grace)) return false;
+    if (l.isEmpty ||
+        paused ||
+        (phase != RunPhase.shooting && phase != RunPhase.grace)) return false;
     l.removeLast();
     notifyListeners();
     return true;
@@ -396,7 +421,37 @@ class FinalRunController extends ChangeNotifier {
     return true;
   }
 
-  bool _humansDone() => _shooters.where(humans.contains).every((id) => stagedOf(id).length >= shotsPerShooter);
+  /// Время на отметку после «Стоп» вышло, а у кого-то нет результата выстрела: ждём «Промах» или исключение.
+  bool get awaitingResult =>
+      phase == RunPhase.grace && secondsLeft <= 0 && !_humansDone();
+
+  /// Люди, у которых не хватает результата выстрела (когда [awaitingResult]).
+  List<String> get missingIds => awaitingResult
+      ? [
+          for (final id in _shooters)
+            if (humans.contains(id) && stagedOf(id).length < shotsPerShooter) id
+        ]
+      : const [];
+
+  /// «Промах»: выстрел не сделан по факту — записываем ноль (точка за пределами мишени).
+  bool markMiss(String id) =>
+      submitShotFor(id, face.faceRadiusMm * 1.5, 0) != null;
+
+  /// Судья/тренер исключает финалиста: остаётся в таблице на месте выбывания, финал идёт дальше.
+  bool exclude(String id) {
+    if (!humans.contains(id) || phase == RunPhase.finished) return false;
+    stagedOf(id).clear();
+    if (!engine.withdraw(id)) return false;
+    log.add({'e': 'exclude', 'who': id, 't': clock});
+    _shooters.remove(id);
+    if (engine.isFinished) phase = RunPhase.finished;
+    notifyListeners();
+    return true;
+  }
+
+  bool _humansDone() => _shooters
+      .where(humans.contains)
+      .every((id) => stagedOf(id).length >= shotsPerShooter);
 
   /// Время раунда вышло («Стоп»): если человек отметил не всё — короткое окно.
   void _stopRound() {
@@ -419,7 +474,8 @@ class FinalRunController extends ChangeNotifier {
       }
       var fired = l.length;
       l.clear();
-      while (fired < shotsPerShooter && !engine.isFinished && _stillInRound(id)) {
+      while (
+          fired < shotsPerShooter && !engine.isFinished && _stillInRound(id)) {
         _record(id, face.faceRadiusMm, 0, 0.0);
         log.add({'e': 'timeout', 'who': id, 't': clock});
         fired++;
@@ -436,7 +492,8 @@ class FinalRunController extends ChangeNotifier {
   }
 
   bool _stillInRound(String id) => inShootOff
-      ? engine.phase == FinalPhase.shootOff && engine.shootOffShooters.any((c) => c.id == id)
+      ? engine.phase == FinalPhase.shootOff &&
+          engine.shootOffShooters.any((c) => c.id == id)
       : engine.phase == FinalPhase.match && engine.byId(id).active;
 
   /// Между сериями — комментарий диктора и «Заряжай»; при смене положения (колено → лёжа → стоя)
@@ -461,12 +518,17 @@ class FinalRunController extends ChangeNotifier {
       }
       rows.add(LiveRow(c, shots));
     }
-    final act = [for (final r in rows) if (r.c.active) r]
-      ..sort((a, b) {
+    final act = [
+      for (final r in rows)
+        if (r.c.active) r
+    ]..sort((a, b) {
         final byAvg = b.avg.compareTo(a.avg);
         return byAvg != 0 ? byAvg : b.total.compareTo(a.total);
       });
-    final out = [for (final r in rows) if (!r.c.active) r]..sort((a, b) => a.c.place!.compareTo(b.c.place!));
+    final out = [
+      for (final r in rows)
+        if (!r.c.active) r
+    ]..sort((a, b) => a.c.place!.compareTo(b.c.place!));
     return [...act, ...out];
   }
 
@@ -474,7 +536,8 @@ class FinalRunController extends ChangeNotifier {
   /// выбывания, перестрелки) досчитывается сразу. Для активного спортсмена
   /// недоступно — его оставшиеся выстрелы пришлось бы обнулить.
   bool fastForward() {
-    if (humans.any((h) => engine.byId(h).active) || phase == RunPhase.finished) return false;
+    if (humans.any((h) => engine.byId(h).active) || phase == RunPhase.finished)
+      return false;
     paused = false;
     var guard = 0;
     while (phase != RunPhase.finished && guard++ < 200000) {
@@ -490,7 +553,13 @@ class FinalRunController extends ChangeNotifier {
         'finishedAt': DateTime.now().toUtc().toIso8601String(),
         'standings': [
           for (final c in engine.standings)
-            {'id': c.id, 'name': c.name, 'place': c.place, 'total': c.total, 'user': c.id == userId}
+            {
+              'id': c.id,
+              'name': c.name,
+              'place': c.place,
+              'total': c.total,
+              'user': c.id == userId
+            }
         ],
         'shots': [for (final s in shots) s.toJson()],
         'log': log,
@@ -503,6 +572,7 @@ class LiveRow {
   final List<double> shots;
   LiveRow(this.c, this.shots);
 
-  double get total => (shots.fold<double>(0, (a, b) => a + b) * 10).round() / 10;
+  double get total =>
+      (shots.fold<double>(0, (a, b) => a + b) * 10).round() / 10;
   double get avg => shots.isEmpty ? 0 : total / shots.length;
 }

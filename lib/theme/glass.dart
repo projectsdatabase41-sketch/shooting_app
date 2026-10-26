@@ -1,3 +1,4 @@
+import '../services/economy_mode.dart';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -56,7 +57,7 @@ class GlassFill extends StatelessWidget {
     // пятнами проезжающего под ними содержимого.
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
-      child: blur <= 0 ? box : BackdropFilter(filter: ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur), child: box),
+      child: blur <= 0 || EconomyMode.on ? box : BackdropFilter(filter: ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur), child: box),
     );
   }
 }
@@ -69,7 +70,7 @@ class GlassBlur extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!GlassTheme.enabled) return child;
+    if (!GlassTheme.enabled || EconomyMode.on) return child;
     Widget blurred = BackdropFilter(filter: ui.ImageFilter.blur(sigmaX: GlassTheme.windowBlur, sigmaY: GlassTheme.windowBlur), child: child);
     if (radius != null) blurred = ClipRRect(borderRadius: BorderRadius.vertical(top: Radius.circular(radius!)), child: blurred);
     return blurred;

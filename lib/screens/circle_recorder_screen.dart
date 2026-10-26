@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import '../widgets/selfie_light.dart';
 import 'package:camera/camera.dart';
@@ -31,6 +32,10 @@ class CircleRecorderScreen extends StatefulWidget {
       {super.key, this.autoStart = false, this.finishSignal});
 
   static const int maxSeconds = 120;
+
+  /// Продление: за 10 с до конца появляется кнопка «+2 мин» — кружок остаётся одним, только длиннее.
+  static const int extendSeconds = 120;
+  static const int hardLimit = 600;
 
   @override
   State<CircleRecorderScreen> createState() => _CircleRecorderScreenState();
@@ -72,6 +77,7 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
   bool _switching =
       false; // идёт смена камеры — картинку прячем, чтобы не мелькал кадр «вверх ногами»
   int _elapsed = 0;
+  int _limit = CircleRecorderScreen.maxSeconds;
   Timer? _ticker;
 
   @override
@@ -195,7 +201,7 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
       _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
         if (!mounted) return;
         setState(() => _elapsed++);
-        if (_elapsed >= CircleRecorderScreen.maxSeconds) _finish(send: true);
+        if (_elapsed >= _limit) _finish(send: true);
       });
     } catch (e) {
       if (mounted) setState(() => _error = friendlyError(e));
@@ -268,7 +274,7 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
                             height: d + 12,
                             child: CircularProgressIndicator(
                               value: _recording
-                                  ? _elapsed / CircleRecorderScreen.maxSeconds
+                                  ? _elapsed / _limit
                                   : 0,
                               strokeWidth: 4,
                               color: Colors.redAccent,
@@ -328,11 +334,20 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
                     const SizedBox(height: 16),
                     Text(
                       _recording
-                          ? '${formatClock(_elapsed)} / ${formatClock(CircleRecorderScreen.maxSeconds)}'
+                          ? '${formatClock(_elapsed)} / ${formatClock(_limit)}'
                           : tr('Кружок до {m} мин',
                               {'m': CircleRecorderScreen.maxSeconds ~/ 60}),
                       style: const TextStyle(color: Colors.white70),
                     ),
+                    if (_recording && _limit - _elapsed <= 10 && _limit < CircleRecorderScreen.hardLimit)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: FilledButton.tonalIcon(
+                          onPressed: () => setState(() => _limit = math.min(_limit + CircleRecorderScreen.extendSeconds, CircleRecorderScreen.hardLimit)),
+                          icon: const Icon(Icons.add),
+                          label: Text(tr('Продлить на {m} мин', {'m': CircleRecorderScreen.extendSeconds ~/ 60})),
+                        ),
+                      ),
                     const Spacer(),
                     Padding(
                       padding: const EdgeInsets.only(bottom: 24),

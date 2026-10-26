@@ -159,7 +159,8 @@ class FinalsAnnouncer {
     try {
       if (!_ready) {
         await _tts.setLanguage(language);
-        await _tts.setSpeechRate(0.5);
+        // В браузере шкала другая (1.0 — обычная скорость), 0.5 там звучало медленно: на вебе 1.25.
+        await _tts.setSpeechRate(kIsWeb ? 1.25 : 0.5);
         try {
           await _tts.setQueueMode(1); // новая фраза встаёт в очередь
         } catch (_) {}

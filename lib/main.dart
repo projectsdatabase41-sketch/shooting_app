@@ -1,4 +1,5 @@
 import 'services/app_update_service.dart';
+import 'services/economy_mode.dart';
 import 'dart:async';
 import 'widgets/home_tabs_bar.dart' show TileStyle;
 import 'theme/glass.dart';
@@ -10,7 +11,7 @@ import 'services/secret_box.dart';
 import 'dart:async' show Timer;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'theme/app_transitions.dart';
-import 'dart:ui' show PlatformDispatcher;
+import 'dart:ui' show PlatformDispatcher, PointerDeviceKind;
 import 'logic/friendly_error.dart' show friendlyErrorReporter;
 import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform;
@@ -206,6 +207,7 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
     DemoMode.load(widget.db);
     VoiceSettings.load(widget.db);
     AnimSettings.load(widget.db);
+    EconomyMode.load(widget.db);
     // Мессенджер выключен — его push на этом устройстве не нужны.
     _syncPushWithModule();
     ModulesSettings.revision.addListener(_syncPushWithModule);
@@ -438,6 +440,8 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
           return MaterialApp(
             key: ValueKey(I18n.code),
             navigatorKey: navigatorKey,
+            // Листание мышью и на ПК (по умолчанию Flutter на вебе тянет только пальцем): страницы финала, таблицы.
+            scrollBehavior: const _AllDevicesScrollBehavior(),
             navigatorObservers: [DemoRouteObserver.instance],
             title: 'Nexus',
             debugShowCheckedModeBanner: false,
@@ -564,4 +568,12 @@ class _ProfileGateState extends State<_ProfileGate> {
       },
     );
   }
+}
+
+/// Мышь и стилус листают так же, как палец: свайп между страницами и горизонтальные таблицы на ПК.
+class _AllDevicesScrollBehavior extends MaterialScrollBehavior {
+  const _AllDevicesScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => {...super.dragDevices, PointerDeviceKind.mouse, PointerDeviceKind.stylus, PointerDeviceKind.trackpad};
 }

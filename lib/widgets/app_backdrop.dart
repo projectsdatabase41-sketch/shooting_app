@@ -1,3 +1,4 @@
+import '../services/economy_mode.dart';
 import '../theme/wallpaper.dart';
 import 'package:flutter/foundation.dart' show ValueNotifier, kIsWeb;
 import 'package:flutter/material.dart';
@@ -55,6 +56,14 @@ class _AppBackdropState extends State<AppBackdrop> {
   @override
   Widget build(BuildContext context) {
     final w = MediaQuery.sizeOf(context).width;
+    return ValueListenableBuilder<int>(valueListenable: EconomyMode.revision, builder: (context, _, __) => _body(context, w));
+  }
+
+  Widget _body(BuildContext context, double w) {
+    // «Эконом»: простой фон вместо слоёв обоев.
+    if (EconomyMode.on) {
+      return Stack(fit: StackFit.expand, children: [ColoredBox(color: Theme.of(context).scaffoldBackgroundColor), widget.child]);
+    }
     return Stack(fit: StackFit.expand, children: [
       // Обои — слои (см. theme/wallpaper.dart): рисуются по размеру всего окна и по центру,
       // чтобы бесшовно продолжаться на боковых полях широкого экрана (main.dart).

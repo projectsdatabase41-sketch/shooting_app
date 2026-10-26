@@ -7,6 +7,7 @@ import 'package:shooting_app/models/training_session.dart';
 import 'package:shooting_app/screens/focus_training_screen.dart';
 import 'package:shooting_app/services/local_db_service.dart';
 import 'package:shooting_app/state/app_data_store.dart';
+import 'package:shooting_app/state/personalization_view_model.dart';
 import 'package:shooting_app/state/target_view_model.dart';
 
 void main() {
@@ -25,7 +26,7 @@ void main() {
       face: TargetFace.rifle10m,
     )..start();
     await tester.pumpWidget(MultiProvider(
-      providers: [ChangeNotifierProvider<AppDataStore>.value(value: store), ChangeNotifierProvider<TargetViewModel>.value(value: vm)],
+      providers: [ChangeNotifierProvider<AppDataStore>.value(value: store), ChangeNotifierProvider<TargetViewModel>.value(value: vm), ChangeNotifierProvider<PersonalizationViewModel>(create: (_) => PersonalizationViewModel(db)..loadFromDb())],
       child: const MaterialApp(home: FocusTrainingScreen()),
     ));
     expect(vm.session.shots, isEmpty);
@@ -33,8 +34,8 @@ void main() {
     await tester.tapAt(tester.getCenter(pad) + const Offset(30, -20));
     await tester.pump();
     expect(vm.session.shots.length, 1);
-    expect(find.text('Отменить выстрел'), findsOneWidget);
-    await tester.tap(find.text('Отменить выстрел'));
+    expect(find.byTooltip('Отменить выстрел'), findsOneWidget);
+    await tester.tap(find.byTooltip('Отменить выстрел'));
     await tester.pump();
     expect(vm.session.shots, isEmpty);
     await tester.pumpWidget(const SizedBox());

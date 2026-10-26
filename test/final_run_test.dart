@@ -28,6 +28,12 @@ FinalRunController _make(int seed, {BotDifficulty d = BotDifficulty.medium, Fina
 int _run(FinalRunController c, {(double, double)? aim, int maxTicks = 20000}) {
   var ticks = 0;
   while (c.phase != RunPhase.finished && ticks < maxTicks) {
+    // Выстрел не указан после «Стоп»: ждём «Промах» (как судья/спортсмен в живом финале).
+    for (final id in c.missingIds) {
+      while (c.canShootFor(id)) {
+        c.markMiss(id);
+      }
+    }
     if (aim != null) {
       while (c.userCanShoot) {
         c.submitUserShot(aim.$1, aim.$2);
@@ -87,7 +93,6 @@ void main() {
     expect(c.user.place, 8); // с нулями он последний и выбывает после 12-го
     expect(c.user.shots.length, 12);
     expect(c.user.shots.every((s) => s == 0.0), isTrue);
-    expect(c.log.where((e) => e['e'] == 'timeout' && e['who'] == 'me').isNotEmpty, isTrue);
     // 2 серии по 250 с + 2 одиночных до 12-го выстрела уже дали выбывание; всё — не дольше нескольких тысяч секунд.
     expect(ticks, lessThan(2000));
   });
@@ -126,6 +131,29 @@ void main() {
     expect(avgOfBots(BotDifficulty.easy), lessThan(avgOfBots(BotDifficulty.hard)));
   });
 
+  test('исключение финалиста: занимает место выбывания, финал идёт дальше', () {
+    final c = _make(21);
+    c.skipSighting();
+    for (var i = 0; i < 5; i++) {
+      c.tick();
+    }
+    for (var i = 0; i < 250; i++) {
+      c.tick();
+    }
+    expect(c.awaitingResult, isFalse);
+    for (var i = 0; i < 10; i++) {
+      c.tick();
+    }
+    expect(c.awaitingResult, isTrue);
+    expect(c.exclude('me'), isTrue);
+    expect(c.user.place, 8);
+    expect(c.user.active, isFalse);
+    c.tick();
+    expect(c.phase, RunPhase.loading);
+    expect(c.fastForward(), isTrue);
+    expect({for (final x in c.engine.competitors) x.place}, {1, 2, 3, 4, 5, 6, 7, 8});
+  });
+
   test('«назад» убирает выстрел; после «Стоп» ещё 10 с на отметку', () {
     final c = _make(11);
     c.skipSighting();
@@ -146,8 +174,16 @@ void main() {
     for (var i = 0; i < 10; i++) {
       c.tick();
     }
+    // Окно вышло, а 3 выстрела не указаны: дальше не идём, пока не будет результата («Промах»).
+    expect(c.phase, RunPhase.grace);
+    expect(c.awaitingResult, isTrue);
+    expect(c.missingIds, ['me']);
+    while (c.canShootFor('me')) {
+      c.markMiss('me');
+    }
+    c.tick();
     expect(c.phase, RunPhase.loading);
-    expect(c.user.shots.length, 5); // 2 отмеченных + 3 нуля
+    expect(c.user.shots.length, 5); // 2 отмеченных + 3 промаха
     expect(c.user.shots.where((v) => v == 0.0).length, 3);
     expect(c.staged, isEmpty);
   });
@@ -205,6 +241,9 @@ void main() {
     // Человек не стреляет, выбывает 8-м после 12 выстрелов; ждём выбывания.
     var guard = 0;
     while (c.user.active && guard++ < 5000) {
+      while (c.missingIds.contains('me') && c.canShootFor('me')) {
+        c.markMiss('me');
+      }
       c.tick();
     }
     expect(c.user.active, isFalse);
@@ -268,6 +307,11 @@ void main() {
     for (var i = 0; i < 10; i++) {
       c.tick();
     }
+    expect(c.missingIds, ['h']); // ждём результат H
+    while (c.canShootFor('h')) {
+      c.markMiss('h');
+    }
+    c.tick();
     final h = c.engine.byId('h');
     expect(h.shots.length, 5);
     expect(h.shots.where((v) => v == 0.0).length, 4); // 1 отмечен + 4 нуля

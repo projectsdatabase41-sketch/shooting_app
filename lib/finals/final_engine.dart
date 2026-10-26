@@ -149,7 +149,9 @@ class FinalFormat {
       singleShots: singles,
       seriesSeconds: seriesSeconds,
       singleSeconds: singleSeconds,
-      eliminationAfter: [for (var i = 0; i < eliminations; i++) first + step * i],
+      eliminationAfter: [
+        for (var i = 0; i < eliminations; i++) first + step * i
+      ],
     );
   }
 
@@ -172,6 +174,9 @@ class FinalCompetitor {
 
   /// Итоговое место; `null`, пока участник в борьбе.
   int? place;
+
+  /// Исключён судьёй (не сделал выстрел, неисправность): занимает ближайшее место выбывания.
+  bool withdrawn = false;
 
   FinalCompetitor(this.id, this.name, {this.isUser = false});
 
@@ -200,13 +205,17 @@ class FinalEngine {
 
   FinalEngine(this.format, this.competitors) {
     if (competitors.length != format.finalists) {
-      throw ArgumentError('В финале должно быть ${format.finalists} участников');
+      throw ArgumentError(
+          'В финале должно быть ${format.finalists} участников');
     }
   }
 
   FinalCompetitor byId(String id) => competitors.firstWhere((c) => c.id == id);
 
-  List<FinalCompetitor> get active => [for (final c in competitors) if (c.active) c];
+  List<FinalCompetitor> get active => [
+        for (final c in competitors)
+          if (c.active) c
+      ];
 
   /// Контрольные точки: после этих выстрелов решается место.
   List<int> get _checkpoints => [...format.eliminationAfter, format.totalShots];
@@ -217,7 +226,8 @@ class FinalEngine {
   bool get isFinished => phase == FinalPhase.finished;
 
   /// Сколько выстрелов сделано всеми активными (минимум).
-  int get roundShots => active.map((c) => c.shots.length).fold(1 << 30, math.min);
+  int get roundShots =>
+      active.map((c) => c.shots.length).fold(1 << 30, math.min);
 
   /// Принять выстрел [score] участника [id].
   void submit(String id, double score) {
@@ -227,15 +237,50 @@ class FinalEngine {
         throw StateError('Финал окончен');
       case FinalPhase.match:
         if (!c.active) throw StateError('${c.name} уже выбыл');
-        if (c.shots.length >= format.totalShots) throw StateError('Все выстрелы сделаны');
+        if (c.shots.length >= format.totalShots)
+          throw StateError('Все выстрелы сделаны');
         c.shots.add(score);
         _advance();
       case FinalPhase.shootOff:
-        if (!_tied.contains(c)) throw StateError('${c.name} не участвует в перестрелке');
-        if (c.shootoff.length > _soRound) throw StateError('${c.name} уже выстрелил в этом круге');
+        if (!_tied.contains(c))
+          throw StateError('${c.name} не участвует в перестрелке');
+        if (c.shootoff.length > _soRound)
+          throw StateError('${c.name} уже выстрелил в этом круге');
         c.shootoff.add(score);
-        if (_tied.every((t) => t.shootoff.length > _soRound)) _resolveShootOff();
+        if (_tied.every((t) => t.shootoff.length > _soRound))
+          _resolveShootOff();
     }
+  }
+
+  /// Исключить участника из финала (судья/тренер): он занимает место выбывания, остальные продолжают.
+  /// В перестрелке не применяется.
+  bool withdraw(String id) {
+    if (phase != FinalPhase.match) return false;
+    final c = byId(id);
+    if (!c.active) return false;
+    final others = active.where((a) => a != c).toList();
+    c.withdrawn = true;
+    if (others.length == 1) {
+      // Остались двое за золото: сошёл один — второй побеждает.
+      c.place = 2;
+      others.first.place = 1;
+      phase = FinalPhase.finished;
+      _checkpoint = _checkpoints.length;
+      return true;
+    }
+    c.place = format.finalists -
+        [
+          for (final x in competitors)
+            if (!x.active && x != c) x
+        ].length;
+    _elimInCp++;
+    if (_checkpoint < _checkpoints.length - 1 &&
+        _elimInCp >= format.eliminationsAt(_checkpoint)) {
+      _checkpoint++;
+      _elimInCp = 0;
+    }
+    _advance();
+    return true;
   }
 
   void _advance() {
@@ -245,9 +290,13 @@ class FinalEngine {
       if (act.any((c) => c.shots.length < n)) return;
       final last = _checkpoint == _checkpoints.length - 1;
       if (last) {
-        final sorted = [...act]..sort((a, b) => b.totalAt(n).compareTo(a.totalAt(n)));
+        final sorted = [...act]
+          ..sort((a, b) => b.totalAt(n).compareTo(a.totalAt(n)));
         final best = sorted.first.totalAt(n);
-        final leaders = [for (final c in sorted) if (c.totalAt(n) == best) c];
+        final leaders = [
+          for (final c in sorted)
+            if (c.totalAt(n) == best) c
+        ];
         if (leaders.length > 1) {
           _startShootOff(leaders, forGold: true, place: 1);
           return;
@@ -260,11 +309,21 @@ class FinalEngine {
       }
       final k = format.eliminationsAt(_checkpoint);
       final lowest = act.map((c) => c.totalAt(n)).reduce(math.min);
-      final lows = [for (final c in act) if (c.totalAt(n) == lowest) c];
-      final place = format.finalists - [for (final c in competitors) if (!c.active) c].length;
+      final lows = [
+        for (final c in act)
+          if (c.totalAt(n) == lowest) c
+      ];
+      final place = format.finalists -
+          [
+            for (final c in competitors)
+              if (!c.active) c
+          ].length;
       if (lows.length == 1) {
         lows.first.place = place;
-      } else if (lows.length == 2 && k == 2 && _elimInCp == 0 && _countback(lows[0], lows[1], n) != 0) {
+      } else if (lows.length == 2 &&
+          k == 2 &&
+          _elimInCp == 0 &&
+          _countback(lows[0], lows[1], n) != 0) {
         // Двое с равной суммой при выбывании двоих: худший по счёту серий — 8-й.
         final worse = _countback(lows[0], lows[1], n) < 0 ? lows[0] : lows[1];
         worse.place = place;
@@ -284,8 +343,10 @@ class FinalEngine {
   int _countback(FinalCompetitor a, FinalCompetitor b, int n) {
     var end = n;
     for (final size in format.countbackBlocks) {
-      final sa = a.shots.sublist(end - size, end).fold<double>(0, (x, y) => x + y);
-      final sb = b.shots.sublist(end - size, end).fold<double>(0, (x, y) => x + y);
+      final sa =
+          a.shots.sublist(end - size, end).fold<double>(0, (x, y) => x + y);
+      final sb =
+          b.shots.sublist(end - size, end).fold<double>(0, (x, y) => x + y);
       final r = ((sa - sb) * 10).round();
       if (r != 0) return r;
       end -= size;
@@ -297,7 +358,8 @@ class FinalEngine {
     return 0;
   }
 
-  void _startShootOff(List<FinalCompetitor> tied, {required bool forGold, required int place}) {
+  void _startShootOff(List<FinalCompetitor> tied,
+      {required bool forGold, required int place}) {
     phase = FinalPhase.shootOff;
     _tied = [...tied];
     _soRound = 0;
@@ -313,7 +375,10 @@ class FinalEngine {
     final target = _soForGold
         ? scores.values.reduce(math.max) // за золото — лучший
         : scores.values.reduce(math.min); // за выбывание — худший
-    final stay = [for (final e in scores.entries) if (e.value == target) e.key];
+    final stay = [
+      for (final e in scores.entries)
+        if (e.value == target) e.key
+    ];
     if (stay.length > 1) {
       _tied = stay; // ничья осталась — ещё круг
       _soRound++;
@@ -343,8 +408,10 @@ class FinalEngine {
   /// худшему; после финала все с местами — по месту.
   List<FinalCompetitor> get standings {
     final act = active..sort((a, b) => b.total.compareTo(a.total));
-    final out = [for (final c in competitors) if (!c.active) c]
-      ..sort((a, b) => a.place!.compareTo(b.place!));
+    final out = [
+      for (final c in competitors)
+        if (!c.active) c
+    ]..sort((a, b) => a.place!.compareTo(b.place!));
     return [...act, ...out];
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../i18n/i18n.dart';
+import '../widgets/glass_pill.dart';
 import '../services/ai_service.dart';
 import '../services/ai_settings.dart';
 import '../services/feedback_service.dart';
@@ -143,19 +144,13 @@ class _VoiceOverlayState extends State<VoiceOverlay> {
                                 style: const TextStyle(color: Colors.white)),
                           ),
                         ),
-                      FloatingActionButton.small(
-                        heroTag: 'voice-control',
-                        tooltip: tr('Голосовое управление'),
-                        backgroundColor: listening
-                            ? Colors.redAccent
-                            : Theme.of(context).colorScheme.primaryContainer,
-                        foregroundColor: listening
-                            ? Colors.white
-                            : Theme.of(context).colorScheme.onPrimaryContainer,
-                        onPressed: _tap,
-                        child: Icon(listening ? Icons.mic : Icons.mic_none),
-                      ),
-                    ]),
+                      // Круглая стеклянная кнопка, как у кнопки отзывов; при записи подсвечивается красным.
+                  GlassCircleButton(
+                    icon: BoldIcon(listening ? Icons.mic : Icons.mic_none),
+                    color: listening ? Colors.redAccent.withValues(alpha: 0.55) : null,
+                    onTap: _tap,
+                  ),
+                ]),
               ),
             ),
           );

@@ -87,6 +87,13 @@ class CallSession extends ChangeNotifier {
   /// Высокое качество видео. Меняется в ходе звонка: при слабой связи выключают, потом снова включают.
   bool hd = true;
   bool torchOn = false; // фонарик (только задняя камера)
+
+  /// Показ экрана собеседнику (в браузере): вместо камеры уходит картинка экрана. На телефонах пока недоступно:
+  /// Android требует отдельную службу показа экрана.
+  bool screenSharing = false;
+  MediaStream? _display;
+  MediaStreamTrack? _cameraTrack;
+  static bool get canShareScreen => kIsWeb;
   bool remoteVideo = false;
 
   /// Разговор состоялся (дошли до «активен») и его длительность.
@@ -402,6 +409,45 @@ class CallSession extends ChangeNotifier {
     }
   }
 
+  Future<void> toggleScreenShare() async {
+    if (!canShareScreen || !video) return;
+    try {
+      final senders = await _pc?.getSenders() ?? const <RTCRtpSender>[];
+      final sender = senders.where((s) => s.track?.kind == 'video').firstOrNull;
+      if (sender == null) return;
+      if (!screenSharing) {
+        final ds = await navigator.mediaDevices.getDisplayMedia({'video': true, 'audio': false});
+        final track = ds.getVideoTracks().first;
+        _cameraTrack = sender.track;
+        await sender.replaceTrack(track);
+        _display = ds;
+        localRenderer.srcObject = ds;
+        track.onEnded = () => _stopShare(sender); // пользователь нажал «Остановить доступ» в браузере
+        screenSharing = true;
+        notifyListeners();
+      } else {
+        await _stopShare(sender);
+      }
+    } catch (_) {
+      // отказ в доступе к экрану — звонок идёт как шёл
+    }
+  }
+
+  Future<void> _stopShare(RTCRtpSender sender) async {
+    if (!screenSharing) return;
+    screenSharing = false;
+    try {
+      await sender.replaceTrack(_cameraTrack);
+      localRenderer.srcObject = _local;
+      for (final t in _display?.getTracks() ?? const <MediaStreamTrack>[]) {
+        t.stop();
+      }
+      await _display?.dispose();
+    } catch (_) {}
+    _display = null;
+    notifyListeners();
+  }
+
   Future<void> switchCamera() async {
     final tracks = _local?.getVideoTracks() ?? const <MediaStreamTrack>[];
     if (tracks.isNotEmpty) await Helper.switchCamera(tracks.first);
@@ -451,6 +497,9 @@ class CallSession extends ChangeNotifier {
     } catch (_) {}
     remoteVideo = false;
     for (final t in _local?.getTracks() ?? const <MediaStreamTrack>[]) {
+      t.stop();
+    }
+    for (final t in _display?.getTracks() ?? const <MediaStreamTrack>[]) {
       t.stop();
     }
     _local?.dispose();

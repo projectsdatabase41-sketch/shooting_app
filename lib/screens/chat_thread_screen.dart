@@ -1,3 +1,5 @@
+import '../widgets/fan_menu.dart';
+import '../services/economy_mode.dart';
 import '../widgets/glass_route.dart';
 import 'package:uuid/uuid.dart';
 import '../widgets/linked_text.dart';
@@ -2027,9 +2029,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         builder: (context, _, __) {
           final online = !_contact.isGroup &&
               (_live?.peerOnline == true || ChatPresence.online(_contact.id));
+          // Пока уходит запись или файл — в шапке статус отправки (кружок, голосовое, фото, файл).
+          final sending = _messages.where((m) => m.direction == ChatMessageDirection.outgoing && m.status == ChatMessageStatus.sending && m.type != ChatMessageType.text).lastOrNull;
+          final sendLabel = switch (sending?.type) {
+            ChatMessageType.video => tr('Видео…'),
+            ChatMessageType.audio => tr('Голосовое…'),
+            ChatMessageType.image => tr('Фото…'),
+            ChatMessageType.file => tr('Файл…'),
+            _ => null,
+          };
           final seen = _contact.isGroup
               ? null
-              : (online ? tr('в сети') : ChatPresence.label(_contact.id));
+              : (sendLabel ?? (online ? tr('в сети') : ChatPresence.label(_contact.id)));
           return Row(
             children: [
               ChatAvatar(
@@ -2192,7 +2203,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     Uint8List? bytes,
     String? path,
   }) async {
-    setState(() => _sending = true);
+    // Запись уходит в фоне: кнопки не блокируем — следующий кружок можно писать сразу, свой прогресс виден на самом кружке.
+    // Сообщение появляется в базе сразу, а экран обновлялся только по окончании отправки: пока уходит запись,
+    // обновляем ленту, чтобы кружок с индикатором загрузки был виден сразу.
+    final poll = Timer.periodic(const Duration(milliseconds: 500), (_) {
+      if (mounted) _reload();
+    });
     try {
       final allowed =
           widget.prefs.downloadAllowedFor(isPersonal: !_contact.isGroup);
@@ -2244,9 +2260,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             'ChatThreadScreen', e, st);
       }
     } finally {
+      poll.cancel();
       if (mounted) {
         _reload();
-        setState(() => _sending = false);
       }
     }
   }
@@ -2452,63 +2468,43 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                   ),
                                 ),
                               ),
-                              // Качество голосовых: HD (тяжелее, чище) или обычное; видно, пока поле пустое.
-                              ValueListenableBuilder<TextEditingValue>(
-                                valueListenable: _input,
-                                builder: (_, v, __) => v.text.trim().isNotEmpty
-                                    ? const SizedBox.shrink()
-                                    : Tooltip(
-                                        message: VoiceRecorder.hd
-                                            ? tr('Голосовые в HD')
-                                            : tr(
-                                                'Голосовые в обычном качестве'),
-                                        child: InkWell(
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                          onTap: () => setState(() =>
-                                              VoiceRecorder.hd =
-                                                  !VoiceRecorder.hd),
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 8, vertical: 8),
-                                            child: Text('HD',
-                                                style: TextStyle(
-                                                    fontWeight: FontWeight.w900,
-                                                    color: VoiceRecorder.hd
-                                                        ? Theme.of(context)
-                                                            .colorScheme
-                                                            .primary
-                                                        : Theme.of(context)
-                                                            .colorScheme
-                                                            .onSurfaceVariant)),
-                                          ),
-                                        ),
-                                      ),
-                              ),
-                              if (aiModuleOn(context))
-                                IconButton(
-                                  onPressed: _sending || _aiBusy
-                                      ? null
-                                      : _composeWithAi,
-                                  tooltip: tr('Написать с ИИ'),
-                                  icon: _aiBusy
-                                      ? const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                              strokeWidth: 2))
-                                      : const Icon(Icons.auto_awesome_outlined),
-                                ),
-                              GestureDetector(
-                                // Долгое нажатие — большой файл через Google Drive,
-                                // в обход лимита обычных вложений (см. `_attachLarge`).
-                                onLongPress: _sending ? null : _attachLarge,
-                                child: IconButton(
-                                  onPressed: _sending ? null : _attach,
-                                  icon: const Icon(Icons.attach_file),
-                                  tooltip: tr(
-                                      'Прикрепить фото или файл (долгое нажатие — большой файл)'),
-                                ),
+                              // Одна кнопка вместо трёх: тап раскрывает веер (HD, файл, большой файл, ИИ),
+                              // либо, не отпуская палец, потянуть к нужному пункту.
+                              FanButton(
+                                tooltip: tr('Ещё'),
+                                icon: const Icon(Icons.add_circle_outline),
+                                items: [
+                                  FanItem(
+                                    label: VoiceRecorder.hd ? tr('Голосовые в HD') : tr('Голосовые в обычном качестве'),
+                                    active: VoiceRecorder.hd,
+                                    onSelect: () => setState(() => VoiceRecorder.hd = !VoiceRecorder.hd),
+                                    child: const Text('HD'),
+                                  ),
+                                  FanItem(
+                                    label: tr('Фото или файл'),
+                                    onSelect: () {
+                                      if (!_sending) _attach();
+                                    },
+                                    child: const Icon(Icons.attach_file),
+                                  ),
+                                  FanItem(
+                                    label: tr('Большой файл (Google Диск)'),
+                                    onSelect: () {
+                                      if (!_sending) _attachLarge();
+                                    },
+                                    child: const Icon(Icons.upload_file),
+                                  ),
+                                  if (aiModuleOn(context))
+                                    FanItem(
+                                      label: tr('Написать с ИИ'),
+                                      onSelect: () {
+                                        if (!_sending && !_aiBusy) _composeWithAi();
+                                      },
+                                      child: _aiBusy
+                                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                                          : const Icon(Icons.auto_awesome_outlined),
+                                    ),
+                                ],
                               ),
                             ],
                           ),
@@ -2613,10 +2609,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               children: [
                 Expanded(
                   child: Container(
-                    decoration: widget.prefs.wallpaperDecoration,
+                    decoration: EconomyMode.on ? null : widget.prefs.wallpaperDecoration,
                     child: Stack(
                       children: [
-                        if (widget.prefs.wallpaperDecoration == null)
+                        if (EconomyMode.on || widget.prefs.wallpaperDecoration == null)
                           Positioned.fill(
                               child: AppBackdrop(
                                   kind: 'messenger',
@@ -3339,6 +3335,8 @@ class _Bubble extends StatelessWidget {
               durationSec: _ChatThreadScreenState._secondsFromName(
                   message.attachmentName),
               load: onLoadMedia,
+              poster: message.attachmentBase64 != null ||
+                  message.attachmentLocalPath != null,
               // Свой кружок, пока уходит, и чужой, пока скачивается, — плавная анимация передачи.
               busy: downloading ||
                   (mine && message.status == ChatMessageStatus.sending),

@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
 
 import '../finals/announcer.dart';
+import '../finals/voice_texts.dart';
 import '../voice/voice_control.dart';
 import '../voice/voice_grammar.dart';
 import '../finals/second_ticker.dart';
@@ -123,7 +124,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
       case RunPhase.finished:
         return tr('Финал окончен');
       case RunPhase.grace:
-        return tr('Стоп! Отметьте выстрел');
+        return c.awaitingResult ? tr('Укажите результат выстрела') : tr('Стоп! Отметьте выстрел');
       case RunPhase.shooting:
         final l = c.roundLabel;
         if (l == 'shootoff') return tr('Перестрелка');
@@ -323,6 +324,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
           if (sighting && _started) TextButton(onPressed: c.skipSighting, child: Text(tr('Пропустить пристрелку'))),
           if (!c.user.active && c.phase != RunPhase.finished)
             TextButton(onPressed: c.fastForward, child: Text(tr('Завершить результат'))),
+          if (c.awaitingResult) FilledButton.tonal(onPressed: () => c.markMiss(c.userId), child: Text(tr('Промах'))),
           TextButton.icon(
             onPressed: marks.isEmpty ? null : _undo,
             icon: const Icon(Icons.undo),
@@ -401,7 +403,10 @@ class ShotPad extends StatefulWidget {
 
   /// Своя схема цветов мишени (режим концентрации); по умолчанию — обычная.
   final TargetColorScheme? colors;
-  const ShotPad({required this.face, required this.marks, required this.enabled, required this.onHold, required this.onShot, this.colors});
+
+  /// Мишень при зуме всегда по центру (режим концентрации): сдвиг двумя пальцами отключён.
+  final bool lockCenter;
+  const ShotPad({required this.face, required this.marks, required this.enabled, required this.onHold, required this.onShot, this.colors, this.lockCenter = false});
 
   @override
   State<ShotPad> createState() => _ShotPadState();
@@ -483,7 +488,7 @@ class _ShotPadState extends State<ShotPad> {
         // подвинуть: сдвиг равен перемещению середины между пальцами.
         setState(() {
           _scale = ns;
-          _pan = _clampPan(_zStartPan * (ns / _zStartScale) + (focal - _zStartFocal), s);
+          _pan = widget.lockCenter ? Offset.zero : _clampPan(_zStartPan * (ns / _zStartScale) + (focal - _zStartFocal), s);
         });
       }
       return;
@@ -936,6 +941,20 @@ class FinalResultScreen extends StatelessWidget {
     );
   }
 
+  /// Итог финала для озвучки: места и результаты, как у диктора.
+  static String _resultSpeech(List<Map<String, dynamic>> st) {
+    const places = ['Первое', 'Второе', 'Третье', 'Четвёртое', 'Пятое', 'Шестое', 'Седьмое', 'Восьмое'];
+    final rows = [for (final p in st) if (p['place'] is int) p]..sort((a, b) => (a['place'] as int).compareTo(b['place'] as int));
+    final parts = <String>['Финал окончен.'];
+    for (final p in rows.take(8)) {
+      final i = (p['place'] as int) - 1;
+      if (i < 0 || i >= places.length) continue;
+      final me = p['user'] == true ? ' Это вы.' : '';
+      parts.add('${places[i]} место — ${VoiceTexts.spokenName('${p['name']}')}, ${(p['total'] as num).toStringAsFixed(1).replaceAll('.', ',')}.$me');
+    }
+    return parts.join(' ');
+  }
+
   Future<void> _publish(BuildContext context) async {
     final store = context.read<AppDataStore>();
     final msg = ScaffoldMessenger.of(context);
@@ -1009,6 +1028,7 @@ class FinalResultScreen extends StatelessWidget {
       body: AppBackdrop(kind: 'finals', child: ListView(
         padding: EdgeInsets.fromLTRB(16, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 16, 24),
         children: [
+          if (!readOnly) _ResultVoice(text: _resultSpeech(st)),
           _protocol(context, st),
           const SizedBox(height: 12),
           if (!readOnly && mine.isNotEmpty) ...[
@@ -1037,4 +1057,34 @@ class FinalResultScreen extends StatelessWidget {
       )),
     );
   }
+}
+
+/// Озвучивает итог финала при открытии экрана результатов (если озвучка финалов включена).
+class _ResultVoice extends StatefulWidget {
+  final String text;
+  const _ResultVoice({required this.text});
+
+  @override
+  State<_ResultVoice> createState() => _ResultVoiceState();
+}
+
+class _ResultVoiceState extends State<_ResultVoice> {
+  @override
+  void initState() {
+    super.initState();
+    final db = context.read<AppDataStore>().db;
+    if (FinalsPrefs.voice(db)) {
+      // Ждём, пока отыграет «Финал окончен» из последней команды: фраза встаёт в очередь.
+      FinalsAnnouncer.speak(widget.text, queue: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    FinalsAnnouncer.stop();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }

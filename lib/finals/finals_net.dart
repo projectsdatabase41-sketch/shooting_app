@@ -58,7 +58,8 @@ class RealtimeFinalsChannel implements FinalsChannel {
   }
 
   @override
-  bool send(String event, Map<String, dynamic> payload) => _client.sendBroadcast(event, payload);
+  bool send(String event, Map<String, dynamic> payload) =>
+      _client.sendBroadcast(event, payload);
 
   @override
   void close() => _client.close();
@@ -90,7 +91,8 @@ class MemoryFinalsChannel implements FinalsChannel {
     if (closed) return false;
     final peer = _peer;
     // Доставка асинхронна, как по сети; копия, чтобы не делить объекты.
-    scheduleMicrotask(() => peer?.onMessage?.call(event, Map<String, dynamic>.from(payload)));
+    scheduleMicrotask(
+        () => peer?.onMessage?.call(event, Map<String, dynamic>.from(payload)));
     return true;
   }
 
@@ -118,10 +120,12 @@ class FinalsSnapshot {
 
   /// Связь тиров: тир → [на связи, всего].
   Map<String, List<int>> get siteStatus => {
-        for (final e in ((data['sites'] as Map?) ?? const {}).entries) '${e.key}': [for (final v in (e.value as List)) (v as num).toInt()],
+        for (final e in ((data['sites'] as Map?) ?? const {}).entries)
+          '${e.key}': [for (final v in (e.value as List)) (v as num).toInt()],
       };
   int get siteCount => siteStatus.length;
-  List<Map<String, dynamic>> get rows => (data['rows'] as List).cast<Map<String, dynamic>>();
+  List<Map<String, dynamic>> get rows =>
+      (data['rows'] as List).cast<Map<String, dynamic>>();
 
   Map<String, dynamic>? row(String id) {
     for (final r in rows) {
@@ -157,8 +161,10 @@ class FinalsSnapshot {
       'rid': c.roundId,
       'sites': c.siteStatus,
       'pb': c.pausedBy,
+      'aw': c.missingIds,
       // В конце финала участникам уходят все выстрелы с координатами — из них у каждого собирается протокол.
-      if (c.phase == RunPhase.finished) 'shots': [for (final s in c.shots) s.toJson()],
+      if (c.phase == RunPhase.finished)
+        'shots': [for (final s in c.shots) s.toJson()],
       'rows': [
         for (final r in live)
           {
@@ -171,10 +177,13 @@ class FinalsSnapshot {
             'total': r.total,
             'avg': r.avg,
             'shots': r.shots,
-            if (lastShot[r.c.id] != null) 'last': [lastShot[r.c.id]!.x, lastShot[r.c.id]!.y],
+            if (lastShot[r.c.id] != null)
+              'last': [lastShot[r.c.id]!.x, lastShot[r.c.id]!.y],
             if (pts[r.c.id] != null) 'pts': pts[r.c.id],
             if (c.humans.contains(r.c.id))
-              'staged': [for (final st in c.stagedOf(r.c.id)) [st.x, st.y]],
+              'staged': [
+                for (final st in c.stagedOf(r.c.id)) [st.x, st.y]
+              ],
             if (c.humans.contains(r.c.id)) 'can': c.canShootFor(r.c.id),
           }
       ],
@@ -277,7 +286,9 @@ class FinalsHost {
       if (name == null || !CheerFeed.kinds.containsKey(kind)) return;
       final now = DateTime.now();
       final last = _lastCheer[author];
-      if (last != null && now.difference(last) < const Duration(milliseconds: 1500)) return; // не чаще раза в 1,5 с
+      if (last != null &&
+          now.difference(last) < const Duration(milliseconds: 1500))
+        return; // не чаще раза в 1,5 с
       _lastCheer[author] = now;
       final shown = name.length > 24 ? name.substring(0, 24) : name;
       channel.send('cheer', {'name': shown, 'k': kind});
@@ -286,7 +297,8 @@ class FinalsHost {
     }
     if (event == 'hello') {
       if (onHello?.call(author, '${p['name'] ?? ''}') == false) {
-        channel.send('denied', {'to': author, if (isFull?.call() == true) 'full': true});
+        channel.send(
+            'denied', {'to': author, if (isFull?.call() == true) 'full': true});
         return;
       }
       broadcast(); // подключившийся сразу получает состояние
@@ -294,6 +306,10 @@ class FinalsHost {
     }
     if (event == 'next') {
       if (canControl?.call(author) == true) controller.advance();
+      return;
+    }
+    if (event == 'exclude') {
+      if (canControl?.call(author) == true) controller.exclude('${p['who']}');
       return;
     }
     final who = '${p['who']}';
@@ -304,9 +320,12 @@ class FinalsHost {
         // Выстрел из прошлого раунда (долго шёл по сети) в новый не засчитываем; в своём раунде — в том числе после «Стоп».
         final rid = p['rid'];
         if (rid is int && rid != controller.roundId) return;
-        controller.submitShotFor(who, (p['x'] as num).toDouble(), (p['y'] as num).toDouble());
+        controller.submitShotFor(
+            who, (p['x'] as num).toDouble(), (p['y'] as num).toDouble());
       case 'undo':
         controller.undoShotFor(who);
+      case 'miss':
+        controller.markMiss(who);
     }
   }
 
@@ -351,10 +370,17 @@ class FinalsGuest extends ChangeNotifier {
   bool deniedFull = false;
 
   /// Запросить текущее состояние (после входа в канал).
-  void hello() => channel.send('hello', {'author': userId, 'who': '', 'name': name});
+  void hello() =>
+      channel.send('hello', {'author': userId, 'who': '', 'name': name});
 
-  bool shoot(String who, double x, double y) =>
-      channel.send('shot', {'author': userId, 'who': who, 'x': x, 'y': y, if (snapshot?.data['rid'] != null) 'rid': snapshot!.data['rid']});
+  bool shoot(String who, double x, double y) => channel.send('shot', {
+        'author': userId,
+        'who': who,
+        'x': x,
+        'y': y,
+        if (snapshot?.data['rid'] != null) 'rid': snapshot!.data['rid']
+      });
+
   /// Остановить время (по правилам — при неисправности); продолжает судья.
   bool pause() => channel.send('pause', {'author': userId});
 
@@ -363,14 +389,24 @@ class FinalsGuest extends ChangeNotifier {
   /// Раз в 5 секунд сообщает ведущему, что устройство на связи (статус тира у главного судьи).
   void startPing() {
     _ping?.cancel();
-    _ping = Timer.periodic(const Duration(seconds: 5), (_) => channel.send('ping', {'author': userId}));
+    _ping = Timer.periodic(const Duration(seconds: 5),
+        (_) => channel.send('ping', {'author': userId}));
   }
+
   bool resume() => channel.send('resume', {'author': userId});
 
-  bool cheer(String kind) => channel.send('cheer', {'author': userId, 'k': kind});
+  bool cheer(String kind) =>
+      channel.send('cheer', {'author': userId, 'k': kind});
 
   /// Команда тренера «Далее» (заряжай / старт / стоп).
   bool next() => channel.send('next', {'author': userId, 'who': ''});
+
+  /// «Промах»: выстрел не сделан — записать ноль.
+  bool miss(String who) => channel.send('miss', {'author': userId, 'who': who});
+
+  /// Исключить финалиста (только судья/ведущий).
+  bool exclude(String who) =>
+      channel.send('exclude', {'author': userId, 'who': who});
   bool undo(String who) => channel.send('undo', {'author': userId, 'who': who});
 
   @override

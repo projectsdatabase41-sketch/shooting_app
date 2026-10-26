@@ -1,3 +1,4 @@
+import '../services/economy_mode.dart';
 import 'dart:async';
 import '../widgets/glass_route.dart';
 import 'security_settings_screen.dart';
@@ -165,6 +166,16 @@ class SettingsScreen extends StatelessWidget {
               subtitle: Text(tr('Кнопка для отзывов на каждой странице')),
               value: on,
               onChanged: (v) => DemoMode.set(store.db, v),
+            ),
+          ),
+          ValueListenableBuilder<int>(
+            valueListenable: EconomyMode.revision,
+            builder: (context, _, __) => SwitchListTile(
+              secondary: const Icon(Icons.battery_saver_outlined),
+              title: Text(tr('Эконом')),
+              subtitle: Text(tr('Без обоев, размытия и анимаций — меньше нагрузка и нагрев телефона')),
+              value: EconomyMode.on,
+              onChanged: (v) => EconomyMode.set(store.db, v),
             ),
           ),
           ListTile(

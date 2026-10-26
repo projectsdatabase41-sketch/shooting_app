@@ -62,9 +62,10 @@ String _timeOf(FinalsSnapshot s) {
   return '${v ~/ 60}:${(v % 60).toString().padLeft(2, '0')}';
 }
 
-String _nextLabel(String phase) => switch (phase) {
+String _nextLabel(String phase, int secondsLeft) => switch (phase) {
       'sighting' => tr('Заряжай'),
-      'loading' => tr('Старт'),
+      // Пока идёт комментарий диктора (больше 5 с), следующая команда — «Заряжай».
+      'loading' => secondsLeft > 5 ? tr('Заряжай') : tr('Старт'),
       'shooting' => tr('Стоп'),
       'grace' => tr('Далее'),
       _ => '',
@@ -80,6 +81,10 @@ class FinalRoomView extends StatefulWidget {
   final String? ownId; // спортсмен: его id в финале
   final void Function(String who, Offset mm) onShoot;
   final void Function(String who) onUndo;
+
+  /// «Промах» (результат выстрела не указан) и исключение финалиста — для тех, у кого есть право.
+  final void Function(String who)? onMiss;
+  final void Function(String who)? onExclude;
   final VoidCallback? onNext; // команды: заряжай / старт / стоп
   final VoidCallback? onPause; // судья и ведущий: остановить/продолжить время
   final VoidCallback? onRequestPause; // спортсмен: остановить время при неисправности
@@ -101,6 +106,8 @@ class FinalRoomView extends StatefulWidget {
     required this.role,
     required this.onShoot,
     required this.onUndo,
+    this.onMiss,
+    this.onExclude,
     this.ownId,
     this.onNext,
     this.onPause,
@@ -298,6 +305,27 @@ class _FinalRoomViewState extends State<FinalRoomView> {
         ]),
       );
 
+  /// Выстрел не указан после «Стоп»: переход к следующему раунду ждёт результата.
+  Widget _awaitBanner(BuildContext context, FinalsSnapshot s) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(color: cs.errorContainer, borderRadius: BorderRadius.circular(12)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(tr('Укажите результат выстрела'), style: TextStyle(fontWeight: FontWeight.w700, color: cs.onErrorContainer)),
+        for (final id in (s.data['aw'] as List).map((e) => '$e'))
+          Row(children: [
+            Expanded(child: Text('${s.row(id)?['name'] ?? id}', style: TextStyle(color: cs.onErrorContainer))),
+            if (widget.onMiss != null && (widget.ownId == id || _judge))
+              TextButton(onPressed: () => widget.onMiss!(id), child: Text(tr('Промах'))),
+            if (widget.onExclude != null)
+              TextButton(onPressed: () => widget.onExclude!(id), child: Text(tr('Исключить'))),
+          ]),
+      ]),
+    );
+  }
+
   /// Справа: мишени. Спортсмен/судья — крупная мишень, вокруг мишени остальных; зритель — все мишени сеткой.
   Widget _main(BuildContext context, FinalsSnapshot s) {
     final theme = Theme.of(context);
@@ -348,10 +376,12 @@ class _FinalRoomViewState extends State<FinalRoomView> {
               width: double.infinity,
               child: FilledButton(
                 onPressed: widget.onNext,
-                child: Text(_nextLabel(s.phase), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                child: Text(_nextLabel(s.phase, s.secondsLeft), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
               ),
             ),
           ),
+        if (s.data['aw'] is List && (s.data['aw'] as List).isNotEmpty && widget.role != FinalsRole.spectator)
+          _awaitBanner(context, s),
         if (s.paused)
           Padding(
             padding: const EdgeInsets.only(bottom: 4),
@@ -1215,6 +1245,8 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
         ownId: widget.hostCompetitorId,
         onShoot: (who, mm) => c.submitShotFor(who, mm.dx, mm.dy),
         onUndo: (who) => c.undoShotFor(who),
+        onMiss: c.markMiss,
+        onExclude: c.exclude,
         onNext: c.advance,
         onPause: c.paused ? c.resume : c.pause,
         onLeave: _leave,
@@ -1513,6 +1545,8 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
       ownId: widget.member.targetId,
       onShoot: (who, mm) => g?.shoot(who, mm.dx, mm.dy),
       onUndo: (who) => g?.undo(who),
+      onMiss: (who) => g?.miss(who),
+      onExclude: widget.member.chief ? (who) => g?.exclude(who) : null,
       onNext: widget.member.chief ? () => g?.next() : null,
       onPause: widget.member.chief
           ? () => snap.paused ? g?.resume() : g?.pause()

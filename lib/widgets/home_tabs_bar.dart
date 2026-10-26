@@ -1,3 +1,4 @@
+import '../services/economy_mode.dart';
 import '../theme/glass.dart';
 import 'dart:math' as math;
 import '../theme/app_transitions.dart';
@@ -447,14 +448,17 @@ class _HomeTileGridState extends State<HomeTileGrid> {
   /// поправка на индекс, что и в `HomeTabsViewModel.move` (иначе
   /// предпросмотр во время перетаскивания не совпадал бы с тем, что
   /// реально происходит на отпускании).
+  List<String> _preview = const [];
+
   List<String> _previewOrder(List<String> ids) {
     final dragging = _dragging;
     final hover = _hoverIndex;
     if (dragging == null || hover == null) return ids;
     final from = ids.indexOf(dragging);
     if (from < 0) return ids;
+    // hover — МЕСТО (ячейка сетки) под пальцем, а не плитка: ячейки неподвижны, поэтому расступающиеся плитки
+    // не «дёргаются» (раньше под пальцем оказывалась уже другая плитка, и предпросмотр прыгал туда-сюда).
     var target = hover;
-    if (target > from) target -= 1;
     if (target < 0) target = 0;
     if (target >= ids.length) target = ids.length - 1;
     if (target == from) return ids;
@@ -475,6 +479,7 @@ class _HomeTileGridState extends State<HomeTileGrid> {
   Widget build(BuildContext context) {
     final ids = widget.vm.visible;
     final preview = _previewOrder(ids);
+    _preview = preview;
     final screenW = MediaQuery.sizeOf(context).width;
     _wide = screenW > 600;
     _effCols = math.max(widget.vm.tileColumns, (screenW / widget.vm.tileMaxPx).ceil()).clamp(2, 10);
@@ -545,18 +550,19 @@ class _HomeTileGridState extends State<HomeTileGrid> {
         widthFactor: 0.8,
         heightFactor: 0.8,
         child: DragTarget<String>(
-          onWillAcceptWithDetails: (details) => details.data != id,
+          onWillAcceptWithDetails: (details) => true,
+          // Ячейка, над которой палец: плитка, стоящая в ней сейчас (в том числе сама перетаскиваемая).
           onMove: (details) {
-            if (_hoverIndex != index) setState(() => _hoverIndex = index);
-          },
-          onLeave: (data) {
-            if (_hoverIndex == index) setState(() => _hoverIndex = null);
+            final slot = _preview.indexOf(id);
+            if (slot >= 0 && _hoverIndex != slot) setState(() => _hoverIndex = slot);
           },
           onAcceptWithDetails: (details) {
             final oldIndex = widget.vm.visible.indexOf(details.data);
-            if (oldIndex < 0) return;
-            widget.vm.move(oldIndex, index);
+            final slot = _hoverIndex ?? _preview.indexOf(id);
             setState(() => _hoverIndex = null);
+            if (oldIndex < 0 || slot < 0 || slot == oldIndex) return;
+            // vm.move ждёт «вставить перед индексом» (как у ReorderableListView): вперёд — на 1 дальше.
+            widget.vm.move(oldIndex, slot > oldIndex ? slot + 1 : slot);
           },
           builder: (context, candidateData, rejectedData) =>
               LongPressDraggable<String>(
@@ -737,7 +743,7 @@ class _HomeTileGridState extends State<HomeTileGrid> {
 
   /// «Стекло»: полупрозрачная заливка + размытие фона + тонкая рамка.
   Widget _glassWrap(bool glass, bool dark, bool pressed, Widget child) {
-    if (!glass) return child;
+    if (!glass || EconomyMode.on) return child;
     final r = BorderRadius.circular(16);
     return ClipRRect(
       borderRadius: r,
