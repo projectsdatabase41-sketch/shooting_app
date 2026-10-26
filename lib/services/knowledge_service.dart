@@ -8,6 +8,7 @@ import 'ai_settings.dart';
 import 'knowledge_column_discovery.dart';
 import 'local_db_service.dart';
 import 'supabase_auth_service.dart';
+import 'user_profile.dart';
 import '../i18n/i18n.dart';
 
 /// Кусок текста из базы знаний.
@@ -131,6 +132,14 @@ class KnowledgeService {
     'отдача': ['откат'],
     'ремень': ['погон'],
     'мишень': ['мишен', 'бланк'],
+    // Психология и концентрация: в книгах те же вещи названы по-разному.
+    'концен': ['вниман', 'сосред', 'собран'],
+    'вниман': ['концен', 'сосред', 'собран'],
+    'сосред': ['концен', 'вниман'],
+    'настро': ['психол', 'волнен', 'уверен'],
+    'психол': ['настро', 'саморе', 'волнен'],
+    'визуал': ['предст', 'образ'],
+    'расслаб': ['напряж', 'дыхани'],
   };
 
   /// К ключевым словам вопроса добавляются синонимы (после самих слов и
@@ -361,8 +370,10 @@ class KnowledgeService {
       }
 
       // Вопрос про пистолет — не подсовываем куски про винтовку (и наоборот).
+      final disciplines = UserProfile.disciplinesOf(db).toSet();
       unique.removeWhere((_, c) =>
-          weaponMismatch(trimmed, '${c.heading} ${c.text}'));
+          weaponMismatch(trimmed, '${c.heading} ${c.text}') ||
+          clayMismatch(disciplines, '${c.heading} ${c.text}'));
       final ranked = unique.values.toList()
         ..sort((a, b) => _relevance(b, words).compareTo(_relevance(a, words)));
       if (ranked.isEmpty && personal.contains(table.name)) {
@@ -384,6 +395,16 @@ class KnowledgeService {
   /// «Пистолетная рукоятка» — деталь ВИНТОВКИ (а не признак текста про пистолет):
   /// раньше куски про хват винтовки отбрасывались как «про пистолет».
   static final _pistolGripRe = RegExp(r'пистолетн[а-яё]*\s+рукоят[а-яё]*|pistol\s+grip', caseSensitive: false);
+
+  static final _clayRe = RegExp(r'(^|[^а-яё])(тарелк|стендов|скит($|[^а-яё])|трап($|[^а-яё])|дробов|траектори[а-яё]* полёта мишени|траектори[а-яё]* полета мишени)', caseSensitive: false);
+
+  /// Кусок про стендовую стрельбу (тарелки, ружьё), а в анкете спортсмена её нет: советы по ружью
+  /// и траектории тарелки подмешивались к ответам про винтовку и пистолет (напр. «Внутренняя дисциплина»).
+  /// Анкета не заполнена — ничего не отбрасываем.
+  static bool clayMismatch(Set<String> disciplines, String text) {
+    if (disciplines.isEmpty || disciplines.contains('shotgun')) return false;
+    return _clayRe.hasMatch(text.toLowerCase());
+  }
 
   static bool weaponMismatch(String question, String text) {
     final qp = _pistolRe.hasMatch(question), qr = _rifleRe.hasMatch(question);
@@ -407,7 +428,7 @@ class KnowledgeService {
   /// столько же, сколько текст: попадание в заголовок раздела обычно
   /// значит, что раздел ровно про это.
   static int _relevance(KnowledgeChunk c, List<String> words) =>
-      TextSearch.relevance('${c.heading} ${c.text}', words);
+      TextSearch.weightedRelevance(c.heading, c.text, words);
 
   /// [word] == null — без фильтра, самые свежие записи (по дате, если
   /// в таблице есть колонка даты).
