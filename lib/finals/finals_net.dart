@@ -148,6 +148,7 @@ class FinalsSnapshot {
       'hs': c.hostSilent,
       'ch': c.chiefHint,
       'pub': c.isPublic,
+      'rid': c.roundId,
       'pb': c.pausedBy,
       // В конце финала участникам уходят все выстрелы с координатами — из них у каждого собирается протокол.
       if (c.phase == RunPhase.finished) 'shots': [for (final s in c.shots) s.toJson()],
@@ -286,6 +287,9 @@ class FinalsHost {
     if (scope != null && !scope.contains(who)) return; // чужой выстрел — игнор
     switch (event) {
       case 'shot':
+        // Выстрел из прошлого раунда (долго шёл по сети) в новый не засчитываем; в своём раунде — в том числе после «Стоп».
+        final rid = p['rid'];
+        if (rid is int && rid != controller.roundId) return;
         controller.submitShotFor(who, (p['x'] as num).toDouble(), (p['y'] as num).toDouble());
       case 'undo':
         controller.undoShotFor(who);
@@ -335,7 +339,8 @@ class FinalsGuest extends ChangeNotifier {
   /// Запросить текущее состояние (после входа в канал).
   void hello() => channel.send('hello', {'author': userId, 'who': '', 'name': name});
 
-  bool shoot(String who, double x, double y) => channel.send('shot', {'author': userId, 'who': who, 'x': x, 'y': y});
+  bool shoot(String who, double x, double y) =>
+      channel.send('shot', {'author': userId, 'who': who, 'x': x, 'y': y, if (snapshot?.data['rid'] != null) 'rid': snapshot!.data['rid']});
   /// Остановить время (по правилам — при неисправности); продолжает судья.
   bool pause() => channel.send('pause', {'author': userId});
   bool resume() => channel.send('resume', {'author': userId});

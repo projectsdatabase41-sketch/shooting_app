@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
 
 import '../finals/announcer.dart';
+import '../finals/second_ticker.dart';
 import '../finals/round_label.dart';
 import '../finals/final_engine.dart';
 import '../finals/final_run.dart';
@@ -39,7 +40,7 @@ class FinalRunScreen extends StatefulWidget {
 }
 
 class _FinalRunScreenState extends State<FinalRunScreen> {
-  Timer? _timer;
+  SecondTicker? _timer;
   final List<Offset> _sightingMarks = []; // мм, пристрелка не идёт в зачёт
   final _page = PageController(initialPage: 1);
   bool _saved = false;
@@ -99,7 +100,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
   void _begin() {
     if (_started) return;
     setState(() => _started = true);
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) => c.tick());
+    _timer = SecondTicker(c.tick)..start();
   }
 
   String _banner() {

@@ -145,6 +145,13 @@ class FinalRunController extends ChangeNotifier {
   /// Секунд на отметку выстрелов после «Стоп».
   static const graceSeconds = 10;
 
+  /// Окно после «Стоп» для отметки последних выстрелов. В совместном финале ведущий увеличивает его на запас под
+  /// задержку сети: выстрел, сделанный в последний момент, не должен потеряться из-за медленного канала.
+  int graceLimit = graceSeconds;
+
+  /// Номер раунда для сети: выстрел, пришедший с опозданием из прошлого раунда, не засчитывается в новый.
+  int get roundId => roundIndex * 2 + (inShootOff ? 1 : 0);
+
   /// Выстрелы человека в текущем раунде: можно убрать кнопкой «назад», в
   /// таблицу и движок уходят при закрытии раунда.
   final Map<String, List<({double x, double y, int t})>> _staged = {};
@@ -391,7 +398,7 @@ class FinalRunController extends ChangeNotifier {
   void _stopRound() {
     if (!_humansDone()) {
       phase = RunPhase.grace;
-      secondsLeft = graceSeconds;
+      secondsLeft = graceLimit;
       log.add({'e': 'stop', 't': clock});
     } else {
       _endRound();

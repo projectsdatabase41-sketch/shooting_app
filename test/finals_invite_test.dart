@@ -12,6 +12,7 @@ void main() {
   spectatorTest();
   publicTest();
   pauseTest();
+  lateShotsTest();
   test('код приглашения: кодируется и читается из текста сообщения', () {
     final book = FinalsInviteBook();
     final inv = book.create(role: FinalsRole.athlete, name: 'Иван', targetId: 'u_1');
@@ -187,6 +188,49 @@ void pauseTest() {
     await settle();
     expect(c.paused, isFalse);
     expect(c.pausedBy, isNull);
+    host.dispose();
+  });
+}
+
+void lateShotsTest() {
+  test('выстрел после «Стоп» принимается в окне, а опоздавший из прошлого раунда в новый не попадает', () async {
+    final (hostCh, guestCh) = MemoryFinalsChannel.pair();
+    final fmt = FinalFormat.airRifle10m;
+    final c = FinalRunController(
+      format: fmt,
+      face: TargetFace.byCode(fmt.faceCode),
+      engine: FinalEngine(fmt, [for (var i = 0; i < 8; i++) FinalCompetitor(i == 0 ? 'u_a' : 'b$i', 'N$i')]),
+      userId: 'u_a',
+      bots: const {},
+      rng: Random(1),
+      manual: true,
+    );
+    c.graceLimit = 15;
+    final host = FinalsHost(controller: c, channel: hostCh, allowed: (_) => null);
+    Future<void> settle() => Future<void>.delayed(const Duration(milliseconds: 50));
+    final g = FinalsGuest(channel: guestCh, userId: 'x')..hello();
+    await settle();
+    // пристрелка → заряжай → старт → время серии вышло (человек отметил не всё) → окно после «Стоп»
+    c.advance();
+    c.advance();
+    expect(c.phase, RunPhase.shooting);
+    final rid0 = c.roundId;
+    for (var i = 0; i < c.roundLimit; i++) {
+      c.tick();
+    }
+    expect(c.phase, RunPhase.grace);
+    expect(c.secondsLeft, 15);
+    g.shoot('u_a', 1, 1);
+    await settle();
+    expect(c.stagedOf('u_a').length, 1, reason: 'последний выстрел после «Стоп» принят');
+
+    // раунд закрыт; запоздалый выстрел со старым номером раунда в новый раунд не попадает
+    c.advance(); // конец окна → загрузка следующей серии
+    c.advance();
+    expect(c.phase, RunPhase.shooting);
+    expect(c.roundId, isNot(rid0));
+    hostCh.onMessage?.call('shot', {'author': 'x', 'who': 'u_a', 'x': 2.0, 'y': 2.0, 'rid': rid0});
+    expect(c.stagedOf('u_a'), isEmpty);
     host.dispose();
   });
 }

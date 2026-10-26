@@ -32,6 +32,7 @@ import '../finals/finals_board.dart';
 import '../finals/finals_invite.dart';
 import '../services/supabase_auth_service.dart';
 import '../finals/round_label.dart';
+import '../finals/second_ticker.dart';
 import 'final_run_screen.dart';
 
 String _bannerOf(FinalsSnapshot s) {
@@ -852,7 +853,7 @@ class FinalHostScreen extends StatefulWidget {
 
 class _FinalHostScreenState extends State<FinalHostScreen> {
   FinalsHost? _host;
-  Timer? _timer;
+  SecondTicker? _timer;
   Timer? _refresh;
   late List<FinalsMember> _members = widget.members;
   late final String _me = widget.service.auth.userId;
@@ -873,7 +874,8 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
     // Ведущий стреляет сам и есть жюри — говорит главный из жюри, у ведущего тишина.
     c.hostSilent = widget.hostCompetitorId != null && widget.members.any((m) => m.role == FinalsRole.coach && m.status == 'accepted');
     c.addListener(_onChange);
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) => c.tick());
+    c.graceLimit = FinalRunController.graceSeconds + 5; // запас на задержку сети
+    _timer = SecondTicker(c.tick)..start();
     _connect();
     // Состав и главный из жюри обновляются — приглашённые подключаются по ходу.
     c.chiefHint = widget.book.chiefHint;
