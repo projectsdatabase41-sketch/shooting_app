@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import '../widgets/ai_gate.dart';
+import 'focus_training_screen.dart';
 import 'package:provider/provider.dart';
 import '../logic/ai_context.dart';
 import '../logic/shot_photo_detection.dart';
@@ -183,6 +184,12 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
                 icon: const BoldIcon(Icons.lock_outline),
                 tooltip: tr('Разблокировать правку завершённой тренировки'),
                 onTap: () => _confirmUnlockFinished(context, vm),
+              ),
+            if (vm.canEditShots && !vm.face.hitMiss)
+              GlassCircleButton(
+                icon: const BoldIcon(Icons.center_focus_strong),
+                tooltip: tr('Режим концентрации'),
+                onTap: () => FocusTrainingScreen.open(context),
               ),
             if (vm.canEditShots)
               GlassCircleButton(

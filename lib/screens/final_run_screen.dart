@@ -387,7 +387,10 @@ class ShotPad extends StatefulWidget {
   final bool enabled;
   final ValueChanged<bool> onHold;
   final ValueChanged<Offset> onShot;
-  const ShotPad({required this.face, required this.marks, required this.enabled, required this.onHold, required this.onShot});
+
+  /// Своя схема цветов мишени (режим концентрации); по умолчанию — обычная.
+  final TargetColorScheme? colors;
+  const ShotPad({required this.face, required this.marks, required this.enabled, required this.onHold, required this.onShot, this.colors});
 
   @override
   State<ShotPad> createState() => _ShotPadState();
@@ -552,7 +555,7 @@ class _ShotPadState extends State<ShotPad> {
                       child: CustomPaint(
                         painter: TargetPainter(
                           face: widget.face,
-                          colors: TargetColorScheme.defaultScheme,
+                          colors: widget.colors ?? TargetColorScheme.defaultScheme,
                           visibleShots: const [],
                           selectedShot: null,
                           currentSeriesNo: 1,
@@ -655,7 +658,7 @@ class _ShotPadState extends State<ShotPad> {
                   child: CustomPaint(
                     painter: TargetPainter(
                       face: widget.face,
-                      colors: TargetColorScheme.defaultScheme,
+                      colors: widget.colors ?? TargetColorScheme.defaultScheme,
                       visibleShots: const [],
                       selectedShot: null,
                       currentSeriesNo: 1,

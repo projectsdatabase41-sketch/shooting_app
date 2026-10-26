@@ -476,6 +476,24 @@ class TargetViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Режим концентрации: сразу записывает выстрел в точку ([xMm], [yMm]) мишени — без черновика и правки.
+  void addShotAt(double xMm, double yMm) {
+    if (!canAddShotNow) return;
+    session = SessionLogic.addShot(
+      session,
+      exercise,
+      face,
+      xMm,
+      yMm,
+      DateTime.now(),
+      idGenerator: () => _uuid.v4(),
+      allowDuringPause: canAddShotNow,
+    );
+    _selectedIndex = session.shots.length - 1;
+    notifyListeners();
+    _persist();
+  }
+
   /// Тарелки: «попал» — выстрел в центр, «мимо» — за краем зоны.
   void addHitMiss(bool hit) {
     if (!canAddShotNow) return;
