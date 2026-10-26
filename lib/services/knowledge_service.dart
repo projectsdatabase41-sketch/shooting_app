@@ -370,10 +370,15 @@ class KnowledgeService {
       }
 
       // Вопрос про пистолет — не подсовываем куски про винтовку (и наоборот).
+      // Фильтр по анкете: вид стрельбы (пистолет/винтовка/стендовая) и пол, плюс вид оружия из самого вопроса.
       final disciplines = UserProfile.disciplinesOf(db).toSet();
-      unique.removeWhere((_, c) =>
-          weaponMismatch(trimmed, '${c.heading} ${c.text}') ||
-          clayMismatch(disciplines, '${c.heading} ${c.text}'));
+      final gender = UserProfile.genderOf(db);
+      unique.removeWhere((_, c) {
+        final t = '${c.heading} ${c.text}';
+        return weaponMismatch(trimmed, t, profileDisciplines: disciplines) ||
+            clayMismatch(disciplines, t) ||
+            genderMismatch(gender, t);
+      });
       final ranked = unique.values.toList()
         ..sort((a, b) => _relevance(b, words).compareTo(_relevance(a, words)));
       if (ranked.isEmpty && personal.contains(table.name)) {
@@ -401,14 +406,33 @@ class KnowledgeService {
   /// Кусок про стендовую стрельбу (тарелки, ружьё), а в анкете спортсмена её нет: советы по ружью
   /// и траектории тарелки подмешивались к ответам про винтовку и пистолет (напр. «Внутренняя дисциплина»).
   /// Анкета не заполнена — ничего не отбрасываем.
+  static final _womenRe = RegExp(r'(^|[^а-яё])(женщин|женск|девушк|девочк)', caseSensitive: false);
+  static final _menRe = RegExp(r'(^|[^а-яё])(мужчин|мужск|юнош|мальчик)', caseSensitive: false);
+
+  /// Кусок целиком про одну из категорий (только «женщины» или только «мужчины», например программа упражнения),
+  /// а в анкете указан пол другой категории. Если в куске названы обе категории или ни одной — не отбрасываем.
+  static bool genderMismatch(String gender, String text) {
+    if (gender != 'm' && gender != 'f') return false;
+    final low = text.toLowerCase();
+    final w = _womenRe.hasMatch(low), m = _menRe.hasMatch(low);
+    if (w == m) return false;
+    return gender == 'm' ? w : m;
+  }
+
   static bool clayMismatch(Set<String> disciplines, String text) {
     if (disciplines.isEmpty || disciplines.contains('shotgun')) return false;
     return _clayRe.hasMatch(text.toLowerCase());
   }
 
-  static bool weaponMismatch(String question, String text) {
-    final qp = _pistolRe.hasMatch(question), qr = _rifleRe.hasMatch(question);
-    if (qp == qr) return false; // оружие не названо или названо оба
+  /// Вид оружия берётся из вопроса, а если вопрос его не называет — из анкеты (только пистолет или только
+  /// винтовка). Анкета с обоими видами или пустая ничего не отбрасывает.
+  static bool weaponMismatch(String question, String text, {Set<String> profileDisciplines = const {}}) {
+    var qp = _pistolRe.hasMatch(question), qr = _rifleRe.hasMatch(question);
+    if (!qp && !qr) {
+      qp = profileDisciplines.contains('pistol') && !profileDisciplines.contains('rifle');
+      qr = profileDisciplines.contains('rifle') && !profileDisciplines.contains('pistol');
+    }
+    if (qp == qr) return false; // оружие не названо ни там, ни там или названо оба
     // нижний регистр: без флага unicode кириллица не сравнивается без учёта регистра
     final low = text.toLowerCase();
     final plain = low.replaceAll(_pistolGripRe, '');

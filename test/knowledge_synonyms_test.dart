@@ -3,6 +3,7 @@ import 'package:shooting_app/logic/text_search.dart';
 import 'package:shooting_app/services/knowledge_service.dart';
 
 void main() {
+  profileFilterTests();
   retrievalTests();
   test('вопрос про концентрацию внимания находит и близкие слова (сосредоточение, психология)', () {
     final words = KnowledgeService.withSynonyms(KnowledgeService.keywords('методы концентрации внимания перед выстрелом'));
@@ -35,5 +36,27 @@ void retrievalTests() {
     expect(KnowledgeService.clayMismatch({'shotgun'}, clay), isFalse); // стендовик — его материал
     expect(KnowledgeService.clayMismatch({}, clay), isFalse); // анкета не заполнена — не отбрасываем
     expect(KnowledgeService.clayMismatch({'rifle'}, rifle), isFalse);
+  });
+}
+
+void profileFilterTests() {
+  test('вид оружия берётся из анкеты, если вопрос его не называет', () {
+    const rifleText = 'Приклад прижат к плечу, щека на гребне приклада.';
+    const pistolText = 'Хват пистолета: рука вытянута, пистолет удерживается одной рукой.';
+    expect(KnowledgeService.weaponMismatch('как держать', rifleText, profileDisciplines: {'pistol'}), isTrue);
+    expect(KnowledgeService.weaponMismatch('как держать', pistolText, profileDisciplines: {'rifle'}), isTrue);
+    expect(KnowledgeService.weaponMismatch('как держать', pistolText, profileDisciplines: {'pistol'}), isFalse);
+    expect(KnowledgeService.weaponMismatch('как держать', rifleText, profileDisciplines: {'pistol', 'rifle'}), isFalse);
+    expect(KnowledgeService.weaponMismatch('как держать', rifleText), isFalse); // анкета пуста
+    // вопрос важнее анкеты
+    expect(KnowledgeService.weaponMismatch('хват винтовки', pistolText, profileDisciplines: {'pistol'}), isTrue);
+  });
+
+  test('пол из анкеты: куски только про другую категорию отбрасываются', () {
+    expect(KnowledgeService.genderMismatch('m', 'Программа для женщин: 60 выстрелов.'), isTrue);
+    expect(KnowledgeService.genderMismatch('f', 'ВП-60, мужчины, 60 выстрелов.'), isTrue);
+    expect(KnowledgeService.genderMismatch('m', 'Мужчины и женщины стреляют по одной программе.'), isFalse);
+    expect(KnowledgeService.genderMismatch('m', 'Дыхание и пауза перед выстрелом.'), isFalse);
+    expect(KnowledgeService.genderMismatch('', 'Программа для женщин.'), isFalse);
   });
 }
