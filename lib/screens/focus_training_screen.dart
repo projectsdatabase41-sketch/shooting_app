@@ -4,7 +4,6 @@ import 'package:uuid/uuid.dart';
 
 import '../i18n/i18n.dart';
 import '../models/comment.dart';
-import '../models/target_color_scheme.dart';
 import '../services/comments_repository.dart';
 import '../state/app_data_store.dart';
 import '../state/personalization_view_model.dart';
