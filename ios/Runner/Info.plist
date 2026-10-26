@@ -74,5 +74,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Bluetooth нужен для связи устройств в одном тире во время финала.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>Bluetooth нужен для связи устройств в одном тире во время финала.</string>
 </dict>
 </plist>

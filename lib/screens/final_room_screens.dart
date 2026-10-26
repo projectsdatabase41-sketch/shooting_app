@@ -24,7 +24,10 @@ import '../services/chat_messages_repository.dart';
 import '../services/chat_sync_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/glass_pill.dart';
+import '../finals/ble_link.dart';
 import '../finals/cheers.dart';
+import '../finals/finals_bridge.dart';
+import '../finals/local_link.dart';
 import '../services/local_db_service.dart';
 import '../services/user_profile.dart';
 import '../finals/final_publish.dart';
@@ -82,6 +85,9 @@ class FinalRoomView extends StatefulWidget {
   final VoidCallback? onRequestPause; // спортсмен: остановить время при неисправности
   final VoidCallback? onLeave;
 
+  /// Дополнительные кнопки в шапке (например, выбор связи).
+  final List<Widget> extraActions;
+
   /// Кричалки: лента реакций у всех, кнопки — у зрителя.
   final CheerFeed? cheers;
   final void Function(String kind)? onCheer;
@@ -100,6 +106,7 @@ class FinalRoomView extends StatefulWidget {
     this.onPause,
     this.onRequestPause,
     this.onLeave,
+    this.extraActions = const [],
     this.cheers,
     this.onCheer,
     this.offline = false,
@@ -192,6 +199,7 @@ class _FinalRoomViewState extends State<FinalRoomView> {
           Text(_timeOf(s), style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
         ]),
         actions: [
+          ...widget.extraActions,
           if (widget.onPause != null) IconButton(icon: Icon(s.paused ? Icons.play_arrow : Icons.pause), onPressed: widget.onPause),
           if (canRequestPause) IconButton(tooltip: tr('Остановить время (неисправность)'), icon: const Icon(Icons.pause_circle_outline), onPressed: _askPause),
           if (widget.onLeave != null) IconButton(tooltip: tr('Покинуть финал'), icon: const Icon(Icons.logout), onPressed: widget.onLeave),
@@ -522,6 +530,7 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
   bool _public = false;
   int _maxSpec = 50;
   int _hostSite = 1; // тир ведущего
+  bool _hostBle = false; // раздавать финал устройствам своего тира по Bluetooth (Android)
   String? _boardId;
   bool _handedOff = false; // дальше табло ведёт экран ведущего
   bool _busy = false;
@@ -708,6 +717,7 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
           book: _book,
           boardId: _boardId,
           hostSite: '$_hostSite',
+          bluetooth: _hostBle,
           controller: controller,
           sessionId: sid,
           service: _svc,
@@ -788,6 +798,14 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
                   onChanged: started ? null : (v) => setState(() => _hostSite = v ?? 1),
                 ),
               ),
+              if (FinalsBle.canBridge)
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(tr('Bluetooth в моём тире')),
+                  subtitle: Text(tr('Устройства рядом подключатся к вам по Bluetooth, им не нужен интернет; остальные — через сеть')),
+                  value: _hostBle,
+                  onChanged: started ? null : (v) => setState(() => _hostBle = v),
+                ),
               Text(tr('Участники'), style: theme.textTheme.titleSmall),
               for (final p in _picks)
                 ListTile(
@@ -886,6 +904,9 @@ class FinalHostScreen extends StatefulWidget {
   /// Тир ведущего.
   final String hostSite;
 
+  /// Раздавать состояние устройствам тира по Bluetooth (ведущий — мост).
+  final bool bluetooth;
+
   /// Если ведущий сам стреляет — его id участника; иначе `null` (он только ведёт).
   final String? hostCompetitorId;
   const FinalHostScreen(
@@ -898,6 +919,7 @@ class FinalHostScreen extends StatefulWidget {
       required this.book,
       this.boardId,
       this.hostSite = '1',
+      this.bluetooth = false,
       this.hostCompetitorId});
 
   @override
@@ -913,6 +935,10 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
   bool _saved = false;
   final _cheers = CheerFeed();
   final Map<String, DateTime> _seen = {}; // когда устройство последний раз подавало признак жизни
+  BleBridgeServer? _ble;
+  StreamSubscription<LocalLink>? _bleSub;
+  FinalsBridge? _hub;
+  bool _bleOn = false;
   late final _board = FinalsBoardService(widget.service.auth);
   bool _boardLive = false;
   String _boardPeople = '';
@@ -992,9 +1018,26 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
     }
     _attempt = 0;
     setState(() => _online = true);
+    // Bluetooth: ведущий — мост своего тира. Участники по сети идут как раньше, устройства рядом — по Bluetooth.
+    FinalsChannel hostCh = ch;
+    if (widget.bluetooth && FinalsBle.canBridge) {
+      final hub = FinalsBridge(ch, hostMode: true);
+      _hub = hub;
+      hostCh = hub.self;
+      if (!_bleOn) {
+        final server = BleBridgeServer(widget.sessionId);
+        _ble = server;
+        _bleOn = await server.start();
+        if (_bleOn) {
+          _bleSub = server.connections.listen((l) => _hub?.addLocal(LocalLinkChannel(l)));
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Bluetooth недоступен — финал идёт по сети'))));
+        }
+      }
+    }
     _host = FinalsHost(
       controller: c,
-      channel: ch,
+      channel: hostCh,
       allowed: (a) => FinalsSessionService.scopeFor(a, _me, _members),
       canControl: (a) => FinalsSessionService.canControl(a, _me, _members),
       cheerName: (a) {
@@ -1146,6 +1189,8 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
 
   @override
   void dispose() {
+    _bleSub?.cancel();
+    _ble?.stop();
     _cheers.dispose();
     _timer?.cancel();
     _refresh?.cancel();
@@ -1209,6 +1254,10 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
   late final LocalDbService _db;
   int _helloTicks = 0;
   bool _closing = false;
+  bool _ble = false; // подключён к мосту тира по Bluetooth
+  BleBridgeServer? _server; // это устройство само мост тира
+  StreamSubscription<LocalLink>? _serverSub;
+  FinalsBridge? _bridge;
   final _cheers = CheerFeed();
   bool _saved = false;
 
@@ -1264,6 +1313,69 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
     Navigator.of(context).maybePop();
   }
 
+  /// Меню «Связь»: Bluetooth-мост тира или обычная сеть.
+  Future<void> _bluetoothMenu() async {
+    final choice = await showGlassSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          if (!_ble && _server == null)
+            ListTile(
+              leading: const Icon(Icons.bluetooth_searching),
+              title: Text(tr('Подключиться к мосту по Bluetooth')),
+              subtitle: Text(tr('Устройство рядом с мостом вашего тира; интернет не нужен')),
+              onTap: () => Navigator.pop(ctx, 'connect'),
+            ),
+          if (FinalsBle.canBridge && _server == null && !_ble)
+            ListTile(
+              leading: const Icon(Icons.bluetooth),
+              title: Text(tr('Стать мостом тира')),
+              subtitle: Text(tr('Остальные устройства тира подключатся к вам по Bluetooth')),
+              onTap: () => Navigator.pop(ctx, 'bridge'),
+            ),
+          if (_ble || _server != null)
+            ListTile(
+              leading: const Icon(Icons.wifi),
+              title: Text(tr('Вернуться на сеть')),
+              onTap: () => Navigator.pop(ctx, 'net'),
+            ),
+        ]),
+      ),
+    );
+    if (choice == null || !mounted) return;
+    switch (choice) {
+      case 'connect':
+        _ble = true;
+      case 'bridge':
+        final server = BleBridgeServer(widget.member.sessionId);
+        if (!await server.start()) {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Bluetooth недоступен'))));
+          return;
+        }
+        _server = server;
+        _serverSub = server.connections.listen((l) => _bridge?.addLocal(LocalLinkChannel(l)));
+      case 'net':
+        _ble = false;
+        await _stopBridge();
+    }
+    // Заново открываем связь уже выбранным способом.
+    _retry?.cancel();
+    _retry = null;
+    _hello?.cancel();
+    _guest?.dispose();
+    _guest = null;
+    if (mounted) setState(() => _online = false);
+    _join();
+  }
+
+  Future<void> _stopBridge() async {
+    await _serverSub?.cancel();
+    _serverSub = null;
+    await _server?.stop();
+    _server = null;
+    _bridge = null;
+  }
+
   void _scheduleReconnect() {
     if (!mounted || _retry != null) return;
     setState(() => _online = false);
@@ -1279,16 +1391,41 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
   }
 
   Future<void> _join() async {
-    final ch = FinalsSessionService.publicChannel(widget.member.sessionId, url: widget.url, anonKey: widget.anonKey);
-    ch.onClosed = _scheduleReconnect;
+    FinalsChannel ch;
+    if (_ble) {
+      // Подключаемся к мосту тира по Bluetooth; не нашли — остаёмся на сети.
+      final link = await BleBridgeClient(widget.member.sessionId).connect();
+      if (!mounted) return;
+      if (link != null) {
+        ch = LocalLinkChannel(link);
+      } else {
+        _ble = false;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Мост Bluetooth не найден — остаёмся на сети'))));
+        ch = FinalsSessionService.publicChannel(widget.member.sessionId, url: widget.url, anonKey: widget.anonKey);
+      }
+    } else {
+      ch = FinalsSessionService.publicChannel(widget.member.sessionId, url: widget.url, anonKey: widget.anonKey);
+    }
+    // Связь оборвалась: по Bluetooth — возвращаемся на сеть, по сети — переподключаемся.
+    ch.onClosed = () {
+      if (_ble) _ble = false;
+      _scheduleReconnect();
+    };
     final ok = await ch.join();
     if (!mounted) return;
     if (!ok) {
+      _ble = false;
       _scheduleReconnect();
       return;
     }
     _attempt = 0;
-    final g = FinalsGuest(channel: ch, userId: widget.member.userId, name: widget.member.name)
+    // Это устройство — мост тира: остальные подключаются к нему по Bluetooth, а оно держит связь с ведущим по сети.
+    var gch = ch;
+    if (_server != null && !_ble) {
+      _bridge = FinalsBridge(ch);
+      gch = _bridge!.self;
+    }
+    final g = FinalsGuest(channel: gch, userId: widget.member.userId, name: widget.member.name)
       ..addListener(() {
         if (!mounted) return;
         final g = _guest;
@@ -1333,6 +1470,7 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
 
   @override
   void dispose() {
+    unawaited(_stopBridge());
     // Посмотрели финал — жюри и зрителям ссылка и ключ больше не нужны: код приглашения стирается сразу.
     // Остаётся только у участников (до окончания финала или срока) и у ведущего.
     if (widget.member.role != FinalsRole.athlete) {
@@ -1381,6 +1519,14 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
           : null,
       onRequestPause: role == FinalsRole.athlete ? () => g?.pause() : null,
       cheers: _cheers,
+      extraActions: [
+        if (FinalsBle.supported)
+          IconButton(
+            tooltip: tr('Связь'),
+            icon: Icon(_ble || _server != null ? Icons.bluetooth_connected : Icons.bluetooth),
+            onPressed: _bluetoothMenu,
+          ),
+      ],
       onCheer: role == FinalsRole.spectator
           ? (kind) {
               if (g?.cheer(kind) == true) _cheers.add(widget.member.name.isEmpty ? '' : widget.member.name, kind);
