@@ -13,6 +13,7 @@ void main() {
   publicTest();
   pauseTest();
   lateShotsTest();
+  multiSiteTest();
   test('код приглашения: кодируется и читается из текста сообщения', () {
     final book = FinalsInviteBook();
     final inv = book.create(role: FinalsRole.athlete, name: 'Иван', targetId: 'u_1');
@@ -154,7 +155,7 @@ void pauseTest() {
   test('пауза: спортсмен останавливает время для всех, продолжает только судья', () async {
     final book = FinalsInviteBook();
     final a = book.create(role: FinalsRole.athlete, name: 'Анна', targetId: 'u_a');
-    final j = book.create(role: FinalsRole.coach, name: 'Судья');
+    final j = book.create(role: FinalsRole.coach, name: 'Судья', chief: true);
     book.accept(a.token, 'Анна');
     book.accept(j.token, 'Судья');
     final (hostCh, guestCh) = MemoryFinalsChannel.pair();
@@ -232,5 +233,33 @@ void lateShotsTest() {
     hostCh.onMessage?.call('shot', {'author': 'x', 'who': 'u_a', 'x': 2.0, 'y': 2.0, 'rid': rid0});
     expect(c.stagedOf('u_a'), isEmpty);
     host.dispose();
+  });
+}
+
+void multiSiteTest() {
+  test('несколько тиров: команды только у главного судьи, тир едет в приглашении, главный один', () {
+    final book = FinalsInviteBook();
+    final j1 = book.create(role: FinalsRole.coach, name: 'Судья 1', site: '1', chief: true);
+    final j2 = book.create(role: FinalsRole.coach, name: 'Судья 2', site: '2');
+    final a2 = book.create(role: FinalsRole.athlete, name: 'Спортсмен', targetId: 'u_a', site: '2');
+    for (final i in [j1, j2, a2]) {
+      book.accept(i.token, i.name);
+    }
+    expect(FinalsSessionService.canControl(j1.token, '', book.members), isTrue);
+    expect(FinalsSessionService.canControl(j2.token, '', book.members), isFalse); // судья второго тира только слушает
+    expect(FinalsSessionService.canControl(a2.token, '', book.members), isFalse);
+    expect(FinalsSessionService.canControl('host', 'host', book.members), isTrue);
+    expect(book.chiefHint, FinalsInviteBook.hint(j1.token));
+    // назначили другого главным — прежний перестаёт быть главным
+    final j3 = book.create(role: FinalsRole.coach, name: 'Судья 3', site: '2', chief: true);
+    book.accept(j3.token, 'Судья 3');
+    expect(FinalsSessionService.canControl(j1.token, '', book.members), isFalse);
+    expect(FinalsSessionService.canControl(j3.token, '', book.members), isTrue);
+    // приглашение несёт тир и признак главного
+    final back = FinalsInvite.parse(j3.encode())!;
+    expect(back.site, '2');
+    expect(back.chief, isTrue);
+    expect(back.member.chief, isTrue);
+    expect(FinalsInvite.parse(a2.encode())!.site, '2');
   });
 }

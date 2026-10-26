@@ -272,7 +272,7 @@ class _FinalRoomViewState extends State<FinalRoomView> {
                 ),
                 child: Row(children: [
                   SizedBox(width: 26, child: Text('${rows[i]['place'] ?? (i + 1)}', style: const TextStyle(fontWeight: FontWeight.w800))),
-                  Expanded(child: Text('${rows[i]['name']}', overflow: TextOverflow.ellipsis)),
+                  Expanded(child: Text('${rows[i]['name']}${rows[i]['site'] != null && s.siteCount > 1 ? ' · ${tr('Тир {n}', {'n': rows[i]['site']})}' : ''}', overflow: TextOverflow.ellipsis)),
                   Text(((rows[i]['shots'] as List).isEmpty) ? '' : '${tr('ср')} ${(rows[i]['avg'] as num).toStringAsFixed(2)}  ', style: theme.textTheme.bodySmall),
                   Text((rows[i]['total'] as num).toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.w700)),
                 ]),
@@ -316,6 +316,20 @@ class _FinalRoomViewState extends State<FinalRoomView> {
               Icon(Icons.wifi_off, color: cs.onErrorContainer, size: 18),
               const SizedBox(width: 8),
               Expanded(child: Text(tr('Нет связи — подключаемся снова'), style: TextStyle(color: cs.onErrorContainer))),
+            ]),
+          ),
+        // Несколько тиров: у каждого видно, сколько устройств на связи (главному судье — чтобы знать, слышат ли его).
+        if (s.siteCount > 1 && widget.role != FinalsRole.spectator)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Wrap(spacing: 6, runSpacing: 4, children: [
+              for (final e in s.siteStatus.entries)
+                Chip(
+                  visualDensity: VisualDensity.compact,
+                  avatar: Icon(e.value[0] < e.value[1] ? Icons.signal_wifi_off : Icons.check_circle_outline, size: 16),
+                  backgroundColor: e.value[0] < e.value[1] ? Theme.of(context).colorScheme.errorContainer : null,
+                  label: Text('${tr('Тир {n}', {'n': e.key})}: ${e.value[0]}/${e.value[1]}'),
+                ),
             ]),
           ),
         if (widget.onNext != null && s.phase != 'finished')
@@ -480,6 +494,8 @@ class _RoomCard extends StatelessWidget {
 
 class _Pick {
   FinalsInvite? invite;
+  int site = 1; // тир
+  bool chief = false; // главный судья (только у судьи)
   final ChatContact contact;
   FinalsRole role;
   _Pick(this.contact, this.role);
@@ -505,6 +521,7 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
   FinalsChannel? _lobbyCh;
   bool _public = false;
   int _maxSpec = 50;
+  int _hostSite = 1; // тир ведущего
   String? _boardId;
   bool _handedOff = false; // дальше табло ведёт экран ведущего
   bool _busy = false;
@@ -601,7 +618,9 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
       final inv = _book.create(
           role: p.role,
           name: p.contact.nickname,
-          targetId: p.role == FinalsRole.athlete ? p.targetId : null);
+          targetId: p.role == FinalsRole.athlete ? p.targetId : null,
+          site: '${p.site}',
+          chief: p.chief);
       p.invite = inv;
       // Приглашение уходит сообщением мессенджера (push) вместе с кодом; в базу финала оно не пишется.
       try {
@@ -688,6 +707,7 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
       builder: (_) => FinalHostScreen(
           book: _book,
           boardId: _boardId,
+          hostSite: '$_hostSite',
           controller: controller,
           sessionId: sid,
           service: _svc,
@@ -757,6 +777,17 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
                     onChanged: started ? null : (v) => setState(() => _maxSpec = v.round()),
                   ),
                 ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(tr('Мой тир')),
+                subtitle: Text(tr('Финалисты могут стрелять в разных тирах; команды даёт один главный судья')),
+                trailing: DropdownButton<int>(
+                  value: _hostSite,
+                  underline: const SizedBox.shrink(),
+                  items: [for (var i = 1; i <= 4; i++) DropdownMenuItem(value: i, child: Text(tr('Тир {n}', {'n': i})))],
+                  onChanged: started ? null : (v) => setState(() => _hostSite = v ?? 1),
+                ),
+              ),
               Text(tr('Участники'), style: theme.textTheme.titleSmall),
               for (final p in _picks)
                 ListTile(
@@ -778,9 +809,27 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
                                 _ => tr('ждём'),
                               })
                           .join(', '))
-                      : IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => setState(() => _picks.remove(p))),
+                      : Row(mainAxisSize: MainAxisSize.min, children: [
+                          if (p.role == FinalsRole.coach)
+                            FilterChip(
+                              label: Text(tr('Главный')),
+                              selected: p.chief,
+                              onSelected: (v) => setState(() {
+                                for (final o in _picks) {
+                                  o.chief = false;
+                                }
+                                p.chief = v;
+                              }),
+                            ),
+                          const SizedBox(width: 4),
+                          DropdownButton<int>(
+                            value: p.site,
+                            underline: const SizedBox.shrink(),
+                            items: [for (var i = 1; i <= 4; i++) DropdownMenuItem(value: i, child: Text(tr('Тир {n}', {'n': i})))],
+                            onChanged: (v) => setState(() => p.site = v ?? 1),
+                          ),
+                          IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _picks.remove(p))),
+                        ]),
                 ),
               if (!started)
                 OutlinedButton.icon(
@@ -834,6 +883,9 @@ class FinalHostScreen extends StatefulWidget {
   /// Строка на табло публичных финалов (если финал публичный).
   final String? boardId;
 
+  /// Тир ведущего.
+  final String hostSite;
+
   /// Если ведущий сам стреляет — его id участника; иначе `null` (он только ведёт).
   final String? hostCompetitorId;
   const FinalHostScreen(
@@ -845,6 +897,7 @@ class FinalHostScreen extends StatefulWidget {
       required this.members,
       required this.book,
       this.boardId,
+      this.hostSite = '1',
       this.hostCompetitorId});
 
   @override
@@ -859,6 +912,7 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
   late final String _me = widget.service.auth.userId;
   bool _saved = false;
   final _cheers = CheerFeed();
+  final Map<String, DateTime> _seen = {}; // когда устройство последний раз подавало признак жизни
   late final _board = FinalsBoardService(widget.service.auth);
   bool _boardLive = false;
   String _boardPeople = '';
@@ -884,6 +938,7 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
       _members = widget.book.members;
       c.chiefHint = widget.book.chiefHint;
       c.hostSilent = widget.hostCompetitorId != null && _members.any((m) => m.role == FinalsRole.coach && m.status == 'accepted');
+      _refreshSites();
       // Зрителей много — состояние реже, чтобы не упереться в лимит сообщений.
       _host?.minInterval = _members.length > 14 ? const Duration(seconds: 1) : const Duration(milliseconds: 150);
       // Состав на табло обновляется, когда кто-то подключился.
@@ -949,6 +1004,7 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
         return null;
       },
       isFull: () => widget.book.full,
+      onSeen: (a) => _seen[a] = DateTime.now(),
       canPause: (a) => _members.any((m) => m.userId == a && m.status == 'accepted' && m.role != FinalsRole.spectator),
       onCheer: (name, kind) {
         _cheers.add(name, kind);
@@ -1019,6 +1075,31 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
       });
     }
     setState(() {});
+  }
+
+  /// Тир каждого участника и связь тиров: «на связи / всего» (устройство на связи, если подавало признак жизни
+  /// последние 20 секунд; ведущий всегда на связи на своём тире).
+  void _refreshSites() {
+    final now = DateTime.now();
+    final map = <String, String>{};
+    final stat = <String, List<int>>{};
+    void add(String site, bool online) {
+      final s = stat.putIfAbsent(site, () => [0, 0]);
+      s[1]++;
+      if (online) s[0]++;
+    }
+
+    add(widget.hostSite, true);
+    if (widget.hostCompetitorId != null) map[widget.hostCompetitorId!] = widget.hostSite;
+    for (final m in _members) {
+      if (m.status != 'accepted' || m.role == FinalsRole.spectator) continue;
+      final site = m.site.isEmpty ? widget.hostSite : m.site;
+      final seen = _seen[m.userId];
+      add(site, seen != null && now.difference(seen) < const Duration(seconds: 20));
+      if (m.targetId != null) map[m.targetId!] = site;
+    }
+    c.sites = map;
+    c.siteStatus = stat;
   }
 
   /// Жюри и участники для табло (только имена, без токенов).
@@ -1236,6 +1317,7 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
         setState(() => _last = snap ?? _last);
       });
     g.onCheer = _cheers.add;
+    g.startPing();
     _guest = g;
     g.hello();
     // Пока состояния нет (хозяин ещё не в сети) — повторяем запрос.
@@ -1293,8 +1375,8 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
       ownId: widget.member.targetId,
       onShoot: (who, mm) => g?.shoot(who, mm.dx, mm.dy),
       onUndo: (who) => g?.undo(who),
-      onNext: role == FinalsRole.coach ? () => g?.next() : null,
-      onPause: (role == FinalsRole.coach || role == FinalsRole.helper)
+      onNext: widget.member.chief ? () => g?.next() : null,
+      onPause: widget.member.chief
           ? () => snap.paused ? g?.resume() : g?.pause()
           : null,
       onRequestPause: role == FinalsRole.athlete ? () => g?.pause() : null,

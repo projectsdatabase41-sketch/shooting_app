@@ -121,6 +121,10 @@ class FinalRunController extends ChangeNotifier {
   bool voiceAll = false;
   bool hostSilent = false;
 
+  /// Тир каждого участника финала (id → тир) и связь тиров (тир → [на связи, всего]); раздаётся в снимке.
+  Map<String, String> sites = {};
+  Map<String, List<int>> siteStatus = {};
+
   /// Кто остановил время (спортсмен при неисправности или судья); сбрасывается при продолжении.
   String? pausedBy;
 

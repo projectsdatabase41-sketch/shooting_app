@@ -62,4 +62,18 @@ void main() {
     expect(find.text('Назад'), findsOneWidget);
     expect(find.text('Участник · Анна'), findsOneWidget);
   });
+
+  testWidgets('несколько тиров: у каждого виден статус связи и тир у участника', (tester) async {
+    tester.view.physicalSize = const Size(900, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final c = _c()
+      ..sites = {'a': '1', 'h': '2'}
+      ..siteStatus = {'1': [2, 2], '2': [1, 3]};
+    await tester.pumpWidget(MaterialApp(
+      home: FinalRoomView(snapshot: FinalsSnapshot.of(c), role: FinalsRole.coach, onShoot: (_, __) {}, onUndo: (_) {}),
+    ));
+    expect(find.text('Тир 1: 2/2'), findsOneWidget);
+    expect(find.text('Тир 2: 1/3'), findsOneWidget);
+  });
 }

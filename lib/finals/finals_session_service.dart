@@ -18,7 +18,13 @@ class FinalsMember {
   final String? targetId; // за кого вводит помощник / какой участник финала спортсмен
   final String name;
   final String status; // invited | accepted | declined
-  const FinalsMember(this.sessionId, this.userId, this.role, this.targetId, this.name, this.status);
+
+  /// Тир (стрельбище), где участник находится; пусто — не указан.
+  final String site;
+
+  /// Главный судья: только он (и ведущий на своём устройстве) подаёт команды; остальные судьи слушают.
+  final bool chief;
+  const FinalsMember(this.sessionId, this.userId, this.role, this.targetId, this.name, this.status, {this.site = '', this.chief = false});
 
   factory FinalsMember.fromJson(Map<String, dynamic> j) => FinalsMember(
         '${j['session_id']}',
@@ -171,7 +177,7 @@ class FinalsSessionService {
     return {for (final m in mine) if (m.targetId != null) m.targetId!};
   }
 
-  /// Команды («Заряжай», «Старт», «Стоп», «Далее») подаёт хозяин или тренер.
+  /// Команды («Заряжай», «Старт», «Стоп», «Далее», пауза) подаёт ведущий или назначенный главный судья.
   static bool canControl(String author, String hostId, List<FinalsMember> members) =>
-      author == hostId || members.any((m) => m.userId == author && m.role == FinalsRole.coach && m.status == 'accepted');
+      author == hostId || members.any((m) => m.userId == author && m.chief && m.role == FinalsRole.coach && m.status == 'accepted');
 }

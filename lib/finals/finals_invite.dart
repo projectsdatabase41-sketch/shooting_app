@@ -26,16 +26,18 @@ class FinalsInvite {
   final FinalsRole role;
   final String? targetId;
   final DateTime expires;
+  final String site;
+  final bool chief;
 
   /// База, на которой ведущий открыл канал (его личная); `null` — публичная база мессенджера.
   final String? url;
   final String? anonKey;
-  const FinalsInvite(this.key, this.token, this.name, this.role, this.targetId, this.expires, {this.url, this.anonKey});
+  const FinalsInvite(this.key, this.token, this.name, this.role, this.targetId, this.expires, {this.url, this.anonKey, this.site = '', this.chief = false});
 
   bool get expired => DateTime.now().isAfter(expires);
 
   /// Участник для экрана гостя: «id пользователя» здесь — токен.
-  FinalsMember get member => FinalsMember(key, token, role, targetId, name, 'accepted');
+  FinalsMember get member => FinalsMember(key, token, role, targetId, name, 'accepted', site: site, chief: chief);
 
   String encode() => prefix +
       base64Url.encode(utf8.encode(jsonEncode({
@@ -45,6 +47,8 @@ class FinalsInvite {
         'r': role.name,
         if (targetId != null) 'a': targetId,
         'e': expires.millisecondsSinceEpoch ~/ 1000,
+        if (site.isNotEmpty) 's': site,
+        if (chief) 'c': true,
         if (url != null && anonKey != null) 'u': url,
         if (url != null && anonKey != null) 'ak': anonKey,
       })));
@@ -64,6 +68,8 @@ class FinalsInvite {
         DateTime.fromMillisecondsSinceEpoch((j['e'] as num).toInt() * 1000),
         url: j['u'] as String?,
         anonKey: j['ak'] as String?,
+        site: '${j['s'] ?? ''}',
+        chief: j['c'] == true,
       );
     } catch (_) {
       return null;
@@ -89,10 +95,12 @@ class FinalsInviteBook {
   int get spectators => _m.values.where((m) => m.role == FinalsRole.spectator && m.status == 'accepted').length;
   bool get full => isPublic && spectators >= maxSpectators;
 
-  FinalsInvite create({required FinalsRole role, required String name, String? targetId, Duration ttl = const Duration(hours: 12)}) {
+  FinalsInvite create({required FinalsRole role, required String name, String? targetId, String site = '', bool chief = false, Duration ttl = const Duration(hours: 12)}) {
     final token = _rand(16);
-    _m[token] = FinalsMember(key, token, role, targetId, name, 'invited');
-    return FinalsInvite(key, token, name, role, targetId, DateTime.now().add(ttl), url: url, anonKey: anonKey);
+    final isChief = chief && role == FinalsRole.coach;
+    if (isChief) _clearChief();
+    _m[token] = FinalsMember(key, token, role, targetId, name, 'invited', site: site, chief: isChief);
+    return FinalsInvite(key, token, name, role, targetId, DateTime.now().add(ttl), url: url, anonKey: anonKey, site: site, chief: isChief);
   }
 
   List<FinalsMember> get members => List.unmodifiable(_m.values);
@@ -106,18 +114,37 @@ class FinalsInviteBook {
       _m[token] = FinalsMember(key, token, FinalsRole.spectator, null, name.isEmpty ? 'Зритель' : name, 'accepted');
       return true;
     }
-    _m[token] = FinalsMember(m.sessionId, m.userId, m.role, m.targetId, m.name.isEmpty ? name : m.name, 'accepted');
+    _m[token] = FinalsMember(m.sessionId, m.userId, m.role, m.targetId, m.name.isEmpty ? name : m.name, 'accepted', site: m.site, chief: m.chief);
     return true;
   }
 
   /// Главный из жюри: принявший с наименьшим токеном. Наружу уходит только начало токена —
   /// его хватает, чтобы гость узнал себя, и не хватает, чтобы подделать.
   String? get chiefHint {
+    final explicit = chiefToken;
+    if (explicit != null) return hint(explicit);
     final jury = [for (final m in _m.values) if (m.role == FinalsRole.coach && m.status == 'accepted') m.userId]..sort();
     return jury.isEmpty ? null : hint(jury.first);
   }
 
   static String hint(String token) => token.length <= 4 ? token : token.substring(0, 4);
+
+  void _clearChief() {
+    for (final e in _m.entries.toList()) {
+      if (e.value.chief) {
+        final m = e.value;
+        _m[e.key] = FinalsMember(m.sessionId, m.userId, m.role, m.targetId, m.name, m.status, site: m.site);
+      }
+    }
+  }
+
+  /// Главный судья — единственный; его токен (начало) гость узнаёт по снимку.
+  String? get chiefToken {
+    for (final m in _m.values) {
+      if (m.chief && m.status == 'accepted') return m.userId;
+    }
+    return null;
+  }
 
   void erase() => _m.clear();
 }

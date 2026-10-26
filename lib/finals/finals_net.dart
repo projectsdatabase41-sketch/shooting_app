@@ -115,6 +115,12 @@ class FinalsSnapshot {
   int get shotsPerShooter => data['spp'] as int;
   String get face => data['face'] as String;
   String get format => data['fmt'] as String;
+
+  /// Связь тиров: тир → [на связи, всего].
+  Map<String, List<int>> get siteStatus => {
+        for (final e in ((data['sites'] as Map?) ?? const {}).entries) '${e.key}': [for (final v in (e.value as List)) (v as num).toInt()],
+      };
+  int get siteCount => siteStatus.length;
   List<Map<String, dynamic>> get rows => (data['rows'] as List).cast<Map<String, dynamic>>();
 
   Map<String, dynamic>? row(String id) {
@@ -149,6 +155,7 @@ class FinalsSnapshot {
       'ch': c.chiefHint,
       'pub': c.isPublic,
       'rid': c.roundId,
+      'sites': c.siteStatus,
       'pb': c.pausedBy,
       // В конце финала участникам уходят все выстрелы с координатами — из них у каждого собирается протокол.
       if (c.phase == RunPhase.finished) 'shots': [for (final s in c.shots) s.toJson()],
@@ -157,6 +164,7 @@ class FinalsSnapshot {
           {
             'id': r.c.id,
             'name': r.c.name,
+            if (c.sites[r.c.id] != null) 'site': c.sites[r.c.id],
             'human': c.humans.contains(r.c.id),
             'active': r.c.active,
             'place': r.c.place,
@@ -185,6 +193,7 @@ class FinalsHost {
     this.onHello,
     this.isFull,
     this.canPause,
+    this.onSeen,
     this.cheerName,
     this.onCheer,
   }) {
@@ -228,6 +237,9 @@ class FinalsHost {
   /// Проверка приглашения при подключении гостя ([author] — его токен); `false` — отказ.
   final bool Function(String author, String name)? onHello;
 
+  /// Устройство подало признак жизни (любое сообщение или `ping`) — для статуса связи тиров.
+  final void Function(String author)? onSeen;
+
   /// Кто может остановить время (спортсмен при неисправности, судья).
   final bool Function(String author)? canPause;
 
@@ -246,6 +258,8 @@ class FinalsHost {
 
   void _onMessage(String event, Map<String, dynamic> p) {
     final author = '${p['author']}';
+    if (author.isNotEmpty && author != 'null') onSeen?.call(author);
+    if (event == 'ping') return;
     if (event == 'pause') {
       if (canPause?.call(author) == true && !controller.paused) {
         controller.pausedBy = cheerName?.call(author);
@@ -343,6 +357,14 @@ class FinalsGuest extends ChangeNotifier {
       channel.send('shot', {'author': userId, 'who': who, 'x': x, 'y': y, if (snapshot?.data['rid'] != null) 'rid': snapshot!.data['rid']});
   /// Остановить время (по правилам — при неисправности); продолжает судья.
   bool pause() => channel.send('pause', {'author': userId});
+
+  Timer? _ping;
+
+  /// Раз в 5 секунд сообщает ведущему, что устройство на связи (статус тира у главного судьи).
+  void startPing() {
+    _ping?.cancel();
+    _ping = Timer.periodic(const Duration(seconds: 5), (_) => channel.send('ping', {'author': userId}));
+  }
   bool resume() => channel.send('resume', {'author': userId});
 
   bool cheer(String kind) => channel.send('cheer', {'author': userId, 'k': kind});
@@ -353,6 +375,7 @@ class FinalsGuest extends ChangeNotifier {
 
   @override
   void dispose() {
+    _ping?.cancel();
     channel.close();
     super.dispose();
   }
