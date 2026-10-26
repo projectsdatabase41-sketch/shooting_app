@@ -21,19 +21,28 @@
 const DRIVE_SCRIPT_URL = Deno.env.get('DRIVE_SCRIPT_URL') ?? '';
 const DRIVE_API_TOKEN = Deno.env.get('DRIVE_API_TOKEN') ?? '';
 
+// CORS: веб-версия приложения (браузер) вызывает функцию с другого адреса — без этих заголовков запрос блокируется
+// ещё до отправки («Load failed» в Safari/Chrome), а в Android-приложении это не нужно.
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
 Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (!DRIVE_SCRIPT_URL || !DRIVE_API_TOKEN) {
-    return new Response(JSON.stringify({ error: 'not configured' }), { status: 500 });
+    return new Response(JSON.stringify({ error: 'not configured' }), { status: 500, headers: CORS });
   }
   if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'method not allowed' }), { status: 405 });
+    return new Response(JSON.stringify({ error: 'method not allowed' }), { status: 405, headers: CORS });
   }
 
   let body: { action?: string; fileId?: string };
   try {
     body = await req.json();
   } catch {
-    return new Response(JSON.stringify({ error: 'bad json' }), { status: 400 });
+    return new Response(JSON.stringify({ error: 'bad json' }), { status: 400, headers: CORS });
   }
 
   const url = new URL(DRIVE_SCRIPT_URL);
@@ -42,11 +51,11 @@ Deno.serve(async (req: Request) => {
   if (body.action === 'getUploadToken') {
     url.searchParams.set('action', 'getUploadToken');
   } else if (body.action === 'delete') {
-    if (!body.fileId) return new Response(JSON.stringify({ error: 'fileId required' }), { status: 400 });
+    if (!body.fileId) return new Response(JSON.stringify({ error: 'fileId required' }), { status: 400, headers: CORS });
     url.searchParams.set('action', 'delete');
     url.searchParams.set('fileId', body.fileId);
   } else {
-    return new Response(JSON.stringify({ error: 'unknown action' }), { status: 400 });
+    return new Response(JSON.stringify({ error: 'unknown action' }), { status: 400, headers: CORS });
   }
 
   // Apps Script Web App иногда отвечает редиректом (302) на сам себя —
@@ -61,5 +70,5 @@ Deno.serve(async (req: Request) => {
   } catch (_) {
     json = { error: `bad response from script (HTTP ${res.status}, ${res.headers.get('content-type') ?? '?'}): ${text.replace(/\s+/g, ' ').slice(0, 160)}` };
   }
-  return new Response(JSON.stringify(json), { headers: { 'Content-Type': 'application/json' } });
+  return new Response(JSON.stringify(json), { headers: { ...CORS, 'Content-Type': 'application/json' } });
 });

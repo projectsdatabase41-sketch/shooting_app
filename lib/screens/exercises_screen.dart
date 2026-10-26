@@ -118,6 +118,8 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
                     onConfirmed: () => store.deleteExerciseForever(ex.id),
                     onConfirmedLocalOnly: () => _deleteExercise(context, ex),
                     child: _ExerciseCard(
+                      onRename: () => _rename(context, ex),
+                      onMerge: () => _merge(context, ex),
                       name: ex.shownName,
                       faceName: face.name,
                       totalShots: ex.totalShots,
@@ -157,6 +159,60 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
       2 || 3 || 4 => tr('тренировки'),
       _ => tr('тренировок'),
     };
+  }
+
+  Future<void> _rename(BuildContext context, Exercise ex) async {
+    final store = context.read<AppDataStore>();
+    final ctl = TextEditingController(text: ex.shownName);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('Название упражнения')),
+        content: TextField(controller: ctl, autofocus: true, textCapitalization: TextCapitalization.sentences),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Отмена'))),
+          FilledButton(onPressed: () => Navigator.pop(ctx, ctl.text.trim()), child: Text(tr('Сохранить'))),
+        ],
+      ),
+    );
+    ctl.dispose();
+    if (name != null && name.isNotEmpty) store.renameExercise(ex.id, name);
+  }
+
+  /// Объединение: все тренировки выбранного упражнения переходят в другое, выбранное — скрывается.
+  Future<void> _merge(BuildContext context, Exercise ex) async {
+    final store = context.read<AppDataStore>();
+    final others = [for (final e in store.activeExercises) if (e.id != ex.id) e]
+      ..sort((a, b) => (a.targetFaceCode == ex.targetFaceCode ? 0 : 1).compareTo(b.targetFaceCode == ex.targetFaceCode ? 0 : 1));
+    if (others.isEmpty) return;
+    final target = await showDialog<Exercise>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text(tr('Перенести тренировки «{name}» в…', {'name': ex.shownName})),
+        children: [
+          for (final e in others)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, e),
+              child: Text(e.shownName + (e.targetFaceCode == ex.targetFaceCode ? '' : ' · ${TargetFace.byCode(e.targetFaceCode).name}')),
+            ),
+        ],
+      ),
+    );
+    if (target == null || !context.mounted) return;
+    final sure = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('Объединить упражнения?')),
+        content: Text(tr('Тренировки «{a}» перейдут в «{b}», а «{a}» будет скрыто.', {'a': ex.shownName, 'b': target.shownName})),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Отмена'))),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Объединить'))),
+        ],
+      ),
+    );
+    if (sure != true || !context.mounted) return;
+    final n = store.mergeExercises(ex.id, target.id);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Перенесено тренировок: {n}', {'n': n}))));
   }
 
   void _deleteExercise(BuildContext context, Exercise ex) {
@@ -200,8 +256,12 @@ class _ExerciseCard extends StatelessWidget {
   /// Описание серий. Пустой список — упражнение старого вида.
   final List<SeriesSpec> series;
   final VoidCallback onTap;
+  final VoidCallback onRename;
+  final VoidCallback onMerge;
 
   const _ExerciseCard({
+    required this.onRename,
+    required this.onMerge,
     required this.name,
     required this.faceName,
     required this.totalShots,
@@ -285,7 +345,15 @@ class _ExerciseCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
+              PopupMenuButton<String>(
+                tooltip: tr('Действия'),
+                icon: Icon(Icons.more_vert, color: cs.onSurfaceVariant),
+                onSelected: (v) => v == 'rename' ? onRename() : onMerge(),
+                itemBuilder: (_) => [
+                  PopupMenuItem(value: 'rename', child: Text(tr('Переименовать'))),
+                  PopupMenuItem(value: 'merge', child: Text(tr('Объединить с другим…'))),
+                ],
+              ),
               Icon(Icons.chevron_right, color: cs.onSurfaceVariant, size: 28),
             ],
           ),

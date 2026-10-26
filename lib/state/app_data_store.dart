@@ -136,6 +136,26 @@ class AppDataStore extends ChangeNotifier {
       exercises.where((e) => !e.isDeleted).toList();
 
   /// Мягко удаляет упражнение. Тренировки не трогаются.
+  /// Переименовывает упражнение (тренировки остаются привязанными к нему); уходит в облако как обычная правка.
+  void renameExercise(String id, String name) {
+    final n = name.trim();
+    if (n.isEmpty) return;
+    final now = DateTime.now().toIso8601String();
+    db.db.execute('UPDATE exercises SET name = ?, code = ?, updated_at = ? WHERE id = ?', [n, n, now, id]);
+    exercises = [for (final e in exercises) e.id == id ? e.copyWith(name: n) : e];
+    notifyListeners();
+  }
+
+  /// Объединяет упражнения: тренировки [fromId] переходят в [toId], само [fromId] скрывается (как при обычном
+  /// удалении, его можно вернуть). Возвращает, сколько тренировок перенесено.
+  int mergeExercises(String fromId, String toId) {
+    if (fromId == toId) return 0;
+    final moved = sessions.where((s) => s.exerciseId == fromId).length;
+    moveSessionsToExercise(fromId, toId);
+    deleteExercise(fromId);
+    return moved;
+  }
+
   void deleteExercise(String id) {
     final now = DateTime.now();
     db.db.execute('UPDATE exercises SET deleted_at = ? WHERE id = ?',
