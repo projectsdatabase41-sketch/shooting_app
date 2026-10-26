@@ -22,7 +22,8 @@ class WebSearchService {
   bool get configured => settings.geminiKey.isNotEmpty;
 
   Future<({String text, List<({String title, String url})> sources})> search(
-      String query) async {
+      String query,
+      {bool structured = false}) async {
     if (!configured) throw StateError('no key');
     Object? lastError;
     for (final model in models) {
@@ -41,7 +42,9 @@ class WebSearchService {
                   'parts': [
                     {
                       'text': 'You search the web and answer the user question based on what you find. '
-                          'Answer in the language of the question, to the point, without padding; if the sources disagree — say so.',
+                          'Answer in the language of the question, to the point, without padding; if the sources disagree — say so.'
+                          '${structured ? ' Format: first line — a short title; then 3-7 short bullet points starting with "• " (facts, numbers, dates); '
+                              'then, if useful, one line "Коротко:" with the takeaway. No long paragraphs, no markdown headings.' : ''}',
                     }
                   ],
                 },

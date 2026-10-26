@@ -14,7 +14,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData, HapticFeedback;
+import 'package:flutter/services.dart'
+    show Clipboard, ClipboardData, HapticFeedback;
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -49,7 +50,8 @@ import '../services/chat_sync_service.dart';
 import '../services/coach_link.dart';
 import '../services/demo_mode.dart';
 import '../services/p2p_file_transfer.dart';
-import '../services/push_service.dart' show PushService, pendingCallAckContactId;
+import '../services/push_service.dart'
+    show PushService, pendingCallAckContactId;
 import '../widgets/link_signal.dart';
 import '../services/chat_translation_service.dart';
 import '../services/group_live_session.dart';
@@ -165,7 +167,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         final prev = run.last;
         final same = prev.direction == m.direction &&
             prev.senderId == m.senderId &&
-            m.createdAt.difference(prev.createdAt).abs() <= const Duration(minutes: 5);
+            m.createdAt.difference(prev.createdAt).abs() <=
+                const Duration(minutes: 5);
         if (!same) flush();
       }
       run.add(m);
@@ -177,30 +180,37 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final last = group.last;
     final mine = last.direction == ChatMessageDirection.outgoing;
     final theme = Theme.of(context);
-    final providers = [for (final m in group) ChatMediaUtils.imageOf(m.id, m.attachmentBase64!)];
+    final providers = [
+      for (final m in group) ChatMediaUtils.imageOf(m.id, m.attachmentBase64!)
+    ];
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),
         child: Column(
-          crossAxisAlignment: mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          crossAxisAlignment:
+              mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             PhotoStack(
               images: providers,
-              sending: mine && group.any((m) => m.status == ChatMessageStatus.sending),
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PhotoGalleryScreen(images: providers))),
+              sending: mine &&
+                  group.any((m) => m.status == ChatMessageStatus.sending),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => PhotoGalleryScreen(images: providers))),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(6, 2, 6, 0),
               child: Text(DateFormat('HH:mm').format(last.createdAt.toLocal()),
-                  style: theme.textTheme.labelSmall?.copyWith(color: theme.hintColor)),
+                  style: theme.textTheme.labelSmall
+                      ?.copyWith(color: theme.hintColor)),
             ),
           ],
         ),
       ),
     );
   }
+
   bool _sending = false;
   bool _aiBusy = false;
 
@@ -393,7 +403,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   void _markRead() {
     if (!_foreground) return;
-    PushService.clearForContact(_contact.id); // убрать уведомление о сообщениях отсюда
+    PushService.clearForContact(
+        _contact.id); // убрать уведомление о сообщениях отсюда
     widget.repo.markThreadSeen(_contact.id);
     if (!_contact.isGroup) widget.sync.reportRead(_contact.id);
   }
@@ -429,15 +440,25 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         final id = '${p['callId']}';
         final busy = CallSession.current;
         if (busy != null) {
-          if (busy.callId != id) _live!.sendCall({'type': 'busy', 'callId': id, 'from': widget.auth.userId});
+          if (busy.callId != id)
+            _live!.sendCall(
+                {'type': 'busy', 'callId': id, 'from': widget.auth.userId});
           return;
         }
-        _live!.sendCall({'type': 'ringing', 'callId': id, 'from': widget.auth.userId});
+        _live!.sendCall(
+            {'type': 'ringing', 'callId': id, 'from': widget.auth.userId});
         final session = CallSession.incoming(widget.auth,
-            callId: id, peerId: _contact.id, peerName: _contact.nickname, video: p['video'] == true, live: _live);
+            callId: id,
+            peerId: _contact.id,
+            peerName: _contact.nickname,
+            video: p['video'] == true,
+            live: _live);
         Navigator.of(context)
             .push(MaterialPageRoute(
-              builder: (_) => CallScreen(session: session, avatarBase64: _contact.avatarBase64, repo: widget.repo),
+              builder: (_) => CallScreen(
+                  session: session,
+                  avatarBase64: _contact.avatarBase64,
+                  repo: widget.repo),
             ))
             .then((_) => _reload());
       };
@@ -548,7 +569,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     // «Режим низа»: следуем за новыми сообщениями, пока нижнее сообщение у
     // нижнего края; сместили примерно на пол-экрана — слежение отключается.
     final first = pos.where((p) => p.index == 0).firstOrNull;
-    _atBottom = lo <= 0 && (first == null || first.itemLeadingEdge < 0.45 + _endAlignment);
+    _atBottom = lo <= 0 &&
+        (first == null || first.itemLeadingEdge < 0.45 + _endAlignment);
     if (_atBottom) _newBelow.value = 0;
     if (_translateVisibleCount >= _messages.length) return;
     if (hi >= _messages.length - 4) {
@@ -595,7 +617,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         pendingCallAckContactId = null;
         widget.sync.acknowledgeCall(m).then((_) {
           if (mounted) {
-            setState(() => _messages = widget.repo.forContact(_contact.id, reuseFrom: _messages));
+            setState(() => _messages =
+                widget.repo.forContact(_contact.id, reuseFrom: _messages));
           }
         });
         return;
@@ -709,7 +732,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   final _pullChecking = ValueNotifier<bool>(false);
 
   bool _onListScroll(ScrollNotification n) {
-    if (n is OverscrollNotification && n.metrics.pixels <= n.metrics.minScrollExtent && n.overscroll < 0) {
+    if (n is OverscrollNotification &&
+        n.metrics.pixels <= n.metrics.minScrollExtent &&
+        n.overscroll < 0) {
       _pullAcc += -n.overscroll;
       if (!_pullFired && _pullAcc > 90) {
         _pullFired = true;
@@ -720,7 +745,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           if (mounted) _pullChecking.value = false;
         });
       }
-    } else if (n is ScrollEndNotification || (n is ScrollUpdateNotification && n.metrics.pixels > n.metrics.minScrollExtent + 1)) {
+    } else if (n is ScrollEndNotification ||
+        (n is ScrollUpdateNotification &&
+            n.metrics.pixels > n.metrics.minScrollExtent + 1)) {
       _pullAcc = 0;
       _pullFired = false;
     }
@@ -748,8 +775,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _scrollTimers.add(Timer(Duration(milliseconds: ms), () {
         if (!mounted || !_itemCtl.isAttached) return;
         // не у самого низа (пузырь дорос позже, подтянулось фото) — ставим прыжком
-        final first = _itemPos.itemPositions.value.where((p) => p.index == 0).firstOrNull;
-        if (first == null || (first.itemLeadingEdge - _endAlignment).abs() > 0.01) {
+        final first =
+            _itemPos.itemPositions.value.where((p) => p.index == 0).firstOrNull;
+        if (first == null ||
+            (first.itemLeadingEdge - _endAlignment).abs() > 0.01) {
           _itemCtl.jumpTo(index: 0, alignment: _endAlignment);
         }
       }));
@@ -758,6 +787,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   // ---- Поиск по переписке ----
   bool _searching = false;
+  String? _searchFilter; // null — всё; photo | file | audio | video
   final _searchCtl = TextEditingController();
   List<int> _hits = []; // индексы в _messages, от новых к старым
   int _hitPos = 0;
@@ -768,25 +798,39 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   void _closeSearch() => setState(() {
         _searching = false;
+        _searchFilter = null;
         _searchQuery = '';
         _searchCtl.clear();
         _hits = [];
         _hitPos = 0;
       });
 
-  /// Ищет слово в тексте сообщений, названиях файлов и переводах.
+  bool _matchesFilter(ChatMessage m) => switch (_searchFilter) {
+        'photo' => m.type == ChatMessageType.image,
+        'file' => m.type == ChatMessageType.file,
+        'audio' => m.type == ChatMessageType.audio,
+        'video' => m.type == ChatMessageType.video,
+        _ => true,
+      };
+
+  /// Ищет слова в тексте сообщений (подписи к фото), названиях файлов и переводах; все слова запроса должны
+  /// встретиться (по основам: «долг» найдёт «долги», «долгами»). Фильтр ограничивает тип: фото, файлы, голосовые, видео.
   void _runSearch(String q) {
-    final needle = _norm(q.trim());
+    final needles = _norm(q.trim())
+        .split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty)
+        .toList();
     final hits = <int>[];
-    if (needle.isNotEmpty) {
+    if (needles.isNotEmpty || _searchFilter != null) {
       for (var i = _messages.length - 1; i >= 0; i--) {
         final m = _messages[i];
+        if (!_matchesFilter(m)) continue;
         final hay = _norm([
           if (m.text != null) AiService.splitChart(m.text!).$1,
           if (m.attachmentName != null) m.attachmentName!,
           if (_translations[m.id] != null) _translations[m.id]!,
         ].join(' '));
-        if (hay.contains(needle)) hits.add(i);
+        if (needles.every(hay.contains)) hits.add(i);
       }
     }
     setState(() {
@@ -824,6 +868,30 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ),
       titlePadding: const EdgeInsets.fromLTRB(4, 4, 8, 4),
       actions: [
+        // Фильтр по типу: все → фото → файлы → голосовые → видео.
+        GlassCircleButton(
+          icon: Icon(switch (_searchFilter) {
+            'photo' => Icons.photo_outlined,
+            'file' => Icons.insert_drive_file_outlined,
+            'audio' => Icons.mic_none,
+            'video' => Icons.videocam_outlined,
+            _ => Icons.filter_list,
+          }),
+          tooltip: switch (_searchFilter) {
+            'photo' => tr('Только фото'),
+            'file' => tr('Только файлы'),
+            'audio' => tr('Только голосовые'),
+            'video' => tr('Только видео'),
+            _ => tr('Любые сообщения'),
+          },
+          onTap: () {
+            const order = [null, 'photo', 'file', 'audio', 'video'];
+            setState(() => _searchFilter =
+                order[(order.indexOf(_searchFilter) + 1) % order.length]);
+            _runSearch(_searchCtl.text);
+          },
+        ),
+        const SizedBox(width: 6),
         GlassCircleButton(
           icon: const Icon(Icons.keyboard_arrow_up),
           tooltip: tr('Предыдущее (старее)'),
@@ -956,7 +1024,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final raw = reply.text.trim();
       final cut = raw.indexOf('---COMMENT---');
       final messagePart = cut < 0 ? raw : raw.substring(0, cut);
-      final comment = cut < 0 ? '' : raw.substring(cut + '---COMMENT---'.length).trim();
+      final comment =
+          cut < 0 ? '' : raw.substring(cut + '---COMMENT---'.length).trim();
       final (caption, parsed) = AiService.splitChart(messagePart.trim());
       final chart = reply.chart ?? parsed;
       await _showAiDraft(caption.trim(), comment, chart);
@@ -973,40 +1042,52 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   /// Черновик от ИИ: сверху редактируемый текст для собеседника, ниже
   /// неизменяемый комментарий ИИ лично пользователю. «Вставить» кладёт текст
   /// (и график) в поле ввода — отправляет человек сам.
-  Future<void> _showAiDraft(String message, String comment, Map<String, dynamic>? chart) async {
+  Future<void> _showAiDraft(
+      String message, String comment, Map<String, dynamic>? chart) async {
     final ctl = TextEditingController(text: message);
     final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Черновик сообщения')),
         content: SingleChildScrollView(
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(tr('Текст для собеседника (можно править)'), style: Theme.of(ctx).textTheme.labelMedium),
-            const SizedBox(height: 6),
-            TextField(controller: ctl, minLines: 3, maxLines: 10),
-            if (chart != null) ...[
-              const SizedBox(height: 6),
-              Text(tr('К сообщению добавится график'), style: Theme.of(ctx).textTheme.bodySmall),
-            ],
-            if (comment.isNotEmpty) ...[
-              const SizedBox(height: 14),
-              Text(tr('Комментарий ИИ вам'), style: Theme.of(ctx).textTheme.labelMedium),
-              const SizedBox(height: 6),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Theme.of(ctx).colorScheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: SelectableText(comment, style: Theme.of(ctx).textTheme.bodySmall),
-              ),
-            ],
-          ]),
+          child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(tr('Текст для собеседника (можно править)'),
+                    style: Theme.of(ctx).textTheme.labelMedium),
+                const SizedBox(height: 6),
+                TextField(controller: ctl, minLines: 3, maxLines: 10),
+                if (chart != null) ...[
+                  const SizedBox(height: 6),
+                  Text(tr('К сообщению добавится график'),
+                      style: Theme.of(ctx).textTheme.bodySmall),
+                ],
+                if (comment.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  Text(tr('Комментарий ИИ вам'),
+                      style: Theme.of(ctx).textTheme.labelMedium),
+                  const SizedBox(height: 6),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Theme.of(ctx).colorScheme.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: SelectableText(comment,
+                        style: Theme.of(ctx).textTheme.bodySmall),
+                  ),
+                ],
+              ]),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Отмена'))),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Вставить в чат'))),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(tr('Отмена'))),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(tr('Вставить в чат'))),
         ],
       ),
     );
@@ -1027,7 +1108,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         .push(MaterialPageRoute(
           builder: (_) => CallScreen(
             session: CallSession.outgoing(widget.auth,
-                peerId: _contact.id, peerName: _contact.nickname, video: video, live: _live),
+                peerId: _contact.id,
+                peerName: _contact.nickname,
+                video: video,
+                live: _live),
             avatarBase64: _contact.avatarBase64,
             repo: widget.repo,
           ),
@@ -1070,16 +1154,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Future<void> _retry(ChatMessage m) async {
     // Файл крупнее лимита облака повторно через облако не отправить.
-    if (m.attachmentLocalPath != null && (m.attachmentSize ?? 0) > ChatMediaUtils.maxDriveBytes) {
+    if (m.attachmentLocalPath != null &&
+        (m.attachmentSize ?? 0) > ChatMediaUtils.maxDriveBytes) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(tr('Файл больше 1,5 ГБ — отправьте его заново напрямую (P2P)'))));
+          content: Text(
+              tr('Файл больше 1,5 ГБ — отправьте его заново напрямую (P2P)'))));
       return;
     }
     try {
       await widget.sync.retry(m);
     } catch (e, st) {
       if (mounted) {
-        DemoMode.reportError(context, tr('Ошибка отправки сообщения'), 'ChatThreadScreen', e, st);
+        DemoMode.reportError(context, tr('Ошибка отправки сообщения'),
+            'ChatThreadScreen', e, st);
       }
     } finally {
       _reload();
@@ -1121,7 +1208,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         try {
           final bytes = await widget.sync.downloadLargeBytes(m);
           if (!mounted) return;
-          await AttachmentViewer.open(context, name: m.attachmentName ?? 'file', bytes: bytes, mime: m.attachmentMime);
+          await AttachmentViewer.open(context,
+              name: m.attachmentName ?? 'file',
+              bytes: bytes,
+              mime: m.attachmentMime);
         } finally {
           if (mounted) setState(() => _downloading.remove(m.id));
         }
@@ -1142,10 +1232,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           if (mounted) setState(() => _downloading.remove(m.id));
         }
         _reload();
-        msg = widget.repo.forContact(_contact.id).firstWhere((x) => x.id == m.id, orElse: () => m);
+        msg = widget.repo
+            .forContact(_contact.id)
+            .firstWhere((x) => x.id == m.id, orElse: () => m);
       }
       final lp = msg.attachmentLocalPath;
-      if (lp != null && File(lp).existsSync() && File(lp).lengthSync() > 64 * 1024 * 1024) {
+      if (lp != null &&
+          File(lp).existsSync() &&
+          File(lp).lengthSync() > 64 * 1024 * 1024) {
         // Большие файлы не грузим в память: отдаём системе.
         await ChatMediaUtils.shareAttachmentPath(lp, msg.attachmentMime);
         return;
@@ -1153,11 +1247,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final bytes = await _attachmentBytes(msg);
       if (bytes == null || !mounted) return;
       await AttachmentViewer.open(context,
-          name: msg.attachmentName ?? 'file', bytes: bytes, mime: msg.attachmentMime);
+          name: msg.attachmentName ?? 'file',
+          bytes: bytes,
+          mime: msg.attachmentMime);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(tr('Не удалось открыть файл: {e}', {'e': friendlyError(e)}))));
+            content: Text(
+                tr('Не удалось открыть файл: {e}', {'e': friendlyError(e)}))));
       }
     }
   }
@@ -1165,7 +1262,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<Uint8List?> _attachmentBytes(ChatMessage m) async {
     if (m.attachmentBase64 != null) return base64Decode(m.attachmentBase64!);
     final path = m.attachmentLocalPath;
-    if (path != null && File(path).existsSync()) return File(path).readAsBytes();
+    if (path != null && File(path).existsSync())
+      return File(path).readAsBytes();
     return null;
   }
 
@@ -1178,7 +1276,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (m.attachmentBase64 == null && path != null) {
       ok = await saveFileToAppFolder(path, name, m.attachmentMime);
     } else if (m.attachmentBase64 != null) {
-      ok = await saveToAppFolder(base64Decode(m.attachmentBase64!), name, m.attachmentMime);
+      ok = await saveToAppFolder(
+          base64Decode(m.attachmentBase64!), name, m.attachmentMime);
     } else {
       return;
     }
@@ -1251,17 +1350,61 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Widget _selectionActions(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final single = _singleSelectedMessage();
-    final items = <({IconData icon, String tip, VoidCallback onTap, bool active, bool danger})>[
-      (icon: Icons.copy_outlined, tip: tr('Копировать'), onTap: _copySelected, active: false, danger: false),
-      (icon: Icons.translate_outlined, tip: tr('Перевести'), onTap: _translateSelected, active: _selectionTranslated, danger: false),
+    final items = <({
+      IconData icon,
+      String tip,
+      VoidCallback onTap,
+      bool active,
+      bool danger
+    })>[
+      (
+        icon: Icons.copy_outlined,
+        tip: tr('Копировать'),
+        onTap: _copySelected,
+        active: false,
+        danger: false
+      ),
+      (
+        icon: Icons.translate_outlined,
+        tip: tr('Перевести'),
+        onTap: _translateSelected,
+        active: _selectionTranslated,
+        danger: false
+      ),
       if (single != null) ...[
-        (icon: Icons.reply_outlined, tip: tr('Ответить'), onTap: _replySelected, active: false, danger: false),
-        if (single.direction == ChatMessageDirection.outgoing && single.type == ChatMessageType.text)
-          (icon: Icons.edit_outlined, tip: tr('Редактировать'), onTap: _editSelected, active: false, danger: false),
-        if (single.direction == ChatMessageDirection.outgoing && single.status == ChatMessageStatus.error)
-          (icon: Icons.refresh, tip: tr('Отправить ещё раз'), onTap: _retrySelected, active: false, danger: false),
+        (
+          icon: Icons.reply_outlined,
+          tip: tr('Ответить'),
+          onTap: _replySelected,
+          active: false,
+          danger: false
+        ),
+        if (single.direction == ChatMessageDirection.outgoing &&
+            single.type == ChatMessageType.text)
+          (
+            icon: Icons.edit_outlined,
+            tip: tr('Редактировать'),
+            onTap: _editSelected,
+            active: false,
+            danger: false
+          ),
+        if (single.direction == ChatMessageDirection.outgoing &&
+            single.status == ChatMessageStatus.error)
+          (
+            icon: Icons.refresh,
+            tip: tr('Отправить ещё раз'),
+            onTap: _retrySelected,
+            active: false,
+            danger: false
+          ),
       ],
-      (icon: Icons.delete_outline, tip: tr('Удалить'), onTap: _deleteSelected, active: false, danger: true),
+      (
+        icon: Icons.delete_outline,
+        tip: tr('Удалить'),
+        onTap: _deleteSelected,
+        active: false,
+        danger: true
+      ),
     ];
     return Positioned(
       right: 12,
@@ -1278,7 +1421,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               builder: (_, v, child) => Opacity(
                 opacity: v.clamp(0.0, 1.0),
                 // Кнопка и её тень — один виджет: тень выезжает вместе с ней.
-                child: Transform.translate(offset: Offset(0, -28 * (1 - v)), child: child),
+                child: Transform.translate(
+                    offset: Offset(0, -28 * (1 - v)), child: child),
               ),
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 10),
@@ -1431,13 +1575,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       // Большой файл: не отказываем, а отправляем через Google Диск (как «долгое нажатие» на скрепке).
       if (!mounted) return;
       if (kIsWeb) {
-        await _sendLargeCloud(ChatLargeFilePick('', picked.name, bytes.length, bytes: bytes));
+        await _sendLargeCloud(
+            ChatLargeFilePick('', picked.name, bytes.length, bytes: bytes));
       } else {
         final dir = await getApplicationDocumentsDirectory();
-        final keep = p.join(dir.path, 'chat_media', '${DateTime.now().millisecondsSinceEpoch}_${picked.name}');
+        final keep = p.join(dir.path, 'chat_media',
+            '${DateTime.now().millisecondsSinceEpoch}_${picked.name}');
         await Directory(p.dirname(keep)).create(recursive: true);
         await File(keep).writeAsBytes(bytes);
-        await _sendLargeCloud(ChatLargeFilePick(keep, picked.name, bytes.length));
+        await _sendLargeCloud(
+            ChatLargeFilePick(keep, picked.name, bytes.length));
       }
       return;
     }
@@ -1454,8 +1601,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
     setState(() => _sending = true);
     try {
-      final compressed =
-          isImage ? ChatMediaUtils.compressImage(finalBytes, hd: result.hd) : null;
+      final compressed = isImage
+          ? ChatMediaUtils.compressImage(finalBytes, hd: result.hd)
+          : null;
       await widget.sync.sendAttachment(
         contactId: _contact.id,
         bytes: compressed ?? finalBytes,
@@ -1475,7 +1623,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _scrollToEnd();
     } catch (e, st) {
       if (mounted) {
-        DemoMode.reportError(context, tr('Ошибка отправки сообщения'), 'ChatThreadScreen', e, st);
+        DemoMode.reportError(context, tr('Ошибка отправки сообщения'),
+            'ChatThreadScreen', e, st);
       }
     } finally {
       if (mounted) {
@@ -1513,7 +1662,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       setProgress(null);
       if (st == P2pState.done) {
         final path = donePath?.call();
-        if (path != null) widget.repo.updateAttachmentLocalPath(messageId, path);
+        if (path != null)
+          widget.repo.updateAttachmentLocalPath(messageId, path);
         widget.repo.updateStatus(messageId, ChatMessageStatus.delivered);
       } else if (onFail != null) {
         // следующий уровень приоритета (облако): неудавшийся пузырь убираем,
@@ -1532,14 +1682,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final live = _live;
     if (live == null || !live.isDirect) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(tr('Прямого соединения нет: откройте переписку одновременно с собеседником'))));
+          content: Text(tr(
+              'Прямого соединения нет: откройте переписку одновременно с собеседником'))));
       return;
     }
     final sender = live.files.sendFile(
       path: picked.path,
       name: picked.name,
       size: picked.size,
-      mime: ChatMediaUtils.looksLikeImage(picked.name) ? ChatMediaUtils.mimeFor(picked.name) : 'application/octet-stream',
+      mime: ChatMediaUtils.looksLikeImage(picked.name)
+          ? ChatMediaUtils.mimeFor(picked.name)
+          : 'application/octet-stream',
     );
     final msg = ChatMessage(
       id: const Uuid().v4(),
@@ -1561,7 +1714,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         clientId: sender.id,
         progress: sender.progress,
         state: sender.state,
-        onFail: cloudFallback && picked.size <= ChatMediaUtils.maxDriveBytes ? () => _sendLargeCloud(picked) : null);
+        onFail: cloudFallback && picked.size <= ChatMediaUtils.maxDriveBytes
+            ? () => _sendLargeCloud(picked)
+            : null);
     _reload();
     _scrollToEnd();
   }
@@ -1573,12 +1728,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final live = _live;
     final messenger = ScaffoldMessenger.of(context);
     if (live == null || !live.peerOnline) {
-      messenger.showSnackBar(SnackBar(content: Text(tr('Собеседник должен быть сейчас в этой переписке'))));
+      messenger.showSnackBar(SnackBar(
+          content: Text(tr('Собеседник должен быть сейчас в этой переписке'))));
       return;
     }
     _awaitingHistoryUntil = DateTime.now().add(const Duration(minutes: 3));
     live.requestHistory();
-    messenger.showSnackBar(SnackBar(content: Text(tr('Запрос отправлен. Ждём согласия собеседника…'))));
+    messenger.showSnackBar(SnackBar(
+        content: Text(tr('Запрос отправлен. Ждём согласия собеседника…'))));
   }
 
   /// Собеседник просит копию переписки — отдаём только с согласием.
@@ -1588,24 +1745,35 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Передать переписку?')),
-        content: Text(tr('{c} просит копию вашей переписки (сообщения и небольшие вложения), чтобы восстановить свою историю. Передать?',
+        content: Text(tr(
+            '{c} просит копию вашей переписки (сообщения и небольшие вложения), чтобы восстановить свою историю. Передать?',
             {'c': _contact.nickname})),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Нет'))),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Передать'))),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(tr('Нет'))),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(tr('Передать'))),
         ],
       ),
     );
     if (ok != true || !mounted) return;
-    final sent = await _live?.sendHistory(ChatHistoryTransfer.encode(widget.repo.forContact(_contact.id))) ?? false;
+    final sent = await _live?.sendHistory(
+            ChatHistoryTransfer.encode(widget.repo.forContact(_contact.id))) ??
+        false;
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(sent ? tr('Переписка передана') : tr('Не удалось передать: нужно прямое соединение (P2P)'))));
+        content: Text(sent
+            ? tr('Переписка передана')
+            : tr('Не удалось передать: нужно прямое соединение (P2P)'))));
   }
 
   Future<void> _receiveHistory(P2pReceiver r) async {
     final until = _awaitingHistoryUntil;
-    if (until == null || DateTime.now().isAfter(until) || r.size > ChatHistoryTransfer.maxPackageBytes + 1024 * 1024) {
+    if (until == null ||
+        DateTime.now().isAfter(until) ||
+        r.size > ChatHistoryTransfer.maxPackageBytes + 1024 * 1024) {
       return r.reject();
     }
     void done() async {
@@ -1616,7 +1784,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         final path = r.path;
         if (path == null) return;
         final json = await File(path).readAsString();
-        final n = ChatHistoryTransfer.import(widget.repo, _contact.id, json, () => const Uuid().v4());
+        final n = ChatHistoryTransfer.import(
+            widget.repo, _contact.id, json, () => const Uuid().v4());
         try {
           await File(path).delete();
         } catch (_) {}
@@ -1624,7 +1793,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         if (mounted) {
           _reload();
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(n > 0 ? tr('Восстановлено сообщений: {n}', {'n': n}) : tr('Новых сообщений в копии нет'))));
+              content: Text(n > 0
+                  ? tr('Восстановлено сообщений: {n}', {'n': n})
+                  : tr('Новых сообщений в копии нет'))));
         }
       } catch (_) {}
     }
@@ -1636,8 +1807,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   /// Фото/голос/файл из переписки, пришедшие по P2P: принимаем без вопросов и
   /// кладём в переписку как обычное вложение (тот же clientMessageId — дубль
   /// из базы не появится).
-  Future<void> _receiveInlineAttachment(P2pReceiver r, Map<String, dynamic> meta) async {
-    if (widget.repo.existsByClientId(r.id) || r.size > 8 * 1024 * 1024) return r.reject();
+  Future<void> _receiveInlineAttachment(
+      P2pReceiver r, Map<String, dynamic> meta) async {
+    if (widget.repo.existsByClientId(r.id) || r.size > 8 * 1024 * 1024)
+      return r.reject();
     void done() async {
       if (r.state.value != P2pState.done) return;
       r.state.removeListener(done);
@@ -1645,7 +1818,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         final path = r.path;
         if (path == null) return;
         final bytes = await File(path).readAsBytes();
-        final type = ChatMessageType.values.where((t) => t.name == meta['t']).firstOrNull ?? ChatMessageType.file;
+        final type = ChatMessageType.values
+                .where((t) => t.name == meta['t'])
+                .firstOrNull ??
+            ChatMessageType.file;
         widget.repo.addMessage(ChatMessage(
           id: const Uuid().v4(),
           clientMessageId: r.id,
@@ -1682,7 +1858,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<void> _onFileOffer(P2pReceiver r) async {
     if (!mounted) return r.reject();
     final meta = r.meta;
-    if (meta != null && meta['att'] == 1) return _receiveInlineAttachment(r, meta);
+    if (meta != null && meta['att'] == 1)
+      return _receiveInlineAttachment(r, meta);
     if (meta != null && meta['hist'] == 1) return _receiveHistory(r);
     final ok = await showGlassDialog<bool>(
       context: context,
@@ -1695,8 +1872,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           's': ChatMediaUtils.formatSize(r.size),
         })),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Отказаться'))),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Принять'))),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(tr('Отказаться'))),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(tr('Принять'))),
         ],
       ),
     );
@@ -1718,9 +1899,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       createdAt: DateTime.now(),
     );
     widget.repo.addMessage(msg);
-    _watchTransfer(messageId: msg.id, clientId: r.id, progress: r.progress, state: r.state, donePath: () => r.path);
+    _watchTransfer(
+        messageId: msg.id,
+        clientId: r.id,
+        progress: r.progress,
+        state: r.state,
+        donePath: () => r.path);
     await r.accept();
-    if (r.state.value == P2pState.failed || r.state.value == P2pState.rejected) {
+    if (r.state.value == P2pState.failed ||
+        r.state.value == P2pState.rejected) {
       widget.repo.updateStatus(msg.id, ChatMessageStatus.error);
     }
     if (mounted) _reload();
@@ -1746,12 +1933,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<void> _sendLargeCloud(ChatLargeFilePick picked) async {
     if (kIsWeb && picked.size > ChatMediaUtils.maxWebDriveBytes) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(tr('В веб-версии файл больше {p} не отправить — отправьте его с телефона', {'p': ChatMediaUtils.formatSize(ChatMediaUtils.maxWebDriveBytes)}))));
+          content: Text(tr(
+              'В веб-версии файл больше {p} не отправить — отправьте его с телефона',
+              {
+            'p': ChatMediaUtils.formatSize(ChatMediaUtils.maxWebDriveBytes)
+          }))));
       return;
     }
     if (picked.size > ChatMediaUtils.maxDriveBytes) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(tr('Файл больше 1,5 ГБ: через облако такой не отправить. Для очень больших файлов нужна прямая передача (P2P).'))));
+          content: Text(tr(
+              'Файл больше 1,5 ГБ: через облако такой не отправить. Для очень больших файлов нужна прямая передача (P2P).'))));
       return;
     }
 
@@ -1773,7 +1965,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _scrollToEnd();
     } catch (e, st) {
       if (mounted) {
-        DemoMode.reportError(context, tr('Ошибка отправки сообщения'), 'ChatThreadScreen', e, st);
+        DemoMode.reportError(context, tr('Ошибка отправки сообщения'),
+            'ChatThreadScreen', e, st);
       }
     } finally {
       if (mounted) {
@@ -1929,7 +2122,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (!await _voice.start()) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(tr('Нет доступа к микрофону — разрешите его в настройках'))));
+              content: Text(
+                  tr('Нет доступа к микрофону — разрешите его в настройках'))));
         }
         return;
       }
@@ -1943,7 +2137,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(tr('Не удалось записать: {e}', {'e': friendlyError(e)}))));
+            content:
+                Text(tr('Не удалось записать: {e}', {'e': friendlyError(e)}))));
       }
     }
   }
@@ -1962,7 +2157,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     await _sendRecorded(
       type: ChatMessageType.audio,
       // Волна громкости едет в имени вложения: voice-<сек>-<48 hex>.m4a
-      name: clip.wave.isEmpty ? 'voice-${clip.seconds}.$ext' : 'voice-${clip.seconds}-${clip.wave}.$ext',
+      name: clip.wave.isEmpty
+          ? 'voice-${clip.seconds}.$ext'
+          : 'voice-${clip.seconds}-${clip.wave}.$ext',
       mime: ext == 'webm' ? 'audio/webm' : 'audio/mp4',
       bytes: kIsWeb ? await clip.readBytes() : null,
       path: kIsWeb ? null : clip.path,
@@ -1971,8 +2168,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   /// «Кружок»: полноэкранная запись видео в круге до 2 минут.
   Future<void> _recordCircle({bool hold = false}) async {
-    final r = await Navigator.of(context).push<CircleResult>(
-        MaterialPageRoute(builder: (_) => CircleRecorderScreen(autoStart: hold, finishSignal: hold ? _circleFinish : null)));
+    final r = await Navigator.of(context).push<CircleResult>(MaterialPageRoute(
+        builder: (_) => CircleRecorderScreen(
+            autoStart: hold, finishSignal: hold ? _circleFinish : null)));
     if (r == null || !mounted) return;
     final isWebm = r.file.name.toLowerCase().endsWith('.webm');
     await _sendRecorded(
@@ -2042,7 +2240,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _scrollToEnd();
     } catch (e, st) {
       if (mounted) {
-        DemoMode.reportError(context, tr('Ошибка отправки сообщения'), 'ChatThreadScreen', e, st);
+        DemoMode.reportError(context, tr('Ошибка отправки сообщения'),
+            'ChatThreadScreen', e, st);
       }
     } finally {
       if (mounted) {
@@ -2059,7 +2258,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       var msg = m;
       if (kIsWeb && msg.attachmentBase64 == null && msg.driveFileId != null) {
         final bytes = await widget.sync.downloadLargeBytes(m);
-        return MediaSource(bytes: bytes, mime: m.attachmentMime ?? 'application/octet-stream');
+        return MediaSource(
+            bytes: bytes, mime: m.attachmentMime ?? 'application/octet-stream');
       }
       if (msg.attachmentBase64 == null &&
           !(msg.attachmentLocalPath != null &&
@@ -2077,7 +2277,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       }
       final mime = msg.attachmentMime ?? 'application/octet-stream';
       if (msg.attachmentBase64 != null) {
-        return MediaSource(bytes: base64Decode(msg.attachmentBase64!), mime: mime);
+        return MediaSource(
+            bytes: base64Decode(msg.attachmentBase64!), mime: mime);
       }
       final path = msg.attachmentLocalPath;
       if (path != null && File(path).existsSync()) {
@@ -2086,7 +2287,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(tr('Не удалось открыть файл: {e}', {'e': friendlyError(e)}))));
+            content: Text(
+                tr('Не удалось открыть файл: {e}', {'e': friendlyError(e)}))));
       }
     }
     return null;
@@ -2108,7 +2310,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Row(
                 children: [
-                  const Icon(Icons.fiber_manual_record, color: Colors.red, size: 14),
+                  const Icon(Icons.fiber_manual_record,
+                      color: Colors.red, size: 14),
                   const SizedBox(width: 8),
                   Text(formatClock(_voiceSecs),
                       style: const TextStyle(fontWeight: FontWeight.w600)),
@@ -2125,7 +2328,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                               child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 90),
                                 width: 3,
-                                height: 4 + 18 * (v * (0.35 + 0.65 * ((i * 7919) % 13) / 12)).clamp(0.0, 1.0),
+                                height: 4 +
+                                    18 *
+                                        (v *
+                                                (0.35 +
+                                                    0.65 *
+                                                        ((i * 7919) % 13) /
+                                                        12))
+                                            .clamp(0.0, 1.0),
                                 decoration: BoxDecoration(
                                   color: cs.primary.withValues(alpha: 0.85),
                                   borderRadius: BorderRadius.circular(2),
@@ -2205,132 +2415,150 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             child: _voiceRecording
                 ? _voiceBar(cs)
                 : Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: GlassPill(
-                    radius:
-                        25, // постоянное — многострочный текст не раздувает скругление
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        IconButton(
-                          onPressed: _toggleEmoji,
-                          tooltip:
-                              _emojiOpen ? tr('Клавиатура') : tr('Смайлики'),
-                          icon: Icon(_emojiOpen
-                              ? Icons.keyboard_outlined
-                              : Icons.emoji_emotions_outlined),
-                        ),
-                        Expanded(
-                          child: TextField(
-                            controller: _input,
-                            focusNode: _inputFocus,
-                            minLines: 1,
-                            maxLines: 5,
-                            textInputAction: TextInputAction.newline,
-                            decoration: InputDecoration(
-                              hintText: tr('Сообщение'),
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              filled: false,
-                              contentPadding:
-                                  const EdgeInsets.symmetric(vertical: 14),
-                            ),
-                          ),
-                        ),
-                        // Качество голосовых: HD (тяжелее, чище) или обычное; видно, пока поле пустое.
-                        ValueListenableBuilder<TextEditingValue>(
-                          valueListenable: _input,
-                          builder: (_, v, __) => v.text.trim().isNotEmpty
-                              ? const SizedBox.shrink()
-                              : Tooltip(
-                                  message: VoiceRecorder.hd ? tr('Голосовые в HD') : tr('Голосовые в обычном качестве'),
-                                  child: InkWell(
-                                    borderRadius: BorderRadius.circular(12),
-                                    onTap: () => setState(() => VoiceRecorder.hd = !VoiceRecorder.hd),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                                      child: Text('HD',
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.w900,
-                                              color: VoiceRecorder.hd ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant)),
-                                    ),
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: GlassPill(
+                          radius:
+                              25, // постоянное — многострочный текст не раздувает скругление
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              IconButton(
+                                onPressed: _toggleEmoji,
+                                tooltip: _emojiOpen
+                                    ? tr('Клавиатура')
+                                    : tr('Смайлики'),
+                                icon: Icon(_emojiOpen
+                                    ? Icons.keyboard_outlined
+                                    : Icons.emoji_emotions_outlined),
+                              ),
+                              Expanded(
+                                child: TextField(
+                                  controller: _input,
+                                  focusNode: _inputFocus,
+                                  minLines: 1,
+                                  maxLines: 5,
+                                  textInputAction: TextInputAction.newline,
+                                  decoration: InputDecoration(
+                                    hintText: tr('Сообщение'),
+                                    border: InputBorder.none,
+                                    enabledBorder: InputBorder.none,
+                                    focusedBorder: InputBorder.none,
+                                    filled: false,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        vertical: 14),
                                   ),
                                 ),
-                        ),
-                        if (aiModuleOn(context))
-                          IconButton(
-                          onPressed:
-                              _sending || _aiBusy ? null : _composeWithAi,
-                          tooltip: tr('Написать с ИИ'),
-                          icon: _aiBusy
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2))
-                              : const Icon(Icons.auto_awesome_outlined),
-                        ),
-                        GestureDetector(
-                          // Долгое нажатие — большой файл через Google Drive,
-                          // в обход лимита обычных вложений (см. `_attachLarge`).
-                          onLongPress: _sending ? null : _attachLarge,
-                          child: IconButton(
-                            onPressed: _sending ? null : _attach,
-                            icon: const Icon(Icons.attach_file),
-                            tooltip: tr(
-                                'Прикрепить фото или файл (долгое нажатие — большой файл)'),
+                              ),
+                              // Качество голосовых: HD (тяжелее, чище) или обычное; видно, пока поле пустое.
+                              ValueListenableBuilder<TextEditingValue>(
+                                valueListenable: _input,
+                                builder: (_, v, __) => v.text.trim().isNotEmpty
+                                    ? const SizedBox.shrink()
+                                    : Tooltip(
+                                        message: VoiceRecorder.hd
+                                            ? tr('Голосовые в HD')
+                                            : tr(
+                                                'Голосовые в обычном качестве'),
+                                        child: InkWell(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          onTap: () => setState(() =>
+                                              VoiceRecorder.hd =
+                                                  !VoiceRecorder.hd),
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 8, vertical: 8),
+                                            child: Text('HD',
+                                                style: TextStyle(
+                                                    fontWeight: FontWeight.w900,
+                                                    color: VoiceRecorder.hd
+                                                        ? Theme.of(context)
+                                                            .colorScheme
+                                                            .primary
+                                                        : Theme.of(context)
+                                                            .colorScheme
+                                                            .onSurfaceVariant)),
+                                          ),
+                                        ),
+                                      ),
+                              ),
+                              if (aiModuleOn(context))
+                                IconButton(
+                                  onPressed: _sending || _aiBusy
+                                      ? null
+                                      : _composeWithAi,
+                                  tooltip: tr('Написать с ИИ'),
+                                  icon: _aiBusy
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2))
+                                      : const Icon(Icons.auto_awesome_outlined),
+                                ),
+                              GestureDetector(
+                                // Долгое нажатие — большой файл через Google Drive,
+                                // в обход лимита обычных вложений (см. `_attachLarge`).
+                                onLongPress: _sending ? null : _attachLarge,
+                                child: IconButton(
+                                  onPressed: _sending ? null : _attach,
+                                  icon: const Icon(Icons.attach_file),
+                                  tooltip: tr(
+                                      'Прикрепить фото или файл (долгое нажатие — большой файл)'),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Пустое поле — микрофон (голосовое), есть текст — отправка.
+                      ValueListenableBuilder<TextEditingValue>(
+                        valueListenable: _input,
+                        builder: (_, v, __) {
+                          final empty =
+                              v.text.trim().isEmpty && _pendingChart == null;
+                          if (!empty || _sending) {
+                            return GlassCircleButton(
+                              size: 50,
+                              color: cs.primary.withValues(alpha: 0.85),
+                              onTap: _sending ? null : _send,
+                              icon: Icon(Icons.send, color: cs.onPrimary),
+                            );
+                          }
+                          // Тап — звук/видео; удержание: кнопка растёт вдвое, круг загрузки заполняется (до 0,7 с),
+                          // затем идёт запись; отпустили — отправка; провели вверх — запись закрепляется.
+                          return _RecordHold(
+                            icon: Icon(_recVideo ? Icons.videocam : Icons.mic,
+                                color: cs.onPrimary),
+                            color: cs.primary.withValues(alpha: 0.85),
+                            onTap: () => setState(() => _recVideo = !_recVideo),
+                            onStart: () {
+                              _recLocked = false;
+                              if (_recVideo) {
+                                _recordCircle(hold: true);
+                              } else {
+                                _startVoice();
+                              }
+                            },
+                            onLock: () => setState(() => _recLocked = true),
+                            onEnd: () {
+                              if (_recLocked)
+                                return; // закреплено: остановит сам пользователь
+                              if (_recVideo) {
+                                _circleFinish.value++;
+                              } else if (_voiceRecording) {
+                                _finishVoice(send: true);
+                              }
+                            },
+                          );
+                        },
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(width: 8),
-                // Пустое поле — микрофон (голосовое), есть текст — отправка.
-                ValueListenableBuilder<TextEditingValue>(
-                  valueListenable: _input,
-                  builder: (_, v, __) {
-                    final empty = v.text.trim().isEmpty && _pendingChart == null;
-                    if (!empty || _sending) {
-                      return GlassCircleButton(
-                        size: 50,
-                        color: cs.primary.withValues(alpha: 0.85),
-                        onTap: _sending ? null : _send,
-                        icon: Icon(Icons.send, color: cs.onPrimary),
-                      );
-                    }
-                    // Тап — звук/видео; удержание: кнопка растёт вдвое, круг загрузки заполняется (до 0,7 с),
-                    // затем идёт запись; отпустили — отправка; провели вверх — запись закрепляется.
-                    return _RecordHold(
-                      icon: Icon(_recVideo ? Icons.videocam : Icons.mic, color: cs.onPrimary),
-                      color: cs.primary.withValues(alpha: 0.85),
-                      onTap: () => setState(() => _recVideo = !_recVideo),
-                      onStart: () {
-                        _recLocked = false;
-                        if (_recVideo) {
-                          _recordCircle(hold: true);
-                        } else {
-                          _startVoice();
-                        }
-                      },
-                      onLock: () => setState(() => _recLocked = true),
-                      onEnd: () {
-                        if (_recLocked) return; // закреплено: остановит сам пользователь
-                        if (_recVideo) {
-                          _circleFinish.value++;
-                        } else if (_voiceRecording) {
-                          _finishVoice(send: true);
-                        }
-                      },
-                    );
-                  },
-                ),
-              ],
-            ),
           ),
         ),
       ],
@@ -2348,7 +2576,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   // Клавиатура закрылась/открылась: поле ввода меняет высоту (отступ жестовой панели),
   // а State.build от этого не вызывается — без замера последнее сообщение остаётся под полем.
   @override
-  void didChangeMetrics() => WidgetsBinding.instance.addPostFrameCallback((_) => _measureBar());
+  void didChangeMetrics() =>
+      WidgetsBinding.instance.addPostFrameCallback((_) => _measureBar());
 
   @override
   Widget build(BuildContext context) {
@@ -2402,30 +2631,35 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                             : NotificationListener<ScrollNotification>(
                                 onNotification: _onListScroll,
                                 child: ScrollablePositionedList.builder(
-                                itemScrollController: _itemCtl,
-                                itemPositionsListener: _itemPos,
-                                reverse: true,
-                                padding: EdgeInsets.fromLTRB(
-                                    12,
-                                    _selecting ? 12 : topInset,
-                                    12,
-                                    _barHeight + 18), // запас: последнее сообщение не прячется под полем ввода
-                                itemCount: _messages.length,
-                                itemBuilder: (context, i) {
-                                  _ensureStacks();
-                                  final idx = _messages.length - 1 - i;
-                                  final m = _messages[idx];
-                                  final item = _stackHidden.contains(m.id)
-                                      ? const SizedBox.shrink()
-                                      : (_stackLeader[m.id] != null ? _stackItem(_stackLeader[m.id]!) : _item(m));
-                                  // Первое сообщение дня — плашка с датой над ним (как в Telegram).
-                                  if (idx > 0 &&
-                                      _sameDay(_messages[idx - 1].createdAt,
-                                          m.createdAt)) return item;
-                                  return Column(
-                                      children: [_dayChip(m.createdAt), item]);
-                                },
-                              )),
+                                  itemScrollController: _itemCtl,
+                                  itemPositionsListener: _itemPos,
+                                  reverse: true,
+                                  padding: EdgeInsets.fromLTRB(
+                                      12,
+                                      _selecting ? 12 : topInset,
+                                      12,
+                                      _barHeight +
+                                          18), // запас: последнее сообщение не прячется под полем ввода
+                                  itemCount: _messages.length,
+                                  itemBuilder: (context, i) {
+                                    _ensureStacks();
+                                    final idx = _messages.length - 1 - i;
+                                    final m = _messages[idx];
+                                    final item = _stackHidden.contains(m.id)
+                                        ? const SizedBox.shrink()
+                                        : (_stackLeader[m.id] != null
+                                            ? _stackItem(_stackLeader[m.id]!)
+                                            : _item(m));
+                                    // Первое сообщение дня — плашка с датой над ним (как в Telegram).
+                                    if (idx > 0 &&
+                                        _sameDay(_messages[idx - 1].createdAt,
+                                            m.createdAt)) return item;
+                                    return Column(children: [
+                                      _dayChip(m.createdAt),
+                                      item
+                                    ]);
+                                  },
+                                )),
                         // Индикатор проверки новых сообщений (после протяжки вниз у нижнего края).
                         Positioned(
                           left: 0,
@@ -2436,13 +2670,24 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                               child: ValueListenableBuilder<bool>(
                                 valueListenable: _pullChecking,
                                 builder: (_, on, __) => !on
-                                    ? const SizedBox.shrink() // без скрытого индикатора: он анимируется постоянно
+                                    ? const SizedBox
+                                        .shrink() // без скрытого индикатора: он анимируется постоянно
                                     : Container(
                                         padding: const EdgeInsets.all(8),
-                                        decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                                        child: Row(mainAxisSize: MainAxisSize.min, children: [
-                                          const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
-                                        ]),
+                                        decoration: const BoxDecoration(
+                                            color: Colors.black54,
+                                            shape: BoxShape.circle),
+                                        child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const SizedBox(
+                                                  width: 14,
+                                                  height: 14,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                          strokeWidth: 2,
+                                                          color: Colors.white)),
+                                            ]),
                                       ),
                               ),
                             ),
@@ -2468,22 +2713,32 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                         GlassCircleButton(
                                             size: 44,
                                             onTap: _scrollToEnd,
-                                            icon: const Icon(Icons.arrow_downward)),
+                                            icon: const Icon(
+                                                Icons.arrow_downward)),
                                         if (n > 0)
                                           Positioned(
                                             top: -6,
                                             right: -4,
                                             child: Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 6,
+                                                      vertical: 2),
                                               decoration: BoxDecoration(
-                                                color: Theme.of(context).colorScheme.primary,
-                                                borderRadius: BorderRadius.circular(10),
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .primary,
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
                                               ),
                                               child: Text('$n',
                                                   style: TextStyle(
-                                                      color: Theme.of(context).colorScheme.onPrimary,
+                                                      color: Theme.of(context)
+                                                          .colorScheme
+                                                          .onPrimary,
                                                       fontSize: 12,
-                                                      fontWeight: FontWeight.w700)),
+                                                      fontWeight:
+                                                          FontWeight.w700)),
                                             ),
                                           ),
                                       ],
@@ -2594,15 +2849,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     Widget? actions;
     switch (k) {
       case 'coach_req':
-        title = mine ? tr('Запрос тренеру отправлен') : tr('Запрос на добавление в спортсмены');
+        title = mine
+            ? tr('Запрос тренеру отправлен')
+            : tr('Запрос на добавление в спортсмены');
         final birth = '${d['birth'] ?? ''}';
         final shownBirth = birth.length >= 10
             ? '${birth.substring(8, 10)}.${birth.substring(5, 7)}.${birth.substring(0, 4)}'
             : (d['birth_year'] != null ? '${d['birth_year']}' : '');
         lines = [
           if ('${d['name'] ?? ''}'.isNotEmpty) '${d['name']}',
-          if (shownBirth.isNotEmpty) tr('Дата рождения: {d}', {'d': shownBirth}),
-          if ('${d['region'] ?? ''}'.isNotEmpty) tr('Регион: {r}', {'r': d['region']}),
+          if (shownBirth.isNotEmpty)
+            tr('Дата рождения: {d}', {'d': shownBirth}),
+          if ('${d['region'] ?? ''}'.isNotEmpty)
+            tr('Регион: {r}', {'r': d['region']}),
         ];
         if (!mine) {
           if (st == null) {
@@ -2623,15 +2882,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               ),
             ]);
           } else {
-            lines.add(st == 'yes' ? tr('Вы приняли запрос — ждём доступ от спортсмена') : tr('Вы отказали'));
+            lines.add(st == 'yes'
+                ? tr('Вы приняли запрос — ждём доступ от спортсмена')
+                : tr('Вы отказали'));
           }
         }
       case 'coach_invite':
-        title = mine ? tr('Приглашение отправлено') : tr('Тренер приглашает вас подключиться');
+        title = mine
+            ? tr('Приглашение отправлено')
+            : tr('Тренер приглашает вас подключиться');
         if ('${d['name'] ?? ''}'.isNotEmpty) lines.add('${d['name']}');
         if (!mine) {
           if (st == null) {
-            lines.add(tr('Он увидит ваши тренировки только после вашего согласия на следующем шаге.'));
+            lines.add(tr(
+                'Он увидит ваши тренировки только после вашего согласия на следующем шаге.'));
             actions = Wrap(spacing: 8, runSpacing: 6, children: [
               FilledButton(
                 onPressed: () async {
@@ -2649,7 +2913,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               ),
             ]);
           } else {
-            lines.add(st == 'yes' ? tr('Вы приняли приглашение — отправлен запрос тренеру') : tr('Вы отказали'));
+            lines.add(st == 'yes'
+                ? tr('Вы приняли приглашение — отправлен запрос тренеру')
+                : tr('Вы отказали'));
           }
         }
       case 'coach_ok':
@@ -2657,8 +2923,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         if (!mine) {
           lines.add(switch (st) {
             'done' => tr('Доступ тренеру выдан'),
-            'needs_db' => tr('Чтобы выдать доступ, подключите свою базу: Настройки → Данные и синхронизация'),
-            'error' => tr('Не удалось выдать доступ — попробуем снова при открытии переписки'),
+            'needs_db' => tr(
+                'Чтобы выдать доступ, подключите свою базу: Настройки → Данные и синхронизация'),
+            'error' => tr(
+                'Не удалось выдать доступ — попробуем снова при открытии переписки'),
             _ => tr('Выдаём доступ…'),
           });
         }
@@ -2666,7 +2934,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         title = mine ? tr('Вы отказали') : tr('Тренер отклонил запрос');
       case 'coach_grant':
         title = mine ? tr('Доступ тренеру выдан') : tr('Спортсмен добавлен');
-        if (!mine) lines.add(st == 'done' ? tr('Он в вашем списке спортсменов') : tr('Сохраняем…'));
+        if (!mine)
+          lines.add(st == 'done'
+              ? tr('Он в вашем списке спортсменов')
+              : tr('Сохраняем…'));
       default:
         title = tr('Сообщение');
     }
@@ -2681,15 +2952,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: cs.primary.withValues(alpha: 0.35)),
         ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-          Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.how_to_reg_outlined, size: 18, color: cs.primary),
-            const SizedBox(width: 8),
-            Flexible(child: Text(title, style: theme.textTheme.titleSmall)),
-          ]),
-          for (final l in lines) Padding(padding: const EdgeInsets.only(top: 4), child: Text(l, style: theme.textTheme.bodySmall)),
-          if (actions != null) Padding(padding: const EdgeInsets.only(top: 10), child: actions),
-        ]),
+        child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.how_to_reg_outlined, size: 18, color: cs.primary),
+                const SizedBox(width: 8),
+                Flexible(child: Text(title, style: theme.textTheme.titleSmall)),
+              ]),
+              for (final l in lines)
+                Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(l, style: theme.textTheme.bodySmall)),
+              if (actions != null)
+                Padding(
+                    padding: const EdgeInsets.only(top: 10), child: actions),
+            ]),
       ),
     );
   }
@@ -2701,7 +2980,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final cs = theme.colorScheme;
     final db = context.read<AppDataStore>().db;
     final usable = !inv.expired && !FinalsInviteStore.isEnded(db, inv.token);
-    final intro = (m.text ?? '').replaceAll(FinalsInvite.codePattern, '').trim();
+    final intro =
+        (m.text ?? '').replaceAll(FinalsInvite.codePattern, '').trim();
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -2713,41 +2993,60 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: cs.primary.withValues(alpha: 0.35)),
         ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-          Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.emoji_events_outlined, size: 18, color: cs.primary),
-            const SizedBox(width: 8),
-            Flexible(child: Text(mine ? tr('Приглашение в финал отправлено') : tr('Приглашение в финал'), style: theme.textTheme.titleSmall)),
-          ]),
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(tr('Вас приглашают участвовать {r}', {'r': finalRoleWord(inv.role)}), style: theme.textTheme.bodySmall),
-          ),
-          if (!usable)
-            Padding(padding: const EdgeInsets.only(top: 4), child: Text(tr('Приглашение больше не действует'), style: theme.textTheme.bodySmall))
-          else if (!mine)
-            Padding(
-              padding: const EdgeInsets.only(top: 10),
-              child: Wrap(spacing: 8, runSpacing: 6, children: [
-                FilledButton(
-                  onPressed: () async {
-                    await joinFinal(context, context.read<AppDataStore>(), inv);
-                    if (mounted) setState(() {});
-                  },
-                  child: Text(tr('Подключиться')),
-                ),
-                OutlinedButton(
-                  onPressed: () {
-                    FinalsInviteStore.markEnded(db, inv.token);
-                    FinalsInviteStore.purge(db);
-                    _reload();
-                  },
-                  child: Text(tr('Отказаться')),
-                ),
+        child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.emoji_events_outlined, size: 18, color: cs.primary),
+                const SizedBox(width: 8),
+                Flexible(
+                    child: Text(
+                        mine
+                            ? tr('Приглашение в финал отправлено')
+                            : tr('Приглашение в финал'),
+                        style: theme.textTheme.titleSmall)),
               ]),
-            ),
-          if (intro.isNotEmpty && mine) Padding(padding: const EdgeInsets.only(top: 6), child: Text(tr('Получатель увидит кнопки подключения'), style: theme.textTheme.labelSmall)),
-        ]),
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                    tr('Вас приглашают участвовать {r}',
+                        {'r': finalRoleWord(inv.role)}),
+                    style: theme.textTheme.bodySmall),
+              ),
+              if (!usable)
+                Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(tr('Приглашение больше не действует'),
+                        style: theme.textTheme.bodySmall))
+              else if (!mine)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Wrap(spacing: 8, runSpacing: 6, children: [
+                    FilledButton(
+                      onPressed: () async {
+                        await joinFinal(
+                            context, context.read<AppDataStore>(), inv);
+                        if (mounted) setState(() {});
+                      },
+                      child: Text(tr('Подключиться')),
+                    ),
+                    OutlinedButton(
+                      onPressed: () {
+                        FinalsInviteStore.markEnded(db, inv.token);
+                        FinalsInviteStore.purge(db);
+                        _reload();
+                      },
+                      child: Text(tr('Отказаться')),
+                    ),
+                  ]),
+                ),
+              if (intro.isNotEmpty && mine)
+                Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(tr('Получатель увидит кнопки подключения'),
+                        style: theme.textTheme.labelSmall)),
+            ]),
       ),
     );
   }
@@ -2783,7 +3082,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
               color: selected
-                  ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)
+                  ? Theme.of(context)
+                      .colorScheme
+                      .primary
+                      .withValues(alpha: 0.15)
                   : null,
               borderRadius: BorderRadius.circular(16),
             ),
@@ -3034,11 +3336,12 @@ class _Bubble extends StatelessWidget {
           ValueListenableBuilder<Map<String, double>>(
             valueListenable: ChatSyncService.uploadProgress,
             builder: (_, map, __) => CircleVideo(
-              durationSec:
-                  _ChatThreadScreenState._secondsFromName(message.attachmentName),
+              durationSec: _ChatThreadScreenState._secondsFromName(
+                  message.attachmentName),
               load: onLoadMedia,
               // Свой кружок, пока уходит, и чужой, пока скачивается, — плавная анимация передачи.
-              busy: downloading || (mine && message.status == ChatMessageStatus.sending),
+              busy: downloading ||
+                  (mine && message.status == ChatMessageStatus.sending),
               progress: map[message.clientMessageId],
             ),
           ),
@@ -3069,8 +3372,11 @@ class _Bubble extends StatelessWidget {
             valueListenable: ChatSyncService.uploadProgress,
             builder: (_, map, __) {
               final pr = map[message.clientMessageId];
-              final sendingNow = mine && message.status == ChatMessageStatus.sending;
-              if ((pr == null && !sendingNow) || (message.attachmentBase64 != null && !sendingNow)) return const SizedBox.shrink();
+              final sendingNow =
+                  mine && message.status == ChatMessageStatus.sending;
+              if ((pr == null && !sendingNow) ||
+                  (message.attachmentBase64 != null && !sendingNow))
+                return const SizedBox.shrink();
               return Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: ClipRRect(
@@ -3086,7 +3392,10 @@ class _Bubble extends StatelessWidget {
           Row(mainAxisSize: MainAxisSize.min, children: [
             Icon(Icons.broken_image_outlined, color: fg),
             const SizedBox(width: 8),
-            Text(mine ? tr('Фото не отправлено целиком') : tr('Фото не загрузилось, попросите отправить ещё раз'),
+            Text(
+                mine
+                    ? tr('Фото не отправлено целиком')
+                    : tr('Фото не загрузилось, попросите отправить ещё раз'),
                 style: theme.textTheme.bodySmall?.copyWith(color: fg)),
           ]),
           const SizedBox(height: 6),
@@ -3216,17 +3525,27 @@ class _Bubble extends StatelessWidget {
     void openFullscreen() {
       // Листаем все фото переписки свайпом (от старых к новым).
       final at = photos.indexWhere((m) => m.id == message.id);
-      PhotoViewerScreen.open(context, ChatMediaUtils.imageOf(message.id, message.attachmentBase64!),
-          gallery: at < 0 ? null : [for (final m in photos) ChatMediaUtils.imageOf(m.id, m.attachmentBase64!)],
+      PhotoViewerScreen.open(context,
+          ChatMediaUtils.imageOf(message.id, message.attachmentBase64!),
+          gallery: at < 0
+              ? null
+              : [
+                  for (final m in photos)
+                    ChatMediaUtils.imageOf(m.id, m.attachmentBase64!)
+                ],
           index: at < 0 ? 0 : at);
     }
 
     // «Кружок» без подписи и ответа — без рамки пузыря (только сам круг).
-    final isBareCircle = message.type == ChatMessageType.video && !hasCaption && message.replyToPreview == null;
+    final isBareCircle = message.type == ChatMessageType.video &&
+        !hasCaption &&
+        message.replyToPreview == null;
 
     final Widget frame;
     if (isBareCircle) {
-      frame = ConstrainedBox(constraints: const BoxConstraints(maxWidth: 480), child: captionContent);
+      frame = ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: captionContent);
     } else if (isBareImage) {
       frame = ClipRRect(
         borderRadius: BorderRadius.circular(radius),
@@ -3309,14 +3628,17 @@ class _Bubble extends StatelessWidget {
                     alignment: Alignment.center,
                     children: [
                       ImageFiltered(
-                        imageFilter: ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+                        imageFilter:
+                            ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
                         child: frame,
                       ),
                       Positioned.fill(
                         child: IgnorePointer(
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(radius),
-                            child: ColoredBox(color: Colors.black.withValues(alpha: 0.30 * (1 - v))),
+                            child: ColoredBox(
+                                color: Colors.black
+                                    .withValues(alpha: 0.30 * (1 - v))),
                           ),
                         ),
                       ),
@@ -3324,8 +3646,11 @@ class _Bubble extends StatelessWidget {
                         right: 8,
                         bottom: 8,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                              color: Colors.black54,
+                              borderRadius: BorderRadius.circular(12)),
                           child: Row(mainAxisSize: MainAxisSize.min, children: [
                             SizedBox(
                               width: 12,
@@ -3337,7 +3662,9 @@ class _Bubble extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(width: 6),
-                            Text('${(v * 100).round()}%', style: const TextStyle(color: Colors.white, fontSize: 11)),
+                            Text('${(v * 100).round()}%',
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 11)),
                           ]),
                         ),
                       ),
@@ -3390,12 +3717,14 @@ class _Bubble extends StatelessWidget {
                 // Одна серая ✓ — дошло (на сервере или уже на устройстве, но
                 // не прочитано), синие ✓✓ — прочитано. Промежуточного
                 // «доставлено, но двумя галочками» нет — путает с «прочитано».
-                if (!message.readByPeer && message.status == ChatMessageStatus.sending)
+                if (!message.readByPeer &&
+                    message.status == ChatMessageStatus.sending)
                   // Идёт отправка: крутится индикатор, пока нет ответа сервера.
                   SizedBox(
                     width: 12,
                     height: 12,
-                    child: CircularProgressIndicator(strokeWidth: 1.6, color: theme.hintColor),
+                    child: CircularProgressIndicator(
+                        strokeWidth: 1.6, color: theme.hintColor),
                   )
                 else
                   Icon(
@@ -3405,7 +3734,9 @@ class _Bubble extends StatelessWidget {
                     size: 14,
                     color: message.readByPeer
                         ? const Color(0xFF34B7F1)
-                        : (message.status == ChatMessageStatus.error ? theme.colorScheme.error : theme.hintColor),
+                        : (message.status == ChatMessageStatus.error
+                            ? theme.colorScheme.error
+                            : theme.hintColor),
                   ),
               ],
               if (translationError != null) ...[
@@ -3422,7 +3753,9 @@ class _Bubble extends StatelessWidget {
         ),
         if (mine && message.status == ChatMessageStatus.error) ...[
           const SizedBox(height: 2),
-          Text(tr('Отправка прервана'), style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.error)),
+          Text(tr('Отправка прервана'),
+              style: theme.textTheme.labelSmall
+                  ?.copyWith(color: theme.colorScheme.error)),
           TextButton.icon(
             onPressed: onRetry,
             icon: const Icon(Icons.refresh, size: 14),
@@ -3455,8 +3788,9 @@ class _KeyboardPad extends StatelessWidget {
   const _KeyboardPad({required this.child});
 
   @override
-  Widget build(BuildContext context) =>
-      Transform.translate(offset: Offset(0, -MediaQuery.viewInsetsOf(context).bottom), child: child);
+  Widget build(BuildContext context) => Transform.translate(
+      offset: Offset(0, -MediaQuery.viewInsetsOf(context).bottom),
+      child: child);
 }
 
 /// Нижний отступ поля ввода (жестовая панель): виден, пока клавиатура закрыта.
@@ -3482,14 +3816,22 @@ class _RecordHold extends StatefulWidget {
   final VoidCallback onStart;
   final VoidCallback onLock;
   final VoidCallback onEnd;
-  const _RecordHold({required this.icon, required this.color, required this.onTap, required this.onStart, required this.onLock, required this.onEnd});
+  const _RecordHold(
+      {required this.icon,
+      required this.color,
+      required this.onTap,
+      required this.onStart,
+      required this.onLock,
+      required this.onEnd});
 
   @override
   State<_RecordHold> createState() => _RecordHoldState();
 }
 
-class _RecordHoldState extends State<_RecordHold> with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 700));
+class _RecordHoldState extends State<_RecordHold>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 700));
   bool _down = false, _started = false, _locked = false;
   double _downY = 0;
   DateTime _downAt = DateTime.now();
@@ -3517,7 +3859,8 @@ class _RecordHoldState extends State<_RecordHold> with SingleTickerProviderState
     _down = false;
     if (_started) {
       if (!_locked) widget.onEnd();
-    } else if (DateTime.now().difference(_downAt) < const Duration(milliseconds: 300)) {
+    } else if (DateTime.now().difference(_downAt) <
+        const Duration(milliseconds: 300)) {
       widget.onTap();
     }
     _started = false;
@@ -3558,9 +3901,16 @@ class _RecordHoldState extends State<_RecordHold> with SingleTickerProviderState
                 child: Transform.scale(
                   scale: scale,
                   child: Stack(alignment: Alignment.center, children: [
-                    GlassCircleButton(size: 50, color: widget.color, icon: widget.icon),
+                    GlassCircleButton(
+                        size: 50, color: widget.color, icon: widget.icon),
                     if (_c.value > 0 && !_started)
-                      SizedBox(width: 50, height: 50, child: CircularProgressIndicator(value: _c.value, strokeWidth: 2.5, color: Colors.white)),
+                      SizedBox(
+                          width: 50,
+                          height: 50,
+                          child: CircularProgressIndicator(
+                              value: _c.value,
+                              strokeWidth: 2.5,
+                              color: Colors.white)),
                   ]),
                 ),
               );

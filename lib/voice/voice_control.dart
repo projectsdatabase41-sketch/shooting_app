@@ -46,7 +46,8 @@ class VoiceSettings {
 
   /// ИИ-помощник для фраз, которые не разобрала грамматика (отдельная модель, выбирает только из списка действий).
   static bool aiOn(LocalDbService db) => _read(db, _kAi) == '1';
-  static void setAiOn(LocalDbService db, bool v) => _write(db, _kAi, v ? '1' : '0');
+  static void setAiOn(LocalDbService db, bool v) =>
+      _write(db, _kAi, v ? '1' : '0');
 
   /// Модель помощника: `auto` или id модели OpenRouter — отдельная от модели чата.
   static String model(LocalDbService db) {
@@ -54,7 +55,8 @@ class VoiceSettings {
     return v.isEmpty ? 'auto' : v;
   }
 
-  static void setModel(LocalDbService db, String v) => _write(db, _kModel, v.trim());
+  static void setModel(LocalDbService db, String v) =>
+      _write(db, _kModel, v.trim());
 }
 
 /// Голосовое управление: распознавание речи средствами самой системы телефона (бесплатно, у Android — встроенный
@@ -64,18 +66,28 @@ class VoiceControl {
   VoiceControl._();
   static final VoiceControl instance = VoiceControl._();
 
-  final Map<VoiceAction, List<({Object owner, VoiceHandler fn})>> _handlers = {};
+  final Map<VoiceAction, List<({Object owner, VoiceHandler fn})>> _handlers =
+      {};
 
   /// Идёт прослушивание (кнопка микрофона мигает) и что уже услышано.
   final ValueNotifier<bool> listening = ValueNotifier(false);
   final ValueNotifier<String> heard = ValueNotifier('');
 
-  void register(Object owner, Map<VoiceAction, VoiceHandler> handlers) {
+  final List<({Object owner, String mode})> _modes = [];
+
+  /// Режим верхнего экрана (тренировка, переписка…): от него зависит, как понимаются фразы.
+  String? get currentMode => _modes.isEmpty ? null : _modes.last.mode;
+
+  void register(Object owner, Map<VoiceAction, VoiceHandler> handlers,
+      {String? mode}) {
     unregister(owner);
-    handlers.forEach((a, fn) => (_handlers[a] ??= []).add((owner: owner, fn: fn)));
+    handlers
+        .forEach((a, fn) => (_handlers[a] ??= []).add((owner: owner, fn: fn)));
+    if (mode != null) _modes.add((owner: owner, mode: mode));
   }
 
   void unregister(Object owner) {
+    _modes.removeWhere((m) => m.owner == owner);
     for (final l in _handlers.values) {
       l.removeWhere((h) => h.owner == owner);
     }
@@ -102,14 +114,16 @@ class VoiceControl {
       };
 
   /// Слушает одну фразу. `null` — не получилось (нет доступа к микрофону, нет распознавателя, тишина).
-  Future<String?> listenOnce({Duration listenFor = const Duration(seconds: 8)}) async {
+  Future<String?> listenOnce(
+      {Duration listenFor = const Duration(seconds: 8)}) async {
     if (listening.value) {
       await stop();
       return null;
     }
     try {
       if (!_ready) {
-        _ready = await _stt.initialize(onError: (e) => debugPrint('STT: ${e.errorMsg}'));
+        _ready = await _stt.initialize(
+            onError: (e) => debugPrint('STT: ${e.errorMsg}'));
       }
       if (!_ready) return null;
       final done = Completer<String?>();
@@ -118,14 +132,17 @@ class VoiceControl {
       await _stt.listen(
         onResult: (SpeechRecognitionResult r) {
           heard.value = r.recognizedWords;
-          if (r.finalResult && !done.isCompleted) done.complete(r.recognizedWords);
+          if (r.finalResult && !done.isCompleted)
+            done.complete(r.recognizedWords);
         },
         listenFor: listenFor,
         pauseFor: const Duration(seconds: 2),
         localeId: _locale(),
-        listenOptions: SpeechListenOptions(partialResults: true, cancelOnError: true),
+        listenOptions:
+            SpeechListenOptions(partialResults: true, cancelOnError: true),
       );
-      return await done.future.timeout(listenFor + const Duration(seconds: 4), onTimeout: () => heard.value.isEmpty ? null : heard.value);
+      return await done.future.timeout(listenFor + const Duration(seconds: 4),
+          onTimeout: () => heard.value.isEmpty ? null : heard.value);
     } catch (e) {
       debugPrint('Voice listen: $e');
       return null;

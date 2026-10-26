@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../widgets/ai_gate.dart';
 import 'focus_training_screen.dart';
+import '../voice/clock_shot.dart';
 import '../voice/voice_control.dart';
 import '../voice/voice_grammar.dart';
 import 'package:uuid/uuid.dart';
@@ -140,7 +141,32 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
     super.initState();
     // Голос: команды тренировки действуют, пока открыт этот экран.
     final vm = context.read<TargetViewModel>();
-    VoiceControl.instance.register(this, {
+    VoiceControl.instance.register(this, mode: VoiceMode.training, {
+      VoiceAction.placeShot: (i) {
+        if (!vm.canAddShotNow) return tr('Сначала начните тренировку');
+        final (x, y) = pointForScore(vm.face, i.score!, i.hour!);
+        vm.addShotAt(x, y);
+        final note = i.text;
+        if (note != null && note.isNotEmpty) {
+          final store = context.read<AppDataStore>();
+          final shot = vm.session.shots.last;
+          CommentsRepository(store.db).add(Comment(
+            id: const Uuid().v4(),
+            sessionId: vm.session.id,
+            level: CommentLevel.shot,
+            shotId: shot.id,
+            authorRole: store.workMode == WorkMode.coach
+                ? AuthorRole.coach
+                : AuthorRole.athlete,
+            text: note,
+            createdAt: DateTime.now(),
+          ));
+          vm.noteExternalEdit();
+        }
+        return tr('Выстрел {s} на {h} ч',
+                {'s': (i.score!).toStringAsFixed(1), 'h': i.hour!.round()}) +
+            (note == null || note.isEmpty ? '' : tr(' — заметка сохранена'));
+      },
       VoiceAction.trainingStart: (i) {
         if (!vm.canEdit) return tr('Тренировку сейчас начать нельзя');
         vm.start();
@@ -161,8 +187,12 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
           builder: (ctx) => AlertDialog(
             title: Text(tr('Завершить тренировку?')),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Отмена'))),
-              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Завершить'))),
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: Text(tr('Отмена'))),
+              FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: Text(tr('Завершить'))),
             ],
           ),
         );
@@ -180,15 +210,19 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
       },
       VoiceAction.addNote: (i) {
         final text = i.text;
-        if (text == null || text.isEmpty) return tr('Скажите: «заметка» и текст');
+        if (text == null || text.isEmpty)
+          return tr('Скажите: «заметка» и текст');
         final store = context.read<AppDataStore>();
-        final shot = vm.selectedShot ?? (vm.session.shots.isEmpty ? null : vm.session.shots.last);
+        final shot = vm.selectedShot ??
+            (vm.session.shots.isEmpty ? null : vm.session.shots.last);
         CommentsRepository(store.db).add(Comment(
           id: const Uuid().v4(),
           sessionId: vm.session.id,
           level: shot == null ? CommentLevel.session : CommentLevel.shot,
           shotId: shot?.id,
-          authorRole: store.workMode == WorkMode.coach ? AuthorRole.coach : AuthorRole.athlete,
+          authorRole: store.workMode == WorkMode.coach
+              ? AuthorRole.coach
+              : AuthorRole.athlete,
           text: text,
           createdAt: DateTime.now(),
         ));
@@ -210,7 +244,8 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
   void _jumpTo(WorkspacePage page) {
     final ctx = _keyOf(page).currentContext;
     if (ctx == null) return;
-    Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+    Scrollable.ensureVisible(ctx,
+        duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
   }
 
   @override
@@ -218,8 +253,12 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
     final vm = context.watch<TargetViewModel>();
     final workspace = context.watch<WorkspaceViewModel>();
     // Страница «Тренер» нужна, только если кому-то выдан доступ (есть тренер).
-    final hasCoach = context.watch<AppDataStore>().shareGrants.any((g) => g.isActive);
-    final pages = [for (final p in workspace.visible) if (p != WorkspacePage.coach || hasCoach) p];
+    final hasCoach =
+        context.watch<AppDataStore>().shareGrants.any((g) => g.isActive);
+    final pages = [
+      for (final p in workspace.visible)
+        if (p != WorkspacePage.coach || hasCoach) p
+    ];
     // ShotListSheet живёт в своём разделе и не видит нашу прокрутку — просит перейти к мишени
     // через вью-модель.
     vm.onJumpToTargetRequested = () => _jumpTo(WorkspacePage.target);
@@ -235,7 +274,10 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
       child: Scaffold(
         appBar: GlassHeader(
           title: Text(vm.exercise.shownName,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w600),
               overflow: TextOverflow.ellipsis),
           actions: [
             // Сброс зума — кнопка надёжнее щипка, который мог «залипнуть» на максимуме.
@@ -259,11 +301,14 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
               ),
             if (vm.canEditShots)
               GlassCircleButton(
-                icon: BoldIcon(vm.isEditing ? Icons.remove_red_eye_outlined : Icons.edit_outlined),
+                icon: BoldIcon(vm.isEditing
+                    ? Icons.remove_red_eye_outlined
+                    : Icons.edit_outlined),
                 tooltip: vm.isEditing ? tr('Просмотр') : tr('Правка'),
                 onTap: () => _toggleEditMode(vm),
               ),
-            if (vm.session.status == SessionStatus.running || vm.session.status == SessionStatus.paused)
+            if (vm.session.status == SessionStatus.running ||
+                vm.session.status == SessionStatus.paused)
               CallCoachButton(db: context.read<AppDataStore>().db),
             GlassCircleButton(
               icon: const BoldIcon(Icons.grid_view),
@@ -280,7 +325,8 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
               child: LayoutBuilder(
                 builder: (context, box) {
                   // Мишень ~на 20% ниже прежней (раньше занимала всё место над панелями).
-                  final targetH = ((box.maxHeight - 125) * 0.8).clamp(220.0, 720.0);
+                  final targetH =
+                      ((box.maxHeight - 125) * 0.8).clamp(220.0, 720.0);
                   final sectionH = math.max(380.0, box.maxHeight * 0.75);
                   return SingleChildScrollView(
                     controller: _scroll,
@@ -292,18 +338,19 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
                       children: [
                         for (final page in pages)
                           // Пустую статистику (нет зачётных выстрелов) не показываем вовсе.
-                          if (!(page == WorkspacePage.statistics && vm.session.countingShots.isEmpty))
-                          KeyedSubtree(
-                            key: _keyOf(page),
-                            child: page == WorkspacePage.target
-                                ? _TargetPage(height: targetH)
-                                : _Section(
-                                    title: page.title,
-                                    height: sectionH,
-                                    scroll: _scroll,
-                                    child: _pageBody(page, vm),
-                                  ),
-                          ),
+                          if (!(page == WorkspacePage.statistics &&
+                              vm.session.countingShots.isEmpty))
+                            KeyedSubtree(
+                              key: _keyOf(page),
+                              child: page == WorkspacePage.target
+                                  ? _TargetPage(height: targetH)
+                                  : _Section(
+                                      title: page.title,
+                                      height: sectionH,
+                                      scroll: _scroll,
+                                      child: _pageBody(page, vm),
+                                    ),
+                            ),
                         const SizedBox(height: 24),
                       ],
                     ),
@@ -416,12 +463,17 @@ class _Section extends StatelessWidget {
   /// тянется пальцем (двигает страницу), а упор вложенного списка в край передаёт остаток
   /// движения странице. Иначе из нижнего раздела нельзя было вернуться вверх.
   final ScrollController scroll;
-  const _Section({required this.title, required this.height, required this.child, required this.scroll});
+  const _Section(
+      {required this.title,
+      required this.height,
+      required this.child,
+      required this.scroll});
 
   void _by(double dy) {
     if (!scroll.hasClients) return;
     final p = scroll.position;
-    scroll.jumpTo((p.pixels + dy).clamp(p.minScrollExtent, p.maxScrollExtent).toDouble());
+    scroll.jumpTo(
+        (p.pixels + dy).clamp(p.minScrollExtent, p.maxScrollExtent).toDouble());
   }
 
   @override
@@ -436,8 +488,11 @@ class _Section extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
                 child: Row(children: [
-                  Expanded(child: Text(title, style: Theme.of(context).textTheme.titleMedium)),
-                  Icon(Icons.drag_handle, size: 20, color: Theme.of(context).hintColor),
+                  Expanded(
+                      child: Text(title,
+                          style: Theme.of(context).textTheme.titleMedium)),
+                  Icon(Icons.drag_handle,
+                      size: 20, color: Theme.of(context).hintColor),
                 ]),
               ),
             ]),
@@ -446,7 +501,8 @@ class _Section extends StatelessWidget {
             height: height,
             child: NotificationListener<OverscrollNotification>(
               onNotification: (n) {
-                if (n.metrics.axis == Axis.vertical && n.overscroll != 0) _by(n.overscroll);
+                if (n.metrics.axis == Axis.vertical && n.overscroll != 0)
+                  _by(n.overscroll);
                 return false;
               },
               child: child,
@@ -496,7 +552,9 @@ class _WorkspaceOverview extends StatelessWidget {
                       title: Text(page.title),
                       subtitle: page == WorkspacePage.target
                           ? Text(tr('закреплена наверху'))
-                          : (workspace.isHidden(page) ? Text(tr('скрыта')) : null),
+                          : (workspace.isHidden(page)
+                              ? Text(tr('скрыта'))
+                              : null),
                       onTap: workspace.isHidden(page)
                           ? null
                           : () {
@@ -562,7 +620,9 @@ class _TargetPage extends StatelessWidget {
               Positioned.fill(child: canvas),
               // Отмена последнего выстрела: маленький кружок справа сверху, не зависит от зума
               // мишени и уезжает вместе со страницей при прокрутке.
-              if (vm.canEditShots && vm.session.shots.isNotEmpty && !vm.isEditing)
+              if (vm.canEditShots &&
+                  vm.session.shots.isNotEmpty &&
+                  !vm.isEditing)
                 Positioned(
                   top: 6,
                   right: 8,
@@ -612,7 +672,9 @@ class _ShotNoteBarState extends State<_ShotNoteBar> {
       sessionId: vm.session.id,
       level: CommentLevel.shot,
       shotId: shot.id,
-      authorRole: store.workMode == WorkMode.coach ? AuthorRole.coach : AuthorRole.athlete,
+      authorRole: store.workMode == WorkMode.coach
+          ? AuthorRole.coach
+          : AuthorRole.athlete,
       text: text,
       createdAt: DateTime.now(),
     ));
@@ -625,9 +687,14 @@ class _ShotNoteBarState extends State<_ShotNoteBar> {
   Future<void> _scanPhoto(TargetViewModel vm) async {
     setState(() => _scanning = true);
     try {
-      final knownHolesMm = [for (final s in [...vm.session.shots, ...vm.session.trash]) PixelPoint(s.xMm, s.yMm)];
+      final knownHolesMm = [
+        for (final s in [...vm.session.shots, ...vm.session.trash])
+          PixelPoint(s.xMm, s.yMm)
+      ];
       final points = await Navigator.of(context).push<List<PixelPoint>>(
-        MaterialPageRoute(builder: (_) => PhotoScanScreen(face: vm.face, knownHolesMm: knownHolesMm)),
+        MaterialPageRoute(
+            builder: (_) =>
+                PhotoScanScreen(face: vm.face, knownHolesMm: knownHolesMm)),
       );
       if (points == null || points.isEmpty || !mounted) return;
       final added = vm.addScannedShots(points);
@@ -642,7 +709,9 @@ class _ShotNoteBarState extends State<_ShotNoteBar> {
     final vm = context.watch<TargetViewModel>();
     final shot = vm.selectedShot;
     final store = context.watch<AppDataStore>();
-    final notes = shot == null ? const <Comment>[] : CommentsRepository(store.db).forShot(vm.session.id, shot.id);
+    final notes = shot == null
+        ? const <Comment>[]
+        : CommentsRepository(store.db).forShot(vm.session.id, shot.id);
     final cs = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
@@ -658,7 +727,9 @@ class _ShotNoteBarState extends State<_ShotNoteBar> {
                     icon: Icons.check_circle_outline,
                     label: tr('Попал'),
                     baseColor: Colors.green.shade700,
-                    onTap: () => vm.canAddShotNow ? vm.addHitMiss(true) : showPauseAddHint(context),
+                    onTap: () => vm.canAddShotNow
+                        ? vm.addHitMiss(true)
+                        : showPauseAddHint(context),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -667,7 +738,9 @@ class _ShotNoteBarState extends State<_ShotNoteBar> {
                     icon: Icons.highlight_off,
                     label: tr('Мимо'),
                     baseColor: Colors.red.shade700,
-                    onTap: () => vm.canAddShotNow ? vm.addHitMiss(false) : showPauseAddHint(context),
+                    onTap: () => vm.canAddShotNow
+                        ? vm.addHitMiss(false)
+                        : showPauseAddHint(context),
                   ),
                 ),
               ]),
@@ -675,7 +748,10 @@ class _ShotNoteBarState extends State<_ShotNoteBar> {
           if (notes.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(bottom: 4),
-              child: Text(notes.last.text, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall),
+              child: Text(notes.last.text,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall),
             ),
           Row(children: [
             Expanded(
@@ -688,7 +764,9 @@ class _ShotNoteBarState extends State<_ShotNoteBar> {
                 onSubmitted: (_) => _save(vm),
                 decoration: InputDecoration(
                   isDense: true,
-                  hintText: shot == null ? tr('Сначала сделайте выстрел') : tr('Отметка к выстрелу'),
+                  hintText: shot == null
+                      ? tr('Сначала сделайте выстрел')
+                      : tr('Отметка к выстрелу'),
                   border: const OutlineInputBorder(),
                   suffixIcon: IconButton(
                     icon: Icon(Icons.send, color: cs.primary),
@@ -1120,21 +1198,21 @@ class _ShotActionBarState extends State<_ShotActionBar> {
                 ),
                 const SizedBox(width: 16),
               ] else
-              Raised3DButton(
-                icon: Icons.add_circle_outline,
-                label: tr('Выстрел'),
-                baseColor: Theme.of(context).colorScheme.primary,
-                onTap: () {
-                  // На паузе позже минутного окна выстрел не добавляется.
-                  // Молча ничего не делать нельзя — кнопка выглядела бы
-                  // сломанной, поэтому объясняем, что надо продолжить.
-                  if (!vm.canAddShotNow) {
-                    showPauseAddHint(context);
-                    return;
-                  }
-                  vm.beginAddNew();
-                },
-              ),
+                Raised3DButton(
+                  icon: Icons.add_circle_outline,
+                  label: tr('Выстрел'),
+                  baseColor: Theme.of(context).colorScheme.primary,
+                  onTap: () {
+                    // На паузе позже минутного окна выстрел не добавляется.
+                    // Молча ничего не делать нельзя — кнопка выглядела бы
+                    // сломанной, поэтому объясняем, что надо продолжить.
+                    if (!vm.canAddShotNow) {
+                      showPauseAddHint(context);
+                      return;
+                    }
+                    vm.beginAddNew();
+                  },
+                ),
               const SizedBox(width: 16),
               Raised3DButton(
                 icon: Icons.edit_location_alt_outlined,
