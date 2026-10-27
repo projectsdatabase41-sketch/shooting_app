@@ -489,9 +489,15 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
                                   color: Theme.of(ctx).scaffoldBackgroundColor,
                                   child: Stack(fit: StackFit.expand, children: [
                                     // Боковые поля продолжают фон верхнего экрана (у «Чемпионов» свой, золотой).
-                                    ValueListenableBuilder<String>(
-                                      valueListenable: AppBackdrop.active,
-                                      builder: (_, kind, __) => Wallpaper(kind: kind),
+                                    // В режиме «Эконом» обои не рисуются совсем.
+                                    ValueListenableBuilder<int>(
+                                      valueListenable: EconomyMode.revision,
+                                      builder: (_, __, ___) => EconomyMode.on
+                                          ? const SizedBox.shrink()
+                                          : ValueListenableBuilder<String>(
+                                              valueListenable: AppBackdrop.active,
+                                              builder: (_, kind, __) => Wallpaper(kind: kind),
+                                            ),
                                     ),
                                     Center(
                                       child: DecoratedBox(

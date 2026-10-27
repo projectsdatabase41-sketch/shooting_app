@@ -128,6 +128,8 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     Navigator.of(context).pop();
   }
 
+  List<String> _shown = const []; // доступные модели без уже добавленных
+
   Future<void> _loadModels() async {
     setState(() {
       _loading = true;
@@ -207,38 +209,8 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
       final service = AiService(_settings);
       final free = await service.fetchFreeModels();
       if (free.isEmpty) throw AiException(tr('Бесплатных моделей сейчас нет'));
-      final preferSpeed = _settings.modelPriority == 'speed';
-      final reply = await service.ask(
-        systemPrompt: preferSpeed
-            ? 'You help configure a chain of AI models for a sport shooting assistant. '
-                'The priority is the speed and brevity of the answer: the model must not '
-                'reason out loud for long, even if that lowers the accuracy of '
-                'arithmetic a little.'
-            : 'You help configure a chain of AI models for a sport shooting '
-                'assistant. We need models that calculate arithmetic accurately '
-                '(for example the mean point of impact and group size from shot coordinates) '
-                'and do not reason out loud for long — the answer must be short and to the point, not '
-                'expensive and slow.',
-        contextBlock:
-            'Free OpenRouter models available right now, one per line:\n'
-            '${free.join('\n')}',
-        history: const [
-          (
-            role: 'user',
-            text: 'Rank these models by priority for the described task and give me '
-                'a list with no extra text — one model per line, in the same id format '
-                'as the input list, from the most suitable to the least suitable.',
-          ),
-        ],
-      );
-      final ranked = reply.text
-          .split('\n')
-          .map((l) => l.trim())
-          .where(free.contains)
-          .toList();
-      if (ranked.isEmpty)
-        throw AiException(
-            tr('Не удалось разобрать ответ моделей — попробуйте ещё раз'));
+      // Без опроса ИИ: берём самые свежие бесплатные модели (список уже отсортирован по дате выхода).
+      final ranked = free.take(8).toList();
       _settings.models = ranked;
       setState(() {
         _models.text = ranked.join('\n');
@@ -596,9 +568,15 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             ],
             if (_available != null) ...[
               const SizedBox(height: 12),
+              // Уже добавленные модели из списка доступных пропадают.
+              Builder(builder: (_) {
+                final used = _models.text.split(RegExp(r'[\r\n]+')).map((e) => e.trim()).toSet();
+                _shown = [for (final m in _available!) if (!used.contains(m)) m];
+                return const SizedBox.shrink();
+              }),
               Text(
                 tr('Бесплатные модели сейчас ({p}) — нажмите, чтобы добавить:',
-                    {'p': _available!.length}),
+                    {'p': _shown.length}),
                 style: theme.textTheme.bodySmall,
               ),
               const SizedBox(height: 8),
@@ -606,7 +584,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                 spacing: 6,
                 runSpacing: 6,
                 children: [
-                  for (final m in _available!)
+                  for (final m in _shown)
                     ActionChip(
                       label: Text(m, style: theme.textTheme.labelSmall),
                       onPressed: () => setState(() {

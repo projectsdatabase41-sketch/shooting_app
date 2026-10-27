@@ -434,8 +434,8 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
                 const SizedBox(height: 18),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: Text(tr('Свой финал')),
-                  subtitle: Text(tr('Результат не публикуется и не влияет на рейтинг')),
+                  title: Text(tr('Свой формат финала')),
+                  subtitle: Text(tr('Свои серии и время; такой результат не попадает в рейтинг. Публикация обычного финала — в конце, на экране итогов')),
                   value: _custom,
                   onChanged: (v) => setState(() => _custom = v),
                 ),
@@ -678,6 +678,7 @@ class _PublicBoardState extends State<_PublicBoard> {
             content: SingleChildScrollView(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
                 if (r.region.isNotEmpty) Text(r.region, style: theme.textTheme.bodySmall),
+                if (r.status == 'live') Text(tr('Пройдено {p}% (пристрелка не в счёт)', {'p': r.pct}), style: theme.textTheme.bodySmall),
                 const SizedBox(height: 8),
                 Text(tr('Судья'), style: theme.textTheme.labelLarge),
                 Text(r.jury.isEmpty ? '—' : r.jury.join(', ')),
@@ -719,7 +720,7 @@ class _PublicBoardState extends State<_PublicBoard> {
                 _ => Icons.hourglass_empty,
               }),
               title: Text(formatName(r)),
-              subtitle: Text(r.region.isNotEmpty ? r.region : r.hostName),
+              subtitle: Text([r.region.isNotEmpty ? r.region : r.hostName, if (status == 'live') tr('пройдено {p}%', {'p': r.pct})].join(' · ')),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => details(r),
             ),

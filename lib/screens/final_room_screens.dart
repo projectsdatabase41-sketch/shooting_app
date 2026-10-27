@@ -62,11 +62,12 @@ String _timeOf(FinalsSnapshot s) {
   return '${v ~/ 60}:${(v % 60).toString().padLeft(2, '0')}';
 }
 
-String _nextLabel(String phase, int secondsLeft) => switch (phase) {
+String _nextLabel(String phase, int secondsLeft, bool paused) => switch (phase) {
       'sighting' => tr('Заряжай'),
       // Пока идёт комментарий диктора (больше 5 с), следующая команда — «Заряжай».
       'loading' => secondsLeft > 5 ? tr('Заряжай') : tr('Старт'),
-      'shooting' => tr('Стоп'),
+      // Во время стрельбы «Стоп» ставит паузу, «Старт» продолжает ту же серию.
+      'shooting' => paused ? tr('Старт') : tr('Стоп'),
       'grace' => tr('Далее'),
       _ => '',
     };
@@ -376,7 +377,7 @@ class _FinalRoomViewState extends State<FinalRoomView> {
               width: double.infinity,
               child: FilledButton(
                 onPressed: widget.onNext,
-                child: Text(_nextLabel(s.phase, s.secondsLeft), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                child: Text(_nextLabel(s.phase, s.secondsLeft, s.paused), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
               ),
             ),
           ),
@@ -817,17 +818,6 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
                     onChanged: started ? null : (v) => setState(() => _maxSpec = v.round()),
                   ),
                 ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(tr('Мой тир')),
-                subtitle: Text(tr('Финалисты могут стрелять в разных тирах; команды даёт один главный судья')),
-                trailing: DropdownButton<int>(
-                  value: _hostSite,
-                  underline: const SizedBox.shrink(),
-                  items: [for (var i = 1; i <= 4; i++) DropdownMenuItem(value: i, child: Text(tr('Тир {n}', {'n': i})))],
-                  onChanged: started ? null : (v) => setState(() => _hostSite = v ?? 1),
-                ),
-              ),
               if (FinalsBle.canBridge)
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
@@ -1179,7 +1169,16 @@ class _FinalHostScreenState extends State<FinalHostScreen> {
   Map<String, dynamic> _people() => {
         'jury': [for (final m in _members) if (m.role == FinalsRole.coach && m.status == 'accepted') m.name],
         'athletes': [for (final m in _members) if (m.role == FinalsRole.athlete && m.status == 'accepted') m.name],
+        // Процент пройденного финала: зачётные выстрелы лидера от всех (пристрелка не считается).
+        'pct': _progressPct(),
       };
+
+  int _progressPct() {
+    final total = c.format.totalShots;
+    if (total <= 0) return 0;
+    final most = c.engine.competitors.fold<int>(0, (a, x) => math.max(a, x.shots.length));
+    return c.phase == RunPhase.finished ? 100 : (most * 100 ~/ total).clamp(0, 100);
+  }
 
   /// Финал окончен: гости получают «ended», токены приглашений стираются — старые приглашения не откроют ничего.
   void _endSession() {

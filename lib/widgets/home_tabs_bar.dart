@@ -607,7 +607,7 @@ class _HomeTileGridState extends State<HomeTileGrid> {
     var fg = personalization.appButtonTextFor(cs.brightness) ?? cs.primary;
     // «Стекло» просвечивает фон, цвет самой кнопки там не при чём; иначе (светлая
     // тема: белый на белом) берём цвет текста темы, если контраст слабый.
-    final under = TileStyle.isGlass(context.read<AppDataStore>().db) ? cs.surface : bg;
+    final under = (TileStyle.isGlass(context.read<AppDataStore>().db) && !EconomyMode.on) ? cs.surface : bg;
     double lum(Color c) => c.computeLuminance();
     final hi = math.max(lum(fg), lum(under)) + 0.05, lo = math.min(lum(fg), lum(under)) + 0.05;
     if (hi / lo < 3) fg = cs.onSurface;
@@ -616,7 +616,7 @@ class _HomeTileGridState extends State<HomeTileGrid> {
     final pressed = !elevated && _pressedId == id;
     final canTap = _dragging == null;
 
-    final glass = TileStyle.isGlass(context.read<AppDataStore>().db);
+    final glass = (TileStyle.isGlass(context.read<AppDataStore>().db) && !EconomyMode.on);
     return _scatter(context, id, GestureDetector(
       onTapDown: canTap ? (_) => setState(() => _pressedId = id) : null,
       onTapCancel: () => setState(() => _pressedId = null),

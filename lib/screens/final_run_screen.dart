@@ -697,6 +697,25 @@ class _ShotPadState extends State<ShotPad> {
             ),
           ),
         ),
+        // Кнопки зума на всех устройствах (щипок двумя пальцами тоже работает).
+        Positioned(
+          left: 2,
+          bottom: 2,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            IconButton.filledTonal(
+              visualDensity: VisualDensity.compact,
+              tooltip: tr('Приблизить'),
+              onPressed: _scale >= _maxScale ? null : () => _setScale(_scale + 1, size),
+              icon: const Icon(Icons.add),
+            ),
+            IconButton.filledTonal(
+              visualDensity: VisualDensity.compact,
+              tooltip: tr('Отдалить'),
+              onPressed: _scale <= 1 ? null : () => _setScale(_scale - 1, size),
+              icon: const Icon(Icons.remove),
+            ),
+          ]),
+        ),
         // В вебе справа вертикальный ползунок зума; на телефоне зум — щипком двумя пальцами.
         if (kIsWeb)
         Positioned(

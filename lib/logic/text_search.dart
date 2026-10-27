@@ -148,9 +148,17 @@ class TextSearch {
     'что ты умеешь',
   ];
 
+  /// Вопрос про само приложение или ассистента («что это за приложение», «что ты умеешь», «кто ты»): ответ в самом
+  /// ассистенте, книги не нужны — иначе слово «приложение» находило «Приложение B» из учебника.
+  static final _aboutAppRe = RegExp(
+      r'(что|кто)\s+(это\s+)?за\s+(приложени|программ)|(что|расскаж)[^.?!]{0,30}\s(об?|про)\s+(этом\s+)?(приложени|nexus|нексус|тебе|себе)|что ты умеешь|кто ты($|[^а-яё])',
+      caseSensitive: false);
+
+  static bool isAboutApp(String text) => _aboutAppRe.hasMatch(text.trim().toLowerCase());
+
   static bool isSmallTalk(String text) {
     final t = text.trim().toLowerCase();
-    return smallTalkPrefixes.any(t.startsWith);
+    return smallTalkPrefixes.any(t.startsWith) || isAboutApp(t);
   }
 
   /// Сколько разных ключевых слов встретилось в тексте — для

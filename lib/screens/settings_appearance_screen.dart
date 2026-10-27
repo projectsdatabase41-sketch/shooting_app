@@ -1,3 +1,4 @@
+import '../services/economy_mode.dart';
 import '../widgets/glass_route.dart';
 import '../widgets/app_backdrop.dart';
 import '../theme/backdrop_tint.dart';
@@ -114,6 +115,8 @@ class SettingsAppearanceScreen extends StatelessWidget {
           // Видео-заставка при запуске (звук играет на Android и компьютере;
           // в браузере без звука — так требуют браузеры).
           // ---- Плитки главного экрана ----
+          // В режиме «Эконом» обои, стекло и анимации не работают — их настройки скрыты.
+          if (!EconomyMode.on) ...[
           StatefulBuilder(
             builder: (ctx, setS) {
               final db = context.read<AppDataStore>().db;
@@ -193,6 +196,7 @@ class SettingsAppearanceScreen extends StatelessWidget {
             },
           ),
           const Divider(height: 1),
+          ],
           StatefulBuilder(
             builder: (ctx, setS) => SwitchListTile(
               secondary: const Icon(Icons.movie_outlined),

@@ -10,7 +10,10 @@ import 'package:flutter/material.dart';
 class GlassTheme {
   GlassTheme._();
 
-  static bool enabled = false;
+  static bool _enabled = false;
+
+  /// «Стекло» включено и не режим «Эконом» (там кнопки и плитки — сплошной цвет темы).
+  static bool get enabled => _enabled && !EconomyMode.on;
 
   /// Множитель прозрачности (тот же ползунок, что у плиток): 0.2 — почти прозрачно … 2 — плотнее.
   static double alpha = 1.0;
@@ -19,8 +22,8 @@ class GlassTheme {
   static final revision = ValueNotifier<int>(0);
 
   static void sync(bool glass, double a) {
-    if (enabled == glass && alpha == a) return;
-    enabled = glass;
+    if (_enabled == glass && alpha == a) return;
+    _enabled = glass;
     alpha = a;
     revision.value++;
   }
@@ -47,7 +50,8 @@ class GlassFill extends StatelessWidget {
   Widget build(BuildContext context) {
     final box = DecoratedBox(
       decoration: BoxDecoration(
-        color: color,
+        // «Эконом»: заливка сплошная — полупрозрачный цвет смешивается с цветом темы.
+        color: EconomyMode.on ? Color.alphaBlend(color, Theme.of(context).colorScheme.surface) : color,
         borderRadius: BorderRadius.circular(radius),
         border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
       ),

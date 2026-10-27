@@ -57,13 +57,13 @@ class AnimSettings {
   }
 
   static String label(AnimType t) => switch (t) {
-        AnimType.dissolve => 'Растворение',
-        AnimType.scatter => 'Разброс',
-        AnimType.horizontal => 'Горизонт',
-        AnimType.vertical => 'Вертикаль',
-        AnimType.zoom => 'Наплыв',
-        AnimType.fade => 'Затухание',
-        AnimType.morph => 'Превращение',
+        AnimType.dissolve => /*tr*/ 'Растворение',
+        AnimType.scatter => /*tr*/ 'Разброс',
+        AnimType.horizontal => /*tr*/ 'Горизонт',
+        AnimType.vertical => /*tr*/ 'Вертикаль',
+        AnimType.zoom => /*tr*/ 'Наплыв',
+        AnimType.fade => /*tr*/ 'Затухание',
+        AnimType.morph => /*tr*/ 'Превращение',
       };
 }
 

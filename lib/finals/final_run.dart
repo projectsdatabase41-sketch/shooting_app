@@ -246,6 +246,12 @@ class FinalRunController extends ChangeNotifier {
   /// Кнопка тренера «Далее»: подготовка → «Заряжай» → «Старт» (пошёл отсчёт
   /// времени) → «Стоп». Работает в любом режиме, в обычном — как «пропустить».
   void advance() {
+    // «Стоп» во время стрельбы — пауза (время и боты замирают), «Старт» продолжает ту же серию, а не переходит к
+    // следующей: серия закрывается только по времени или когда все отстреляли.
+    if (phase == RunPhase.shooting) {
+      paused ? resume() : pause();
+      return;
+    }
     if (paused) return;
     switch (phase) {
       case RunPhase.sighting:
@@ -258,7 +264,7 @@ class FinalRunController extends ChangeNotifier {
           _beginRound();
         }
       case RunPhase.shooting:
-        _stopRound();
+        return; // обработано выше
       case RunPhase.grace:
         if (_humansDone()) {
           _endRound();
@@ -304,6 +310,8 @@ class FinalRunController extends ChangeNotifier {
       : [for (final c in engine.active) c.id];
 
   void _beginRound() {
+    // Переход с пристрелки на зачёт: пристрелочные выстрелы ботов с мишеней убираем.
+    sightShots.clear();
     phase = RunPhase.shooting;
     roundSeconds = 0;
     _shooters = _currentShooters();

@@ -109,6 +109,7 @@ class AiService {
           jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
       final list = (data['data'] as List?) ?? const [];
       final free = <String>[];
+      final created = <String, num>{};
       for (final m in list) {
         if (m is! Map) continue;
         final id = m['id'];
@@ -116,9 +117,19 @@ class AiService {
         if (id is! String || pricing is! Map) continue;
         final prompt = double.tryParse('${pricing['prompt']}') ?? 1;
         final completion = double.tryParse('${pricing['completion']}') ?? 1;
-        if (prompt == 0 && completion == 0) free.add(id);
+        // Только текстовые чат-модели: музыкальные (lyria), модерация (safety) и прочие с нетекстовым выходом ассистенту не годятся.
+        final out = (m['architecture'] is Map) ? (m['architecture'] as Map)['output_modalities'] : null;
+        final textOnly = out is! List || (out.contains('text') && out.every((e) => e == 'text'));
+        if (prompt == 0 && completion == 0 && textOnly && !id.contains('safety')) {
+          free.add(id);
+          created[id] = m['created'] is num ? m['created'] as num : 0;
+        }
       }
-      free.sort();
+      // Самые свежие модели — первыми (по дате выхода с сервера), при равенстве — по названию.
+      free.sort((a, b) {
+        final c = created[b]!.compareTo(created[a]!);
+        return c != 0 ? c : a.compareTo(b);
+      });
       return free;
     } catch (_) {
       // Сервер ответил 200, но не тем форматом, что мы ждём (сменился

@@ -18,7 +18,10 @@ class FinalsBoardRow {
   final List<String> athletes;
   final List<Map<String, dynamic>> top;
   final DateTime updatedAt;
-  const FinalsBoardRow(this.id, this.hostName, this.region, this.formatId, this.maxSpectators, this.status, this.jury, this.athletes, this.top, this.updatedAt);
+
+  /// Процент пройденного финала (0–100), без пристрелки.
+  final int pct;
+  const FinalsBoardRow(this.id, this.hostName, this.region, this.formatId, this.maxSpectators, this.status, this.jury, this.athletes, this.top, this.updatedAt, {this.pct = 0});
 
   factory FinalsBoardRow.fromJson(Map<String, dynamic> j) => FinalsBoardRow(
         '${j['id']}',
@@ -31,6 +34,7 @@ class FinalsBoardRow {
         [for (final n in ((j['people'] as Map?)?['athletes'] as List? ?? const [])) '$n'],
         [for (final e in (j['top'] as List? ?? const [])) (e as Map).cast<String, dynamic>()],
         DateTime.tryParse('${j['updated_at']}') ?? DateTime.now(),
+        pct: ((j['people'] as Map?)?['pct'] as num?)?.toInt() ?? 0,
       );
 }
 

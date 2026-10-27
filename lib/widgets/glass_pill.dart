@@ -28,7 +28,8 @@ class GlassPill extends StatelessWidget {
     final body = Material(
       // На вебе размытие отключено (тяжело для iPhone, касания «тупят») —
       // фон плотнее, чтобы текст под панелью не просвечивал.
-      color: color ?? cs.surface.withValues(alpha: kIsWeb ? 0.9 : 0.55),
+      // «Эконом»: сплошной цвет темы без прозрачности.
+      color: EconomyMode.on ? Color.alphaBlend(color ?? cs.surfaceContainerHigh, cs.surface) : (color ?? cs.surface.withValues(alpha: kIsWeb ? 0.9 : 0.55)),
       shape: radius == null
           ? StadiumBorder(side: BorderSide(color: cs.onSurface.withValues(alpha: 0.08)))
           : RoundedRectangleBorder(

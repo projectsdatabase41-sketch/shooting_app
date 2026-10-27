@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../theme/app_transitions.dart';
+import '../theme/glass.dart';
 
 /// Режим «Эконом»: меньше нагрузки на телефон (iPhone и слабые Android) — без обоев, размытия стекла,
 /// анимаций переходов и кадров-превью в кружках. Настройки внешнего вида не меняются: при выключении всё возвращается.
@@ -30,5 +31,6 @@ class EconomyMode {
       AnimSettings.load(db); // вернуть выбранное пользователем
     }
     revision.value++;
+    GlassTheme.revision.value++; // тема приложения пересобирается: кнопки сплошного цвета
   }
 }
