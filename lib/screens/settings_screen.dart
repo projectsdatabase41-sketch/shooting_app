@@ -24,6 +24,7 @@ import '../services/knowledge_column_discovery.dart';
 import '../services/supabase_auth_service.dart';
 import '../i18n/i18n.dart';
 import 'voice_settings_screen.dart';
+import 'screen_buttons_settings_screen.dart';
 import '../state/app_data_store.dart';
 import '../state/home_tabs_view_model.dart';
 import '../state/personalization_view_model.dart';
@@ -158,6 +159,13 @@ class SettingsScreen extends StatelessWidget {
                     builder: (_) => SettingsServicesScreen(repo: services)),
               ),
             ),
+          ListTile(
+            leading: const Icon(Icons.apps),
+            title: Text(tr('Кнопки на экране')),
+            subtitle: Text(tr('Одна кнопка на всех страницах: из неё веером — отзывы, голос, разделы')),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ScreenButtonsSettingsScreen(db: store.db))),
+          ),
           ValueListenableBuilder<bool>(
             valueListenable: DemoMode.enabled,
             builder: (context, on, _) => SwitchListTile(

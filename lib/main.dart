@@ -46,6 +46,7 @@ import 'screens/call_screen.dart';
 import 'screens/chat_thread_screen.dart';
 import 'i18n/i18n.dart';
 import 'services/demo_mode.dart';
+import 'services/screen_buttons.dart';
 import 'voice/voice_control.dart' show VoiceSettings;
 import 'widgets/splash_gate.dart';
 import 'services/coach_access_service.dart';
@@ -206,6 +207,7 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     DemoMode.load(widget.db);
     VoiceSettings.load(widget.db);
+    ScreenButtons.load(widget.db);
     AnimSettings.load(widget.db);
     EconomyMode.load(widget.db);
     // Мессенджер выключен — его push на этом устройстве не нужны.

@@ -5,6 +5,7 @@ import '../widgets/glass_pill.dart';
 import '../services/ai_service.dart';
 import '../services/ai_settings.dart';
 import '../services/feedback_service.dart';
+import '../services/screen_buttons.dart';
 import 'voice_actions.dart';
 import 'voice_ai.dart';
 import 'voice_control.dart';
@@ -24,6 +25,18 @@ class VoiceOverlay extends StatefulWidget {
 
 class _VoiceOverlayState extends State<VoiceOverlay> {
   Offset _pos = const Offset(12, 220); // от правого нижнего угла
+
+  @override
+  void initState() {
+    super.initState();
+    ScreenButtons.voiceTap = _tap;
+  }
+
+  @override
+  void dispose() {
+    if (ScreenButtons.voiceTap == _tap) ScreenButtons.voiceTap = null;
+    super.dispose();
+  }
 
   /// Ответ с оценкой 👍/👎: оценка тихо уходит в отзывы (фраза, экран, как поняли, чем) — по ней правим разбор.
   void _rate(String phrase, String? mode, VoiceIntent intent, bool byAi,
@@ -109,10 +122,11 @@ class _VoiceOverlayState extends State<VoiceOverlay> {
   Widget build(BuildContext context) {
     return Stack(children: [
       Positioned.fill(child: widget.child),
-      ValueListenableBuilder<bool>(
-        valueListenable: VoiceSettings.enabled,
-        builder: (context, on, _) {
-          if (!on) return const SizedBox.shrink();
+      AnimatedBuilder(
+        animation: Listenable.merge([VoiceSettings.enabled, ScreenButtons.on]),
+        builder: (context, _) {
+          // При включённых «Кнопках на экране» микрофон живёт в общем веере.
+          if (!VoiceSettings.enabled.value || ScreenButtons.on.value) return const SizedBox.shrink();
           final size = MediaQuery.sizeOf(context);
           return Positioned(
             right: _pos.dx,

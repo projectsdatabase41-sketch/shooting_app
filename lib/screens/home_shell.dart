@@ -1,6 +1,8 @@
 import '../gdrive/gdrive_screen.dart';
 import 'dart:async' show Timer;
+import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
+import '../services/screen_buttons.dart';
 import '../finals/finals_invite.dart' show FinalsInviteStore;
 import '../voice/voice_control.dart';
 import '../voice/voice_grammar.dart';
@@ -185,6 +187,20 @@ class _HomeShellState extends State<HomeShell> {
         // нижней навигацией нет): вкладки открываются отдельным экраном по
         // тапу, «Настройки» — шестерёнка в шапке справа вверху.
         final specs = _specsWithServices();
+        // Для общей кнопки «Кнопки на экране»: какие разделы доступны и как открыть раздел с любой страницы.
+        if (!setEquals(ScreenButtons.suppressed, tabs.suppressed)) {
+          ScreenButtons.suppressed = {...tabs.suppressed};
+          WidgetsBinding.instance.addPostFrameCallback((_) => ScreenButtons.tabs.value = [...ScreenButtons.tabs.value]);
+        }
+        ScreenButtons.openTab = (id) {
+          if (!context.mounted) return;
+          DemoMode.tab = id;
+          final icon = specs[id]?.icon;
+          final page = icon == null
+              ? _pageFor(id, store, tabs)
+              : TileBackdropPage(id: id, icon: icon, child: _pageFor(id, store, tabs));
+          Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
+        };
         return Scaffold(
           extendBodyBehindAppBar: true,
           appBar: GlassHeader(

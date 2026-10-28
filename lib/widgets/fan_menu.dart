@@ -17,14 +17,17 @@ class FanButton extends StatefulWidget {
   final Widget icon;
   final String tooltip;
   final List<FanItem> items;
-  const FanButton({super.key, required this.icon, required this.items, this.tooltip = ''});
+  /// Если кнопка стоит вне навигатора (поверх всего приложения), веер рисуется в оверлее этого навигатора.
+  final GlobalKey<NavigatorState>? navigatorKey;
+  const FanButton({super.key, required this.icon, required this.items, this.tooltip = '', this.navigatorKey});
 
   @override
   State<FanButton> createState() => _FanButtonState();
 }
 
 class _FanButtonState extends State<FanButton> {
-  static const double _radius = 114, _itemSize = 50;
+  static const double _itemSize = 50;
+  double _radius = 114;
   final _link = LayerLink();
   final _hot = ValueNotifier<int?>(null);
   OverlayEntry? _entry;
@@ -45,6 +48,8 @@ class _FanButtonState extends State<FanButton> {
 
   void _show() {
     final n = widget.items.length;
+    // Много пунктов — дуга шире, чтобы кнопки не налезали друг на друга (дуга 100° ≈ 1,75 рад).
+    _radius = math.max(114, (_itemSize + 6) * (n - 1) / 1.75);
     _entry = OverlayEntry(
       builder: (ctx) => Stack(children: [
         Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.translucent, onTap: _hide)),
@@ -66,7 +71,7 @@ class _FanButtonState extends State<FanButton> {
           ),
       ]),
     );
-    Overlay.of(context).insert(_entry!);
+    (widget.navigatorKey?.currentState?.overlay ?? Overlay.of(context)).insert(_entry!);
   }
 
   Widget _bubble(BuildContext ctx, FanItem it, bool hot) {

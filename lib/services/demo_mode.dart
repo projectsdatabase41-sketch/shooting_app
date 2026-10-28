@@ -6,7 +6,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import '../models/home_tab_specs.dart';
+import '../voice/voice_control.dart';
 import '../voice/voice_overlay.dart';
+import '../widgets/fan_menu.dart';
+import 'screen_buttons.dart';
 import 'app_update_service.dart';
 import '../i18n/i18n.dart';
 import 'chat_settings.dart';
@@ -378,14 +382,101 @@ class _DemoFeedbackOverlayState extends State<DemoFeedbackOverlay> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    ScreenButtons.openFeedback = _open;
+  }
+
+  @override
+  void dispose() {
+    if (ScreenButtons.openFeedback == _open) ScreenButtons.openFeedback = null;
+    super.dispose();
+  }
+
+  /// Единая кнопка «Кнопки на экране»: одна — работает сразу, несколько — раскрываются веером.
+  Widget _screenButtons() {
+    return ValueListenableBuilder<bool>(
+      valueListenable: ScreenButtons.on,
+      builder: (context, master, _) {
+        if (!master) return const SizedBox.shrink();
+        return AnimatedBuilder(
+          animation: Listenable.merge([
+            DemoMode.enabled,
+            VoiceSettings.enabled,
+            ScreenButtons.tabs,
+            VoiceControl.instance.listening,
+          ]),
+          builder: (context, _) {
+            final listening = VoiceControl.instance.listening.value;
+            final items = <FanItem>[
+              if (DemoMode.enabled.value)
+                FanItem(
+                    child: const Icon(Icons.rate_review_outlined), label: tr('Отзыв'), onSelect: _open),
+              if (VoiceSettings.enabled.value)
+                FanItem(
+                  child: Icon(listening ? Icons.mic : Icons.mic_none),
+                  label: tr('Голосовое управление'),
+                  active: listening,
+                  onSelect: () => ScreenButtons.voiceTap?.call(),
+                ),
+              for (final id in ScreenButtons.visibleTabs)
+                FanItem(
+                  child: Icon(homeTabSpecs[id]!.icon),
+                  label: tr(homeTabSpecs[id]!.label),
+                  onSelect: () => ScreenButtons.openTab?.call(id),
+                ),
+            ];
+            if (items.isEmpty) return const SizedBox.shrink();
+            final single = items.length == 1;
+            return Positioned(
+              right: 8,
+              bottom: 120,
+              child: Material(
+                color: Colors.transparent,
+                child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end, children: [
+                  if (listening)
+                    ValueListenableBuilder<String>(
+                      valueListenable: VoiceControl.instance.heard,
+                      builder: (_, t, __) => Container(
+                        constraints: const BoxConstraints(maxWidth: 240),
+                        margin: const EdgeInsets.only(bottom: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(12)),
+                        child: Text(t.isEmpty ? tr('Говорите…') : t, style: const TextStyle(color: Colors.white)),
+                      ),
+                    ),
+                  if (single)
+                    GlassCircleButton(
+                      icon: BoldIcon((items.first.child as Icon).icon!),
+                      color: listening ? Colors.redAccent.withValues(alpha: 0.55) : null,
+                      onTap: items.first.onSelect,
+                    )
+                  else
+                    FanButton(
+                      navigatorKey: widget.navigatorKey,
+                      icon: const GlassCircleButton(icon: BoldIcon(Icons.apps)),
+                      items: items,
+                    ),
+                ]),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Stack(children: [
       Positioned.fill(child: VoiceOverlay(navigatorKey: widget.navigatorKey, child: widget.child)),
-      ValueListenableBuilder<bool>(
-        valueListenable: DemoMode.enabled,
-        builder: (context, on, _) {
+      _screenButtons(),
+      AnimatedBuilder(
+        animation: Listenable.merge([DemoMode.enabled, ScreenButtons.on]),
+        builder: (context, _) {
           // Кнопка отзыва видна при включённом «Режиме Демо» (режим разработчика не нужен).
-          if (!on) return const SizedBox.shrink();
+          // При включённых «Кнопках на экране» она живёт в общем веере.
+          if (!DemoMode.enabled.value || ScreenButtons.on.value) return const SizedBox.shrink();
           final size = MediaQuery.sizeOf(context);
           final pos = _pos ?? const Offset(8, 120);
           return Positioned(
