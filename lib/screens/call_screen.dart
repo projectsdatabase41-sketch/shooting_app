@@ -42,8 +42,19 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
   Timer? _tick;
   Timer? _autoClose;
 
+  String _lightKey = '';
+  void _lightChanged() {
+    // перерисовываем экран только при включении/выключении и смене режима, а не на каждом шаге плавного нарастания
+    final k = '${_light.on}${_light.rgb}';
+    if (k != _lightKey && mounted) {
+      _lightKey = k;
+      setState(() {});
+    }
+  }
+
   @override
   void initState() {
+    _light.addListener(_lightChanged);
     super.initState();
     _attach(s);
     if (s.outgoing) {
@@ -246,12 +257,21 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
           _button(Icons.cameraswitch_outlined, tr('Сменить'), s.switchCamera),
           if (CallSession.canShareScreen)
             _button(s.screenSharing ? Icons.stop_screen_share_outlined : Icons.screen_share_outlined, s.screenSharing ? tr('Стоп экран') : tr('Экран'), s.toggleScreenShare, on: s.screenSharing),
-          _button(Icons.hd_outlined, s.hd ? tr('HD вкл.') : tr('HD выкл.'), () => s.setHd(!s.hd), on: s.hd),
-          // Задняя камера — фонарик; фронтальная — подсветка экрана (яркость, теплота, RGB).
-          _button(s.frontCamera ? Icons.wb_incandescent_outlined : (s.torchOn ? Icons.flashlight_on : Icons.flashlight_off), tr('Свет'),
-              () => s.frontCamera ? showSelfieLightSheet(context, _light) : s.toggleTorch(),
-              on: s.frontCamera ? _light.on : s.torchOn),
+          // Задняя камера — фонарик; фронтальная — подсветка экрана. Тап — сразу вкл/выкл; яркость — свайп вверх/вниз,
+          // теплота — вправо/влево; удержание 2 с — выбор цвета полосой.
+          HoldButton(
+            onTap: () => s.frontCamera ? _light.toggle() : s.toggleTorch(),
+            onHold: () {
+              if (!s.frontCamera) return;
+              if (!_light.on) _light.turnOn();
+              _light.update(() => _light.rgb = !_light.rgb);
+            },
+            child: _button(s.frontCamera ? Icons.wb_incandescent_outlined : (s.torchOn ? Icons.flashlight_on : Icons.flashlight_off), tr('Свет'), () {},
+                on: s.frontCamera ? _light.on : s.torchOn),
+          ),
         ],
+        // Качество (HD) переключается на ходу и в видео-, и в аудиозвонке.
+        _button(Icons.hd_outlined, s.hd ? tr('HD вкл.') : tr('HD выкл.'), () => s.setHd(!s.hd), on: s.hd),
         _button(Icons.call_end, tr('Завершить'), s.hangUp, color: const Color(0xFFE53935)),
       ],
     );
@@ -278,6 +298,14 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
               if (remoteVideo)
                 RTCVideoView(s.remoteRenderer, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
               if (s.video && s.frontCamera) SelfieLightOverlay(light: _light),
+              if (s.video && s.frontCamera) Positioned.fill(child: SelfieLightGestures(light: _light, child: const SizedBox.expand())),
+              if (s.video && s.frontCamera && _light.on && _light.rgb)
+                Positioned(
+                  left: 24,
+                  right: 24,
+                  bottom: 190,
+                  child: HueBar(hue: _light.hue, onChanged: (h) => _light.update(() => _light.hue = h)),
+                ),
               SafeArea(
                 child: Column(
                   children: [

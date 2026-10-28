@@ -59,7 +59,7 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
 
   Future<void> _toggleLight() async {
     if (_isFront) {
-      await showSelfieLightSheet(context, _light);
+      _light.toggle(); // сразу, без окон; яркость — свайпом вверх/вниз, теплота — вправо/влево
       return;
     }
     final c = _controller;
@@ -181,7 +181,7 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
       _switching = true;
       _torch = false;
     });
-    if (_light.on) _light.update(() => _light.on = false);
+    if (_light.on) _light.turnOff();
     try {
       final c = _controller;
       if (_recording && c != null) {
@@ -196,7 +196,7 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
     }
     if (lightWasOn && mounted) {
       if (_isFront) {
-        _light.update(() => _light.on = true);
+        _light.turnOn();
       } else {
         try {
           await _controller?.setFlashMode(FlashMode.torch);
@@ -266,6 +266,7 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
       body: Stack(fit: StackFit.expand, children: [
         // подсветка экрана по краям (фронтальная камера) — под интерфейсом
         SelfieLightOverlay(light: _light),
+        Positioned.fill(child: SelfieLightGestures(light: _light, child: const SizedBox.expand())),
         SafeArea(
           child: _error != null
               ? Center(
@@ -291,6 +292,18 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
                       child: Stack(
                         alignment: Alignment.center,
                         children: [
+                          ListenableBuilder(
+                            listenable: _light,
+                            builder: (_, __) => !(_light.on && _light.rgb && _isFront)
+                                ? const SizedBox.shrink()
+                                : Positioned(
+                                    left: -26,
+                                    right: -26,
+                                    top: -26,
+                                    bottom: -26,
+                                    child: HueRing(hue: _light.hue, onChanged: (h) => _light.update(() => _light.hue = h)),
+                                  ),
+                          ),
                           SizedBox(
                             width: d + 12,
                             height: d + 12,
@@ -439,15 +452,23 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
                             onTap: _cameras.length < 2 ? null : _flip,
                           ),
                           // Свет: задняя камера — фонарик, фронтальная — подсветка экрана.
-                          GlassCircleButton(
-                            size: 52,
-                            icon: Icon(_isFront
-                                ? Icons.wb_incandescent_outlined
-                                : (_torch
-                                    ? Icons.flashlight_on
-                                    : Icons.flashlight_off)),
-                            tooltip: tr('Свет'),
+                          // Тап — включить/выключить сразу; удержание 2 с — выбор цвета (RGB) кольцом вокруг кружка.
+                          HoldButton(
                             onTap: _toggleLight,
+                            onHold: () {
+                              if (!_isFront) return;
+                              if (!_light.on) _light.turnOn();
+                              _light.update(() => _light.rgb = !_light.rgb);
+                            },
+                            child: GlassCircleButton(
+                              size: 52,
+                              icon: Icon(_isFront
+                                  ? Icons.wb_incandescent_outlined
+                                  : (_torch
+                                      ? Icons.flashlight_on
+                                      : Icons.flashlight_off)),
+                              tooltip: tr('Свет'),
+                            ),
                           ),
                         ],
                       ),

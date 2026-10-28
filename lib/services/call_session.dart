@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'call_service.dart';
+import 'demo_mode.dart';
 import 'chat_auth_service.dart';
 import 'live_chat_session.dart';
 import '../i18n/i18n.dart';
@@ -230,6 +231,7 @@ class CallSession extends ChangeNotifier {
       _set(CallState.calling);
       final delivered = await _service.ring(callId: callId, to: peerId, name: auth.nickname, video: video);
       if (delivered == 0) {
+        _fail('NO_DEVICE', 'ring delivered=0 (у собеседника нет зарегистрированного устройства с push)');
         _end(tr('{peerName} сейчас недоступен — нет устройства с приложением', {'peerName': peerName}), outcome: 'failed');
         return;
       }
@@ -240,6 +242,7 @@ class CallSession extends ChangeNotifier {
         }
       });
     } catch (e) {
+      _fail('EXC_${e.runtimeType}', e);
       _end(_humanError(e), outcome: 'failed');
     }
   }
@@ -252,9 +255,11 @@ class CallSession extends ChangeNotifier {
       await _openRoom();
       final delivered = await _service.ring(callId: callId, to: peerId, name: auth.nickname, video: video);
       if (delivered == 0) {
+        _fail('NO_DEVICE', 'ring delivered=0 (у собеседника нет зарегистрированного устройства с push)');
         _end(tr('{peerName} сейчас недоступен — нет устройства с приложением', {'peerName': peerName}), outcome: 'failed');
       }
     } catch (e) {
+      _fail('EXC_${e.runtimeType}', e);
       _end(_humanError(e), outcome: 'failed');
     }
   }
@@ -393,6 +398,17 @@ class CallSession extends ChangeNotifier {
     notifyListeners();
     try {
       for (final sender in await _pc?.getSenders() ?? const <RTCRtpSender>[]) {
+        if (sender.track?.kind == 'audio') {
+          // Аудио: HD — 64 кбит/с, обычное — 24 кбит/с (Opus)
+          final ap = sender.parameters;
+          final enc = (ap.encodings == null || ap.encodings!.isEmpty) ? [RTCRtpEncoding()] : ap.encodings!;
+          for (final e in enc) {
+            e.maxBitrate = v ? 64000 : 24000;
+          }
+          ap.encodings = enc;
+          await sender.setParameters(ap);
+          continue;
+        }
         if (sender.track?.kind != 'video') continue;
         final p = sender.parameters;
         final encodings = (p.encodings == null || p.encodings!.isEmpty) ? [RTCRtpEncoding()] : p.encodings!;
@@ -476,8 +492,27 @@ class CallSession extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Код и подробность сбоя звонка — уходят тихо в отзывы (кратко: хватает для понимания причины).
+  String _failCode = '';
+  String _failDetail = '';
+
+  void _fail(String code, [Object? detail]) {
+    _failCode = code;
+    final d = '${detail ?? ''}'.replaceAll(RegExp(r'\s+'), ' ');
+    _failDetail = d.length > 240 ? d.substring(0, 240) : d;
+  }
+
   void _end(String reason, {String? outcome}) {
     if (isEnded) return;
+    final failed = (outcome ?? (answered ? 'answered' : 'failed')) == 'failed';
+    if (failed && !answered) {
+      DemoMode.sendError(
+        'Call failed',
+        '[${_failCode.isEmpty ? 'UNKNOWN' : _failCode}] $reason',
+        null,
+        'out=$outgoing video=$video viaLive=$_viaLive peerOnline=${live?.peerOnline} state=${state.name}${_failDetail.isEmpty ? '' : '\n$_failDetail'}',
+      );
+    }
     endReason = reason;
     this.outcome = outcome ?? (answered ? 'answered' : 'failed');
     _endedAt = DateTime.now();
