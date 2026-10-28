@@ -126,23 +126,23 @@ class VoiceControl {
             onError: (e) => debugPrint('STT: ${e.errorMsg}'));
       }
       if (!_ready) return null;
-      final done = Completer<String?>();
+      // Несколько сеансов подряд: системное распознавание заканчивает сеанс на первой короткой паузе
+      // («что» ... «можешь»). Ждём настоящую паузу — сеанс без новых слов — и только тогда отдаём фразу целиком.
       heard.value = '';
       listening.value = true;
-      await _stt.listen(
-        onResult: (SpeechRecognitionResult r) {
-          heard.value = r.recognizedWords;
-          if (r.finalResult && !done.isCompleted)
-            done.complete(r.recognizedWords);
-        },
-        listenFor: listenFor,
-        pauseFor: const Duration(seconds: 2),
-        localeId: _locale(),
-        listenOptions:
-            SpeechListenOptions(partialResults: true, cancelOnError: true),
-      );
-      return await done.future.timeout(listenFor + const Duration(seconds: 4),
-          onTimeout: () => heard.value.isEmpty ? null : heard.value);
+      final parts = <String>[];
+      final deadline = DateTime.now().add(listenFor + const Duration(seconds: 8));
+      var firstSession = true;
+      while (DateTime.now().isBefore(deadline)) {
+        final text = await _session(firstSession ? listenFor : const Duration(seconds: 2), parts.join(' '));
+        firstSession = false;
+        if (!listening.value) break; // нажали ещё раз — остановили
+        if (text == null || text.trim().isEmpty) break; // пауза: новых слов нет
+        parts.add(text.trim());
+        heard.value = parts.join(' ');
+      }
+      final all = parts.join(' ').trim();
+      return all.isEmpty ? null : all;
     } catch (e) {
       debugPrint('Voice listen: $e');
       return null;
@@ -151,6 +151,26 @@ class VoiceControl {
       try {
         await _stt.stop();
       } catch (_) {}
+    }
+  }
+
+  /// Один сеанс распознавания: итоговый текст или `null`, если ничего не сказано.
+  Future<String?> _session(Duration listenFor, String before) async {
+    final done = Completer<String?>();
+    try {
+      await _stt.listen(
+        onResult: (SpeechRecognitionResult r) {
+          heard.value = '$before ${r.recognizedWords}'.trim();
+          if (r.finalResult && !done.isCompleted) done.complete(r.recognizedWords);
+        },
+        listenFor: listenFor,
+        pauseFor: const Duration(seconds: 2),
+        localeId: _locale(),
+        listenOptions: SpeechListenOptions(partialResults: true, cancelOnError: true),
+      );
+      return await done.future.timeout(listenFor + const Duration(seconds: 3), onTimeout: () => null);
+    } catch (_) {
+      return null;
     }
   }
 

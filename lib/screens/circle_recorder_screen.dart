@@ -5,6 +5,9 @@ import '../widgets/selfie_light.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart' show ValueListenable, kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../services/demo_mode.dart';
 
 import '../i18n/i18n.dart';
 import '../logic/friendly_error.dart';
@@ -84,6 +87,7 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
   void initState() {
     super.initState();
     widget.finishSignal?.addListener(_onSignal);
+    SystemChrome.setPreferredOrientations(const [DeviceOrientation.portraitUp]);
     _init().then((_) {
       if (widget.autoStart && !_released && mounted) _start();
     });
@@ -128,6 +132,9 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
       return;
     }
     try {
+      await c.lockCaptureOrientation(DeviceOrientation.portraitUp);
+    } catch (_) {}
+    try {
       _minZoom = await c.getMinZoomLevel();
       _maxZoom = await c.getMaxZoomLevel();
       _zoom = _minZoom;
@@ -167,11 +174,14 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
   Future<void> _flip() async {
     if (_cameras.length < 2) return;
     final next = (_camIndex + 1) % _cameras.length;
+    // Свет переходит вместе с камерой: подсветка экрана на селфи ⇄ фонарик на основной.
+    final lightWasOn = _isFront ? _light.on : _torch;
     _camIndex = next;
     setState(() {
       _switching = true;
       _torch = false;
     });
+    if (_light.on) _light.update(() => _light.on = false);
     try {
       final c = _controller;
       if (_recording && c != null) {
@@ -184,8 +194,18 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
     } catch (e) {
       if (mounted) setState(() => _error = friendlyError(e));
     }
-    // пока камера не выдала нормальный кадр — картинка скрыта
-    await Future<void>.delayed(const Duration(milliseconds: 450));
+    if (lightWasOn && mounted) {
+      if (_isFront) {
+        _light.update(() => _light.on = true);
+      } else {
+        try {
+          await _controller?.setFlashMode(FlashMode.torch);
+          if (mounted) setState(() => _torch = true);
+        } catch (_) {}
+      }
+    }
+    // пока камера не выдала нормальный кадр (и не закончится разворот картинки) — она скрыта под заставкой
+    await Future<void>.delayed(const Duration(milliseconds: 900));
     if (mounted) setState(() => _switching = false);
   }
 
@@ -214,13 +234,14 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
     _finishing = true;
     _ticker?.cancel();
     try {
-      final file = await c.stopVideoRecording();
+      final file = await c.stopVideoRecording().timeout(const Duration(seconds: 8));
       final seconds = _elapsed;
       if (!mounted) return;
-      Navigator.of(context)
-          .pop(send && seconds >= 1 ? CircleResult(file, seconds) : null);
+      Navigator.of(context).pop(send && seconds >= 1 ? CircleResult(file, seconds) : null);
     } catch (e) {
-      if (mounted) setState(() => _error = friendlyError(e));
+      // Камера не дала остановить запись: не зависаем с мёртвыми кнопками — закрываем экран (запись не сохранена).
+      DemoMode.sendError('Circle stop', e);
+      if (mounted) Navigator.of(context).pop();
     }
   }
 
@@ -228,6 +249,7 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
   void dispose() {
     widget.finishSignal?.removeListener(_onSignal);
     _ticker?.cancel();
+    SystemChrome.setPreferredOrientations(const []); // снова любая ориентация (как у приложения)
     _controller?.dispose();
     _light.release();
     _light.dispose();

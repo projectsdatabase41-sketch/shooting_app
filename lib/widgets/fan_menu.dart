@@ -24,7 +24,7 @@ class FanButton extends StatefulWidget {
 }
 
 class _FanButtonState extends State<FanButton> {
-  static const double _radius = 76, _itemSize = 50;
+  static const double _radius = 114, _itemSize = 50;
   final _link = LayerLink();
   final _hot = ValueNotifier<int?>(null);
   OverlayEntry? _entry;

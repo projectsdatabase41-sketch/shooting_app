@@ -2481,6 +2481,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                     child: const Text('HD'),
                                   ),
                                   FanItem(
+                                    label: tr('Кружок: сначала настроить камеру'),
+                                    onSelect: () {
+                                      if (!_sending) _recordCircle();
+                                    },
+                                    child: const Icon(Icons.videocam_outlined),
+                                  ),
+                                  FanItem(
                                     label: tr('Фото или файл'),
                                     onSelect: () {
                                       if (!_sending) _attach();
