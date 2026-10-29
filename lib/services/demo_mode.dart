@@ -404,6 +404,8 @@ class _DemoFeedbackOverlayState extends State<DemoFeedbackOverlay> {
             DemoMode.enabled,
             VoiceSettings.enabled,
             ScreenButtons.tabs,
+            ScreenButtons.left,
+            ScreenButtons.bottom,
             VoiceControl.instance.listening,
           ]),
           builder: (context, _) {
@@ -428,12 +430,14 @@ class _DemoFeedbackOverlayState extends State<DemoFeedbackOverlay> {
             ];
             if (items.isEmpty) return const SizedBox.shrink();
             final single = items.length == 1;
+            final left = ScreenButtons.left.value;
             return Positioned(
-              right: 8,
-              bottom: 120,
+              right: left ? null : 8,
+              left: left ? 8 : null,
+              bottom: ScreenButtons.bottom.value,
               child: Material(
                 color: Colors.transparent,
-                child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end, children: [
+                child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: left ? CrossAxisAlignment.start : CrossAxisAlignment.end, children: [
                   if (listening)
                     ValueListenableBuilder<String>(
                       valueListenable: VoiceControl.instance.heard,
@@ -459,6 +463,7 @@ class _DemoFeedbackOverlayState extends State<DemoFeedbackOverlay> {
                           )
                         : FanButton(
                             navigatorKey: widget.navigatorKey,
+                            mirror: left,
                             icon: const GlassCircleButton(icon: BoldIcon(Icons.apps)),
                             items: items,
                           ),

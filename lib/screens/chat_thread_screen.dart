@@ -2542,7 +2542,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                             onStart: () {
                               _recLocked = false;
                               if (_recVideo) {
-                                _recordCircle(hold: true);
+                                // Кружок открывается в режиме «сначала настроить»: запись — красной кнопкой.
+                                _recordCircle();
                               } else {
                                 _startVoice();
                               }

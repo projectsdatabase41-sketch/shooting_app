@@ -19,7 +19,9 @@ class FanButton extends StatefulWidget {
   final List<FanItem> items;
   /// Если кнопка стоит вне навигатора (поверх всего приложения), веер рисуется в оверлее этого навигатора.
   final GlobalKey<NavigatorState>? navigatorKey;
-  const FanButton({super.key, required this.icon, required this.items, this.tooltip = '', this.navigatorKey});
+  /// Кнопка у левого края: веер раскрывается вправо.
+  final bool mirror;
+  const FanButton({super.key, required this.icon, required this.items, this.tooltip = '', this.navigatorKey, this.mirror = false});
 
   @override
   State<FanButton> createState() => _FanButtonState();
@@ -38,7 +40,7 @@ class _FanButtonState extends State<FanButton> {
   Offset _offsetOf(int i, int n) {
     final deg = n == 1 ? 0.0 : -15 + i * (100 / (n - 1));
     final a = deg * math.pi / 180;
-    return Offset(-_radius * math.sin(a), -_radius * math.cos(a));
+    return Offset((widget.mirror ? 1 : -1) * _radius * math.sin(a), -_radius * math.cos(a));
   }
 
   Offset _centerGlobal() {

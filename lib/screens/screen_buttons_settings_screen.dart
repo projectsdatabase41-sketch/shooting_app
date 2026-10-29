@@ -34,6 +34,30 @@ class ScreenButtonsSettingsScreen extends StatelessWidget {
             ),
           ),
           const Divider(height: 24),
+          Text(tr('Положение кнопки'), style: theme.textTheme.titleSmall),
+          const SizedBox(height: 8),
+          ValueListenableBuilder<bool>(
+            valueListenable: ScreenButtons.left,
+            builder: (_, left, __) => SegmentedButton<bool>(
+              segments: [
+                ButtonSegment(value: false, label: Text(tr('Справа'))),
+                ButtonSegment(value: true, label: Text(tr('Слева'))),
+              ],
+              selected: {left},
+              onSelectionChanged: (s) => ScreenButtons.setLeft(db, s.first),
+            ),
+          ),
+          ValueListenableBuilder<double>(
+            valueListenable: ScreenButtons.bottom,
+            builder: (_, b, __) => Slider(
+              min: 60,
+              max: 400,
+              value: b.clamp(60, 400).toDouble(),
+              onChanged: (v) => ScreenButtons.bottom.value = v.roundToDouble(),
+              onChangeEnd: (v) => ScreenButtons.setBottom(db, v),
+            ),
+          ),
+          const Divider(height: 24),
           Text(tr('Что показывать в веере'), style: theme.textTheme.titleSmall),
           const SizedBox(height: 4),
           ValueListenableBuilder<bool>(
