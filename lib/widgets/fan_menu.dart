@@ -52,7 +52,14 @@ class _FanButtonState extends State<FanButton> {
     _radius = math.max(114, (_itemSize + 6) * (n - 1) / 1.75);
     _entry = OverlayEntry(
       builder: (ctx) => Stack(children: [
-        Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.translucent, onTap: _hide)),
+        // Затемнение вокруг кнопки: пункты веера лучше видны на любом фоне.
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: _hide,
+            child: DecoratedBox(decoration: BoxDecoration(gradient: _shade(ctx))),
+          ),
+        ),
         for (var i = 0; i < n; i++)
           Positioned(
             left: 0,
@@ -72,6 +79,16 @@ class _FanButtonState extends State<FanButton> {
       ]),
     );
     (widget.navigatorKey?.currentState?.overlay ?? Overlay.of(context)).insert(_entry!);
+  }
+
+  RadialGradient _shade(BuildContext ctx) {
+    final size = MediaQuery.sizeOf(ctx);
+    final c = _centerGlobal();
+    return RadialGradient(
+      center: Alignment(c.dx / size.width * 2 - 1, c.dy / size.height * 2 - 1),
+      radius: (_radius + 110) / size.shortestSide,
+      colors: const [Color(0xB3000000), Color(0x00000000)],
+    );
   }
 
   Widget _bubble(BuildContext ctx, FanItem it, bool hot) {

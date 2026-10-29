@@ -445,18 +445,24 @@ class _DemoFeedbackOverlayState extends State<DemoFeedbackOverlay> {
                         child: Text(t.isEmpty ? tr('Говорите…') : t, style: const TextStyle(color: Colors.white)),
                       ),
                     ),
-                  if (single)
-                    GlassCircleButton(
-                      icon: BoldIcon((items.first.child as Icon).icon!),
-                      color: listening ? Colors.redAccent.withValues(alpha: 0.55) : null,
-                      onTap: items.first.onSelect,
-                    )
-                  else
-                    FanButton(
-                      navigatorKey: widget.navigatorKey,
-                      icon: const GlassCircleButton(icon: BoldIcon(Icons.apps)),
-                      items: items,
+                  // Тень под кнопкой: она читается на любом фоне.
+                  DecoratedBox(
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [BoxShadow(color: Color(0x99000000), blurRadius: 22, spreadRadius: 4)],
                     ),
+                    child: single
+                        ? GlassCircleButton(
+                            icon: BoldIcon((items.first.child as Icon).icon!),
+                            color: listening ? Colors.redAccent.withValues(alpha: 0.55) : null,
+                            onTap: items.first.onSelect,
+                          )
+                        : FanButton(
+                            navigatorKey: widget.navigatorKey,
+                            icon: const GlassCircleButton(icon: BoldIcon(Icons.apps)),
+                            items: items,
+                          ),
+                  ),
                 ]),
               ),
             );

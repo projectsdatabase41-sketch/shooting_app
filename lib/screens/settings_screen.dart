@@ -37,7 +37,6 @@ import 'settings_data_screen.dart';
 import 'onboarding_screen.dart';
 import 'settings_modules_screen.dart';
 import 'settings_services_screen.dart';
-import '../services/demo_mode.dart';
 import '../models/chat_contact.dart';
 import '../services/chat_auth_service.dart';
 import '../services/chat_messages_repository.dart';
@@ -165,16 +164,6 @@ class SettingsScreen extends StatelessWidget {
             subtitle: Text(tr('Одна кнопка на всех страницах: из неё веером — отзывы, голос, разделы')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ScreenButtonsSettingsScreen(db: store.db))),
-          ),
-          ValueListenableBuilder<bool>(
-            valueListenable: DemoMode.enabled,
-            builder: (context, on, _) => SwitchListTile(
-              secondary: const Icon(Icons.rate_review_outlined),
-              title: Text(tr('Режим Демо')),
-              subtitle: Text(tr('Кнопка для отзывов на каждой странице')),
-              value: on,
-              onChanged: (v) => DemoMode.set(store.db, v),
-            ),
           ),
           ValueListenableBuilder<int>(
             valueListenable: EconomyMode.revision,

@@ -428,10 +428,13 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
                               ),
                             ),
                           ),
-                          GlassCircleButton(
+                          // Во время записи качество не сменить (камера пересоздаётся) — кнопка гаснет.
+                          Opacity(
+                            opacity: _recording ? 0.35 : 1,
+                            child: GlassCircleButton(
                             size: 52,
                             icon: Text('HD', style: TextStyle(fontWeight: FontWeight.w900, color: _hd ? Theme.of(context).colorScheme.primary : null)),
-                            tooltip: _hd ? tr('Высокое качество включено') : tr('Включить высокое качество (HD)'),
+                            tooltip: _recording ? tr('Качество меняется до начала записи') : _hd ? tr('Высокое качество включено') : tr('Включить высокое качество (HD)'),
                             onTap: _recording
                                 ? null
                                 : () async {
@@ -444,7 +447,7 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
                                     } catch (_) {}
                                     if (mounted) setState(() => _switching = false);
                                   },
-                          ),
+                          )),
                           GlassCircleButton(
                             size: 52,
                             icon: const Icon(Icons.cameraswitch_outlined),
