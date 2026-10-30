@@ -135,7 +135,7 @@ class AppTheme {
   /// умолчанию из палитры выше, ничем не переопределён.
   static ThemeData _build(ColorScheme cs,
       {Color? background, Color? buttonColor, Color? buttonTextColor}) {
-    final base = ThemeData(colorScheme: cs);
+    final base = ThemeData(colorScheme: cs, fontFamily: 'Roboto'); // вшитый шрифт: см. pubspec
     final t = base.textTheme;
 
     // Табличные цифры — чтобы результаты (10.9 / 9.4 / 109.0) не

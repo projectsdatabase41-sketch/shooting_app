@@ -108,6 +108,18 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  # Roboto вшит в приложение: на вебе без него шрифт берётся из интернета (fonts.gstatic.com), и на
+  # телефонах, где он не грузится, вместо цифр и знаков видны квадратики.
+  fonts:
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/Roboto-light.ttf
+          weight: 300
+        - asset: assets/fonts/Roboto-regular.ttf
+        - asset: assets/fonts/Roboto-medium.ttf
+          weight: 500
+        - asset: assets/fonts/Roboto-bold.ttf
+          weight: 700
   assets:
     - lib/db/local_schema.sql
     - lib/db/puls_install.sql

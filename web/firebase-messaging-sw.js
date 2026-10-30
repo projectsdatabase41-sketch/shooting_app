@@ -61,6 +61,19 @@ messaging.onBackgroundMessage((payload) => {
       icon: '/icons/Icon-192.png',
     });
   }
+  // Удалённое сообщение: убираем показанные уведомления этого чата. Safari на iPhone требует показать
+  // уведомление на любой push, иначе рисует «Nexus from Nexus» — показываем пустое и сразу закрываем.
+  if (payload.data && payload.data.type === 'msg_delete') {
+    return (async () => {
+      const cid = payload.data.contact_id;
+      const shown = await self.registration.getNotifications();
+      for (const n of shown) {
+        if (cid && JSON.stringify(n.data || {}).includes(cid)) n.close();
+      }
+      await self.registration.showNotification('Nexus', { tag: 'msg-delete', silent: true });
+      (await self.registration.getNotifications({ tag: 'msg-delete' })).forEach((n) => n.close());
+    })();
+  }
 });
 
 // ---- Кеш тяжёлой статики сборки (CanvasKit ~7 МБ, main.dart.js ~7 МБ,
