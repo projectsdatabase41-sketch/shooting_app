@@ -31,6 +31,49 @@ class DemoMode {
   static void load(LocalDbService db) {
     final rows = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [_key]);
     enabled.value = rows.isNotEmpty && '${rows.first['hex']}' == '1';
+    _initDiagnostics(db);
+  }
+
+  // ── Диагностика: путь по экранам и признак вылета ──────────────────────────
+  static LocalDbService? _db;
+  static final List<String> _crumbs = [];
+  static const _kCrumbs = 'diag_crumbs', _kOpen = 'diag_open';
+
+  static String _get(String k) {
+    final r = _db?.db.select('SELECT hex FROM color_prefs WHERE key = ?', [k]);
+    return r == null || r.isEmpty ? '' : '${r.first['hex']}';
+  }
+
+  static void _put(String k, String v) {
+    try {
+      _db?.db.execute(
+          'INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex', [k, v]);
+    } catch (_) {}
+  }
+
+  /// Запоминает шаг пути (последние 15): уходит вместе с любым отчётом об ошибке и о вылете.
+  static void crumb(String step) {
+    final t = DateTime.now();
+    String two(int n) => n.toString().padLeft(2, '0');
+    _crumbs.add('${two(t.hour)}:${two(t.minute)}:${two(t.second)} $step');
+    if (_crumbs.length > 15) _crumbs.removeAt(0);
+    _put(_kCrumbs, _crumbs.join('\n'));
+  }
+
+  static void _initDiagnostics(LocalDbService db) {
+    if (_db != null) return;
+    _db = db;
+    if (kIsWeb) return; // на вебе вкладку просто закрывают — вылет не определить
+    final crashed = _get(_kOpen) == '1';
+    final trail = _get(_kCrumbs);
+    _put(_kOpen, '1');
+    try {
+      WidgetsBinding.instance.addObserver(_LifeObserver());
+    } catch (_) {}
+    if (crashed) {
+      // Прошлый сеанс оборвался на переднем плане (вылет, нехватка памяти): сообщаем, где это было.
+      Future.delayed(const Duration(seconds: 6), () => sendError('Crash', 'Прошлый сеанс оборвался без выхода', null, '--- путь до вылета ---\n$trail'));
+    }
   }
 
   static void set(LocalDbService db, bool v) {
@@ -199,7 +242,7 @@ class DemoMode {
       screen = screenSnapshot(maxChars: 1000);
     } catch (_) {}
     final text = '[ОШИБКА] $error\nТип: ${error.runtimeType}\nГде: $where'
-        '${extra == null ? '' : '\n$extra'}${st.isEmpty ? '' : '\n--- стек ---\n$st'}${screen.isEmpty ? '' : '\n--- экран ---\n$screen'}';
+        '${extra == null ? '' : '\n$extra'}${_crumbs.isEmpty || where == 'Crash' ? '' : '\n--- путь ---\n${_crumbs.join('\n')}'}${st.isEmpty ? '' : '\n--- стек ---\n$st'}${screen.isEmpty ? '' : '\n--- экран ---\n$screen'}';
     final client = http.Client();
     try {
       final res = await _post(client, {
@@ -252,6 +295,18 @@ class DemoMode {
   }
 }
 
+/// Ставит признак «приложение открыто» на переднем плане: если он остался при следующем запуске — был вылет.
+class _LifeObserver with WidgetsBindingObserver {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      DemoMode._put(DemoMode._kOpen, '1');
+    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+      DemoMode._put(DemoMode._kOpen, '0');
+    }
+  }
+}
+
 /// Следит за стеком маршрутов, чтобы знать, какая страница сейчас сверху.
 class DemoRouteObserver extends NavigatorObserver {
   DemoRouteObserver._();
@@ -268,7 +323,15 @@ class DemoRouteObserver extends NavigatorObserver {
   }
 
   @override
-  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) => _stack.add(route);
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    _stack.add(route);
+    // Название страницы читаем после первого кадра: до него заголовка ещё нет.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        DemoMode.crumb(DemoMode.currentPage());
+      } catch (_) {}
+    });
+  }
 
   @override
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) => _stack.remove(route);
