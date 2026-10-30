@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../i18n/i18n.dart';
+import '../services/ai_settings.dart';
 import '../services/local_db_service.dart';
 import '../voice/voice_control.dart';
 import '../widgets/glass_pill.dart';
@@ -50,6 +51,8 @@ class _VoiceSettingsScreenState extends State<VoiceSettingsScreen> {
             tr('«Открой настройки / финалы / мессенджер / статистику», «Начать тренировку», «Пауза», «Продолжить», «Завершить тренировку», «Отмени последний выстрел», «Режим концентрации», «Заметка …» (текст сохранится как заметка к выстрелу), «Готов» (в финале), «Назад».'),
             style: theme.textTheme.bodySmall,
           ),
+          // Только со своим ключом: встроенные ключи общие и ограничены, на голос их не тратим.
+          if (AiSettings(widget.db).hasOwnKey) ...[
           const Divider(height: 32),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
@@ -67,6 +70,7 @@ class _VoiceSettingsScreenState extends State<VoiceSettingsScreen> {
               decoration: InputDecoration(labelText: tr('Модель помощника (пусто — автоматически)'), hintText: 'auto'),
               onChanged: (v) => VoiceSettings.setModel(widget.db, v),
             ),
+          ],
         ],
       ),
     );

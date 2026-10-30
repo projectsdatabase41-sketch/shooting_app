@@ -90,7 +90,7 @@ class _VoiceOverlayState extends State<VoiceOverlay> {
     var byAi = false;
     // Грамматика не поняла — ИИ-помощник (отдельная модель) выбирает действие из закрытого списка.
     final db = VoiceSettings.db;
-    if (intent == null && db != null && VoiceSettings.aiOn(db)) {
+    if (intent == null && db != null && VoiceSettings.aiOn(db) && AiSettings(db).hasOwnKey) {
       intent = await VoiceAi(AiService(AiSettings(db)))
           .interpret(phrase, mode: mode);
       byAi = intent != null;
