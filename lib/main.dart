@@ -25,6 +25,7 @@ import 'services/ai_service.dart';
 import 'services/ai_settings.dart';
 import 'services/call_session.dart';
 import 'services/chat_auth_service.dart';
+import 'services/user_call_channel.dart';
 import 'services/chat_messages_repository.dart';
 import 'services/chat_preferences.dart';
 import 'services/chat_sync_service.dart';
@@ -244,6 +245,7 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
     pushTaskTapHandler = _openTaskFromPush;
     _registerTaskPush();
     incomingCallHandler = _openIncomingCall;
+    _listenForCalls();
     incomingCallEndHandler = (callId) {
       final c = CallSession.current;
       if (c != null && c.callId == callId) c.cancelledByCaller();
@@ -290,10 +292,14 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
   /// локально (см. `ChatSyncService.pollIncoming`), иначе для чужого
   /// открылся бы список контактов вместо самой переписки.
   /// Входящий звонок (push или кнопка «Принять» в уведомлении).
+  final Set<String> _seenCalls = {};
+
   void _openIncomingCall(Map<String, dynamic> data, {required bool accepted}) {
     final nav = navigatorKey.currentState;
     final auth = ChatAuthService(widget.db);
     if (nav == null || !auth.isSignedIn) return;
+    // Один и тот же звонок мог прийти и push-ом, и по личному каналу — экран открываем один раз.
+    if (!accepted && !_seenCalls.add('${data['call_id']}')) return;
     final busy = CallSession.current;
     if (busy != null) {
       if (busy.callId == data['call_id'])
@@ -393,8 +399,26 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
   /// файл сам.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) return;
+    if (state == AppLifecycleState.resumed) {
+      _listenForCalls();
+      return;
+    }
+    if (state == AppLifecycleState.paused) UserCallChannel.stop(); // в фоне звонок придёт push-ом
     widget.db.flush();
+  }
+
+  /// Личный канал входящих звонков (без push): работает, пока приложение открыто.
+  void _listenForCalls() {
+    final auth = ChatAuthService(widget.db);
+    if (!auth.isSignedIn || !ModulesSettings.isOn(widget.db, AppModule.messenger)) return;
+    UserCallChannel.start(auth, (p) {
+      _openIncomingCall({
+        'call_id': '${p['callId']}',
+        'from': '${p['from']}',
+        'name': '${p['name'] ?? ''}',
+        'video': p['video'] == true ? '1' : '0',
+      }, accepted: false);
+    });
   }
 
   @override

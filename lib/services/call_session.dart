@@ -1,3 +1,4 @@
+import 'user_call_channel.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -229,13 +230,14 @@ class CallSession extends ChangeNotifier {
       _viaLive = false;
       await _openRoom();
       _set(CallState.calling);
-      final delivered = await _service.ring(callId: callId, to: peerId, name: auth.nickname, video: video);
-      if (delivered == 0) {
-        _fail('NO_DEVICE', 'ring delivered=0 (у собеседника нет зарегистрированного устройства с push)');
-        _end(tr('{peerName} сейчас недоступен — нет устройства с приложением', {'peerName': peerName}), outcome: 'failed');
-        return;
-      }
-      _ringTimeout = Timer(ringTimeout, () {
+      final noPush = await _ringServer();
+      _ringTimeout = Timer(noPush ? const Duration(seconds: 25) : ringTimeout, () {
+        if (noPush && state == CallState.calling) {
+          _fail('NO_DEVICE', 'push delivered=0, личный канал не ответил (у собеседника нет push, приложение закрыто)');
+          _service.cancel(callId: callId, to: peerId);
+          _end(tr('{peerName} сейчас недоступен — нет устройства с приложением', {'peerName': peerName}), outcome: 'failed');
+          return;
+        }
         if (state == CallState.calling) {
           _service.cancel(callId: callId, to: peerId);
           _end(tr('Не отвечает'), outcome: 'missed');
@@ -247,16 +249,31 @@ class CallSession extends ChangeNotifier {
     }
   }
 
+  /// Звоним через сервер: push и одновременно личный канал собеседника (для тех, у кого push нет).
+  /// `true` — push никуда не ушёл: ждём ответа по каналу недолго, потом «недоступен».
+  Future<bool> _ringServer() async {
+    final results = await Future.wait([
+      _service.ring(callId: callId, to: peerId, name: auth.nickname, video: video),
+      UserCallChannel.ring(auth, peerId, callId: callId, name: auth.nickname, video: video),
+    ]);
+    return (results[0] as int) == 0;
+  }
+
   /// Собеседник не откликнулся по каналу переписки — звоним через сервер.
   Future<void> _fallbackToServer() async {
     if (state != CallState.calling || !_viaLive) return;
     _viaLive = false;
     try {
       await _openRoom();
-      final delivered = await _service.ring(callId: callId, to: peerId, name: auth.nickname, video: video);
-      if (delivered == 0) {
-        _fail('NO_DEVICE', 'ring delivered=0 (у собеседника нет зарегистрированного устройства с push)');
-        _end(tr('{peerName} сейчас недоступен — нет устройства с приложением', {'peerName': peerName}), outcome: 'failed');
+      final noPush = await _ringServer();
+      if (noPush) {
+        _ringTimeout?.cancel();
+        _ringTimeout = Timer(const Duration(seconds: 25), () {
+          if (state != CallState.calling) return;
+          _fail('NO_DEVICE', 'push delivered=0, личный канал не ответил (у собеседника нет push, приложение закрыто)');
+          _service.cancel(callId: callId, to: peerId);
+          _end(tr('{peerName} сейчас недоступен — нет устройства с приложением', {'peerName': peerName}), outcome: 'failed');
+        });
       }
     } catch (e) {
       _fail('EXC_${e.runtimeType}', e);
