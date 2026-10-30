@@ -36,9 +36,9 @@ class _FanButtonState extends State<FanButton> {
   Offset _start = Offset.zero;
   bool _dragged = false, _wasOpen = false;
 
-  /// Смещение пункта [i] от центра кнопки: дуга от «чуть правее вверх» до «влево».
+  /// Смещение пункта [i] от центра кнопки: дуга от «11 часов» до «7 часов».
   Offset _offsetOf(int i, int n) {
-    final deg = n == 1 ? 0.0 : -15 + i * (100 / (n - 1));
+    final deg = n == 1 ? 60.0 : 20 + i * (120 / (n - 1)); // от «11 часов» до «7 часов», всё в стороне от края
     final a = deg * math.pi / 180;
     return Offset((widget.mirror ? 1 : -1) * _radius * math.sin(a), -_radius * math.cos(a));
   }
@@ -50,8 +50,8 @@ class _FanButtonState extends State<FanButton> {
 
   void _show() {
     final n = widget.items.length;
-    // Много пунктов — дуга шире, чтобы кнопки не налезали друг на друга (дуга 100° ≈ 1,75 рад).
-    _radius = math.max(114, (_itemSize + 6) * (n - 1) / 1.75);
+    // Много пунктов — дуга шире, чтобы кнопки не налезали друг на друга (дуга 120° ≈ 2,09 рад).
+    _radius = math.max(114, (_itemSize + 6) * (n - 1) / 2.09);
     _entry = OverlayEntry(
       builder: (ctx) => Stack(children: [
         // Затемнение вокруг кнопки: пункты веера лучше видны на любом фоне.

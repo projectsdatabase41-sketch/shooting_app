@@ -25,8 +25,15 @@ Future<CommonDatabase> openAppDatabase({String? overridePath}) async {
 
   // Виртуальная файловая система поверх IndexedDB. `dbName` — имя
   // хранилища в браузере, а не имя файла базы внутри него.
-  _fileSystem = await IndexedDbFileSystem.open(dbName: 'shooting_app');
-  sqlite.registerVirtualFileSystem(_fileSystem!, makeDefault: true);
+  // На части iPhone (Safari, приватный режим, мало места) IndexedDB зависает или отказывает —
+  // тогда работаем в памяти: данные не сохранятся между запусками, зато приложение откроется.
+  try {
+    _fileSystem = await IndexedDbFileSystem.open(dbName: 'shooting_app').timeout(const Duration(seconds: 12));
+    sqlite.registerVirtualFileSystem(_fileSystem!, makeDefault: true);
+  } catch (_) {
+    _fileSystem = null;
+    sqlite.registerVirtualFileSystem(InMemoryFileSystem(), makeDefault: true);
+  }
 
   return sqlite.open(overridePath ?? '/shooting_app.sqlite3');
 }

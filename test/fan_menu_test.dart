@@ -59,7 +59,6 @@ void main() {
     await tester.pump();
     final f = tester.getCenter(find.text('F'));
     expect(f.dx, greaterThan(c.dx + 50)); // последний пункт — справа
-    expect(f.dy, lessThan(c.dy));
     // 6 пунктов не налезают друг на друга
     final a = tester.getCenter(find.text('A')), b = tester.getCenter(find.text('B'));
     expect((a - b).distance, greaterThanOrEqualTo(50));
