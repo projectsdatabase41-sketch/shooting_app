@@ -84,7 +84,7 @@ Future<void> main() async {
     DemoMode.sendError('Uncaught', e, st);
     return true;
   };
-  friendlyErrorReporter = (e) => DemoMode.sendError('handled', e);
+  friendlyErrorReporter = (e) => DemoMode.sendError('handled', e, StackTrace.current);
   final db = LocalDbService();
   try {
     // На вебе открытие идёт через IndexedDB + wasm-сборку sqlite (см.
