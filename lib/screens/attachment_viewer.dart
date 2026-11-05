@@ -7,6 +7,8 @@ import '../i18n/i18n.dart';
 import '../logic/chat_media_utils.dart';
 import '../widgets/file_chip.dart';
 import '../widgets/glass_pill.dart';
+import '../widgets/voice_bubble.dart' show MediaSource;
+import 'audio_player_screen.dart';
 import 'pdf_viewer_screen.dart';
 import 'photo_viewer_screen.dart';
 
@@ -21,16 +23,31 @@ class AttachmentViewer {
   };
   static const _imageExt = {'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'};
 
+  /// Аудиофайлы играем сами: mp3 из переписки раньше уходил в «этот тип
+  /// файла нельзя показать внутри приложения» (отзыв от 02.11.2026).
+  static const _audioExt = {
+    'mp3', 'wav', 'm4a', 'aac', 'ogg', 'oga', 'opus', 'flac', 'amr', 'wma', '3gp',
+  };
+
   static String _ext(String name) {
     final dot = name.lastIndexOf('.');
     return dot < 0 ? '' : name.substring(dot + 1).toLowerCase();
   }
 
-  /// Какой просмотрщик подойдёт: image | pdf | text | other.
+  /// Это аудиофайл (по расширению или MIME).
+  static bool isAudio(String name, String? mime) {
+    final m = mime?.toLowerCase() ?? '';
+    if (m.startsWith('audio/')) return true;
+    // Видео с контейнером 3gp/oga иногда приходит как audio/* — не мешаем.
+    return _audioExt.contains(_ext(name));
+  }
+
+  /// Какой просмотрщик подойдёт: image | pdf | text | audio | other.
   static String kindOf(String name, String? mime) {
     final e = _ext(name);
     if (_imageExt.contains(e) || (mime?.startsWith('image/') ?? false)) return 'image';
     if (e == 'pdf' || mime == 'application/pdf') return 'pdf';
+    if (isAudio(name, mime)) return 'audio';
     if (_textExt.contains(e) || (mime?.startsWith('text/') ?? false)) return 'text';
     return 'other';
   }
@@ -43,6 +60,12 @@ class AttachmentViewer {
       case 'pdf':
         await Navigator.of(context)
             .push(MaterialPageRoute(builder: (_) => PdfViewerScreen(bytes: bytes, fileName: name)));
+      case 'audio':
+        await Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => AudioPlayerScreen(
+                name: name,
+                size: bytes.length,
+                load: () async => MediaSource(bytes: bytes, mime: mime ?? 'audio/mpeg'))));
       case 'text':
         await Navigator.of(context)
             .push(MaterialPageRoute(builder: (_) => _TextViewerScreen(name: name, bytes: bytes, mime: mime)));

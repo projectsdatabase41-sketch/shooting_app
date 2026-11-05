@@ -41,6 +41,8 @@ import '../widgets/file_chip.dart';
 import '../widgets/photo_stack.dart';
 import 'photo_gallery_screen.dart';
 import '../widgets/voice_bubble.dart';
+import '../widgets/audio_file_bubble.dart';
+import 'audio_player_screen.dart';
 import 'circle_recorder_screen.dart';
 import '../widgets/reaction_bar.dart';
 import 'attachment_viewer.dart';
@@ -529,6 +531,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _pollLoop?.stop();
     _stopLive();
     _flushTranslations?.cancel();
+    _flashTimer?.cancel();
     _voiceTimer?.cancel();
     _voice.dispose();
     _input.dispose();
@@ -851,6 +854,43 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         alignment: 0.3,
         duration: const Duration(milliseconds: 250),
         curve: Curves.easeOut);
+  }
+
+  // ---- Переход к оригиналу ответа ----
+  /// Сообщение, которое сейчас подсвечено после перехода (короткая вспышка,
+  /// чтобы было видно, к чему привела прокрутка).
+  String? _flashId;
+  Timer? _flashTimer;
+
+  /// Тап по цитате в пузыре: прокрутить ленту к оригиналу и подсветить его.
+  ///
+  /// Оригинал ищется по [ChatMessage.clientMessageId] — именно он хранится в
+  /// цитате (`reply_to_client_message_id`), потому что id строки у отправителя
+  /// и получателя разные.
+  void _goToOriginal(ChatMessage message) {
+    final target = message.replyToClientMessageId;
+    if (target == null || target.isEmpty) return;
+    final idx = _messages.indexWhere((m) => m.clientMessageId == target);
+    if (idx < 0) {
+      // Оригинал мог быть удалён или ещё не подгружен (история живёт локально).
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
+          content: Text(tr('Исходное сообщение не найдено')),
+          duration: const Duration(seconds: 2)));
+      return;
+    }
+    final id = _messages[idx].id;
+    if (_itemCtl.isAttached) {
+      _itemCtl.scrollTo(
+          index: _messages.length - 1 - idx,
+          alignment: 0.35,
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.easeOutCubic);
+    }
+    _flashTimer?.cancel();
+    setState(() => _flashId = id);
+    _flashTimer = Timer(const Duration(milliseconds: 1600), () {
+      if (mounted) setState(() => _flashId = null);
+    });
   }
 
   /// Листание вариантов: [older] — к более старому совпадению.
@@ -2310,6 +2350,25 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return null;
   }
 
+  /// Полноэкранный плеер для аудиофайла из переписки: мини-плеер в пузыре
+  /// остаётся для быстрого прослушивания, а длинную запись удобнее вести
+  /// слайдером и на скорости.
+  Future<void> _openAudioFull(ChatMessage m) async {
+    final src = await _mediaSource(m);
+    if (!mounted) return;
+    if (src == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(tr('Не удалось получить файл'))));
+      return;
+    }
+    await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => AudioPlayerScreen(
+              name: m.attachmentName ?? tr('Запись'),
+              size: m.attachmentSize,
+              load: () async => src,
+            )));
+  }
+
   /// Панель записи голосового вместо строки ввода: отмена, время, отправка.
   Widget _voiceBar(ColorScheme cs) => Row(
         children: [
@@ -3082,7 +3141,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         child: GestureDetector(
           onTap: _selecting ? () => _toggleSelect(m.id) : null,
           onLongPress: () => _toggleSelect(m.id),
-          child: Container(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeOut,
             padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
               color: selected
@@ -3090,6 +3151,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                       .colorScheme
                       .primary
                       .withValues(alpha: 0.15)
+                  // После перехода к оригиналу ответа пузырь коротко светится:
+                  // прокрутка без вспышки не отвечает на вопрос «а какой это был».
+                  : (_flashId == m.id
+                      ? Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withValues(alpha: 0.18)
+                      : null),
+              border: _flashId == m.id
+                  ? Border.all(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withValues(alpha: 0.45))
                   : null,
               borderRadius: BorderRadius.circular(16),
             ),
@@ -3113,6 +3188,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   onAckCall: () => _ackCall(m),
                   onCancelCall: () => _cancelCall(m),
                   onOpenFile: () => _openAttachment(m),
+                  onOpenAudio: () => _openAudioFull(m),
+                  onTapReply: () => _goToOriginal(m),
                   photos: _photos,
                   onLoadMedia: () => _mediaSource(m),
                   onSave: () => _saveAttachment(m),
@@ -3186,6 +3263,12 @@ class _Bubble extends StatelessWidget {
   final VoidCallback onCancelCall;
   final VoidCallback onOpenFile;
 
+  /// Тап по цитате ответа — перейти к оригиналу (прокрутка + подсветка).
+  final VoidCallback onTapReply;
+
+  /// Открыть аудиофайл в полноэкранном плеере (скорость, слайдер).
+  final VoidCallback onOpenAudio;
+
   /// Все фото переписки — для листания в полноэкранном просмотре.
   final List<ChatMessage> photos;
 
@@ -3218,6 +3301,8 @@ class _Bubble extends StatelessWidget {
     required this.onAckCall,
     required this.onCancelCall,
     required this.onOpenFile,
+    required this.onTapReply,
+    required this.onOpenAudio,
     this.photos = const [],
     required this.onLoadMedia,
     required this.onSave,
@@ -3308,21 +3393,26 @@ class _Bubble extends StatelessWidget {
             ),
           ),
         if (message.replyToPreview != null) ...[
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            margin: const EdgeInsets.only(bottom: 6),
-            decoration: BoxDecoration(
-              color: fg.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(8),
-              border: Border(
-                  left: BorderSide(color: fg.withValues(alpha: 0.5), width: 3)),
-            ),
-            child: Text(
-              message.replyToPreview!,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: fg.withValues(alpha: 0.85)),
+          // Тап по цитате — переход к оригиналу (прокрутка + подсветка).
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTapReply,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              margin: const EdgeInsets.only(bottom: 6),
+              decoration: BoxDecoration(
+                color: fg.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+                border: Border(
+                    left: BorderSide(color: fg.withValues(alpha: 0.5), width: 3)),
+              ),
+              child: Text(
+                message.replyToPreview!,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: fg.withValues(alpha: 0.85)),
+              ),
             ),
           ),
         ],
@@ -3353,26 +3443,51 @@ class _Bubble extends StatelessWidget {
           ),
           const SizedBox(height: 4),
         ] else if (!isImage && message.type == ChatMessageType.file) ...[
-          // Ярлык файла: расширение на кнопке, название снизу. Нажатие
-          // открывает файл внутри приложения (большой файл с сервера при
-          // первом нажатии скачивается незаметно). Кнопка «Загрузить»
-          // (сохранить в папку Nexus) показывается один раз.
-          FileChip(
-            name: message.attachmentName ?? tr('Файл'),
-            size: message.attachmentSize,
-            fg: fg,
-            remote: message.attachmentBase64 == null &&
-                message.attachmentLocalPath == null &&
-                message.driveFileId != null,
-            busy: downloading,
-            onSave: !mine &&
-                    !saved &&
-                    (message.attachmentBase64 != null ||
-                        message.attachmentLocalPath != null)
-                ? onSave
-                : null,
-            onTap: onOpenFile,
-          ),
+          // Аудиофайл — маленький плеер прямо в пузыре (отзыв 02.11.2026:
+          // присланный mp3 не открывался и уходил в «неизвестный файл»).
+          if (AttachmentViewer.isAudio(
+              message.attachmentName ?? '', message.attachmentMime))
+            AudioFileBubble(
+              name: message.attachmentName ?? tr('Запись'),
+              size: message.attachmentSize,
+              fg: fg,
+              mine: mine,
+              remote: message.attachmentBase64 == null &&
+                  message.attachmentLocalPath == null &&
+                  message.driveFileId != null,
+              busy: downloading,
+              load: onLoadMedia,
+              onOpenFull: onOpenAudio,
+              // «Скачать» — и для своих тоже: файл уходит в «Загрузки»
+              // устройства, откуда его видно другим приложениям.
+              onSave: !saved &&
+                      (message.attachmentBase64 != null ||
+                          message.attachmentLocalPath != null)
+                  ? onSave
+                  : null,
+              saved: saved,
+            )
+          else
+            // Ярлык файла: расширение на кнопке, название снизу. Нажатие
+            // открывает файл внутри приложения (большой файл с сервера при
+            // первом нажатии скачивается незаметно). Кнопка «Загрузить»
+            // (сохранить в папку Nexus) показывается один раз.
+            FileChip(
+              name: message.attachmentName ?? tr('Файл'),
+              size: message.attachmentSize,
+              fg: fg,
+              remote: message.attachmentBase64 == null &&
+                  message.attachmentLocalPath == null &&
+                  message.driveFileId != null,
+              busy: downloading,
+              onSave: !mine &&
+                      !saved &&
+                      (message.attachmentBase64 != null ||
+                          message.attachmentLocalPath != null)
+                  ? onSave
+                  : null,
+              onTap: onOpenFile,
+            ),
           // Передача напрямую (P2P): полоса прогресса под файлом.
           ValueListenableBuilder<Map<String, double>>(
             valueListenable: ChatSyncService.uploadProgress,

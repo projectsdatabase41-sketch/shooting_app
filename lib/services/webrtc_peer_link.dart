@@ -1,3 +1,4 @@
+import 'demo_mode.dart';
 import 'dart:async';
 
 import 'package:flutter_webrtc/flutter_webrtc.dart';
@@ -48,6 +49,11 @@ class WebRtcPeerLink implements PeerLink {
   void Function(String data)? _onMessage;
   Timer? _timeout;
 
+  // Диагностика: почему P2P не поднялся (уходит в отзывы, если соединение так и не открылось).
+  bool _everOpen = false;
+  final List<String> _diag = [];
+  final Map<String, int> _cands = {};
+
   @override
   bool get isOpen => !_closed && _dc?.state == RTCDataChannelState.RTCDataChannelOpen;
 
@@ -63,15 +69,23 @@ class WebRtcPeerLink implements PeerLink {
   @override
   Future<void> start({required bool initiator}) async {
     try {
+      final ice = await _ice();
+      _diag.add('ice=${ice.map((e) {
+        final u = e['urls'];
+        return (u is List ? u : [u]).map((x) => '$x'.split(':').first).toSet().join('+');
+      }).join(',')} initiator=$initiator');
       final pc = await createPeerConnection({
-        'iceServers': await _ice(),
+        'iceServers': ice,
       });
       _pc = pc;
       pc.onIceCandidate = (c) {
         if (c.candidate == null || _closed) return;
+        final m = RegExp(r' typ (\w+)').firstMatch(c.candidate!);
+        if (m != null) _cands[m.group(1)!] = (_cands[m.group(1)] ?? 0) + 1;
         _onSignal?.call({'kind': 'ice', 'candidate': c.candidate, 'sdpMid': c.sdpMid, 'sdpMLineIndex': c.sdpMLineIndex});
       };
       pc.onConnectionState = (s) {
+        _diag.add('conn=${s.name}');
         if (s == RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
             s == RTCPeerConnectionState.RTCPeerConnectionStateClosed ||
             s == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
@@ -90,7 +104,8 @@ class WebRtcPeerLink implements PeerLink {
       } else {
         pc.onDataChannel = _attach;
       }
-    } catch (_) {
+    } catch (e) {
+      _diag.add('exc=$e');
       close();
     }
   }
@@ -98,6 +113,7 @@ class WebRtcPeerLink implements PeerLink {
   void _attach(RTCDataChannel dc) {
     _dc = dc;
     dc.onDataChannelState = (st) {
+      if (st == RTCDataChannelState.RTCDataChannelOpen) _everOpen = true;
       if (st == RTCDataChannelState.RTCDataChannelOpen || st == RTCDataChannelState.RTCDataChannelClosed) {
         _onState?.call();
       }
@@ -160,6 +176,11 @@ class WebRtcPeerLink implements PeerLink {
     if (_closed) return;
     _closed = true;
     _timeout?.cancel();
+    if (!_everOpen) {
+      DemoMode.sendError('P2P failed', 'прямое соединение не поднялось', null,
+          '${_diag.join(' ')} '
+          'кандидаты: ${_cands.isEmpty ? 'нет' : _cands.entries.map((e) => '${e.key}:${e.value}').join(' ')}');
+    }
     try {
       _dc?.close();
       _pc?.close();
