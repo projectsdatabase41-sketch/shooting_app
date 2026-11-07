@@ -11,7 +11,10 @@ enum AppModule {
   services('module_services'),
   finals('module_finals'),
   notes('module_notes'),
-  drive('module_drive');
+  drive('module_drive'),
+  // Просмотр STEP/GLB: сама страница вьюера лежит в web/viewer и
+  // публикуется вместе с сайтом, модуль лишь открывает её вкладкой.
+  viewer('module_viewer');
 
   final String key;
   const AppModule(this.key);

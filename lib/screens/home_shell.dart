@@ -1,4 +1,5 @@
 import '../gdrive/gdrive_screen.dart';
+import '../viewer/step_viewer_screen.dart';
 import 'dart:async' show Timer;
 import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
@@ -161,6 +162,7 @@ class _HomeShellState extends State<HomeShell> {
       if (!on(AppModule.assistant)) 'assistant',
       if (!on(AppModule.messenger)) 'messenger',
       if (!on(AppModule.drive)) 'drive',
+      if (!on(AppModule.viewer)) 'viewer',
       if (!on(AppModule.notes)) 'notes',
       // Финалы — только в режиме разработчика и при включённом модуле.
       if (!on(AppModule.finals)) 'finals',
@@ -293,6 +295,7 @@ class _HomeShellState extends State<HomeShell> {
       'notes' => const CoachDiaryNotesScreen(),
       'finals' => const FinalsScreen(),
       'drive' => const GDriveScreen(),
+      'viewer' => const StepViewerScreen(),
       'messenger' => ChatHomeScreen(
           onClose: null),
       _ => SettingsScreen(homeTabs: tabs, services: _services),

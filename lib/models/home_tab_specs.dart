@@ -27,6 +27,7 @@ const allTabIds = [
   'finals', // модуль «Финалы» (режим разработчика)
   'messenger', // модуль «Мессенджер»
   'drive', // модуль «Google Диск»
+  'viewer', // модуль «3D-модели» (просмотр STEP/GLB)
   'settings',
 ];
 
@@ -60,6 +61,8 @@ const Map<String, HomeTabSpec> homeTabSpecs = {
       HomeTabSpec(icon: Icons.forum_outlined, label: /*tr*/ 'Мессенджер'),
   'drive':
       HomeTabSpec(icon: Icons.cloud_outlined, label: /*tr*/ 'Google Диск'),
+  'viewer':
+      HomeTabSpec(icon: Icons.view_in_ar_outlined, label: /*tr*/ '3D-модели'),
   'settings':
       HomeTabSpec(icon: Icons.settings_outlined, label: /*tr*/ 'Настройки'),
 };

@@ -47,6 +47,7 @@ class _SettingsModulesScreenState extends State<SettingsModulesScreen> {
         'notes' => AppModule.notes,
         'finals' => AppModule.finals,
         'drive' => AppModule.drive,
+        'viewer' => AppModule.viewer,
         _ => null,
       };
 

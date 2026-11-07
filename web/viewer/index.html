@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>STEP Viewer</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230e1219'/%3E%3Cpath d='M9 21.5 16 7l7 14.5' stroke='%234c8dff' stroke-width='2.6' fill='none' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="./styles.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three.module.js",
+    "three/addons/": "./vendor/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+
+<div id="viewport"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <span class="brand-name">STEP&nbsp;Viewer</span>
+  </div>
+
+  <div class="toolbar" role="toolbar" aria-label="Управление просмотром">
+    <button id="open-btn" class="btn btn-primary" type="button">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h2.7l1.2 1.6h4.6A1.5 1.5 0 0 1 13.5 6v5.5A1.5 1.5 0 0 1 12 13H3.5A1.5 1.5 0 0 1 2 11.5v-7Z"/></svg>
+      Открыть STEP
+    </button>
+    <input id="file-input" type="file" accept=".stp,.step,.glb,.gltf,application/step,model/gltf-binary,text/plain" hidden>
+
+    <span class="sep" aria-hidden="true"></span>
+
+    <div class="segmented" role="group" aria-label="Ракурс">
+      <button class="btn btn-seg is-on" data-view="iso" type="button" title="Изометрия (1)">Изо</button>
+      <button class="btn btn-seg" data-view="front" type="button" title="Спереди (2)">Спереди</button>
+      <button class="btn btn-seg" data-view="top" type="button" title="Сверху (3)">Сверху</button>
+      <button class="btn btn-seg" data-view="right" type="button" title="Справа (4)">Справа</button>
+    </div>
+
+    <span class="sep" aria-hidden="true"></span>
+
+    <button id="fit-btn" class="btn" type="button" title="Подогнать под экран (F)">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V3.5A1.5 1.5 0 0 1 3.5 2H6M10 2h2.5A1.5 1.5 0 0 1 14 3.5V6M14 10v2.5a1.5 1.5 0 0 1-1.5 1.5H10M6 14H3.5A1.5 1.5 0 0 1 2 12.5V10"/></svg>
+      Подогнать
+    </button>
+    <button id="edges-btn" class="btn is-on" type="button" title="Показывать рёбра (E)">Рёбра</button>
+    <button id="theme-btn" class="btn" type="button" title="Светлый / тёмный фон (T)">Фон</button>
+  </div>
+</header>
+
+<aside id="info" class="info is-empty" aria-live="polite">
+  <div id="info-title" class="info-title">Модель не загружена</div>
+  <div id="info-stats" class="info-stats">Откройте .stp / .step / .glb файл</div>
+</aside>
+
+<div class="hint">
+  <span><b>ЛКМ</b> — вращать</span>
+  <span><b>ПКМ / wheel‑клик</b> — панорама</span>
+  <span><b>Колесо</b> — масштаб</span>
+  <span><b>F</b> — подогнать</span>
+</div>
+
+<div id="empty" class="empty">
+  <div class="empty-card">
+    <div class="empty-title">Откройте STEP‑файл</div>
+    <div id="empty-sub" class="empty-sub">Кнопка «Открыть STEP» или перетащите файл (.stp / .step / .glb) — всё обрабатывается локально, на устройстве</div>
+    <div class="empty-samples">
+      <span>Посмотреть на примере:</span>
+      <button class="chip" data-sample="samples/as1_pe_203.stp" type="button">Сборка (STEP)</button>
+      <button class="chip" data-sample="samples/as1_pe_203.glb" type="button">Сборка (GLB)</button>
+      <button class="chip" data-sample="samples/rounded-cube.stp" type="button">Кубик со скруглениями</button>
+      <button class="chip" data-sample="samples/dm1-oc-214.stp" type="button">Деталь</button>
+    </div>
+  </div>
+</div>
+
+<div id="overlay" class="overlay" hidden>
+  <div class="overlay-box">
+    <div class="spinner" aria-hidden="true"></div>
+    <div id="overlay-text" class="overlay-text">Читаю STEP…</div>
+    <div id="overlay-sub" class="overlay-sub"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<div id="drop-hint" class="drop-hint"><div>Отпустите файл, чтобы открыть</div></div>
+
+<script src="./vendor/occt-import-js.js"></script>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
