@@ -1,4 +1,5 @@
 import '../logic/friendly_error.dart';
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -62,7 +63,7 @@ List<HoleCandidate> _detectInIsolate(_DetectArgs args) {
 
 class _CalibArgs {
   final GrayImage image;
-  final double bullseyeToFaceRatio;
+  final double? bullseyeToFaceRatio;
   final List<double> ringRadiiMm;
   final double faceRadiusMm;
   const _CalibArgs({
@@ -137,6 +138,7 @@ class _PhotoScanScreenState extends State<PhotoScanScreen>
 
   @override
   void dispose() {
+    _calibDebounce?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -158,6 +160,9 @@ class _PhotoScanScreenState extends State<PhotoScanScreen>
   double _calibRx = 0;
   double _calibRy = 0;
   double _calibAngle = 0;
+
+  /// Пересчёт пробоин после правки контура — с паузой, см. `_onCalibrationChanged`.
+  Timer? _calibDebounce;
 
   // Кандидаты текущего фото — тоже в координатах исходного фото.
   List<Offset> _candidates = [];
@@ -261,8 +266,12 @@ class _PhotoScanScreenState extends State<PhotoScanScreen>
       _detectCircleInIsolate,
       _CalibArgs(
         image: analyzed.image,
-        bullseyeToFaceRatio:
-            widget.face.faceRadiusMm / widget.face.bullseyeRadiusMm,
+        // У некоторых мишеней яблока в модели нет (диаметр 0) — отношение
+        // дало бы бесконечность и уронило разбор. Пусть решает детект по
+        // краю бланка, без подсказки про яблоко.
+        bullseyeToFaceRatio: widget.face.bullseyeRadiusMm > 0
+            ? widget.face.faceRadiusMm / widget.face.bullseyeRadiusMm
+            : null,
         ringRadiiMm: widget.face.ringRadiiMm,
         faceRadiusMm: widget.face.faceRadiusMm,
       ),
@@ -300,6 +309,13 @@ class _PhotoScanScreenState extends State<PhotoScanScreen>
     final decoded = _decoded;
     final center = _calibCenter;
     if (decoded == null || center == null) return;
+    // Мишени без калибра (IPSC: «попал в зону») фото-разбором не меряются:
+    // окно ожидаемого размера пробоины вышло бы пустым, и детектор не
+    // нашёл бы ничего вообще.
+    if (widget.face.caliberMm <= 0) {
+      setState(() => _error = tr('Для этой мишени определение пробоин по фото не работает — добавьте точки вручную.'));
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -308,8 +324,30 @@ class _PhotoScanScreenState extends State<PhotoScanScreen>
       final analyzed = ShotPhotoService.analyze(decoded);
       final s = analyzed.scale;
       final scaledCenter = PixelPoint(center.dx * s, center.dy * s);
-      final scaledRx = _calibRx * s;
-      final scaledRy = _calibRy * s;
+      var scaledRx = _calibRx * s;
+      var scaledRy = _calibRy * s;
+      // Шкала мм↔пиксели уточняется по печатным кольцам на КАЖДОМ запуске,
+      // а не только в авто-калибровке. Контур формально означает радиус
+      // бланка, но человек (и авто-детект) обводит внешнее печатное кольцо:
+      // у № 8 это 22.75 мм против 40 мм — ошибка в 1.76 раза. Без этой
+      // поправки калибр пробоины и окно её ожидаемого размера выходят
+      // неверными, настоящие отверстия отсекаются, а печатные цифры
+      // габаритов проходят фильтры (тот самый «ноль попаданий»).
+      if (widget.face.ringRadiiMm.length >= 2 && widget.face.faceRadiusMm > 0) {
+        final avg = (scaledRx + scaledRy) / 2;
+        final refined = refineRadiusByRings(
+          image: analyzed.image,
+          center: scaledCenter,
+          initialRadiusPx: avg,
+          ringRadiiMm: widget.face.ringRadiiMm,
+          faceRadiusMm: widget.face.faceRadiusMm,
+        );
+        if (avg > 0 && refined > 0) {
+          final k = refined / avg;
+          scaledRx *= k;
+          scaledRy *= k;
+        }
+      }
       // Калибр и окно ожидаемого размера пробоины считаем по СРЕДНЕМУ
       // радиусу эллипса — при умеренном наклоне (а калибровка эллипсом
       // рассчитана именно на умеренный, не на настоящую трапецию) разница
@@ -357,6 +395,28 @@ class _PhotoScanScreenState extends State<PhotoScanScreen>
         _error = friendlyError(e);
       });
     }
+  }
+
+  /// Правка контура пользователем: запоминаем и — после короткой паузы —
+  /// ПЕРЕСЧИТЫВАЕМ пробоины.
+  ///
+  /// Раньше здесь было только setState: контур можно было двигать сколько
+  /// угодно, а найденные точки оставались посчитанными по первоначальной
+  /// (часто неверной) авто-калибровке — и «Подтвердить» записывало чужие
+  /// точки. Пауза 500 мс, чтобы не запускать детект на каждый кадр
+  /// перетаскивания.
+  void _onCalibrationChanged(
+      Offset c, double rx, double ry, double angle) {
+    setState(() {
+      _calibCenter = c;
+      _calibRx = rx;
+      _calibRy = ry;
+      _calibAngle = angle;
+    });
+    _calibDebounce?.cancel();
+    _calibDebounce = Timer(const Duration(milliseconds: 500), () {
+      if (mounted && !_busy && _decoded != null) _runDetection();
+    });
   }
 
   PixelPoint _toMm(Offset px) => pixelToMmEllipse(
@@ -568,13 +628,7 @@ class _PhotoScanScreenState extends State<PhotoScanScreen>
                                   widget.face.faceRadiusMm,
                               candidates: _candidates,
                               addMode: _addMode,
-                              onCalibrationChanged: (c, rx, ry, angle) =>
-                                  setState(() {
-                                _calibCenter = c;
-                                _calibRx = rx;
-                                _calibRy = ry;
-                                _calibAngle = angle;
-                              }),
+                              onCalibrationChanged: _onCalibrationChanged,
                               onCandidateMoved: (i, p) =>
                                   setState(() => _candidates[i] = p),
                               onCandidateRemoved: (i) =>

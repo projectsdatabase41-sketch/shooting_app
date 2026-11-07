@@ -113,6 +113,24 @@ GrayImage boxBlur(GrayImage src, int radius) {
   return GrayImage(w, h, out);
 }
 
+/// Оценка шума снимка: медиана модулей разницы соседних пикселей по
+/// сетке. Нужна, чтобы порог «пятно отличается от своего фона» подстраивался
+/// под освещение и качество фото, а не стоял одной константой на все
+/// случаи. На мягком и тёмном снимке пробоина не добирает 28 единиц
+/// разницы и не находится вовсе; на шумном — наоборот, зерно и фактура
+/// бумаги проходят порог и попадают в «пробоины».
+double estimateNoise(GrayImage image, {int step = 7}) {
+  final diffs = <int>[];
+  for (var y = 1; y < image.height - 1; y += step) {
+    for (var x = 1; x < image.width - 1; x += step) {
+      diffs.add((image.at(x + 1, y) - image.at(x, y)).abs());
+    }
+  }
+  if (diffs.isEmpty) return 0;
+  diffs.sort();
+  return diffs[diffs.length ~/ 2].toDouble();
+}
+
 /// Ищет НОВЫЕ пробоины в откалиброванной круглой области изображения.
 ///
 /// Калибровка (центр + радиус в пикселях, соответствующий
@@ -158,6 +176,13 @@ List<HoleCandidate> findCandidateHoles({
   final blurRadius = math.max(2, (caliberRadiusPx * 1.6).round());
   final blurred = boxBlur(image, blurRadius);
 
+  // Порог отличия от локального фона: не меньше заданного вызывающим
+  // кодом (28), но и не меньше трёх шумов снимка — иначе на тёмном и
+  // мягком фото пробоины просто не добирают разницы, а на шумном в
+  // «пробоины» лезет зерно. Верхняя граница 60: выше начинают
+  // отсекаться уже настоящие отверстия.
+  final thr = math.max(contrastThreshold, math.min(60.0, estimateNoise(image) * 3));
+
   final w = image.width, h = image.height;
   final visited = Uint8List(w * h);
   final candidates = <HoleCandidate>[];
@@ -188,7 +213,7 @@ List<HoleCandidate> findCandidateHoles({
       visited[idx] = 1;
       if (!insideTarget(x, y)) continue;
       final diff = (image.at(x, y) - blurred.at(x, y)).abs();
-      if (diff < contrastThreshold) continue;
+      if (diff < thr) continue;
 
       // Начало новой компоненты — растим BFS тем же знаком отклонения
       // (все точки одной пробоины темнее ЛИБО все светлее локального
@@ -223,7 +248,7 @@ List<HoleCandidate> findCandidateHoles({
           final nDiff = image.at(nx, ny) - blurred.at(nx, ny);
           final nDarker = nDiff < 0;
           if (nDarker != darker) continue;
-          if (nDiff.abs() < contrastThreshold) continue;
+          if (nDiff.abs() < thr) continue;
           visited[nIdx] = 1;
           queueX[tail] = nx;
           queueY[tail] = ny;
@@ -828,8 +853,17 @@ double refineRadiusByRings({
   final w = image.width, h = image.height;
   const angleSamples = 24;
   const scaleSteps = 80;
-  const scaleRangeMin = 0.6;
-  const scaleRangeMax = 1.6;
+  // Диапазон поиска ШИРОКИЙ и намеренно не привязан к тому, что именно
+  // обвёл пользователь. Контур калибровки означает радиус `faceRadiusMm`
+  // (половину БЛАНКА), но человек на фото видит печатную мишень и ведёт
+  // круг по её внешнему кольцу — у № 8 это 22.75 мм против 40 мм, то
+  // есть ошибка масштаба в 1.76 раза. Прежнее окно 0.6…1.6 такой промах
+  // не покрывало: радиус оставался неверным, калибр пробоины — тоже, и
+  // детектор либо не находил ничего, либо принимал за пробоины цифры
+  // габаритов. Кольца напечатаны на мишени всегда, поэтому масштаб
+  // восстанавливается по ним независимо от того, что было обведено.
+  const scaleRangeMin = 0.3;
+  const scaleRangeMax = 3.0;
   final maxSamplingRadius = math.min(w, h) * 0.6;
 
   double sampleAt(double x, double y) {
@@ -866,12 +900,13 @@ double refineRadiusByRings({
     return score;
   }
 
-  double search(double from, double to, int steps) {
+  double search(double from, double to, int steps, {List<double>? scores}) {
     var bestScale = initialRadiusPx;
     var bestScore = -1.0;
     for (var i = 0; i <= steps; i++) {
       final scale = from + (to - from) * i / steps;
       final score = scoreForScale(scale);
+      scores?.add(score);
       if (score > bestScore) {
         bestScore = score;
         bestScale = scale;
@@ -884,7 +919,23 @@ double refineRadiusByRings({
   // вокруг найденного — той же ценой, что и один грубый проход вдвое
   // мельче, но без риска промахнуться мимо истинного пика на широком
   // диапазоне из-за крупного шага.
-  final coarse = search(initialRadiusPx * scaleRangeMin, initialRadiusPx * scaleRangeMax, scaleSteps);
+  final coarseScores = <double>[];
+  final coarse = search(
+      initialRadiusPx * scaleRangeMin,
+      initialRadiusPx * scaleRangeMax,
+      scaleSteps,
+      scores: coarseScores);
   final step = initialRadiusPx * (scaleRangeMax - scaleRangeMin) / scaleSteps;
-  return search(coarse - step, coarse + step, scaleSteps);
+  final fine = search(coarse - step, coarse + step, scaleSteps);
+  final fineScore = scoreForScale(fine);
+
+  // Принимаем подгонку, только если она даёт ЯВНЫЙ пик относительно
+  // остальных масштабов. Иначе (колец не видно — размыто, обрезано,
+  // ровное поле) остаёмся на исходной оценке: случайный пик шума на
+  // широком диапазоне хуже грубой, но честной шкалы.
+  coarseScores.sort();
+  final median = coarseScores.isEmpty ? 0.0 : coarseScores[coarseScores.length ~/ 2];
+  if (fineScore <= 0) return initialRadiusPx;
+  if (median > 0 && fineScore < median * 1.5) return initialRadiusPx;
+  return fine;
 }
