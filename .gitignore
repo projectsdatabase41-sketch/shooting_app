@@ -59,3 +59,9 @@ hs_err_pid*.log
 # Кэш Supabase CLI (`supabase functions deploy`) — локальная привязка
 # проекта на этой машине, не имеет отношения к коду.
 supabase/.temp/
+
+# --- Служебные файлы сторонних агентов: в публичный репозиторий не нужны ---
+.omc/
+.claude/
+.mcp.json
+CLAUDE.md
