@@ -175,6 +175,17 @@ class ChatMessage {
         callStatus: row['call_status'] as String?,
         senderId: row['sender_id'] as String?,
         readByPeer: row['peer_read'] == 1,
-        createdAt: DateTime.parse(row['created_at'] as String),
+        createdAt: _parseCreatedAt(row['created_at'] as String),
       );
+}
+
+/// Время из строки базы/сервера.
+///
+/// Сервер (`chat_messages.created_at`) отдаёт UTC с «Z», а локальные записи
+/// лежат без зоны. Раньше строка с «Z» попадала в интерфейс как UTC: в
+/// Калининграде (UTC+2) время сообщений показывалось на два часа назад —
+/// отзыв 13.11 «у собеседника время в списке чатов на два часа назад».
+DateTime _parseCreatedAt(String value) {
+  final t = DateTime.parse(value);
+  return t.isUtc ? t.toLocal() : t;
 }
