@@ -390,7 +390,13 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
         return const CommentsThreadSheet(level: CommentLevel.session);
       case WorkspacePage.coach:
         // Чат прямо с тренером; колокольчик «Вызвать тренера» — в его шапке.
-        return const AthleteCoachChat();
+        // Фон непрозрачный: раздел открыт поверх обоев с цветной маской, и
+        // раньше сквозь чат просвечивал фиолетовый цвет — «весь чат светится
+        // фиолетовой маской» (отзыв 12.11, TargetScreen).
+        return Material(
+          color: Theme.of(context).colorScheme.surface,
+          child: const AthleteCoachChat(),
+        );
     }
   }
 
