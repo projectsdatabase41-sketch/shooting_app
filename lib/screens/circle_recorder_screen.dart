@@ -143,7 +143,15 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
       _minZoom = _maxZoom = _zoom = 1; // на этой камере зум недоступен
     }
     setState(() => _controller = c);
-    await old?.dispose();
+    // Освобождение прежней камеры иногда падает на Android с
+    // «releaseFlutterSurfaceTexture() cannot be called if the flutterSurfaceProducer
+    // for the camera preview has not yet been initialized» (отзыв 07.11) — камеру
+    // всё равно нельзя оставить висеть, но и ронять экран из-за этого незачем.
+    try {
+      await old?.dispose();
+    } catch (e) {
+      DemoMode.sendError('Camera dispose', e);
+    }
   }
 
   void _pinchDown(PointerDownEvent e) {
@@ -186,8 +194,16 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
       final c = _controller;
       if (_recording && c != null) {
         // камеру можно сменить прямо во время записи (запись продолжается одним роликом)
-        await c.setDescription(_cameras[next]);
-        if (mounted) setState(() {});
+        try {
+          await c.setDescription(_cameras[next]);
+          if (mounted) setState(() {});
+        } catch (e) {
+          // setDescription на Android падал с releaseFlutterSurfaceTexture
+          // (отзыв 07.11: «переключил камеру — чёрный экран»). Пересоздаём
+          // контроллер целиком вместо того, чтобы остаться с чёрным превью.
+          DemoMode.sendError('Camera switch', e);
+          await _open(_cameras[next]);
+        }
       } else {
         await _open(_cameras[next]);
       }
@@ -250,7 +266,12 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
     widget.finishSignal?.removeListener(_onSignal);
     _ticker?.cancel();
     SystemChrome.setPreferredOrientations(const []); // снова любая ориентация (как у приложения)
-    _controller?.dispose();
+    try {
+      _controller?.dispose();
+    } catch (e) {
+      // Та же ошибка releaseFlutterSurfaceTexture, что и при смене камеры.
+      DemoMode.sendError('Camera dispose', e);
+    }
     _light.release();
     _light.dispose();
     super.dispose();

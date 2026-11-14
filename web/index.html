@@ -82,6 +82,38 @@
       setTimeout(hide, 15000);
     })();
   </script>
+  <script>
+    // Заглушки JS-моста push (web/push-bridge.js). Нужны, если браузер отдал
+    // новый main.dart.js, но закешировал старый push-bridge.js без части
+    // функций: вызов отсутствующей функции ронял экран чата с
+    // «NoSuchMethodError: nexusSetActiveChat is not a function» (отзыв 13.11).
+    // Настоящий push-bridge.js загружается следом и перекрывает заглушки.
+    (function () {
+      var noop = function () {};
+      var names = [
+        'nexusSetActiveChat', 'nexusConsumePushTap', 'nexusPushEnv',
+        'nexusRequestPermission', 'nexusPushPermission', 'nexusWebPushToken'
+      ];
+      for (var i = 0; i < names.length; i++) {
+        if (typeof window[names[i]] !== 'function') window[names[i]] = noop;
+      }
+      if (typeof window.nexusPushEnv !== 'function' || window.nexusPushEnv === noop) {
+        window.nexusPushEnv = function () { return 'unsupported'; };
+      }
+      if (window.nexusPushPermission === noop) {
+        window.nexusPushPermission = function () { return 'default'; };
+      }
+      if (window.nexusRequestPermission === noop) {
+        window.nexusRequestPermission = function () { return Promise.resolve('default'); };
+      }
+      if (window.nexusWebPushToken === noop) {
+        window.nexusWebPushToken = function () { return Promise.resolve(null); };
+      }
+      if (window.nexusConsumePushTap === noop) {
+        window.nexusConsumePushTap = function () { return null; };
+      }
+    })();
+  </script>
   <script src="vendor/firebase-app-compat.js"></script>
   <script src="vendor/firebase-messaging-compat.js"></script>
   <script src="push-bridge.js"></script>

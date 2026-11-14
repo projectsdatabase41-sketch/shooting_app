@@ -226,10 +226,37 @@ class DemoMode {
   static DateTime? _lastError;
   static final Set<String> _sentErrors = {};
 
+  /// Сетевые сбои — не дефект приложения: нет связи, спящий ноутбук, сорвавшийся
+  /// refresh токена. Раньше они шли в отчёты и за неделю дали 21 запись
+  /// «ERROR: handled» с ClientException: Load failed / Failed to fetch, в которых
+  /// тонули настоящие сбои. В отчёты такие ошибки больше не попадают.
+  static bool _isNetworkNoise(Object error) {
+    final type = error.runtimeType.toString();
+    if (type.contains('Socket') ||
+        type.contains('ClientException') ||
+        type.contains('Timeout') ||
+        type.contains('Handshake') ||
+        type.contains('HttpException')) return true;
+    const marks = [
+      'Failed to fetch',
+      'Load failed',
+      'Connection timed out',
+      'Failed host lookup',
+      'Network is unreachable',
+      'Connection refused',
+      'Connection closed',
+      'Нет сети',
+      'Сеть недоступна',
+    ];
+    final text = '$error';
+    return marks.any(text.contains);
+  }
+
   /// Отчёт об ошибке в ту же таблицу отзывов: что случилось, где, технические
   /// подробности (тип ошибки, стек, платформа) — без личных данных.
   static Future<String?> sendError(String where, Object error, [StackTrace? stack, String? extra]) async {
     if (!ChatSettings.isConfigured) return tr('Сервер отзывов не настроен');
+    if (_isNetworkNoise(error)) return null;
     // Одну и ту же ошибку за сеанс шлём один раз; разные — не чаще раза в 2 с.
     final key = '$where|${'$error'.length > 160 ? '$error'.substring(0, 160) : '$error'}';
     if (!_sentErrors.add(key)) return null;

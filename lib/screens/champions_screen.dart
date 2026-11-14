@@ -46,10 +46,13 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
   }
 
   Future<void> _load() async {
+    // База берётся до первого await: после него State.context может быть уже
+    // недоступен (страницу закрыли), и `context.read` падал с _TypeError
+    // «Null check operator used on a null value» (отзыв от 10.11, Android).
+    final db = context.read<AppDataStore>().db;
     final pending = await _svc.pendingForMe();
     final banned = await _svc.myBanned();
     final appeals = await _svc.appeals();
-    final db = context.read<AppDataStore>().db;
     final auth = ChatAuthService(db);
     final access = CoachAccessService(db);
     final mine = <String>{};

@@ -92,15 +92,25 @@ class SupabaseAuthService {
   /// Нет сети, таймаут, 429/5xx — сессию не трогаем (раньше любая кратковременная
   /// потеря связи при обновлении токена выкидывала из мессенджера).
   Future<String?> _refreshSession() async {
-    try {
-      await _token(grant: 'refresh_token', body: {'refresh_token': refreshToken});
-      return accessToken;
-    } on AuthNetworkException {
-      return null;
-    } on AuthException {
-      signOutLocally();
-      return null;
+    // Кратковременный обрыв связи (мобильная сеть, «Load failed» на вебе) —
+    // одна повторная попытка вместо мгновенного отказа: иначе любой провал
+    // Wi-Fi на секунду оставлял пользователя без сессии до перезапуска.
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        await _token(grant: 'refresh_token', body: {'refresh_token': refreshToken});
+        return accessToken;
+      } on AuthNetworkException {
+        if (attempt == 0) {
+          await Future<void>.delayed(const Duration(milliseconds: 800));
+          continue;
+        }
+        return null;
+      } on AuthException {
+        signOutLocally();
+        return null;
+      }
     }
+    return null;
   }
 
 
