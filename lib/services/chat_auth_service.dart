@@ -146,19 +146,36 @@ class ChatAuthService {
     return _refreshing!;
   }
 
+  /// Принудительное обновление по требованию сервера: приходит 401, хотя по
+  /// нашим часам токен ещё живой (PostgREST отвечает «JWT issued at future»,
+  /// когда часы устройства отстают от серверных). Отзыв 12.11 в чате.
+  Future<String?> forceRefresh() {
+    if (!isSignedIn || refreshToken.isEmpty) return Future.value(null);
+    return _refreshing ?? _refreshOnce();
+  }
+
   /// Выход из аккаунта — ТОЛЬКО если сервер ответил, что refresh-токен не годится.
   /// Нет сети, таймаут, 429/5xx — сессию не трогаем (раньше любая кратковременная
   /// потеря связи при обновлении токена выкидывала из мессенджера).
   Future<String?> _refreshSession() async {
-    try {
-      await _token(grant: 'refresh_token', body: {'refresh_token': refreshToken});
-      return accessToken;
-    } on AuthNetworkException {
-      return null;
-    } on AuthException {
-      signOutLocally();
-      return null;
+    // Одна повторная попытка при обрыве связи (переключение Wi-Fi → LTE,
+    // «Load failed» на вебе) — иначе секундный провал сети обнулял сессию.
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        await _token(grant: 'refresh_token', body: {'refresh_token': refreshToken});
+        return accessToken;
+      } on AuthNetworkException {
+        if (attempt == 0) {
+          await Future<void>.delayed(const Duration(milliseconds: 800));
+          continue;
+        }
+        return null;
+      } on AuthException {
+        signOutLocally();
+        return null;
+      }
     }
+    return null;
   }
 
 

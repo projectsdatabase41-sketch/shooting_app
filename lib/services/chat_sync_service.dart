@@ -414,6 +414,36 @@ class ChatSyncService {
   /// выше — статус на пузыре выставляется всё равно, но пользователь ещё
   /// и видит, что и почему не отправилось.
   Future<void> retry(ChatMessage message) async {
+    Object failure;
+    try {
+      await _retryOnce(message);
+      return;
+    } catch (e) {
+      failure = e;
+    }
+    // 401 в чате — это обычно не «нет прав», а разошедшиеся часы или
+    // устаревший кеш токена: PostgREST отвечает PGRST303 «JWT issued at
+    // future» (отзыв 12.11). Просим свежий токен насильно и пробуем один
+    // раз ещё, вместо того чтобы сразу показывать ошибку отправки.
+    if ('$failure'.contains('401')) {
+      final fresh = await auth.forceRefresh();
+      if (fresh != null) {
+        try {
+          await _retryOnce(message);
+          return;
+        } catch (e) {
+          failure = e;
+        }
+      }
+    }
+    // Статус на пузыре ставим здесь, чтобы «зависшее» вложение не осталось
+    // навсегда в состоянии sending без кнопки повтора (отзыв 13.11: «отправил
+    // фото, а оно грузится и в чате его нет, следующее отправить не могу»).
+    repo.updateStatus(message.id, ChatMessageStatus.error);
+    throw failure;
+  }
+
+  Future<void> _retryOnce(ChatMessage message) async {
     // Большое вложение (Google Drive) — путь на диске есть, а обычных
     // байт для Storage нет: своя ветка, см. `_retryLargeAttachment`.
     if (message.attachmentLocalPath != null && _attachmentTypes.contains(message.type)) {
@@ -468,16 +498,24 @@ class ChatSyncService {
           // Чанками, а не всё сразу — иначе прогресс либо 0%, либо 100%,
           // толку от него не больше, чем от обычного спиннера.
           unawaited(() async {
-            const chunk = 32 * 1024;
-            for (var i = 0; i < bytes.length; i += chunk) {
-              final end = (i + chunk < bytes.length) ? i + chunk : bytes.length;
-              request.sink.add(bytes.sublist(i, end));
-              uploadProgress.value = {...uploadProgress.value, message.clientMessageId: end / bytes.length};
+            try {
+              const chunk = 32 * 1024;
+              for (var i = 0; i < bytes.length; i += chunk) {
+                final end = (i + chunk < bytes.length) ? i + chunk : bytes.length;
+                request.sink.add(bytes.sublist(i, end));
+                uploadProgress.value = {...uploadProgress.value, message.clientMessageId: end / bytes.length};
+              }
+              await request.sink.close();
+            } catch (_) {
+              // Соединение оборвалось раньше нас — ошибку покажет ответ ниже,
+              // а необработанное исключение в этом потоке роняло отчёт.
             }
-            await request.sink.close();
           }());
           final streamedRes = await client.send(request).timeout(_timeout);
-          final uploadBody = await streamedRes.stream.bytesToString();
+          // Ответ читаем тоже с таймаутом: раньше `bytesToString()` мог ждать
+          // вечно, сообщение оставалось «отправляется», и следующее фото уже
+          // не отправлялось (отзыв 13.11).
+          final uploadBody = await streamedRes.stream.bytesToString().timeout(_timeout);
           // «Уже существует» — это повторная отправка после сбоя: файл уже на
           // месте, дальше просто записываем сообщение.
           final duplicate =

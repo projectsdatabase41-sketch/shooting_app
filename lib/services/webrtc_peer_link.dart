@@ -44,6 +44,13 @@ class WebRtcPeerLink implements PeerLink {
   final List<RTCIceCandidate> _early = [];
   bool _remoteSet = false;
   bool _closed = false;
+  bool _initiator = false;
+
+  /// Одна повторная попытка пересобрать маршрут (restartIce). Отзывы 12–13.11:
+  /// «прямое соединение не поднялось», при этом host-кандидатов было 30 — то есть
+  /// сеть была, а ICE успевал сдаться раньше, чем приходил рабочий маршрут.
+  bool _retried = false;
+  Timer? _disconnectTimer;
   void Function()? _onState;
   void Function(Map<String, dynamic> signal)? _onSignal;
   void Function(String data)? _onMessage;
@@ -69,6 +76,7 @@ class WebRtcPeerLink implements PeerLink {
   @override
   Future<void> start({required bool initiator}) async {
     try {
+      _initiator = initiator;
       final ice = await _ice();
       _diag.add('ice=${ice.map((e) {
         final u = e['urls'];
@@ -86,15 +94,28 @@ class WebRtcPeerLink implements PeerLink {
       };
       pc.onConnectionState = (s) {
         _diag.add('conn=${s.name}');
-        if (s == RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
-            s == RTCPeerConnectionState.RTCPeerConnectionStateClosed ||
-            s == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
-          close();
+        if (s == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
+          // «Disconnected» часто временный: телефон переключился Wi-Fi → LTE.
+          // Раньше мы закрывали канал сразу; теперь даём 8 секунд на восстановление.
+          _disconnectTimer?.cancel();
+          _disconnectTimer = Timer(const Duration(seconds: 8), () {
+            if (!_closed && !isOpen) close();
+          });
+          return;
         }
+        if (s == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
+          _disconnectTimer?.cancel();
+          return;
+        }
+        if (s == RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
+          _retryOrClose();
+          return;
+        }
+        if (s == RTCPeerConnectionState.RTCPeerConnectionStateClosed) close();
       };
-      // Не поднялось за 15 с — сдаёмся, остаёмся на Broadcast.
+      // Не поднялось за 20 с — одна попытка пересобрать маршрут, потом сдаёмся.
       _timeout = Timer(const Duration(seconds: 20), () {
-        if (!isOpen) close();
+        if (!_closed && !isOpen) _retryOrClose();
       });
       if (initiator) {
         _attach(await pc.createDataChannel('chat', RTCDataChannelInit()..ordered = true));
@@ -108,6 +129,36 @@ class WebRtcPeerLink implements PeerLink {
       _diag.add('exc=$e');
       close();
     }
+  }
+
+  /// Один повтор: просим ICE пересобрать кандидатов и, если мы инициатор,
+  /// отправляем новый offer. Если и это не помогло за 12 с — закрываем канал
+  /// (чат продолжит работать через Broadcast/базу).
+  Future<void> _retryOrClose() async {
+    if (_closed || isOpen) return;
+    final pc = _pc;
+    if (_retried || pc == null) {
+      close();
+      return;
+    }
+    _retried = true;
+    _diag.add('retry restartIce');
+    try {
+      await pc.restartIce();
+      if (_initiator) {
+        final offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        _onSignal?.call({'kind': 'offer', 'sdp': offer.sdp});
+      }
+    } catch (e) {
+      _diag.add('retry exc=$e');
+      close();
+      return;
+    }
+    _timeout?.cancel();
+    _timeout = Timer(const Duration(seconds: 12), () {
+      if (!_closed && !isOpen) close();
+    });
   }
 
   void _attach(RTCDataChannel dc) {
@@ -176,6 +227,7 @@ class WebRtcPeerLink implements PeerLink {
     if (_closed) return;
     _closed = true;
     _timeout?.cancel();
+    _disconnectTimer?.cancel();
     if (!_everOpen) {
       DemoMode.sendError('P2P failed', 'прямое соединение не поднялось', null,
           '${_diag.join(' ')} '
