@@ -103,6 +103,11 @@ class LiveChatSession {
     return 'dm:${ids[0]}:${ids[1]}';
   }
 
+  /// Сигналы WebRTC, которые некуда было отправить: канал сигнализации ещё
+  /// поднимается. Без этого первые кандидаты уходили «в пустоту», и у второй
+  /// стороны в отчётах было «кандидаты: нет» (веб, 14.11).
+  final List<Map<String, dynamic>> _pendingSignals = [];
+
   Future<void> open() async {
     if (_closed || !RemoteConfig.realtimeEnabled || !ChatSettings.isConfigured || !auth.isSignedIn) return;
     final token = await auth.ensureFreshToken();
@@ -129,6 +134,10 @@ class LiveChatSession {
     _client = c;
     if (await c.join(token)) {
       _attempt = 0;
+      // Досылаем сигналы WebRTC, накопленные до готовности канала.
+      while (_pendingSignals.isNotEmpty) {
+        c.sendBroadcast('rtc', _pendingSignals.removeAt(0));
+      }
       // Токен живёт около часа — обновляем в уже открытом канале.
       _tokenTimer?.cancel();
       _tokenTimer = Timer.periodic(const Duration(minutes: 45), (_) async {
@@ -387,7 +396,16 @@ class LiveChatSession {
     _rtcTries++;
     final l = linkFactory!();
     _link = l;
-    l.onSignal = (s) => _client?.sendBroadcast('rtc', s);
+    l.onSignal = (s) {
+      final c = _client;
+      if (c == null || !c.isJoined) {
+        // Канал сигнализации ещё не готов — кандидат потерялся бы. Держим в
+        // очереди и отправим сразу после join (см. open()).
+        if (_pendingSignals.length < 200) _pendingSignals.add(s);
+        return;
+      }
+      c.sendBroadcast('rtc', s);
+    };
     l.onMessage = (raw) {
       final f = decodePeerFrame(raw);
       if (f != null) _onBroadcast(f.$1, f.$2);

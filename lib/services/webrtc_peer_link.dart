@@ -42,6 +42,11 @@ class WebRtcPeerLink implements PeerLink {
   RTCPeerConnection? _pc;
   RTCDataChannel? _dc;
   final List<RTCIceCandidate> _early = [];
+  /// Свои кандидаты: если они ушли раньше, чем у собеседника появилось
+  /// удалённое описание, он их не применил. После установки offer/answer
+  /// отправляем весь список заново — это и лечит «кандидаты: нет» в отчётах
+  /// 14.11 с веба.
+  final List<RTCIceCandidate> _localCands = [];
   bool _remoteSet = false;
   bool _closed = false;
   bool _initiator = false;
@@ -90,6 +95,7 @@ class WebRtcPeerLink implements PeerLink {
         if (c.candidate == null || _closed) return;
         final m = RegExp(r' typ (\w+)').firstMatch(c.candidate!);
         if (m != null) _cands[m.group(1)!] = (_cands[m.group(1)] ?? 0) + 1;
+        if (_localCands.length < 100) _localCands.add(c);
         _onSignal?.call({'kind': 'ice', 'candidate': c.candidate, 'sdpMid': c.sdpMid, 'sdpMLineIndex': c.sdpMLineIndex});
       };
       pc.onConnectionState = (s) {
@@ -99,7 +105,11 @@ class WebRtcPeerLink implements PeerLink {
           // Раньше мы закрывали канал сразу; теперь даём 8 секунд на восстановление.
           _disconnectTimer?.cancel();
           _disconnectTimer = Timer(const Duration(seconds: 8), () {
-            if (!_closed && !isOpen) close();
+            // Не закрываем сразу: разрыв часто временный (переключение сети),
+            // поэтому сначала пробуем пересобрать маршрут — раньше здесь было
+            // close() без restartIce, и в отчётах 14.11 (Android, host:15
+            // srflx:3) не было даже метки о повторе.
+            if (!_closed && !isOpen) _retryOrClose();
           });
           return;
         }
@@ -187,10 +197,12 @@ class WebRtcPeerLink implements PeerLink {
           await pc.setLocalDescription(answer);
           _onSignal?.call({'kind': 'answer', 'sdp': answer.sdp});
           await _flushEarly();
+          _resendLocal();
         case 'answer':
           await pc.setRemoteDescription(RTCSessionDescription(s['sdp'] as String?, 'answer'));
           _remoteSet = true;
           await _flushEarly();
+          _resendLocal();
         case 'ice':
           final c = RTCIceCandidate(s['candidate'] as String?, s['sdpMid'] as String?, s['sdpMLineIndex'] as int?);
           if (_remoteSet) {
@@ -209,6 +221,15 @@ class WebRtcPeerLink implements PeerLink {
       await _pc?.addCandidate(c);
     }
     _early.clear();
+  }
+
+  /// Повторная отправка своих кандидатов после установки удалённого описания.
+  void _resendLocal() {
+    if (_localCands.isEmpty) return;
+    _diag.add('resend-ice:${_localCands.length}');
+    for (final c in _localCands) {
+      _onSignal?.call({'kind': 'ice', 'candidate': c.candidate, 'sdpMid': c.sdpMid, 'sdpMLineIndex': c.sdpMLineIndex});
+    }
   }
 
   @override
