@@ -29,8 +29,8 @@ import 'services/user_call_channel.dart';
 import 'services/chat_messages_repository.dart';
 import 'services/chat_preferences.dart';
 import 'services/chat_sync_service.dart';
-import 'services/firebase_settings.dart';
-import 'services/knowledge_service.dart';
+import 'services/crash_reporter.dart';
+import 'services/firebase_settings.dart';import 'services/knowledge_service.dart';
 import 'services/local_db_service.dart';
 import 'screens/onboarding_screen.dart';
 import 'services/modules_settings.dart';
@@ -86,6 +86,8 @@ Future<void> main() async {
     return true;
   };
   friendlyErrorReporter = (e) => DemoMode.sendError('handled', e, StackTrace.current);
+  // Нативные падения (не Dart) — в Crashlytics, см. services/crash_reporter.dart.
+  await CrashReporter.init();
   final db = LocalDbService();
   try {
     // На вебе открытие идёт через IndexedDB + wasm-сборку sqlite (см.

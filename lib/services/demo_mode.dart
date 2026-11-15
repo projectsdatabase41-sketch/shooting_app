@@ -11,6 +11,7 @@ import '../voice/voice_control.dart';
 import '../voice/voice_overlay.dart';
 import '../widgets/fan_menu.dart';
 import 'screen_buttons.dart';
+import 'crash_reporter.dart';
 import 'app_update_service.dart';
 import '../i18n/i18n.dart';
 import 'chat_settings.dart';
@@ -58,6 +59,9 @@ class DemoMode {
     _crumbs.add('${two(t.hour)}:${two(t.minute)}:${two(t.second)} $step');
     if (_crumbs.length > 15) _crumbs.removeAt(0);
     _put(_kCrumbs, _crumbs.join('\n'));
+    // Тот же шаг — в Crashlytics: при нативном падении в отчёте будет видно,
+    // что происходило перед вылетом (см. services/crash_reporter.dart).
+    CrashReporter.breadcrumb(step);
   }
 
   static void _initDiagnostics(LocalDbService db) {

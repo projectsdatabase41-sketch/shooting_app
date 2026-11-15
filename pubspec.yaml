@@ -103,6 +103,7 @@ dependencies:
   screen_brightness: ^2.1.11
   bluetooth_low_energy: ^6.2.1
   speech_to_text: ^7.4.0
+  firebase_crashlytics: ^4.3.10
 
 dev_dependencies:
   flutter_test:
