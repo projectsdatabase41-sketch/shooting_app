@@ -892,15 +892,25 @@ async function loadFile(file) {
 
 async function loadUrl(url, name) {
   try {
-    showOverlay('Скачиваю файл…', url);
+    // В подписи показываем только имя файла: адрес модели может быть
+    // приватным (подписанная ссылка Google Диска), и показывать его
+    // пользователю, а тем более в кодах ошибок, нельзя (отзыв 10.11).
+    const fileName = name || decodeURIComponent((url.split('?')[0].split('/').pop() || 'файл'));
+    showOverlay('Скачиваю файл…', fileName);
     const response = await fetch(url);
     if (!response.ok) throw new Error(`Не удалось скачать файл (HTTP ${response.status})`);
     const buffer = await response.arrayBuffer();
     hideOverlay();
-    await loadBuffer(buffer, name || url.split('/').pop());
+    await loadBuffer(buffer, fileName);
   } catch (err) {
     fail(err);
   }
+}
+
+/** Прячет ссылки в сообщениях об ошибках: приватные адреса моделей не должны
+ *  попадать ни в интерфейс, ни в отчёты. */
+function redactLinks(text) {
+  return String(text).replace(/https?:\/\/[^\s"'`]+/g, '<ссылка скрыта>');
 }
 
 function fail(err) {
@@ -908,7 +918,7 @@ function fail(err) {
   hideOverlay();
   state.loading = false;
   const message = err && err.message ? err.message : String(err);
-  showToast('Не удалось открыть файл: ' + message);
+  showToast('Не удалось открыть файл: ' + redactLinks(message));
 }
 
 /* ------------------------------------------------------------------ */
@@ -1070,13 +1080,21 @@ if (window.matchMedia && window.matchMedia('(hover: none)').matches) {
 }
 
 const params = new URLSearchParams(window.location.search);
-
 // Для встраивания (Тильда/iframe): ?ui=min — только 3D, без панелей и подсказок.
 if (params.get('ui') === 'min' || params.get('minimal') === '1') {
   document.body.classList.add('ui-minimal');
 }
 const modelUrl = params.get('model') || params.get('url');
+const modelName = params.get('name') || undefined;
+// Адрес модели — приватный (подписанная ссылка Google Диска), поэтому после
+// чтения убираем его из адресной строки и истории: страница остаётся той же,
+// но ссылки в URL больше нет (отзыв 10.11 — «ключи и ссылки не показывать»).
 if (modelUrl) {
-  loadUrl(modelUrl, params.get('name') || undefined);
+  try {
+    window.history.replaceState({}, '', window.location.pathname);
+  } catch (e) {
+    /* старые WebView могут запрещать — не критично */
+  }
+  loadUrl(modelUrl, modelName);
 }
 

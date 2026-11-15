@@ -10,6 +10,11 @@ import 'step_viewer_common.dart';
 const _viewerBase =
     'https://appassets.androidplatform.net/assets/flutter_assets/assets/webview/';
 
+/// Прячет ссылки в тексте ошибки: адрес модели может быть приватным
+/// (подписанная ссылка Google Диска), а ошибка видна пользователю.
+String _redactLinks(String text) =>
+    text.replaceAll(RegExp(r'https?://\S+'), '<ссылка скрыта>');
+
 /// Встроенный показ возможен только там, где есть WebView и AssetLoader.
 bool get _canEmbed => defaultTargetPlatform == TargetPlatform.android;
 
@@ -66,7 +71,7 @@ class _ViewerState extends State<_Viewer> {
             if (mounted) setState(() => _progress = progress / 100);
           },
           onReceivedError: (controller, request, error) {
-            if (mounted) setState(() => _error = error.description);
+            if (mounted) setState(() => _error = _redactLinks(error.description));
           },
           onConsoleMessage: (controller, message) {
             if (kDebugMode) {
