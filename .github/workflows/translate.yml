@@ -63,5 +63,16 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "Переводы: автообновление словарей [no-apk] [skip ci]"
-          git pull --rebase
-          git push
+          # Ветку мог успеть обновить человек (или другой запуск) — пробуем
+          # аккуратно переехать на свежий main и повторить пуш. Раньше здесь
+          # был безусловный `git pull --rebase`, который падал конфликтом
+          # словарей, и запуск завершался красным (15.11).
+          for i in 1 2 3; do
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort || true; sleep 5; continue; }
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::warning::Не удалось запушить словари (ветка ушла вперёд) — переведутся в следующий запуск"
