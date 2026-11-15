@@ -38,6 +38,11 @@ const languageNames = {
 final _call = RegExp(r"""(?:\btr\(|/\*tr\*/)\s*((?:'(?:[^'\\]|\\.)*'\s*)+)""");
 final _literal = RegExp(r"""'((?:[^'\\]|\\.)*)'""");
 
+/// Момент, после которого перевод прекращается (см. `I18N_BUDGET_MIN`).
+DateTime? _deadline;
+
+bool get _outOfTime => _deadline != null && DateTime.now().isAfter(_deadline!);
+
 String _unescape(String s) => s.replaceAllMapped(RegExp(r'\\(.)'), (m) => switch (m[1]) {
       'n' => '\n',
       't' => '\t',
@@ -50,6 +55,13 @@ Set<String> extractKeys(String source) => {
 
 Future<void> main(List<String> args) async {
   final translate = args.contains('--translate');
+  // Бюджет времени на весь прогон. Раньше шаг «Перевести недостающее» мог
+  // висеть часами: модели по очереди, у каждой до 3 минут, а новых строк
+  // бывают сотни — workflow «Переводы интерфейса» так и не доходил до
+  // сохранения словарей и был отменён. Теперь по истечении бюджета
+  // сохраняем то, что успели, и выходим с кодом 0.
+  final budgetMin = int.tryParse(Platform.environment['I18N_BUDGET_MIN'] ?? '') ?? 15;
+  _deadline = DateTime.now().add(Duration(minutes: budgetMin));
   final keys = <String>{};
   for (final f in Directory('lib').listSync(recursive: true).whereType<File>()) {
     if (f.path.endsWith('.dart')) keys.addAll(extractKeys(f.readAsStringSync()));
@@ -70,6 +82,10 @@ Future<void> main(List<String> args) async {
         exit(1);
       }
       for (var i = 0; i < missing.length; i += 40) {
+        if (_outOfTime) {
+          print('Бюджет времени ($budgetMin мин) исчерпан: переведено $i из ${missing.length}, остальное — в следующий запуск');
+          break;
+        }
         final batch = missing.sublist(i, i + 40 > missing.length ? missing.length : i + 40);
         dict.addAll(await _translateAny(apiKey, code, batch));
       }
@@ -97,6 +113,7 @@ List<String> _models() {
 /// одной — пачка останется русской до следующего запуска.
 Future<Map<String, String>> _translateAny(String apiKey, String code, List<String> batch) async {
   for (final model in _models()) {
+    if (_outOfTime) return const {};
     try {
       final out = await _translate(apiKey, model, code, batch);
       if (out.length >= batch.length * 0.8) return out;
