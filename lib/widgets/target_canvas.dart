@@ -153,6 +153,8 @@ class _TargetCanvasState extends State<TargetCanvas> {
   void _cancelPending() {
     _holdTimer?.cancel();
     _pendingAdd = false;
+    // Касание оказалось прокруткой страницы — предпросмотр лупы убираем.
+    if (mounted && _finger != null && !_autoAdd) setState(() => _finger = null);
   }
 
   @override
@@ -193,6 +195,11 @@ class _TargetCanvasState extends State<TargetCanvas> {
               // быстрый сдвиг — прокрутка страницы.
               _pendingAdd = true;
               _downPos = _lastPos = e.localPosition;
+              // Лупа показывается сразу при касании, ещё до решения «тап или
+              // прокрутка»: иначе при быстром тапе пробоина ставилась вслепую
+              // (отзыв 13.11 «стоит добавить лупу, чтобы видеть, куда проставляю
+              // выстрел») — раньше она появлялась только после удержания.
+              setState(() => _finger = e.localPosition);
               _holdTimer?.cancel();
               _holdTimer = Timer(_holdDelay, () {
                 if (!mounted || !_pendingAdd) return;
@@ -295,7 +302,7 @@ class _TargetCanvasState extends State<TargetCanvas> {
                 ),
               ),
               ..._buildCornerValues(vm, colors),
-              if (_finger != null && vm.isEditing) _loupe(vm, colors),
+              if (_finger != null && (vm.isEditing || _pendingAdd)) _loupe(vm, colors),
             ],
           ),
           ),
@@ -324,7 +331,11 @@ class _TargetCanvasState extends State<TargetCanvas> {
     final step = vm.face.decimalStepMm > 0 ? vm.face.decimalStepMm : 1.0;
     final mmToPx = _loupePxPerStep / step;
     final zoomL = mmToPx * vm.face.faceRadiusMm / (d / 2);
-    final pan = Offset(-vm.draftXMm * mmToPx, vm.draftYMm * mmToPx); // черновой выстрел — в центре лупы
+    // До начала правки (касание ещё не превратилось в черновой выстрел) лупа
+    // показывает окрестность точки под пальцем — чтобы тап был не вслепую.
+    final mm = vm.isEditing ? null : _screenToMm(vm, f);
+    final center = vm.isEditing ? Offset(vm.draftXMm, vm.draftYMm) : mm!;
+    final pan = Offset(-center.dx * mmToPx, -center.dy * mmToPx); // точка — в центре лупы
     return Positioned(
       left: left,
       top: top,
@@ -345,10 +356,10 @@ class _TargetCanvasState extends State<TargetCanvas> {
                 visibleShots: vm.visibleShots,
                 selectedShot: vm.selectedShot,
                 currentSeriesNo: vm.session.shots.isEmpty ? 1 : vm.session.shots.last.seriesNo,
-                isEditing: true,
-                draftXMm: vm.draftXMm,
-                draftYMm: vm.draftYMm,
-                draftShotNumber: vm.draftShotNumber,
+                isEditing: vm.isEditing,
+                draftXMm: vm.isEditing ? vm.draftXMm : null,
+                draftYMm: vm.isEditing ? vm.draftYMm : null,
+                draftShotNumber: vm.isEditing ? vm.draftShotNumber : null,
                 zoom: zoomL,
                 pan: pan,
               ),
