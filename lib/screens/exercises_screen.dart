@@ -354,7 +354,8 @@ class _ExerciseCard extends StatelessWidget {
                   PopupMenuItem(value: 'merge', child: Text(tr('Объединить с другим…'))),
                 ],
               ),
-              Icon(Icons.chevron_right, color: cs.onSurfaceVariant, size: 28),
+              // Стрелка справа убрана: тап по всей плитке и так открывает
+              // упражнение (отзыв 16.11 «убрать её, и так понятно»).
             ],
           ),
         ),

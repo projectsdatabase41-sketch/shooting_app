@@ -136,7 +136,6 @@ flutter:
     # открывается WebView из самого APK, без сети. Каталоги перечислены
     # по отдельности — Flutter не обходит вложенные папки сам.
     - assets/webview/
-    - assets/webview/samples/
     - assets/webview/vendor/
     - assets/webview/vendor/jsm/
     - assets/webview/vendor/jsm/controls/

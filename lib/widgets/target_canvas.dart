@@ -218,7 +218,15 @@ class _TargetCanvasState extends State<TargetCanvas> {
           },
           onPointerMove: (e) {
             _lastPos = e.localPosition;
-            if (_pendingAdd && (e.localPosition - _downPos).distance > _moveSlopPx) _cancelPending(); // прокрутка
+            // Палец пошёл — это не прокрутка, а черновая правка: ведём точку
+            // за пальцем. Раньше движение отменяло касание, страница
+            // прокручивалась, и лупа исчезала — сдвинуть её было нельзя
+            // (отзыв 16.11).
+            if (_pendingAdd && (e.localPosition - _downPos).distance > _moveSlopPx) {
+              _holdTimer?.cancel();
+              _pendingAdd = false;
+              _beginAddAt(vm, e.localPosition);
+            }
             if (_autoAdd && _activePointers == 1) {
               _applyEditDrag(e.localPosition, vm);
               setState(() => _finger = e.localPosition);

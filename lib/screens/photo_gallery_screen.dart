@@ -49,7 +49,10 @@ class _PhotoCard extends StatelessWidget {
       color: theme.colorScheme.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(18),
       clipBehavior: Clip.antiAlias,
-      elevation: 2,
+      // Тень заметнее, чтобы стопка фото читалась как карточки в ящике
+      // (отзыв 16.11: «добавить тени для фото, как в выдвижном ящике»).
+      elevation: 10,
+      shadowColor: Colors.black54,
       child: InkWell(
         onTap: onTap,
         child: Stack(children: [
