@@ -44,6 +44,7 @@ class FanLayout {
     required double itemSize,
     required int count,
     required bool mirror,
+    bool vertical = false,
     double margin = 8,
   }) {
     if (count <= 0) return const [];
@@ -78,6 +79,22 @@ class FanLayout {
               p.dy >= rect.top - 0.01 &&
               p.dy <= rect.bottom + 0.01;
         });
+
+    // Вертикальный список: пункты ровным столбиком над кнопкой, а если сверху
+    // места нет — под ней (отзыв 16.11: «пусть будет лучше вертикальный список
+    // над этим плюсиком»). Дуга остаётся для экранной кнопки.
+    if (vertical) {
+      final step = itemSize + 10;
+      final above = center.dy - step * count >= rect.top;
+      final dir = above ? -1.0 : 1.0;
+      final dx = center.dx.clamp(rect.left, rect.right) - center.dx;
+      final out = <Offset>[];
+      for (var i = 0; i < count; i++) {
+        final y = center.dy + (i + 1) * step * dir;
+        out.add(Offset(dx, y.clamp(rect.top, rect.bottom) - center.dy));
+      }
+      return out;
+    }
 
     // Радиус, при котором соседние пункты не налезают друг на друга:
     // длина дуги = шаг между пунктами × (count − 1).
@@ -127,7 +144,10 @@ class FanButton extends StatefulWidget {
   final GlobalKey<NavigatorState>? navigatorKey;
   /// Кнопка у левого края: веер раскрывается вправо.
   final bool mirror;
-  const FanButton({super.key, required this.icon, required this.items, this.tooltip = '', this.navigatorKey, this.mirror = false});
+
+  /// Пункты ровным столбиком над кнопкой вместо дуги (чат: «+» в вводе).
+  final bool vertical;
+  const FanButton({super.key, required this.icon, required this.items, this.tooltip = '', this.navigatorKey, this.mirror = false, this.vertical = false});
 
   @override
   State<FanButton> createState() => _FanButtonState();
@@ -156,6 +176,12 @@ class _FanButtonState extends State<FanButton> {
   /// Старая формула — только на случай, если MediaQuery недоступен.
   List<Offset> _legacyOffsets(int n) {
     final out = <Offset>[];
+    if (widget.vertical) {
+      for (var i = 0; i < n; i++) {
+        out.add(Offset(0, -(n - i) * (_itemSize + 10)));
+      }
+      return out;
+    }
     for (var i = 0; i < n; i++) {
       final deg = n == 1 ? 60.0 : 20 + i * (120 / (n - 1));
       final a = deg * math.pi / 180;
@@ -178,6 +204,7 @@ class _FanButtonState extends State<FanButton> {
       itemSize: _itemSize,
       count: n,
       mirror: widget.mirror,
+      vertical: widget.vertical,
     );
   }
 

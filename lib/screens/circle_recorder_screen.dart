@@ -463,6 +463,20 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
                                       _hd = !_hd;
                                       _switching = true;
                                     });
+                                    // Смена разрешения = новый контроллер. Старый
+                                    // надо освободить ДО создания нового: иначе
+                                    // releaseFlutterSurfaceTexture падает на уже
+                                    // привязанном превью, и экран остаётся чёрным
+                                    // (отзывы 15.11 и 16.11).
+                                    final old = _controller;
+                                    if (old != null) {
+                                      setState(() => _controller = null);
+                                      try {
+                                        await old.dispose();
+                                      } catch (e) {
+                                        DemoMode.sendError('Camera hd dispose', e);
+                                      }
+                                    }
                                     try {
                                       await _open(_cameras[_camIndex]);
                                     } catch (_) {}
