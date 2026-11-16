@@ -2,6 +2,7 @@ import '../widgets/glass_route.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import '../widgets/ai_gate.dart';
 import 'focus_training_screen.dart';
 import '../voice/clock_shot.dart';
@@ -136,6 +137,9 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
   final _scroll = ScrollController();
   final Map<WorkspacePage, GlobalKey> _keys = {};
 
+  /// Максимальный размер мишени на десктоп/веб (фиксированный лимит, px).
+  static const double _maxTargetSizeDesktop = 720.0;
+
   @override
   void initState() {
     super.initState();
@@ -210,8 +214,9 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
       },
       VoiceAction.addNote: (i) {
         final text = i.text;
-        if (text == null || text.isEmpty)
+        if (text == null || text.isEmpty) {
           return tr('Скажите: «заметка» и текст');
+        }
         final store = context.read<AppDataStore>();
         final shot = vm.selectedShot ??
             (vm.session.shots.isEmpty ? null : vm.session.shots.last);
@@ -324,20 +329,83 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
             Expanded(
               child: LayoutBuilder(
                 builder: (context, box) {
-                  // Мишень ~на 20% ниже прежней (раньше занимала всё место над панелями).
-                  final targetH =
-                      ((box.maxHeight - 125) * 0.8).clamp(220.0, 720.0);
+                  // Определяем, десктоп/веб ли это (широкий экран).
+                  final isDesktopOrWeb = kIsWeb ||
+                      defaultTargetPlatform == TargetPlatform.windows ||
+                      defaultTargetPlatform == TargetPlatform.macOS ||
+                      defaultTargetPlatform == TargetPlatform.linux;
+
+                  // Высота мишени.
+                  double targetH;
+                  if (isDesktopOrWeb) {
+                    final maxByWidth = box.maxWidth * 0.6;
+                    final maxByHeight = box.maxHeight * 0.8;
+                    targetH = math.min(maxByWidth, maxByHeight).clamp(220.0, _maxTargetSizeDesktop);
+                  } else {
+                    targetH = ((box.maxHeight - 125) * 0.8).clamp(220.0, 720.0);
+                  }
                   final sectionH = math.max(380.0, box.maxHeight * 0.75);
+
+                  // На десктоп/веб: мишень слева (фикс. ширина), остальные разделы справа в скролле.
+                  // На мобильном: вертикальный скролл со всеми страницами (как было).
+                  if (isDesktopOrWeb) {
+                    // Разделяем страницы: мишень отдельно, остальные — в правую колонку.
+                    final otherPages = pages.where((p) => p != WorkspacePage.target).toList();
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Левая колонка: мишень с ограниченной шириной.
+                        SizedBox(
+                          width: targetH * 1.1, // ширина ~высоте (квадратная мишень + отступы)
+                          child: SingleChildScrollView(
+                            controller: _scroll,
+                            physics: vm.isEditing || vm.multiTouch
+                                ? const NeverScrollableScrollPhysics()
+                                : const ClampingScrollPhysics(),
+                            child: Column(
+                              children: [
+                                _TargetPage(height: targetH),
+                                if (vm.isEditing) const _EditActionBar() else const _ShotNoteBar(),
+                                const _ShotWheelBar(),
+                                const SizedBox(height: 24),
+                              ],
+                            ),
+                          ),
+                        ),
+                        // Правая колонка: остальные разделы в вертикальном скролле.
+                        Expanded(
+                          child: SingleChildScrollView(
+                            physics: const ClampingScrollPhysics(),
+                            child: Column(
+                              children: [
+                                for (final page in otherPages)
+                                  // Пустую статистику (нет зачётных выстрелов) не показываем вовсе.
+                                  if (!(page == WorkspacePage.statistics &&
+                                      vm.session.countingShots.isEmpty))
+                                    _Section(
+                                      title: page.title,
+                                      height: sectionH,
+                                      scroll: _scroll, // не используется для внутренней прокрутки, но оставлен для совместимости
+                                      child: _pageBody(page, vm),
+                                    ),
+                                const SizedBox(height: 24),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+
+                  // Мобильный: вертикальный скролл со всеми страницами.
                   return SingleChildScrollView(
                     controller: _scroll,
-                    // Пока палец ставит выстрел или два пальца зумят — страница не прокручивается.
                     physics: vm.isEditing || vm.multiTouch
                         ? const NeverScrollableScrollPhysics()
                         : const ClampingScrollPhysics(),
                     child: Column(
                       children: [
                         for (final page in pages)
-                          // Пустую статистику (нет зачётных выстрелов) не показываем вовсе.
                           if (!(page == WorkspacePage.statistics &&
                               vm.session.countingShots.isEmpty))
                             KeyedSubtree(
@@ -507,8 +575,9 @@ class _Section extends StatelessWidget {
             height: height,
             child: NotificationListener<OverscrollNotification>(
               onNotification: (n) {
-                if (n.metrics.axis == Axis.vertical && n.overscroll != 0)
+                if (n.metrics.axis == Axis.vertical && n.overscroll != 0) {
                   _by(n.overscroll);
+                }
                 return false;
               },
               child: child,
@@ -671,7 +740,9 @@ class _ShotNoteBarState extends State<_ShotNoteBar> {
   void _save(TargetViewModel vm) {
     final text = _ctl.text.trim();
     final shot = vm.selectedShot;
-    if (text.isEmpty || shot == null) return;
+    if (text.isEmpty || shot == null) {
+      return;
+    }
     final store = context.read<AppDataStore>();
     CommentsRepository(store.db).add(Comment(
       id: const Uuid().v4(),

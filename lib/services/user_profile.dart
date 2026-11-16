@@ -20,19 +20,27 @@ class UserProfile {
   /// Не спортивная пулевая стрельба — только в режиме разработчика.
   static const devOnlyDisciplines = {'archery', 'shotgun', 'biathlon', 'ipsc'};
 
+  /// Современные разряды РФ: нет разряда, юношеские 1–3, взрослые 1–3, КМС/МС/МСМК/ЗМС.
   static const ranks = <String>[
     /*tr*/ 'Нет разряда',
     /*tr*/ '3 юношеский',
     /*tr*/ '2 юношеский',
     /*tr*/ '1 юношеский',
-    /*tr*/ '3 разряд',
-    /*tr*/ '2 разряд',
-    /*tr*/ '1 разряд',
+    /*tr*/ '3 взрослый',
+    /*tr*/ '2 взрослый',
+    /*tr*/ '1 взрослый',
     /*tr*/ 'КМС',
     /*tr*/ 'МС',
     /*tr*/ 'МСМК',
     /*tr*/ 'ЗМС',
   ];
+
+  /// Маппинг устаревших строк из БД на современные названия.
+  static const _legacyRankMap = <String, String>{
+    '3 разряд': '3 взрослый',
+    '2 разряд': '2 взрослый',
+    '1 разряд': '1 взрослый',
+  };
 
   static const _kDisciplines = 'profile_disciplines';
   static const _kFirst = 'profile_first_name';
@@ -101,7 +109,10 @@ class UserProfile {
     final raw = _read(db, _kDate);
     return raw.isEmpty ? null : DateTime.tryParse(raw);
   }
-  static String rankOf(LocalDbService db) => _read(db, _kRank);
+  static String rankOf(LocalDbService db) {
+    final raw = _read(db, _kRank);
+    return _legacyRankMap[raw] ?? raw;
+  }
   static String regionOf(LocalDbService db) => _read(db, _kRegion);
 
   /// Сохраняет анкету. Обязательны вид стрельбы, пол и год рождения.
