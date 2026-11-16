@@ -313,8 +313,16 @@ class _HomeShellState extends State<HomeShell> {
 /// тренировку, если она есть, иначе предлагает начать новую с вкладки
 /// "Тренировка" (раздел 5.1 ТЗ: тренер не создаёт тренировки — это
 /// действие спортсмена).
-class _ActiveTargetTab extends StatelessWidget {
+class _ActiveTargetTab extends StatefulWidget {
   const _ActiveTargetTab({super.key});
+
+  @override
+  State<_ActiveTargetTab> createState() => _ActiveTargetTabState();
+}
+
+class _ActiveTargetTabState extends State<_ActiveTargetTab> {
+  bool _hadActive = false;
+  bool _poppedAfterFinish = false;
 
   @override
   Widget build(BuildContext context) {
@@ -323,7 +331,19 @@ class _ActiveTargetTab extends StatelessWidget {
       (s) =>
           s.status == SessionStatus.running || s.status == SessionStatus.paused,
     );
-    if (active.isEmpty) return const ExercisesScreen();
+    if (active.isEmpty) {
+      // Тренировку только что завершили прямо здесь: не выбрасываем человека
+      // в список тренировок, а возвращаем на главный экран (отзыв 16.11:
+      // «нажал финиш, назад-назад — открываются тренировки, так не логично»).
+      if (_hadActive && !_poppedAfterFinish) {
+        _poppedAfterFinish = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) Navigator.of(context).maybePop();
+        });
+      }
+      return const ExercisesScreen();
+    }
+    _hadActive = true;
     final session = active.first;
     final exercise = store.exerciseFor(session);
     if (exercise == null) {

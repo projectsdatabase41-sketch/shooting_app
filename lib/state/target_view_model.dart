@@ -220,19 +220,27 @@ class TargetViewModel extends ChangeNotifier {
   }
 
   void pause() {
-    if (!canEdit) return;
+    // Пауза/продолжение — как и завершение, доступны в любом режиме.
+    if (!canFinish) return;
     session = SessionLogic.pause(session, DateTime.now());
     _persist();
   }
 
   void resume() {
-    if (!canEdit) return;
+    if (!canFinish) return;
     session = SessionLogic.resume(session, DateTime.now());
     _persist();
   }
 
+  /// Завершение своей тренировки доступно в любом рабочем режиме.
+  ///
+  /// Раньше `finish()` проверял `canEdit`, а тот требует режима спортсмена:
+  /// в режиме тренера кнопка «Завершить» молча ничего не делала, и
+  /// тренировка оставалась «в процессе» даже после финиша (отзыв 16.11).
+  bool get canFinish => isOwnSession && session.status != SessionStatus.finished;
+
   void finish() {
-    if (!canEdit) return;
+    if (!canFinish) return;
     session = SessionLogic.finish(session, DateTime.now());
     _persist();
     // Не ждём результата: индикатор в HomeShell следит за
