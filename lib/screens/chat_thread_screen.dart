@@ -783,7 +783,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         final first =
             _itemPos.itemPositions.value.where((p) => p.index == 0).firstOrNull;
         if (first == null ||
-            (first.itemLeadingEdge - _endAlignment).abs() > 0.01) {
+            // Порог 24 px: раньше прыжок срабатывал на любом расхождении в
+            // пиксель, и при открытии чат «подпрыгивал» из-за догрузки пузырей
+            // и поля ввода (отзыв 16.11).
+            (first.itemLeadingEdge - _endAlignment).abs() > 24) {
           _itemCtl.jumpTo(index: 0, alignment: _endAlignment);
         }
       }));
