@@ -196,10 +196,23 @@ class CoachLink {
     }
     final coach = repo.contactById(ok.contactId);
     try {
-      final token = await SupabaseSyncService(personal).createShareToken(
-        store,
-        athleteLabel: coach?.nickname ?? '',
-      );
+      // Повторный coach_ok (их приходит несколько, если спортсмен нажимал
+      // «принять»/запрос уходил дважды) не должен выдавать новый токен и
+      // новое сообщение: от этого у тренера появлялись 4 одинаковых
+      // спортсмена и 4 уведомления (отзыв 16.11).
+      final tokenKey = 'grant_token_${ok.contactId}';
+      final savedToken = state(tokenKey) ?? '';
+      if (savedToken.isNotEmpty && state('grant_sent_${ok.contactId}') == '1') {
+        _setState(ok.clientMessageId, 'done');
+        return true;
+      }
+      final token = savedToken.isNotEmpty
+          ? savedToken
+          : await SupabaseSyncService(personal).createShareToken(
+              store,
+              athleteLabel: coach?.nickname ?? '',
+            );
+      if (savedToken.isEmpty) _setState(tokenKey, token);
       await sync.send(
         ok.contactId,
         encode({
@@ -210,6 +223,7 @@ class CoachLink {
           'name': _profileCard()['name'],
         }),
       );
+      _setState('grant_sent_${ok.contactId}', '1');
       _setState(ok.clientMessageId, 'done');
       return true;
     } catch (_) {
@@ -226,14 +240,21 @@ class CoachLink {
       return false;
     }
     final access = CoachAccessService(db);
+
+    // Идемпотентность: если такой спортсмен уже сохранён (по токену или по
+    // паре «адрес базы + имя»), только обновляем запись — новые не плодим.
+    // Так же защищаемся от повторных coach_grant: у спортсмена много
+    // сообщений-приглашений, но спортсмен в списке должен быть один.
+    final name = '${d['name'] ?? repo.contactById(grant.contactId)?.nickname ?? ''}';
     final athlete = CoachAthlete(
       id: _uuid.v4(),
-      name: '${d['name'] ?? repo.contactById(grant.contactId)?.nickname ?? ''}',
+      name: name,
       url: url,
       anonKey: anon,
       token: token,
     );
     access.saveAthlete(athlete);
+
     try {
       await access.linkChat(athlete, chatUserId: auth.userId, nickname: auth.nickname);
     } catch (_) {}

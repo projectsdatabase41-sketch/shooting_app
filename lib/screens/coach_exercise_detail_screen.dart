@@ -233,6 +233,7 @@ class _DetailBody extends StatelessWidget {
             face: face,
             embedded: true,
             coachMode: true,
+            comments: comments,
           ),
         );
     }

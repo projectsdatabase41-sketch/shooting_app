@@ -47,6 +47,7 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
   String? _error;
   List<TrainingSession> _sessions = [];
   String Function(TrainingSession) _nameOf = (_) => tr('Упражнение');
+  List<Map<String, dynamic>> _comments = [];
 
   _Scope _scope = _Scope.all;
   String? _exerciseName;
@@ -84,10 +85,20 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
           .toList()
         ..sort((a, b) =>
             (b.startedAt ?? DateTime(0)).compareTo(a.startedAt ?? DateTime(0)));
+      
+      // Fetch comments for all sessions
+      final allComments = <Map<String, dynamic>>[];
+      for (final p in packages) {
+        final id = '${p['id']}';
+        final comments = await _access.fetchComments(id);
+        allComments.addAll(comments);
+      }
+      
       if (!mounted) return;
       setState(() {
         _sessions = sessions;
         _nameOf = coachExerciseNameOf(exercises);
+        _comments = allComments;
         _sessionId = null;
         _seriesNo = null;
       });
@@ -208,6 +219,7 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
             sessionsOverride: _sessions,
             exerciseNameOfOverride: _nameOf,
             ownerLabel: _athlete?.name,
+            comments: _comments,
           ),
         ),
       ],
@@ -240,31 +252,15 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
   }
 
   List<Widget> _sessionPickers() {
-    final df = DateFormat('dd.MM.yyyy HH:mm');
     final currentId = _currentSessionId();
     final current = _sessions.firstWhere((s) => s.id == currentId);
     final seriesNos = current.shots.map((s) => s.seriesNo).toSet().toList()
       ..sort();
     return [
-      DropdownButtonFormField<String>(
-        initialValue: currentId,
-        isExpanded: true,
-        decoration: InputDecoration(labelText: tr('Тренировка')),
-        items: [
-          for (final s in _sessions)
-            DropdownMenuItem(
-              value: s.id,
-              child: Text(
-                '${_nameOf(s)} · ${s.startedAt == null ? '—' : df.format(s.startedAt!)}',
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-        ],
-        onChanged: (v) => setState(() {
-          _sessionId = v;
-          _seriesNo = null;
-        }),
-      ),
+      // Карточка вместо выпадающего списка: у спортсмена тренировки
+      // показываются карточками («как мои тренировки», отзыв 16.11), у
+      // тренера было неудобное меню — теперь так же.
+      _sessionCard(current),
       const SizedBox(height: 12),
       if (seriesNos.length > 1) ...[
         DropdownButtonFormField<int>(
@@ -281,6 +277,90 @@ class _CoachStatisticsScreenState extends State<CoachStatisticsScreen> {
         const SizedBox(height: 12),
       ],
     ];
+  }
+
+  /// Карточка выбранной тренировки в стиле «Мои тренировки».
+  Widget _sessionCard(TrainingSession s) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final df = DateFormat('dd.MM.yyyy HH:mm');
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: _pickSession,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(_nameOf(s), maxLines: 1, overflow: TextOverflow.ellipsis, style: theme.textTheme.titleSmall),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${s.startedAt == null ? '—' : df.format(s.startedAt!)} · ${tr('{n} выстр.', {'n': s.shots.length})}',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              s.totalScore.toStringAsFixed(1),
+              style: theme.textTheme.titleLarge?.copyWith(color: cs.primary),
+            ),
+            Icon(Icons.expand_more, color: cs.onSurfaceVariant),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  /// Список всех тренировок спортсмена — карточками, как в «Моих тренировках».
+  Future<void> _pickSession() async {
+    final df = DateFormat('dd.MM.yyyy HH:mm');
+    final theme = Theme.of(context);
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(ctx).height * 0.7),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+                child: Text(tr('Тренировки спортсмена'), style: theme.textTheme.titleMedium),
+              ),
+              for (final s in _sessions)
+                Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: ListTile(
+                    selected: s.id == _currentSessionId(),
+                    title: Text(_nameOf(s), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    subtitle: Text(
+                      '${s.startedAt == null ? '—' : df.format(s.startedAt!)} · ${tr('{n} выстр.', {'n': s.shots.length})}',
+                    ),
+                    trailing: Text(
+                      s.totalScore.toStringAsFixed(1),
+                      style: theme.textTheme.titleMedium?.copyWith(color: Theme.of(ctx).colorScheme.primary),
+                    ),
+                    onTap: () => Navigator.pop(ctx, s.id),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _sessionId = picked;
+      _seriesNo = null;
+    });
   }
 
   String _currentSessionId() {

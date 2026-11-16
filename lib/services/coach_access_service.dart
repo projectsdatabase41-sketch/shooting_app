@@ -115,34 +115,55 @@ class CoachAccessService {
   List<CoachAthlete> listAthletes() {
     final rows = db.db
         .select('SELECT * FROM coach_athletes ORDER BY sort_order, created_at');
-    return [
-      for (final r in rows)
-        CoachAthlete(
-          id: r['id'] as String,
-          name: r['name'] as String,
-          url: r['supabase_url'] as String,
-          anonKey: r['supabase_anon_key'] as String,
-          token: r['share_token'] as String,
-        ),
-    ];
+    // Один и тот же спортсмен мог попасть в список несколько раз (отзыв
+    // 16.11: «добавил спортсмена, а его почему-то 4 штуки»): тренер получал
+    // повторные coach_grant с новым токеном. Показываем по одной записи на
+    // пару «адрес базы + имя», оставляя самую свежую.
+    final seen = <String>{};
+    final out = <CoachAthlete>[];
+    for (final r in rows.reversed) {
+      final a = CoachAthlete(
+        id: r['id'] as String,
+        name: r['name'] as String,
+        url: r['supabase_url'] as String,
+        anonKey: r['supabase_anon_key'] as String,
+        token: r['share_token'] as String,
+      );
+      final key = '${a.url.trim()}${a.name.trim()}';
+      if (!seen.add(key)) continue;
+      out.add(a);
+    }
+    return out.reversed.toList();
   }
 
   /// Добавляет нового спортсмена или обновляет уже сохранённого (если
-  /// `id` совпадает с существующим).
-  void saveAthlete(CoachAthlete athlete) {
+  /// `id` совпадает с существующим, либо если такой же адрес базы и имя уже
+  /// есть — тогда обновляем токен у старой записи, а не плодим новые).
+  /// Возвращает true, если спортсмен был добавлен впервые, false — если обновлён существующий.
+  bool saveAthlete(CoachAthlete athlete) {
+    final url = athlete.url.trim().replaceAll(RegExp(r'/+$'), '');
+    final name = athlete.name.trim();
+    final existing = db.db.select(
+      'SELECT id FROM coach_athletes WHERE id = ? OR (supabase_url = ? AND name = ?) LIMIT 1',
+      [athlete.id, url, name],
+    );
+    final isNew = existing.isEmpty;
+    final id = isNew ? athlete.id : existing.first['id'] as String;
+
     db.db.execute(
       'INSERT INTO coach_athletes (id, name, supabase_url, supabase_anon_key, share_token) '
       'VALUES (?, ?, ?, ?, ?) '
       'ON CONFLICT(id) DO UPDATE SET name = excluded.name, supabase_url = excluded.supabase_url, '
       'supabase_anon_key = excluded.supabase_anon_key, share_token = excluded.share_token',
       [
-        athlete.id,
-        athlete.name.trim(),
-        athlete.url.trim().replaceAll(RegExp(r'/+$'), ''),
+        id,
+        name,
+        url,
         athlete.anonKey.trim(),
         athlete.token.trim(),
       ],
     );
+    return isNew;
   }
 
   void deleteAthlete(String id) {

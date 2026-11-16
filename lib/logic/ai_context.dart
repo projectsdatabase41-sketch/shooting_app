@@ -90,6 +90,10 @@ class AiContext {
   /// различает по имени, свои данные — в [allSessions].
   final List<AiAthleteData> athletes;
 
+  /// Комментарии к выстрелам/сериям/сессиям для текущей тренировки.
+  /// Используется в режиме тренера, где комментарии приходят отдельно от RPC.
+  final List<Map<String, dynamic>> comments;
+
   const AiContext({
     required this.scope,
     required this.allSessions,
@@ -103,6 +107,7 @@ class AiContext {
     this.existingExercises = const [],
     this.ownerLabel,
     this.athletes = const [],
+    this.comments = const [],
   });
 
   /// Только для того, чтобы дописать сводки прошлых разговоров ПОСЛЕ
@@ -325,6 +330,18 @@ The user has a notes module. Only when explicitly asked to save/create a note, a
         if (s.extra != null && s.extra!.isNotEmpty) 'device': s.extra,
       };
       map['shots'] = _shotsJson(s.shots);
+    }
+
+    // Комментарии к выстрелам/сериям/сессии (если есть)
+    if (comments.isNotEmpty) {
+      map['comments'] = comments.map((c) => {
+        'level': c['level'],
+        'shot_id': c['shot_id'],
+        'series_no': c['series_no'],
+        'author_role': c['author_role'],
+        'text': c['text'],
+        'created_at': c['created_at'],
+      }).toList();
     }
 
     final sh = shot;

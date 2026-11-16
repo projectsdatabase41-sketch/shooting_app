@@ -71,6 +71,9 @@ class AiChatScreen extends StatelessWidget {
   /// Данные спортсменов тренера (общий ассистент видит всех).
   final List<AiAthleteData> athletes;
 
+  /// Комментарии к выстрелам/сериям/сессии для режима тренера.
+  final List<Map<String, dynamic>> comments;
+
   const AiChatScreen({
     super.key,
     this.scope = AiScope.general,
@@ -84,6 +87,7 @@ class AiChatScreen extends StatelessWidget {
     this.exerciseNameOfOverride,
     this.ownerLabel,
     this.athletes = const [],
+    this.comments = const [],
   });
 
   @override
@@ -109,6 +113,7 @@ class AiChatScreen extends StatelessWidget {
           coachMode: coachMode,
           ownerLabel: ownerLabel,
           athletes: athletes,
+          comments: comments,
         ));
     return _AiChatBody(embedded: embedded, coachMode: coachMode);
   }
