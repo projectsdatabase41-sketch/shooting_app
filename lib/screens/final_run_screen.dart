@@ -265,6 +265,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
             enabled: _canPlace && !c.paused,
             onHold: (v) => setState(() => _holding = v),
             onShot: _onShot,
+            sighting: sighting,
           ),
         ),
         if (c.paused)
@@ -406,7 +407,10 @@ class ShotPad extends StatefulWidget {
 
   /// Мишень при зуме всегда по центру (режим концентрации): сдвиг двумя пальцами отключён.
   final bool lockCenter;
-  const ShotPad({required this.face, required this.marks, required this.enabled, required this.onHold, required this.onShot, this.colors, this.lockCenter = false});
+
+  /// Идёт пристрелка: на бумаге рисуется загнутый уголок, как на бланке.
+  final bool sighting;
+  const ShotPad({required this.face, required this.marks, required this.enabled, required this.onHold, required this.onShot, this.colors, this.lockCenter = false, this.sighting = false});
 
   @override
   State<ShotPad> createState() => _ShotPadState();
@@ -680,6 +684,7 @@ class _ShotPadState extends State<ShotPad> {
                       currentSeriesNo: 1,
                       zoom: _scale,
                       pan: _pan,
+                      sighting: widget.sighting,
                     ),
                   ),
                 ),
@@ -775,6 +780,7 @@ class _BotCard extends StatelessWidget {
                     currentSeriesNo: 1,
                     zoom: zoom,
                     denseLabels: true,
+                    sighting: c.phase == RunPhase.sighting,
                   ),
                 ),
               ),
