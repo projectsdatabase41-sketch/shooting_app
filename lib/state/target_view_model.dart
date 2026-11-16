@@ -287,6 +287,10 @@ class TargetViewModel extends ChangeNotifier {
   /// показывать в шапке нечего.
   SeriesSpec? get currentSeriesSpec => exercise.specFor(currentSeriesNo);
 
+  /// Текущая серия — пристрелочная (не идёт в зачёт): на мишени рисуется
+  /// загнутый уголок, как на бланке и на пульте SIUS.
+  bool get isSightingSeries => currentSeriesSpec?.counts == false;
+
   /// Сколько выстрелов уже сделано в текущей серии.
   int get shotsInCurrentSeries {
     final no = currentSeriesNo;

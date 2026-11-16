@@ -307,6 +307,7 @@ class _TargetCanvasState extends State<TargetCanvas> {
                   draftShotNumber: vm.draftShotNumber,
                   zoom: vm.zoom,
                   pan: Offset(vm.panX, vm.panY),
+                  sighting: vm.isSightingSeries,
                 ),
               ),
               ..._buildCornerValues(vm, colors),

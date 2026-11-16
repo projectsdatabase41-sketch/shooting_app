@@ -42,6 +42,11 @@ class TargetPainter extends CustomPainter {
   /// Мелкая картинка (пресеты, превью): подписи колец рисуются и на узких полосах, мелким шрифтом.
   final bool denseLabels;
 
+  /// Текущая серия — пристрелочная (без зачёта). На настоящем бланке такая
+  /// мишень помечается загнутым уголком; рисуем его на бумаге, поэтому он
+  /// масштабируется вместе с мишнью, а не висит поверх экрана (отзыв 16.11).
+  final bool sighting;
+
   TargetPainter({
     required this.face,
     required this.colors,
@@ -55,6 +60,7 @@ class TargetPainter extends CustomPainter {
     this.zoom = 1.0,
     this.pan = Offset.zero,
     this.denseLabels = false,
+    this.sighting = false,
   });
 
   @override
@@ -111,6 +117,33 @@ class TargetPainter extends CustomPainter {
           Radius.circular(radiusPx * 0.06),
         ),
         Paint()..color = colors.targetPaper,
+      );
+    }
+
+    // 1a. Загнутый уголок — признак пристрелочной мишени (как на бланке и на
+    // пульте SIUS). Рисуется на бумаге, в её координатах: при зуме растёт
+    // вместе с мишенью, при панорамировании уезжает с углом, а не висит перед
+    // ней. Цвет — противоположный бумаге, чтобы читался и на белом бланке, и
+    // на затемнённой теме.
+    if (sighting && face.zones.isEmpty && !face.isArchery) {
+      final rect = Rect.fromCenter(
+          center: center, width: radiusPx * 2, height: radiusPx * 2);
+      final fold = radiusPx * 0.28;
+      final paperLight = colors.targetPaper.computeLuminance() > 0.5;
+      final foldColor = paperLight ? Colors.black : Colors.white;
+      final path = Path()
+        ..moveTo(rect.right - fold, rect.top)
+        ..lineTo(rect.right, rect.top)
+        ..lineTo(rect.right, rect.top + fold)
+        ..close();
+      canvas.drawPath(path, Paint()..color = foldColor.withValues(alpha: 0.92));
+      // Сгиб: вторая, чуть отступающая линия — объём «загнутого» уголка.
+      canvas.drawLine(
+        Offset(rect.right - fold, rect.top),
+        Offset(rect.right, rect.top + fold),
+        Paint()
+          ..color = foldColor.withValues(alpha: 0.45)
+          ..strokeWidth = math.max(1.0, radiusPx * 0.012),
       );
     }
 

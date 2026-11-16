@@ -72,6 +72,11 @@ class _StepViewerScreenState extends State<StepViewerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // Клавиатура не должна сжимать область WebView: при каждом кадре
+      // открытия она пересчитывала размер и перерисовывала 3D-сцену, из-за
+      // чего ввод отзыва шёл рывками (отзыв 16.11). Поле ввода остаётся над
+      // клавиатурой, а вьюер просто не перерисовывается.
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: Text(tr('3D-модели')),
         actions: [
