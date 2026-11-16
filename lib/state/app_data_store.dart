@@ -1,4 +1,5 @@
 import '../logic/friendly_error.dart';
+import '../i18n/i18n.dart';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -385,6 +386,23 @@ class AppDataStore extends ChangeNotifier {
     ExerciseGender gender = ExerciseGender.mixed,
     List<SeriesSpec> series = const [],
   }) {
+    // Простое упражнение без расписанных серий: первой ставим пристрелку
+    // (15 минут, без зачёта), как на бланке и по правилам ISSF. Иначе
+    // тренировка начиналась сразу с зачётной мишени — самая частая жалоба
+    // 16.11 («создал упражнение, а мишень сразу зачётная»).
+    final specs = series.isNotEmpty
+        ? series
+        : <SeriesSpec>[
+            SeriesSpec(
+                name: tr('Пристрелка'),
+                timeLimit: const Duration(minutes: 15),
+                counts: false),
+            for (var i = 0;
+                i < (seriesSize <= 0 ? 1 : (totalShots / seriesSize).ceil());
+                i++)
+              SeriesSpec(
+                  name: tr('Серия {n}', {'n': i + 1}), shotCount: seriesSize),
+          ];
     final ex = Exercise(
       id: _uuid.v4(),
       name: name,
@@ -392,7 +410,7 @@ class AppDataStore extends ChangeNotifier {
       totalShots: totalShots,
       seriesSize: seriesSize,
       gender: gender,
-      series: series,
+      series: specs,
     );
     db.db.execute(
       'INSERT INTO exercises (id, code, name, target_face_code, total_shots, series_size, gender, series) '
