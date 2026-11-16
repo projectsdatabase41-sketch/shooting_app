@@ -12,7 +12,7 @@ void main() {
     expect(UserProfile.disciplinesOf(db), ['pistol', 'rifle']);
     expect(UserProfile.genderOf(db), 'f');
     expect(UserProfile.birthYearOf(db), 2008);
-    expect(UserProfile.rankOf(db), '2 разряд');
+    expect(UserProfile.rankOf(db), '2 взрослый');
     expect(UserProfile.regionOf(db), 'Москва');
 
     final old = LocalDbService();
