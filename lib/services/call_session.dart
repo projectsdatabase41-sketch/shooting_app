@@ -7,9 +7,11 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:uuid/uuid.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import 'call_audio_io.dart' if (dart.library.js_interop) 'call_audio_web.dart' as call_audio;
 import 'call_service.dart';
 import 'demo_mode.dart';
 import 'chat_auth_service.dart';
+import 'ice_servers.dart';
 import 'live_chat_session.dart';
 import '../i18n/i18n.dart';
 
@@ -107,12 +109,20 @@ class CallSession extends ChangeNotifier {
   /// missed / busy / failed / cancelled.
   String outcome = '';
 
+  /// Состояние ICE-соединения для UI: 'connecting' | 'connected' | 'no_connection' | 'disconnected'
+  String iceConnectionState = 'connecting';
+
+  /// На вебе: удалённый аудио-поток должен быть привязан к <audio autoplay>,
+  /// иначе автовоспроизведение блокируется браузером. Разблокируется на первом жесте.
+  bool _webAudioUnlocked = false;
+
   Timer? _disconnectTimer;
 
   final localRenderer = RTCVideoRenderer();
   final remoteRenderer = RTCVideoRenderer();
 
   late final CallService _service = CallService(auth);
+  late final IceServers _iceServers = IceServers(fetch: _service.iceServers);
   RTCPeerConnection? _pc;
   MediaStream? _local;
   WebSocketChannel? _ws;
@@ -143,7 +153,7 @@ class CallSession extends ChangeNotifier {
       'video': video ? {'facingMode': 'user', 'width': {'ideal': 1280}, 'height': {'ideal': 720}, 'frameRate': {'ideal': 30}} : false,
     });
     localRenderer.srcObject = _local;
-    final pc = await createPeerConnection({'iceServers': await _service.iceServers()});
+    final pc = await createPeerConnection({'iceServers': await _iceServers.get()});
     _pc = pc;
     for (final t in _local!.getTracks()) {
       await pc.addTrack(t, _local!);
@@ -157,6 +167,34 @@ class CallSession extends ChangeNotifier {
       if (e.streams.isEmpty) return;
       remoteRenderer.srcObject = e.streams.first;
       if (e.track.kind == 'video') remoteVideo = true;
+      // На вебе браузер может глушить удалённый звук до первого жеста —
+      // подталкиваем play() у <audio>, который создал сам flutter_webrtc.
+      if (kIsWeb && e.track.kind == 'audio') call_audio.nudgeRemoteAudio();
+      notifyListeners();
+    };
+    // ICE connection state для UI: connecting → connected / no_connection / disconnected
+    pc.onIceConnectionState = (s) {
+      switch (s) {
+        case RTCIceConnectionState.RTCIceConnectionStateNew:
+        case RTCIceConnectionState.RTCIceConnectionStateChecking:
+          iceConnectionState = 'connecting';
+          break;
+        case RTCIceConnectionState.RTCIceConnectionStateConnected:
+        case RTCIceConnectionState.RTCIceConnectionStateCompleted:
+          iceConnectionState = 'connected';
+          break;
+        case RTCIceConnectionState.RTCIceConnectionStateDisconnected:
+          iceConnectionState = 'no_connection';
+          break;
+        case RTCIceConnectionState.RTCIceConnectionStateFailed:
+          iceConnectionState = 'failed';
+          break;
+        case RTCIceConnectionState.RTCIceConnectionStateClosed:
+          iceConnectionState = 'closed';
+          break;
+        default:
+          iceConnectionState = 'unknown';
+      }
       notifyListeners();
     };
     pc.onConnectionState = (s) {
@@ -174,6 +212,14 @@ class CallSession extends ChangeNotifier {
     };
     // Видео — на громкую связь, голос — к уху (как в обычных звонилках).
     await setSpeaker(video);
+  }
+
+  /// Разблокировать автовоспроизведение на вебе (первый жест: тап по экрану).
+  /// На остальных платформах ничего не делает — там хватает самого flutter_webrtc.
+  void unlockWebAudio() {
+    if (!kIsWeb || _webAudioUnlocked) return;
+    _webAudioUnlocked = true;
+    call_audio.nudgeRemoteAudio();
   }
 
   Future<void> _openRoom() async {
@@ -563,6 +609,7 @@ class CallSession extends ChangeNotifier {
   static String _humanError(Object e) {
     final s = '$e';
     if (s.contains('Permission') || s.contains('NotAllowed')) return tr('Нет доступа к микрофону или камере');
+    if (s.contains('NO_DEVICE')) return tr('У {peerName} сейчас нет устройства с приложением', {'peerName': CallSession.current?.peerName ?? ''});
     return tr('Не удалось начать звонок: {s}', {'s': s});
   }
 

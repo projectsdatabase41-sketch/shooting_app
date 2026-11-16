@@ -40,7 +40,9 @@ class CallService {
   /// FCM-токен устройства — чтобы до него дозвонились, когда приложение закрыто.
   Future<void> registerDevice(String fcmToken) => _send('POST', '/register', {'token': fcmToken});
 
-  /// STUN/TURN для соединения (TURN — временные доступы, выдаёт сервер).
+  /// STUN/TURN от сервера звонков (TURN — временные доступы, выдаёт сервер).
+  /// Это «сырой» ответ `/ice`: резервный TURN и STUN из конфига добавляет
+  /// `IceServers` (`lib/services/ice_servers.dart`).
   Future<List<Map<String, dynamic>>> iceServers() async {
     try {
       final r = await _send('GET', '/ice') as Map<String, dynamic>;

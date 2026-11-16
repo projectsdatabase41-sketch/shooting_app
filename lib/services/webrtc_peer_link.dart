@@ -3,8 +3,8 @@ import 'dart:async';
 
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
+import 'ice_servers.dart';
 import 'peer_link.dart';
-import 'remote_config.dart';
 
 /// Реализация на `flutter_webrtc`. Только STUN из удалённого конфига: TURN
 /// требует секретных учётных данных, а конфиг публичный — без TURN часть
@@ -18,26 +18,12 @@ class WebRtcPeerLink implements PeerLink {
 
   final Future<List<Map<String, dynamic>>> Function()? iceServers;
 
-  static List<Map<String, dynamic>>? _iceCache;
-  static DateTime _iceAt = DateTime.fromMillisecondsSinceEpoch(0);
+  /// ICE-серверы: STUN из конфига + TURN от сервера звонков + бесплатный
+  /// резерв. Логика и кэш — в `IceServers`, чтобы звонки и P2P брали одно и
+  /// то же (без TURN пары за симметричным NAT оставались на Connecting).
+  late final IceServers _iceModule = IceServers(fetch: iceServers);
 
-  Future<List<Map<String, dynamic>>> _ice() async {
-    final fallback = [
-      {'urls': RemoteConfig.stunServers},
-    ];
-    final get = iceServers;
-    if (get == null) return fallback;
-    if (_iceCache != null && DateTime.now().difference(_iceAt) < const Duration(minutes: 10)) return _iceCache!;
-    try {
-      final r = await get().timeout(const Duration(seconds: 4));
-      if (r.isNotEmpty) {
-        _iceCache = r;
-        _iceAt = DateTime.now();
-        return r;
-      }
-    } catch (_) {}
-    return fallback;
-  }
+  Future<List<Map<String, dynamic>>> _ice() => _iceModule.get();
 
   RTCPeerConnection? _pc;
   RTCDataChannel? _dc;

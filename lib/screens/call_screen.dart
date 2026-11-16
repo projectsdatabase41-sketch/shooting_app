@@ -143,14 +143,34 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     super.dispose();
   }
 
-  String get _status => switch (s.state) {
-        CallState.preparing => tr('Подготовка…'),
-        CallState.calling => s.video ? tr('Видеовызов…') : tr('Вызов…'),
-        CallState.ringing => s.video ? tr('Входящий видеозвонок') : tr('Входящий звонок'),
-        CallState.connecting => tr('Соединение…'),
-        CallState.active => _fmt(s.talked),
-        CallState.ended => s.answered ? '${s.endReason ?? 'Звонок завершён'} · ${_fmt(s.talked)}' : (s.endReason ?? tr('Звонок завершён')),
-      };
+  String get _status {
+    // ICE connection state для веба/мобайла: connecting → connected / no_connection / disconnected
+    if (s.state == CallState.connecting || s.state == CallState.calling) {
+      switch (s.iceConnectionState) {
+        case 'connecting':
+        case 'checking':
+          return tr('Подключение…');
+        case 'connected':
+        case 'completed':
+          return tr('Соединено');
+        case 'no_connection':
+        case 'disconnected':
+          return tr('Нет соединения…');
+        case 'failed':
+          return tr('Ошибка соединения');
+        case 'closed':
+          return tr('Соединение закрыто');
+      }
+    }
+    return switch (s.state) {
+          CallState.preparing => tr('Подготовка…'),
+          CallState.calling => s.video ? tr('Видеовызов…') : tr('Вызов…'),
+          CallState.ringing => s.video ? tr('Входящий видеозвонок') : tr('Входящий звонок'),
+          CallState.connecting => tr('Соединение…'),
+          CallState.active => _fmt(s.talked),
+          CallState.ended => s.answered ? '${s.endReason ?? 'Звонок завершён'} · ${_fmt(s.talked)}' : (s.endReason ?? tr('Звонок завершён')),
+        };
+  }
 
   static String _fmt(Duration d) {
     final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
@@ -284,72 +304,75 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     return PopScope(
       canPop: s.isEnded,
       child: Scaffold(
-        body: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [_tint, Color.lerp(_tint, Colors.black, 0.75)!],
-            ),
-          ),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (remoteVideo)
-                RTCVideoView(s.remoteRenderer, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
-              if (s.video && s.frontCamera) SelfieLightOverlay(light: _light),
-              if (s.video && s.frontCamera) Positioned.fill(child: SelfieLightGestures(light: _light, child: const SizedBox.expand())),
-              if (s.video && s.frontCamera && _light.on && _light.rgb)
-                Positioned(
-                  left: 24,
-                  right: 24,
-                  bottom: 190,
-                  child: HueBar(hue: _light.hue, onChanged: (h) => _light.update(() => _light.hue = h)),
-                ),
-              SafeArea(
-                child: Column(
-                  children: [
-                    const SizedBox(height: 24),
-                    if (!remoteVideo) _avatar() else const SizedBox(height: 8),
-                    Text(
-                      s.peerName,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w600, shadows: shadow),
-                    ),
-                    const SizedBox(height: 8),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: Text(
-                        _status,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: Colors.white70, fontSize: 16, shadows: shadow),
-                      ),
-                    ),
-                    const Spacer(),
-                    Container(
-                      margin: const EdgeInsets.fromLTRB(12, 0, 12, 20),
-                      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.25),
-                        borderRadius: BorderRadius.circular(28),
-                      ),
-                      child: _controls(),
-                    ),
-                  ],
-                ),
+        body: GestureDetector(
+          onTap: () => s.unlockWebAudio(),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [_tint, Color.lerp(_tint, Colors.black, 0.75)!],
               ),
-              if (s.video && !s.cameraOff && s.state != CallState.ringing && !s.isEnded)
-                Positioned(
-                  right: 16,
-                  top: MediaQuery.paddingOf(context).top + 16,
-                  width: 110,
-                  height: 160,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: RTCVideoView(s.localRenderer, mirror: true, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
+            ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (remoteVideo)
+                  RTCVideoView(s.remoteRenderer, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
+                if (s.video && s.frontCamera) SelfieLightOverlay(light: _light),
+                if (s.video && s.frontCamera) Positioned.fill(child: SelfieLightGestures(light: _light, child: const SizedBox.expand())),
+                if (s.video && s.frontCamera && _light.on && _light.rgb)
+                  Positioned(
+                    left: 24,
+                    right: 24,
+                    bottom: 190,
+                    child: HueBar(hue: _light.hue, onChanged: (h) => _light.update(() => _light.hue = h)),
+                  ),
+                SafeArea(
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 24),
+                      if (!remoteVideo) _avatar() else const SizedBox(height: 8),
+                      Text(
+                        s.peerName,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w600, shadows: shadow),
+                      ),
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: Text(
+                          _status,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.white70, fontSize: 16, shadows: shadow),
+                        ),
+                      ),
+                      const Spacer(),
+                      Container(
+                        margin: const EdgeInsets.fromLTRB(12, 0, 12, 20),
+                        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.25),
+                          borderRadius: BorderRadius.circular(28),
+                        ),
+                        child: _controls(),
+                      ),
+                    ],
                   ),
                 ),
-            ],
+                if (s.video && !s.cameraOff && s.state != CallState.ringing && !s.isEnded)
+                  Positioned(
+                    right: 16,
+                    top: MediaQuery.paddingOf(context).top + 16,
+                    width: 110,
+                    height: 160,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: RTCVideoView(s.localRenderer, mirror: true, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
