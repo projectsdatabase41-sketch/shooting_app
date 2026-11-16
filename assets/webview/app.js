@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { attachMassPanel } from './mass.js';
 
 const MODEL_COLOR = 0xc7d0dd;
 const EDGE_COLOR = 0x151a22;
@@ -431,6 +432,9 @@ function installGroup(group, sources, parts, triangles, loadId) {
   state.triangles = triangles;
   state.edges = null;
   state.modelLuminance = computeLuminance(group);
+
+  // Масса, объём и центр тяжести по каждой детали (см. mass.js).
+  state.massPanel = attachMassPanel(modelRoot, state.massPanel);
 
   // Тёмная деталь на тёмном фоне не видна — автоматически переключаем фон.
   applyTheme(state.themeUserPicked ? state.theme : state.modelLuminance < 0.34 ? 'light' : 'dark', true);
@@ -936,6 +940,10 @@ function disposeObject(object) {
 }
 
 function disposeModel() {
+  if (state.massPanel) {
+    state.massPanel.dispose();
+    state.massPanel = null;
+  }
   state.modelGroup = null;
   state.edgeSources = [];
   state.edges = null;

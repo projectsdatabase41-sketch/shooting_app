@@ -449,3 +449,70 @@ body.ui-minimal .empty {
 
   .empty-title { font-size: 15.5px; }
 }
+
+/* ---- Панель массы, объёма и центра тяжести (mass.js) ---- */
+.mass {
+  position: fixed;
+  top: 64px;
+  right: 12px;
+  width: 320px;
+  max-height: calc(100vh - 96px);
+  overflow: auto;
+  z-index: 30;
+  border-radius: 14px;
+  background: rgba(18, 22, 28, 0.86);
+  color: #e8eef7;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(10px);
+  font: 500 12.5px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif;
+  padding: 10px 10px 6px;
+}
+.mass[hidden] { display: none; }
+.mass-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 4px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  opacity: 0.92;
+}
+.mass-sum { color: #8fd0ff; font-weight: 700; }
+.mass-list { display: flex; flex-direction: column; gap: 4px; padding-top: 8px; }
+.mass-row {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.mass-row:hover, .mass-row:focus-within { background: rgba(76, 141, 255, 0.18); }
+.mass-row.is-hidden { opacity: 0.45; }
+.mass-row.is-hidden .mass-name { text-decoration: line-through; }
+.mass-eye input { accent-color: #4c8dff; width: 15px; height: 15px; cursor: pointer; }
+.mass-main { min-width: 0; }
+.mass-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+.mass-meta { opacity: 0.72; font-size: 11.5px; }
+.mass-mat {
+  background: rgba(255, 255, 255, 0.1);
+  color: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  padding: 3px 4px;
+  font: inherit;
+  font-size: 11.5px;
+  max-width: 104px;
+}
+.mass-mat option { color: #111; }
+
+@media (max-width: 720px) {
+  .mass { width: calc(100vw - 20px); left: 10px; right: 10px; top: auto; bottom: 56px; max-height: 42vh; }
+}
