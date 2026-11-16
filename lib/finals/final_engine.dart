@@ -136,6 +136,7 @@ class FinalFormat {
     required int seriesSeconds,
     required int singleSeconds,
     required int step,
+    int sightingSeconds = 300,
   }) {
     final total = series * perSeries + singles;
     const eliminations = 6; // из восьми остаётся двое
@@ -149,6 +150,7 @@ class FinalFormat {
       singleShots: singles,
       seriesSeconds: seriesSeconds,
       singleSeconds: singleSeconds,
+      sightingSeconds: sightingSeconds,
       eliminationAfter: [
         for (var i = 0; i < eliminations; i++) first + step * i
       ],

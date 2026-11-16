@@ -1,6 +1,7 @@
 import '../services/chat_sync_service.dart';
 import '../services/chat_messages_repository.dart';
 import 'dart:async';
+import 'dart:convert';
 import '../widgets/glass_route.dart';
 import '../widgets/app_backdrop.dart';
 import 'finals_voice_settings_screen.dart';
@@ -20,6 +21,8 @@ import '../state/app_data_store.dart';
 import '../widgets/glass_pill.dart';
 import '../finals/champions_service.dart';
 import '../services/chat_auth_service.dart';
+import '../services/ai_service.dart';
+import '../services/ai_settings.dart';
 import '../finals/finals_session_service.dart';
 import '../services/user_profile.dart';
 import 'champions_screen.dart';
@@ -158,9 +161,11 @@ class FinalSetupScreen extends StatefulWidget {
 }
 
 class _FinalSetupScreenState extends State<FinalSetupScreen> {
-  String _level = 'mixed'; // mixed | easy | medium | hard | unpredictable
+  String _level = 'mixed'; // mixed | easy | medium | hard | unpredictable | manual
   bool _custom = false; // свой финал: не публикуется
-  int _cSeries = 2, _cPerSeries = 5, _cSingles = 14, _cSeriesSec = 250, _cSingleSec = 50, _cStep = 2;
+  int _cSeries = 2, _cPerSeries = 5, _cSingles = 14, _cSeriesSec = 250, _cSingleSec = 50, _cStep = 2, _cSightingSec = 300;
+  // Ручной режим сложности ботов
+  double _manualMinShot = 8.0, _manualMaxShot = 10.9, _manualStp = 10.0, _manualDispersion = 0.0;
 
   /// Формат: выбранный или собранный конструктором (`null` — параметры неверны).
   FinalFormat? get _fmt => _custom
@@ -172,6 +177,7 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
           seriesSeconds: _cSeriesSec,
           singleSeconds: _cSingleSec,
           step: _cStep,
+          sightingSeconds: _cSightingSec,
         )
       : widget.format;
   late bool _voice = FinalsPrefs.voice(context.read<AppDataStore>().db);
@@ -214,11 +220,34 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
   void _start(AppDataStore store) {
     final fmt = _fmt;
     if (fmt == null) return;
+    
+    // Проверка: если нет истории тренировок и не выбран ручной режим — показываем предупреждение
+    final h = _history(store);
+    final enough = h.all.length >= 20;
+    if (!enough && _level != 'manual' && _level != 'champions') {
+      showGlassDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(tr('Нет истории тренировок')),
+          content: Text(tr('У вас меньше 20 выстрелов на этой мишени. Сила ботов будет угадана. Продолжить?')),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Отмена'))),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Продолжить'))),
+          ],
+        ),
+      ).then((confirmed) {
+        if (confirmed == true) _doStart(store, enough, h);
+      });
+      return;
+    }
+    _doStart(store, enough, h);
+  }
+
+  void _doStart(AppDataStore store, bool enough, ({List<(double, double)> all, List<ShotStats> sessions}) h) {
+    final fmt = _fmt!;
     // Недостающие записи диктора для участников готовим в фоне (если они уже есть — ничего не делается).
     VoicePacks.ensureNames(store.db, [_myName(store), for (final o in _opps) o.name]);
     final face = TargetFace.byCode(widget.format.faceCode);
-    final h = _history(store);
-    final enough = h.all.length >= 20;
     final stats = enough ? ShotStats.fromPoints(h.all) : _fallback;
     final rng = math.Random();
     const mixed = [
@@ -244,15 +273,74 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
       userId: 'me',
       bots: {
         for (var i = 0; i < 7; i++)
-          'b$i': BotShooter(_opps[i].stats ?? stats, _opps[i].stats != null ? BotDifficulty.medium : levels[i], face,
-              math.Random(rng.nextInt(1 << 30)),
-              sessions: h.sessions),
+          'b$i': _createBotShooter(_opps[i].stats ?? stats, _opps[i].stats != null ? BotDifficulty.medium : levels[i], face,
+              math.Random(rng.nextInt(1 << 30)), h.sessions),
       },
       rng: rng,
     );
     Navigator.of(context).pushReplacement(MaterialPageRoute(
       builder: (_) => FinalRunScreen(controller: controller, store: store, custom: _custom),
     ));
+  }
+
+  BotShooter _createBotShooter(ShotStats stats, BotDifficulty diff, TargetFace face, math.Random rng, List<ShotStats> sessions) {
+    if (_level == 'manual') {
+      return BotShooter(stats, BotDifficulty.manual, face, rng, 
+        sessions: sessions,
+        manualMinShot: _manualMinShot,
+        manualMaxShot: _manualMaxShot,
+        manualStp: _manualStp,
+        manualDispersionDeg: _manualDispersion,
+      );
+    }
+    return BotShooter(stats, diff, face, rng, sessions: sessions);
+  }
+
+  /// ИИ подбирает параметры ручной сложности по истории тренировок на этой
+  /// мишени (отзыв 16.11: «возможность создать уровень сложности с помощью ИИ»).
+  Future<void> _generateAiDifficulty(AppDataStore store) async {
+    final ai = AiSettings(store.db);
+    if (ai.apiKey.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Добавьте ключ API в настройках ИИ'))));
+      return;
+    }
+    final face = TargetFace.byCode(widget.format.faceCode);
+    final h = _history(store);
+    final enough = h.all.length >= 20;
+    final stats = enough ? ShotStats.fromPoints(h.all) : _fallback;
+
+    final prompt = '''
+Формат финала: ${tr(widget.format.nameKey)} (мишень ${face.name}), ${widget.format.finalists} финалистов.
+${enough ? 'У спортсмена ${h.all.length} тренировочных выстрелов: СТП (${stats.mx.toStringAsFixed(1)}, ${stats.my.toStringAsFixed(1)}), разброс X ${stats.sx.toStringAsFixed(1)}, Y ${stats.sy.toStringAsFixed(1)}.' : 'У спортсмена мало выстрелов (${h.all.length}) — бери типичные значения для этой мишени.'}
+Подбери сложность семи ботов: min_shot и max_shot — значение выстрела (0.0–10.9),
+stp — сколько выстрелов до пика формы (1–30), dispersion_deg — направление смещения группы в градусах (-180…180).
+''';
+
+    try {
+      final service = AiService(ai);
+      final reply = await service.ask(
+        systemPrompt: 'Ты тренер по пулевой стрельбе. Отвечай только JSON без пояснений.',
+        contextBlock: prompt,
+        history: const [],
+        json: true,
+      );
+      final start = reply.text.indexOf('{');
+      final end = reply.text.lastIndexOf('}');
+      if (start < 0 || end <= start) throw const FormatException('no json');
+      final data = jsonDecode(reply.text.substring(start, end + 1)) as Map<String, dynamic>;
+      setState(() {
+        _manualMinShot = (data['min_shot'] as num).toDouble().clamp(0.0, 10.9);
+        _manualMaxShot = (data['max_shot'] as num).toDouble().clamp(_manualMinShot, 10.9);
+        _manualStp = (data['stp'] as num).toDouble().clamp(1.0, 30.0);
+        _manualDispersion = (data['dispersion_deg'] as num).toDouble().clamp(-180.0, 180.0);
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Параметры загружены от ИИ'))));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Ошибка ИИ: {e}', {'e': e.toString()}))));
+    }
   }
 
   /// Выбор чемпиона из таблицы и замена им одного из участников.
@@ -316,6 +404,24 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
         IconButton(
           icon: const Icon(Icons.add_circle_outline),
           onPressed: value + step > max ? null : () => setState(() => set(value + step)),
+        ),
+      ]);
+
+  /// Шаг с десятичными значениями (ручная сложность ботов, отзыв 16.11).
+  Widget _stepperF(String label, double value, double min, double max, void Function(double) set, {double step = 0.1}) =>
+      Row(children: [
+        Expanded(child: Text(label)),
+        IconButton(
+          icon: const Icon(Icons.remove_circle_outline),
+          onPressed: value - step < min ? null : () => setState(() => set((value - step).clamp(min, max))),
+        ),
+        SizedBox(
+          width: 56,
+          child: Text(value.toStringAsFixed(1), textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w700)),
+        ),
+        IconButton(
+          icon: const Icon(Icons.add_circle_outline),
+          onPressed: value + step > max ? null : () => setState(() => set((value + step).clamp(min, max))),
         ),
       ]);
 
@@ -393,14 +499,50 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
                   ('medium', tr('Средние')),
                   ('hard', tr('Сложные')),
                   ('unpredictable', tr('Непредсказуемые')),
+                  ('manual', tr('Ручная')),
                   ('champions', tr('Чемпионы (недостающих заменят боты)')),
                 ], _level, (v) => _level = v),
                 const SizedBox(height: 6),
+                if (!enough && _level != 'manual' && _level != 'champions')
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: cs.errorContainer,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.warning_amber_rounded, color: cs.onErrorContainer, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            tr('Мало ваших тренировок на этой мишени — сила ботов подобрана условно, результат будет приблизительным'),
+                            style: TextStyle(color: cs.onErrorContainer, fontSize: 13),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 6),
+                if (_level == 'manual') ...[
+                  _stepperF(tr('Мин. значение выстрела'), _manualMinShot, 0.0, 10.9, (v) => _manualMinShot = v),
+                  _stepperF(tr('Макс. значение выстрела'), _manualMaxShot, 0.0, 10.9, (v) => _manualMaxShot = v),
+                  _stepperF(tr('STP (выстрелов к пику)'), _manualStp, 1.0, 30.0, (v) => _manualStp = v, step: 1.0),
+                  _stepperF(tr('Направление смещения (°)'), _manualDispersion, -180.0, 180.0, (v) => _manualDispersion = v, step: 1.0),
+                  const SizedBox(height: 6),
+                  OutlinedButton.icon(
+                    onPressed: () => _generateAiDifficulty(store),
+                    icon: const Icon(Icons.auto_awesome),
+                    label: Text(tr('ИИ подбор сложности')),
+                  ),
+                  const SizedBox(height: 6),
+                ],
                 Text(switch (_level) {
                   'easy' => tr('Лёгкие: стреляют чуть хуже вас — средняя точка дальше от центра, разброс больше.'),
                   'medium' => tr('Средние: стреляют как вы — по вашей манере и разбросу.'),
                   'hard' => tr('Сложные: стреляют чуть лучше вас — точка ближе к центру, разброс меньше.'),
                   'unpredictable' => tr('Непредсказуемые: в каждом финале у бота случайный «день» — то лучше, то хуже вас, с колебаниями по ходу.'),
+                  'manual' => tr('Ручная: задайте мин/макс значение, STP и направление смещения для всех ботов.'),
                   _ => tr('Боты разной силы: от чуть слабее вас до чуть сильнее.'),
                 }, style: theme.textTheme.bodySmall),
                 const SizedBox(height: 18),
@@ -445,6 +587,7 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
                   _stepper(tr('Одиночных выстрелов'), _cSingles, 0, 40, (v) => _cSingles = v),
                   _stepper(tr('Секунд на серию'), _cSeriesSec, 30, 600, (v) => _cSeriesSec = v, step: 10),
                   _stepper(tr('Секунд на выстрел'), _cSingleSec, 10, 120, (v) => _cSingleSec = v, step: 5),
+                  _stepper(tr('Секунд на пристрелку'), _cSightingSec, 30, 600, (v) => _cSightingSec = v, step: 10),
                   _stepper(tr('Выбывание после каждых N выстрелов'), _cStep, 1, 5, (v) => _cStep = v),
                   if (_fmt == null)
                     Padding(

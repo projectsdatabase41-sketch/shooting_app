@@ -55,6 +55,9 @@ enum BotDifficulty {
 
   /// Каждый финал — одна случайная тренировка, и случайные колебания.
   unpredictable,
+
+  /// Ручная настройка: мин/макс выстрел, STP, направление разброса.
+  manual,
 }
 
 /// Бот: стреляет настоящими выстрелами (точка попадания), которые считаются
@@ -67,9 +70,17 @@ class BotShooter {
 
   /// Для «непредсказуемого»: статистика отдельных тренировок спортсмена.
   final List<ShotStats> sessions;
+  
+  /// Ручной режим параметры
+  final double? manualMinShot;
+  final double? manualMaxShot;
+  final double? manualStp;
+  final double? manualDispersionDeg;
+  
   late final ShotStats _active = _pick();
 
-  BotShooter(this.stats, this.difficulty, this.face, this.rng, {this.sessions = const []});
+  BotShooter(this.stats, this.difficulty, this.face, this.rng, {this.sessions = const [], 
+    this.manualMinShot, this.manualMaxShot, this.manualStp, this.manualDispersionDeg});
 
   ShotStats _pick() {
     if (difficulty != BotDifficulty.unpredictable || sessions.isEmpty) return stats;
@@ -82,6 +93,7 @@ class BotShooter {
         BotDifficulty.medium => (1.0, 1.0),
         BotDifficulty.hard => (0.65, 0.88),
         BotDifficulty.unpredictable => (0.6 + rng.nextDouble() * 0.9, 0.8 + rng.nextDouble() * 0.45),
+        BotDifficulty.manual => (1.0, 1.0), // не используется в ручном режиме
       };
 
   double _gauss() {
@@ -91,13 +103,47 @@ class BotShooter {
   }
 
   /// «Форма» бота: полоса удач и неудач (серии держатся несколько выстрелов).
-  /// > 0 — бот в ударе (кучнее и ближе к центру), < 0 — сыпется.
+  /// > 0 — бот в удаче (кучнее и ближе к центру), < 0 — сыпется.
   double form = 0;
+  
+  /// Счётчик выстрелов для STP (выстрелов к пику)
+  int _shotCount = 0;
 
   /// Один выстрел: точка (x, y) в мм. [volatility] 0…1 — сила камбэков:
   /// форма бота плавает вверх и вниз, из-за чего он может подняться или упасть
   /// по таблице; при 0 бот стреляет ровно по своей статистике.
   (double, double) shotPoint({double volatility = 0}) {
+    // Ручной режим: используем заданные параметры
+    if (difficulty == BotDifficulty.manual && manualMinShot != null && manualMaxShot != null) {
+      _shotCount++;
+      // STP: плавное приближение к лучшему результату
+      double stpFactor = 1.0;
+      if (manualStp != null && manualStp! > 0) {
+        stpFactor = (_shotCount / manualStp!).clamp(0.0, 1.0);
+      }
+      
+      // Интерполируем между мин и макс значением выстрела
+      final targetScore = manualMinShot! + (manualMaxShot! - manualMinShot!) * stpFactor;
+      
+      // Направление разброса
+      double angleRad = 0;
+      if (manualDispersionDeg != null) {
+        angleRad = manualDispersionDeg! * math.pi / 180.0;
+      }
+      
+      // Вычисляем радиус для целевого результата через обратную функцию подсчёта
+      final ring = targetScore.floor().clamp(0, 10);
+      final decimal = ((targetScore - ring) * 10).round().clamp(0, 9);
+      final radius = radiusForScore(ring, decimal, face);
+      
+      // Разброс вокруг целевого радиуса
+      final spread = face.ringWidthMm * 0.3; // ~30% ширины кольца
+      final r = radius + _gauss() * spread;
+      final a = angleRad + _gauss() * 0.3;
+      
+      return (r * math.cos(a), r * math.sin(a));
+    }
+    
     final (mpi, disp) = _scales;
     form = (0.7 * form + 0.6 * volatility * _gauss()).clamp(-1.5, 1.5);
     final dm = math.exp(-0.22 * form); // разброс
@@ -107,7 +153,7 @@ class BotShooter {
       mpi * bm * _active.my + disp * dm * _active.sy * _gauss(),
     );
   }
-
+  
   /// Один выстрел: результат с десятыми по правилам мишени.
   double nextScore() {
     final (x, y) = shotPoint();

@@ -227,11 +227,38 @@ class _FinalRoomViewState extends State<FinalRoomView> {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 4),
             color: _judge ? Colors.red.shade700 : theme.colorScheme.primaryContainer,
-            child: Text(
-              label,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w800, color: _judge ? Colors.white : theme.colorScheme.onPrimaryContainer),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Flexible(
+                  child: Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w800, color: _judge ? Colors.white : theme.colorScheme.onPrimaryContainer),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                // Связь видно всегда, а не только при обрыве (отзыв 16.11:
+                // «не подключается, и не понятно, подключилось ли вообще»).
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: widget.offline
+                        ? (_judge ? Colors.white : theme.colorScheme.error)
+                        : (_judge ? Colors.greenAccent : theme.colorScheme.primary),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  widget.offline ? tr('нет связи') : tr('в сети'),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      color: _judge ? Colors.white : theme.colorScheme.onPrimaryContainer),
+                ),
+              ],
             ),
           ),
         ),
@@ -341,9 +368,10 @@ class _FinalRoomViewState extends State<FinalRoomView> {
     final top0 = MediaQuery.paddingOf(context).top + GlassHeader.height;
     final marks = selId == null ? const <Offset>[] : _marks(selId, selRow);
     final canShoot = selRow != null && selRow['can'] == true && !s.paused && marks.length < s.shotsPerShooter;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(8, top0 + 4, 8, 4),
-      child: Column(children: [
+    return Stack(children: [
+      Padding(
+        padding: EdgeInsets.fromLTRB(8, top0 + 4, 8, 4),
+        child: Column(children: [
         if (widget.offline)
           Container(
             margin: const EdgeInsets.only(bottom: 6),
@@ -458,7 +486,37 @@ class _FinalRoomViewState extends State<FinalRoomView> {
             _cardsRow(face, [...rest.skip(i).take(4)], h * 0.12),
         ],
       ]),
-    );
+      ),
+      // Язычок слева: слева страница с таблицей результатов (отзыв 16.11:
+      // «сделать стрелочку, что слева есть список результатов»).
+      if (widget.role != FinalsRole.spectator)
+        Positioned(
+          left: 0,
+          top: top0 + h * 0.28,
+          child: Semantics(
+            button: true,
+            label: tr('Список результатов'),
+            child: GestureDetector(
+              onTap: () => _page.animateToPage(0, duration: const Duration(milliseconds: 250), curve: Curves.easeOut),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 2),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest.withValues(alpha: 0.85),
+                  borderRadius: const BorderRadius.horizontal(right: Radius.circular(12)),
+                ),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.chevron_left, size: 18, color: cs.onSurfaceVariant),
+                  RotatedBox(
+                    quarterTurns: 3,
+                    child: Text(tr('Результаты'), style: theme.textTheme.labelSmall?.copyWith(color: cs.onSurfaceVariant)),
+                  ),
+                  Icon(Icons.chevron_left, size: 18, color: cs.onSurfaceVariant),
+                ]),
+              ),
+            ),
+          ),
+        ),
+    ]);
   }
 }
 

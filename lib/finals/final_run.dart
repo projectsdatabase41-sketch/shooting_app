@@ -175,6 +175,7 @@ class FinalRunController extends ChangeNotifier {
   /// Название раунда для экрана.
   String get roundLabel {
     if (inShootOff) return 'shootoff';
+    if (phase == RunPhase.sighting) return 'sighting';
     if (roundIndex == 0 && format.hasOpenStage) return 'open';
     if (roundIndex < format.seriesShots.length)
       return 'series:${roundIndex + 1}';
