@@ -23,7 +23,7 @@ class TargetViewModel extends ChangeNotifier {
   static const _uuid = Uuid();
 
   TrainingSession session;
-  final Exercise exercise;
+  Exercise exercise;
   final TargetFace face;
 
   /// `false`, когда экран открыт тренером в режиме "дневник" —
@@ -43,6 +43,16 @@ class TargetViewModel extends ChangeNotifier {
     this.detached = false,
   }) {
     _selectedIndex = session.shots.isEmpty ? -1 : session.shots.length - 1;
+    // Упражнения без расписанных серий (созданные до 16.11, импорт) раньше
+    // начинались сразу с зачётной мишени — отзыв 17.11: «где пристрелочная
+    // мишень?». Пристрелку дописываем только новой тренировке, и один раз:
+    // серии сохраняются в упражнении (AppDataStore.ensureSighting).
+    if (isOwnSession &&
+        !detached &&
+        session.status == SessionStatus.notStarted &&
+        session.shots.isEmpty) {
+      exercise = store.ensureSighting(exercise);
+    }
     if (isOwnSession) {
       _timer = Timer.periodic(const Duration(seconds: 1), (_) => _onTick());
     }

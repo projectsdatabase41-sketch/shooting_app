@@ -85,7 +85,7 @@ class TargetScreen extends StatelessWidget {
           create: (_) => WorkspaceViewModel(store.db),
         ),
       ],
-      child: const _WorkspaceBody(),
+      child: _WorkspaceBody(embedded: embedded),
     );
   }
 }
@@ -127,7 +127,10 @@ class TaskTargetPanel extends StatelessWidget {
 }
 
 class _WorkspaceBody extends StatefulWidget {
-  const _WorkspaceBody();
+  /// Экран открыт внутри главного экрана (вкладка), а не отдельным маршрутом:
+  /// тогда после завершения тренировки его закрывает сам главный экран.
+  final bool embedded;
+  const _WorkspaceBody({this.embedded = false});
 
   @override
   State<_WorkspaceBody> createState() => _WorkspaceBodyState();
@@ -139,6 +142,7 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
 
   /// Максимальный размер мишени на десктоп/веб (фиксированный лимит, px).
   static const double _maxTargetSizeDesktop = 720.0;
+
 
   @override
   void initState() {
@@ -200,7 +204,14 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
             ],
           ),
         );
-        if (ok == true) vm.finish();
+        if (ok == true) {
+          vm.finish();
+          if (!widget.embedded && context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(tr('Тренировка завершена'))));
+            Navigator.of(context).maybePop();
+          }
+        }
         return ok == true ? tr('Тренировка завершена') : tr('Отменено');
       },
       VoiceAction.undoShot: (i) {
@@ -268,6 +279,7 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
     // через вью-модель.
     vm.onJumpToTargetRequested = () => _jumpTo(WorkspacePage.target);
 
+
     return PopScope(
       // Если завершённая тренировка была разблокирована и что-то поправили, выход спрашивает —
       // применить правки или вернуть как было (решение пользователя, часть 12).
@@ -325,7 +337,7 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
         body: Column(
           children: [
             // Управление тренировкой — над разделами и неподвижно.
-            if (vm.showTrainingControls) const _TrainingControlsBar(),
+            if (vm.showTrainingControls) _TrainingControlsBar(embedded: widget.embedded),
             Expanded(
               child: LayoutBuilder(
                 builder: (context, box) {
@@ -373,6 +385,7 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
                           ),
                         ),
                         // Правая колонка: остальные разделы в вертикальном скролле.
+                        // Статистика — плоский список без вложенного скролла (Task 4).
                         Expanded(
                           child: SingleChildScrollView(
                             physics: const ClampingScrollPhysics(),
@@ -382,12 +395,18 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
                                   // Пустую статистику (нет зачётных выстрелов) не показываем вовсе.
                                   if (!(page == WorkspacePage.statistics &&
                                       vm.session.countingShots.isEmpty))
-                                    _Section(
-                                      title: page.title,
-                                      height: sectionH,
-                                      scroll: _scroll, // не используется для внутренней прокрутки, но оставлен для совместимости
-                                      child: _pageBody(page, vm),
-                                    ),
+                                    if (page == WorkspacePage.statistics)
+                                      _StatisticsSection(
+                                        title: page.title,
+                                        child: _pageBody(page, vm),
+                                      )
+                                    else
+                                      _Section(
+                                        title: page.title,
+                                        height: sectionH,
+                                        scroll: _scroll, // не используется для внутренней прокрутки, но оставлен для совместимости
+                                        child: _pageBody(page, vm),
+                                      ),
                                 const SizedBox(height: 24),
                               ],
                             ),
@@ -398,6 +417,7 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
                   }
 
                   // Мобильный: вертикальный скролл со всеми страницами.
+                  // Статистика — плоский список без вложенного скролла (Task 4).
                   return SingleChildScrollView(
                     controller: _scroll,
                     physics: vm.isEditing || vm.multiTouch
@@ -412,12 +432,17 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
                               key: _keyOf(page),
                               child: page == WorkspacePage.target
                                   ? _TargetPage(height: targetH)
-                                  : _Section(
-                                      title: page.title,
-                                      height: sectionH,
-                                      scroll: _scroll,
-                                      child: _pageBody(page, vm),
-                                    ),
+                                  : page == WorkspacePage.statistics
+                                      ? _StatisticsSection(
+                                          title: page.title,
+                                          child: _pageBody(page, vm),
+                                        )
+                                      : _Section(
+                                          title: page.title,
+                                          height: sectionH,
+                                          scroll: _scroll,
+                                          child: _pageBody(page, vm),
+                                        ),
                             ),
                         const SizedBox(height: 24),
                       ],
@@ -433,40 +458,44 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
   }
 
   Widget _pageBody(WorkspacePage page, TargetViewModel vm) {
+    // Фон непрозрачный для всех разделов: на десктопе страницы отображаются
+    // поверх обоев с цветной маской, и сквозь полупрозрачные виджеты
+    // просвечивал фиолетовый цвет — «синяя накладывается на синюю».
+    Widget pageChild;
     switch (page) {
       case WorkspacePage.target:
-        return const _TargetPage();
+        pageChild = const _TargetPage();
       case WorkspacePage.statistics:
-        return _StatisticsPage(
+        pageChild = _StatisticsPage(
           session: vm.session,
           face: vm.face,
           exerciseName: vm.exercise.shownName,
         );
       case WorkspacePage.shots:
-        return const ShotListSheet();
+        pageChild = const ShotListSheet();
       case WorkspacePage.assistant:
-        if (!aiModuleOn(context)) return const SizedBox.shrink();
-        return AiChatScreen(
-          scope: AiScope.session,
-          session: vm.session,
-          exercise: vm.exercise,
-          face: vm.face,
-          shot: vm.selectedShot,
-          embedded: true,
-        );
+        if (!aiModuleOn(context)) pageChild = const SizedBox.shrink();
+        else {
+          pageChild = AiChatScreen(
+            scope: AiScope.session,
+            session: vm.session,
+            exercise: vm.exercise,
+            face: vm.face,
+            shot: vm.selectedShot,
+            embedded: true,
+          );
+        }
       case WorkspacePage.notes:
-        return const CommentsThreadSheet(level: CommentLevel.session);
+        pageChild = const CommentsThreadSheet(level: CommentLevel.session);
       case WorkspacePage.coach:
-        // Чат прямо с тренером; колокольчик «Вызвать тренера» — в его шапке.
-        // Фон непрозрачный: раздел открыт поверх обоев с цветной маской, и
-        // раньше сквозь чат просвечивал фиолетовый цвет — «весь чат светится
-        // фиолетовой маской» (отзыв 12.11, TargetScreen).
-        return Material(
-          color: Theme.of(context).colorScheme.surface,
-          child: const AthleteCoachChat(),
-        );
+        pageChild = const AthleteCoachChat();
     }
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      child: pageChild,
+    );
   }
+
 
   void _toggleEditMode(TargetViewModel vm) {
     if (vm.isEditing) {
@@ -583,6 +612,35 @@ class _Section extends StatelessWidget {
               child: child,
             ),
           ),
+        ],
+      );
+}
+
+/// Раздел «Разбор» без фиксированной высоты: заголовок + содержимое,
+/// которое растёт по мере необходимости. Используется вместо _Section,
+/// чтобы убрать вложенный скролл (плоский список на странице).
+class _StatisticsSection extends StatelessWidget {
+  final String title;
+  final Widget child;
+
+  const _StatisticsSection({required this.title, required this.child});
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Divider(height: 24),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+            child: Row(children: [
+              Expanded(
+                  child: Text(title,
+                      style: Theme.of(context).textTheme.titleMedium)),
+              Icon(Icons.drag_handle,
+                  size: 20, color: Theme.of(context).hintColor),
+            ]),
+          ),
+          child,
         ],
       );
 }
@@ -902,15 +960,21 @@ class _StatisticsPageState extends State<_StatisticsPage> {
         ? all
         : all.where((s) => s.seriesNo == _seriesNo).toList();
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+    // Используем Column вместо ListView: прокрутка обеспечивает родительский
+    // SingleChildScrollView, вложенный скролл убираем.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(widget.exerciseName,
-            style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 16),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text(widget.exerciseName,
+              style: Theme.of(context).textTheme.titleMedium),
+        ),
         const SizedBox(height: 12),
         if (seriesNos.length > 1)
           Padding(
-            padding: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: DropdownButtonFormField<int>(
               initialValue: seriesNos.contains(_seriesNo) ? _seriesNo : null,
               decoration: InputDecoration(labelText: tr('Серия')),
@@ -924,23 +988,26 @@ class _StatisticsPageState extends State<_StatisticsPage> {
               onChanged: (v) => setState(() => _seriesNo = v),
             ),
           ),
-        AnalyticsPanel(
-          shots: shots,
-          face: widget.face,
-          showSeries: _seriesNo == null,
-          dynamics: shots.isEmpty
-              ? null
-              : [
-                  AnalyticsDynamics(
-                    title: _seriesNo == null
-                        ? tr('Динамика выстрелов')
-                        : tr('Динамика серии {seriesNo}',
-                            {'seriesNo': _seriesNo}),
-                    subtitle: '',
-                    points: shots,
-                    maxY: 10.9,
-                  ),
-                ],
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+          child: AnalyticsPanel(
+            shots: shots,
+            face: widget.face,
+            showSeries: _seriesNo == null,
+            dynamics: shots.isEmpty
+                ? null
+                : [
+                    AnalyticsDynamics(
+                      title: _seriesNo == null
+                          ? tr('Динамика выстрелов')
+                          : tr('Динамика серии {seriesNo}',
+                              {'seriesNo': _seriesNo}),
+                      subtitle: '',
+                      points: shots,
+                      maxY: 10.9,
+                    ),
+                  ],
+          ),
         ),
       ],
     );
@@ -950,7 +1017,9 @@ class _StatisticsPageState extends State<_StatisticsPage> {
 /// Полоса старт/пауза/финиш + оба таймера (раздел 6 ТЗ) — только в
 /// режиме спортсмена, не в "дневнике" тренера.
 class _TrainingControlsBar extends StatelessWidget {
-  const _TrainingControlsBar();
+  /// Внутри главного экрана закрытие после завершения делает сам главный экран.
+  final bool embedded;
+  const _TrainingControlsBar({this.embedded = false});
 
   @override
   Widget build(BuildContext context) {
@@ -987,6 +1056,17 @@ class _TrainingControlsBar extends StatelessWidget {
     );
   }
 
+  /// Завершить и вернуть к списку. Внутри главного экрана (embedded) просто
+  /// завершаем: закрытие сделает главный экран.
+  void _finish(BuildContext context, TargetViewModel vm) {
+    if (vm.session.status == SessionStatus.finished) return;
+    vm.finish();
+    if (embedded || !context.mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr('Тренировка завершена'))));
+    Navigator.of(context).maybePop();
+  }
+
   Widget _buildActionButton(
       BuildContext context, TargetViewModel vm, SessionStatus status) {
     final cs = Theme.of(context).colorScheme;
@@ -1009,7 +1089,7 @@ class _TrainingControlsBar extends StatelessWidget {
               dense: true,
               label: tr('Завершить'),
               baseColor: cs.error,
-              onTap: vm.finish),
+              onTap: () => _finish(context, vm)),
         ]);
       case SessionStatus.paused:
         return Row(mainAxisSize: MainAxisSize.min, children: [
@@ -1023,7 +1103,7 @@ class _TrainingControlsBar extends StatelessWidget {
               dense: true,
               label: tr('Завершить'),
               baseColor: cs.error,
-              onTap: vm.finish),
+              onTap: () => _finish(context, vm)),
         ]);
       case SessionStatus.finished:
         return Text(tr('Завершена'),

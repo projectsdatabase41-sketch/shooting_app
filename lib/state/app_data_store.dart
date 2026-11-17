@@ -378,6 +378,33 @@ class AppDataStore extends ChangeNotifier {
     return [for (final r in rows) r['id'] as String];
   }
 
+  /// Добавляет пристрелочную серию упражнению, у которого серии не описаны.
+  ///
+  /// Упражнения, созданные до 16.11, и упражнения из импорта начинали
+  /// тренировку сразу с зачётной мишени — отзыв 17.11 12:16: «где
+  /// пристрелочная мишень, почему сразу зачётные выстрелы?». Правим один раз
+  /// при старте тренировки: серии записываются в упражнение, поэтому и в
+  /// статистике, и в истории первая серия называется «Пристрелка».
+  Exercise ensureSighting(Exercise ex) {
+    if (ex.series.isNotEmpty) return ex;
+    final specs = <SeriesSpec>[
+      SeriesSpec(
+          name: tr('Пристрелка'),
+          timeLimit: const Duration(minutes: 15),
+          counts: false),
+      for (var i = 0;
+          i < (ex.seriesSize <= 0 ? 1 : (ex.totalShots / ex.seriesSize).ceil());
+          i++)
+        SeriesSpec(name: tr('Серия {n}', {'n': i + 1}), shotCount: ex.seriesSize),
+    ];
+    final updated = ex.copyWith(series: specs);
+    db.db.execute('UPDATE exercises SET series = ?, updated_at = ? WHERE id = ?',
+        [seriesToJson(specs), DateTime.now().toIso8601String(), ex.id]);
+    exercises = [for (final e in exercises) e.id == ex.id ? updated : e];
+    notifyListeners();
+    return updated;
+  }
+
   Exercise createExercise({
     required String name,
     required String targetFaceCode,
