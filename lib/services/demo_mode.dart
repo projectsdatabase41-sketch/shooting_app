@@ -256,11 +256,26 @@ class DemoMode {
     return marks.any(text.contains);
   }
 
+  /// Ожидаемые сообщения, которые НЕ являются ошибками приложения и не должны
+  /// попадать в отчёты разработчику. Пользователь видит их в UI (снэкбары,
+  /// диалоги), но в базу отзывов они не уходят.
+  static bool _isExpectedUserMessage(Object error) {
+    final text = '$error'.toLowerCase();
+    const expected = [
+      'сначала войдите в базу',
+      'сначала войдите в мессенджер',
+      'нет токена мессенджера',
+      'не подключена база',
+    ];
+    return expected.any(text.contains);
+  }
+
   /// Отчёт об ошибке в ту же таблицу отзывов: что случилось, где, технические
   /// подробности (тип ошибки, стек, платформа) — без личных данных.
   static Future<String?> sendError(String where, Object error, [StackTrace? stack, String? extra]) async {
     if (!ChatSettings.isConfigured) return tr('Сервер отзывов не настроен');
     if (_isNetworkNoise(error)) return null;
+    if (_isExpectedUserMessage(error)) return null;
     // Одну и ту же ошибку за сеанс шлём один раз; разные — не чаще раза в 2 с.
     final key = '$where|${'$error'.length > 160 ? '$error'.substring(0, 160) : '$error'}';
     if (!_sentErrors.add(key)) return null;

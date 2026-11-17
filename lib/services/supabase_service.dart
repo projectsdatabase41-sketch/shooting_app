@@ -24,6 +24,15 @@ class SupabaseSyncException implements Exception {
   String toString() => message;
 }
 
+/// Ожидаемое состояние: пользователь не вошёл в Supabase.
+/// Не считается сбоем — не уходит в отчёты об ошибках.
+class NotSignedInException implements Exception {
+  final String message;
+  const NotSignedInException(this.message);
+  @override
+  String toString() => message;
+}
+
 /// Итог одного прогона синхронизации — для сообщения на экране настроек.
 class SyncResult {
   final int pushedSessions;
@@ -89,7 +98,7 @@ class SupabaseSyncService {
   Future<String> _requireToken() async {
     final token = await auth.ensureFreshToken();
     if (token == null) {
-      throw SupabaseSyncException(
+      throw NotSignedInException(
           tr('Сначала войдите в базу — Настройки → Данные и синхронизация → Учётная запись'));
     }
     return token;
