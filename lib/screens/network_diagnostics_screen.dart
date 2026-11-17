@@ -68,16 +68,18 @@ class _NetworkDiagnosticsScreenState extends State<NetworkDiagnosticsScreen> {
       _running = false;
     });
     // Провал любого шага — отправляем сразу: это и есть «автоотзыв в базу».
-    if (!report.allPassed) {
-      final sent = await sendDiagReport(report, autoSend: true);
-      if (!mounted) return;
-      setState(() {
-        _sent = sent != null;
-        _message = sent != null
-            ? tr('Отчёт отправлен автоматически')
-            : tr('Не удалось отправить отчёт — проверьте связь');
-      });
-    }
+    // Провал любого шага — отчёт уходит сам. DemoMode.send при успехе
+    // возвращает null, при ошибке — текст; раньше экран путал это и писал
+    // «не удалось отправить» даже когда отчёт уже лежал в базе.
+    final sent = await sendDiagReport(report, autoSend: true);
+    if (!mounted) return;
+    final ok = diagSendSucceeded(sent);
+    setState(() {
+      _sent = ok;
+      _message = ok
+          ? tr('Отчёт отправлен автоматически')
+          : tr('Не удалось отправить отчёт: {e}', {'e': sent ?? ''});
+    });
   }
 
   Future<void> _send() async {
@@ -95,9 +97,12 @@ class _NetworkDiagnosticsScreenState extends State<NetworkDiagnosticsScreen> {
     );
     final sent = await sendDiagReport(report, autoSend: false);
     if (!mounted) return;
+    final ok = diagSendSucceeded(sent);
     setState(() {
-      _sent = sent != null;
-      _message = sent != null ? tr('Отчёт отправлен') : tr('Не удалось отправить отчёт');
+      _sent = ok;
+      _message = ok
+          ? tr('Отчёт отправлен')
+          : tr('Не удалось отправить отчёт: {e}', {'e': sent ?? ''});
     });
   }
 

@@ -315,12 +315,18 @@ class DemoMode {
   }
 
   /// Отправка отзыва. Возвращает текст ошибки или `null`.
-  static Future<String?> send(String text, String page) async {
+  ///
+  /// [ignoreThrottle] — не действует правило «не чаще раза в 10 секунд»:
+  /// нужно диагностике сети, которая может отправить отчёт сразу после
+  /// автопопытки (отзыв 17.11 «проблема отправки отчёта о диагностике»).
+  static Future<String?> send(String text, String page, {bool ignoreThrottle = false}) async {
     final t = text.trim();
     if (t.isEmpty) return tr('Напишите текст отзыва');
     if (!ChatSettings.isConfigured) return tr('Сервер отзывов не настроен');
     final last = _lastSent;
-    if (last != null && DateTime.now().difference(last) < const Duration(seconds: 10)) {
+    if (!ignoreThrottle &&
+        last != null &&
+        DateTime.now().difference(last) < const Duration(seconds: 10)) {
       return tr('Подождите несколько секунд перед следующим отзывом');
     }
     final client = http.Client();

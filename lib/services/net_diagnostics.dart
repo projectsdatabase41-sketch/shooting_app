@@ -4,6 +4,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:http/http.dart' as http;
+import 'package:uuid/uuid.dart';
 
 import 'call_service.dart';
 import 'chat_auth_service.dart';
@@ -359,72 +360,80 @@ class NetDiagnostics {
 
   /// 5. ICE кандидаты: сбор, типы (host/srflx/relay), время
   Future<DiagStepResult> _checkIceCandidates() async {
+    final sw = Stopwatch()..start();
     try {
       final ice = await CallService(chatAuth).iceServers();
       final pc = await createPeerConnection({'iceServers': ice});
       final cands = <String, int>{};
-      final completer = Completer<Map<String, int>>();
+      final gathered = Completer<void>();
 
       pc.onIceCandidate = (c) {
-        if (c.candidate == null) {
-          completer.complete(cands);
+        final s = c.candidate;
+        if (s == null) {
+          // Некоторые платформы отмечают конец сбора пустым кандидатом.
+          if (!gathered.isCompleted) gathered.complete();
           return;
         }
-        final m = RegExp(r' typ (\w+)').firstMatch(c.candidate!);
-        if (m != null) {
-          cands[m.group(1)!] = (cands[m.group(1)] ?? 0) + 1;
-        }
+        final m = RegExp(r' typ (\w+)').firstMatch(s);
+        if (m != null) cands[m.group(1)!] = (cands[m.group(1)] ?? 0) + 1;
       };
 
-      await pc.createOffer();
       await pc.setLocalDescription(await pc.createOffer());
-
-      // Ждём завершения сбора (candidate = null) или таймаут
-      final done = await completer.future.timeout(const Duration(seconds: 8));
+      // Ждём конец сбора, но не считаем таймаут ошибкой: вторая сторона для
+      // этого шага не нужна, важно — собрались ли свои кандидаты.
+      try {
+        await gathered.future.timeout(const Duration(seconds: 8));
+      } on TimeoutException {
+        // собрали сколько успели
+      }
       await pc.close();
+      sw.stop();
 
-      final total = done.values.fold(0, (a, b) => a + b);
-      final details = 'всего: $total; ${done.entries.map((e) => '${e.key}:${e.value}').join(', ')}';
+      final total = cands.values.fold(0, (a, b) => a + b);
+      final details = 'всего: $total; '
+          '${cands.entries.map((e) => '${e.key}:${e.value}').join(', ')}'
+          '${cands.isEmpty ? ' (за 8 с не собралось ни одного — нет STUN/TURN или сеть режет UDP)' : ''}';
 
       return DiagStepResult(
         name: 'ICE кандидаты',
-        passed: total > 0 && done.containsKey('host'),
+        passed: total > 0,
         details: details,
-        latency: Duration.zero,
+        latency: sw.elapsed,
       );
     } catch (e) {
-      return DiagStepResult(name: 'ICE кандидаты', passed: false, details: 'ошибка: $e', latency: Duration.zero);
+      sw.stop();
+      return DiagStepResult(name: 'ICE кандидаты', passed: false, details: 'ошибка: $e', latency: sw.elapsed);
     }
   }
-
   /// 6. Сигналинг: открытие комнаты, обмен ring/join
   Future<DiagStepResult> _checkSignaling() async {
+    final sw = Stopwatch()..start();
     try {
       if (!chatAuth.isSignedIn) {
-        return DiagStepResult(name: 'Сигналинг', passed: false, details: 'нет входа в чат', latency: Duration.zero);
+        sw.stop();
+        return DiagStepResult(name: 'Сигналинг', passed: false, details: 'нет входа в чат', latency: sw.elapsed);
       }
-
-      final callId = 'diag-${DateTime.now().millisecondsSinceEpoch}';
+      // callId обязан быть uuid v4 — иначе сервер отвечает 400 (отзыв 17.11:
+      // «Сервер звонков: 400» — это была ошибка самой проверки).
+      final callId = const Uuid().v4();
       final cs = CallService(chatAuth);
-
-      // Пробуем вызвать партнёра (ring)
-      final delivered = await cs.ring(callId: callId, to: partner.id, name: 'Диагностика', video: false).timeout(const Duration(seconds: 8));
-
-      // Отменяем сразу
+      final delivered = await cs
+          .ring(callId: callId, to: partner.id, name: 'Диагностика', video: false)
+          .timeout(const Duration(seconds: 8));
       await cs.cancel(callId: callId, to: partner.id);
-
-      final details = 'доставлено устройств: $delivered';
+      sw.stop();
       return DiagStepResult(
         name: 'Сигналинг',
-        passed: delivered > 0,
-        details: details,
-        latency: Duration.zero,
+        passed: true,
+        details: 'сервер принял вызов, устройств с push: $delivered'
+            '${delivered == 0 ? ' (у собеседника нет адреса устройства — вызов не покажется)' : ''}',
+        latency: sw.elapsed,
       );
     } catch (e) {
-      return DiagStepResult(name: 'Сигналинг', passed: false, details: 'ошибка: $e', latency: Duration.zero);
+      sw.stop();
+      return DiagStepResult(name: 'Сигналинг', passed: false, details: 'ошибка: $e', latency: sw.elapsed);
     }
   }
-
   /// 7. P2P + DataChannel: поднимается ли канал, время, пара кандидатов
   Future<DiagStepResult> _checkP2P() async {
     try {
@@ -551,14 +560,19 @@ class NetDiagnostics {
   }
 }
 
-/// Отправка отчёта диагностики через DemoMode.sendError
+/// Отправка отчёта диагностики через DemoMode.send.
+///
+/// Возвращает текст ошибки или null при успехе. Отправляем всегда, когда
+/// просили: и при провале (авто), и по кнопке — раньше при успехе с
+/// autoSend=false возвращался null, и экран считал это ошибкой, хотя отчёт
+/// даже не уходил. Заодно обходим общий лимит «не чаще раза в 10 секунд»,
+/// иначе сразу после автопопытки кнопка отвечала «Подождите несколько секунд».
 Future<String?> sendDiagReport(NetDiagReport report, {required bool autoSend}) async {
   final text = report.toReportText();
   final page = 'Диагностика сети${autoSend ? ' (авто)' : ''}';
-
-  if (autoSend || report.allPassed) {
-    // Автоотправка при провале, ручная при успехе
-    return await DemoMode.send(text, page);
-  }
-  return null;
+  return await DemoMode.send(text, page, ignoreThrottle: true);
 }
+
+/// Успешна ли отправка: DemoMode.send возвращает null при успехе и текст
+/// ошибки при неудаче.
+bool diagSendSucceeded(String? sendResult) => sendResult == null;
