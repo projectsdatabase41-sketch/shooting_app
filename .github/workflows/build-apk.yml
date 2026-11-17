@@ -58,7 +58,7 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
           set -o pipefail
-          flutter build apk --release --stacktrace \
+          flutter build apk --release \
             --dart-define=OPENROUTER_KEY="${{ secrets.OPENROUTER_KEY }}" \
             --dart-define=OPENROUTER_KEY_2="${{ secrets.OPENROUTER_KEY_2 }}" \
             --dart-define=OPENROUTER_KEY_3="${{ secrets.OPENROUTER_KEY_3 }}" \
