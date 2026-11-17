@@ -2663,7 +2663,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   void didChangeMetrics() =>
       WidgetsBinding.instance.addPostFrameCallback((_) => _measureBar());
 
-  @override
   /// Плашка «Звонок идёт» поверх переписки: разговор можно свернуть, не
   /// сбрасывая, и вернуться к нему одним нажатием (отзыв 17.11 18:23).
   Widget _collapsedCallBanner(BuildContext context) {
@@ -2700,6 +2699,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ),
     );
   }
+
+  @override
   Widget build(BuildContext context) {
     // Высота плавающего низа меняется (ответ, график, многострочный текст) —
     // ленте нужен точный отступ, меряем после кадра.
