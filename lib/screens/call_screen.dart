@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../widgets/selfie_light.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:uuid/uuid.dart';
@@ -274,12 +275,15 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
         _button(s.speaker ? Icons.volume_up : Icons.volume_down, tr('Динамик'), () => s.setSpeaker(!s.speaker), on: s.speaker),
         if (s.video) ...[
           _button(s.cameraOff ? Icons.videocam_off : Icons.videocam_outlined, tr('Камера'), s.toggleCamera, on: s.cameraOff),
-          _button(Icons.cameraswitch_outlined, tr('Сменить'), s.switchCamera),
+          // На вебе нет переключения фронтальная/задняя — кнопка была мёртвой
+          // (отзыв 17.11 18:16), поэтому её там не показываем.
+          if (!kIsWeb) _button(Icons.cameraswitch_outlined, tr('Сменить'), s.switchCamera),
           if (CallSession.canShareScreen)
             _button(s.screenSharing ? Icons.stop_screen_share_outlined : Icons.screen_share_outlined, s.screenSharing ? tr('Стоп экран') : tr('Экран'), s.toggleScreenShare, on: s.screenSharing),
           // Задняя камера — фонарик; фронтальная — подсветка экрана. Тап — сразу вкл/выкл; яркость — свайп вверх/вниз,
-          // теплота — вправо/влево; удержание 2 с — выбор цвета полосой.
-          HoldButton(
+          // теплота — вправо/влево; удержание 2 с — выбор цвета полосой. На вебе фонарика нет (тускло/не работает, отзыв 18:22).
+          if (!kIsWeb)
+            HoldButton(
             onTap: () => s.frontCamera ? _light.toggle() : s.toggleTorch(),
             onHold: () {
               if (!s.frontCamera) return;
@@ -292,6 +296,10 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
         ],
         // Качество (HD) переключается на ходу и в видео-, и в аудиозвонке.
         _button(Icons.hd_outlined, s.hd ? tr('HD вкл.') : tr('HD выкл.'), () => s.setHd(!s.hd), on: s.hd),
+        // Свернуть разговор, не сбрасывая его: экран закрывается, звонок
+        // остаётся — вернуться можно из чата (отзывы 17.11 18:08 и 18:23).
+        if (s.state == CallState.active)
+          _button(Icons.close_fullscreen, tr('Свернуть'), () => Navigator.of(context).maybePop()),
         _button(Icons.call_end, tr('Завершить'), s.hangUp, color: const Color(0xFFE53935)),
       ],
     );

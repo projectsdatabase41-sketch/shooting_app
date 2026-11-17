@@ -160,7 +160,14 @@ class BotShooter {
     return scoreForPoint(x, y, face);
   }
 
-  /// Через сколько секунд бот выстрелит, если на выстрел дано [limitSeconds]
-  /// (человек стреляет не мгновенно и не на последней секунде).
-  double delaySeconds(int limitSeconds) => limitSeconds * (0.3 + rng.nextDouble() * 0.55);
+  /// Через сколько секунд бот выстрелит, если на выстрел дано [limitSeconds].
+  ///
+  /// Не быстрее, чем раз в 4 секунды: человеку нужно перезарядить винтовку,
+  /// встать в изготовку и прицелиться — по отзыву 17.11 это «не менее 5 секунд».
+  /// Медленнее — можно (до лимита на выстрел), быстрее — нельзя.
+  double delaySeconds(int limitSeconds) {
+    final base = limitSeconds * (0.35 + rng.nextDouble() * 0.5);
+    final atLeastHuman = math.max(4.0, base);
+    return math.min(limitSeconds.toDouble(), atLeastHuman);
+  }
 }

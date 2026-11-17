@@ -171,6 +171,14 @@ class CallSession extends ChangeNotifier {
       throw Exception(tr('Звонок отменён'));
     }
     localRenderer.srcObject = _local;
+    // На вебе звук локального потока надо заглушить: иначе браузер играет
+    // его обратно, и человек слышит себя (отзыв 17.11 17:39 «звук фонит,
+    // сам себя слышит собеседник»).
+    if (kIsWeb) {
+      try {
+        localRenderer.muted = true;
+      } catch (_) {}
+    }
     final pc = await createPeerConnection({'iceServers': await _iceServers.get()});
     if (_disposed) {
       try {
@@ -551,6 +559,14 @@ class CallSession extends ChangeNotifier {
     try {
       await sender.replaceTrack(_cameraTrack);
       localRenderer.srcObject = _local;
+    // На вебе звук локального потока надо заглушить: иначе браузер играет
+    // его обратно, и человек слышит себя (отзыв 17.11 17:39 «звук фонит,
+    // сам себя слышит собеседник»).
+    if (kIsWeb) {
+      try {
+        localRenderer.muted = true;
+      } catch (_) {}
+    }
       for (final t in _display?.getTracks() ?? const <MediaStreamTrack>[]) {
         t.stop();
       }

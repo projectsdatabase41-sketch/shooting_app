@@ -2664,6 +2664,42 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       WidgetsBinding.instance.addPostFrameCallback((_) => _measureBar());
 
   @override
+  /// Плашка «Звонок идёт» поверх переписки: разговор можно свернуть, не
+  /// сбрасывая, и вернуться к нему одним нажатием (отзыв 17.11 18:23).
+  Widget _collapsedCallBanner(BuildContext context) {
+    final c = CallSession.current;
+    if (c == null || c.isEnded) return const SizedBox.shrink();
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.secondaryContainer,
+      borderRadius: BorderRadius.circular(14),
+      elevation: 3,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => CallScreen(
+            session: c,
+            avatarBase64: _contact.avatarBase64,
+            repo: widget.repo,
+          ),
+        )),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(children: [
+            Icon(Icons.call, size: 18, color: cs.onSecondaryContainer),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                tr('Звонок идёт · {name}', {'name': c.peerName}),
+                style: TextStyle(color: cs.onSecondaryContainer, fontWeight: FontWeight.w600),
+              ),
+            ),
+            Text(tr('Вернуться'), style: TextStyle(color: cs.primary, fontWeight: FontWeight.w700)),
+          ]),
+        ),
+      ),
+    );
+  }
   Widget build(BuildContext context) {
     // Высота плавающего низа меняется (ответ, график, многострочный текст) —
     // ленте нужен точный отступ, меряем после кадра.
@@ -2705,6 +2741,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                               child: AppBackdrop(
                                   kind: 'messenger',
                                   child: const SizedBox.shrink())),
+                        // Разговор свёрнут — возвращаемся к нему из чата.
+                        if (CallSession.current != null && !CallSession.current!.isEnded)
+                          Positioned(
+                            left: 12,
+                            right: 12,
+                            top: MediaQuery.paddingOf(context).top + 64,
+                            child: _collapsedCallBanner(context),
+                          ),
                         _messages.isEmpty
                             ? EmptyState(
                                 icon: Icons.forum_outlined,
