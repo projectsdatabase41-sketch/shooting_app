@@ -809,8 +809,25 @@ class _PublicBoardState extends State<_PublicBoard> {
 
   @override
   Widget build(BuildContext context) {
-    if (_rows.isEmpty) return const SizedBox.shrink();
     final theme = Theme.of(context);
+    if (_rows.isEmpty) {
+      // Пустое табло раньше просто исчезало, и было непонятно, есть ли вообще
+      // публичные финалы и как их смотреть (отзыв 17.11 17:54).
+      return Card(
+        margin: const EdgeInsets.only(top: 8, bottom: 4),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(tr('Публичные финалы'), style: theme.textTheme.titleSmall),
+            const SizedBox(height: 6),
+            Text(
+              tr('Сейчас публичных финалов нет. Свой финал можно сделать публичным при создании — он появится здесь, и его сможет смотреть любой, у кого открыт мессенджер.'),
+              style: theme.textTheme.bodySmall,
+            ),
+          ]),
+        ),
+      );
+    }
     String formatName(FinalsBoardRow r) =>
         tr(FinalFormat.all.firstWhere((f) => f.id == r.formatId, orElse: () => FinalFormat.airRifle10m).nameKey);
 

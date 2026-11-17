@@ -432,6 +432,10 @@ class _ShotPadState extends State<ShotPad> {
   /// лупа пропадает, щипок меняет масштаб; выстрела нет, пока не отпустят все пальцы и не будет нового одиночного касания.
   double _scale = 1;
   Offset _pan = Offset.zero;
+  /// Для распознавания двойного тапа (сброс зума и центрирование мишени).
+  DateTime? _lastTapAt;
+  Offset? _lastTapPos;
+  bool _suppressShot = false;
   final Map<int, Offset> _pointers = {};
   bool _zoomMode = false;
   double _zStartDist = 1, _zStartScale = 1;
@@ -465,6 +469,10 @@ class _ShotPadState extends State<ShotPad> {
     _pointers[e.pointer] = e.localPosition;
     if (_pointers.length >= 2) {
       // Появился второй палец: лупа пропадает, включается зум.
+      // Заодно забываем прошлый тап — иначе первый одиночный тап после щипка
+      // мог быть принят за двойной и съесть выстрел.
+      _lastTapAt = null;
+      _lastTapPos = null;
       final pts = _pointers.values.take(2).toList();
       _zoomMode = true;
       _zStartDist = math.max((pts[0] - pts[1]).distance, 1);
@@ -489,10 +497,12 @@ class _ShotPadState extends State<ShotPad> {
         final focal = (pts[0] + pts[1]) / 2;
         final ns = (_zStartScale * dist / _zStartDist).clamp(1.0, _maxScale).toDouble();
         // Масштаб — относительно центра мишени (она остаётся по центру), а двумя пальцами её можно
-        // подвинуть: сдвиг равен перемещению середины между пальцами.
+        // подвинуть: сдвиг равен перемещению середины между пальцами. Панорама НЕ умножается на
+        // масштаб — именно поэтому в тренировке мишень «само центрируется», а здесь уезжала
+        // (отзыв 17.11 17:50 «надо скопировать механику с тренировок»).
         setState(() {
           _scale = ns;
-          _pan = widget.lockCenter ? Offset.zero : _clampPan(_zStartPan * (ns / _zStartScale) + (focal - _zStartFocal), s);
+          _pan = widget.lockCenter ? Offset.zero : _clampPan(_zStartPan + (focal - _zStartFocal), s);
         });
       }
       return;
@@ -519,11 +529,40 @@ class _ShotPadState extends State<ShotPad> {
 
   void _down(Offset f, Size s) {
     if (!widget.enabled) return;
+    // Двойной тап — вернуть мишень в центр и сбросить зум, как в тренировке
+    // (отзыв 17.11 «мишень не само центрируется»). Распознаём сами, без
+    // GestureDetector: его таймеры ломают widget-тесты и конфликтуют с Listener.
+    final now = DateTime.now();
+    final prevAt = _lastTapAt;
+    final prevPos = _lastTapPos;
+    if (prevAt != null &&
+        prevPos != null &&
+        (_scale > 1.01 || _pan != Offset.zero) &&
+        now.difference(prevAt) < const Duration(milliseconds: 400) &&
+        (f - prevPos).distance < 48) {
+      _lastTapAt = null;
+      _lastTapPos = null;
+      _suppressShot = true;
+      setState(() {
+        _scale = 1;
+        _pan = Offset.zero;
+      });
+      return;
+    }
+    _lastTapAt = now;
+    _lastTapPos = f;
     setState(() => _finger = f);
     widget.onHold(true);
   }
 
   void _up(Size s) {
+    if (_suppressShot) {
+      // Это был второй тап двойного — выстрела нет.
+      _suppressShot = false;
+      setState(() => _finger = null);
+      widget.onHold(false);
+      return;
+    }
     final f = _finger;
     if (f == null) return;
     final mm = _toMm(f, s);
@@ -667,6 +706,8 @@ class _ShotPadState extends State<ShotPad> {
       final center = Offset(size.width / 2, size.height / 2) + _pan;
       return Stack(clipBehavior: Clip.none, children: [
         Positioned.fill(
+          // Двойной тап распознаём сами в Listenere (см. _pointerDown/_pointerUp):
+          // GestureDetector оставляет таймер и ломает widget-тесты.
           child: Listener(
             onPointerDown: (e) => _pointerDown(e, size),
             onPointerMove: (e) => _pointerMove(e, size),
