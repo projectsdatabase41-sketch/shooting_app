@@ -52,10 +52,13 @@ jobs:
           fi
 
       - name: Сборка APK
+        id: apk
+        continue-on-error: true
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
-          flutter build apk --release \
+          set -o pipefail
+          flutter build apk --release --stacktrace \
             --dart-define=OPENROUTER_KEY="${{ secrets.OPENROUTER_KEY }}" \
             --dart-define=OPENROUTER_KEY_2="${{ secrets.OPENROUTER_KEY_2 }}" \
             --dart-define=OPENROUTER_KEY_3="${{ secrets.OPENROUTER_KEY_3 }}" \
@@ -63,11 +66,45 @@ jobs:
             --build-name="0.${{ github.run_number }}" \
             --dart-define=APP_VERSION="0.${{ github.run_number }}" \
             --dart-define=GIT_SHA="${{ github.sha }}" \
-            --dart-define=BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            --dart-define=BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            2>&1 | tee "$RUNNER_TEMP/apk-build.log"
+
+      # Если сборка упала — кладём хвост лога в отдельную ветку ci-apk-log,
+      # чтобы причину можно было прочитать без доступа к логам Actions.
+      - name: Лог падения в ветку ci-apk-log
+        if: steps.apk.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "sha: $GITHUB_SHA"
+            echo "run: $GITHUB_RUN_ID"
+            echo "date: $(date -u)"
+            echo
+            echo "--- java ---"
+            java -version 2>&1 || true
+            echo
+            echo "--- gradle.properties ---"
+            cat android/gradle.properties || true
+            echo
+            echo "--- хвост лога сборки ---"
+            tail -n 400 "$RUNNER_TEMP/apk-build.log" || true
+          } > ci-apk-log.txt
+          git config user.name "ci-log"
+          git config user.email "ci-log@local"
+          git checkout -B ci-apk-log
+          git add -f ci-apk-log.txt
+          git commit -m "ci: лог падения сборки APK ($GITHUB_RUN_ID)" || true
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" ci-apk-log || true
+
+      - name: Провал сборки
+        if: steps.apk.outcome == 'failure'
+        run: exit 1
 
       # Артефакт сборки — доступен на вкладке Actions у этого запуска,
       # хранится 90 дней. Удобно сразу после пуша, без похода в Releases.
       - uses: actions/upload-artifact@v4
+        if: steps.apk.outcome == 'success'
         with:
           name: app-release
           path: build/app/outputs/flutter-apk/app-release.apk
@@ -81,10 +118,12 @@ jobs:
       # общими адресами он быстро кончается, и проверка падала с 403).
       # Версия «0.N»: N растёт на 1 с каждой сборкой (номер запуска сборки).
       - name: version.json
+        if: steps.apk.outcome == 'success'
         run: |
           printf '{"sha":"%s","built":"%s","version":"%s"}' "${{ github.sha }}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "0.${{ github.run_number }}" > build/app/outputs/flutter-apk/version.json
 
       - uses: softprops/action-gh-release@v2
+        if: steps.apk.outcome == 'success'
         with:
           tag_name: latest-apk
           name: Последняя сборка
