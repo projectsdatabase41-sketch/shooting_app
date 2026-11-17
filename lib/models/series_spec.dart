@@ -1,6 +1,21 @@
 import 'dart:convert';
 import '../i18n/i18n.dart';
 
+/// Режим пристрелки для первой серии упражнения.
+enum SightingMode {
+  /// Без пристрелки — первая серия сразу зачётная.
+  none,
+
+  /// Пристрелка по времени (минуты).
+  byTime,
+
+  /// Пристрелка по выстрелам (число выстрелов).
+  byShots,
+
+  /// Пристрелка по готовности — без границ, стрелок нажимает «К зачёту».
+  byReadiness,
+}
+
 /// Одна серия в описании упражнения.
 ///
 /// Упражнение перестало быть парой «сколько всего выстрелов» и «по
@@ -33,15 +48,25 @@ class SeriesSpec {
   /// Идёт ли в зачёт: в сумму, средние и статистику.
   final bool counts;
 
+  /// Режим пристрелки для первой серии. Используется только для серии
+  /// с name == 'Пристрелка' и counts == false. Для остальных серий
+  /// игнорируется (по умолчанию none).
+  final SightingMode sightingMode;
+
   const SeriesSpec({
     required this.name,
     this.shotCount,
     this.timeLimit,
     this.counts = true,
+    this.sightingMode = SightingMode.none,
   });
 
   /// Серия ограничена временем, а не числом выстрелов.
   bool get isTimed => shotCount == null && timeLimit != null;
+
+  /// Пристрелка по готовности — серия без границ, завершается вручную.
+  bool get isSightingByReadiness =>
+      sightingMode == SightingMode.byReadiness && counts == false;
 
   /// Подпись для списков: «Лёжа · 10 выстрелов» / «Пристрелка · 15 мин».
   String get label {
@@ -68,8 +93,10 @@ class SeriesSpec {
     int? shotCount,
     Duration? timeLimit,
     bool? counts,
+    SightingMode? sightingMode,
     bool clearShotCount = false,
     bool clearTimeLimit = false,
+    bool clearSightingMode = false,
   }) {
     return SeriesSpec(
       name: name ?? this.name,
@@ -79,6 +106,7 @@ class SeriesSpec {
       shotCount: clearShotCount ? null : (shotCount ?? this.shotCount),
       timeLimit: clearTimeLimit ? null : (timeLimit ?? this.timeLimit),
       counts: counts ?? this.counts,
+      sightingMode: clearSightingMode ? SightingMode.none : (sightingMode ?? this.sightingMode),
     );
   }
 
@@ -89,6 +117,7 @@ class SeriesSpec {
             ? null
             : Duration(seconds: (json['time_limit_s'] as num).toInt()),
         counts: json['counts'] != false && json['counts'] != 0,
+        sightingMode: SightingMode.values.byName(json['sighting_mode'] as String? ?? 'none'),
       );
 
   Map<String, dynamic> toJson() => {
@@ -96,6 +125,7 @@ class SeriesSpec {
         'shot_count': shotCount,
         'time_limit_s': timeLimit?.inSeconds,
         'counts': counts,
+        'sighting_mode': sightingMode.name,
       };
 
   @override
@@ -104,10 +134,11 @@ class SeriesSpec {
       other.name == name &&
       other.shotCount == shotCount &&
       other.timeLimit == timeLimit &&
-      other.counts == counts;
+      other.counts == counts &&
+      other.sightingMode == sightingMode;
 
   @override
-  int get hashCode => Object.hash(name, shotCount, timeLimit, counts);
+  int get hashCode => Object.hash(name, shotCount, timeLimit, counts, sightingMode);
 }
 
 /// Разбор списка серий: из JSON-строки базы или из уже готового списка.

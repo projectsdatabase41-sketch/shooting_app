@@ -36,8 +36,12 @@ class _ExerciseEditorScreenState extends State<ExerciseEditorScreen> {
   final _totalShots = TextEditingController(text: '60');
   final _seriesSize = TextEditingController(text: '10');
 
+  /// Режим пристрелки для первой серии. Применяется только в простом
+  /// режиме и если первая серия — пристрелка (counts == false).
+  SightingMode _sightingMode = SightingMode.byTime;
+
   final List<SeriesSpec> _series = [
-    SeriesSpec(name: tr('Пристрелка'), timeLimit: const Duration(minutes: 15), counts: false),
+    SeriesSpec(name: tr('Пристрелка'), timeLimit: const Duration(minutes: 15), counts: false, sightingMode: SightingMode.byTime),
     SeriesSpec(name: tr('Лёжа'), shotCount: 10),
   ];
 
@@ -67,11 +71,53 @@ class _ExerciseEditorScreenState extends State<ExerciseEditorScreen> {
     final store = context.read<AppDataStore>();
     final Exercise created;
     if (_simple) {
+      // Строим серии вручную, чтобы учесть выбранный режим пристрелки.
+      final totalShots = int.tryParse(_totalShots.text) ?? 60;
+      final seriesSize = int.tryParse(_seriesSize.text) ?? 10;
+      final seriesCount = seriesSize <= 0 ? 1 : (totalShots / seriesSize).ceil();
+      final specs = <SeriesSpec>[];
+      if (_sightingMode != SightingMode.none) {
+        SeriesSpec sighting;
+        switch (_sightingMode) {
+          case SightingMode.byTime:
+            sighting = SeriesSpec(
+              name: tr('Пристрелка'),
+              timeLimit: const Duration(minutes: 15),
+              counts: false,
+              sightingMode: SightingMode.byTime,
+            );
+          case SightingMode.byShots:
+            sighting = SeriesSpec(
+              name: tr('Пристрелка'),
+              shotCount: seriesSize,
+              counts: false,
+              sightingMode: SightingMode.byShots,
+            );
+          case SightingMode.byReadiness:
+            sighting = SeriesSpec(
+              name: tr('Пристрелка'),
+              counts: false,
+              sightingMode: SightingMode.byReadiness,
+            );
+          default:
+            sighting = SeriesSpec(
+              name: tr('Пристрелка'),
+              timeLimit: const Duration(minutes: 15),
+              counts: false,
+              sightingMode: SightingMode.byTime,
+            );
+        }
+        specs.add(sighting);
+      }
+      for (var i = 0; i < seriesCount; i++) {
+        specs.add(SeriesSpec(name: tr('Серия {n}', {'n': i + 1}), shotCount: seriesSize));
+      }
       created = store.createExercise(
         name: _name.text.trim(),
         targetFaceCode: _faceCode,
-        totalShots: int.tryParse(_totalShots.text) ?? 60,
-        seriesSize: int.tryParse(_seriesSize.text) ?? 10,
+        totalShots: totalShots,
+        seriesSize: seriesSize,
+        series: specs,
       );
     } else {
       // totalShots и seriesSize остаются заполненными и в гибком
@@ -147,6 +193,40 @@ class _ExerciseEditorScreenState extends State<ExerciseEditorScreen> {
           ),
           const SizedBox(height: 16),
           if (_simple) ...[
+            // Выбор режима пристрелки
+            Text(
+              tr('Пристрелка'),
+              style: theme.textTheme.titleSmall,
+            ),
+            const SizedBox(height: 8),
+            SegmentedButton<SightingMode>(
+              segments: [
+                ButtonSegment(
+                  value: SightingMode.none,
+                  label: Text(tr('Без пристрелки')),
+                  icon: const Icon(Icons.close),
+                ),
+                ButtonSegment(
+                  value: SightingMode.byTime,
+                  label: Text(tr('По времени')),
+                  icon: const Icon(Icons.timer),
+                ),
+                ButtonSegment(
+                  value: SightingMode.byShots,
+                  label: Text(tr('По выстрелам')),
+                  icon: const Icon(Icons.numbers),
+                ),
+                ButtonSegment(
+                  value: SightingMode.byReadiness,
+                  label: Text(tr('По готовности')),
+                  icon: const Icon(Icons.check_circle),
+                ),
+              ],
+              selected: {_sightingMode},
+              showSelectedIcon: false,
+              onSelectionChanged: (v) => setState(() => _sightingMode = v.first),
+            ),
+            const SizedBox(height: 12),
             TextField(
               controller: _totalShots,
               decoration: InputDecoration(labelText: tr('Всего выстрелов')),

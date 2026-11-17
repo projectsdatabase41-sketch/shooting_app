@@ -1122,7 +1122,10 @@ class _TrainingControlsBar extends StatelessWidget {
 /// Строка текущей серии: «Пристрелка · осталось 12:04 · без зачёта».
 ///
 /// Показывается только у упражнений со свободной структурой — там, где
-/// серии разные и стрелку надо знать, в какой он сейчас. У обычного
+/// Индикатор текущей серии и оставшегого времени/выстрелов.
+///
+/// Показывается только если у упражнения расписана структура — серии
+/// разные и стрелку надо знать, в какой он сейчас. У обычного
 /// «60 по 10» строки нет: она сообщала бы то, что и так видно.
 ///
 /// Истёкшее время — предупреждение, а не запрет: стрелять можно
@@ -1158,6 +1161,10 @@ class _CurrentSeriesLine extends StatelessWidget {
     }
     if (!spec.counts) parts.add(tr('без зачёта'));
 
+    // Для режима "по готовности" показываем кнопку перехода к зачёту
+    final showCompleteSighting =
+        vm.isSightingByReadiness && !vm.sightingManuallyCompleted;
+
     return Padding(
       padding: const EdgeInsets.only(top: 4),
       child: Row(
@@ -1179,6 +1186,21 @@ class _CurrentSeriesLine extends StatelessWidget {
               ),
             ),
           ),
+          if (showCompleteSighting) ...[
+            const SizedBox(width: 8),
+            FilledButton.tonal(
+              onPressed: () => vm.completeSightingByReadiness(),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Text(
+                tr('К зачёту'),
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
+          ],
         ],
       ),
     );

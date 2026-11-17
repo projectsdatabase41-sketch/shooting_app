@@ -285,21 +285,47 @@ class TargetViewModel extends ChangeNotifier {
 
   // ---- Текущая серия (упражнения со свободной структурой) ----
 
-  /// Номер серии, в которую попадёт СЛЕДУЮЩИЙ выстрел.
-  int get currentSeriesNo => SessionLogic.seriesNoFor(
+  /// Пользователь уже нажал «К зачёту» в пристрелке по готовности.
+  bool get sightingManuallyCompleted => _sightingManuallyCompleted;
+
+  /// Номер серии по обычным правилам (без надстройки «по готовности»).
+  int get _baseSeriesNo => SessionLogic.seriesNoFor(
         session,
         exercise,
         session.shots.length + 1,
         DateTime.now(),
       );
 
-  /// Описание текущей серии. `null` — у упражнения нет структуры, и
+  /// Описание текущей серии. null — у упражнения нет структуры, и
   /// показывать в шапке нечего.
   SeriesSpec? get currentSeriesSpec => exercise.specFor(currentSeriesNo);
+
+  /// Номер серии, в которую попадёт СЛЕДУЮЩИЙ выстрел.
+  int get currentSeriesNo => _baseSeriesNo;
 
   /// Текущая серия — пристрелочная (не идёт в зачёт): на мишени рисуется
   /// загнутый уголок, как на бланке и на пульте SIUS.
   bool get isSightingSeries => currentSeriesSpec?.counts == false;
+
+  /// Индекс серии «пристрелка по готовности» в списке серий упражнения.
+  /// null — такой серии нет.
+  int? get _readinessIndex {
+    for (var i = 0; i < exercise.series.length; i++) {
+      if (exercise.series[i].isSightingByReadiness) return i;
+    }
+    return null;
+  }
+
+  /// Текущая пристрелка — «по готовности» и ещё не завершена вручную.
+  /// Считается напрямую из серий упражнения (не через currentSeriesNo),
+  /// иначе получается бесконечная рекурсия.
+  bool get isSightingByReadiness {
+    final i = _readinessIndex;
+    return i != null && !_sightingManuallyCompleted;
+  }
+
+  /// Флаг: пристрелочная серия (по готовности) вручную завершена.
+  bool _sightingManuallyCompleted = false;
 
   /// Сколько выстрелов уже сделано в текущей серии.
   int get shotsInCurrentSeries {
@@ -311,6 +337,22 @@ class TargetViewModel extends ChangeNotifier {
     return n;
   }
 
+  /// Завершает пристрелку «по готовности» и переводит к зачётной серии.
+  ///
+  /// Серия без границ не даёт обычной нумерации сдвинуться, поэтому ей
+  /// проставляется граница по числу уже сделанных выстрелов — дальше
+  /// SessionLogic сам считает серии как обычно.
+  void completeSightingByReadiness() {
+    final i = _readinessIndex;
+    if (i == null || _sightingManuallyCompleted) return;
+    _sightingManuallyCompleted = true;
+    final done = session.shots.where((s) => s.seriesNo == i + 1).length;
+    final specs = [...exercise.series];
+    specs[i] = specs[i].copyWith(shotCount: done < 1 ? 1 : done, clearTimeLimit: true);
+    exercise = exercise.copyWith(series: specs);
+    _persist();
+    notifyListeners();
+  }
   /// Сколько времени осталось в серии, ограниченной временем.
   ///
   /// Отрицательное значение — время вышло. Это предупреждение, а не
