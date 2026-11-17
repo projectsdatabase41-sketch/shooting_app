@@ -72,7 +72,7 @@ class WebRtcPeerLink implements PeerLink {
       _diag.add('ice=${ice.map((e) {
         final u = e['urls'];
         return (u is List ? u : [u]).map((x) => '$x'.split(':').first).toSet().join('+');
-      }).join(',')} initiator=$initiator');
+      }).join(',')} turn=${IceServers.lastTurnProvider ?? 'none'} turnHost=${IceServers.turnHosts(ice)} initiator=$initiator');
       final pc = await createPeerConnection({
         'iceServers': ice,
       });

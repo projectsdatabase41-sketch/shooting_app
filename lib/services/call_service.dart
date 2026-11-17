@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'chat_auth_service.dart';
+import 'ice_servers.dart';
 import 'remote_config.dart';
 import '../i18n/i18n.dart';
 
@@ -46,6 +47,11 @@ class CallService {
   Future<List<Map<String, dynamic>>> iceServers() async {
     try {
       final r = await _send('GET', '/ice') as Map<String, dynamic>;
+      // Сервер сам сообщает, чей TURN он выдал (`turnProvider`): cloudflare,
+      // metered или null. Без этого в отчётах не отличить «TURN нет» от
+      // «TURN есть, но не работает» — отчёт 16.11 18:58.
+      final provider = r['turnProvider'];
+      IceServers.lastTurnProvider = provider is String && provider.isNotEmpty ? provider : null;
       return (r['iceServers'] as List).cast<Map<String, dynamic>>();
     } catch (_) {
       return [

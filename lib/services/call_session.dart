@@ -135,10 +135,22 @@ class CallSession extends ChangeNotifier {
   /// Сколько ждём ответа на исходящий.
   static const Duration ringTimeout = Duration(seconds: 45);
 
+  /// Экран закрыт и рендереры освобождены. Колбэки WebRTC и таймеры после
+  /// этого не должны ничего трогать: иначе `_end()` обращается к освобождённым
+  /// рендерерам и вызывает `notifyListeners()` у освобождённого ChangeNotifier
+  /// (отзыв 16.11 18:57 — «прошлый сеанс оборвался», путь кончился на
+  /// CallScreen).
+  bool _disposed = false;
+
+  /// Типы собранных ICE-кандидатов: host / srflx / relay. `relay` — признак
+  /// того, что ретранслятор реально работает; без него звонок за строгим NAT
+  /// не поднимется (отчёт 16.11 18:58).
+  final Map<String, int> _cands = {};
+
   bool get isEnded => state == CallState.ended;
 
   void _set(CallState s) {
-    if (isEnded) return;
+    if (isEnded || _disposed) return;
     state = s;
     if (s == CallState.active) activeSince ??= DateTime.now();
     notifyListeners();
@@ -152,18 +164,35 @@ class CallSession extends ChangeNotifier {
       // HD по умолчанию: 720p/30; выключается кнопкой «HD» (слабая связь) — тогда резче сжимается и кадров меньше.
       'video': video ? {'facingMode': 'user', 'width': {'ideal': 1280}, 'height': {'ideal': 720}, 'frameRate': {'ideal': 30}} : false,
     });
+    // Экран могли закрыть, пока ждали камеру/микрофон: не трогаем рендереры.
+    if (_disposed) {
+      _local?.dispose();
+      _local = null;
+      throw Exception(tr('Звонок отменён'));
+    }
     localRenderer.srcObject = _local;
     final pc = await createPeerConnection({'iceServers': await _iceServers.get()});
+    if (_disposed) {
+      try {
+        await pc.close();
+      } catch (_) {}
+      _releaseMedia();
+      return;
+    }
     _pc = pc;
     for (final t in _local!.getTracks()) {
       await pc.addTrack(t, _local!);
     }
     pc.onIceCandidate = (c) {
-      if (c.candidate != null) {
-        _send({'type': 'ice', 'candidate': c.candidate, 'sdpMid': c.sdpMid, 'sdpMLineIndex': c.sdpMLineIndex});
-      }
+      if (_disposed) return;
+      final cand = c.candidate;
+      if (cand == null) return;
+      final m = RegExp(r' typ (\w+)').firstMatch(cand);
+      if (m != null) _cands[m.group(1)!] = (_cands[m.group(1)] ?? 0) + 1;
+      _send({'type': 'ice', 'candidate': cand, 'sdpMid': c.sdpMid, 'sdpMLineIndex': c.sdpMLineIndex});
     };
     pc.onTrack = (e) {
+      if (_disposed) return;
       if (e.streams.isEmpty) return;
       remoteRenderer.srcObject = e.streams.first;
       if (e.track.kind == 'video') remoteVideo = true;
@@ -174,6 +203,7 @@ class CallSession extends ChangeNotifier {
     };
     // ICE connection state для UI: connecting → connected / no_connection / disconnected
     pc.onIceConnectionState = (s) {
+      if (_disposed) return;
       switch (s) {
         case RTCIceConnectionState.RTCIceConnectionStateNew:
         case RTCIceConnectionState.RTCIceConnectionStateChecking:
@@ -198,6 +228,7 @@ class CallSession extends ChangeNotifier {
       notifyListeners();
     };
     pc.onConnectionState = (s) {
+      if (_disposed) return;
       if (s == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
         _disconnectTimer?.cancel();
         _set(CallState.active);
@@ -206,7 +237,9 @@ class CallSession extends ChangeNotifier {
       // переживает сам — ждём 10 с, потом сдаёмся.
       if (s == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
         _disconnectTimer?.cancel();
-        _disconnectTimer = Timer(const Duration(seconds: 10), () => _end(tr('Связь прервалась'), outcome: 'failed'));
+        _disconnectTimer = Timer(const Duration(seconds: 10), () {
+          if (!_disposed) _end(tr('Связь прервалась'), outcome: 'failed');
+        });
       }
       if (s == RTCPeerConnectionState.RTCPeerConnectionStateFailed) _end(tr('Связь прервалась'), outcome: 'failed');
     };
@@ -565,6 +598,42 @@ class CallSession extends ChangeNotifier {
     _failDetail = d.length > 240 ? d.substring(0, 240) : d;
   }
 
+  /// Строка для отчёта: сколько кандидатов каждого типа и кто выдал TURN.
+  /// `relay:0` без `turn` — рабочий ретранслятор не выдан, и за симметричным
+  /// NAT пара не составится (отчёт 16.11 18:58).
+  String _diagLine() {
+    final cands = _cands.entries.map((e) => '${e.key}:${e.value}').join(' ');
+    return '${cands.isEmpty ? 'кандидаты: нет' : 'кандидаты: $cands'} turn=${IceServers.lastTurnProvider ?? 'none'}';
+  }
+
+  /// Освобождает медиа и соединение. Отдельно от [_end], потому что вызывается
+  /// ещё и из [dispose] — там уже нельзя уведомлять слушателей.
+  void _releaseMedia() {
+    try {
+      remoteRenderer.srcObject = null;
+      localRenderer.srcObject = null;
+    } catch (_) {}
+    remoteVideo = false;
+    for (final t in _local?.getTracks() ?? const <MediaStreamTrack>[]) {
+      try {
+        t.stop();
+      } catch (_) {}
+    }
+    for (final t in _display?.getTracks() ?? const <MediaStreamTrack>[]) {
+      try {
+        t.stop();
+      } catch (_) {}
+    }
+    try {
+      _local?.dispose();
+    } catch (_) {}
+    try {
+      _pc?.close();
+    } catch (_) {}
+    _local = null;
+    _pc = null;
+  }
+
   void _end(String reason, {String? outcome}) {
     if (isEnded) return;
     final failed = (outcome ?? (answered ? 'answered' : 'failed')) == 'failed';
@@ -573,10 +642,16 @@ class CallSession extends ChangeNotifier {
         'Call failed',
         '[${_failCode.isEmpty ? 'UNKNOWN' : _failCode}] $reason',
         null,
-        'out=$outgoing video=$video viaLive=$_viaLive peerOnline=${live?.peerOnline} state=${state.name}${_failDetail.isEmpty ? '' : '\n$_failDetail'}',
+        'out=$outgoing video=$video viaLive=$_viaLive peerOnline=${live?.peerOnline} state=${state.name} ${_diagLine()}${_failDetail.isEmpty ? '' : '\n$_failDetail'}',
       );
     }
     endReason = reason;
+    if (failed && !answered && (_cands['relay'] ?? 0) == 0 && IceServers.lastTurnProvider == null) {
+      // Честная подсказка вместо общего «связь прервалась»: соединения нет и
+      // ретранслятора тоже, значит сети не хватает прямого пути.
+      endReason = tr('{reason}. Прямое соединение не удалось — попробуйте другую сеть или VPN',
+          {'reason': reason});
+    }
     this.outcome = outcome ?? (answered ? 'answered' : 'failed');
     _endedAt = DateTime.now();
     state = CallState.ended;
@@ -589,21 +664,9 @@ class CallSession extends ChangeNotifier {
       _ws?.sink.close();
     } catch (_) {}
     // Сразу убираем картинку с экрана: иначе последний кадр «зависает», пока экран закрывается.
-    try {
-      remoteRenderer.srcObject = null;
-      localRenderer.srcObject = null;
-    } catch (_) {}
-    remoteVideo = false;
-    for (final t in _local?.getTracks() ?? const <MediaStreamTrack>[]) {
-      t.stop();
-    }
-    for (final t in _display?.getTracks() ?? const <MediaStreamTrack>[]) {
-      t.stop();
-    }
-    _local?.dispose();
-    _pc?.close();
+    _releaseMedia();
     if (current == this) current = null;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   static String _humanError(Object e) {
@@ -615,7 +678,30 @@ class CallSession extends ChangeNotifier {
 
   @override
   void dispose() {
-    if (!isEnded) hangUp();
+    if (_disposed) {
+      super.dispose();
+      return;
+    }
+    // Порядок важен: сначала прощаемся с собеседником, потом освобождаем
+    // медиа и рендереры. Раньше здесь вызывался hangUp() (он асинхронный),
+    // а рендереры освобождались сразу — и _end() после этого обращался к
+    // освобождённым объектам, что на Android роняет приложение (отзыв 16.11
+    // 18:57, путь закончился на CallScreen).
+    if (!isEnded) {
+      if (outgoing && !answered && !_viaLive) _service.cancel(callId: callId, to: peerId);
+      _send({'type': 'hangup'});
+    }
+    _disposed = true;
+    _ringTimeout?.cancel();
+    _fallbackTimer?.cancel();
+    _disconnectTimer?.cancel();
+    if (_prevOnCall != null && live != null) live!.onCall = _prevOnCall;
+    _wsSub?.cancel();
+    try {
+      _ws?.sink.close();
+    } catch (_) {}
+    _releaseMedia();
+    if (current == this) current = null;
     localRenderer.dispose();
     remoteRenderer.dispose();
     super.dispose();

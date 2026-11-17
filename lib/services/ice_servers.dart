@@ -3,33 +3,27 @@ import 'remote_config.dart';
 /// Общий модуль ICE-серверов для звонков и P2P.
 ///
 /// Порядок: STUN из RemoteConfig → то, что отдал сервер звонков (`/ice`) →
-/// бесплатный резервный TURN. Резерв нужен, потому что без TURN за
-/// симметричным NAT оператора пары не составляются вовсе: в отчётах 16.11
-/// при 20 host- и 7 srflx-кандидатах состояние оставалось Connecting.
+/// TURN из публичного конфига (`webrtc.turn`). Свой TURN выдаёт сервер
+/// звонков; конфиг нужен, чтобы подложить рабочий ретранслятор без выпуска
+/// новой версии.
+///
+/// Бесплатный `openrelay.metered.ca` убран: домен отдаёт `192.0.2.1`
+/// (тестовый адрес-заглушка), relay-кандидатов не появлялось, а сбор
+/// кандидатов только зря тратил время — отчёт 16.11 18:58.
 class IceServers {
   IceServers({this.fetch});
 
-  /// Откуда взять серверы от сервера звонков. null — только STUN и резерв.
+  /// Откуда взять серверы от сервера звонков. null — только STUN и конфиг.
   final Future<List<Map<String, dynamic>>> Function()? fetch;
+
+  /// Признак того, кто выдал TURN последним ответом `/ice`: `cloudflare`,
+  /// `metered`, `config` (из `webrtc.turn`) или null — ретранслятора нет.
+  /// Уходит в отчёт о сбое, чтобы по одной строке было видно причину.
+  static String? lastTurnProvider;
 
   static List<Map<String, dynamic>>? _cache;
   static DateTime _cachedAt = DateTime.fromMillisecondsSinceEpoch(0);
   static const _ttl = Duration(minutes: 10);
-
-  /// Бесплатный резервный TURN (Open Relay Project). Свой TURN у проекта
-  /// появится позже, поэтому он подставляется, только если среди серверов
-  /// нет ни одного turn:-адреса.
-  static const freeTurn = <Map<String, dynamic>>[
-    {
-      'urls': [
-        'turn:openrelay.metered.ca:80',
-        'turn:openrelay.metered.ca:443',
-        'turn:openrelay.metered.ca:443?transport=tcp',
-      ],
-      'username': 'openrelayproject',
-      'credential': 'openrelayproject',
-    },
-  ];
 
   static bool hasTurn(List<Map<String, dynamic>> servers) => servers.any((s) {
         final u = s['urls'];
@@ -37,10 +31,26 @@ class IceServers {
         return list.any((x) => '$x'.startsWith('turn'));
       });
 
-  /// Серверы без сервера звонков: STUN из конфига + резервный TURN.
+  /// Хосты TURN в коротком виде — для отчёта (`cloudflare`, `openrelay`…).
+  static String turnHosts(List<Map<String, dynamic>> servers) {
+    final hosts = <String>{};
+    for (final s in servers) {
+      final u = s['urls'];
+      final list = u is List ? u : [u];
+      for (final x in list) {
+        final v = '$x';
+        if (!v.startsWith('turn')) continue;
+        final host = Uri.tryParse(v.replaceFirst('turn:', 'https:'))?.host ?? v;
+        hosts.add(host.split('.').first);
+      }
+    }
+    return hosts.isEmpty ? 'none' : hosts.join('+');
+  }
+
+  /// Серверы без сервера звонков: STUN из конфига + TURN из конфига.
   static List<Map<String, dynamic>> fallback() => <Map<String, dynamic>>[
         {'urls': RemoteConfig.stunServers},
-        ...freeTurn,
+        ...RemoteConfig.turnServers,
       ];
 
   /// Список для `createPeerConnection`. Кэшируется на 10 минут.
@@ -53,15 +63,23 @@ class IceServers {
       try {
         final r = await get();
         if (r.isNotEmpty) {
-          final withTurn = hasTurn(r) ? r : [...r, ...freeTurn];
-          _cache = withTurn;
+          final configTurn = RemoteConfig.turnServers;
+          final fromServer = hasTurn(r);
+          final servers = fromServer ? r : [...r, ...configTurn];
+          if (fromServer) {
+            lastTurnProvider ??= 'server';
+          } else if (configTurn.isNotEmpty) {
+            lastTurnProvider = 'config';
+          }
+          _cache = servers;
           _cachedAt = now;
-          return withTurn;
+          return servers;
         }
       } catch (_) {}
     }
 
     final servers = fallback();
+    if (hasTurn(servers)) lastTurnProvider = 'config';
     _cache = servers;
     _cachedAt = now;
     return servers;
@@ -71,5 +89,6 @@ class IceServers {
   static void clearCache() {
     _cache = null;
     _cachedAt = DateTime.fromMillisecondsSinceEpoch(0);
+    lastTurnProvider = null;
   }
 }

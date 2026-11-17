@@ -46,6 +46,30 @@ class RemoteConfig {
     return list.isEmpty ? const ['stun:stun.l.google.com:19302'] : list;
   }
 
+  /// TURN из публичного конфига: список `{"urls": [...], "username": "…",
+  /// "credential": "…"}`. Нужен, чтобы подложить рабочий ретранслятор БЕЗ
+  /// выпуска новой версии приложения: секретов здесь быть не может, только
+  /// публичные или временные доступы. Пустой список — TURN только от сервера
+  /// звонков.
+  static List<Map<String, dynamic>> get turnServers {
+    final v = _get('webrtc', 'turn');
+    if (v is! List) return const [];
+    final out = <Map<String, dynamic>>[];
+    for (final e in v) {
+      if (e is! Map) continue;
+      final urls = e['urls'];
+      final list = urls is List
+          ? urls.whereType<String>().where((s) => s.startsWith('turn')).toList()
+          : (urls is String && urls.startsWith('turn') ? <String>[urls] : <String>[]);
+      if (list.isEmpty) continue;
+      final m = <String, dynamic>{'urls': list};
+      if (e['username'] is String) m['username'] = e['username'];
+      if (e['credential'] is String) m['credential'] = e['credential'];
+      out.add(m);
+    }
+    return out;
+  }
+
   /// Адрес чат-базы из конфига — только https и *.supabase.co, иначе null
   /// (защита: подменённый конфиг не должен увести приложение на чужой сервер).
   static String? get chatUrl {
