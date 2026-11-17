@@ -10,7 +10,6 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:provider/provider.dart';
 import '../models/app_color_presets.dart';
 import '../models/color_presets.dart';
@@ -24,6 +23,7 @@ import '../state/personalization_view_model.dart';
 import '../widgets/color_picker_dialog.dart';
 import '../widgets/glass_pill.dart';
 import '../i18n/i18n.dart';
+import '../logic/copy_text.dart';
 
 /// Переключатель светлой/тёмной темы интерфейса.
 ///
@@ -429,11 +429,11 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
           // Выделять пятнадцать строк JSON пальцем на телефоне —
           // мучение, ради которого экспорт и не открывали.
           TextButton.icon(
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: json));
+            onPressed: () async {
+              final ok = await copyText(json);
               Navigator.of(dialogContext).pop();
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(tr('Схема скопирована'))),
+                SnackBar(content: Text(ok ? tr('Схема скопирована') : tr('Не удалось скопировать — выделите текст вручную'))),
               );
             },
             icon: const Icon(Icons.copy, size: 18),

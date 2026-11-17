@@ -7,12 +7,13 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData, rootBundle;
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../i18n/i18n.dart';
+import '../logic/copy_text.dart';
 import '../logic/friendly_error.dart';
 import '../logic/save_to_app_folder.dart';
 import '../state/app_data_store.dart';
@@ -519,8 +520,12 @@ class _GDriveSetupState extends State<GDriveSetup> {
       return;
     }
     final template = await rootBundle.loadString('docs/gdrive-script.gs');
-    await Clipboard.setData(ClipboardData(text: template.replaceFirst('__SECRET__', _secret.text.trim())));
-    msg.showSnackBar(SnackBar(content: Text(tr('Готовый скрипт скопирован — вставьте его в Apps Script целиком'))));
+    final ok = await copyText(template.replaceFirst('__SECRET__', _secret.text.trim()));
+    if (ok) {
+      msg.showSnackBar(SnackBar(content: Text(tr('Готовый скрипт скопирован — вставьте его в Apps Script целиком'))));
+    } else {
+      msg.showSnackBar(SnackBar(content: Text(tr('Не удалось скопировать — выделите текст вручную'))));
+    }
   }
 
   Future<void> _connect() async {

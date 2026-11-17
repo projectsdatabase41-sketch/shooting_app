@@ -4,10 +4,10 @@ import '../logic/friendly_error.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../logic/copy_text.dart';
 import '../logic/service_display_ai.dart';
 import '../models/custom_service.dart';
 import '../services/ai_settings.dart';
@@ -253,9 +253,18 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
         content: SingleChildScrollView(child: SelectableText(value)),
         actions: [
           TextButton(
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: value));
+            onPressed: () async {
+              final ok = await copyText(value);
               Navigator.of(ctx).pop();
+              if (ok) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  SnackBar(content: Text(tr('Скопировано'))),
+                );
+              } else {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  SnackBar(content: Text(tr('Не удалось скопировать — выделите текст вручную'))),
+                );
+              }
             },
             child: Text(tr('Копировать')),
           ),
@@ -386,10 +395,11 @@ class _ServiceTileScreenState extends State<ServiceTileScreen> {
       floatingActionButton: _response == null
           ? null
           : FloatingActionButton.small(
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: _response!));
+              onPressed: () async {
+                final ok = await copyText(_response!);
                 ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(tr('Ответ скопирован'))));
+                  SnackBar(content: Text(ok ? tr('Ответ скопирован') : tr('Не удалось скопировать — выделите текст вручную'))),
+                );
               },
               child: const Icon(Icons.copy),
             ),

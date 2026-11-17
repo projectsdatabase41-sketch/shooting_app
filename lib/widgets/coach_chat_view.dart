@@ -4,10 +4,10 @@ import 'app_loader.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../logic/copy_text.dart';
 import '../models/coach_chat_message.dart';
 import '../services/chat_preferences.dart';
 import '../state/app_data_store.dart';
@@ -103,9 +103,14 @@ class _CoachChatViewState extends State<CoachChatView> {
             ListTile(
               leading: const Icon(Icons.copy_outlined),
               title: Text(tr('Копировать')),
-              onTap: () {
+              onTap: () async {
                 Navigator.of(ctx).pop();
-                Clipboard.setData(ClipboardData(text: m.text));
+                final ok = await copyText(m.text);
+                if (!ok && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(tr('Не удалось скопировать — выделите текст вручную'))),
+                  );
+                }
               },
             ),
             if (mine)

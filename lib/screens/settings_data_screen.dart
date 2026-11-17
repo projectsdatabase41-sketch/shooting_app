@@ -8,11 +8,11 @@ import '../services/chat_messages_repository.dart';
 import '../services/chat_sync_service.dart';
 import '../services/coach_link.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../logic/copy_text.dart';
 import '../services/supabase_auth_service.dart';
-import '../services/supabase_service.dart';
+import '../services/supabase_service.dart' show SupabaseSyncService, NotSignedInException;
 import '../state/app_data_store.dart';
 import '../widgets/glass_pill.dart';
 import '../widgets/section_header.dart';
@@ -512,6 +512,15 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
   }
 
   Future<void> _create() async {
+    // Проверка входа перед открытием диалога и вызовом API —
+    // если не вошли, показываем подсказку и не доходим до исключения.
+    if (!_auth.isSignedIn) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(tr('Сначала войдите в базу Supabase — токен проверяется на сервере, без неё выдавать его некому.'))),
+      );
+      return;
+    }
     final settings = await _askTokenSettings();
     if (settings == null) return; // отменили в диалоге
     if (!mounted) return;
@@ -527,6 +536,9 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
       if (!mounted) return;
       setState(() => _lastCreatedToken = token);
     } catch (e) {
+      // NotSignedInException не должна сюда попасть (предохранили выше),
+      // но на всякий случай — не считаем её ошибкой для UI.
+      if (e is NotSignedInException) return;
       if (!mounted) return;
       setState(() => _error = friendlyError(e));
     } finally {
@@ -623,13 +635,15 @@ class _ShareTokensSectionState extends State<ShareTokensSection> {
                     // сразу отправить тренеру, глазами читать незачем,
                     // а плечом подсмотреть — риск.
                     OutlinedButton.icon(
-                      onPressed: () {
-                        Clipboard.setData(
-                            ClipboardData(text: _lastCreatedToken!));
+                      onPressed: () async {
+                        final ok = await copyText(_lastCreatedToken!);
+                        if (!mounted) return;
                         ScaffoldMessenger.of(context)
                           ..hideCurrentSnackBar()
-                          ..showSnackBar(
-                              SnackBar(content: Text(tr('Токен скопирован'))));
+                          ..showSnackBar(SnackBar(
+                              content: Text(ok
+                                  ? tr('Токен скопирован')
+                                  : tr('Не удалось скопировать — выделите текст вручную'))));
                       },
                       icon: const Icon(Icons.copy, size: 16),
                       label: Text(tr('Скопировать токен')),

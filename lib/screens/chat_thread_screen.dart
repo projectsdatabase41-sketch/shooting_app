@@ -16,8 +16,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
-import 'package:flutter/services.dart'
-    show Clipboard, ClipboardData, HapticFeedback;
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -26,6 +25,7 @@ import 'package:provider/provider.dart';
 import '../logic/adaptive_poller.dart';
 import '../logic/ai_context.dart';
 import '../logic/chat_media_utils.dart';
+import '../logic/copy_text.dart';
 import '../models/chat_contact.dart';
 import '../models/chat_message.dart';
 import '../services/ai_service.dart';
@@ -1345,10 +1345,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         .join('\n\n');
     setState(() => _selected.clear());
     if (text.isEmpty) return;
-    await Clipboard.setData(ClipboardData(text: text));
-    if (mounted)
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(tr('Скопировано'))));
+    final ok = await copyText(text);
+    if (mounted) {
+      if (ok) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(tr('Скопировано'))));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Не удалось скопировать — выделите текст вручную'))));
+      }
+    }
   }
 
   /// Кнопка «Перевести» — переключатель: перевод показывается под оригиналом;

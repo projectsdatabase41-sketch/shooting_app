@@ -9,8 +9,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'
-    show Clipboard, ClipboardData, rootBundle;
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -19,6 +18,7 @@ import '../models/home_tab_specs.dart';
 import '../services/ai_service.dart';
 import '../services/ai_settings.dart';
 import '../services/custom_services_repository.dart';
+import '../logic/copy_text.dart';
 import '../services/app_update_service.dart';
 import '../services/knowledge_column_discovery.dart';
 import '../services/supabase_auth_service.dart';
@@ -530,20 +530,13 @@ class _AccountSheetState extends State<_AccountSheet> {
   /// Полная объяснённая версия с разбивкой по файлам — в репозитории
   /// приложения, папка Puls-Database-Setup.
   Future<void> _copyInstallSql(BuildContext context) async {
-    String message;
-    try {
-      final sql = await rootBundle.loadString('lib/db/nexus_personal_db.sql');
-      await Clipboard.setData(ClipboardData(text: sql));
-      message =
-          tr('SQL скопирован — вставьте в SQL Editor Supabase и нажмите Run');
-    } catch (e) {
-      // Браузер иногда отказывает в доступе к буферу обмена (нет разрешения,
-      // окно не в фокусе) — тогда честно сказать об этом, а не падать молча.
-      message = tr('Не удалось скопировать: {e}', {'e': friendlyError(e)});
-    }
+    final sql = await rootBundle.loadString('lib/db/nexus_personal_db.sql');
+    final ok = await copyText(sql);
+    final message = ok
+        ? tr('SQL скопирован — вставьте в SQL Editor Supabase и нажмите Run')
+        : tr('Не удалось скопировать — выделите текст вручную');
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _run(Future<String?> Function() action) async {

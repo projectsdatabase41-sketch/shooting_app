@@ -5,12 +5,13 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../logic/chat_media_utils.dart';
+import '../logic/copy_text.dart';
 import '../models/chat_contact.dart';
 import '../models/chat_message.dart';
 import '../services/chat_auth_service.dart';
@@ -346,10 +347,11 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
             subtitle: Text(tr('Код для поиска — нажмите, чтобы скопировать')),
             onTap: _code.isEmpty
                 ? null
-                : () {
-                    Clipboard.setData(ClipboardData(text: _code));
+                : () async {
+                    final ok = await copyText(_code);
                     ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(tr('Код скопирован'))));
+                      SnackBar(content: Text(ok ? tr('Код скопирован') : tr('Не удалось скопировать — выделите текст вручную'))),
+                    );
                   },
           ),
         if (!_contact.isGroup)
@@ -488,10 +490,11 @@ class _ChatContactPanelScreenState extends State<ChatContactPanelScreen> {
           subtitle: Text(_date(m)),
           onTap: () =>
               launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
-          onLongPress: () {
-            Clipboard.setData(ClipboardData(text: url));
+          onLongPress: () async {
+            final ok = await copyText(url);
             ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(tr('Ссылка скопирована'))));
+              SnackBar(content: Text(ok ? tr('Ссылка скопирована') : tr('Не удалось скопировать — выделите текст вручную'))),
+            );
           },
         );
       },

@@ -1,10 +1,10 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:intl/intl.dart';
 
 import '../i18n/i18n.dart';
+import '../logic/copy_text.dart';
 import '../services/coach_access_service.dart';
 import '../services/coach_data_mapper.dart';
 import '../services/local_db_service.dart';
@@ -284,8 +284,14 @@ class _AthleteSheetState extends State<_AthleteSheet> {
                 ? null
                 : () async {
                     _commit();
-                    await Clipboard.setData(ClipboardData(text: weeklyReport(widget.athlete.name, s, widget.meta)));
-                    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Отчёт скопирован — вставьте его в чат'))));
+                    final ok = await copyText(weeklyReport(widget.athlete.name, s, widget.meta));
+                    if (context.mounted) {
+                      if (ok) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Отчёт скопирован — вставьте его в чат'))));
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Не удалось скопировать — выделите текст вручную'))));
+                      }
+                    }
                   },
             icon: const Icon(Icons.summarize_outlined),
             label: Text(tr('Отчёт за неделю')),

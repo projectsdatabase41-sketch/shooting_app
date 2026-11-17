@@ -1,10 +1,10 @@
 import 'glass_route.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
+import '../logic/copy_text.dart';
 import '../models/comment.dart';
 import '../services/chat_preferences.dart';
 import '../services/comments_repository.dart';
@@ -219,9 +219,14 @@ class _CommentsThreadSheetState extends State<CommentsThreadSheet> {
             ListTile(
               leading: const Icon(Icons.copy_outlined),
               title: Text(tr('Копировать')),
-              onTap: () {
+              onTap: () async {
                 Navigator.of(ctx).pop();
-                Clipboard.setData(ClipboardData(text: c.text));
+                final ok = await copyText(c.text);
+                if (!ok && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(tr('Не удалось скопировать — выделите текст вручную'))),
+                  );
+                }
               },
             ),
             if (mine)

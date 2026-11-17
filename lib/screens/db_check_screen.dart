@@ -1,10 +1,11 @@
 import '../widgets/app_backdrop.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData, rootBundle;
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../i18n/i18n.dart';
+import '../logic/copy_text.dart';
 import '../logic/friendly_error.dart';
 import '../services/db_setup_check.dart';
 import '../services/supabase_auth_service.dart';
@@ -58,8 +59,11 @@ class _DbCheckScreenState extends State<DbCheckScreen> {
     final msg = ScaffoldMessenger.of(context);
     try {
       final sql = await rootBundle.loadString('lib/db/nexus_personal_db.sql');
-      await Clipboard.setData(ClipboardData(text: sql));
-      msg.showSnackBar(SnackBar(content: Text(tr('SQL скопирован — вставьте в SQL Editor и нажмите Run'))));
+      final ok = await copyText(sql);
+      msg.showSnackBar(SnackBar(
+          content: Text(ok
+              ? tr('SQL скопирован — вставьте в SQL Editor и нажмите Run')
+              : tr('Не удалось скопировать — выделите текст вручную'))));
     } catch (e) {
       msg.showSnackBar(SnackBar(content: Text(tr('Не удалось скопировать: {e}', {'e': friendlyError(e)}))));
     }

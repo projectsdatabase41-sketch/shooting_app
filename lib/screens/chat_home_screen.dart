@@ -7,8 +7,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'
-    show Clipboard, ClipboardData;
+
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -26,6 +25,7 @@ import '../services/live_chat_session.dart';
 import '../services/coach_access_service.dart';
 import '../services/local_db_service.dart';
 import '../gdrive/chat_drive_backup.dart';
+import '../logic/copy_text.dart';
 import '../services/chat_backup_service.dart';
 import '../services/chat_vault.dart';
 import '../services/push_service.dart';
@@ -1174,10 +1174,11 @@ class _ProfileSheetState extends State<_ProfileSheet> {
                 'Ваш код контакта — дайте его собеседнику, чтобы он вас добавил')),
             const SizedBox(height: 8),
             OutlinedButton.icon(
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: auth.chatCode));
+              onPressed: () async {
+                final ok = await copyText(auth.chatCode);
                 ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(tr('Код скопирован'))));
+                  SnackBar(content: Text(ok ? tr('Код скопирован') : tr('Не удалось скопировать — выделите текст вручную'))),
+                );
               },
               icon: const Icon(Icons.copy),
               label: Text(auth.chatCode.isEmpty ? '—' : auth.chatCode),
