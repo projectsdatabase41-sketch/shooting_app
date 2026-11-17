@@ -28,6 +28,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # На раннере по умолчанию теперь Java 25, а Gradle/AGP этого проекта
+      # её не понимают: сборка падала с «What went wrong: 25.0.5» за 20 секунд.
+      # Фиксируем Java 21 (Temurin) — её ждёт AGP 8/9, и локально сборка идёт
+      # именно на ней.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.41.9'
