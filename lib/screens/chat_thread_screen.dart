@@ -588,6 +588,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   void _onPushPing() => _pollLoop?.poke();
 
   void _reload() {
+    // Экран могли закрыть, пока шла переписка с сетью (повтор отправки,
+    // опрос): setState у закрытого экрана — это и есть Null check operator
+    // на setState (отзыв 17.11 11:47, путь кончился в CircleRecorderScreen).
+    if (!mounted) return;
     final before = _lastCount;
     setState(() {
       _messages = widget.repo.forContact(_contact.id, reuseFrom: _messages);

@@ -892,6 +892,33 @@ class _AccountSheetState extends State<_AccountSheet> {
                       overflow: TextOverflow.ellipsis),
                 ),
               const SizedBox(height: 14),
+              // Короткий ответ на вопрос из отзыва 17.11 («зачем почта и
+              // пароль, если есть адрес и ключ?»): адрес и ключ сами по себе
+              // в базу писать не дают.
+              if (!signedIn)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(tr('Зачем вход'), style: theme.textTheme.titleSmall),
+                    const SizedBox(height: 6),
+                    Text(
+                      tr('Адрес и публичный ключ только открывают базу. Писать в неё можно лишь от своего имени — поэтому нужна почта и пароль: это вход в ВАШУ базу, он включает синхронизацию между устройствами, токены для тренера и задания. Без входа приложение работает только на этом устройстве, и облако трогать не будет.'),
+                      style: theme.textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: Text(tr('Продолжить без входа')),
+                      ),
+                    ]),
+                  ]),
+                ),
+              const SizedBox(height: 14),
               Text(
                 tr('Почта и пароль — это ваш личный вход в эту базу. Адрес базы сам по себе данные не открывает: вход нужен, чтобы вы видели и меняли только свои записи. Это не пароль от Supabase и не пароль мессенджера; при первом входе нажмите «Регистрация».'),
                 style: theme.textTheme.bodySmall,

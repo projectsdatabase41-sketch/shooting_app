@@ -314,7 +314,7 @@ class CallSession extends ChangeNotifier {
         if (noPush && state == CallState.calling) {
           _fail('NO_DEVICE', 'push delivered=0, личный канал не ответил (у собеседника нет push, приложение закрыто)');
           _service.cancel(callId: callId, to: peerId);
-          _end(tr('{peerName} сейчас недоступен — нет устройства с приложением', {'peerName': peerName}), outcome: 'failed');
+          _end(tr('{peerName} недоступен: приложение закрыто или уведомления выключены. Позвоните, когда он откроет Nexus', {'peerName': peerName}), outcome: 'failed');
           return;
         }
         if (state == CallState.calling) {
@@ -351,7 +351,7 @@ class CallSession extends ChangeNotifier {
           if (state != CallState.calling) return;
           _fail('NO_DEVICE', 'push delivered=0, личный канал не ответил (у собеседника нет push, приложение закрыто)');
           _service.cancel(callId: callId, to: peerId);
-          _end(tr('{peerName} сейчас недоступен — нет устройства с приложением', {'peerName': peerName}), outcome: 'failed');
+          _end(tr('{peerName} недоступен: приложение закрыто или уведомления выключены. Позвоните, когда он откроет Nexus', {'peerName': peerName}), outcome: 'failed');
         });
       }
     } catch (e) {
