@@ -21,12 +21,6 @@ import '../models/target_face.dart';
 /// перекрестия там нет — если рисовать цифры раньше, линии прицела их
 /// перечёркивают.
 class TargetPainter extends CustomPainter {
-  /// Внутренняя граница зоны компаса, долей радиуса мишени (B.4:
-  /// r >= 0.85*R). Публичная, потому что тот же порог нужен жестовому
-  /// слою (`TargetCanvas`), чтобы понять, что пользователь тянет за
-  /// компас, а не двигает пробоину — два разных значения разъехались бы.
-  static const double compassZoneFraction = 0.85;
-
   final TargetFace face;
   final TargetColorScheme colors;
   final List<Shot> visibleShots;
@@ -123,27 +117,35 @@ class TargetPainter extends CustomPainter {
     // 1a. Загнутый уголок — признак пристрелочной мишени (как на бланке и на
     // пульте SIUS). Рисуется на бумаге, в её координатах: при зуме растёт
     // вместе с мишенью, при панорамировании уезжает с углом, а не висит перед
-    // ней. Цвет — противоположный бумаге, чтобы читался и на белом бланке, и
-    // на затемнённой теме.
+    // ней. Зона инвертирует цвета (BlendMode.difference) — на белом листе
+    // тёмная, на чёрном яблоке — светлая. Размер +30% (было 0.28, стало ~0.36).
     if (sighting && face.zones.isEmpty && !face.isArchery) {
       final rect = Rect.fromCenter(
           center: center, width: radiusPx * 2, height: radiusPx * 2);
-      final fold = radiusPx * 0.28;
-      final paperLight = colors.targetPaper.computeLuminance() > 0.5;
-      final foldColor = paperLight ? Colors.black : Colors.white;
+      final fold = radiusPx * 0.36; // +30% от 0.28
       final path = Path()
         ..moveTo(rect.right - fold, rect.top)
         ..lineTo(rect.right, rect.top)
         ..lineTo(rect.right, rect.top + fold)
         ..close();
-      canvas.drawPath(path, Paint()..color = foldColor.withValues(alpha: 0.92));
-      // Сгиб: вторая, чуть отступающая линия — объём «загнутого» уголка.
+      // Рисуем треугольник с инверсией цвета (негатив). BlendMode.difference
+      // инвертирует под собой: на белой бумаге — чёрный, на чёрном яблоке — белый,
+      // на цветных зонах — комплементарный цвет. Сама зона пристрелочной
+      // мишени всегда узнаваема.
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = Colors.white
+          ..blendMode = BlendMode.difference,
+      );
+      // Сгиб: линия по диагонали угла — объём «загнутого» уголка, тоже в негативе.
       canvas.drawLine(
         Offset(rect.right - fold, rect.top),
         Offset(rect.right, rect.top + fold),
         Paint()
-          ..color = foldColor.withValues(alpha: 0.45)
-          ..strokeWidth = math.max(1.0, radiusPx * 0.012),
+          ..color = Colors.white
+          ..blendMode = BlendMode.difference
+          ..strokeWidth = math.max(1.0, radiusPx * 0.015),
       );
     }
 
@@ -171,10 +173,7 @@ class TargetPainter extends CustomPainter {
     // 5. Подписи габаритов — после перекрестия, см. комментарий к классу
     _paintRingLabels(canvas, size, center, mmToPx);
 
-    // 6. Компас — только во время редактирования
-    if (isEditing) {
-      _paintCompass(canvas, center, radiusPx);
-    }
+    // 6. Компас убран (отзыв 17.11 08:04) — больше не нужен.
 
     // 7. Пробоины
     _paintShots(canvas, center, mmToPx);
@@ -281,60 +280,6 @@ class TargetPainter extends CustomPainter {
       textDirection: TextDirection.ltr,
     )..layout();
     tp.paint(canvas, pos - Offset(tp.width / 2, tp.height / 2));
-  }
-
-  /// Компас выбора угла — появляется только во время правки.
-  ///
-  /// Раньше это была просто закрашенная полоса во внешних 15% радиуса.
-  /// Теперь это настоящий компас: кольцо, 12 делений по часам с
-  /// подписями и стрелка на текущий угол пробоины. Потянув по этому
-  /// кольцу, пользователь меняет ТОЛЬКО угол, не трогая результат —
-  /// см. `TargetCanvas` и `TargetViewModel.setDraftAngleFromPoint`.
-  /// Он заменил прежний степпер "Угол" с кнопками +/-.
-  void _paintCompass(Canvas canvas, Offset center, double radiusPx) {
-    final inner = radiusPx * compassZoneFraction;
-    final mid = (radiusPx + inner) / 2;
-
-    canvas.drawCircle(
-      center,
-      mid,
-      Paint()
-        ..color = colors.compassRing.withValues(alpha: 0.30)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = (radiusPx - inner),
-    );
-
-    final tickPaint = Paint()
-      ..color = colors.compassRing
-      ..strokeWidth = 1.5;
-    for (var hour = 1; hour <= 12; hour++) {
-      final angle = -math.pi / 2 + hour * (2 * math.pi / 12);
-      final dir = Offset(math.cos(angle), math.sin(angle));
-      final long = hour % 3 == 0;
-      canvas.drawLine(
-        center + dir * inner,
-        center + dir * (inner + (radiusPx - inner) * (long ? 0.55 : 0.3)),
-        tickPaint,
-      );
-      if (long) {
-        _drawText(canvas, '$hour', center + dir * (mid + (radiusPx - inner) * 0.18),
-            colors.compassRing, 11);
-      }
-    }
-
-    // Стрелка на текущий угол пробоины — чтобы было видно, что именно
-    // крутится, ещё до начала перетаскивания.
-    final draftX = draftXMm;
-    final draftY = draftYMm;
-    if (draftX != null && draftY != null && (draftX != 0 || draftY != 0)) {
-      final angle = math.atan2(draftX, draftY); // 0 = вверх, по часовой
-      final dir = Offset(math.sin(angle), -math.cos(angle));
-      canvas.drawCircle(
-        center + dir * mid,
-        (radiusPx - inner) * 0.32,
-        Paint()..color = colors.shotSelected,
-      );
-    }
   }
 
   void _paintShots(Canvas canvas, Offset center, double mmToPx) {

@@ -99,7 +99,9 @@ class _ColorPersonalizationScreenState extends State<ColorPersonalizationScreen>
       'shot_past_series',
       'shot_number_text'
     ],
-    /*tr*/ 'ПРАВКА': ['compass_ring', 'edit_result_badge', 'edit_angle_badge'],
+    // Компас убран с мишени (отзыв 17.11), поэтому и цвета для него больше
+    // не предлагаем: остались индикаторы правки.
+    /*tr*/ 'ПРАВКА': ['edit_result_badge', 'edit_angle_badge'],
     /*tr*/ 'ИНТЕРФЕЙС': ['bottom_panel_bg', 'bottom_panel_text'],
     /*tr*/ 'ПРОЧЕЕ': ['crosshair'],
   };

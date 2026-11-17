@@ -100,12 +100,6 @@ class _TargetCanvasState extends State<TargetCanvas> {
     vm.setMultiTouch(_activePointers >= 2);
   }
 
-  /// Текущий жест начат на кольце компаса — значит меняем только угол,
-  /// не трогая результат. Решается ОДИН раз в начале жеста: иначе
-  /// пробоина прыгала бы между режимами, когда палец пересекает границу
-  /// зоны компаса по дороге.
-  bool _gestureOnCompass = false;
-
   // Сколько пальцев было в жесте — нужно только чтобы поймать появление
   // второго пальца ПОСЛЕ начала жеста (см. _onScaleUpdate) и отменить
   // правку: одиночным касанием пробоина больше не ставится нигде, это
@@ -144,7 +138,6 @@ class _TargetCanvasState extends State<TargetCanvas> {
     vm.beginAddNew();
     _autoAdd = vm.isEditing;
     if (_autoAdd) {
-      _gestureOnCompass = false;
       _applyEditDrag(pos, vm);
       setState(() => _finger = pos);
     }
@@ -344,7 +337,16 @@ class _TargetCanvasState extends State<TargetCanvas> {
     // показывает окрестность точки под пальцем — чтобы тап был не вслепую.
     final mm = vm.isEditing ? null : _screenToMm(vm, f);
     final center = vm.isEditing ? Offset(vm.draftXMm, vm.draftYMm) : mm!;
-    final pan = Offset(-center.dx * mmToPx, -center.dy * mmToPx); // точка — в центре лупы
+    // Лупа стоит над пальцем (left/top уже вычислены). Содержимое должно ехать
+    // ВМЕСТЕ с пальцем: смещаем pan на вектор (палец - центр_лупы).
+    // В координатах лупы (d x d) центр лупы = (d/2, d/2).
+    // Сдвиг в мм = (f - центр_лупы_в_пикселях) / mmToPx.
+    final loupeCenterScreen = Offset(left + d / 2, top + d / 2);
+    final deltaScreen = f - loupeCenterScreen;
+    final pan = Offset(
+      -(center.dx - deltaScreen.dx / mmToPx) * mmToPx,
+      -(center.dy + deltaScreen.dy / mmToPx) * mmToPx, // Y инвертирован в мм
+    );
     return Positioned(
       left: left,
       top: top,
@@ -403,27 +405,11 @@ class _TargetCanvasState extends State<TargetCanvas> {
     return Rect.fromCenter(center: _targetCenter(vm), width: r * 2, height: r * 2);
   }
 
-  /// Попало ли касание в кольцо компаса.
-  ///
-  /// Центр берётся С УЧЁТОМ панорамирования — в прежней версии радиус
-  /// касания считался от геометрического центра холста без `pan`, и
-  /// после сдвига мишени зона компаса уезжала от нарисованного кольца.
-  bool _isInCompassZone(Offset localPos, TargetViewModel vm) {
-    final radiusPx = _targetRadiusPx(vm);
-    if (radiusPx <= 0) return false;
-    final d = (localPos - _targetCenter(vm)).distance;
-    return d >= TargetPainter.compassZoneFraction * radiusPx && d <= radiusPx * 1.2;
-  }
-
-  /// Единая точка применения перетаскивания во время правки: по кольцу
-  /// компаса — только угол, иначе — свободно по XY.
+  /// Применяет перетаскивание при правке: всегда свободное перемещение XY.
+  /// Компас убран (отзыв 17.11 08:04) — больше нет режима "только угол".
   void _applyEditDrag(Offset localPos, TargetViewModel vm) {
     final mmPos = _screenToMm(vm, localPos);
-    if (_gestureOnCompass) {
-      vm.setDraftAngleFromPoint(mmPos.dx, mmPos.dy);
-    } else {
-      vm.updateDraftPosition(mmPos.dx, mmPos.dy);
-    }
+    vm.updateDraftPosition(mmPos.dx, mmPos.dy);
   }
 
   // ---- Scale (пинч-зум / пролистывание выстрелов, B.4) ----
@@ -445,9 +431,8 @@ class _TargetCanvasState extends State<TargetCanvas> {
     // точку касания, не дожидаясь порога сдвига для onUpdate. Режим
     // (компас или свободное XY) решается здесь и на весь жест.
     if (vm.isEditing && !_autoAdd) {
-      _gestureOnCompass = _isInCompassZone(details.localFocalPoint, vm);
       _applyEditDrag(details.localFocalPoint, vm);
-      setState(() => _finger = _gestureOnCompass ? null : details.localFocalPoint);
+      setState(() => _finger = details.localFocalPoint);
     }
   }
 
@@ -467,7 +452,7 @@ class _TargetCanvasState extends State<TargetCanvas> {
       // (isAddingNew — без разницы, обе двигаются через draftX/Y).
       if (vm.isEditing && !_autoAdd) {
         _applyEditDrag(details.localFocalPoint, vm);
-        if (!_gestureOnCompass) setState(() => _finger = details.localFocalPoint);
+        setState(() => _finger = details.localFocalPoint);
       }
       return;
     }
