@@ -14,6 +14,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
@@ -2683,15 +2684,39 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           ),
         )),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           child: Row(children: [
-            Icon(Icons.call, size: 18, color: cs.onSecondaryContainer),
-            const SizedBox(width: 8),
+            // Мини-окно с живым видео собеседника: свёрнутый звонок видно,
+            // а не только читаемо (отзыв 17.11 «свернуть звонок без сброса»).
+            if (c.video && c.remoteVideo)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: SizedBox(
+                  width: 48,
+                  height: 64,
+                  child: RTCVideoView(c.remoteRenderer,
+                      objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
+                ),
+              )
+            else
+              Icon(Icons.call, size: 18, color: cs.onSecondaryContainer),
+            const SizedBox(width: 10),
             Expanded(
               child: Text(
                 tr('Звонок идёт · {name}', {'name': c.peerName}),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(color: cs.onSecondaryContainer, fontWeight: FontWeight.w600),
               ),
+            ),
+            IconButton(
+              tooltip: tr('Завершить'),
+              visualDensity: VisualDensity.compact,
+              onPressed: () async {
+                await c.hangUp();
+                if (context.mounted) setState(() {});
+              },
+              icon: const Icon(Icons.call_end, color: Color(0xFFE53935)),
             ),
             Text(tr('Вернуться'), style: TextStyle(color: cs.primary, fontWeight: FontWeight.w700)),
           ]),

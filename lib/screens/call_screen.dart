@@ -38,6 +38,9 @@ class CallScreen extends StatefulWidget {
 class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateMixin {
   late CallSession s = widget.session;
   final _light = SelfieLightState(); // подсветка экрана при съёмке на фронтальную камеру
+
+  /// Своё видео — на весь экран, собеседник — окошком (тап по окошку меняет местами).
+  bool _swapped = false;
   late final AnimationController _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))
     ..repeat();
   Timer? _tick;
@@ -325,7 +328,11 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
             child: Stack(
               fit: StackFit.expand,
               children: [
-                if (remoteVideo)
+                // Большой слой: по умолчанию собеседник; если пользователь
+                // поменял окна — своё видео (отзыв 17.11 18:17).
+                if (_swapped && s.video && !s.cameraOff)
+                  RTCVideoView(s.localRenderer, mirror: true, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover)
+                else if (remoteVideo)
                   RTCVideoView(s.remoteRenderer, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
                 if (s.video && s.frontCamera) SelfieLightOverlay(light: _light),
                 if (s.video && s.frontCamera) Positioned.fill(child: SelfieLightGestures(light: _light, child: const SizedBox.expand())),
@@ -368,15 +375,23 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
                     ],
                   ),
                 ),
-                if (s.video && !s.cameraOff && s.state != CallState.ringing && !s.isEnded)
+                if (s.video && s.state != CallState.ringing && !s.isEnded && (_swapped ? remoteVideo : !s.cameraOff))
                   Positioned(
                     right: 16,
                     top: MediaQuery.paddingOf(context).top + 16,
                     width: 110,
                     height: 160,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
-                      child: RTCVideoView(s.localRenderer, mirror: true, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
+                    child: GestureDetector(
+                      // Тап по окошку меняет большое и маленькое местами.
+                      onTap: () => setState(() => _swapped = !_swapped),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: _swapped
+                            // Собеседник в окошке — без зеркала (отзыв 18:17:
+                            // «в маленьком окошке перевёрнуто»).
+                            ? RTCVideoView(s.remoteRenderer, mirror: false, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover)
+                            : RTCVideoView(s.localRenderer, mirror: true, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
+                      ),
                     ),
                   ),
               ],
