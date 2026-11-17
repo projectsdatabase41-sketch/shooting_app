@@ -52,6 +52,9 @@ class WebRtcPeerLink implements PeerLink {
   final List<String> _diag = [];
   final Map<String, int> _cands = {};
 
+  /// Диагностические записи для отладки (используется в тестах и отзывах).
+  List<String> get diag => _diag;
+
   @override
   bool get isOpen => !_closed && _dc?.state == RTCDataChannelState.RTCDataChannelOpen;
 
@@ -69,7 +72,7 @@ class WebRtcPeerLink implements PeerLink {
     try {
       _initiator = initiator;
       final ice = await _ice();
-      _diag.add('ice=${ice.map((e) {
+      _diag.add('warm ice=${ice.map((e) {
         final u = e['urls'];
         return (u is List ? u : [u]).map((x) => '$x'.split(':').first).toSet().join('+');
       }).join(',')} turn=${IceServers.lastTurnProvider ?? 'none'} turnHost=${IceServers.turnHosts(ice)} initiator=$initiator');

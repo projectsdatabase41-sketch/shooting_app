@@ -108,6 +108,32 @@ class LiveChatSession {
   /// стороны в отчётах было «кандидаты: нет» (веб, 14.11).
   final List<Map<String, dynamic>> _pendingSignals = [];
 
+  /// Запускает «разогрев» P2P-соединения при открытии чата.
+  /// Не блокирует UI, использует существующий linkFactory.
+  /// Если пир уже онлайн и P2P не поднят — пробуем поднять сразу.
+  Future<void> warmP2P() async {
+    if (_closed || linkFactory == null || !RemoteConfig.webrtcEnabled) return;
+    if (_link != null) return; // уже есть линк (переиспользуем)
+    if (_rtcTries >= _maxRtcTries) return; // лимит попыток исчерпан
+    // Ждём, пока канал сигнализации поднимется (peerOnline проверит presence)
+    // Но не блокируем: если пир уже в канале — поднимаем P2P сразу.
+    unawaited(_maybeWarmRtc());
+  }
+
+  Future<void> _maybeWarmRtc() async {
+    // Канал сигнализации подключается асинхронно, поэтому ждём появления
+    // собеседника до ~6 секунд и только потом поднимаем P2P — по тем же
+    // правилам, что и обычно (_maybeStartRtc: инициатор — младший id).
+    for (var i = 0; i < 6; i++) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (_closed || _link != null) return;
+      if (_client?.peers.contains(contactId) == true) {
+        _maybeStartRtc();
+        return;
+      }
+    }
+  }
+
   Future<void> open() async {
     if (_closed || !RemoteConfig.realtimeEnabled || !ChatSettings.isConfigured || !auth.isSignedIn) return;
     final token = await auth.ensureFreshToken();
