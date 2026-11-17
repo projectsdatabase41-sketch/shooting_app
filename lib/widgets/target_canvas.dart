@@ -337,16 +337,11 @@ class _TargetCanvasState extends State<TargetCanvas> {
     // показывает окрестность точки под пальцем — чтобы тап был не вслепую.
     final mm = vm.isEditing ? null : _screenToMm(vm, f);
     final center = vm.isEditing ? Offset(vm.draftXMm, vm.draftYMm) : mm!;
-    // Лупа стоит над пальцем (left/top уже вычислены). Содержимое должно ехать
-    // ВМЕСТЕ с пальцем: смещаем pan на вектор (палец - центр_лупы).
-    // В координатах лупы (d x d) центр лупы = (d/2, d/2).
-    // Сдвиг в мм = (f - центр_лупы_в_пикселях) / mmToPx.
-    final loupeCenterScreen = Offset(left + d / 2, top + d / 2);
-    final deltaScreen = f - loupeCenterScreen;
-    final pan = Offset(
-      -(center.dx - deltaScreen.dx / mmToPx) * mmToPx,
-      -(center.dy + deltaScreen.dy / mmToPx) * mmToPx, // Y инвертирован в мм
-    );
+    // Как в финалах (ShotPad): точка выстрела — в ЦЕНТРЕ лупы, а сама
+    // лупа стоит над пальцем. Знак по Y: в мм ось вверх, на экране вниз,
+    // поэтому pan.dy = +mm.dy. Раньше стоял минус — точка отражалась по
+    // вертикали, отсюда «двигаю вниз, а смотрю вверх» (отзыв 17.11).
+    final pan = Offset(-center.dx * mmToPx, center.dy * mmToPx);
     return Positioned(
       left: left,
       top: top,
