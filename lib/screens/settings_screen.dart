@@ -23,6 +23,7 @@ import '../services/app_update_service.dart';
 import '../services/knowledge_column_discovery.dart';
 import '../services/supabase_auth_service.dart';
 import '../i18n/i18n.dart';
+import 'network_diagnostics_screen.dart';
 import 'voice_settings_screen.dart';
 import 'screen_buttons_settings_screen.dart';
 import '../state/app_data_store.dart';
@@ -182,6 +183,18 @@ class SettingsScreen extends StatelessWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => VoiceSettingsScreen(db: store.db))),
           ),
+          // Диагностика сети — только в режиме разработчика: это парный тест
+          // соединения и автоотчёт в отзывы (пожелание пользователя 17.11).
+          if (friendlyErrorDevMode)
+            ListTile(
+              leading: const Icon(Icons.wifi_tethering),
+              title: Text(tr('Диагностика сети')),
+              subtitle: Text(tr('Проверка соединения в паре и автоотчёт')),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const NetworkDiagnosticsScreen()),
+              ),
+            ),
           const Divider(height: 24),
           const _UpdateTile(),
         ],

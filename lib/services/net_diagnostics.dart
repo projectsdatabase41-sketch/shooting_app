@@ -1,0 +1,572 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
+import 'package:flutter/material.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'call_service.dart';
+import 'chat_auth_service.dart';
+import 'chat_settings.dart';
+import 'demo_mode.dart';
+import 'firebase_settings.dart';
+import 'ice_servers.dart';
+import 'local_db_service.dart';
+import 'push_service.dart';
+import 'remote_config.dart';
+import 'supabase_auth_service.dart';
+import 'webrtc_peer_link.dart';
+import 'web_push_token.dart';
+import '../i18n/i18n.dart';
+import '../models/chat_contact.dart';
+
+/// Результат одного шага диагностики.
+class DiagStepResult {
+  final String name;
+  final bool passed;
+  final String details;
+  final Duration latency;
+
+  const DiagStepResult({
+    required this.name,
+    required this.passed,
+    required this.details,
+    required this.latency,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'passed': passed,
+        'details': details,
+        'latencyMs': latency.inMilliseconds,
+      };
+}
+
+/// Полный отчёт диагностики.
+class NetDiagReport {
+  final DateTime startedAt;
+  final DateTime finishedAt;
+  final List<DiagStepResult> steps;
+  final String platform;
+  final String version;
+  final String? partnerId;
+  final String? partnerNickname;
+  final String networkType;
+  final String? fcmToken;
+
+  NetDiagReport({
+    required this.startedAt,
+    required this.finishedAt,
+    required this.steps,
+    required this.platform,
+    required this.version,
+    this.partnerId,
+    this.partnerNickname,
+    required this.networkType,
+    this.fcmToken,
+  });
+
+  bool get allPassed => steps.every((s) => s.passed);
+
+  String toReportText() {
+    final buf = StringBuffer();
+    buf.writeln('[ДИАГНОСТИКА СЕТИ]');
+    buf.writeln('Платформа: $platform');
+    buf.writeln('Версия: $version');
+    buf.writeln('Сеть: $networkType');
+    if (fcmToken != null && fcmToken!.isNotEmpty) {
+      buf.writeln('FCM: ${fcmToken!.substring(0, 20)}…');
+    }
+    if (partnerId != null) {
+      buf.writeln('Партнёр: ${partnerNickname ?? '—'} ($partnerId)');
+    }
+    buf.writeln('Время: ${startedAt.toIso8601String()} — ${finishedAt.toIso8601String()}');
+    buf.writeln('');
+    buf.writeln('Шаги:');
+    for (final s in steps) {
+      final mark = s.passed ? '✓' : '✗';
+      buf.writeln('$mark ${s.name} (${s.latency.inMilliseconds} мс): ${s.details}');
+    }
+    return buf.toString();
+  }
+
+  Map<String, dynamic> toJson() => {
+        'startedAt': startedAt.toIso8601String(),
+        'finishedAt': finishedAt.toIso8601String(),
+        'steps': [for (final s in steps) s.toJson()],
+        'platform': platform,
+        'version': version,
+        'partnerId': partnerId,
+        'partnerNickname': partnerNickname,
+        'networkType': networkType,
+        'fcmToken': fcmToken,
+      };
+}
+
+/// Запуск пошаговой диагностики сети.
+class NetDiagnostics {
+  NetDiagnostics({
+    required this.db,
+    required this.chatAuth,
+    required this.mainAuth,
+    required this.partner,
+    this.onProgress,
+  });
+
+  final LocalDbService db;
+  final ChatAuthService chatAuth;
+  final SupabaseAuthService mainAuth;
+  final ChatContact partner;
+  final void Function(DiagStepResult step)? onProgress;
+
+  static const _totalTimeout = Duration(seconds: 30);
+  static const _stepTimeout = Duration(seconds: 10);
+
+  Future<NetDiagReport> run() async {
+    final startedAt = DateTime.now();
+    final steps = <DiagStepResult>[];
+    final completer = Completer<NetDiagReport>();
+
+    // Таймаут на всю диагностику
+    final timer = Timer(_totalTimeout, () async {
+      if (!completer.isCompleted) {
+        completer.complete(NetDiagReport(
+          startedAt: startedAt,
+          finishedAt: DateTime.now(),
+          steps: steps,
+          platform: defaultTargetPlatform.name,
+          version: _appVersion(),
+          partnerId: partner.id,
+          partnerNickname: partner.nickname,
+          networkType: await _networkType(),
+          fcmToken: await _fcmToken(),
+        ));
+      }
+    });
+
+    try {
+      // 1. Сеть и время
+      steps.add(await _step('Сеть и время', _checkNetwork));
+
+      // 2. ICE-серверы
+      steps.add(await _step('ICE-серверы', _checkIceServers));
+
+      // 3. Вход (токены)
+      steps.add(await _step('Вход', _checkAuth));
+
+      // 4. Push (FCM)
+      steps.add(await _step('Push (FCM)', _checkPush));
+
+      // 5. ICE кандидаты (сбор)
+      steps.add(await _step('ICE кандидаты', _checkIceCandidates));
+
+      // 6. Сигналинг
+      steps.add(await _step('Сигналинг', _checkSignaling));
+
+      // 7. P2P + DataChannel
+      final p2pResult = await _step('P2P + DataChannel', _checkP2P);
+      steps.add(p2pResult);
+
+      // 8. Скорость (только если P2P прошло)
+      if (p2pResult.passed) {
+        steps.add(await _step('Скорость (DataChannel)', _checkThroughput));
+      } else {
+        steps.add(const DiagStepResult(
+          name: 'Скорость (DataChannel)',
+          passed: false,
+          details: 'пропущено: P2P не поднялся',
+          latency: Duration.zero,
+        ));
+      }
+
+      final report = NetDiagReport(
+        startedAt: startedAt,
+        finishedAt: DateTime.now(),
+        steps: steps,
+        platform: defaultTargetPlatform.name,
+        version: _appVersion(),
+        partnerId: partner.id,
+        partnerNickname: partner.nickname,
+        networkType: await _networkType(),
+        fcmToken: await _fcmToken(),
+      );
+
+      timer.cancel();
+      completer.complete(report);
+    } catch (e) {
+      timer.cancel();
+      if (!completer.isCompleted) {
+        completer.complete(NetDiagReport(
+          startedAt: startedAt,
+          finishedAt: DateTime.now(),
+          steps: steps,
+          platform: defaultTargetPlatform.name,
+          version: _appVersion(),
+          partnerId: partner.id,
+          partnerNickname: partner.nickname,
+          networkType: await _networkType(),
+          fcmToken: await _fcmToken(),
+        ));
+      }
+    }
+
+    return completer.future;
+  }
+
+  Future<DiagStepResult> _step(String name, Future<DiagStepResult> Function() fn) async {
+    final stopwatch = Stopwatch()..start();
+    try {
+      final result = await fn().timeout(_stepTimeout);
+      stopwatch.stop();
+      onProgress?.call(result);
+      return result;
+    } catch (e) {
+      stopwatch.stop();
+      final result = DiagStepResult(
+        name: name,
+        passed: false,
+        details: 'ошибка: ${e.toString().replaceAll('\n', ' ')}',
+        latency: stopwatch.elapsed,
+      );
+      onProgress?.call(result);
+      return result;
+    }
+  }
+
+  /// 1. Сеть и время: пинг до чат-базы и сервера звонков
+  Future<DiagStepResult> _checkNetwork() async {
+    final client = http.Client();
+    try {
+      final chatPing = await _ping(client, '${ChatSettings.url}/rest/v1/');
+      final callsPing = await _ping(client, '${CallService.url}/ice');
+
+      final ok = chatPing != null || callsPing != null;
+      final details = 'чат: ${chatPing != null ? '${chatPing.inMilliseconds} мс' : 'нет ответа'}; '
+          'звонки: ${callsPing != null ? '${callsPing.inMilliseconds} мс' : 'нет ответа'}';
+
+      return DiagStepResult(name: 'Сеть и время', passed: ok, details: details, latency: Duration.zero);
+    } finally {
+      client.close();
+    }
+  }
+
+  Future<Duration?> _ping(http.Client client, String url) async {
+    final sw = Stopwatch()..start();
+    try {
+      final res = await client.head(Uri.parse(url)).timeout(const Duration(seconds: 5));
+      sw.stop();
+      return res.statusCode < 500 ? sw.elapsed : null;
+    } catch (_) {
+      sw.stop();
+      return null;
+    }
+  }
+
+  /// 2. ICE-серверы: что вернул /ice, turnProvider, TURN хосты
+  Future<DiagStepResult> _checkIceServers() async {
+    try {
+      final cs = CallService(chatAuth);
+      final ice = await cs.iceServers();
+      final hasTurn = IceServers.hasTurn(ice);
+      final turnProvider = IceServers.lastTurnProvider ?? 'none';
+      final turnHosts = IceServers.turnHosts(ice);
+      final stunCount = ice.where((s) {
+        final u = s['urls'];
+        final list = u is List ? u : [u];
+        return list.any((x) => '$x'.startsWith('stun:'));
+      }).length;
+      final turnCount = ice.where((s) {
+        final u = s['urls'];
+        final list = u is List ? u : [u];
+        return list.any((x) => '$x'.startsWith('turn:'));
+      }).length;
+
+      final details = 'STUN: $stunCount, TURN: $turnCount, провайдер: $turnProvider, хосты: $turnHosts';
+      return DiagStepResult(
+        name: 'ICE-серверы',
+        passed: stunCount > 0,
+        details: details,
+        latency: Duration.zero,
+      );
+    } catch (e) {
+      return DiagStepResult(
+        name: 'ICE-серверы',
+        passed: false,
+        details: 'ошибка: $e',
+        latency: Duration.zero,
+      );
+    }
+  }
+
+  /// 3. Вход: токен мессенджера, свежесть, вход в личную базу
+  Future<DiagStepResult> _checkAuth() async {
+    final chatSignedIn = chatAuth.isSignedIn;
+    final chatTokenFresh = chatSignedIn && (await chatAuth.ensureFreshToken()) != null;
+    final mainSignedIn = mainAuth.isSignedIn;
+    final mainTokenFresh = mainSignedIn && (await mainAuth.ensureFreshToken()) != null;
+
+    final details = 'чат: ${chatSignedIn ? (chatTokenFresh ? 'ок' : 'токен не свеж') : 'не входит'}; '
+        'личная база: ${mainSignedIn ? (mainTokenFresh ? 'ок' : 'токен не свеж') : 'не входит'}';
+
+    return DiagStepResult(
+      name: 'Вход',
+      passed: chatSignedIn && chatTokenFresh,
+      details: details,
+      latency: Duration.zero,
+    );
+  }
+
+  /// 4. Push (FCM): разрешение, токен, зарегистрирован ли на сервере звонков
+  Future<DiagStepResult> _checkPush() async {
+    if (kIsWeb) {
+      final perm = await webPushPermission();
+      final config = {
+        'apiKey': FirebaseSettings.webApiKey,
+        'appId': FirebaseSettings.webAppId,
+        'messagingSenderId': FirebaseSettings.messagingSenderId,
+        'projectId': FirebaseSettings.projectId,
+        'authDomain': FirebaseSettings.webAuthDomain,
+      };
+      final token = await webPushToken(config, FirebaseSettings.webVapidKey);
+      final registered = token != null && token.isNotEmpty;
+      final details = 'веб: разрешение=$perm, токен=${registered ? 'есть' : 'нет'}';
+      return DiagStepResult(name: 'Push (FCM)', passed: registered, details: details, latency: Duration.zero);
+    }
+
+    // Android/iOS — через PushService
+    try {
+      final messaging = FirebaseMessaging.instance;
+      final perm = await messaging.getNotificationSettings();
+      final authorized = perm.authorizationStatus == AuthorizationStatus.authorized;
+      String? token;
+      if (authorized) {
+        token = await messaging.getToken();
+      }
+      final hasToken = token != null && token.isNotEmpty;
+
+      // Проверим регистрацию на сервере звонков
+      bool registered = false;
+      if (hasToken && chatAuth.isSignedIn) {
+        try {
+          final cs = CallService(chatAuth);
+          await cs.registerDevice(token!);
+          registered = true;
+        } catch (_) {}
+      }
+
+      final details = 'разрешение=${authorized ? 'есть' : 'нет'}, токен=${hasToken ? 'есть' : 'нет'}, на сервере=${registered ? 'да' : 'нет'}';
+      return DiagStepResult(name: 'Push (FCM)', passed: authorized && hasToken, details: details, latency: Duration.zero);
+    } catch (e) {
+      return DiagStepResult(name: 'Push (FCM)', passed: false, details: 'ошибка: $e', latency: Duration.zero);
+    }
+  }
+
+  /// 5. ICE кандидаты: сбор, типы (host/srflx/relay), время
+  Future<DiagStepResult> _checkIceCandidates() async {
+    try {
+      final ice = await CallService(chatAuth).iceServers();
+      final pc = await createPeerConnection({'iceServers': ice});
+      final cands = <String, int>{};
+      final completer = Completer<Map<String, int>>();
+
+      pc.onIceCandidate = (c) {
+        if (c.candidate == null) {
+          completer.complete(cands);
+          return;
+        }
+        final m = RegExp(r' typ (\w+)').firstMatch(c.candidate!);
+        if (m != null) {
+          cands[m.group(1)!] = (cands[m.group(1)] ?? 0) + 1;
+        }
+      };
+
+      await pc.createOffer();
+      await pc.setLocalDescription(await pc.createOffer());
+
+      // Ждём завершения сбора (candidate = null) или таймаут
+      final done = await completer.future.timeout(const Duration(seconds: 8));
+      await pc.close();
+
+      final total = done.values.fold(0, (a, b) => a + b);
+      final details = 'всего: $total; ${done.entries.map((e) => '${e.key}:${e.value}').join(', ')}';
+
+      return DiagStepResult(
+        name: 'ICE кандидаты',
+        passed: total > 0 && done.containsKey('host'),
+        details: details,
+        latency: Duration.zero,
+      );
+    } catch (e) {
+      return DiagStepResult(name: 'ICE кандидаты', passed: false, details: 'ошибка: $e', latency: Duration.zero);
+    }
+  }
+
+  /// 6. Сигналинг: открытие комнаты, обмен ring/join
+  Future<DiagStepResult> _checkSignaling() async {
+    try {
+      if (!chatAuth.isSignedIn) {
+        return DiagStepResult(name: 'Сигналинг', passed: false, details: 'нет входа в чат', latency: Duration.zero);
+      }
+
+      final callId = 'diag-${DateTime.now().millisecondsSinceEpoch}';
+      final cs = CallService(chatAuth);
+
+      // Пробуем вызвать партнёра (ring)
+      final delivered = await cs.ring(callId: callId, to: partner.id, name: 'Диагностика', video: false).timeout(const Duration(seconds: 8));
+
+      // Отменяем сразу
+      await cs.cancel(callId: callId, to: partner.id);
+
+      final details = 'доставлено устройств: $delivered';
+      return DiagStepResult(
+        name: 'Сигналинг',
+        passed: delivered > 0,
+        details: details,
+        latency: Duration.zero,
+      );
+    } catch (e) {
+      return DiagStepResult(name: 'Сигналинг', passed: false, details: 'ошибка: $e', latency: Duration.zero);
+    }
+  }
+
+  /// 7. P2P + DataChannel: поднимается ли канал, время, пара кандидатов
+  Future<DiagStepResult> _checkP2P() async {
+    try {
+      if (!chatAuth.isSignedIn) {
+        return DiagStepResult(name: 'P2P + DataChannel', passed: false, details: 'нет входа в чат', latency: Duration.zero);
+      }
+
+      final link = WebRtcPeerLink(iceServers: () => CallService(chatAuth).iceServers());
+      final completer = Completer<DiagStepResult>();
+      bool resolved = false;
+
+      link.onState = () {
+        if (resolved) return;
+        if (link.isOpen) {
+          resolved = true;
+          completer.complete(DiagStepResult(
+            name: 'P2P + DataChannel',
+            passed: true,
+            details: 'DataChannel открыт',
+            latency: Duration.zero,
+          ));
+        }
+      };
+
+      // Запускаем как инициатор
+      await link.start(initiator: true);
+
+      // Ждём открытия или таймаут
+      final result = await completer.future.timeout(const Duration(seconds: 15));
+      link.close();
+      return result;
+    } catch (e) {
+      return DiagStepResult(name: 'P2P + DataChannel', passed: false, details: 'ошибка: $e', latency: Duration.zero);
+    }
+  }
+
+  /// 8. Скорость: передача 256 КБ через DataChannel
+  Future<DiagStepResult> _checkThroughput() async {
+    try {
+      if (!chatAuth.isSignedIn) {
+        return DiagStepResult(name: 'Скорость (DataChannel)', passed: false, details: 'нет входа в чат', latency: Duration.zero);
+      }
+
+      final link = WebRtcPeerLink(iceServers: () => CallService(chatAuth).iceServers());
+      final completer = Completer<DiagStepResult>();
+      bool resolved = false;
+      int received = 0;
+      final sw = Stopwatch();
+
+      link.onMessage = (data) {
+        received += data.length;
+        if (received >= 256 * 1024 && !resolved) {
+          resolved = true;
+          sw.stop();
+          completer.complete(DiagStepResult(
+            name: 'Скорость (DataChannel)',
+            passed: true,
+            details: 'передано ${received ~/ 1024} КБ за ${sw.elapsed.inMilliseconds} мс (${(received / 1024 / sw.elapsed.inSeconds).toStringAsFixed(1)} КБ/с)',
+            latency: sw.elapsed,
+          ));
+        }
+      };
+
+      link.onState = () {
+        if (resolved) return;
+        if (link.isOpen) {
+          sw.start();
+          // Отправляем 256 КБ кусками
+          const chunkSize = 16384;
+          const totalSize = 256 * 1024;
+          for (int i = 0; i < totalSize; i += chunkSize) {
+            final chunk = 'x' * chunkSize;
+            if (!link.send(chunk)) break;
+          }
+        }
+      };
+
+      await link.start(initiator: true);
+      final result = await completer.future.timeout(const Duration(seconds: 20));
+      link.close();
+      return result;
+    } catch (e) {
+      return DiagStepResult(name: 'Скорость (DataChannel)', passed: false, details: 'ошибка: $e', latency: Duration.zero);
+    }
+  }
+
+  String _appVersion() {
+    try {
+      return DemoMode.appVersion.isEmpty ? 'dev' : DemoMode.appVersion;
+    } catch (_) {
+      return 'dev';
+    }
+  }
+
+  Future<String> _networkType() async {
+    try {
+      // На мобильных платформах можно попробовать определить тип сети
+      // Для простоты возвращаем платформу
+      return defaultTargetPlatform.name;
+    } catch (_) {
+      return 'unknown';
+    }
+  }
+
+  Future<String?> _fcmToken() async {
+    try {
+      if (kIsWeb) {
+        final config = {
+          'apiKey': FirebaseSettings.webApiKey,
+          'appId': FirebaseSettings.webAppId,
+          'messagingSenderId': FirebaseSettings.messagingSenderId,
+          'projectId': FirebaseSettings.projectId,
+          'authDomain': FirebaseSettings.webAuthDomain,
+        };
+        return await webPushToken(config, FirebaseSettings.webVapidKey);
+      }
+      final messaging = FirebaseMessaging.instance;
+      final perm = await messaging.getNotificationSettings();
+      if (perm.authorizationStatus == AuthorizationStatus.authorized) {
+        return await messaging.getToken();
+      }
+    } catch (_) {}
+    return null;
+  }
+}
+
+/// Отправка отчёта диагностики через DemoMode.sendError
+Future<String?> sendDiagReport(NetDiagReport report, {required bool autoSend}) async {
+  final text = report.toReportText();
+  final page = 'Диагностика сети${autoSend ? ' (авто)' : ''}';
+
+  if (autoSend || report.allPassed) {
+    // Автоотправка при провале, ручная при успехе
+    return await DemoMode.send(text, page);
+  }
+  return null;
+}
