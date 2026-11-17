@@ -1,13 +1,9 @@
 import 'dart:async';
-import 'dart:convert';
 
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
-import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'call_service.dart';
 import 'chat_auth_service.dart';
@@ -16,12 +12,9 @@ import 'demo_mode.dart';
 import 'firebase_settings.dart';
 import 'ice_servers.dart';
 import 'local_db_service.dart';
-import 'push_service.dart';
-import 'remote_config.dart';
 import 'supabase_auth_service.dart';
 import 'webrtc_peer_link.dart';
 import 'web_push_token.dart';
-import '../i18n/i18n.dart';
 import '../models/chat_contact.dart';
 
 /// Результат одного шага диагностики.
@@ -271,7 +264,6 @@ class NetDiagnostics {
     try {
       final cs = CallService(chatAuth);
       final ice = await cs.iceServers();
-      final hasTurn = IceServers.hasTurn(ice);
       final turnProvider = IceServers.lastTurnProvider ?? 'none';
       final turnHosts = IceServers.turnHosts(ice);
       final stunCount = ice.where((s) {
@@ -353,7 +345,7 @@ class NetDiagnostics {
       if (hasToken && chatAuth.isSignedIn) {
         try {
           final cs = CallService(chatAuth);
-          await cs.registerDevice(token!);
+          await cs.registerDevice(token);
           registered = true;
         } catch (_) {}
       }

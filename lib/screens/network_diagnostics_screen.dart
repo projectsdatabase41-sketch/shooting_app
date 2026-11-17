@@ -83,7 +83,6 @@ class _NetworkDiagnosticsScreenState extends State<NetworkDiagnosticsScreen> {
   Future<void> _send() async {
     final partner = _partner;
     if (partner == null || _running) return;
-    final db = context.read<AppDataStore>().db;
     final report = NetDiagReport(
       startedAt: DateTime.now(),
       finishedAt: DateTime.now(),
