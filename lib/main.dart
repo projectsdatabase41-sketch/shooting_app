@@ -23,6 +23,7 @@ import 'logic/ai_context.dart';
 import 'services/ai_memory_service.dart';
 import 'services/ai_service.dart';
 import 'services/call_service.dart';
+import 'services/chat_presence.dart';
 import 'services/ai_settings.dart';
 import 'services/call_session.dart';
 import 'services/chat_auth_service.dart';
@@ -272,6 +273,13 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
       // список уже в кэше, и P2P стартует без лишнего запроса. Отзыв 18.11:
       // «до минуты до соединения» — часть этого времени уходила на /ice.
       unawaited(CallService(chatAuth).iceServers());
+      // Отмечаемся «в сети» с самого запуска приложения, а не только пока
+      // открыт мессенджер: собеседник видит, что можно соединиться, и
+      // прогревает P2P заранее (отзыв 18.11, 27).
+      ChatPresence.tick(chatAuth, force: true);
+      Timer.periodic(const Duration(seconds: 45), (_) {
+        if (chatAuth.isSignedIn) ChatPresence.tick(chatAuth, force: true);
+      });
     }
 
     final aiSettings = AiSettings(widget.db);

@@ -113,10 +113,15 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
     ChatDriveBackup.runIfDue(_db);
     ChatAuthService.otherDeviceActive.addListener(_deviceBanner);
     if (_auth.isSignedIn) {
-      // Прогрев: пока пользователь смотрит список, соединение с последним
-      // собеседником уже поднимается — открытие чата не ждёт ICE (27–31).
+      // Прогрев: пока пользователь смотрит список, соединение с собеседником
+      // уже поднимается — открытие чата не ждёт ICE (27–31). Сначала берём
+      // того, кто сейчас в сети: с офлайн-собеседником соединение всё равно
+      // не поднимется, а ресурс потратится.
+      final online = _contacts.where((c) => !c.isGroup && ChatPresence.online(c.id));
+      final target = online.isNotEmpty ? online.first : null;
       for (final c in _contacts) {
-        if (!c.isGroup) {
+        if (c.isGroup) continue;
+        if (target == null || c.id == target.id) {
           LiveSessions.warmPrivate(_auth, _repo, c.id);
           break;
         }
