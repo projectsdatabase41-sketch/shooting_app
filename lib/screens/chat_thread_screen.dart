@@ -425,13 +425,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (!_contact.isGroup) {
       _live = LiveSessions.acquire(
         _contact.id,
-        () => LiveChatSession(
-          auth: widget.auth,
-          repo: widget.repo,
-          contactId: _contact.id,
-          linkFactory: () =>
-              WebRtcPeerLink(iceServers: CallService(widget.auth).iceServers),
-        ),
+        () => LiveSessions.createPrivate(widget.auth, widget.repo, _contact.id),
       )
         ..onIncoming = () {
           if (!mounted) return;

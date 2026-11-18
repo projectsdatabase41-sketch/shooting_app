@@ -113,6 +113,14 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
     ChatDriveBackup.runIfDue(_db);
     ChatAuthService.otherDeviceActive.addListener(_deviceBanner);
     if (_auth.isSignedIn) {
+      // Прогрев: пока пользователь смотрит список, соединение с последним
+      // собеседником уже поднимается — открытие чата не ждёт ICE (27–31).
+      for (final c in _contacts) {
+        if (!c.isGroup) {
+          LiveSessions.warmPrivate(_auth, _repo, c.id);
+          break;
+        }
+      }
       _auth.isActiveDevice().catchError((_) => true); // прогрев: первый опрос в переписке без лишнего круга по сети
       _startPolling();
       // При открытии мессенджера сразу проверяем входящие, а не ждём первого

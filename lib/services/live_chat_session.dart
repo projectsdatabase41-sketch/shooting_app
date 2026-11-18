@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/chat_message.dart';
+import 'call_service.dart';
 import 'chat_auth_service.dart';
 import 'chat_messages_repository.dart';
 import 'chat_settings.dart';
@@ -18,6 +19,7 @@ import 'p2p_file_transfer.dart';
 import 'push_service.dart' show PushService;
 import 'peer_link.dart';
 import 'realtime_client.dart';
+import 'webrtc_peer_link.dart';
 import 'remote_config.dart';
 
 /// Живой канал ОДНОГО открытого диалога (решение пользователя: личные чаты —
@@ -513,6 +515,34 @@ class LiveSessions {
       s.open();
       return s;
     });
+  }
+
+  /// Обычная переписка с собеседником: один и тот же набор зависимостей для
+  /// экрана чата и для «прогрева» из списка собеседников (см. [warmPrivate]).
+  static LiveChatSession createPrivate(
+    ChatAuthService auth,
+    ChatMessagesRepository repo,
+    String contactId,
+  ) =>
+      LiveChatSession(
+        auth: auth,
+        repo: repo,
+        contactId: contactId,
+        linkFactory: () => WebRtcPeerLink(iceServers: CallService(auth).iceServers),
+      );
+
+  /// Готовит соединение с собеседником, пока пользователь ещё смотрит список:
+  /// канал сигнализации поднимается сразу, и P2P начинается раньше — открытие
+  /// переписки и переключение между собеседниками заметно быстрее
+  /// (отзыв 18.11, 27–31). Ошибки тут не страшны: экран создаст всё заново.
+  static void warmPrivate(
+    ChatAuthService auth,
+    ChatMessagesRepository repo,
+    String contactId,
+  ) {
+    try {
+      acquire(contactId, () => createPrivate(auth, repo, contactId));
+    } catch (_) {}
   }
 
   /// Экран закрыт: отцепляем его обработчики, соединение оставляем на [grace].
