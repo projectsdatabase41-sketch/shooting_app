@@ -30,6 +30,9 @@ class RemoteConfig {
     return v is num ? v.toDouble() : 1.0;
   }
 
+  /// ИИ идёт через наш воркер (ключи OpenRouter живут в его секретах).
+  static bool get aiProxyEnabled => _get('ai', 'proxy') == true;
+
   static bool get realtimeEnabled => _get('realtime', 'enabled') == true;
   static bool get webrtcEnabled => realtimeEnabled && _get('webrtc', 'enabled') == true;
 

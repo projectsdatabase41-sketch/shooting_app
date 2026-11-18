@@ -87,6 +87,12 @@ class AiService {
 
   static const String defaultBase = 'https://openrouter.ai/api/v1';
 
+  /// Прокси через сервер звонков: ключи OpenRouter живут в секретах воркера,
+  /// и приложение их больше не знает (в APK и веб-сборке ключей нет).
+  /// Возвращает адрес воркера и токен входа в мессенджер; null — работаем
+  /// напрямую своим ключом (старый режим, оставлен как запас).
+  static Future<({String url, String token})?> Function()? proxyProvider;
+
   /// Настраиваемый адрес API — единственный рычаг на стороне кода
   /// против блокировки openrouter.ai в регионе (пользователь сообщил:
   /// без VPN "исчерпан лимит" на всех моделях, с VPN сразу работает —
@@ -97,6 +103,9 @@ class AiService {
 
   /// Список бесплатных моделей с сервера — для экрана настроек.
   Future<List<String>> fetchFreeModels() async {
+    // Через прокси ключей у приложения нет, а список моделей берётся из
+    // настроек: нечего и спрашивать у OpenRouter напрямую.
+    if (await proxyProvider?.call() != null) return settings.models;
     final res = await _client
         .get(Uri.parse('$_base/models'), headers: _headers())
         .timeout(_timeout);
@@ -353,7 +362,8 @@ class AiService {
     final keys = orderKeys(
         settings.hasOwnKey ? [settings.apiKey] : AiSettings.testApiKeys,
         rotate: rotateKeys);
-    if (keys.isEmpty) {
+    final proxy = await proxyProvider?.call();
+    if (keys.isEmpty && proxy == null) {
       throw const AiException(
           'Не задан API Key — укажите его в настройках ассистента');
     }
@@ -380,6 +390,26 @@ class AiService {
 
     final errors = <String>[];
     var anyRateLimited = false;
+    // Через прокси модели перебираем без «ключей»: ключи на воркере.
+    if (proxy != null) {
+      final models = onlyModel != null ? [onlyModel] : chain;
+      for (final model in models) {
+        try {
+          return await _askViaProxy(proxy, model, messages,
+              timeout: preferReasoning ? const Duration(seconds: 100) : null);
+        } on RateLimitedException catch (e) {
+          anyRateLimited = true;
+          errors.add('$model: ${e.message}');
+        } on AiException catch (e) {
+          errors.add('$model: ${e.message}');
+        }
+      }
+      if (anyRateLimited) {
+        throw RateLimitedException(
+            'Лимит бесплатных моделей исчерпан. Подождите минуту и попробуйте снова — это не поломка приложения.\n${errors.join('\n')}');
+      }
+      throw AiException('Ни одна модель не ответила.\n${errors.join('\n')}');
+    }
     for (final key in keys) {
       final models = onlyModel != null
           ? [onlyModel]
@@ -422,6 +452,52 @@ class AiService {
       );
     }
     throw AiException('Ни одна модель не ответила.\n${errors.join('\n')}');
+  }
+
+  /// Один запрос через воркер (`POST /ai`): воркер сам подставляет ключ
+  /// OpenRouter и возвращает ответ OpenRouter как есть.
+  Future<AiReply> _askViaProxy(
+    ({String url, String token}) proxy,
+    String model,
+    List<Map<String, dynamic>> messages, {
+    Duration? timeout,
+  }) async {
+    final res = await _client
+        .post(
+          Uri.parse('${proxy.url}/ai'),
+          headers: {
+            'Authorization': 'Bearer ${proxy.token}',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'model': model,
+            'messages': messages,
+            'max_tokens': settings.modelPriority == 'speed' ? 2500 : 4000,
+            'temperature': 0.3,
+            'reasoning': {'exclude': false},
+          }),
+        )
+        .timeout(timeout ?? _timeout);
+
+    final errorMsg = _errorFrom(res);
+    final isRateLimit = res.statusCode == 429 ||
+        (res.statusCode == 403 &&
+            RegExp(r'rate.?limit|too many requests|quota', caseSensitive: false)
+                .hasMatch(errorMsg));
+    if (isRateLimit) throw RateLimitedException(errorMsg);
+    if (res.statusCode != 200) throw AiException(errorMsg);
+
+    final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    final choices = data['choices'] as List?;
+    if (choices == null || choices.isEmpty) {
+      throw const AiException('пустой ответ');
+    }
+    final message = (choices.first as Map)['message'];
+    final content = message?['content'];
+    if (content is! String || content.trim().isEmpty) {
+      throw const AiException('пустой ответ');
+    }
+    return _parse(content, message?['reasoning'], model);
   }
 
   Future<AiReply> _askModel(

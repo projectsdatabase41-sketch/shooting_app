@@ -22,6 +22,7 @@ import 'package:provider/provider.dart';
 import 'logic/ai_context.dart';
 import 'services/ai_memory_service.dart';
 import 'services/ai_service.dart';
+import 'services/call_service.dart';
 import 'services/ai_settings.dart';
 import 'services/call_session.dart';
 import 'services/chat_auth_service.dart';
@@ -253,6 +254,15 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
       if (c != null && c.callId == callId) c.cancelledByCaller();
     };
     final chatAuth = ChatAuthService(widget.db);
+    // ИИ через наш воркер: ключи OpenRouter живут в секретах сервера звонков,
+    // в приложении их больше нет. Флаг — в config/chat-config.json (`ai.proxy`),
+    // чтобы выключить прокси без выпуска новой версии.
+    AiService.proxyProvider = () async {
+      if (!RemoteConfig.aiProxyEnabled || !chatAuth.isSignedIn) return null;
+      final token = await chatAuth.ensureFreshToken();
+      if (token == null) return null;
+      return (url: CallService.url, token: token);
+    };
     if (chatAuth.isSignedIn &&
         ModulesSettings.isOn(widget.db, AppModule.messenger)) {
       PushService(chatAuth).init();

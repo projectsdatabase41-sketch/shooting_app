@@ -29,6 +29,8 @@ export interface Env {
   /** Порог трафика через ретранслятор в месяц, после которого TURN не выдаём. */
   CF_TURN_LIMIT_GB: string;
   METERED_LIMIT_MB: string;
+  /** Ключи OpenRouter через запятую: приложение их больше не знает. */
+  OPENROUTER_KEYS: string;
   /** Медиа чата (зашифрованные на устройстве) — приватный бакет R2. */
   MEDIA: R2Bucket;
   MEDIA_LIMIT_GB: string;
@@ -259,6 +261,47 @@ export default {
         totalLimitBytes: mediaTotalLimit,
         userBytes: m.user,
         userLimitBytes: mediaUserLimit,
+      });
+    }
+
+    // ---------- ИИ через прокси ----------
+    // Приложение больше не носит ключ OpenRouter: он живёт в секрете воркера.
+    // Один запрос = один вызов модели; ответ отдаём как есть (OpenAI-формат).
+    if (url.pathname === '/ai' && req.method === 'POST') {
+      const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+      const model = String(body.model ?? '').trim();
+      if (!model || model.length > 120) return json({ error: 'bad model' }, 400);
+      const messages = body.messages;
+      if (!Array.isArray(messages) || messages.length === 0 || messages.length > 60) {
+        return json({ error: 'bad messages' }, 400);
+      }
+      const keys = (env.OPENROUTER_KEYS || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.startsWith('sk-or-'));
+      if (keys.length === 0) return json({ error: 'ai not configured' }, 503);
+      // Ключи равноправны: разбрасываем запросы, чтобы не упираться в лимит одного.
+      const key = keys[Math.floor(Math.random() * keys.length)];
+      const aiRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://github.com/shooting-app',
+          'X-Title': 'Shooting App',
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          max_tokens: body.max_tokens ?? 4000,
+          temperature: body.temperature ?? 0.3,
+          reasoning: body.reasoning ?? { exclude: false },
+        }),
+      });
+      const text = await aiRes.text();
+      return new Response(text, {
+        status: aiRes.status,
+        headers: { 'content-type': 'application/json', ...cors },
       });
     }
 
