@@ -91,7 +91,7 @@ class MediaVault {
   }
 
   Future<SecretKey> _sharedKey(SimplePublicKey peer) async {
-    final mine = await ensureKeys();
+    await ensureKeys(); // гарантируем, что пара ключей уже создана
     final pair = _keyPair!;
     final shared = await _x25519.sharedSecretKey(keyPair: pair, remotePublicKey: peer);
     return _hkdf.deriveKey(secretKey: shared, nonce: const [], info: utf8.encode(_hkdfInfo));
