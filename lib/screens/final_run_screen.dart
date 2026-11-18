@@ -263,6 +263,9 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
             face: c.face,
             marks: marks,
             enabled: _canPlace && !c.paused,
+            // Мишень прикована центром: двумя пальцами не сдвинуть, меняется
+            // только масштаб (отзыв 18.11: «сделать как в тренировках»).
+            lockCenter: true,
             onHold: (v) => setState(() => _holding = v),
             onShot: _onShot,
             sighting: sighting,

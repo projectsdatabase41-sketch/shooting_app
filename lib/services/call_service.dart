@@ -116,6 +116,19 @@ class CallService {
     } catch (_) {}
   }
 
+  /// Сводка диагностики сети: только числа (сколько шагов и сколько упало).
+  /// Живёт на сервере звонков, чтобы панель видела статистику без доступа
+  /// к таблице отзывов. Никаких текстов, имён и адресов не отправляем.
+  Future<void> reportDiagnostics({required int total, required int failed, String? platform}) async {
+    try {
+      await _send('POST', '/diag', {
+        'total': total,
+        'failed': failed,
+        'platform': platform ?? '',
+      });
+    } catch (_) {}
+  }
+
   /// Push «входящий звонок» всем устройствам собеседника. Сколько доставлено.
   Future<int> ring({required String callId, required String to, required String name, required bool video}) async {
     final r = await _send('POST', '/call', {'callId': callId, 'to': to, 'name': name, 'video': video}) as Map;

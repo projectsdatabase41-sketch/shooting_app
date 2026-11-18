@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../i18n/i18n.dart';
 import '../models/chat_contact.dart';
+import '../services/call_service.dart';
 import '../services/chat_auth_service.dart';
 import '../services/chat_messages_repository.dart';
 import '../services/net_diagnostics.dart';
@@ -67,6 +70,14 @@ class _NetworkDiagnosticsScreenState extends State<NetworkDiagnosticsScreen> {
       _steps = report.steps;
       _running = false;
     });
+    // Короткая сводка на сервер звонков: панель в настройках видит статистику
+    // диагностики, при этом таблица отзывов остаётся закрытой на чтение.
+    final failed = report.steps.where((s) => !s.passed).length;
+    unawaited(CallService(ChatAuthService(db)).reportDiagnostics(
+      total: report.steps.length,
+      failed: failed,
+      platform: Theme.of(context).platform.name,
+    ));
     // Провал любого шага — отправляем сразу: это и есть «автоотзыв в базу».
     // Провал любого шага — отчёт уходит сам. DemoMode.send при успехе
     // возвращает null, при ошибке — текст; раньше экран путал это и писал

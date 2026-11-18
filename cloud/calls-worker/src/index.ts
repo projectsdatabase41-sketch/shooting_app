@@ -31,6 +31,8 @@ export interface Env {
   METERED_LIMIT_MB: string;
   /** Ключи OpenRouter через запятую: приложение их больше не знает. */
   OPENROUTER_KEYS: string;
+  /** Токен для админской сводки (плагин DSH читает расход TURN и R2). */
+  ADMIN_TOKEN: string;
   /** Медиа чата (зашифрованные на устройстве) — приватный бакет R2. */
   MEDIA: R2Bucket;
   MEDIA_LIMIT_GB: string;
@@ -181,6 +183,75 @@ export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
     const url = new URL(req.url);
+
+    // ---------- Сводка диагностики (без личных данных) ----------
+    // Приложение после проверки сети присылает только числа: сколько шагов
+    // прошло и сколько упало. Этого хватает панели, а таблица отзывов в
+    // Supabase остаётся закрытой на чтение — сервисный ключ никуда не нужен.
+    if (url.pathname === '/diag' && req.method === 'POST') {
+      const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+      const total = Math.max(0, Math.min(100, Number(b.total ?? 0)));
+      const failed = Math.max(0, Math.min(total, Number(b.failed ?? 0)));
+      const platform = String(b.platform ?? '').slice(0, 20);
+      await usage.fetch('https://u/diag', {
+        method: 'POST',
+        body: JSON.stringify({ total, failed, platform, at: new Date().toISOString() }),
+      });
+      return json({ ok: true });
+    }
+
+    // Публичная сводка для боковой панели плагина: только объёмы, без токенов.
+    if (url.pathname === '/stats' && req.method === 'GET') {
+      const usage = env.USAGE.get(env.USAGE.idFromName('global'));
+      const month = (await (await usage.fetch('https://u/get')).json()) as Record<string, number>;
+      const media = (await (await usage.fetch('https://u/media?uid=')).json()) as { total: number };
+      const diag = (await (await usage.fetch('https://u/diag/get')).json()) as {
+        count: number;
+        failed: number;
+        last: Array<Record<string, unknown>>;
+      };
+      return json({
+        month: new Date().toISOString().slice(0, 7),
+        turn: {
+          cloudflare: { usedBytes: month.cloudflare ?? 0, limitBytes: Number(env.CF_TURN_LIMIT_GB || 800) * 1e9 },
+          metered: { usedBytes: month.metered ?? 0, limitBytes: Number(env.METERED_LIMIT_MB || 450) * 1e6 },
+        },
+        media: { usedBytes: media.total, limitBytes: Number(env.MEDIA_LIMIT_GB || 8) * 1e9 },
+        diag: { runs: diag.count, failedRuns: diag.failed, last: (diag.last ?? []).slice(-5) },
+      });
+    }
+
+    // ---------- Админская сводка (только для плагина DSH) ----------
+    // Токен в заголовке x-admin-token, секрет ADMIN_TOKEN. Отдаёт расход
+    // ретранслятора и объём медиа: ровно те цифры, что нужны, чтобы не
+    // выйти за бесплатные лимиты.
+    if (url.pathname === '/admin/stats' && req.method === 'GET') {
+      const token = req.headers.get('x-admin-token') || '';
+      if (!env.ADMIN_TOKEN || token !== env.ADMIN_TOKEN) return json({ error: 'forbidden' }, 403);
+      const usage = env.USAGE.get(env.USAGE.idFromName('global'));
+      const month = (await (await usage.fetch('https://u/get')).json()) as Record<string, number>;
+      const media = (await (await usage.fetch('https://u/media?uid=')).json()) as {
+        total: number;
+        user: number;
+      };
+      return json({
+        month: new Date().toISOString().slice(0, 7),
+        turn: {
+          cloudflare: {
+            usedBytes: month.cloudflare ?? 0,
+            limitBytes: Number(env.CF_TURN_LIMIT_GB || 800) * 1e9,
+          },
+          metered: {
+            usedBytes: month.metered ?? 0,
+            limitBytes: Number(env.METERED_LIMIT_MB || 450) * 1e6,
+          },
+        },
+        media: {
+          usedBytes: media.total,
+          limitBytes: Number(env.MEDIA_LIMIT_GB || 8) * 1e9,
+        },
+      });
+    }
 
     if (url.pathname.startsWith('/room/')) {
       const callId = url.pathname.slice('/room/'.length);
@@ -448,6 +519,30 @@ export class UsageDO {
       await this.state.storage.put('media:total', total + bytes);
       await this.state.storage.put(key(`media:${uid}`), user + bytes);
       return Response.json({ ok: true });
+    }
+    // Диагностика сети: только числа, без текстов и имён.
+    if (url.pathname === '/diag') {
+      const { total, failed, platform, at } = (await req.json()) as {
+        total: number;
+        failed: number;
+        platform: string;
+        at: string;
+      };
+      const runs = ((await this.state.storage.get<number>(key('diag:runs'))) ?? 0) + 1;
+      const failedRuns = ((await this.state.storage.get<number>(key('diag:fail'))) ?? 0) + (failed > 0 ? 1 : 0);
+      const last = ((await this.state.storage.get<Array<Record<string, unknown>>>(key('diag:last'))) ?? []).slice(-19);
+      last.push({ at, total, failed, platform });
+      await this.state.storage.put(key('diag:runs'), runs);
+      await this.state.storage.put(key('diag:fail'), failedRuns);
+      await this.state.storage.put(key('diag:last'), last);
+      return Response.json({ ok: true });
+    }
+    if (url.pathname === '/diag/get') {
+      return Response.json({
+        count: (await this.state.storage.get<number>(key('diag:runs'))) ?? 0,
+        failed: (await this.state.storage.get<number>(key('diag:fail'))) ?? 0,
+        last: ((await this.state.storage.get<Array<Record<string, unknown>>>(key('diag:last'))) ?? []).slice(-5),
+      });
     }
     if (url.pathname === '/add') {
       const { provider, bytes } = (await req.json()) as { provider: string; bytes: number };

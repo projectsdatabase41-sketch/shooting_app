@@ -123,10 +123,17 @@ class TargetPainter extends CustomPainter {
       final rect = Rect.fromCenter(
           center: center, width: radiusPx * 2, height: radiusPx * 2);
       final fold = radiusPx * 0.36; // +30% от 0.28
+      // Бумага рисуется со скруглением радиусом ~6% — ровно в углу треугольника
+      // не было: он ложился на прозрачный фон за скруглением, и инверсия не
+      // давала ничего видимого (отзыв «уголок так и не сделал»). Сдвигаем
+      // маркер внутрь на это скругление, тогда он всегда на бумаге.
+      final inset = radiusPx * 0.06 + radiusPx * 0.02;
+      final right = rect.right - inset;
+      final top = rect.top + inset;
       final path = Path()
-        ..moveTo(rect.right - fold, rect.top)
-        ..lineTo(rect.right, rect.top)
-        ..lineTo(rect.right, rect.top + fold)
+        ..moveTo(right - fold, top)
+        ..lineTo(right, top)
+        ..lineTo(right, top + fold)
         ..close();
       // Рисуем треугольник с инверсией цвета (негатив). BlendMode.difference
       // инвертирует под собой: на белой бумаге — чёрный, на чёрном яблоке — белый,
@@ -140,8 +147,8 @@ class TargetPainter extends CustomPainter {
       );
       // Сгиб: линия по диагонали угла — объём «загнутого» уголка, тоже в негативе.
       canvas.drawLine(
-        Offset(rect.right - fold, rect.top),
-        Offset(rect.right, rect.top + fold),
+        Offset(right - fold, top),
+        Offset(right, top + fold),
         Paint()
           ..color = Colors.white
           ..blendMode = BlendMode.difference
