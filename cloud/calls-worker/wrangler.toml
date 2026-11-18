@@ -9,6 +9,11 @@ JWKS_URL = "https://yirvomezybprdlntxyas.supabase.co/auth/v1/.well-known/jwks.js
 # (Cloudflare 1000 ГБ, Metered 500 МБ), чтобы не платить никогда.
 CF_TURN_LIMIT_GB = "800"
 METERED_LIMIT_MB = "450"
+# Медиа (фото/файлы чата) в R2: бесплатно 10 ГБ, поэтому держим потолок 8 ГБ
+# (2 ГБ запас), на пользователя 1 ГБ в месяц, один объект не больше 25 МБ.
+MEDIA_LIMIT_GB = "8"
+MEDIA_USER_LIMIT_MB = "1024"
+MEDIA_MAX_OBJECT_MB = "25"
 
 [[durable_objects.bindings]]
 name = "ROOMS"
@@ -30,3 +35,9 @@ new_sqlite_classes = ["RoomDO", "UserDO"]
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["UsageDO"]
+
+# Медиа чата: содержимое приходит УЖЕ зашифрованным на устройстве
+# (AES-256-GCM), бакет приватный, публичного адреса нет.
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "nexusbox"

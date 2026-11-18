@@ -104,6 +104,7 @@ dependencies:
   bluetooth_low_energy: ^6.2.1
   speech_to_text: ^7.4.0
   firebase_crashlytics: ^4.3.10
+  cryptography: ^2.9.0
 
 dev_dependencies:
   flutter_test:

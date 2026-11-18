@@ -29,6 +29,11 @@ export interface Env {
   /** Порог трафика через ретранслятор в месяц, после которого TURN не выдаём. */
   CF_TURN_LIMIT_GB: string;
   METERED_LIMIT_MB: string;
+  /** Медиа чата (зашифрованные на устройстве) — приватный бакет R2. */
+  MEDIA: R2Bucket;
+  MEDIA_LIMIT_GB: string;
+  MEDIA_USER_LIMIT_MB: string;
+  MEDIA_MAX_OBJECT_MB: string;
 }
 
 const MAX_PEERS = 4; // напрямую (mesh) больше 4 не потянет
@@ -232,6 +237,61 @@ export default {
 
     const usage = env.USAGE.get(env.USAGE.idFromName('global'));
     const used = async () => (await (await usage.fetch('https://u/get')).json()) as Record<string, number>;
+
+    // ---------- Медиа чата: приватный R2, содержимое уже зашифровано ----------
+    // Клиент шифрует файл на устройстве (AES-256-GCM) и присылает только
+    // шифротекст: ни Cloudflare, ни база чата открытый файл не видят.
+    // Квоты считаем здесь, чтобы нельзя было выйти за бесплатные 10 ГБ:
+    // потолок MEDIA_LIMIT_GB=8 ГБ на бакет и MEDIA_USER_LIMIT_MB на человека
+    // в месяц. При исчерпании клиент молча уходит на старый путь (через базу).
+    const mediaTotalLimit = Number(env.MEDIA_LIMIT_GB || 8) * 1e9;
+    const mediaUserLimit = Number(env.MEDIA_USER_LIMIT_MB || 1024) * 1e6;
+    const mediaMaxObject = Number(env.MEDIA_MAX_OBJECT_MB || 25) * 1e6;
+    const mediaUsage = async () =>
+      (await (
+        await usage.fetch(`https://u/media?uid=${encodeURIComponent(uid)}`)
+      ).json()) as { total: number; user: number };
+
+    if (url.pathname === '/media/usage' && req.method === 'GET') {
+      const m = await mediaUsage();
+      return json({
+        totalBytes: m.total,
+        totalLimitBytes: mediaTotalLimit,
+        userBytes: m.user,
+        userLimitBytes: mediaUserLimit,
+      });
+    }
+
+    if (url.pathname === '/media/upload' && req.method === 'POST') {
+      const key = (req.headers.get('x-media-key') || '').toLowerCase();
+      if (!/^[a-f0-9]{32}$/.test(key)) return json({ error: 'bad key' }, 400);
+      const len = Number(req.headers.get('content-length') || 0);
+      if (!(len > 0) || len > mediaMaxObject) return json({ error: 'too large' }, 413);
+      const m = await mediaUsage();
+      if (m.total + len > mediaTotalLimit || m.user + len > mediaUserLimit) {
+        return json({ error: 'quota' }, 413);
+      }
+      const stored = await env.MEDIA.put(`m/${key}`, req.body, {
+        customMetadata: { owner: uid },
+      });
+      if (!stored) return json({ error: 'store failed' }, 500);
+      await usage.fetch('https://u/media/add', {
+        method: 'POST',
+        body: JSON.stringify({ uid, bytes: len }),
+      });
+      return json({ ok: true, key });
+    }
+
+    if (url.pathname.startsWith('/media/') && req.method === 'GET') {
+      const key = url.pathname.slice('/media/'.length).toLowerCase();
+      if (!/^[a-f0-9]{32}$/.test(key)) return json({ error: 'bad key' }, 400);
+      const obj = await env.MEDIA.get(`m/${key}`);
+      if (!obj) return json({ error: 'not found' }, 404);
+      // Ключ — случайные 128 бит, известен только участникам переписки.
+      return new Response(obj.body, {
+        headers: { 'content-type': 'application/octet-stream', 'cache-control': 'private, max-age=3600', ...cors },
+      });
+    }
     const limitBytes = (p: TurnProvider) =>
       p === 'cloudflare'
         ? Number(env.CF_TURN_LIMIT_GB || 800) * 1e9
@@ -328,7 +388,25 @@ export class UsageDO {
   async fetch(req: Request): Promise<Response> {
     const month = new Date().toISOString().slice(0, 7); // «2026-09» — новый месяц = чистый счётчик
     const key = (p: string) => `${month}:${p}`;
-    if (new URL(req.url).pathname === '/add') {
+    const url = new URL(req.url);
+    // Медиа: общий объём бакета (не месячный — он не сбрасывается) и лимит
+    // пользователя за текущий месяц.
+    if (url.pathname === '/media') {
+      const uid = url.searchParams.get('uid') || '';
+      return Response.json({
+        total: (await this.state.storage.get<number>('media:total')) ?? 0,
+        user: (await this.state.storage.get<number>(key(`media:${uid}`))) ?? 0,
+      });
+    }
+    if (url.pathname === '/media/add') {
+      const { uid, bytes } = (await req.json()) as { uid: string; bytes: number };
+      const total = (await this.state.storage.get<number>('media:total')) ?? 0;
+      const user = (await this.state.storage.get<number>(key(`media:${uid}`))) ?? 0;
+      await this.state.storage.put('media:total', total + bytes);
+      await this.state.storage.put(key(`media:${uid}`), user + bytes);
+      return Response.json({ ok: true });
+    }
+    if (url.pathname === '/add') {
       const { provider, bytes } = (await req.json()) as { provider: string; bytes: number };
       const cur = (await this.state.storage.get<number>(key(provider))) ?? 0;
       await this.state.storage.put(key(provider), cur + bytes);
