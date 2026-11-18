@@ -268,6 +268,10 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
     if (chatAuth.isSignedIn &&
         ModulesSettings.isOn(widget.db, AppModule.messenger)) {
       PushService(chatAuth).init();
+      // Заранее тянем ICE-серверы (STUN/TURN): к моменту открытия чата
+      // список уже в кэше, и P2P стартует без лишнего запроса. Отзыв 18.11:
+      // «до минуты до соединения» — часть этого времени уходила на /ice.
+      unawaited(CallService(chatAuth).iceServers());
     }
 
     final aiSettings = AiSettings(widget.db);
