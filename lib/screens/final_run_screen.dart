@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
 
+import '../finals/voice_packs.dart';
 import '../finals/announcer.dart';
 import '../finals/voice_texts.dart';
 import '../voice/voice_control.dart';
@@ -62,6 +63,11 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
   void initState() {
     super.initState();
     c.addListener(_onChange);
+    // Гибкая озвучка (запрос 17.11): пока идёт финал, фразы диктора
+    // досоздаются в фоне — к моменту объявления результата они уже на
+    // устройстве, и ждать синтеза посреди серии не приходится. Уже готовые
+    // записи не пересоздаются, поэтому повторные финалы почти бесплатны.
+    unawaited(VoicePacks.ensureAll(widget.store.db));
     VoiceControl.instance.register(this, {
       VoiceAction.finalReady: (i) {
         if (_started) return tr('Финал уже идёт');
