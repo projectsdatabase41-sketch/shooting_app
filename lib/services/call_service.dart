@@ -52,7 +52,23 @@ class CallService {
       // «TURN есть, но не работает» — отчёт 16.11 18:58.
       final provider = r['turnProvider'];
       IceServers.lastTurnProvider = provider is String && provider.isNotEmpty ? provider : null;
-      return (r['iceServers'] as List).cast<Map<String, dynamic>>();
+      final servers = (r['iceServers'] as List).cast<Map<String, dynamic>>();
+
+      // Защита месячного бесплатного объёма: Cloudflare даёт 1000 ГБ TURN в
+      // месяц, у воркера порог 800 ГБ. Если израсходовано больше 95% порога,
+      // TURN не используем вовсе — звонки идут напрямую (или не идут, но
+      // счёт не растёт). Так лимит не превысить, даже если воркер ошибётся.
+      final usage = await monthUsage();
+      final cf = usage?['cloudflare'];
+      if (cf is Map) {
+        final used = (cf['usedBytes'] as num?)?.toDouble() ?? 0;
+        final limit = (cf['limitBytes'] as num?)?.toDouble() ?? 0;
+        if (limit > 0 && used >= limit * 0.95) {
+          IceServers.lastTurnProvider = null;
+          return [for (final s in servers) if (!_hasTurn(s)) s];
+        }
+      }
+      return servers;
     } catch (_) {
       return [
         {
@@ -60,6 +76,44 @@ class CallService {
         },
       ];
     }
+  }
+
+  static bool _hasTurn(Map<String, dynamic> server) {
+    final u = server['urls'];
+    final list = u is List ? u : [u];
+    return list.any((x) => '$x'.startsWith('turn'));
+  }
+
+  static Map<String, dynamic>? _usageCache;
+  static DateTime _usageAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// Месячный расход ретранслятора (cloudflare/metered) — из `/usage`.
+  /// Кэш 5 минут, чтобы не дёргать сервер на каждый звонок.
+  Future<Map<String, dynamic>?> monthUsage({bool fresh = false}) async {
+    final now = DateTime.now();
+    if (!fresh &&
+        _usageCache != null &&
+        now.difference(_usageAt) < const Duration(minutes: 5)) {
+      return _usageCache;
+    }
+    try {
+      final r = await _send('GET', '/usage') as Map<String, dynamic>;
+      _usageCache = r;
+      _usageAt = now;
+      return r;
+    } catch (_) {}
+    return _usageCache;
+  }
+
+  /// Сообщить серверу, сколько байт прошло через ретранслятор (из него
+  /// считается месячный лимит). Зовётся из звонка раз в минуту и в конце.
+  Future<void> reportUsage({required String provider, required int bytes}) async {
+    if (bytes <= 0) return;
+    if (provider != 'cloudflare' && provider != 'metered') return;
+    try {
+      await _send('POST', '/usage', {'provider': provider, 'bytes': bytes});
+      _usageCache = null; // в следующий раз перечитаем свежий расход
+    } catch (_) {}
   }
 
   /// Push «входящий звонок» всем устройствам собеседника. Сколько доставлено.

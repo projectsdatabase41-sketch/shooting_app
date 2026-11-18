@@ -118,6 +118,10 @@ class CallSession extends ChangeNotifier {
 
   Timer? _disconnectTimer;
 
+  /// Учёт трафика через ретранслятор: раз в минуту и в конце звонка.
+  Timer? _usageTimer;
+  int _relayBytesReported = 0;
+
   final localRenderer = RTCVideoRenderer();
   final remoteRenderer = RTCVideoRenderer();
 
@@ -240,6 +244,7 @@ class CallSession extends ChangeNotifier {
       if (s == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
         _disconnectTimer?.cancel();
         _set(CallState.active);
+        _startUsageReporting();
       }
       // Кратковременный обрыв (смена Wi-Fi на мобильный и т.п.) WebRTC часто
       // переживает сам — ждём 10 с, потом сдаёмся.
@@ -622,6 +627,51 @@ class CallSession extends ChangeNotifier {
     return '${cands.isEmpty ? 'кандидаты: нет' : 'кандидаты: $cands'} turn=${IceServers.lastTurnProvider ?? 'none'}';
   }
 
+  /// Начинает отчитываться о трафике через ретранслятор: раз в минуту и в
+  /// конце звонка (см. [_reportRelayUsage]). Без этих отчётов сервер звонков
+  /// не знает месячный расход и не может остановиться у порога 800 ГБ.
+  void _startUsageReporting() {
+    if (_usageTimer != null || _disposed) return;
+    _usageTimer = Timer.periodic(const Duration(minutes: 1), (_) => _reportRelayUsage());
+  }
+
+  /// Считает байты, прошедшие через relay-кандидата, и отправляет прирост
+  /// на сервер звонков (`POST /usage`). Ошибки глотаем: учёт не должен
+  /// ломать разговор.
+  Future<void> _reportRelayUsage() async {
+    final pc = _pc;
+    if (pc == null) return;
+    try {
+      final stats = await pc.getStats();
+      final relayIds = <String>{};
+      final types = <String, String>{};
+      for (final r in stats) {
+        if (r.type == 'local-candidate' || r.type == 'remote-candidate') {
+          types[r.id] = '${r.values['candidateType'] ?? ''}';
+        }
+      }
+      for (final r in stats) {
+        if (r.type == 'local-candidate' && types[r.id] == 'relay') relayIds.add(r.id);
+      }
+      if (relayIds.isEmpty) return;
+      var bytes = 0;
+      for (final r in stats) {
+        if (r.type != 'candidate-pair') continue;
+        final local = '${r.values['localCandidateId'] ?? ''}';
+        if (!relayIds.contains(local)) continue;
+        bytes += (r.values['bytesSent'] as num?)?.toInt() ?? 0;
+        bytes += (r.values['bytesReceived'] as num?)?.toInt() ?? 0;
+      }
+      final delta = bytes - _relayBytesReported;
+      if (delta <= 0) return;
+      _relayBytesReported = bytes;
+      await _service.reportUsage(
+        provider: IceServers.lastTurnProvider ?? 'cloudflare',
+        bytes: delta,
+      );
+    } catch (_) {}
+  }
+
   /// Освобождает медиа и соединение. Отдельно от [_end], потому что вызывается
   /// ещё и из [dispose] — там уже нельзя уведомлять слушателей.
   void _releaseMedia() {
@@ -679,6 +729,10 @@ class CallSession extends ChangeNotifier {
     try {
       _ws?.sink.close();
     } catch (_) {}
+    // Последний отчёт о трафике — до освобождения соединения, иначе статистики уже нет.
+    _usageTimer?.cancel();
+    _usageTimer = null;
+    unawaited(_reportRelayUsage());
     // Сразу убираем картинку с экрана: иначе последний кадр «зависает», пока экран закрывается.
     _releaseMedia();
     if (current == this) current = null;
@@ -708,6 +762,8 @@ class CallSession extends ChangeNotifier {
       _send({'type': 'hangup'});
     }
     _disposed = true;
+    _usageTimer?.cancel();
+    _usageTimer = null;
     _ringTimeout?.cancel();
     _fallbackTimer?.cancel();
     _disconnectTimer?.cancel();

@@ -158,6 +158,9 @@ class NetDiagnostics {
       // 5. ICE кандидаты (сбор)
       steps.add(await _step('ICE кандидаты', _checkIceCandidates));
 
+      // 5a. Бюджет TURN: сколько бесплатного объёма израсходовано.
+      steps.add(await _step('Бюджет TURN', _checkTurnBudget));
+
       // 6. Сигналинг
       steps.add(await _step('Сигналинг', _checkSignaling));
 
@@ -359,6 +362,42 @@ class NetDiagnostics {
   }
 
   /// 5. ICE кандидаты: сбор, типы (host/srflx/relay), время
+
+  /// Бюджет ретранслятора: Cloudflare даёт 1000 ГБ TURN в месяц, у воркера
+  /// порог CF_TURN_LIMIT_GB (800 ГБ). Показываем расход, чтобы было видно,
+  /// сколько осталось, и что при 95% TURN отключается автоматически.
+  Future<DiagStepResult> _checkTurnBudget() async {
+    final sw = Stopwatch()..start();
+    try {
+      final u = await CallService(chatAuth).monthUsage(fresh: true).timeout(const Duration(seconds: 8));
+      sw.stop();
+      if (u == null) {
+        return DiagStepResult(
+            name: 'Бюджет TURN', passed: false, details: 'сервер не ответил', latency: sw.elapsed);
+      }
+      String gb(num bytes) => (bytes / 1e9).toStringAsFixed(2);
+      final cf = u['cloudflare'];
+      final metered = u['metered'];
+      final cfUsed = cf is Map ? (cf['usedBytes'] as num?)?.toDouble() ?? 0 : 0.0;
+      final cfLimit = cf is Map ? (cf['limitBytes'] as num?)?.toDouble() ?? 0 : 0.0;
+      final mUsed = metered is Map ? (metered['usedBytes'] as num?)?.toDouble() ?? 0 : 0.0;
+      final mLimit = metered is Map ? (metered['limitBytes'] as num?)?.toDouble() ?? 0 : 0.0;
+      final pct = cfLimit > 0 ? (cfUsed / cfLimit * 100) : 0.0;
+      final left = cfLimit > cfUsed ? cfLimit - cfUsed : 0.0;
+      final shortage = cfLimit > 0 && cfUsed >= cfLimit * 0.95;
+      return DiagStepResult(
+        name: 'Бюджет TURN',
+        passed: !shortage,
+        details: 'Cloudflare: ${gb(cfUsed)} из ${gb(cfLimit)} ГБ (${pct.toStringAsFixed(1)}%), '
+            'осталось ${gb(left)} ГБ · Metered: ${gb(mUsed)} из ${gb(mLimit)} ГБ'
+            '${shortage ? ' · порог близко: TURN отключается, звонки пойдут напрямую' : ''}',
+        latency: sw.elapsed,
+      );
+    } catch (e) {
+      sw.stop();
+      return DiagStepResult(name: 'Бюджет TURN', passed: false, details: 'ошибка: $e', latency: sw.elapsed);
+    }
+  }
   Future<DiagStepResult> _checkIceCandidates() async {
     final sw = Stopwatch()..start();
     try {
