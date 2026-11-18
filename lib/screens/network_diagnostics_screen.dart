@@ -8,6 +8,8 @@ import '../models/chat_contact.dart';
 import '../services/call_service.dart';
 import '../services/chat_auth_service.dart';
 import '../services/chat_messages_repository.dart';
+import '../services/demo_mode.dart';
+import '../services/local_db_service.dart';
 import '../services/net_diagnostics.dart';
 import '../services/supabase_auth_service.dart';
 import '../state/app_data_store.dart';
@@ -29,6 +31,7 @@ class NetworkDiagnosticsScreen extends StatefulWidget {
 
 class _NetworkDiagnosticsScreenState extends State<NetworkDiagnosticsScreen> {
   late final ChatMessagesRepository _repo;
+  late final LocalDbService _db;
   List<ChatContact> _contacts = const [];
   ChatContact? _partner;
   List<DiagStepResult> _steps = const [];
@@ -36,13 +39,43 @@ class _NetworkDiagnosticsScreenState extends State<NetworkDiagnosticsScreen> {
   bool _sent = false;
   String? _message;
 
+  /// Отчёт, который не удалось отправить (нет связи, VPN и т.п.): лежит тут
+  /// и переотправляется при следующем открытии экрана, чтобы не терять
+  /// диагностику из-за одной неудачной попытки.
+  static const _kUnsent = 'diag_unsent_report';
+
   @override
   void initState() {
     super.initState();
     final db = context.read<AppDataStore>().db;
+    _db = db;
     _repo = ChatMessagesRepository(db);
     _contacts = _repo.listContacts();
     _partner = _contacts.isEmpty ? null : _contacts.first;
+    _flushUnsent();
+  }
+
+  String _readUnsent() {
+    final rows = _db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [_kUnsent]);
+    return rows.isEmpty ? '' : '${rows.first['hex'] ?? ''}';
+  }
+
+  void _writeUnsent(String text) {
+    _db.db.execute(
+      'INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex',
+      [_kUnsent, text],
+    );
+  }
+
+  /// Досылает отчёт, сохранённый с прошлого раза (например, отправляли с VPN).
+  Future<void> _flushUnsent() async {
+    final pending = _readUnsent();
+    if (pending.trim().isEmpty) return;
+    final res = await DemoMode.send(pending, 'Диагностика сети (досылка)', ignoreThrottle: true);
+    if (diagSendSucceeded(res)) {
+      _writeUnsent('');
+      if (mounted) setState(() => _message = tr('Отправлен отчёт, сохранённый с прошлого раза'));
+    }
   }
 
   Future<void> _run() async {
@@ -101,19 +134,32 @@ class _NetworkDiagnosticsScreenState extends State<NetworkDiagnosticsScreen> {
       finishedAt: DateTime.now(),
       steps: _steps,
       platform: Theme.of(context).platform.name,
-      version: '',
+      // Раньше здесь стояли пустые строки, и в отчёте было «Версия:» и
+      // «Сеть:» без значения (отзыв 17.11). Берём настоящие данные.
+      version: DemoMode.appVersion.isEmpty ? 'dev' : DemoMode.appVersion,
       partnerId: partner.id,
       partnerNickname: partner.nickname,
-      networkType: '',
+      networkType: Theme.of(context).platform.name,
     );
-    final sent = await sendDiagReport(report, autoSend: false);
+    var sent = await sendDiagReport(report, autoSend: false);
+    if (sent != null) {
+      // Одна повторная попытка: с VPN первый запрос часто отваливается.
+      await Future<void>.delayed(const Duration(seconds: 2));
+      sent = await sendDiagReport(report, autoSend: false);
+    }
     if (!mounted) return;
     final ok = diagSendSucceeded(sent);
+    if (!ok) {
+      // Не теряем отчёт: сохраним и дошлём при следующем открытии экрана.
+      _writeUnsent(report.toReportText());
+    } else {
+      _writeUnsent('');
+    }
     setState(() {
       _sent = ok;
       _message = ok
           ? tr('Отчёт отправлен')
-          : tr('Не удалось отправить отчёт: {e}', {'e': sent ?? ''});
+          : tr('Отчёт сохранён и будет отправлен позже: {e}', {'e': sent ?? ''});
     });
   }
 

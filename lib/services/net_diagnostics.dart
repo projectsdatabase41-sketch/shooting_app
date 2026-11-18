@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'call_service.dart';
 import 'chat_auth_service.dart';
@@ -145,6 +146,11 @@ class NetDiagnostics {
     try {
       // 1. Сеть и время
       steps.add(await _step('Сеть и время', _checkNetwork));
+
+      // Отдельно — задержка самого сервера звонков и открытие комнаты
+      // сигналинга: по ним видно, где именно «медленно» или «не пускает».
+      steps.add(await _step('Сервер звонков (RTT)', _checkWorkerRtt));
+      steps.add(await _step('Комната сигналинга', _checkRoomOpen));
 
       // 2. ICE-серверы
       steps.add(await _step('ICE-серверы', _checkIceServers));
@@ -556,6 +562,59 @@ class NetDiagnostics {
       return result;
     } catch (e) {
       return DiagStepResult(name: 'Скорость (DataChannel)', passed: false, details: 'ошибка: $e', latency: Duration.zero);
+    }
+  }
+
+  /// Задержка сервера звонков: публичная сводка `/stats`, без токена.
+  Future<DiagStepResult> _checkWorkerRtt() async {
+    final sw = Stopwatch()..start();
+    try {
+      final res = await http
+          .get(Uri.parse('${CallService.url}/stats'))
+          .timeout(const Duration(seconds: 8));
+      sw.stop();
+      return DiagStepResult(
+        name: 'Сервер звонков (RTT)',
+        passed: res.statusCode == 200,
+        details: 'HTTP ${res.statusCode}, ${sw.elapsedMilliseconds} мс',
+        latency: sw.elapsed,
+      );
+    } catch (e) {
+      sw.stop();
+      return DiagStepResult(
+          name: 'Сервер звонков (RTT)', passed: false, details: 'ошибка: $e', latency: sw.elapsed);
+    }
+  }
+
+  /// Открывается ли комната сигналинга (WebSocket) с настоящим токеном входа.
+  Future<DiagStepResult> _checkRoomOpen() async {
+    final sw = Stopwatch()..start();
+    try {
+      final token = await chatAuth.ensureFreshToken();
+      if (token == null) {
+        sw.stop();
+        return DiagStepResult(
+            name: 'Комната сигналинга',
+            passed: false,
+            details: 'нет входа в чат',
+            latency: sw.elapsed);
+      }
+      final ch = WebSocketChannel.connect(CallService.roomUri(const Uuid().v4(), token));
+      await ch.ready.timeout(const Duration(seconds: 8));
+      sw.stop();
+      try {
+        await ch.sink.close();
+      } catch (_) {}
+      return DiagStepResult(
+        name: 'Комната сигналинга',
+        passed: true,
+        details: 'открылась за ${sw.elapsedMilliseconds} мс',
+        latency: sw.elapsed,
+      );
+    } catch (e) {
+      sw.stop();
+      return DiagStepResult(
+          name: 'Комната сигналинга', passed: false, details: 'ошибка: $e', latency: sw.elapsed);
     }
   }
 
