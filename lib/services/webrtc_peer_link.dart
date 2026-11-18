@@ -55,6 +55,9 @@ class WebRtcPeerLink implements PeerLink {
   /// Диагностические записи для отладки (используется в тестах и отзывах).
   List<String> get diag => _diag;
 
+  /// Сколько собрано кандидатов по типам (host / srflx / relay).
+  Map<String, int> get candidates => Map.unmodifiable(_cands);
+
   @override
   bool get isOpen => !_closed && _dc?.state == RTCDataChannelState.RTCDataChannelOpen;
 
