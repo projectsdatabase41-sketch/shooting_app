@@ -43,6 +43,18 @@ jobs:
           channel: stable
           cache: true
 
+      # Сборка APK падала на :app:packageRelease (IncrementalSplitterRunnable) —
+      # это почти всегда нехватка места на раннере: Flutter-кэш + Gradle +
+      # промежуточные .dex занимают больше 14 ГБ. Освобождаем то, что Android
+      # сборке не нужно.
+      - name: Освободить место
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /opt/hostedtoolcache/CodeQL || true
+          sudo swapoff -a || true
+          sudo rm -f /mnt/swapfile || true
+          df -h /
+
       - run: flutter pub get
       - run: flutter analyze --no-fatal-infos
       - run: flutter test
