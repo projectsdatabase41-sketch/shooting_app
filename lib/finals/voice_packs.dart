@@ -50,6 +50,7 @@ class VoicePacks {
   static const _kModel = 'finals_voice_model';
   static const _kVoice = 'finals_voice_voice';
   static const _kOn = 'finals_voice_pack_on';
+  static const _kKey = 'finals_voice_key';
 
   /// Имена соперников-ботов по умолчанию (экран финалов); их записи готовятся вместе с общими.
   static const defaultBotNames = ['Бывалый', 'Татошка', 'Кость', 'Я в свое время тоже стрельбой занимался', 'Рыцарь', 'Сахарок', 'Усталый'];
@@ -79,6 +80,8 @@ class VoicePacks {
   }
 
   static String urlOverride(LocalDbService db) => _get(db, _kUrl) ?? '';
+  /// Свой ключ озвучки: отдельный сервис, если он не совпадает с ключом ИИ.
+  static String keyOverride(LocalDbService db) => _get(db, _kKey) ?? '';
   static bool enabled(LocalDbService db) => _get(db, _kOn) == '1';
 
   /// Озвучка моделью работает только со своим ключом ИИ (настройки ИИ → «Свой ключ»): ключ и
@@ -90,18 +93,19 @@ class VoicePacks {
     final base = ai.apiBaseUrl.trim().replaceAll(RegExp(r'/+$'), '');
     return VoiceConfig(
       url: custom.isNotEmpty ? custom : (own ? '$base/audio/speech' : ''),
-      key: own ? ai.apiKey : '',
+      key: keyOverride(db).isNotEmpty ? keyOverride(db) : (own ? ai.apiKey : ''),
       model: _get(db, _kModel) ?? 'tts-1',
       voice: _get(db, _kVoice) ?? 'alloy',
-      enabled: enabled(db) && own,
+      enabled: enabled(db) && (own || keyOverride(db).isNotEmpty),
     );
   }
 
-  static void saveSettings(LocalDbService db, {required String model, required String voice, required String urlOverride, required bool enabled}) {
+  static void saveSettings(LocalDbService db, {required String model, required String voice, required String urlOverride, required bool enabled, String? keyOverride}) {
     _put(db, _kUrl, urlOverride.trim());
     _put(db, _kModel, model.trim().isEmpty ? 'tts-1' : model.trim());
     _put(db, _kVoice, voice.trim().isEmpty ? 'alloy' : voice.trim());
     _put(db, _kOn, enabled ? '1' : '0');
+    if (keyOverride != null) _put(db, _kKey, keyOverride.trim());
   }
 
   static bool get supported => !kIsWeb;
@@ -369,3 +373,5 @@ class VoicePacks {
     _chain = Future.value();
   }
 }
+
+

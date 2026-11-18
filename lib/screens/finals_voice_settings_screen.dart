@@ -45,19 +45,20 @@ class _FinalsVoicePanelState extends State<FinalsVoicePanel> {
   late final _model = TextEditingController(text: _c.model);
   late final _voice = TextEditingController(text: _c.voice);
   late final _url = TextEditingController(text: VoicePacks.urlOverride(widget.db));
+  late final _key = TextEditingController(text: VoicePacks.keyOverride(widget.db));
   late bool _on = VoicePacks.enabled(widget.db);
   String? _message;
   bool _busy = false;
 
   @override
   void dispose() {
-    for (final c in [_model, _voice, _url]) {
+    for (final c in [_model, _voice, _url, _key]) {
       c.dispose();
     }
     super.dispose();
   }
 
-  void _save() => VoicePacks.saveSettings(widget.db, model: _model.text, voice: _voice.text, urlOverride: _url.text, enabled: _on);
+  void _save() => VoicePacks.saveSettings(widget.db, model: _model.text, voice: _voice.text, urlOverride: _url.text, enabled: _on, keyOverride: _key.text);
 
   Future<void> _prepare() async {
     _save();
@@ -120,6 +121,18 @@ class _FinalsVoicePanelState extends State<FinalsVoicePanel> {
           helperText: tr('Пусто — адрес из настроек ИИ + /audio/speech'),
         ),
         keyboardType: TextInputType.url,
+      ),
+      const SizedBox(height: 8),
+      // Озвучка может ходить в отдельный сервис со своим ключом: тогда ключ
+      // ИИ-ассистента тут не нужен (запрос 17.11 — один сервис на всё или
+      // разные под задачи).
+      TextField(
+        controller: _key,
+        decoration: InputDecoration(
+          labelText: tr('Свой ключ озвучки (необязательно)'),
+          helperText: tr('Пусто — ключ из настроек ИИ; с ключом здесь озвучка работает и на другом сервисе'),
+        ),
+        obscureText: true,
       ),
       const SizedBox(height: 12),
       ValueListenableBuilder<({int done, int total, String? error})?>(
