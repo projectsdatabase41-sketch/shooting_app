@@ -258,7 +258,9 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
     // в приложении их больше нет. Флаг — в config/chat-config.json (`ai.proxy`),
     // чтобы выключить прокси без выпуска новой версии.
     AiService.proxyProvider = () async {
-      if (!RemoteConfig.aiProxyEnabled || !chatAuth.isSignedIn) return null;
+      // Включён по умолчанию (ключи в приложении больше не нужны), выключить
+      // можно явным `ai.proxy: false` в конфиге — без выпуска версии.
+      if (RemoteConfig.aiProxyDisabled || !chatAuth.isSignedIn) return null;
       final token = await chatAuth.ensureFreshToken();
       if (token == null) return null;
       return (url: CallService.url, token: token);

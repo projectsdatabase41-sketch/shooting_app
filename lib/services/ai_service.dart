@@ -391,6 +391,8 @@ class AiService {
     final errors = <String>[];
     var anyRateLimited = false;
     // Через прокси модели перебираем без «ключей»: ключи на воркере.
+    // Если прокси не ответил ни одной моделью, а свои ключи есть — тихо
+    // уходим на прямой путь, чтобы ассистент не «падал» из-за сервера.
     if (proxy != null) {
       final models = onlyModel != null ? [onlyModel] : chain;
       for (final model in models) {
@@ -404,11 +406,14 @@ class AiService {
           errors.add('$model: ${e.message}');
         }
       }
-      if (anyRateLimited) {
-        throw RateLimitedException(
-            'Лимит бесплатных моделей исчерпан. Подождите минуту и попробуйте снова — это не поломка приложения.\n${errors.join('\n')}');
+      if (keys.isEmpty) {
+        if (anyRateLimited) {
+          throw RateLimitedException(
+              'Лимит бесплатных моделей исчерпан. Подождите минуту и попробуйте снова — это не поломка приложения.\n${errors.join('\n')}');
+        }
+        throw AiException('Ни одна модель не ответила.\n${errors.join('\n')}');
       }
-      throw AiException('Ни одна модель не ответила.\n${errors.join('\n')}');
+      // Есть запасной прямой ключ — продолжаем ниже.
     }
     for (final key in keys) {
       final models = onlyModel != null

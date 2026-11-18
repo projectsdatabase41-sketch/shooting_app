@@ -33,6 +33,11 @@ class RemoteConfig {
   /// ИИ идёт через наш воркер (ключи OpenRouter живут в его секретах).
   static bool get aiProxyEnabled => _get('ai', 'proxy') == true;
 
+  /// Прокси выключен явно (`ai.proxy: false`). Нужно, чтобы старые кэши
+  /// конфига (без секции `ai`) не отключали прокси: по умолчанию он включён,
+  /// а выключается только явным флагом — это же аварийный выключатель.
+  static bool get aiProxyDisabled => _get('ai', 'proxy') == false;
+
   static bool get realtimeEnabled => _get('realtime', 'enabled') == true;
   static bool get webrtcEnabled => realtimeEnabled && _get('webrtc', 'enabled') == true;
 
