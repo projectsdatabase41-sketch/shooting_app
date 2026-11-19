@@ -22,6 +22,10 @@ class ChatTranslationService {
 
   static const Duration _timeout = Duration(seconds: 10);
 
+  /// Пока переводчик в лимите — минуту его не дёргаем: иначе каждый экран
+  /// получает 429 и пишет одинаковую ошибку в отзывы.
+  static DateTime? _backoffUntil;
+
   /// Язык устройства (ISO 639-1, например "ru"/"en") — с ним сравнивают
   /// "не язык системы" из настройки перевода.
   static String systemLanguageCode() => WidgetsBinding.instance.platformDispatcher.locale.languageCode;
@@ -37,6 +41,13 @@ class ChatTranslationService {
       'langpair': 'autodetect|$target',
     });
     final res = await _client.get(uri).timeout(_timeout);
+    if (res.statusCode == 429) {
+      // Бесплатный переводчик часто отвечает «слишком много запросов».
+      // Это не поломка приложения: молча пропускаем перевод и не засоряем
+      // отзывы одинаковыми ошибками (их было больше половины выгрузки 19.11).
+      _backoffUntil = DateTime.now().add(const Duration(minutes: 1));
+      return null;
+    }
     if (res.statusCode != 200) throw Exception(tr('Переводчик ответил {statusCode}', {'statusCode': res.statusCode}));
     final decoded = jsonDecode(utf8.decode(res.bodyBytes));
     if (decoded is! Map) return null;

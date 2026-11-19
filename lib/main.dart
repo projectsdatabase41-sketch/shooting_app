@@ -24,6 +24,7 @@ import 'services/ai_memory_service.dart';
 import 'services/ai_service.dart';
 import 'services/call_service.dart';
 import 'services/chat_presence.dart';
+import 'services/web_search_service.dart';
 import 'services/ai_settings.dart';
 import 'services/call_session.dart';
 import 'services/chat_auth_service.dart';
@@ -262,6 +263,15 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
       // Включён по умолчанию (ключи в приложении больше не нужны), выключить
       // можно явным `ai.proxy: false` в конфиге — без выпуска версии.
       if (RemoteConfig.aiProxyDisabled || !chatAuth.isSignedIn) return null;
+      final token = await chatAuth.ensureFreshToken();
+      if (token == null) return null;
+      return (url: CallService.url, token: token);
+    };
+    // Поиск в интернете через наш сервер: ключи Tavily в секретах воркера,
+    // поэтому работает без своего ключа Gemini. Свой ключ Gemini, если он
+    // введён, остаётся запасным путём.
+    WebSearchService.serverProvider = () async {
+      if (!chatAuth.isSignedIn) return null;
       final token = await chatAuth.ensureFreshToken();
       if (token == null) return null;
       return (url: CallService.url, token: token);

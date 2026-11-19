@@ -204,7 +204,12 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
     super.dispose();
   }
 
-  void _reload() => setState(() => _contacts = _repo.listContacts());
+  void _reload() {
+    // Экран мог уже закрыться (например, профиль редактировали из списка и
+    // вышли) — setState на уничтоженном State роняет приложение.
+    if (!mounted) return;
+    setState(() => _contacts = _repo.listContacts());
+  }
 
   /// Заявки/друзья живут на сервере (см. `ChatAuthService.listFriends`) —
   /// после переустановки или на новом телефоне их ещё нет только в

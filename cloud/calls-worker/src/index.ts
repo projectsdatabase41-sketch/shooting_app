@@ -33,6 +33,8 @@ export interface Env {
   OPENROUTER_KEYS: string;
   /** Токен для админской сводки (плагин DSH читает расход TURN и R2). */
   ADMIN_TOKEN: string;
+  /** Ключи Tavily через запятую: поиск в интернете для ИИ. */
+  TAVILY_KEYS: string;
   /** Медиа чата (зашифрованные на устройстве) — приватный бакет R2. */
   MEDIA: R2Bucket;
   MEDIA_LIMIT_GB: string;
@@ -307,6 +309,66 @@ export default {
 
     const uid = await verifyUser(env, bearer(req));
     if (!uid) return json({ error: 'unauthorized' }, 401);
+
+    // ---------- Поиск в интернете (Tavily) ----------
+    // Только для вошедших: ключи лежат в секрете TAVILY_KEYS и в приложение
+    // не попадают. Наружу отдаём отфильтрованное: короткий ответ и 5
+    // результатов по 400 символов — иначе контекст модели раздувается.
+    // Результат кладём в R2 на сутки, повторный тот же запрос бесплатен.
+    if (url.pathname === '/search' && req.method === 'POST') {
+      const body = (await req.json().catch(() => ({}))) as { query?: string; fresh?: boolean };
+      const query = String(body.query ?? '').trim().slice(0, 300);
+      if (query.length < 2) return json({ error: 'bad query' }, 400);
+      const keys = (env.TAVILY_KEYS || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.startsWith('tvly-'));
+      if (keys.length === 0) return json({ error: 'search not configured' }, 503);
+      const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(query.toLowerCase()));
+      const keyHex = [...new Uint8Array(hashBuf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+      const cacheKey = `search/${keyHex.slice(0, 32)}.json`;
+      if (!body.fresh) {
+        const cached = await env.MEDIA.get(cacheKey);
+        if (cached && Date.now() - new Date(cached.uploaded).getTime() < 24 * 3600 * 1000) {
+          return new Response(cached.body, { headers: { 'content-type': 'application/json', ...cors } });
+        }
+      }
+      const key = keys[Math.floor(Math.random() * keys.length)];
+      let payload: Record<string, unknown> = {};
+      try {
+        const res = await fetch('https://api.tavily.com/search', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', Authorization: `Bearer ${key}` },
+          body: JSON.stringify({
+            query,
+            search_depth: 'basic',
+            max_results: 5,
+            include_answer: true,
+            include_raw_content: false,
+          }),
+        });
+        payload = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+        if (!res.ok) {
+          const detail = (payload as { detail?: unknown }).detail;
+          const msg = typeof detail === 'string' ? detail : JSON.stringify(detail ?? `HTTP ${res.status}`);
+          return json({ error: msg.slice(0, 200) }, res.status);
+        }
+      } catch (e) {
+        return json({ error: `search failed: ${e}` }, 502);
+      }
+      const results = Array.isArray(payload.results) ? (payload.results as Array<Record<string, unknown>>) : [];
+      const compact = {
+        query,
+        answer: String(payload.answer ?? '').slice(0, 900),
+        results: results.slice(0, 5).map((r) => ({
+          title: String(r.title ?? '').slice(0, 140),
+          url: String(r.url ?? ''),
+          content: String(r.content ?? '').replace(/\s+/g, ' ').slice(0, 400),
+        })),
+      };
+      await env.MEDIA.put(cacheKey, JSON.stringify(compact), { customMetadata: { query: query.slice(0, 100) } });
+      return json(compact);
+    }
 
     const usage = env.USAGE.get(env.USAGE.idFromName('global'));
     const used = async () => (await (await usage.fetch('https://u/get')).json()) as Record<string, number>;

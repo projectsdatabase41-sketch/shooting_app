@@ -21,9 +21,74 @@ class WebSearchService {
 
   bool get configured => settings.geminiKey.isNotEmpty;
 
+  /// Поиск через наш сервер (Tavily): ключи живут в секретах воркера, поэтому
+  /// работает без своего ключа Gemini. Возвращает адрес воркера и токен
+  /// входа в мессенджер; null — сервер недоступен, идём прежним путём.
+  static Future<({String url, String token})?> Function()? serverProvider;
+
+  /// Поиск через сервер: ответ уже отфильтрован и укорочен там.
+  Future<({String text, List<({String title, String url})> sources})?> _searchServer(
+    ({String url, String token}) server,
+    String query, {
+    bool structured = false,
+  }) async {
+    final client = clientFactory();
+    try {
+      final res = await client
+          .post(
+            Uri.parse('${server.url}/search'),
+            headers: {
+              'Authorization': 'Bearer ${server.token}',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({'query': query}),
+          )
+          .timeout(const Duration(seconds: 45));
+      if (res.statusCode != 200) return null;
+      final data = jsonDecode(utf8.decode(res.bodyBytes));
+      if (data is! Map) return null;
+      final answer = '${data['answer'] ?? ''}'.trim();
+      final results = (data['results'] as List? ?? const [])
+          .whereType<Map>()
+          .map((r) => (
+                title: '${r['title'] ?? ''}'.trim(),
+                url: '${r['url'] ?? ''}'.trim(),
+                content: '${r['content'] ?? ''}'.replaceAll(RegExp(r'\s+'), ' ').trim(),
+              ))
+          .where((r) => r.url.isNotEmpty)
+          .toList();
+      if (answer.isEmpty && results.isEmpty) return null;
+      final buf = StringBuffer();
+      if (answer.isNotEmpty) buf.writeln(answer);
+      if (structured) {
+        for (final r in results.take(4)) {
+          if (r.content.isEmpty) continue;
+          buf.writeln('• ${r.title.isEmpty ? r.url : r.title}: ${_shorten(r.content, 220)}');
+        }
+      }
+      return (
+        text: buf.toString().trim(),
+        sources: [for (final r in results) (title: r.title.isEmpty ? r.url : r.title, url: r.url)],
+      );
+    } catch (_) {
+      return null;
+    } finally {
+      client.close();
+    }
+  }
+
+  static String _shorten(String s, int max) => s.length <= max ? s : '${s.substring(0, max - 1)}…';
+
   Future<({String text, List<({String title, String url})> sources})> search(
       String query,
       {bool structured = false}) async {
+    // Сначала сервер: он умеет искать без ключа пользователя и уже отдаёт
+    // отфильтрованный короткий ответ (Tavily + кэш на сутки в R2).
+    final server = await serverProvider?.call();
+    if (server != null) {
+      final viaServer = await _searchServer(server, query, structured: structured);
+      if (viaServer != null) return viaServer;
+    }
     if (!configured) throw StateError('no key');
     Object? lastError;
     for (final model in models) {

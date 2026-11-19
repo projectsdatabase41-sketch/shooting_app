@@ -25,6 +25,7 @@ import '../services/chat_preferences.dart';
 import '../services/coach_notes_repository.dart';
 import '../services/feedback_service.dart';
 import '../state/ai_chat_view_model.dart';
+import '../services/chat_auth_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/ai_chart_view.dart';
 import '../widgets/glass_pill.dart';
@@ -295,7 +296,10 @@ class _AiChatBodyState extends State<_AiChatBody> {
     final text = _input.text.trim();
     if (text.isEmpty) return;
     final vm = context.read<AiChatViewModel>();
-    if (vm.service.settings.geminiKey.isEmpty) {
+    // Серверный поиск (Tavily) работает без своего ключа: закрытый диалог
+    // показываем только когда не вошли в мессенджер и своего ключа тоже нет.
+    final signedIn = ChatAuthService(context.read<AppDataStore>().db).isSignedIn;
+    if (vm.service.settings.geminiKey.isEmpty && !signedIn) {
       final openBrowser = await showGlassDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
