@@ -50,7 +50,64 @@ class LiveChatSession {
     this.ackTimeout = const Duration(seconds: 3),
     this.clientFactory,
     this.linkFactory,
-  });
+  }) {
+    // По умолчанию маленькие вложения принимаем сами: экран чата может быть
+    // закрыт (свернули приложение, открыт другой чат), и раньше фото терялось,
+    // появляясь лишь после перезахода в переписку (отзывы 18–19.11).
+    files.onOffer = autoInlineOffer;
+  }
+
+  /// Приём «вложений в сообщении» без открытого экрана: сохраняем в базу,
+  /// дальше экран (когда откроется) покажет их как обычно.
+  Future<void> autoInlineOffer(P2pReceiver r) async {
+    final meta = r.meta;
+    if (meta == null || meta['att'] != 1 || r.size > 8 * 1024 * 1024) {
+      r.reject();
+      return;
+    }
+    if (repo.existsByClientId(r.id)) {
+      r.reject();
+      return;
+    }
+    void done() async {
+      if (r.state.value != P2pState.done) return;
+      r.state.removeListener(done);
+      try {
+        final path = r.path;
+        if (path == null) return;
+        final bytes = await File(path).readAsBytes();
+        final type = ChatMessageType.values
+                .where((t) => t.name == meta['t'])
+                .firstOrNull ??
+            ChatMessageType.file;
+        if (repo.existsByClientId(r.id)) return;
+        repo.addMessage(ChatMessage(
+          id: _uuid.v4(),
+          clientMessageId: r.id,
+          contactId: contactId,
+          direction: ChatMessageDirection.incoming,
+          status: ChatMessageStatus.delivered,
+          type: type,
+          text: meta['cap'] as String?,
+          attachmentBase64: base64Encode(bytes),
+          attachmentName: r.name,
+          attachmentMime: r.mime,
+          attachmentSize: bytes.length,
+          downloadAllowed: meta['dl'] != false,
+          replyToClientMessageId: meta['rp'] as String?,
+          replyToPreview: meta['rv'] as String?,
+          createdAt: DateTime.now(),
+        ));
+        try {
+          await File(path).delete();
+        } catch (_) {}
+        onIncoming?.call();
+      } catch (_) {}
+    }
+
+    r.state.addListener(done);
+    await r.accept();
+  }
 
   final ChatAuthService auth;
   final ChatMessagesRepository repo;
@@ -551,7 +608,8 @@ class LiveSessions {
     if (s == null) return;
     s.onIncoming = null;
     s.onPeerRead = null;
-    s.files.onOffer = null;
+    // Экран ушёл, но соединение живо: маленькие вложения принимаем сами.
+    s.files.onOffer = s.autoInlineOffer;
     s.files.onChanged = null;
     _timers.remove(contactId)?.cancel();
     _timers[contactId] = Timer(grace, () => close(contactId));

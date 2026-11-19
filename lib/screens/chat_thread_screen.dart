@@ -1708,9 +1708,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
 
     progress.addListener(() => setProgress(progress.value));
+    // Страховка от вечного «отправляется»: если передача зависла (собеседник
+    // ушёл, канал умер молча), через минуту помечаем ошибкой — иначе пузырь
+    // и индикатор в шапке остаются «в процессе» навсегда (отзывы 18–19.11).
+    Timer? watchdog;
+    void stopWatchdog() {
+      watchdog?.cancel();
+      watchdog = null;
+    }
+
     state.addListener(() {
       final st = state.value;
       if (st == P2pState.active || st == P2pState.offered) return;
+      stopWatchdog();
       setProgress(null);
       if (st == P2pState.done) {
         final path = donePath?.call();
@@ -1720,6 +1730,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       } else if (onFail != null) {
         // следующий уровень приоритета (облако): неудавшийся пузырь убираем,
         // чтобы не было дубля — новая отправка создаёт свой
+        widget.repo.deleteMessage(messageId);
+        if (mounted) onFail();
+      } else {
+        widget.repo.updateStatus(messageId, ChatMessageStatus.error);
+      }
+      if (mounted) _reload();
+    });
+    watchdog = Timer(const Duration(minutes: 1), () {
+      final st = state.value;
+      if (st == P2pState.done || st == P2pState.failed || st == P2pState.rejected) return;
+      setProgress(null);
+      if (onFail != null) {
         widget.repo.deleteMessage(messageId);
         if (mounted) onFail();
       } else {
