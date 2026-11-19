@@ -39,6 +39,7 @@ import 'screens/onboarding_screen.dart';
 import 'services/modules_settings.dart';
 import 'services/share_receiver.dart';
 import 'services/user_profile.dart';
+import 'services/news_service.dart';
 import 'services/push_service.dart';
 import 'services/remote_config.dart';
 import 'services/supabase_auth_service.dart';
@@ -287,6 +288,9 @@ class _ShootingAppState extends State<ShootingApp> with WidgetsBindingObserver {
       // открыт мессенджер: собеседник видит, что можно соединиться, и
       // прогревает P2P заранее (отзыв 18.11, 27).
       ChatPresence.tick(chatAuth, force: true);
+      // Новостную ленту подтягиваем в фоне при запуске: экран новостей
+      // открывается моментально и без нагрузки на RSS-источники.
+      NewsService.refresh(db: widget.db);
       Timer.periodic(const Duration(seconds: 45), (_) {
         if (chatAuth.isSignedIn) ChatPresence.tick(chatAuth, force: true);
       });

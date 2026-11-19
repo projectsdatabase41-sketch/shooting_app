@@ -37,6 +37,10 @@ export interface Env {
   TAVILY_KEYS: string;
   /** iLoveAPI: публичный ключ проекта (секретный — для расшифровки JWT). */
   ILOVEPDF_PUBLIC_KEY: string;
+  /** RSS-источники новостей через запятую. */
+  NEWS_FEEDS: string;
+  /** Ключевые слова для фильтра новостей через запятую. */
+  NEWS_KEYWORDS: string;
   /** Медиа чата (зашифрованные на устройстве) — приватный бакет R2. */
   MEDIA: R2Bucket;
   MEDIA_LIMIT_GB: string;
@@ -188,6 +192,21 @@ export default {
     if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
     const url = new URL(req.url);
 
+    // ---------- Новостная лента ----------
+    // Приложение читает только наш /news: один запрос на запуск, без опроса
+    // RSS-источников каждым пользователем. Обновление — по расписанию.
+    if (url.pathname === '/news' && req.method === 'GET') {
+      const obj = await env.MEDIA.get('news/feed.json');
+      if (!obj) return json({ updatedAt: null, items: [] });
+      return new Response(obj.body, {
+        headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=1800', ...cors },
+      });
+    }
+    if (url.pathname === '/news/refresh' && req.method === 'POST') {
+      const token = req.headers.get('x-admin-token') || '';
+      if (!env.ADMIN_TOKEN || token !== env.ADMIN_TOKEN) return json({ error: 'forbidden' }, 403);
+      return json(await refreshNews(env));
+    }
     // ---------- Сводка диагностики (без личных данных) ----------
     // Приложение после проверки сети присылает только числа: сколько шагов
     // прошло и сколько упало. Этого хватает панели, а таблица отзывов в
@@ -646,6 +665,13 @@ export default {
 
     return json({ error: 'not found' }, 404);
   },
+
+  // Обновление новостной ленты по расписанию (см. [triggers] в wrangler.toml).
+  // RSS-источники дёргаются только здесь, а приложение читает наш /news,
+  // поэтому лимиты источников не зависят от числа пользователей.
+  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(refreshNews(env));
+  },
 };
 
 type RTCIceServerLike = { urls: string | string[]; username?: string; credential?: string };
@@ -797,4 +823,63 @@ export class RoomDO {
       } catch {}
     }
   }
+}
+
+// ---------- Новости: RSS → кэш в R2 ----------
+
+function newsPick(block: string, tag: string): string {
+  const m = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, 'i').exec(block);
+  if (!m) return '';
+  return newsStrip(m[1]);
+}
+
+function newsStrip(s: string): string {
+  return s
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function refreshNews(env: Env): Promise<{ items: number; sources: string[] }> {
+  const feeds = (env.NEWS_FEEDS || '').split(',').map((s) => s.trim()).filter(Boolean);
+  const words = (env.NEWS_KEYWORDS || '').toLowerCase().split(',').map((s) => s.trim()).filter(Boolean);
+  const items: Array<{ title: string; link: string; date: string; source: string; summary: string }> = [];
+  for (const feed of feeds) {
+    try {
+      const res = await fetch(feed, { headers: { 'user-agent': 'NexusNews/1.0' } });
+      if (!res.ok) continue;
+      const xml = await res.text();
+      const host = new URL(feed).host.replace(/^www\./, '');
+      const blocks = [...xml.split(/<item[\s>]/i).slice(1), ...xml.split(/<entry[\s>]/i).slice(1)];
+      for (const b of blocks) {
+        const title = newsPick(b, 'title');
+        if (!title) continue;
+        const link = newsPick(b, 'link') || (/<link[^>]+href="([^"]+)"/i.exec(b)?.[1] ?? '');
+        const summary = (newsPick(b, 'description') || newsPick(b, 'summary') || newsPick(b, 'content')).slice(0, 240);
+        const date = newsPick(b, 'pubDate') || newsPick(b, 'updated') || '';
+        const hay = `${title} ${summary}`.toLowerCase();
+        if (words.length > 0 && !words.some((w) => hay.includes(w))) continue;
+        items.push({ title: title.slice(0, 180), link, date, source: host, summary });
+      }
+    } catch {
+      // один недоступный источник не должен останавливать остальные
+    }
+  }
+  const seen = new Set<string>();
+  const unique = items.filter((i) => {
+    const k = (i.link || i.title).toLowerCase();
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  unique.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  const feed = { updatedAt: new Date().toISOString(), items: unique.slice(0, 60) };
+  await env.MEDIA.put('news/feed.json', JSON.stringify(feed));
+  return { items: unique.length, sources: [...new Set(unique.map((i) => i.source))] };
 }

@@ -14,6 +14,15 @@ METERED_LIMIT_MB = "450"
 MEDIA_LIMIT_GB = "8"
 MEDIA_USER_LIMIT_MB = "1024"
 MEDIA_MAX_OBJECT_MB = "25"
+# Новостная лента: RSS-источники (через запятую). Обновляется по расписанию,
+# поэтому приложение тянет готовый JSON один раз при запуске и не дёргает RSS.
+NEWS_FEEDS = "https://www.issf-sports.org/rss/news.xml,https://www.shootinguk.co.uk/feed/,https://www.thefirearmblog.com/blog/feed/,https://www.nrablog.com/feed/"
+NEWS_KEYWORDS = "стрельб,shooting,rifle,pistol,ISSF,винтовк,пистолет,тир,мишен,biathlon,биатлон"
+
+# Обновление новостей два раза в сутки: RSS отдаётся в кэш R2, приложение
+# читает только наш /news — расход RSS-источников не зависит от числа людей.
+[triggers]
+crons = ["0 4,16 * * *"]
 
 [[durable_objects.bindings]]
 name = "ROOMS"
