@@ -120,6 +120,29 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   GroupLiveSession? _groupLive;
   List<ChatMessage> _messages = [];
 
+  /// Кто последний в своей минуте: время показываем только у него, иначе
+  /// подряд идущие сообщения повторяют одно и то же «14:32» (отзыв 19.11).
+  static final Set<String> _lastInMinute = {};
+  static bool showsTime(String id) => _lastInMinute.contains(id);
+
+  void _recomputeLastInMinute() {
+    _lastInMinute.clear();
+    for (var i = 0; i < _messages.length; i++) {
+      final m = _messages[i];
+      final next = i + 1 < _messages.length ? _messages[i + 1] : null;
+      final a = m.createdAt.toLocal();
+      final b = next?.createdAt.toLocal();
+      if (b == null ||
+          a.year != b.year ||
+          a.month != b.month ||
+          a.day != b.day ||
+          a.hour != b.hour ||
+          a.minute != b.minute) {
+        _lastInMinute.add(m.id);
+      }
+    }
+  }
+
   // «Стопки» фото: несколько подряд идущих фото от одного человека показываются
   // одним блоком (ведущий — последнее фото, остальные скрыты, индексы ленты те же).
   late final CoachLink _coachLink = CoachLink(
@@ -595,6 +618,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _messages = widget.repo.forContact(_contact.id, reuseFrom: _messages);
       _reactions = widget.repo.reactionsForContact(_contact.id);
       _saved = widget.repo.savedFor(_contact.id);
+      _recomputeLastInMinute();
     });
     final grew = _messages.length - before;
     _lastCount = _messages.length;
@@ -3935,8 +3959,15 @@ class _Bubble extends StatelessWidget {
               ],
               Text(
                 DateFormat('HH:mm').format(message.createdAt.toLocal()),
+                // Время — только у последнего сообщения минуты (отзыв 19.11):
+                // подряд идущие сообщения не повторяют одно и то же время.
                 style: theme.textTheme.labelSmall
-                    ?.copyWith(color: theme.hintColor),
+                    ?.copyWith(color: theme.hintColor)
+                    .copyWith(
+                      color: _ChatThreadScreenState.showsTime(message.id)
+                          ? theme.hintColor
+                          : Colors.transparent,
+                    ),
               ),
               if (mine) ...[
                 const SizedBox(width: 6),
