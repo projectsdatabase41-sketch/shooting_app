@@ -35,6 +35,8 @@ class ChatTranslationService {
   /// из настроек чата (`ChatPreferences.translationLanguage`, пусто —
   /// язык системы).
   Future<String?> translateIfNeeded(String text, {required String targetLanguage}) async {
+    final until = _backoffUntil;
+    if (until != null && DateTime.now().isBefore(until)) return null;
     final target = targetLanguage.isEmpty ? systemLanguageCode() : targetLanguage;
     final uri = Uri.https('api.mymemory.translated.net', '/get', {
       'q': text,
