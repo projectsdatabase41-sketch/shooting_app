@@ -408,7 +408,11 @@ export default {
       return json({ id, name, bytes: len });
     }
     if (url.pathname === '/pdf/run' && req.method === 'POST') {
-      if (!env.ILOVEPDF_PUBLIC_KEY) return json({ error: 'pdf not configured' }, 503);
+      const publicKeys = (env.ILOVEPDF_PUBLIC_KEY || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.startsWith('project_public_'));
+      if (publicKeys.length === 0) return json({ error: 'pdf not configured' }, 503);
       const body = (await req.json().catch(() => ({}))) as {
         tool?: string;
         files?: Array<{ id: string; name: string }>;
@@ -424,14 +428,21 @@ export default {
       const files = Array.isArray(body.files) ? body.files.slice(0, 10) : [];
       if (files.length === 0) return json({ error: 'no files' }, 400);
       try {
-        const authRes = await fetch('https://api.ilovepdf.com/v1/auth', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ public_key: env.ILOVEPDF_PUBLIC_KEY }),
-        });
-        const auth = (await authRes.json().catch(() => ({}))) as { token?: string };
-        if (!authRes.ok || !auth.token) return json({ error: 'pdf auth failed' }, 502);
-        const token = auth.token;
+        // Ключей может быть несколько (разные аккаунты): берём случайный, а
+        // при отказе пробуем следующий — так лимит одного проекта не
+        // останавливает работу.
+        let token = '';
+        for (let i = 0; i < publicKeys.length && token === ''; i++) {
+          const key = publicKeys[(Math.floor(Math.random() * publicKeys.length) + i) % publicKeys.length];
+          const authRes = await fetch('https://api.ilovepdf.com/v1/auth', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ public_key: key }),
+          });
+          const auth = (await authRes.json().catch(() => ({}))) as { token?: string };
+          if (authRes.ok && auth.token) token = auth.token;
+        }
+        if (token === '') return json({ error: 'pdf auth failed' }, 502);
         const startRes = await fetch(`https://api.ilovepdf.com/v1/start/${tool}`, {
           method: 'GET',
           headers: { Authorization: `Bearer ${token}` },
@@ -468,10 +479,8 @@ export default {
         const outId = crypto.randomUUID();
         await env.MEDIA.put(`pdf-out/${uid}/${outId}`, await dlRes.arrayBuffer());
         for (const f of files) await env.MEDIA.delete(`pdf-tmp/${uid}/${f.id}/${f.name}`);
-        await fetch(`https://${start.server}/v1/delete/${start.task}`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-        }).catch(() => null);
+        // Задачу на стороне iLoveAPI отдельно не удаляем: у них свой срок
+        // хранения, а лишний запрос только тратит квоту.
         return json({ id: outId, name: `${tool}.pdf` });
       } catch (e) {
         return json({ error: `pdf failed: ${e}` }, 502);
