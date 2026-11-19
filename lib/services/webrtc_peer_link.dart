@@ -150,6 +150,21 @@ class WebRtcPeerLink implements PeerLink {
     _retried = true;
     _diag.add('retry restartIce');
     try {
+      // Если прямые пути не сработали, но ретранслятор (relay) собран —
+      // переводим соединение на TURN. Без этого чат оставался без P2P, хотя
+      // TURN был доступен (отзывы 19.11: host/srflx/relay собраны, соединения нет).
+      if ((_cands['relay'] ?? 0) > 0) {
+        try {
+          final servers = await _iceModule.get();
+          await pc.setConfiguration({
+            'iceServers': servers,
+            'iceTransportPolicy': 'relay',
+          });
+          _diag.add('relay=forced');
+        } catch (e) {
+          _diag.add('relay exc=$e');
+        }
+      }
       await pc.restartIce();
       if (_initiator) {
         final offer = await pc.createOffer();
@@ -257,3 +272,4 @@ class WebRtcPeerLink implements PeerLink {
     _onState?.call();
   }
 }
+

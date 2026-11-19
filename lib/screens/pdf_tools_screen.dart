@@ -65,6 +65,21 @@ class PdfToolsScreenState extends State<PdfToolsScreen> {
 
   bool get _single => PdfToolsService.singleFileTools.contains(_tool);
 
+  /// Файлы всё ещё PDF? Тогда бессмысленные конвертеры (Office/HTML/картинки)
+  /// в списке не показываем — меньше путаницы (отзыв 19.11).
+  bool get _onlyPdf => _files.isNotEmpty && _files.every((f) => f.name.toLowerCase().endsWith('.pdf'));
+
+  Set<String> get _allowedTools {
+    if (_files.isEmpty) return PdfToolsService.tools.keys.toSet();
+    if (_onlyPdf) {
+      return PdfToolsService.tools.keys
+          .where((k) => !const {'officepdf', 'htmlpdf', 'imagepdf'}.contains(k))
+          .toSet();
+    }
+    // Не PDF: имеет смысл только конвертация в PDF.
+    return const {'officepdf', 'imagepdf', 'htmlpdf'};
+  }
+
   /// Параметры для сервера: только те, что нужны выбранному инструменту.
   Map<String, dynamic>? _options() {
     switch (_tool) {
@@ -123,6 +138,9 @@ class PdfToolsScreenState extends State<PdfToolsScreen> {
       _files = _single ? files.take(1).toList() : files;
       _result = null;
       _message = null;
+      if (!_allowedTools.contains(_tool)) {
+        _tool = _onlyPdf ? 'merge' : 'officepdf';
+      }
     });
   }
 
@@ -338,7 +356,8 @@ class PdfToolsScreenState extends State<PdfToolsScreen> {
               decoration: InputDecoration(labelText: tr('Что сделать')),
               items: [
                 for (final e in PdfToolsService.tools.entries)
-                  DropdownMenuItem(value: e.key, child: Text(tr(e.value))),
+                  if (_allowedTools.contains(e.key))
+                    DropdownMenuItem(value: e.key, child: Text(tr(e.value))),
               ],
               onChanged: _busy
                   ? null

@@ -35,6 +35,50 @@ class _NewsScreenState extends State<NewsScreen> {
     if (mounted) setState(() => _loading = false);
   }
 
+  /// Краткая карточка новости: заголовок, описание и источник внизу.
+  Future<void> _showDetails(NewsItem n) async {
+    final theme = Theme.of(context);
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(n.title, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+              if (n.summary.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(n.summary, style: theme.textTheme.bodyMedium),
+              ],
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${n.source}${n.date.isEmpty ? '' : ' · ${n.date.substring(0, n.date.length > 10 ? 10 : n.date.length)}'}',
+                      style: theme.textTheme.labelSmall,
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () {
+                      Navigator.of(ctx).pop();
+                      _open(n.link);
+                    },
+                    icon: const Icon(Icons.open_in_new, size: 18),
+                    label: Text(tr('К источнику')),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _open(String url) async {
     if (url.isEmpty) return;
     try {
@@ -84,8 +128,9 @@ class _NewsScreenState extends State<NewsScreen> {
                     title: Text(n.title, maxLines: 3, overflow: TextOverflow.ellipsis),
                     subtitle: Text('${n.source}${date.isEmpty ? '' : ' · $date'}',
                         style: theme.textTheme.labelSmall),
-                    trailing: const Icon(Icons.open_in_new, size: 18),
-                    onTap: () => _open(n.link),
+                    // Ссылки справа нет: по нажатию открываем краткую сводку,
+                    // а источник уже внизу карточки (отзыв 19.11).
+                    onTap: () => _showDetails(n),
                   );
                 },
               ),
