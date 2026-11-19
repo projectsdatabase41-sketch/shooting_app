@@ -519,12 +519,13 @@ class NetDiagnostics {
         return result;
       } on TimeoutException {
         sw.stop();
+        final pair = await _icePairSummary(link.pc);
         link.close();
         return DiagStepResult(
           name: 'P2P (самопроверка)',
           passed: true,
           details: 'без собеседника: свои кандидаты собраны (${link.candidates.isEmpty ? 'нет данных' : link.candidates.entries.map((e) => '${e.key}:${e.value}').join(', ')}); '
-              'реальное соединение проверяйте звонком или сообщением',
+              '$pair. Реальное соединение проверяйте звонком или сообщением',
           latency: sw.elapsed,
         );
       }
@@ -581,6 +582,37 @@ class NetDiagnostics {
       return result;
     } catch (e) {
       return DiagStepResult(name: 'Скорость (DataChannel)', passed: false, details: 'ошибка: $e', latency: Duration.zero);
+    }
+  }
+
+  /// Выбранная ICE-пара и её задержка по `getStats`: видно, идёт ли трафик
+  /// напрямую (host/srflx) или через ретранслятор (relay) и сколько мс RTT.
+  /// Без этого отчёт говорил только «не поднялось», без причины.
+  Future<String> _icePairSummary(RTCPeerConnection? pc) async {
+    if (pc == null) return 'ICE-пары: нет соединения';
+    try {
+      final reports = await pc.getStats();
+      final byId = <String, Map<String, dynamic>>{
+        for (final r in reports) r.id: {...r.values, 'type': r.type},
+      };
+      for (final r in reports) {
+        if (r.type != 'candidate-pair') continue;
+        final v = r.values;
+        final state = '${v['state'] ?? ''}';
+        final nominated = '${v['nominated'] ?? ''}';
+        if (state != 'succeeded' && nominated != 'true') continue;
+        final local = byId['${v['localCandidateId'] ?? ''}'];
+        final remote = byId['${v['remoteCandidateId'] ?? ''}'];
+        final lt = '${local?['candidateType'] ?? '?'}';
+        final rt = '${remote?['candidateType'] ?? '?'}';
+        final rtt = v['currentRoundTripTime'];
+        final rttMs = rtt is num ? (rtt * 1000).round() : (num.tryParse('$rtt') ?? 0) * 1000;
+        final bytes = '${v['bytesSent'] ?? 0}/${v['bytesReceived'] ?? 0}';
+        return 'выбранная пара: $lt → $rt, RTT ${rttMs.round()} мс, байты $bytes';
+      }
+      return 'ICE-пары: ни одна не подтверждена';
+    } catch (e) {
+      return 'ICE-пары: не удалось прочитать ($e)';
     }
   }
 

@@ -58,6 +58,10 @@ class WebRtcPeerLink implements PeerLink {
   /// Сколько собрано кандидатов по типам (host / srflx / relay).
   Map<String, int> get candidates => Map.unmodifiable(_cands);
 
+  /// Само соединение — нужно диагностике, чтобы прочитать выбранную ICE-пару
+  /// и её задержку (`getStats`). В остальном коде используйте методы класса.
+  RTCPeerConnection? get pc => _pc;
+
   @override
   bool get isOpen => !_closed && _dc?.state == RTCDataChannelState.RTCDataChannelOpen;
 

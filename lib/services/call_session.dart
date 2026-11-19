@@ -120,6 +120,10 @@ class CallSession extends ChangeNotifier {
 
   /// Учёт трафика через ретранслятор: раз в минуту и в конце звонка.
   Timer? _usageTimer;
+  /// Страховка через ретранслятор: таймер после старта и метка, что
+  /// принудительный relay уже включали (больше не пробуем).
+  Timer? _relayTimer;
+  bool _relayForced = false;
   int _relayBytesReported = 0;
 
   final localRenderer = RTCVideoRenderer();
@@ -192,6 +196,26 @@ class CallSession extends ChangeNotifier {
       return;
     }
     _pc = pc;
+    // Страховка для заблокированных прямых путей: если за 8 секунд ICE так и
+    // не соединился, но ретранслятор (relay) доступен — принудительно
+    // переводим соединение на TURN. Раньше в этом случае звонок просто висел
+    // в «соединяем…» и падал (отзывы 17.11, записи 19, 20, 24).
+    _relayTimer?.cancel();
+    _relayTimer = Timer(const Duration(seconds: 8), () async {
+      if (_disposed || _relayForced) return;
+      if (iceConnectionState == 'connected') return;
+      if ((_cands['relay'] ?? 0) == 0) return; // ретранслятора нет — нечем помочь
+      _relayForced = true;
+      try {
+        await pc.setConfiguration({
+          'iceServers': await _iceServers.get(),
+          'iceTransportPolicy': 'relay',
+        });
+        await pc.restartIce();
+      } catch (_) {
+        // Не поддерживается платформой — соединение продолжает попытки как есть.
+      }
+    });
     for (final t in _local!.getTracks()) {
       await pc.addTrack(t, _local!);
     }
@@ -624,7 +648,8 @@ class CallSession extends ChangeNotifier {
   /// NAT пара не составится (отчёт 16.11 18:58).
   String _diagLine() {
     final cands = _cands.entries.map((e) => '${e.key}:${e.value}').join(' ');
-    return '${cands.isEmpty ? 'кандидаты: нет' : 'кандидаты: $cands'} turn=${IceServers.lastTurnProvider ?? 'none'}';
+    final relay = _relayForced ? ' relay=forced' : '';
+    return '${cands.isEmpty ? 'кандидаты: нет' : 'кандидаты: $cands'} turn=${IceServers.lastTurnProvider ?? 'none'}$relay';
   }
 
   /// Начинает отчитываться о трафике через ретранслятор: раз в минуту и в
@@ -764,6 +789,8 @@ class CallSession extends ChangeNotifier {
     _disposed = true;
     _usageTimer?.cancel();
     _usageTimer = null;
+    _relayTimer?.cancel();
+    _relayTimer = null;
     _ringTimeout?.cancel();
     _fallbackTimer?.cancel();
     _disconnectTimer?.cancel();
@@ -779,3 +806,4 @@ class CallSession extends ChangeNotifier {
     super.dispose();
   }
 }
+
