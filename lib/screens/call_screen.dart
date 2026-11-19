@@ -331,7 +331,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
                 // Большой слой: по умолчанию собеседник; если пользователь
                 // поменял окна — своё видео (отзыв 17.11 18:17).
                 if (_swapped && s.video && !s.cameraOff)
-                  RTCVideoView(s.localRenderer, mirror: true, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover)
+                  RTCVideoView(s.localRenderer, mirror: false, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover)
                 else if (remoteVideo)
                   RTCVideoView(s.remoteRenderer, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
                 if (s.video && s.frontCamera) SelfieLightOverlay(light: _light),
@@ -390,7 +390,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
                             // Собеседник в окошке — без зеркала (отзыв 18:17:
                             // «в маленьком окошке перевёрнуто»).
                             ? RTCVideoView(s.remoteRenderer, mirror: false, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover)
-                            : RTCVideoView(s.localRenderer, mirror: true, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
+                            : RTCVideoView(s.localRenderer, mirror: false, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
                       ),
                     ),
                   ),
