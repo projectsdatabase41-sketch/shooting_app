@@ -20,6 +20,20 @@ class PdfToolsService {
   /// Последний вызов упёрся в отсутствие ключа на сервере.
   static bool notConfigured = false;
 
+  /// Текст последней ошибки сервера (в интерфейсе показываем по-русски).
+  static String? lastError;
+
+  /// Подписи ошибок от iLoveAPI и нашей обвязки.
+  static String? errorHint(int status, String body) {
+    if (status == 503) return 'модуль не настроен';
+    if (status == 413) return 'файл больше 30 МБ';
+    if (status == 404) return 'файл не найден на сервере';
+    if (body.contains('auth')) return 'не принят ключ iLoveAPI';
+    if (body.contains('password') || body.contains('encrypted')) return 'файл под паролем — укажите пароль';
+    if (body.contains('process')) return 'iLoveAPI не смог обработать файл (проверьте набор файлов и параметры)';
+    return null;
+  }
+
   static const tools = <String, String>{
     'merge': 'Объединить PDF',
     'split': 'Разделить PDF',
@@ -101,10 +115,16 @@ class PdfToolsService {
           .timeout(const Duration(minutes: 3));
       if (res.statusCode == 503) {
         notConfigured = true;
+        lastError = 'модуль не настроен';
         return null;
       }
       notConfigured = false;
-      if (res.statusCode != 200) return null;
+      if (res.statusCode != 200) {
+        lastError = errorHint(res.statusCode, String.fromCharCodes(res.bodyBytes)) ??
+            'сервер ответил ${res.statusCode}';
+        return null;
+      }
+      lastError = null;
       return _field(res.bodyBytes, 'id');
     } catch (_) {
       return null;

@@ -16,7 +16,6 @@ import '../widgets/glass_pill.dart';
 
 /// PDF-инструменты: объединить, разделить, сжать, конвертировать и прочее.
 /// Обработка идёт на нашем сервере (iLoveAPI), ключ в приложении не хранится.
-/// Пока ключ не выдан, экран честно говорит «модуль не настроен».
 class PdfToolsScreen extends StatefulWidget {
   const PdfToolsScreen({super.key});
 
@@ -26,11 +25,29 @@ class PdfToolsScreen extends StatefulWidget {
 
 class PdfToolsScreenState extends State<PdfToolsScreen> {
   late final PdfToolsService _service;
+
   String _tool = 'merge';
   List<({String name, Uint8List bytes})> _files = const [];
   bool _busy = false;
   String? _message;
   Uint8List? _result;
+
+  // Параметры задач (показываются только у подходящих инструментов).
+  String _compress = 'recommended';
+  String _splitMode = 'ranges';
+  final _ranges = TextEditingController(text: '1-3');
+  final _fixedRange = TextEditingController(text: '1');
+  final _pages = TextEditingController();
+  final _wmText = TextEditingController(text: 'Nexus');
+  String _wmVertical = 'center';
+  String _wmHorizontal = 'center';
+  final _pnText = TextEditingController(text: '{n}');
+  String _pnPosition = 'bottom-center';
+  int _rotate = 90;
+  final _password = TextEditingController();
+  String _ocrLang = 'rus+eng';
+  final _dpi = TextEditingController(text: '150');
+  String _conformance = 'pdfa2b';
 
   @override
   void initState() {
@@ -38,7 +55,57 @@ class PdfToolsScreenState extends State<PdfToolsScreen> {
     _service = PdfToolsService(ChatAuthService(context.read<AppDataStore>().db));
   }
 
+  @override
+  void dispose() {
+    for (final c in [_ranges, _fixedRange, _pages, _wmText, _pnText, _password, _dpi]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
   bool get _single => PdfToolsService.singleFileTools.contains(_tool);
+
+  /// Параметры для сервера: только те, что нужны выбранному инструменту.
+  Map<String, dynamic>? _options() {
+    switch (_tool) {
+      case 'compress':
+        return {'compression_level': _compress};
+      case 'split':
+        return {
+          'split_mode': _splitMode,
+          if (_splitMode == 'ranges') 'ranges': _ranges.text.trim(),
+          if (_splitMode == 'fixed_range') 'fixed_range': int.tryParse(_fixedRange.text.trim()) ?? 1,
+          if (_splitMode == 'remove_pages') 'remove_pages': _pages.text.trim(),
+        };
+      case 'pagenumber':
+        return {
+          'text': _pnText.text.trim().isEmpty ? '{n}' : _pnText.text.trim(),
+          'position': _pnPosition,
+          if (_pages.text.trim().isNotEmpty) 'pages': _pages.text.trim(),
+        };
+      case 'watermark':
+        return {
+          'mode': 'text',
+          'text': _wmText.text.trim().isEmpty ? 'Nexus' : _wmText.text.trim(),
+          'vertical_position': _wmVertical,
+          'horizontal_position': _wmHorizontal,
+          if (_pages.text.trim().isNotEmpty) 'pages': _pages.text.trim(),
+        };
+      case 'rotate':
+        return {'rotate': _rotate};
+      case 'protect':
+      case 'unlock':
+        return {if (_password.text.isNotEmpty) 'password': _password.text};
+      case 'ocr':
+        return {'ocr_language': _ocrLang};
+      case 'pdfjpg':
+        return {'pdfjpg_mode': 'pages', 'dpi': int.tryParse(_dpi.text.trim()) ?? 150};
+      case 'pdfa':
+        return {'conformance': _conformance};
+      default:
+        return null;
+    }
+  }
 
   Future<void> _pick() async {
     final picked = await FilePicker.platform.pickFiles(
@@ -76,12 +143,13 @@ class PdfToolsScreenState extends State<PdfToolsScreen> {
         }
         uploaded.add(up);
       }
-      final id = await _service.run(_tool, uploaded);
+      final id = await _service.run(_tool, uploaded, options: _options());
       if (id == null) {
+        final hint = PdfToolsService.lastError;
         setState(() {
           _message = PdfToolsService.notConfigured
               ? tr('Модуль PDF ещё не настроен: нужен ключ iLoveAPI на сервере.')
-              : tr('Не получилось обработать файл. Попробуйте ещё раз.');
+              : tr('Не получилось обработать файл: {e}', {'e': hint ?? ''});
         });
         return;
       }
@@ -111,6 +179,145 @@ class PdfToolsScreenState extends State<PdfToolsScreen> {
     } catch (_) {}
   }
 
+  /// Параметры выбранного инструмента.
+  List<Widget> _optionsUi(ThemeData theme) {
+    final label = theme.textTheme.labelLarge;
+    Widget field(TextEditingController c, String title, {String? hint}) => Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: TextField(
+            controller: c,
+            decoration: InputDecoration(labelText: tr(title), helperText: hint),
+          ),
+        );
+
+    switch (_tool) {
+      case 'compress':
+        return [
+          const SizedBox(height: 12),
+          Text(tr('Сжатие'), style: label),
+          DropdownButtonFormField<String>(
+            initialValue: _compress,
+            items: [
+              DropdownMenuItem(value: 'recommended', child: Text(tr('Рекомендованное'))),
+              DropdownMenuItem(value: 'extreme', child: Text(tr('Максимальное (сильнее жмёт)'))),
+              DropdownMenuItem(value: 'low', child: Text(tr('Слабое (лучше качество)'))),
+            ],
+            onChanged: (v) => setState(() => _compress = v ?? _compress),
+          ),
+        ];
+      case 'split':
+        return [
+          const SizedBox(height: 12),
+          Text(tr('Режим разделения'), style: label),
+          DropdownButtonFormField<String>(
+            initialValue: _splitMode,
+            items: [
+              DropdownMenuItem(value: 'ranges', child: Text(tr('По диапазонам страниц'))),
+              DropdownMenuItem(value: 'fixed_range', child: Text(tr('Каждые N страниц'))),
+              DropdownMenuItem(value: 'remove_pages', child: Text(tr('Удалить страницы'))),
+            ],
+            onChanged: (v) => setState(() => _splitMode = v ?? _splitMode),
+          ),
+          if (_splitMode == 'ranges') field(_ranges, 'Диапазоны', hint: '1-3,5,8-10'),
+          if (_splitMode == 'fixed_range') field(_fixedRange, 'Страниц в части', hint: '1'),
+          if (_splitMode == 'remove_pages') field(_pages, 'Удалить страницы', hint: '2,4,7-9'),
+        ];
+      case 'pagenumber':
+        return [
+          const SizedBox(height: 12),
+          Text(tr('Номера страниц'), style: label),
+          field(_pnText, 'Текст', hint: '{n} — номер, {p} — всего'),
+          DropdownButtonFormField<String>(
+            initialValue: _pnPosition,
+            items: [
+              DropdownMenuItem(value: 'bottom-left', child: Text(tr('Снизу слева'))),
+              DropdownMenuItem(value: 'bottom-center', child: Text(tr('Снизу по центру'))),
+              DropdownMenuItem(value: 'bottom-right', child: Text(tr('Снизу справа'))),
+              DropdownMenuItem(value: 'top-left', child: Text(tr('Сверху слева'))),
+              DropdownMenuItem(value: 'top-center', child: Text(tr('Сверху по центру'))),
+              DropdownMenuItem(value: 'top-right', child: Text(tr('Сверху справа'))),
+            ],
+            onChanged: (v) => setState(() => _pnPosition = v ?? _pnPosition),
+          ),
+        ];
+      case 'watermark':
+        return [
+          const SizedBox(height: 12),
+          Text(tr('Водяной знак'), style: label),
+          field(_wmText, 'Надпись'),
+          DropdownButtonFormField<String>(
+            initialValue: _wmVertical,
+            items: [
+              DropdownMenuItem(value: 'top', child: Text(tr('Сверху'))),
+              DropdownMenuItem(value: 'center', child: Text(tr('По центру'))),
+              DropdownMenuItem(value: 'bottom', child: Text(tr('Снизу'))),
+            ],
+            onChanged: (v) => setState(() => _wmVertical = v ?? _wmVertical),
+          ),
+          DropdownButtonFormField<String>(
+            initialValue: _wmHorizontal,
+            items: [
+              DropdownMenuItem(value: 'left', child: Text(tr('Слева'))),
+              DropdownMenuItem(value: 'center', child: Text(tr('По центру'))),
+              DropdownMenuItem(value: 'right', child: Text(tr('Справа'))),
+            ],
+            onChanged: (v) => setState(() => _wmHorizontal = v ?? _wmHorizontal),
+          ),
+        ];
+      case 'rotate':
+        return [
+          const SizedBox(height: 12),
+          Text(tr('Поворот'), style: label),
+          DropdownButtonFormField<int>(
+            initialValue: _rotate,
+            items: [
+              DropdownMenuItem(value: 90, child: Text(tr('90° по часовой'))),
+              DropdownMenuItem(value: 180, child: Text(tr('180°'))),
+              DropdownMenuItem(value: 270, child: Text(tr('270°'))),
+            ],
+            onChanged: (v) => setState(() => _rotate = v ?? _rotate),
+          ),
+        ];
+      case 'protect':
+      case 'unlock':
+        return [field(_password, _tool == 'protect' ? 'Пароль для PDF' : 'Пароль файла')];
+      case 'ocr':
+        return [
+          const SizedBox(height: 12),
+          Text(tr('Язык распознавания'), style: label),
+          DropdownButtonFormField<String>(
+            initialValue: _ocrLang,
+            items: [
+              DropdownMenuItem(value: 'rus+eng', child: Text(tr('Русский + английский'))),
+              DropdownMenuItem(value: 'rus', child: Text(tr('Русский'))),
+              DropdownMenuItem(value: 'eng', child: Text(tr('Английский'))),
+            ],
+            onChanged: (v) => setState(() => _ocrLang = v ?? _ocrLang),
+          ),
+        ];
+      case 'pdfjpg':
+        return [
+          const SizedBox(height: 12),
+          field(_dpi, 'Качество (DPI)', hint: '150 — обычно хватает'),
+        ];
+      case 'pdfa':
+        return [
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: _conformance,
+            items: [
+              DropdownMenuItem(value: 'pdfa1b', child: Text('PDF/A-1b')),
+              DropdownMenuItem(value: 'pdfa2b', child: Text('PDF/A-2b')),
+              DropdownMenuItem(value: 'pdfa3b', child: Text('PDF/A-3b')),
+            ],
+            onChanged: (v) => setState(() => _conformance = v ?? _conformance),
+          ),
+        ];
+      default:
+        return const [];
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -122,7 +329,8 @@ class PdfToolsScreenState extends State<PdfToolsScreen> {
         child: ListView(
           padding: EdgeInsets.fromLTRB(16, MediaQuery.paddingOf(context).top + GlassHeader.height + 12, 16, 32),
           children: [
-            Text(tr('Файлы обрабатываются на нашем сервере: объединить, разделить, сжать, перевести в PDF и обратно, поставить номера страниц или водяной знак. Файлы не сохраняются в приложении.'),
+            Text(
+                tr('Файлы обрабатываются на нашем сервере: объединить, разделить, сжать, перевести в PDF и обратно, поставить номера страниц или водяной знак. Файлы в приложении не сохраняются.'),
                 style: theme.textTheme.bodySmall),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
@@ -141,6 +349,7 @@ class PdfToolsScreenState extends State<PdfToolsScreen> {
                         _message = null;
                       }),
             ),
+            ..._optionsUi(theme),
             const SizedBox(height: 12),
             Row(children: [
               Expanded(
@@ -187,3 +396,4 @@ class PdfToolsScreenState extends State<PdfToolsScreen> {
     );
   }
 }
+
