@@ -1,0 +1,180 @@
+sha: 627b889bda86d93e21c8512e6d2bb967cf0edb3e
+run: 44481193371
+date: Thu Nov 19 07:41:55 UTC 2026
+
+--- java ---
+openjdk version "21.0.13" 2026-10-20 LTS
+OpenJDK Runtime Environment Temurin-21.0.13+9 (build 21.0.13+9-LTS)
+OpenJDK 64-Bit Server VM Temurin-21.0.13+9 (build 21.0.13+9-LTS, mixed mode, sharing)
+
+--- gradle.properties ---
+org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m -XX:ReservedCodeCacheSize=256m -XX:+HeapDumpOnOutOfMemoryError
+android.useAndroidX=true
+# Сборка падала с «Gradle build daemon disappeared unexpectedly»: JVM Gradle
+# получал -Xmx8G, а на раннере GitHub 7 ГБ и на ноутбуке память занята другими
+# приложениями, поэтому G1 не могла выделить виртуальную память (hs_err:
+# "G1 virtual space"). Два гига + один воркер + без демона собирают APK
+# стабильно и не держат несколько JVM одновременно.
+org.gradle.parallel=false
+org.gradle.daemon=false
+org.gradle.workers.max=1
+
+--- хвост лога сборки ---
+Resolving dependencies...
+Downloading packages...
+  _flutterfire_internals 1.3.59 (1.4.0 available)
+  archive 4.2.0 (4.7.1 available)
+  asn1lib 1.6.5 (1.6.8 available)
+  audioplayers 6.7.1 (6.8.1 available)
+  audioplayers_android 5.2.1 (5.3.0 available)
+  audioplayers_darwin 6.4.0 (6.5.0 available)
+  audioplayers_linux 4.2.1 (4.3.0 available)
+  audioplayers_platform_interface 7.1.1 (7.2.0 available)
+  audioplayers_web 5.2.1 (5.3.0 available)
+  audioplayers_windows 4.3.1 (4.4.1 available)
+  background_downloader 9.5.9 (9.6.6 available)
+  bluez 0.8.3 (0.9.0 available)
+  camera 0.11.4 (0.12.2 available)
+  camera_android_camerax 0.6.30 (0.7.6+1 available)
+  camera_avfoundation 0.9.23+2 (0.11.1 available)
+  camera_platform_interface 2.13.1 (2.15.1 available)
+  camera_web 0.3.5+5 (0.3.6 available)
+  cli_util 0.4.2 (0.6.0 available)
+  clock 1.1.2 (1.1.3 available)
+  code_assets 1.2.1 (2.2.0 available)
+  cross_file 0.3.5+5 (0.4.0 available)
+  crypto 3.0.7 (3.0.8 available)
+  dart_pubspec_licenses 3.0.12 (3.2.0 available)
+  dbus 0.7.15 (0.8.0 available)
+  file_picker 8.3.7 (13.4.0 available)
+  file_selector_macos 0.9.5+1 (0.9.5+2 available)
+  firebase_core 3.15.2 (5.2.0 available)
+  firebase_core_platform_interface 6.0.3 (8.2.0 available)
+  firebase_core_web 2.24.1 (4.2.0 available)
+  firebase_crashlytics 4.3.10 (6.1.0 available)
+  firebase_crashlytics_platform_interface 3.8.10 (3.10.0 available)
+  firebase_messaging 15.2.10 (17.1.0 available)
+  firebase_messaging_platform_interface 4.6.10 (4.12.0 available)
+  firebase_messaging_web 3.10.10 (4.4.0 available)
+  flutter_lints 4.0.0 (6.0.0 available)
+  flutter_local_notifications 18.0.1 (23.0.2 available)
+  flutter_local_notifications_linux 5.0.0 (9.0.0 available)
+  flutter_local_notifications_platform_interface 8.0.0 (13.0.0 available)
+  flutter_secure_storage 9.2.2 (11.2.0 available)
+  flutter_secure_storage_linux 1.2.3 (3.0.3 available)
+  flutter_secure_storage_macos 3.1.3 (4.0.0 available)
+  flutter_secure_storage_platform_interface 1.1.2 (2.1.1 available)
+  flutter_secure_storage_web 1.2.1 (2.1.1 available)
+  flutter_secure_storage_windows 3.1.2 (4.2.2 available)
+  flutter_webrtc 1.6.2+hotfix.3 (1.6.3 available)
+  gal 2.3.3 (3.0.1 available)
+  hooks 2.0.2 (2.2.0 available)
+  image 4.9.2 (4.13.1 available)
+  image_picker 1.2.3 (1.2.4 available)
+  image_picker_android 0.8.13+17 (0.8.13+25 available)
+  image_picker_ios 0.8.13+7 (0.8.13+15 available)
+  image_picker_platform_interface 2.11.1 (2.11.2 available)
+  intl 0.19.0 (0.20.3 available)
+  jni 1.0.3 (1.1.2 available)
+  jni_flutter 1.0.3 (1.0.4+1 available)
+  js 0.6.7 (0.7.2 available)
+  lints 4.0.0 (6.1.0 available)
+  local_auth 2.3.0 (3.0.2 available)
+  local_auth_android 1.0.56 (2.3.0 available)
+  local_auth_darwin 1.6.1 (2.0.5 available)
+  local_auth_windows 1.0.11 (2.0.2 available)
+  matcher 0.12.19 (0.12.20 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.17.0 (1.19.0 available)
+  native_toolchain_c 0.19.2 (0.19.6 available)
+  objective_c 9.5.0 (9.6.4 available)
+  pdfrx 1.3.5 (3.0.1 available)
+  permission_handler 11.4.0 (13.0.2 available)
+  permission_handler_android 12.1.0 (14.1.1 available)
+  permission_handler_apple 9.6.2 (9.6.5 available)
+  permission_handler_windows 0.2.2 (0.2.4 available)
+  petitparser 7.0.2 (7.1.0 available)
+  platform 3.1.6 (3.2.0 available)
+  pointycastle 3.9.1 (4.0.0 available)
+  posix 6.5.2 (6.5.4 available)
+  pro_image_editor 11.23.0 (14.29.0 available)
+  record 6.2.1 (7.2.0 available)
+  record_android 1.5.2 (2.3.0 available)
+  record_ios 1.2.1 (2.1.1 available)
+  record_linux 1.3.1 (2.2.0 available)
+  record_macos 1.2.2 (2.1.1 available)
+  record_platform_interface 1.6.0 (2.2.0 available)
+  record_use 0.6.0 (1.1.1 available)
+  record_web 1.3.0 (2.2.0 available)
+  record_windows 1.0.7 (2.4.0 available)
+  sensors_plus 7.1.0 (7.1.1 available)
+  share_plus 12.0.2 (13.3.1 available)
+  share_plus_platform_interface 6.1.0 (7.2.0 available)
+  shared_preferences 2.5.5 (2.5.6 available)
+  shared_preferences_android 2.4.23 (2.5.5 available)
+  shared_preferences_foundation 2.5.7 (2.6.2 available)
+  speech_to_text 7.4.0 (7.5.0 available)
+  sqlite3 3.5.2 (3.9.1 available)
+  stack_trace 1.12.1 (1.12.2 available)
+  synchronized 3.4.0+1 (3.6.1+1 available)
+  test_api 0.7.10 (0.7.15 available)
+  timezone 0.10.1 (0.11.2 available)
+  url_launcher 6.3.2 (6.3.3 available)
+  url_launcher_android 6.3.30 (6.3.35 available)
+  vector_math 2.2.0 (2.4.4 available)
+  video_player 2.11.1 (2.14.1 available)
+  video_player_android 2.9.5 (2.12.4 available)
+  video_player_avfoundation 2.12.1 (2.12.4 available)
+  vm_service 15.3.0 (15.4.0 available)
+  web 1.1.1 (1.1.2 available)
+  win32 5.15.0 (6.4.0 available)
+  xml 7.0.1 (7.1.0 available)
+Got dependencies!
+107 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Running Gradle task 'assembleRelease'...                        
+
+FAILURE: Build failed with an exception.
+
+* Where:
+Settings file '/home/runner/work/shooting_app/shooting_app/android/settings.gradle.kts' line: 20
+
+* What went wrong:
+Error resolving plugin [id: 'dev.flutter.flutter-plugin-loader', version: '1.0.0']
+> A problem occurred configuring project ':gradle'.
+   > Could not resolve all artifacts for configuration 'classpath'.
+      > Could not find org.jetbrains.kotlin:kotlin-stdlib:2.0.21.
+        Searched in the following locations:
+          - https://plugins.gradle.org/m2/org/jetbrains/kotlin/kotlin-stdlib/2.0.21/kotlin-stdlib-2.0.21.pom
+        Required by:
+            project :gradle
+      > Could not resolve org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.21.
+        Required by:
+            project :gradle > org.jetbrains.kotlin.jvm:org.jetbrains.kotlin.jvm.gradle.plugin:1.9.20
+         > Could not resolve org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.21.
+            > Could not parse POM https://plugins.gradle.org/m2/org/jetbrains/kotlin/kotlin-gradle-plugin/2.0.21/kotlin-gradle-plugin-2.0.21.pom
+               > Could not find org.jetbrains.kotlin:kotlin-gradle-plugins-bom:2.0.21.
+                 Searched in the following locations:
+                   - https://plugins.gradle.org/m2/org/jetbrains/kotlin/kotlin-gradle-plugins-bom/2.0.21/kotlin-gradle-plugins-bom-2.0.21.pom
+      > Could not find org.jetbrains.kotlin:kotlin-gradle-plugin-api:2.0.21.
+        Searched in the following locations:
+          - https://plugins.gradle.org/m2/org/jetbrains/kotlin/kotlin-gradle-plugin-api/2.0.21/kotlin-gradle-plugin-api-2.0.21.pom
+        Required by:
+            project :gradle > org.gradle.kotlin.kotlin-dsl:org.gradle.kotlin.kotlin-dsl.gradle.plugin:5.2.0 > org.gradle.kotlin:gradle-kotlin-dsl-plugins:5.2.0
+      > Could not find org.jetbrains.kotlin:kotlin-stdlib:2.0.21.
+        Searched in the following locations:
+          - https://plugins.gradle.org/m2/org/jetbrains/kotlin/kotlin-stdlib/2.0.21/kotlin-stdlib-2.0.21.pom
+        Required by:
+            project :gradle > org.gradle.kotlin.kotlin-dsl:org.gradle.kotlin.kotlin-dsl.gradle.plugin:5.2.0 > org.gradle.kotlin:gradle-kotlin-dsl-plugins:5.2.0
+> There are 3 more failures with identical causes.
+
+* Try:
+> If the artifact you are trying to retrieve can be found in the repository but without metadata in 'Maven POM' format, you need to adjust the 'metadataSources { ... }' of the repository declaration.
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 22s
+Running Gradle task 'assembleRelease'...                           25.1s
+Gradle task assembleRelease failed with exit code 1
