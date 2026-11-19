@@ -35,6 +35,8 @@ export interface Env {
   ADMIN_TOKEN: string;
   /** Ключи Tavily через запятую: поиск в интернете для ИИ. */
   TAVILY_KEYS: string;
+  /** iLoveAPI: публичный ключ проекта (секретный — для расшифровки JWT). */
+  ILOVEPDF_PUBLIC_KEY: string;
   /** Медиа чата (зашифрованные на устройстве) — приватный бакет R2. */
   MEDIA: R2Bucket;
   MEDIA_LIMIT_GB: string;
@@ -372,6 +374,99 @@ export default {
 
     const usage = env.USAGE.get(env.USAGE.idFromName('global'));
     const used = async () => (await (await usage.fetch('https://u/get')).json()) as Record<string, number>;
+
+    // ---------- PDF-инструменты (iLoveAPI) ----------
+    // Ключ проекта живёт в секрете ILOVEPDF_PUBLIC_KEY, в приложение не
+    // попадает. Клиент кладёт файл в /pdf/upload (R2), просит /pdf/run с
+    // задачей и забирает результат через /pdf/result. Пока ключа нет —
+    // честный 503, интерфейс показывает «модуль не настроен».
+    if (url.pathname === '/pdf/upload' && req.method === 'POST') {
+      const name = (req.headers.get('x-file-name') || 'file').slice(0, 120);
+      const len = Number(req.headers.get('content-length') || 0);
+      if (!(len > 0) || len > 30e6) return json({ error: 'too large' }, 413);
+      const id = crypto.randomUUID();
+      await env.MEDIA.put(`pdf-tmp/${uid}/${id}/${name}`, req.body);
+      return json({ id, name, bytes: len });
+    }
+    if (url.pathname === '/pdf/run' && req.method === 'POST') {
+      if (!env.ILOVEPDF_PUBLIC_KEY) return json({ error: 'pdf not configured' }, 503);
+      const body = (await req.json().catch(() => ({}))) as {
+        tool?: string;
+        files?: Array<{ id: string; name: string }>;
+        options?: Record<string, unknown>;
+      };
+      const tool = String(body.tool ?? '');
+      const allowed = new Set([
+        'merge', 'split', 'compress', 'officepdf', 'htmlpdf', 'pdfa', 'imagepdf',
+        'pdfjpg', 'pagenumber', 'watermark', 'rotate', 'repair', 'protect',
+        'unlock', 'validate', 'unpack', 'splitsmart', 'editpdf', 'ocr',
+      ]);
+      if (!allowed.has(tool)) return json({ error: 'unknown tool' }, 400);
+      const files = Array.isArray(body.files) ? body.files.slice(0, 10) : [];
+      if (files.length === 0) return json({ error: 'no files' }, 400);
+      try {
+        const authRes = await fetch('https://api.ilovepdf.com/v1/auth', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ public_key: env.ILOVEPDF_PUBLIC_KEY }),
+        });
+        const auth = (await authRes.json().catch(() => ({}))) as { token?: string };
+        if (!authRes.ok || !auth.token) return json({ error: 'pdf auth failed' }, 502);
+        const token = auth.token;
+        const startRes = await fetch(`https://api.ilovepdf.com/v1/start/${tool}`, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const start = (await startRes.json().catch(() => ({}))) as { server?: string; task?: string };
+        if (!startRes.ok || !start.server || !start.task) return json({ error: 'pdf start failed' }, 502);
+        const uploaded: Array<{ server_filename: string; filename: string }> = [];
+        for (const f of files) {
+          const obj = await env.MEDIA.get(`pdf-tmp/${uid}/${f.id}/${f.name}`);
+          if (!obj) return json({ error: 'file lost' }, 404);
+          const buf = await obj.arrayBuffer();
+          const form = new FormData();
+          form.append('task', start.task);
+          form.append('file', new Blob([buf]), f.name);
+          const upRes = await fetch(`https://${start.server}/v1/upload`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: form,
+          });
+          const up = (await upRes.json().catch(() => ({}))) as { server_filename?: string };
+          if (!upRes.ok || !up.server_filename) return json({ error: 'pdf upload failed' }, 502);
+          uploaded.push({ server_filename: up.server_filename, filename: f.name });
+        }
+        const procRes = await fetch(`https://${start.server}/v1/process`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+          body: JSON.stringify({ task: start.task, tool, files: uploaded, ...(body.options ?? {}) }),
+        });
+        if (!procRes.ok) return json({ error: 'pdf process failed' }, 502);
+        const dlRes = await fetch(`https://${start.server}/v1/download/${start.task}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!dlRes.ok) return json({ error: 'pdf download failed' }, 502);
+        const outId = crypto.randomUUID();
+        await env.MEDIA.put(`pdf-out/${uid}/${outId}`, await dlRes.arrayBuffer());
+        for (const f of files) await env.MEDIA.delete(`pdf-tmp/${uid}/${f.id}/${f.name}`);
+        await fetch(`https://${start.server}/v1/delete/${start.task}`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(() => null);
+        return json({ id: outId, name: `${tool}.pdf` });
+      } catch (e) {
+        return json({ error: `pdf failed: ${e}` }, 502);
+      }
+    }
+    if (url.pathname.startsWith('/pdf/result/') && req.method === 'GET') {
+      const id = url.pathname.slice('/pdf/result/'.length);
+      if (!/^[0-9a-f-]{36}$/.test(id)) return json({ error: 'bad id' }, 400);
+      const obj = await env.MEDIA.get(`pdf-out/${uid}/${id}`);
+      if (!obj) return json({ error: 'not found' }, 404);
+      return new Response(obj.body, {
+        headers: { 'content-type': 'application/octet-stream', 'cache-control': 'private, max-age=600', ...cors },
+      });
+    }
 
     // ---------- Медиа чата: приватный R2, содержимое уже зашифровано ----------
     // Клиент шифрует файл на устройстве (AES-256-GCM) и присылает только

@@ -24,6 +24,7 @@ import '../services/knowledge_column_discovery.dart';
 import '../services/supabase_auth_service.dart';
 import '../i18n/i18n.dart';
 import 'network_diagnostics_screen.dart';
+import 'pdf_tools_screen.dart';
 import 'voice_settings_screen.dart';
 import 'screen_buttons_settings_screen.dart';
 import '../state/app_data_store.dart';
@@ -182,6 +183,17 @@ class SettingsScreen extends StatelessWidget {
             subtitle: Text(tr('Команды голосом: разделы, тренировка, заметки')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => VoiceSettingsScreen(db: store.db))),
+          ),
+          // PDF-инструменты: объединить, разделить, сжать, конвертировать.
+          // Обработка на сервере (iLoveAPI), ключ в приложении не хранится.
+          ListTile(
+            leading: const Icon(Icons.picture_as_pdf_outlined),
+            title: Text(tr('PDF-инструменты')),
+            subtitle: Text(tr('Объединить, разделить, сжать, конвертировать')),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const PdfToolsScreen()),
+            ),
           ),
           // Диагностика сети — только в режиме разработчика: это парный тест
           // соединения и автоотчёт в отзывы (пожелание пользователя 17.11).
