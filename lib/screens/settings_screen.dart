@@ -1,5 +1,6 @@
 import '../services/economy_mode.dart';
 import 'dart:async';
+import 'dart:io' show SocketException;
 import '../widgets/glass_route.dart';
 import 'security_settings_screen.dart';
 import '../services/app_lock.dart';
@@ -581,7 +582,21 @@ class _AccountSheetState extends State<_AccountSheet> {
       _message = null;
     });
     try {
-      final ok = await action();
+      String? ok;
+      try {
+        ok = await action();
+      } on AuthException {
+        rethrow; // «неверный пароль» и т.п. — повтор не поможет
+      } catch (e) {
+        // Первый вход после простоя часто падает на таймауте/обрыве сети,
+        // со второй попытки проходит (отзыв 19.11, 08:40). Повторяем один раз
+        // и только для сетевых сбоев.
+        final net = e is TimeoutException || e is SocketException ||
+            '$e'.contains('SocketException') || '$e'.contains('TimeoutException');
+        if (!net) rethrow;
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+        ok = await action();
+      }
       if (!mounted) return;
       // "Учётная запись" на самом экране настроек (AccountTile) читает
       // состояние входа из той же локальной базы, но это ДРУГОЙ виджет —
