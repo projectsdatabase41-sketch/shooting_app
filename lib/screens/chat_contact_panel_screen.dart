@@ -679,10 +679,12 @@ class _PhotoGridState extends State<_PhotoGrid> {
                   crossAxisSpacing: 1,
                 ),
                 itemCount: widget.photos.length,
-                // Фото целиком, без обрезки по квадрату (решение пользователя).
-                itemBuilder: (_, i) => ColoredBox(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  child: image(widget.photos[i], BoxFit.contain),
+                // Плитка заполняется фото целиком, без фона по краям: 16:9
+                // фото растягивается до квадрата (отзыв 18.11, 10:10).
+                itemBuilder: (_, i) => ClipRect(
+                  child: SizedBox.expand(
+                    child: image(widget.photos[i], BoxFit.cover),
+                  ),
                 ),
               ),
       ),

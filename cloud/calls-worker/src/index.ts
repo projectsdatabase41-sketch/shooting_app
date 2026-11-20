@@ -858,7 +858,7 @@ function newsStrip(s: string): string {
 async function refreshNews(env: Env): Promise<{ items: number; sources: string[] }> {
   const feeds = (env.NEWS_FEEDS || '').split(',').map((s) => s.trim()).filter(Boolean);
   const words = (env.NEWS_KEYWORDS || '').toLowerCase().split(',').map((s) => s.trim()).filter(Boolean);
-  const items: Array<{ title: string; link: string; date: string; source: string; summary: string }> = [];
+  const items: Array<{ title: string; link: string; date: string; source: string; summary: string; image: string }> = [];
   for (const feed of feeds) {
     try {
       const res = await fetch(feed, { headers: { 'user-agent': 'NexusNews/1.0' } });
@@ -874,7 +874,13 @@ async function refreshNews(env: Env): Promise<{ items: number; sources: string[]
         const date = newsPick(b, 'pubDate') || newsPick(b, 'updated') || '';
         const hay = `${title} ${summary}`.toLowerCase();
         if (words.length > 0 && !words.some((w) => hay.includes(w))) continue;
-        items.push({ title: title.slice(0, 180), link, date, source: host, summary });
+        // Картинка новости: enclosure, media:content или первая <img> в тексте.
+        const imgMatch =
+          /<enclosure[^>]+url="([^"]+)"/i.exec(b) ??
+          /<media:content[^>]+url="([^"]+)"/i.exec(b) ??
+          /<img[^>]+src="([^"]+)"/i.exec(b);
+        const image = imgMatch ? imgMatch[1] : '';
+        items.push({ title: title.slice(0, 180), link, date, source: host, summary, image });
       }
     } catch {
       // один недоступный источник не должен останавливать остальные

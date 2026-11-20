@@ -640,7 +640,7 @@ class KnowledgeService {
       // Перечень материалов — модель должна знать, что в базе вообще есть,
       // и не говорить «такой книги нет», когда она просто не попала в выдачу.
       buf.writeln(
-          'Knowledge-base materials (file names): ${catalog.take(80).join('; ')}. A listed book IS in the base; if no excerpt below, say none was found for this question, not that the book is missing. IMPORTANT: this is only a LIST OF FILE NAMES, not their content — never say what a document contains and never cite a file as a source unless its excerpt is given below. With no relevant excerpt: say plainly that the base had no excerpt on this question, give a SHORT answer from general knowledge marked as such, do not invent details, and mention devices (e.g. SCATT) or user data only if they are present in CONTEXT.');
+          'Knowledge-base materials (file names): ${catalog.take(80).join('; ')}. A listed book IS in the base; if no excerpt below, say none was found for this question, not that the book is missing. IMPORTANT: this is only a LIST OF FILE NAMES, not their content — never say what a document contains and never cite a file as a source unless its excerpt is given below. With no relevant excerpt: say plainly that the base had no excerpt on this question, give a SHORT answer from general knowledge marked as such, do not invent details, and mention devices (e.g. SCATT) or user data only if they are present in CONTEXT. Do not quote or summarise materials unless the user asks about them: no excerpts, no citations and no from-the-materials preambles when the question does not ask for them.');
       buf.writeln();
     }
     for (final c in chunks) {

@@ -40,6 +40,7 @@ class NewsService {
                 title: '${m['title'] ?? ''}',
                 link: '${m['link'] ?? ''}',
                 source: '${m['source'] ?? ''}',
+                image: '${m['image'] ?? ''}',
                 date: '${m['date'] ?? ''}',
                 summary: '${m['summary'] ?? ''}',
               ))
@@ -53,7 +54,7 @@ class NewsService {
           'INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex',
           [_kCache, jsonEncode({'updatedAt': updatedAt, 'items': [
             for (final i in list)
-              {'title': i.title, 'link': i.link, 'source': i.source, 'date': i.date, 'summary': i.summary}
+              {'title': i.title, 'link': i.link, 'source': i.source, 'date': i.date, 'summary': i.summary, 'image': i.image}
           ]})],
         );
       }
@@ -75,6 +76,7 @@ class NewsService {
                 title: '${m['title'] ?? ''}',
                 link: '${m['link'] ?? ''}',
                 source: '${m['source'] ?? ''}',
+                image: '${m['image'] ?? ''}',
                 date: '${m['date'] ?? ''}',
                 summary: '${m['summary'] ?? ''}',
               ))
@@ -90,11 +92,13 @@ class NewsItem {
   final String source;
   final String date;
   final String summary;
+  final String image;
   const NewsItem({
     required this.title,
     required this.link,
     required this.source,
     required this.date,
     required this.summary,
+    this.image = '',
   });
 }

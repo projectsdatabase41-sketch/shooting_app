@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../i18n/i18n.dart';
+import '../services/chat_translation_service.dart';
 import '../services/news_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/app_backdrop.dart';
@@ -21,6 +22,11 @@ class NewsScreen extends StatefulWidget {
 class _NewsScreenState extends State<NewsScreen> {
   bool _loading = false;
 
+  /// Автоперевод заголовков на язык системы: кэш по ссылке новости.
+  final Map<String, String> _translated = {};
+
+  static bool _hasCyrillic(String s) => RegExp(r'[а-яА-ЯёЁ]').hasMatch(s);
+
   @override
   void initState() {
     super.initState();
@@ -33,6 +39,29 @@ class _NewsScreenState extends State<NewsScreen> {
     final db = context.read<AppDataStore>().db;
     await NewsService.refresh(db: db, force: force);
     if (mounted) setState(() => _loading = false);
+    _translateVisible(db);
+  }
+
+  /// Переводим первые заголовки на язык системы (как в чате). Ошибки и
+  /// лимиты переводчика не мешают: показываем оригинал.
+  Future<void> _translateVisible(dynamic db) async {
+    final service = ChatTranslationService();
+    var done = 0;
+    for (final n in NewsService.items) {
+      if (done >= 10) break;
+      if (_translated.containsKey(n.link)) continue;
+      if (_hasCyrillic(n.title)) continue;
+      try {
+        final t = await service.translateIfNeeded(n.title, targetLanguage: '');
+        if (t != null && t.isNotEmpty) {
+          _translated[n.link] = t;
+          done++;
+          if (mounted) setState(() {});
+        }
+      } catch (_) {
+        break; // лимит переводчика — не долбим дальше
+      }
+    }
   }
 
   /// Краткая карточка новости: заголовок, описание и источник внизу.
@@ -48,7 +77,21 @@ class _NewsScreenState extends State<NewsScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(n.title, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+              if (n.image.isNotEmpty) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    n.image,
+                    height: 160,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              Text(_translated[n.link] ?? n.title,
+                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
               if (n.summary.isNotEmpty) ...[
                 const SizedBox(height: 10),
                 Text(n.summary, style: theme.textTheme.bodyMedium),
@@ -124,8 +167,25 @@ class _NewsScreenState extends State<NewsScreen> {
                 itemBuilder: (_, i) {
                   final n = items[i];
                   final date = n.date.length > 10 ? n.date.substring(0, 10) : n.date;
+                  final title = _translated[n.link] ?? n.title;
                   return ListTile(
-                    title: Text(n.title, maxLines: 3, overflow: TextOverflow.ellipsis),
+                    leading: n.image.isEmpty
+                        ? null
+                        : ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              n.image,
+                              width: 56,
+                              height: 56,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const SizedBox(
+                                width: 56,
+                                height: 56,
+                                child: Icon(Icons.newspaper_outlined, size: 22),
+                              ),
+                            ),
+                          ),
+                    title: Text(title, maxLines: 3, overflow: TextOverflow.ellipsis),
                     subtitle: Text('${n.source}${date.isEmpty ? '' : ' · $date'}',
                         style: theme.textTheme.labelSmall),
                     // Ссылки справа нет: по нажатию открываем краткую сводку,
