@@ -204,6 +204,18 @@ class AiChatViewModel extends ChangeNotifier {
     final trimmed = text.trim();
     if (trimmed.isEmpty || _busy) return;
 
+    // Просьба поискать в интернете прямо в диалоге: раньше такой вопрос
+    // уходил в обычную модель, и она отвечала «не умею искать» (отзыв 19.11).
+    // Отправляем в поиск, только если он реально настроен.
+    final wantsSearch = RegExp(
+      r'(в интернете|интернет[еа]?\s|поищи|найди в сети|whats? new|latest news)',
+      caseSensitive: false,
+    ).hasMatch(trimmed);
+    if (wantsSearch && !_busy) {
+      await searchWeb(trimmed);
+      return;
+    }
+
     messages.add(AiMessage(fromUser: true, text: trimmed, imageBytes: image));
     _busy = true;
     // Режим чата выбирается кнопками Fast / Normal / Think. Think начинается

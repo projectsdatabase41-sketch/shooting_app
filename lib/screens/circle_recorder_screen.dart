@@ -266,11 +266,16 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
     widget.finishSignal?.removeListener(_onSignal);
     _ticker?.cancel();
     SystemChrome.setPreferredOrientations(const []); // снова любая ориентация (как у приложения)
-    try {
-      _controller?.dispose();
-    } catch (e) {
-      // Та же ошибка releaseFlutterSurfaceTexture, что и при смене камеры.
-      DemoMode.sendError('Camera dispose', e);
+    // dispose() у CameraController асинхронный: PlatformException
+    // releaseFlutterSurfaceTexture прилетает уже после выхода из try/catch и
+    // роняет приложение как Uncaught (отзыв 19.11, 17:36). Гасим на Future.
+    final cam = _controller;
+    _controller = null;
+    if (cam != null) {
+      cam.dispose().catchError((Object e) {
+        // Та же ошибка releaseFlutterSurfaceTexture, что и при смене камеры.
+        DemoMode.sendError('Camera dispose', e);
+      });
     }
     _light.release();
     _light.dispose();
