@@ -14,7 +14,11 @@ enum AppModule {
   drive('module_drive'),
   // Просмотр STEP/GLB: сама страница вьюера лежит в web/viewer и
   // публикуется вместе с сайтом, модуль лишь открывает её вкладкой.
-  viewer('module_viewer');
+  viewer('module_viewer'),
+  // Новости и PDF — отдельные модули: на главный экран выводятся плитками,
+  // включаются и выключаются в настройках (отзыв 19.11, 09:36).
+  news('module_news'),
+  pdf('module_pdf');
 
   final String key;
   const AppModule(this.key);

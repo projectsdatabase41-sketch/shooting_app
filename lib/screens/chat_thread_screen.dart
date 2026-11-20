@@ -1006,7 +1006,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<void> _send() async {
     final caption = _input.text.trim();
     final chart = _pendingChart;
-    if ((caption.isEmpty && chart == null) || _sending) return;
+    // Отправка текста не должна ждать загрузки вложения — иначе второе
+    // сообщение выглядит «зависшим» (отзыв 19.11).
+    if (caption.isEmpty && chart == null) return;
     // График едет внутри текста блоком ```chart — тот же формат, что у
     // ассистента; получатель рисует его отдельной карточкой.
     final text = chart == null
@@ -2647,7 +2649,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                             return GlassCircleButton(
                               size: 50,
                               color: cs.primary.withValues(alpha: 0.85),
-                              onTap: _sending ? null : _send,
+                              // Текст можно отправлять и во время загрузки
+                              // вложения: раньше кнопка гасла, и казалось, что
+                              // второе сообщение «зависло» (отзыв 19.11, 11:20).
+                              onTap: _send,
                               icon: Icon(Icons.send, color: cs.onPrimary),
                             );
                           }

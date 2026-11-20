@@ -1,5 +1,7 @@
 import '../gdrive/gdrive_screen.dart';
 import '../viewer/step_viewer_screen.dart';
+import 'news_screen.dart';
+import 'pdf_tools_screen.dart';
 import 'dart:async' show Timer;
 import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
@@ -163,6 +165,8 @@ class _HomeShellState extends State<HomeShell> {
       if (!on(AppModule.messenger)) 'messenger',
       if (!on(AppModule.drive)) 'drive',
       if (!on(AppModule.viewer)) 'viewer',
+      if (!on(AppModule.news)) 'news',
+      if (!on(AppModule.pdf)) 'pdf',
       if (!on(AppModule.notes)) 'notes',
       // Финалы — только в режиме разработчика и при включённом модуле.
       if (!on(AppModule.finals)) 'finals',
@@ -296,6 +300,8 @@ class _HomeShellState extends State<HomeShell> {
       'finals' => const FinalsScreen(),
       'drive' => const GDriveScreen(),
       'viewer' => const StepViewerScreen(),
+      'news' => const NewsScreen(),
+      'pdf' => const PdfToolsScreen(),
       'messenger' => ChatHomeScreen(
           onClose: null),
       _ => SettingsScreen(homeTabs: tabs, services: _services),

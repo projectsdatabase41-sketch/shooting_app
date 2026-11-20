@@ -28,6 +28,8 @@ const allTabIds = [
   'messenger', // модуль «Мессенджер»
   'drive', // модуль «Google Диск»
   'viewer', // модуль «3D-модели» (просмотр STEP/GLB)
+  'news', // модуль «Новости»
+  'pdf', // модуль «PDF-инструменты»
   'settings',
 ];
 
@@ -63,6 +65,9 @@ const Map<String, HomeTabSpec> homeTabSpecs = {
       HomeTabSpec(icon: Icons.cloud_outlined, label: /*tr*/ 'Google Диск'),
   'viewer':
       HomeTabSpec(icon: Icons.view_in_ar_outlined, label: /*tr*/ '3D-модели'),
+  'news': HomeTabSpec(icon: Icons.newspaper_outlined, label: /*tr*/ 'Новости'),
+  'pdf': HomeTabSpec(
+      icon: Icons.picture_as_pdf_outlined, label: /*tr*/ 'PDF-инструменты'),
   'settings':
       HomeTabSpec(icon: Icons.settings_outlined, label: /*tr*/ 'Настройки'),
 };
