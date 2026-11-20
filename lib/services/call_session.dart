@@ -434,7 +434,14 @@ class CallSession extends ChangeNotifier {
 
   /// Звонящий передумал до ответа (push call_end).
   void cancelledByCaller() {
-    if (state == CallState.ringing) _end(tr('Звонок отменён'), outcome: 'missed');
+    if (_disposed) return;
+    if (state == CallState.ringing) {
+      _end(tr('Звонок отменён'), outcome: 'missed');
+    } else if (state == CallState.active) {
+      // Собеседник сбросил уже идущий разговор: завершаем сразу, а не ждём
+      // обрыва ICE (раньше это занимало до ~19 секунд, отзыв 19.11).
+      _end(tr('Звонок завершён'), outcome: 'answered');
+    }
   }
 
   Future<void> hangUp() async {

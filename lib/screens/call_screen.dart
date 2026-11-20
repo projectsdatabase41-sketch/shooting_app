@@ -142,7 +142,11 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     _light.dispose();
     s.removeListener(_onChange);
     if (CallSession.current == s && s.isEnded) CallSession.current = null;
-    s.dispose();
+    // Свернули разговор: экран закрылся, но звонок должен продолжаться —
+    // иначе s.dispose() шлёт собеседнику hangup и звонок обрывается
+    // (отзывы 17.11 18:08, 19.11: «свернуть не работает»).
+    final keepAlive = !s.isEnded && s.state == CallState.active;
+    if (!keepAlive) s.dispose();
     cancelIncomingCallNotification();
     super.dispose();
   }
@@ -313,7 +317,9 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     final remoteVideo = s.video && s.remoteVideo && s.state == CallState.active;
     const shadow = [Shadow(blurRadius: 8, color: Colors.black54)];
     return PopScope(
-      canPop: s.isEnded,
+      // Кнопка «назад» и «Свернуть» должны уводить с экрана, не сбрасывая
+      // разговор: звонок продолжается, вернуться можно из чата (отзыв 19.11).
+      canPop: s.isEnded || s.state == CallState.active,
       child: Scaffold(
         body: GestureDetector(
           onTap: () => s.unlockWebAudio(),
