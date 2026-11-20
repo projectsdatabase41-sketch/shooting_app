@@ -794,15 +794,19 @@ class _AccountSheetState extends State<_AccountSheet> {
             Text(tr('Подключение к Supabase'),
                 style: theme.textTheme.bodySmall),
             const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: () => launchUrl(
-                Uri.parse('https://supabase.com/dashboard/sign-up'),
-                mode: LaunchMode.externalApplication,
+            // Кнопку регистрации показываем только пока вход не выполнен:
+            // после входа она путает (отзыв 18.11, 11:04).
+            if (!signedIn) ...[
+              OutlinedButton.icon(
+                onPressed: () => launchUrl(
+                  Uri.parse('https://supabase.com/dashboard/sign-up'),
+                  mode: LaunchMode.externalApplication,
+                ),
+                icon: const Icon(Icons.open_in_new),
+                label: Text(tr('Регистрация в Supabase')),
               ),
-              icon: const Icon(Icons.open_in_new),
-              label: Text(tr('Регистрация в Supabase')),
-            ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
+            ],
             if (signedIn) ...[
               ListTile(
                 contentPadding: EdgeInsets.zero,

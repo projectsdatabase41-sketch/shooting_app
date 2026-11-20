@@ -2604,21 +2604,24 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                   FanItem(
                                     label: tr('Кружок: сначала настроить камеру'),
                                     onSelect: () {
-                                      if (!_sending) _recordCircle();
+                                      _recordCircle();
                                     },
                                     child: const Icon(Icons.videocam_outlined),
                                   ),
                                   FanItem(
                                     label: tr('Фото или файл'),
                                     onSelect: () {
-                                      if (!_sending) _attach();
+                                      // Можно приложить следующий файл, пока
+                                      // предыдущий ещё загружается: P2P ведёт
+                                      // передачу по своему id (отзыв 19.11, 12:1).
+                                      _attach();
                                     },
                                     child: const Icon(Icons.attach_file),
                                   ),
                                   FanItem(
                                     label: tr('Большой файл (Google Диск)'),
                                     onSelect: () {
-                                      if (!_sending) _attachLarge();
+                                      _attachLarge();
                                     },
                                     child: const Icon(Icons.upload_file),
                                   ),
