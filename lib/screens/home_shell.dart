@@ -1,6 +1,8 @@
 import '../gdrive/gdrive_screen.dart';
 import '../viewer/step_viewer_screen.dart';
 import 'news_screen.dart';
+import '../services/sync_status.dart';
+import 'sync_progress_screen.dart';
 import 'pdf_tools_screen.dart';
 import 'dart:async' show Timer;
 import 'package:flutter/foundation.dart' show setEquals;
@@ -257,6 +259,23 @@ class _HomeShellState extends State<HomeShell> {
                   right: 0,
                   child: const IgnorePointer(child: _SyncBanner()),
                 ),
+              // Кнопка-индикатор облачной синхронизации: пока идёт — облачко
+              // с кольцом по контуру, после завершения — галочка на пару
+              // секунд. Тап открывает страницу прогресса (отзыв 18.11, 11:08).
+              Positioned(
+                right: 16,
+                bottom: 24,
+                child: ValueListenableBuilder<SyncState>(
+                  valueListenable: SyncStatus.state,
+                  builder: (context, s, _) => s.visible
+                      ? SyncBadge(
+                          state: s,
+                          onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                              builder: (_) => const SyncProgressScreen())),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+              ),
             ],
           ),
           ),
@@ -375,4 +394,51 @@ class _SyncBanner extends StatelessWidget {
           ),
         ),
       );
+}
+
+/// Кнопка-индикатор облачной синхронизации: во время работы — облачко с
+/// кольцом по контуру, после завершения — галочка на пару секунд. Тап
+/// открывает страницу прогресса; сама синхронизация от экрана не зависит.
+class SyncBadge extends StatelessWidget {
+  const SyncBadge({super.key, required this.state, required this.onTap});
+
+  final SyncState state;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final icon = state.failed
+        ? Icons.error_outline
+        : state.running
+            ? (state.kind == 'push'
+                ? Icons.cloud_upload_outlined
+                : Icons.cloud_download_outlined)
+            : Icons.check;
+    return Material(
+      color: cs.primary.withValues(alpha: 0.9),
+      shape: const CircleBorder(),
+      elevation: 4,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: 52,
+          height: 52,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              if (state.running)
+                const SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
+                ),
+              Icon(icon, size: 24, color: cs.onPrimary),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

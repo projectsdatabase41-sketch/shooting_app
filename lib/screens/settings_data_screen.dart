@@ -6,6 +6,7 @@ import 'db_check_screen.dart';
 import '../services/chat_auth_service.dart';
 import '../services/chat_messages_repository.dart';
 import '../services/chat_sync_service.dart';
+import '../services/sync_status.dart';
 import '../services/coach_link.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -154,90 +155,32 @@ class _SettingsDataScreenState extends State<SettingsDataScreen> {
     );
   }
 
-  Future<void> _pullNow(BuildContext context) async {
-    setState(() {
-      _syncing = true;
-      _syncMessage = null;
-    });
-    final store = context.read<AppDataStore>();
-    final sync = SupabaseSyncService(SupabaseAuthService(store.db));
-    try {
-      final result = await sync.pull(store);
-      final parts = <String>[];
-      if (result.pulledSessions > 0)
-        parts.add(tr('получено тренировок: {pulledSessions}',
-            {'pulledSessions': result.pulledSessions}));
-      if (result.pulledExercises > 0)
-        parts.add(tr('упражнений: {pulledExercises}',
-            {'pulledExercises': result.pulledExercises}));
-      if (result.pulledComments > 0)
-        parts.add(tr('комментариев: {pulledComments}',
-            {'pulledComments': result.pulledComments}));
-      if (result.removedDuplicates > 0)
-        parts.add(tr('убрано дублей и пустых: {n}', {'n': result.removedDuplicates}));
-      setState(() => _syncMessage = parts.isEmpty
-          ? tr('Готово, новых данных не было')
-          : tr('Готово — {p}', {'p': parts.join(', ')}));
-    } catch (e) {
-      setState(() => _syncMessage = friendlyError(e));
-    } finally {
-      setState(() => _syncing = false);
-    }
+  Future<void> _forceRecover(BuildContext context) async {
+    await _runSync(context, 'recover');
   }
 
-  Future<void> _forceRecover(BuildContext context) async {
-    setState(() {
-      _syncing = true;
-      _syncMessage = null;
-    });
-    final store = context.read<AppDataStore>();
-    store.clearLocalTombstones();
-    final sync = SupabaseSyncService(SupabaseAuthService(store.db));
-    try {
-      final result = await sync.pull(store);
-      final parts = <String>[];
-      if (result.pulledSessions > 0)
-        parts.add(tr('получено тренировок: {pulledSessions}',
-            {'pulledSessions': result.pulledSessions}));
-      if (result.pulledExercises > 0)
-        parts.add(tr('упражнений: {pulledExercises}',
-            {'pulledExercises': result.pulledExercises}));
-      if (result.pulledComments > 0)
-        parts.add(tr('комментариев: {pulledComments}',
-            {'pulledComments': result.pulledComments}));
-      if (result.removedDuplicates > 0)
-        parts.add(tr('убрано дублей и пустых: {n}', {'n': result.removedDuplicates}));
-      setState(() => _syncMessage = parts.isEmpty
-          ? tr('Готово, новых данных не было')
-          : tr('Готово — {p}', {'p': parts.join(', ')}));
-    } catch (e) {
-      setState(() => _syncMessage = friendlyError(e));
-    } finally {
-      setState(() => _syncing = false);
-    }
+  Future<void> _pullNow(BuildContext context) async {
+    await _runSync(context, 'pull');
   }
 
   Future<void> _pushNow(BuildContext context) async {
+    await _runSync(context, 'push');
+  }
+
+  /// Синхронизация идёт в [SyncStatus]: можно уйти со страницы, процесс
+  /// продолжится, а индикатор остаётся в углу главного экрана (отзыв 11:08).
+  Future<void> _runSync(BuildContext context, String kind) async {
+    final store = context.read<AppDataStore>();
     setState(() {
       _syncing = true;
       _syncMessage = null;
     });
-    final store = context.read<AppDataStore>();
-    final sync = SupabaseSyncService(SupabaseAuthService(store.db));
     try {
-      final deleted = await sync.pushDeletions(store);
-      final pushed = await sync.push(store);
-      final parts = <String>[];
-      if (deleted > 0)
-        parts.add(tr('удалено: {deleted}', {'deleted': deleted}));
-      if (pushed > 0) parts.add(tr('отправлено: {pushed}', {'pushed': pushed}));
-      setState(() => _syncMessage = parts.isEmpty
-          ? tr('Готово, новых данных не было')
-          : tr('Готово — {p}', {'p': parts.join(', ')}));
-    } catch (e) {
-      setState(() => _syncMessage = friendlyError(e));
+      await SyncStatus.run(store, kind);
+      if (!mounted) return;
+      setState(() => _syncMessage = SyncStatus.state.value.message);
     } finally {
-      setState(() => _syncing = false);
+      if (mounted) setState(() => _syncing = false);
     }
   }
 }

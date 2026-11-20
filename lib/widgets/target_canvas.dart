@@ -304,6 +304,31 @@ class _TargetCanvasState extends State<TargetCanvas> {
                 ),
               ),
               ..._buildCornerValues(vm, colors),
+              // Признак пристрелочной серии — на РАМКЕ, а не на мишени: так
+              // он виден при любом зуме и сдвиге (отзывы 18–20.11).
+              if (vm.isSightingSeries)
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: IgnorePointer(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.55),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.change_history, size: 14, color: Color(0xFFF2C14E)),
+                          SizedBox(width: 6),
+                          Text('Пристрелка',
+                              style: TextStyle(fontSize: 11, color: Colors.white)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               if (_finger != null && (vm.isEditing || _pendingAdd)) _loupe(vm, colors),
             ],
           ),

@@ -114,47 +114,11 @@ class TargetPainter extends CustomPainter {
       );
     }
 
-    // 1a. Загнутый уголок — признак пристрелочной мишени (как на бланке и на
-    // пульте SIUS). Рисуется на бумаге, в её координатах: при зуме растёт
-    // вместе с мишенью, при панорамировании уезжает с углом, а не висит перед
-    // ней. Зона инвертирует цвета (BlendMode.difference) — на белом листе
-    // тёмная, на чёрном яблоке — светлая. Размер +30% (было 0.28, стало ~0.36).
-    if (sighting && face.zones.isEmpty && !face.isArchery) {
-      final rect = Rect.fromCenter(
-          center: center, width: radiusPx * 2, height: radiusPx * 2);
-      final fold = radiusPx * 0.36; // +30% от 0.28
-      // Бумага рисуется со скруглением радиусом ~6% — ровно в углу треугольника
-      // не было: он ложился на прозрачный фон за скруглением, и инверсия не
-      // давала ничего видимого (отзыв «уголок так и не сделал»). Сдвигаем
-      // маркер внутрь на это скругление, тогда он всегда на бумаге.
-      final inset = radiusPx * 0.06 + radiusPx * 0.02;
-      final right = rect.right - inset;
-      final top = rect.top + inset;
-      final path = Path()
-        ..moveTo(right - fold, top)
-        ..lineTo(right, top)
-        ..lineTo(right, top + fold)
-        ..close();
-      // Рисуем треугольник с инверсией цвета (негатив). BlendMode.difference
-      // инвертирует под собой: на белой бумаге — чёрный, на чёрном яблоке — белый,
-      // на цветных зонах — комплементарный цвет. Сама зона пристрелочной
-      // мишени всегда узнаваема.
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = Colors.white
-          ..blendMode = BlendMode.difference,
-      );
-      // Сгиб: линия по диагонали угла — объём «загнутого» уголка, тоже в негативе.
-      canvas.drawLine(
-        Offset(right - fold, top),
-        Offset(right, top + fold),
-        Paint()
-          ..color = Colors.white
-          ..blendMode = BlendMode.difference
-          ..strokeWidth = math.max(1.0, radiusPx * 0.015),
-      );
-    }
+    // 1a. Загнутый уголок раньше рисовался здесь, на самой бумаге. При зуме и
+    // панорамировании он уезжал вместе с мишенью и часто оказывался за краем
+    // (отзывы 18–20.11). Теперь признак пристрелки — бейдж на РАМКЕ: его
+    // рисуют экраны (`TargetCanvas`, финал), поэтому в самом полотне мишени
+    // маркера нет.
 
     // 2. Чёрное яблоко (кольца 10..5 условно — см. scoring.dart)
     if (face.zones.isNotEmpty) {
