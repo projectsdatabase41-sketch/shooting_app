@@ -107,11 +107,22 @@ class _DbCheckScreenState extends State<DbCheckScreen> {
                         child: Text(
                           missing.isEmpty
                               ? tr('Всё на месте: база готова к работе.')
-                              : tr('Не хватает: {n}. Скопируйте SQL, запустите его в SQL Editor и проверьте снова (повторный запуск безопасен).', {'n': missing.length}),
+                              : tr('Не хватает: {n}. Скопируйте SQL кнопкой ниже, запустите его в SQL Editor целиком (заменив прежний текст) и проверьте снова. Повторный запуск безопасен.', {'n': missing.length}),
                         ),
                       ),
                     ),
                   ),
+                  if (missing.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                      child: Text(
+                        tr('Чего не хватает: {list}', {
+                          'list': missing.take(10).join(', ') +
+                              (missing.length > 10 ? ' …' : ''),
+                        }),
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ),
                   group(tr('Таблицы'), _tables!),
                   group(tr('Функции'), _functions!),
                 ],

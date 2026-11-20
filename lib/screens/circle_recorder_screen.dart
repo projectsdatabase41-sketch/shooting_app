@@ -120,6 +120,18 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
 
   Future<void> _open(CameraDescription cam) async {
     final old = _controller;
+    // Android CameraX не даёт привязать новое превью, пока живёт поверхность
+    // предыдущего: если создать контроллер раньше освобождения старого, экран
+    // остаётся чёрным (отзыв 19.11, 17:36). Поэтому сначала отпускаем старый.
+    if (old != null) {
+      setState(() => _controller = null);
+      try {
+        await old.dispose();
+      } catch (e) {
+        DemoMode.sendError('Camera dispose before switch', e);
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+    }
     final c = CameraController(
       cam,
       _hd ? ResolutionPreset.high : ResolutionPreset.medium,
@@ -143,15 +155,6 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
       _minZoom = _maxZoom = _zoom = 1; // на этой камере зум недоступен
     }
     setState(() => _controller = c);
-    // Освобождение прежней камеры иногда падает на Android с
-    // «releaseFlutterSurfaceTexture() cannot be called if the flutterSurfaceProducer
-    // for the camera preview has not yet been initialized» (отзыв 07.11) — камеру
-    // всё равно нельзя оставить висеть, но и ронять экран из-за этого незачем.
-    try {
-      await old?.dispose();
-    } catch (e) {
-      DemoMode.sendError('Camera dispose', e);
-    }
   }
 
   void _pinchDown(PointerDownEvent e) {
