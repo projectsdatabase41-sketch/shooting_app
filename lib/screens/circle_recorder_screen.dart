@@ -119,6 +119,21 @@ class _CircleRecorderScreenState extends State<CircleRecorderScreen> {
   }
 
   Future<void> _open(CameraDescription cam) async {
+    // Переключение камеры нажатием может прийти второй раз, пока первое ещё
+    // идёт: два контроллера на одну камеру дают PlatformException
+    // releaseFlutterSurfaceTexture (отчёт «Camera dispose» 20.11, 22:12).
+    if (_opening) return;
+    _opening = true;
+    try {
+      await _openLocked(cam);
+    } finally {
+      _opening = false;
+    }
+  }
+
+  bool _opening = false;
+
+  Future<void> _openLocked(CameraDescription cam) async {
     final old = _controller;
     // Android CameraX не даёт привязать новое превью, пока живёт поверхность
     // предыдущего: если создать контроллер раньше освобождения старого, экран

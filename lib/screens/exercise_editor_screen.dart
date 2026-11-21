@@ -40,6 +40,12 @@ class _ExerciseEditorScreenState extends State<ExerciseEditorScreen> {
   /// режиме и если первая серия — пристрелка (counts == false).
   SightingMode _sightingMode = SightingMode.byTime;
 
+  /// Сколько длится пристрелка и сколько в ней выстрелов. Раньше здесь
+  /// были зашитые 15 минут и «столько же, сколько в серии» — выбрать
+  /// своё было нельзя (отзыв 20.11: «может я хочу 5 минут поставить»).
+  final _sightingMinutes = TextEditingController(text: '15');
+  final _sightingShots = TextEditingController(text: '10');
+
   final List<SeriesSpec> _series = [
     SeriesSpec(name: tr('Пристрелка'), timeLimit: const Duration(minutes: 15), counts: false, sightingMode: SightingMode.byTime),
     SeriesSpec(name: tr('Лёжа'), shotCount: 10),
@@ -50,6 +56,8 @@ class _ExerciseEditorScreenState extends State<ExerciseEditorScreen> {
     _name.dispose();
     _totalShots.dispose();
     _seriesSize.dispose();
+    _sightingMinutes.dispose();
+    _sightingShots.dispose();
     super.dispose();
   }
 
@@ -77,19 +85,25 @@ class _ExerciseEditorScreenState extends State<ExerciseEditorScreen> {
       final seriesCount = seriesSize <= 0 ? 1 : (totalShots / seriesSize).ceil();
       final specs = <SeriesSpec>[];
       if (_sightingMode != SightingMode.none) {
+        // Значения из полей под выбором режима; при пустом/нулевом вводе
+        // откатываемся к прежним умолчаниям (15 минут и выстрелов в серии).
+        final minutes = int.tryParse(_sightingMinutes.text) ?? 15;
+        final sightingShots = int.tryParse(_sightingShots.text) ?? seriesSize;
+        final safeMinutes = minutes > 0 ? minutes : 15;
+        final safeShots = sightingShots > 0 ? sightingShots : seriesSize;
         SeriesSpec sighting;
         switch (_sightingMode) {
           case SightingMode.byTime:
             sighting = SeriesSpec(
               name: tr('Пристрелка'),
-              timeLimit: const Duration(minutes: 15),
+              timeLimit: Duration(minutes: safeMinutes),
               counts: false,
               sightingMode: SightingMode.byTime,
             );
           case SightingMode.byShots:
             sighting = SeriesSpec(
               name: tr('Пристрелка'),
-              shotCount: seriesSize,
+              shotCount: safeShots,
               counts: false,
               sightingMode: SightingMode.byShots,
             );
@@ -226,6 +240,30 @@ class _ExerciseEditorScreenState extends State<ExerciseEditorScreen> {
               showSelectedIcon: false,
               onSelectionChanged: (v) => setState(() => _sightingMode = v.first),
             ),
+            // Своя длительность/количество пристрелки — поля появляются
+            // только у выбранного режима, чтобы не путать с полями серии.
+            if (_sightingMode == SightingMode.byTime) ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _sightingMinutes,
+                decoration: InputDecoration(
+                  labelText: tr('Пристрелка, минут'),
+                  helperText: tr('Например, 5 — тогда пристрелка закроется через 5 минут'),
+                ),
+                keyboardType: TextInputType.number,
+              ),
+            ],
+            if (_sightingMode == SightingMode.byShots) ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _sightingShots,
+                decoration: InputDecoration(
+                  labelText: tr('Пристрелка, выстрелов'),
+                  helperText: tr('Сколько выстрелов отводится на пристрелку'),
+                ),
+                keyboardType: TextInputType.number,
+              ),
+            ],
             const SizedBox(height: 12),
             TextField(
               controller: _totalShots,

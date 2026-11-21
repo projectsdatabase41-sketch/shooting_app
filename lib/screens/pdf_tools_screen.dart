@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../i18n/i18n.dart';
+import '../logic/friendly_error.dart';
 import '../services/chat_auth_service.dart';
 import '../services/pdf_tools_service.dart';
 import '../state/app_data_store.dart';
@@ -133,7 +134,13 @@ class PdfToolsScreenState extends State<PdfToolsScreen> {
       final bytes = f.bytes;
       if (bytes != null) files.add((name: f.name, bytes: bytes));
     }
-    if (files.isEmpty) return;
+    if (files.isEmpty) {
+      // Молчаливый выход выглядел как «файл не выбрался» (отзыв 20.11,
+      // 17:27). Пикер иногда отдаёт запись без байтов (например, ссылка на
+      // облачный файл) — говорим об этом прямо.
+      setState(() => _message = tr('Не удалось прочитать выбранный файл. Попробуйте другой.'));
+      return;
+    }
     setState(() {
       _files = _single ? files.take(1).toList() : files;
       _result = null;
@@ -145,7 +152,13 @@ class PdfToolsScreenState extends State<PdfToolsScreen> {
   }
 
   Future<void> _run() async {
-    if (_files.isEmpty || _busy) return;
+    if (_busy) return;
+    if (_files.isEmpty) {
+      // Раньше кнопка просто не нажималась — пользователь решил, что она
+      // сломана (отзыв 20.11, 17:27). Теперь она нажимается и объясняет.
+      setState(() => _message = tr('Сначала выберите файл'));
+      return;
+    }
     setState(() {
       _busy = true;
       _message = null;
@@ -177,6 +190,10 @@ class PdfToolsScreenState extends State<PdfToolsScreen> {
         _result = out;
         _message = out == null ? tr('Результат не скачался') : tr('Готово');
       });
+    } catch (e) {
+      // Без catch исключение уходило в необработанную ошибку: спиннер
+      // гас, а на экране не появлялось ничего (отзыв «нажал — ничего»).
+      if (mounted) setState(() => _message = tr('Ошибка: {e}', {'e': friendlyError(e)}));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -352,6 +369,10 @@ class PdfToolsScreenState extends State<PdfToolsScreen> {
                 style: theme.textTheme.bodySmall),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
+              // Ключ от выбранного инструмента: без него Dropdown держит
+              // initialValue с первой отрисовки и показывает не тот пункт,
+              // который реально выбран после автоподстановки в _pick().
+              key: ValueKey('pdf_tool_$_tool'),
               initialValue: _tool,
               decoration: InputDecoration(labelText: tr('Что сделать')),
               items: [
@@ -363,7 +384,11 @@ class PdfToolsScreenState extends State<PdfToolsScreen> {
                   ? null
                   : (v) => setState(() {
                         _tool = v ?? _tool;
-                        _files = const [];
+                        // Выбранный файл при смене инструмента НЕ стираем:
+                        // пользователь уже приложил файл и хочет просто
+                        // выбрать другой способ обработки (отзыв 20.11,
+                        // 17:27 — «файл куда-то пропал пока я выбирал»).
+                        if (_single && _files.length > 1) _files = _files.take(1).toList();
                         _result = null;
                         _message = null;
                       }),
@@ -380,7 +405,10 @@ class PdfToolsScreenState extends State<PdfToolsScreen> {
               ),
               const SizedBox(width: 8),
               FilledButton.icon(
-                onPressed: _files.isEmpty || _busy ? null : _run,
+                // Кнопка больше не гаснет на пустом списке: раньше она
+                // выглядела сломанной (отзыв 20.11). Теперь нажатие
+                // объясняет, чего не хватает (см. _run).
+                onPressed: _busy ? null : _run,
                 icon: _busy
                     ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.bolt),

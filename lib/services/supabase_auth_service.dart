@@ -516,13 +516,18 @@ class SupabaseAuthService {
             body: jsonEncode(body),
           )
           .timeout(const Duration(seconds: 30));
+      // Статус проверяем ДО разбора JSON: сервер при 5xx отвечает обычным
+      // текстом («Internal server error.»), и jsonDecode падал с
+      // FormatException раньше, чем мы успевали сказать «сервер недоступен»
+      // (отзыв 20.11, 18:10).
+      final status = res.statusCode;
+      if (status == 429 || status >= 500) {
+        throw AuthNetworkException(_message(res.body, status));
+      }
+      if (status >= 400) {
+        throw AuthException(_message(res.body, status));
+      }
       final decoded = res.body.isEmpty ? null : jsonDecode(res.body);
-      if (res.statusCode == 429 || res.statusCode >= 500) {
-        throw AuthNetworkException(_message(res.body));
-      }
-      if (res.statusCode >= 400) {
-        throw AuthException(_message(res.body));
-      }
       if (decoded is! Map) return <String, dynamic>{};
       return decoded.map((k, v) => MapEntry('$k', v));
     } on AuthException {
@@ -556,7 +561,8 @@ class SupabaseAuthService {
 
   /// Достаёт человеческий текст из ответа GoTrue. Формат поля плавает
   /// от версии к версии, поэтому перебираем все известные.
-  static String _message(String body) {
+  static String _message(String body, [int? status]) {
+    if (body.trim().isEmpty) return status == null ? '' : 'HTTP $status';
     try {
       final decoded = jsonDecode(body);
       if (decoded is Map) {

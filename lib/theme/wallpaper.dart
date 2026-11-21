@@ -56,9 +56,14 @@ class Wallpaper extends StatelessWidget {
           // поэтому пока картинка проявляется, цвет страницы уже тот же и вспышки нет.
           Widget stack = Stack(fit: StackFit.expand, children: [
             ColoredBox(color: dark ? const Color(0xFF2C2C2C) : const Color(0xFFE4E4E4)),
-            Image.asset('$name.jpg', fit: BoxFit.cover, gaplessPlayback: true, filterQuality: FilterQuality.medium, cacheWidth: cw, frameBuilder: _frame),
+            Image.asset('$name.jpg', fit: BoxFit.cover, gaplessPlayback: true, filterQuality: FilterQuality.medium, cacheWidth: cw, frameBuilder: _frame,
+            // Без errorBuilder любая разовая неудача загрузки (кеш браузера,
+            // обрыв сети) даёт красный экран FlutterError вместо фона
+            // (отзыв 21.11: «Unable to load asset assets/wall/home_dark.jpg»).
+            errorBuilder: (_, __, ___) => const SizedBox.shrink()),
             if (blur > 0.01)
-              Opacity(opacity: blur, child: Image.asset('${name}_b.jpg', fit: BoxFit.cover, gaplessPlayback: true, filterQuality: FilterQuality.medium, cacheWidth: cw, frameBuilder: _frame)),
+              Opacity(opacity: blur, child: Image.asset('${name}_b.jpg', fit: BoxFit.cover, gaplessPlayback: true, filterQuality: FilterQuality.medium, cacheWidth: cw, frameBuilder: _frame,
+            errorBuilder: (_, __, ___) => const SizedBox.shrink())),
           ]);
           if (BackdropTint.wBright != 0 || BackdropTint.wContrast != 1) {
             stack = ColorFiltered(colorFilter: ColorFilter.matrix(BackdropTint.wallpaperMatrix()), child: stack);
