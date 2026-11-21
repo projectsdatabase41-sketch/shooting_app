@@ -13,6 +13,7 @@ class StatsBlocks {
   /// id → название (по порядку по умолчанию).
   static const Map<String, String> titles = {
     'tiles': /*tr*/ 'Сводка (плитки)',
+    'bento': /*tr*/ 'Обзор (карточки)',
     'dynamics': /*tr*/ 'Динамика результата',
     'dist': /*tr*/ 'Распределение по габаритам',
     'group': /*tr*/ 'СТП и кучность',

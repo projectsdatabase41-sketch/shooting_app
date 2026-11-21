@@ -10,6 +10,7 @@ import '../models/target_face.dart';
 import '../painters/analytics_painters.dart';
 import '../painters/score_graph_painter.dart';
 import '../theme/app_theme.dart';
+import 'analytics_bento.dart';
 import 'empty_state.dart';
 import 'section_header.dart';
 import 'stat_tile.dart';
@@ -102,6 +103,13 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
     final mode = modes.isEmpty ? 0 : _mode % modes.length;
 
     final blocks = <(String, Widget)>[
+      // «Обзор» — четыре карточки (перенос промпта AnalyticsBento). Данные
+      // те же, что у остальных блоков: срез выстрелов плюс его динамика.
+      ('bento', _block(
+        title: tr('Обзор'),
+        subtitle: tr('Итог, серии, габариты и месяцы — по одному взгляду'),
+        child: AnalyticsBento(shots: shots, face: face, dynamics: modes),
+      )),
       if (modes.isNotEmpty)
         ('dynamics', _block(
           title: modes[mode].title,
