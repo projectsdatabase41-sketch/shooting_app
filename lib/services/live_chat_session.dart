@@ -167,6 +167,10 @@ class LiveChatSession {
   /// стороны в отчётах было «кандидаты: нет» (веб, 14.11).
   final List<Map<String, dynamic>> _pendingSignals = [];
 
+  /// Входящие сигналы, пришедшие до создания линка (обычно ICE-кандидаты
+  /// собеседника раньше его offer). Применяются сразу после старта линка.
+  final List<Map<String, dynamic>> _earlyIncoming = [];
+
   /// Запускает «разогрев» P2P-соединения при открытии чата.
   /// Не блокирует UI, использует существующий linkFactory.
   /// Если пир уже онлайн и P2P не поднят — пробуем поднять сразу.
@@ -195,6 +199,21 @@ class LiveChatSession {
 
   Future<void> open() async {
     if (_closed || !RemoteConfig.realtimeEnabled || !ChatSettings.isConfigured || !auth.isSignedIn) return;
+    // Открытие могло быть запрошено дважды почти одновременно (повтор по
+    // таймеру и закрытие P2P): второй вызов поднимал лишний WebSocket,
+    // сирота держал heartbeat и путал переподключение (отчёт 20.11).
+    if (_opening) return;
+    _opening = true;
+    try {
+      await _openLocked();
+    } finally {
+      _opening = false;
+    }
+  }
+
+  bool _opening = false;
+
+  Future<void> _openLocked() async {
     final token = await auth.ensureFreshToken();
     if (token == null || _closed) return;
     final c = clientFactory?.call(topic) ??
@@ -229,7 +248,16 @@ class LiveChatSession {
         final t = await auth.ensureFreshToken();
         if (t != null) _client?.refreshToken(t);
       });
+      return;
     }
+    // Join не удался: раньше канал молча оставался мёртвым до пересоздания
+    // экрана (пользователь видел «SB» и не мог повторить). Закрываем и
+    // планируем повтор по той же лестнице пауз.
+    _client = null;
+    try {
+      c.close();
+    } catch (_) {}
+    _scheduleRetry();
   }
 
   void _scheduleRetry() {
@@ -531,15 +559,32 @@ class LiveChatSession {
     if (_closed || linkFactory == null || !RemoteConfig.webrtcEnabled) return;
     var l = _link;
     if (l == null) {
-      if (s['kind'] != 'offer' || _rtcTries >= _maxRtcTries) return; // начинает только тот, у кого id меньше
+      if (s['kind'] != 'offer') {
+        // Кандидаты собеседника приходят сразу после его offer и могут
+        // опередить наш линк. Раньше они выбрасывались — у отвечающей
+        // стороны оставалось «кандидаты: нет» (отчёт 20.11, веб).
+        if (_earlyIncoming.length < 100) _earlyIncoming.add(s);
+        return;
+      }
+      if (_rtcTries >= _maxRtcTries) return; // начинает только тот, у кого id меньше
       l = _newLink();
+      // start() не ждём (метод синхронный), но линк сам копит сигналы до
+      // создания соединения — offer применится сразу после старта.
       l.start(initiator: false);
+      l.handleSignal(s);
+      final buffered = List<Map<String, dynamic>>.of(_earlyIncoming);
+      _earlyIncoming.clear();
+      for (final e in buffered) {
+        l.handleSignal(e);
+      }
+      return;
     }
     l.handleSignal(s);
   }
 
   void close() {
     _closed = true;
+    _earlyIncoming.clear();
     files.abortAll();
     _link?.close();
     _link = null;

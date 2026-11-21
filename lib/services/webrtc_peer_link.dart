@@ -37,6 +37,14 @@ class WebRtcPeerLink implements PeerLink {
   bool _closed = false;
   bool _initiator = false;
 
+  /// Сигналы, пришедшие раньше, чем появилось соединение. Раньше они
+  /// молча выбрасывались: отвечающая сторона зовёт `start(initiator: false)`
+  /// без await и сразу отдаёт offer, `_pc` в этот момент ещё null — offer
+  /// терялся, ответ не создавался, ICE не запускался вовсе. В отчётах это
+  /// выглядело как «кандидаты: нет» у собеседника (20.11).
+  final List<Map<String, dynamic>> _queuedSignals = [];
+  bool _starting = false;
+
   /// Одна повторная попытка пересобрать маршрут (restartIce). Отзывы 12–13.11:
   /// «прямое соединение не поднялось», при этом host-кандидатов было 30 — то есть
   /// сеть была, а ICE успевал сдаться раньше, чем приходил рабочий маршрут.
@@ -76,6 +84,7 @@ class WebRtcPeerLink implements PeerLink {
 
   @override
   Future<void> start({required bool initiator}) async {
+    _starting = true;
     try {
       _initiator = initiator;
       final ice = await _ice();
@@ -91,7 +100,9 @@ class WebRtcPeerLink implements PeerLink {
         if (c.candidate == null || _closed) return;
         final m = RegExp(r' typ (\w+)').firstMatch(c.candidate!);
         if (m != null) _cands[m.group(1)!] = (_cands[m.group(1)] ?? 0) + 1;
-        if (_localCands.length < 100) _localCands.add(c);
+        // 200, а не 100: на Android собирается 111 кандидатов (host:57
+        // srflx:21 relay:33), и хвост relay-кандидатов в повтор не попадал.
+        if (_localCands.length < 200) _localCands.add(c);
         _onSignal?.call({'kind': 'ice', 'candidate': c.candidate, 'sdpMid': c.sdpMid, 'sdpMLineIndex': c.sdpMLineIndex});
       };
       pc.onConnectionState = (s) {
@@ -133,12 +144,27 @@ class WebRtcPeerLink implements PeerLink {
       }
     } catch (e) {
       _diag.add('exc=$e');
+      _starting = false;
       close();
+      return;
+    }
+    _starting = false;
+    await _drainSignals();
+  }
+
+  /// Отдать сигналы, накопившиеся до создания соединения, в исходном порядке.
+  Future<void> _drainSignals() async {
+    if (_closed) {
+      _queuedSignals.clear();
+      return;
+    }
+    while (_queuedSignals.isNotEmpty) {
+      final s = _queuedSignals.removeAt(0);
+      await handleSignal(s);
     }
   }
 
-  /// Один повтор: просим ICE пересобрать кандидатов и, если мы инициатор,
-  /// отправляем новый offer. Если и это не помогло за 12 с — закрываем канал
+  /// Один повтор: просим ICE пересобрать кандидатов и, если мы инициатор,  /// отправляем новый offer. Если и это не помогло за 12 с — закрываем канал
   /// (чат продолжит работать через Broadcast/базу).
   Future<void> _retryOrClose() async {
     if (_closed || isOpen) return;
@@ -197,8 +223,14 @@ class WebRtcPeerLink implements PeerLink {
 
   @override
   Future<void> handleSignal(Map<String, dynamic> s) async {
+    if (_closed) return;
     final pc = _pc;
-    if (pc == null || _closed) return;
+    if (pc == null) {
+      // Соединение ещё создаётся (см. _queuedSignals): не теряем сигнал,
+      // а вернёмся к нему после start().
+      if (_starting || _queuedSignals.length < 100) _queuedSignals.add(s);
+      return;
+    }
     try {
       switch (s['kind']) {
         case 'offer':
@@ -222,8 +254,11 @@ class WebRtcPeerLink implements PeerLink {
             _early.add(c); // кандидаты могут прийти раньше offer/answer
           }
       }
-    } catch (_) {
-      close();
+    } catch (e) {
+      // Не рвём соединение из-за одного неудачного сигнала (например,
+      // addCandidate в неподходящем состоянии): раньше close() здесь гасил
+      // линк, и все следующие сигналы уже не принимались.
+      _diag.add('signal exc=$e');
     }
   }
 
@@ -255,12 +290,16 @@ class WebRtcPeerLink implements PeerLink {
   }
 
   @override
-  void close() {
+  void close({bool silent = false}) {
     if (_closed) return;
     _closed = true;
     _timeout?.cancel();
     _disconnectTimer?.cancel();
-    if (!_everOpen) {
+    _queuedSignals.clear();
+    // silent — закрытие по инициативе самой диагностики: отчёт «P2P failed»
+    // на её прогон не нужен, иначе каждый запуск диагностики присылал
+    // ложную ошибку в отзывы (20.11).
+    if (!_everOpen && !silent) {
       DemoMode.sendError('P2P failed', 'прямое соединение не поднялось', null,
           '${_diag.join(' ')} '
           'кандидаты: ${_cands.isEmpty ? 'нет' : _cands.entries.map((e) => '${e.key}:${e.value}').join(' ')}');

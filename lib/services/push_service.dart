@@ -472,29 +472,50 @@ class PushService {
   Future<void> _saveToken(String token) async {
     final freshToken = await auth.ensureFreshToken();
     if (freshToken == null) return;
-    // Тот же токен — серверу звонков (Cloudflare), чтобы дозвониться до закрытого приложения.
-    CallService(auth).registerDevice(token).catchError((_) {});
-    final client = http.Client();
-    try {
-      await client
-          .post(
-            Uri.parse('${ChatSettings.url}/rest/v1/chat_push_tokens'),
-            headers: {
-              'apikey': ChatSettings.anonKey,
-              'Authorization': 'Bearer $freshToken',
-              'Content-Type': 'application/json',
-              // Тот же токен устройства при повторной регистрации не
-              // создаёт вторую строку.
-              'Prefer': 'return=minimal,resolution=merge-duplicates',
-            },
-            body: jsonEncode({'user_id': auth.userId, 'token': token}),
-          )
-          .timeout(const Duration(seconds: 20));
-    } catch (_) {
-      // Не смогли сохранить токен сейчас — просто не будет push до
-      // следующего успешного запуска, опрос всё равно работает.
-    } finally {
-      client.close();
+    // Тот же токен — серверу звонков (Cloudflare), чтобы дозвониться до
+    // закрытого приложения. С повторами: раньше одна неудачная попытка
+    // оставляла устройство без адреса, и в отчётах появлялось «устройств
+    // с push: 0» (20.11).
+    _registerCloudWithRetry(token);
+    // В Supabase — тоже с повторами: единичный сбой сети/429 не должен
+    // означать «push не будет до следующего запуска».
+    for (var attempt = 0; attempt < 3; attempt++) {
+      final client = http.Client();
+      try {
+        await client
+            .post(
+              Uri.parse('${ChatSettings.url}/rest/v1/chat_push_tokens'),
+              headers: {
+                'apikey': ChatSettings.anonKey,
+                'Authorization': 'Bearer $freshToken',
+                'Content-Type': 'application/json',
+                // Тот же токен устройства при повторной регистрации не
+                // создаёт вторую строку.
+                'Prefer': 'return=minimal,resolution=merge-duplicates',
+              },
+              body: jsonEncode({'user_id': auth.userId, 'token': token}),
+            )
+            .timeout(const Duration(seconds: 20));
+        return;
+      } catch (_) {
+        if (attempt == 2) return; // не смогли — попробуем при следующем запуске
+        await Future<void>.delayed(Duration(seconds: 2 + attempt * 3));
+      } finally {
+        client.close();
+      }
+    }
+  }
+
+  /// Регистрация адреса на сервере звонков: три попытки с паузой.
+  Future<void> _registerCloudWithRetry(String token) async {
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        await CallService(auth).registerDevice(token);
+        return;
+      } catch (_) {
+        if (attempt == 2) return;
+        await Future<void>.delayed(Duration(seconds: 2 + attempt * 3));
+      }
     }
   }
 }

@@ -118,8 +118,12 @@ class NetDiagnostics {
   final ChatContact partner;
   final void Function(DiagStepResult step)? onProgress;
 
-  static const _totalTimeout = Duration(seconds: 30);
-  static const _stepTimeout = Duration(seconds: 10);
+  // Диагностика — сознательно долгая проверка (её запускают руками или по
+  // ошибке), поэтому общий лимит 2 минуты, а не 30 секунд: сбор ICE-кандидатов
+  // сам по себе ждёт 8 секунд, и на прежних 30 с отчёт обрывался посреди
+  // списка шагов (отчёты 20.11: «ICE кандидаты: TimeoutException 10004 мс»).
+  static const _totalTimeout = Duration(seconds: 120);
+  static const _stepTimeout = Duration(seconds: 25);
 
   Future<NetDiagReport> run() async {
     final startedAt = DateTime.now();
@@ -171,20 +175,14 @@ class NetDiagnostics {
       steps.add(await _step('Сигналинг', _checkSignaling));
 
       // 7. P2P + DataChannel
-      final p2pResult = await _step('P2P + DataChannel', _checkP2P);
-      steps.add(p2pResult);
-
-      // 8. Скорость (только если P2P прошло)
-      if (p2pResult.passed) {
-        steps.add(await _step('Скорость (DataChannel)', _checkThroughput));
-      } else {
-        steps.add(const DiagStepResult(
-          name: 'Скорость (DataChannel)',
-          passed: false,
-          details: 'пропущено: P2P не поднялся',
-          latency: Duration.zero,
-        ));
-      }
+      //
+      // Шага «Скорость (DataChannel)» здесь больше нет: прежняя проверка
+      // отправляла 256 КБ сама себе по каналу, у которого нет второй стороны,
+      // и гарантированно падала по таймауту — в каждом отчёте появлялся
+      // красный крест «Future not completed» (отчёты 19–20.11). Измерить
+      // скорость канала без собеседника невозможно; реальную скорость видно
+      // в P2P-обмене файлами.
+      steps.add(await _step('P2P + DataChannel', _checkP2P));
 
       final report = NetDiagReport(
         startedAt: startedAt,
@@ -360,7 +358,10 @@ class NetDiagnostics {
         } catch (_) {}
       }
 
-      final details = 'разрешение=${authorized ? 'есть' : 'нет'}, токен=${hasToken ? 'есть' : 'нет'}, на сервере=${registered ? 'да' : 'нет'}';
+      // «на сервере» здесь означало только то, что мы сами сейчас отправили
+      // регистрацию: реестр токенов не читается. Пишем честно.
+      final details = 'разрешение=${authorized ? 'есть' : 'нет'}, токен=${hasToken ? 'есть' : 'нет'}, '
+          'регистрация отправлена=${registered ? 'да' : 'нет'}';
       return DiagStepResult(name: 'Push (FCM)', passed: authorized && hasToken, details: details, latency: Duration.zero);
     } catch (e) {
       return DiagStepResult(name: 'Push (FCM)', passed: false, details: 'ошибка: $e', latency: Duration.zero);
@@ -515,17 +516,17 @@ class NetDiagnostics {
       // иначе отчёт всегда «красный» и пугает (отзывы 17.11, 19–24).
       try {
         final result = await completer.future.timeout(const Duration(seconds: 8));
-        link.close();
+        link.close(silent: true);
         return result;
       } on TimeoutException {
         sw.stop();
-        final pair = await _icePairSummary(link.pc);
-        link.close();
+        link.close(silent: true);
         return DiagStepResult(
           name: 'P2P (самопроверка)',
           passed: true,
-          details: 'без собеседника: свои кандидаты собраны (${link.candidates.isEmpty ? 'нет данных' : link.candidates.entries.map((e) => '${e.key}:${e.value}').join(', ')}); '
-              '$pair. Реальное соединение проверяйте звонком или сообщением',
+          details: 'без собеседника: свои кандидаты собраны (${link.candidates.isEmpty ? 'нет данных' : link.candidates.entries.map((e) => '${e.key}:${e.value}').join(', ')}). '
+              'ICE-пары здесь не проверяются — для этого нужен второй участник; '
+              'реальную связь проверяйте звонком или сообщением',
           latency: sw.elapsed,
         );
       }
@@ -535,86 +536,9 @@ class NetDiagnostics {
     }
   }
 
-  /// 8. Скорость: передача 256 КБ через DataChannel
-  Future<DiagStepResult> _checkThroughput() async {
-    try {
-      if (!chatAuth.isSignedIn) {
-        return DiagStepResult(name: 'Скорость (DataChannel)', passed: false, details: 'нет входа в чат', latency: Duration.zero);
-      }
-
-      final link = WebRtcPeerLink(iceServers: () => CallService(chatAuth).iceServers());
-      final completer = Completer<DiagStepResult>();
-      bool resolved = false;
-      int received = 0;
-      final sw = Stopwatch();
-
-      link.onMessage = (data) {
-        received += data.length;
-        if (received >= 256 * 1024 && !resolved) {
-          resolved = true;
-          sw.stop();
-          completer.complete(DiagStepResult(
-            name: 'Скорость (DataChannel)',
-            passed: true,
-            details: 'передано ${received ~/ 1024} КБ за ${sw.elapsed.inMilliseconds} мс (${(received / 1024 / sw.elapsed.inSeconds).toStringAsFixed(1)} КБ/с)',
-            latency: sw.elapsed,
-          ));
-        }
-      };
-
-      link.onState = () {
-        if (resolved) return;
-        if (link.isOpen) {
-          sw.start();
-          // Отправляем 256 КБ кусками
-          const chunkSize = 16384;
-          const totalSize = 256 * 1024;
-          for (int i = 0; i < totalSize; i += chunkSize) {
-            final chunk = 'x' * chunkSize;
-            if (!link.send(chunk)) break;
-          }
-        }
-      };
-
-      await link.start(initiator: true);
-      final result = await completer.future.timeout(const Duration(seconds: 20));
-      link.close();
-      return result;
-    } catch (e) {
-      return DiagStepResult(name: 'Скорость (DataChannel)', passed: false, details: 'ошибка: $e', latency: Duration.zero);
-    }
-  }
-
   /// Выбранная ICE-пара и её задержка по `getStats`: видно, идёт ли трафик
   /// напрямую (host/srflx) или через ретранслятор (relay) и сколько мс RTT.
   /// Без этого отчёт говорил только «не поднялось», без причины.
-  Future<String> _icePairSummary(RTCPeerConnection? pc) async {
-    if (pc == null) return 'ICE-пары: нет соединения';
-    try {
-      final reports = await pc.getStats();
-      final byId = <String, Map<String, dynamic>>{
-        for (final r in reports) r.id: {...r.values, 'type': r.type},
-      };
-      for (final r in reports) {
-        if (r.type != 'candidate-pair') continue;
-        final v = r.values;
-        final state = '${v['state'] ?? ''}';
-        final nominated = '${v['nominated'] ?? ''}';
-        if (state != 'succeeded' && nominated != 'true') continue;
-        final local = byId['${v['localCandidateId'] ?? ''}'];
-        final remote = byId['${v['remoteCandidateId'] ?? ''}'];
-        final lt = '${local?['candidateType'] ?? '?'}';
-        final rt = '${remote?['candidateType'] ?? '?'}';
-        final rtt = v['currentRoundTripTime'];
-        final rttMs = rtt is num ? (rtt * 1000).round() : (num.tryParse('$rtt') ?? 0) * 1000;
-        final bytes = '${v['bytesSent'] ?? 0}/${v['bytesReceived'] ?? 0}';
-        return 'выбранная пара: $lt → $rt, RTT ${rttMs.round()} мс, байты $bytes';
-      }
-      return 'ICE-пары: ни одна не подтверждена';
-    } catch (e) {
-      return 'ICE-пары: не удалось прочитать ($e)';
-    }
-  }
 
   /// Задержка сервера звонков: публичная сводка `/stats`, без токена.
   Future<DiagStepResult> _checkWorkerRtt() async {
