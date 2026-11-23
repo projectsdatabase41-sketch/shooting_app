@@ -1,6 +1,7 @@
 import '../services/app_lock.dart';
 import '../theme/backdrop_tint.dart';
 import '../widgets/glass_route.dart';
+import 'dart:async';
 import 'dart:math' as math;
 import '../logic/friendly_error.dart';
 import 'dart:typed_data';
@@ -31,7 +32,9 @@ import '../widgets/ai_chart_view.dart';
 import '../widgets/glass_pill.dart';
 import '../widgets/raised_3d_button.dart';
 import '../i18n/i18n.dart';
+import '../voice/voice_control.dart';
 import '../widgets/messenger_bubble.dart';
+import '../widgets/voice_recording_indicator.dart';
 
 /// Чат с ассистентом по результатам стрельбы.
 ///
@@ -209,11 +212,110 @@ class _AiChatBodyState extends State<_AiChatBody> {
   /// шапке) реально умеет смотреть, см. `_visionAvailable`.
   Uint8List? _pendingImage;
 
+  // --- Голосовой ввод в композере (просьба владельца 23.11, п. 2). ---
+
+  /// Идёт распознавание: композер заменён на панель записи.
+  bool _listening = false;
+
+  /// Секунды с начала распознавания — ведёт Timer самого экрана (требование B),
+  /// а не виджет индикатора: там Timer'ов не заводят принципиально.
+  Duration _voiceElapsed = Duration.zero;
+  Timer? _voiceTimer;
+
+  /// Счётчик сеансов: после отмены прослушанный listenOnce может всё ещё
+  /// додумывать и вернуться с текстом — по несовпадению номера результат
+  /// выбрасывается, а не попадает в поле уже после отмены.
+  int _voiceGen = 0;
+
+  /// Пользователь (или лимит 30 с) попросил остановиться: результат ещё
+  /// может прийти и должен быть вставлен, поэтому это НЕ отмена.
+  bool _voiceStopRequested = false;
+
+  /// Максимум ~30 секунд на фразу (требование B): дольше системный
+  /// распознаватель всё равно не держит, а экран не должен зависнуть
+  /// в панели записи навсегда.
+  static const _voiceMaxListen = Duration(seconds: 30);
+
   @override
   void dispose() {
+    _voiceTimer?.cancel();
     _input.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  /// Микрофон: запускает системное распознавание (speech_to_text, бесплатно;
+  /// язык берётся из языка интерфейса — I18n.code, см. VoiceControl.listenOnce).
+  Future<void> _startVoiceInput() async {
+    if (_listening) return;
+    final gen = ++_voiceGen;
+    _voiceStopRequested = false;
+    setState(() {
+      _listening = true;
+      _voiceElapsed = Duration.zero;
+    });
+    // Таймер на экране (требование B): тикает по секунде для индикатора
+    // и следит за лимитом 30 с.
+    _voiceTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (gen != _voiceGen || !mounted) {
+        t.cancel();
+        return;
+      }
+      setState(() => _voiceElapsed += const Duration(seconds: 1));
+      if (!_voiceStopRequested && _voiceElapsed >= _voiceMaxListen) {
+        // Лимит: не отмена (попросить «не вставлять» некто не просил) —
+        // останавливаем как обычный стоп: что услышано, то вставится.
+        _voiceStopRequested = true;
+        unawaited(VoiceControl.instance.stop());
+      }
+    });
+    final String? recognized;
+    try {
+      recognized = await VoiceControl.instance
+          .listenOnce(listenFor: _voiceMaxListen);
+    } finally {
+      _voiceTimer?.cancel();
+      _voiceTimer = null;
+    }
+    // Отмена (крестик) или экран закрыт — результат выбрасываем.
+    if (gen != _voiceGen || !mounted) return;
+    setState(() => _listening = false);
+    final text = recognized?.trim() ?? '';
+    if (text.isEmpty) {
+      // listenOnce возвращает null и без микрофона, и без разрешения, и при
+      // тишине — одна понятная подсказка вместо трёх разных (ошибки
+      // различить со стороны нельзя, см. требование C).
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(tr('Не удалось распознать речь'))));
+      return;
+    }
+    // Вставляем в поле ввода, НЕ отправляя автоматически (требование A);
+    // курсор — в конец, чтобы можно было сразу дописать руками.
+    final already = _input.text;
+    final merged = already.isEmpty ? text : '$already $text';
+    _input.value = TextEditingValue(
+      text: merged,
+      selection: TextSelection.collapsed(offset: merged.length),
+    );
+  }
+
+  /// Тап по индикатору записи: остановить, но то, что уже услышано,
+  /// вставить в поле (как у голосовых в мессенджере).
+  void _stopVoiceTap() {
+    if (!_listening) return;
+    _voiceStopRequested = true;
+    unawaited(VoiceControl.instance.stop());
+  }
+
+  /// Крестик: отменить совсем — текст в поле не попадает.
+  void _cancelVoiceInput() {
+    _voiceGen++; // результат текущего listenOnce станет неактуальным
+    _voiceStopRequested = true;
+    _voiceTimer?.cancel();
+    _voiceTimer = null;
+    if (mounted) setState(() => _listening = false);
+    unawaited(VoiceControl.instance.stop());
   }
 
   void _send(AiChatViewModel vm, {String? forceFormat}) {
@@ -763,9 +865,15 @@ class _AiChatBodyState extends State<_AiChatBody> {
                 ),
               ),
             _modeSelector(vm),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
+            // Пока идёт распознавание — вместо поля ввода панель записи
+            // (просьба владельца 23.11, п. 2). Вложение и режимы выше
+            // остаются на месте и не подменяются (требование E).
+            if (_listening)
+              _buildVoicePanel(vm)
+            else
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
                 // Бесплатная авто-модель не читает фото, а без ключа Gemini
                 // поиск в чате не работает — такие кнопки только путают
                 // (решение пользователя, пункт 8 второго списка правок).
@@ -813,6 +921,18 @@ class _AiChatBodyState extends State<_AiChatBody> {
                   ),
                 ),
                 const SizedBox(width: 8),
+                // Микрофон для голосового ввода (просьба владельца 23.11,
+                // п. 2): распознанная речь попадает в поле ввода, а не
+                // отправляется сама. Доступен и пока идёт ответ — текст
+                // просто наберётся в поле.
+                GlassCircleButton(
+                  size: 50,
+                  tooltip: tr('Голосовой ввод'),
+                  onTap: _listening ? null : _startVoiceInput,
+                  icon: Icon(Icons.mic_none,
+                      color: Theme.of(context).colorScheme.onSurface),
+                ),
+                const SizedBox(width: 8),
                 GestureDetector(
                   onLongPress: vm.busy ? null : () => _pickFormat(vm),
                   child: GlassCircleButton(
@@ -831,6 +951,53 @@ class _AiChatBodyState extends State<_AiChatBody> {
           ],
         ),
       ),
+    );
+  }
+
+  /// Панель записи вместо строки ввода: индикатор (вращающийся квадрат,
+  /// столбики, таймер) + кнопка отмены. Тап по индикатору — остановить
+  /// и вставить услышанное, крестик — отменить совсем (требование A).
+  Widget _buildVoicePanel(AiChatViewModel vm) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Expanded(
+          child: GlassPill(
+            radius: 25,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: SizedBox(
+              height: 50,
+              child: Row(
+                children: [
+                  VoiceRecordingIndicator(
+                    recording: true,
+                    elapsed: _voiceElapsed,
+                    color: cs.primary,
+                    onTap: _stopVoiceTap,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      tr('Слушаю…'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 13, color: cs.onSurfaceVariant),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        GlassCircleButton(
+          size: 50,
+          tooltip: tr('Отмена'),
+          onTap: _cancelVoiceInput,
+          icon: Icon(Icons.close, color: cs.onSurface),
+        ),
+      ],
     );
   }
 }
@@ -1334,8 +1501,28 @@ class _TypingBubble extends StatefulWidget {
 class _TypingBubbleState extends State<_TypingBubble>
     with SingleTickerProviderStateMixin {
   late final AnimationController _c = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 1200))
-    ..repeat();
+      vsync: this, duration: const Duration(milliseconds: 1400));
+
+  /// «Уменьшить движение» в системе: точки замирают на середине взлёта,
+  /// контроллер не тикает (требование D — как у VoiceRecordingIndicator).
+  bool _still = false;
+
+  // Запуск/остановка здесь, а не в инициализаторе поля: нужно сначала
+  // посмотреть disableAnimations, иначе при включённом ограничении
+  // анимация успевает тикнуть вхолостую.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _still = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (_still) {
+      if (_c.isAnimating) {
+        _c.stop();
+        _c.value = 0;
+      }
+    } else if (!_c.isAnimating) {
+      _c.repeat();
+    }
+  }
 
   @override
   void dispose() {
@@ -1360,23 +1547,14 @@ class _TypingBubbleState extends State<_TypingBubble>
           builder: (_, __) => Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Три точки по очереди «прыгают» по прозрачности.
+              // Три точки волной: каждая поднимается на 5 px, чуть
+              // растёт и становится плотнее по очереди (фаза сдвинута на
+              // треть цикла) — движение читается как «живое», а не как
+              // мигание (просьба владельца 23.11, п. 1).
               for (var i = 0; i < 3; i++)
                 Padding(
                   padding: const EdgeInsets.only(right: 4),
-                  child: Opacity(
-                    opacity: 0.3 +
-                        0.7 *
-                            (0.5 +
-                                0.5 *
-                                    math.sin((_c.value * 2 - i * 0.3) * math.pi)),
-                    child: Container(
-                      width: 7,
-                      height: 7,
-                      decoration: BoxDecoration(
-                          color: cs.primary, shape: BoxShape.circle),
-                    ),
-                  ),
+                  child: _typingDot(_c, cs.primary, i, _still),
                 ),
               const SizedBox(width: 6),
               AnimatedSwitcher(
@@ -1388,6 +1566,29 @@ class _TypingBubbleState extends State<_TypingBubble>
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Одна точка волны: синус с фазой `i/3` цикла даёт плавный подъём и
+  /// спад без рывков; при `_still` — фиксированная середина, без движения.
+  static Widget _typingDot(
+      AnimationController c, Color color, int i, bool still) {
+    final wave = still
+        ? 0.5
+        : 0.5 + 0.5 * math.sin((c.value - i / 3) * 2 * math.pi);
+    return Transform.translate(
+      offset: Offset(0, -5 * wave),
+      child: Transform.scale(
+        scale: 0.8 + 0.3 * wave,
+        child: Opacity(
+          opacity: 0.45 + 0.55 * wave,
+          child: Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
         ),
       ),
