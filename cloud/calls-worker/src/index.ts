@@ -39,8 +39,9 @@ export interface Env {
   ILOVEPDF_PUBLIC_KEY: string;
   /** RSS-источники новостей через запятую. */
   NEWS_FEEDS: string;
-  /** Ключевые слова для фильтра новостей через запятую. */
-  NEWS_KEYWORDS: string;
+  // NEWS_KEYWORDS больше не используется: по указанию владельца 23.11 сервер
+  // грузит все новости из фидов без фильтрации, отбор делает приложение
+  // (NewsFilter в lib/services/news_service.dart).
   /** Медиа чата (зашифрованные на устройстве) — приватный бакет R2. */
   MEDIA: R2Bucket;
   MEDIA_LIMIT_GB: string;
@@ -857,7 +858,10 @@ function newsStrip(s: string): string {
 
 async function refreshNews(env: Env): Promise<{ items: number; sources: string[] }> {
   const feeds = (env.NEWS_FEEDS || '').split(',').map((s) => s.trim()).filter(Boolean);
-  const words = (env.NEWS_KEYWORDS || '').toLowerCase().split(',').map((s) => s.trim()).filter(Boolean);
+  // Без серверной фильтрации по ключевым словам: по указанию владельца 23.11
+  // «Можно просто все новости грузить на сервер, а спортсмены уже тогда по
+  // фильтру определят что им нужно» — фильтры живут в приложении
+  // (NewsFilter в lib/services/news_service.dart).
   const items: Array<{ title: string; link: string; date: string; source: string; summary: string; image: string }> = [];
   for (const feed of feeds) {
     try {
@@ -872,8 +876,8 @@ async function refreshNews(env: Env): Promise<{ items: number; sources: string[]
         const link = newsPick(b, 'link') || (/<link[^>]+href="([^"]+)"/i.exec(b)?.[1] ?? '');
         const summary = (newsPick(b, 'description') || newsPick(b, 'summary') || newsPick(b, 'content')).slice(0, 240);
         const date = newsPick(b, 'pubDate') || newsPick(b, 'updated') || '';
-        const hay = `${title} ${summary}`.toLowerCase();
-        if (words.length > 0 && !words.some((w) => hay.includes(w))) continue;
+        // Все позиции уходят в ленту: без фильтра по словам (указание
+        // владельца 23.11), отбор по источникам и словам делает клиент.
         // Картинка новости: enclosure, media:content или первая <img> в тексте.
         const imgMatch =
           /<enclosure[^>]+url="([^"]+)"/i.exec(b) ??
@@ -894,7 +898,9 @@ async function refreshNews(env: Env): Promise<{ items: number; sources: string[]
     return true;
   });
   unique.sort((a, b) => String(b.date).localeCompare(String(a.date)));
-  const feed = { updatedAt: new Date().toISOString(), items: unique.slice(0, 60) };
+  // Лимит поднят с 60 до 150 (указание владельца 23.11): сервер грузит все
+  // новости, лишние позиции клиент отсекает своими фильтрами без вреда.
+  const feed = { updatedAt: new Date().toISOString(), items: unique.slice(0, 150) };
   await env.MEDIA.put('news/feed.json', JSON.stringify(feed));
   return { items: unique.length, sources: [...new Set(unique.map((i) => i.source))] };
 }

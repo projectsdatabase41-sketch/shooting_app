@@ -16,8 +16,17 @@ MEDIA_USER_LIMIT_MB = "1024"
 MEDIA_MAX_OBJECT_MB = "25"
 # Новостная лента: RSS-источники (через запятую). Обновляется по расписанию,
 # поэтому приложение тянет готовый JSON один раз при запуске и не дёргает RSS.
-NEWS_FEEDS = "https://www.issf-sports.org/rss/news.xml,https://www.shootinguk.co.uk/feed/,https://www.thefirearmblog.com/blog/feed/,https://www.nrablog.com/feed/"
-NEWS_KEYWORDS = "стрельб,shooting,rifle,pistol,ISSF,винтовк,пистолет,тир,мишен,biathlon,биатлон"
+# По указанию владельца 23.11 грузим все новости из всех фидов без серверной
+# фильтрации — отбор по источникам и словам делает приложение (NewsFilter).
+# 23.11 проверены curl'ом: issf-academy (официальная академия ISSF — живой
+# RSS), shootinguk, ammoland, ssusa (NRA Shooting Sports Journal) — 200.
+# Мёртвые убраны: issf-sports.org/rss/news.xml — 404, nrablog.com/feed/ — 404,
+# thefirearmblog.com/blog/feed/ — 406 (не отдаёт RSS нашему user-agent),
+# all4shooters.com/en/rss/ — из нашей сети не отвечает.
+NEWS_FEEDS = "https://www.issf-academy.com/feed/,https://www.shootinguk.co.uk/feed/,https://www.ammoland.com/feed/,https://www.ssusa.org/rss/"
+# NEWS_KEYWORDS больше не используется: по указанию владельца 23.11 сервер
+# грузит все новости, фильтрация перенесена в приложение
+# (lib/services/news_service.dart, NewsFilter).
 
 # Обновление новостей два раза в сутки: RSS отдаётся в кэш R2, приложение
 # читает только наш /news — расход RSS-источников не зависит от числа людей.
