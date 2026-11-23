@@ -18,37 +18,66 @@ class NewsService {
 
   static const _minInterval = Duration(minutes: 30);
 
+  /// Итог последнего обновления. Экран по нему показывает короткое сообщение,
+  /// но ленту не стирает: ошибка сети не должна оставлять пользователя с
+  /// пустым экраном (отзыв владельца 23.11, п.2 — «загрузка долго длится.
+  /// лучше запускать подгрузку новостей в фоне»).
+  static bool lastRefreshFailed = false;
+
+  /// Кладёт сохранённую ленту в [items] БЕЗ сети и возвращает true, если
+  /// что-то нашлось. Экран зовёт это первым делом в initState: список
+  /// рисуется сразу, а сервер догоняет в фоне (отзыв 23.11, п.2).
+  static bool loadCached(LocalDbService db) {
+    final rows = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [_kCache]);
+    if (rows.isEmpty) return false;
+    try {
+      final data = jsonDecode('${rows.first['hex']}');
+      if (data is! Map) return false;
+      final list = _parseList(data['items']);
+      if (list.isEmpty) return false;
+      items = list;
+      updatedAt = '${data['updatedAt'] ?? ''}';
+      return true;
+    } catch (_) {
+      return false; // битый кэш не страшен — просто ждём сеть
+    }
+  }
+
   /// Забирает ленту с сервера. [force] — игнорировать паузу между запросами.
   /// Ошибки не пробрасываем: новости не должны мешать запуску приложения.
+  ///
+  /// Экран вызывает это в фоне и НЕ ждёт перед отрисовкой (отзыв 23.11, п.2):
+  /// во время запроса показывается кэш, а не пустой экран.
   static Future<void> refresh({LocalDbService? db, bool force = false}) async {
     final now = DateTime.now();
-    if (!force && _fetchedAt != null && now.difference(_fetchedAt!) < _minInterval) return;
+    if (!force && _fetchedAt != null && now.difference(_fetchedAt!) < _minInterval) {
+      // В паузу между запросами сеть не трогаем, значит и ошибки нет.
+      lastRefreshFailed = false;
+      return;
+    }
     _fetchedAt = now;
+    // Пока идёт сеть, показываем сохранённое (если экран ещё ничего не поднял).
+    if (items.isEmpty && db != null) loadCached(db);
     try {
       final res = await http
           .get(Uri.parse('${CallService.url}/news'))
           .timeout(const Duration(seconds: 20));
       if (res.statusCode != 200) {
-        if (items.isEmpty && db != null) _loadCached(db);
+        // Кэш уже показан — оставляем его как есть.
+        lastRefreshFailed = true;
         return;
       }
       final data = jsonDecode(utf8.decode(res.bodyBytes));
-      if (data is! Map) return;
-      final list = (data['items'] as List? ?? const [])
-          .whereType<Map>()
-          .map((m) => NewsItem(
-                title: '${m['title'] ?? ''}',
-                link: '${m['link'] ?? ''}',
-                source: '${m['source'] ?? ''}',
-                image: '${m['image'] ?? ''}',
-                date: '${m['date'] ?? ''}',
-                summary: '${m['summary'] ?? ''}',
-              ))
-          .where((i) => i.title.isNotEmpty)
-          .toList();
+      if (data is! Map) {
+        lastRefreshFailed = true;
+        return;
+      }
+      final list = _parseList(data['items']);
+      // Сервер отдал пустой список — это не повод затирать показанное.
       if (list.isEmpty) return;
       items = list;
       updatedAt = '${data['updatedAt'] ?? ''}';
+      lastRefreshFailed = false;
       if (db != null) {
         db.db.execute(
           'INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex',
@@ -59,30 +88,87 @@ class NewsService {
         );
       }
     } catch (_) {
-      if (items.isEmpty && db != null) _loadCached(db);
+      // Сеть отвалилась: ленту из памяти/кэша не трогаем (отзыв 23.11, п.2),
+      // только запоминаем, что за это обновление обновить не удалось.
+      lastRefreshFailed = true;
     }
   }
 
-  /// Показывает сохранённую ленту, если сети нет — экран не пустой.
-  static void _loadCached(LocalDbService db) {
-    final rows = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [_kCache]);
-    if (rows.isEmpty) return;
-    try {
-      final data = jsonDecode('${rows.first['hex']}');
-      if (data is! Map) return;
-      items = (data['items'] as List? ?? const [])
-          .whereType<Map>()
-          .map((m) => NewsItem(
-                title: '${m['title'] ?? ''}',
-                link: '${m['link'] ?? ''}',
-                source: '${m['source'] ?? ''}',
-                image: '${m['image'] ?? ''}',
-                date: '${m['date'] ?? ''}',
-                summary: '${m['summary'] ?? ''}',
-              ))
-          .toList();
-      updatedAt = '${data['updatedAt'] ?? ''}';
-    } catch (_) {}
+  static List<NewsItem> _parseList(Object? raw) => (raw as List? ?? const [])
+      .whereType<Map>()
+      .map((m) => NewsItem(
+            title: '${m['title'] ?? ''}',
+            link: '${m['link'] ?? ''}',
+            source: '${m['source'] ?? ''}',
+            image: '${m['image'] ?? ''}',
+            date: '${m['date'] ?? ''}',
+            summary: '${m['summary'] ?? ''}',
+          ))
+      .where((i) => i.title.isNotEmpty)
+      .toList();
+}
+
+/// Клиентский фильтр ленты: источники чекбоксами + слова по заголовку и
+/// summary. Живёт в той же key-value таблице `color_prefs`, что и кэш ленты
+/// (отдельную таблицу под настройки не заводим) — отзыв владельца 23.11, п.1:
+/// «какие фильтры новостей стоят? хотелось бы их выбирать».
+class NewsFilter {
+  /// Пустой набор = все источники. Пустая строка слов = без поиска.
+  final Set<String> sources;
+  final String words;
+
+  const NewsFilter({this.sources = const <String>{}, this.words = ''});
+
+  /// Ключи настроек в `color_prefs` (механизм тот же, что у кэша ленты).
+  static const keySources = 'news_filter_sources';
+  static const keyWords = 'news_filter_words';
+
+  bool get isActive => sources.isNotEmpty || words.trim().isNotEmpty;
+
+  static NewsFilter load(LocalDbService db) {
+    String read(String key) {
+      final rows = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [key]);
+      return rows.isEmpty ? '' : '${rows.first['hex'] ?? ''}';
+    }
+
+    final sources = read(keySources)
+        .split('\n')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toSet();
+    return NewsFilter(sources: sources, words: read(keyWords).trim());
+  }
+
+  void save(LocalDbService db) {
+    void put(String key, String value) => db.db.execute(
+          'INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex',
+          [key, value],
+        );
+    // Источники — построчно: в названиях бывают запятые и точки.
+    put(keySources, sources.join('\n'));
+    put(keyWords, words.trim());
+  }
+
+  /// Кириллица: `String.toLowerCase()` в Dart работает и для неё, а
+  /// `contains(..., caseSensitive: false)` — нет, поэтому приводим обе
+  /// стороны к нижнему регистру и ищем подстрокой (без RegExp: в вводе
+  /// пользователя могут оказаться спецсимволы).
+  ///
+  /// Несколько слов через пробел — все должны найтись (п.1 отзыва 23.11:
+  /// «поле слова»).
+  bool matches(NewsItem n) {
+    if (sources.isNotEmpty && !sources.contains(n.source)) return false;
+    final tokens = words
+        .toLowerCase()
+        .split(RegExp(r'\s+'))
+        .where((t) => t.isNotEmpty)
+        .toList();
+    if (tokens.isEmpty) return true;
+    final hay = '${n.title}\n${n.summary}'.toLowerCase();
+    for (final t in tokens) {
+      if (!hay.contains(t)) return false;
+    }
+    return true;
   }
 }
 
