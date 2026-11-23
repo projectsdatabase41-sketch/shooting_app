@@ -1,5 +1,6 @@
 import '../widgets/glass_route.dart';
 import '../widgets/app_backdrop.dart';
+import 'dart:async' show unawaited;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -54,22 +55,132 @@ class _ChatBackupSettingsScreenState extends State<ChatBackupSettingsScreen> {
     }
   }
 
+  /// Диалог прогресса «N из M» с кнопкой «Отмена» (отзыв 22.11: импорт/выкладка
+  /// большой истории шли молча, и приложение выглядело зависшим). Возвращает
+  /// функцию закрытия диалога.
+  void Function() _showProgress({
+    required String title,
+    required ValueNotifier<(int, int)> progress,
+    required String Function(int done, int total) progressText,
+    required bool Function() cancelled,
+    required VoidCallback onCancel,
+    required String note,
+  }) {
+    BuildContext? dialog;
+    unawaited(showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        dialog = ctx;
+        return StatefulBuilder(
+          builder: (ctx, setD) => AlertDialog(
+            title: Text(title),
+            content: ValueListenableBuilder<(int, int)>(
+              valueListenable: progress,
+              builder: (_, v, __) {
+                final done = v.$1, total = v.$2;
+                return Column(mainAxisSize: MainAxisSize.min, children: [
+                  // clamp: во время прохода могут прийти новые сообщения и «всего»
+                  // станет меньше уже сделанного — полоска не должна упасть.
+                  LinearProgressIndicator(value: total > 0 ? (done / total).clamp(0.0, 1.0) : null),
+                  const SizedBox(height: 12),
+                  Text(total > 0 ? progressText(done, total) : tr('Читаю данные…')),
+                  const SizedBox(height: 6),
+                  Text(note, style: Theme.of(ctx).textTheme.bodySmall),
+                ]);
+              },
+            ),
+            actions: [
+              TextButton(
+                onPressed: cancelled()
+                    ? null
+                    : () {
+                        onCancel();
+                        setD(() {});
+                      },
+                child: Text(cancelled() ? tr('Останавливаю…') : tr('Отмена')),
+              ),
+            ],
+          ),
+        );
+      },
+    ));
+    return () {
+      final d = dialog;
+      if (d != null && d.mounted) {
+        Navigator.of(d).pop();
+        return;
+      }
+      // Диалог ещё не успел построиться — закроем его сразу после кадра.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final c = dialog;
+        if (c != null && c.mounted) Navigator.of(c).pop();
+      });
+    };
+  }
+
+  /// Восстановление с Диска: импорт тысяч сообщений нельзя делать «молча» —
+  /// показываем «восстановлено N из M» и даём отменить (отзыв 22.11: после
+  /// восстановления переписки приложение попадало в «приложение не отвечает»).
   Future<void> _driveRun({required bool restore}) async {
+    if (restore) {
+      final was = ChatDriveBackup.restoredAt(db);
+      if (was != null) {
+        final again = await showGlassDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text(tr('Восстановить ещё раз?')),
+            content: Text(tr(
+                'Переписка с Google Диска уже восстанавливалась {t}. Повторный импорт — только по этой кнопке: он долгий и на большой истории может подтормозить телефон.',
+                {'t': DateFormat('dd.MM.yy HH:mm').format(was)})),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Отмена'))),
+              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Восстановить'))),
+            ],
+          ),
+        );
+        if (again != true) return;
+      }
+    }
+    if (!mounted) return;
     setState(() {
       _driveBusy = true;
       _driveMessage = null;
     });
+    final progress = ValueNotifier<(int, int)>((0, 0));
+    var cancelled = false;
+    final closeDialog = restore
+        ? _showProgress(
+            title: tr('Восстановление с Google Диска'),
+            progress: progress,
+            progressText: (done, total) => tr('Восстановлено {n} из {m}', {'n': done, 'm': total}),
+            cancelled: () => cancelled,
+            onCancel: () => cancelled = true,
+            note: tr('Уже добавленные сообщения останутся, даже если отменить или прервётся связь'),
+          )
+        : () {};
     try {
       final b = ChatDriveBackup(db, GDriveService(db));
-      final n = restore ? await b.restore(ChatMessagesRepository(db)) : await b.sync();
+      final n = restore
+          ? await b.restore(
+              ChatMessagesRepository(db),
+              force: true, // повторно — только по этой кнопке (флаг в настройках)
+              onProgress: (done, total) => progress.value = (done, total),
+              cancelled: () => cancelled,
+            )
+          : await b.sync();
       if (mounted) {
         setState(() => _driveMessage = restore
-            ? (n == 0 ? tr('На Диске нет ничего нового') : tr('Восстановлено сообщений: {n}', {'n': n}))
+            ? (cancelled
+                ? tr('Восстановление остановлено: добавлено сообщений {n}', {'n': n})
+                : (n == 0 ? tr('Восстановить с Диска нечего: всё уже на месте') : tr('Восстановлено сообщений: {n}', {'n': n})))
             : (n == 0 ? tr('Всё уже на Диске') : tr('Отправлено на Диск: {n}', {'n': n})));
       }
     } catch (e) {
-      if (mounted) setState(() => _driveMessage = friendlyError(e));
+      if (mounted) setState(() => _driveMessage = tr('Не удалось до конца: {e}. Добавленные сообщения сохранены', {'e': friendlyError(e)}));
     } finally {
+      closeDialog();
+      progress.dispose();
       if (mounted) setState(() => _driveBusy = false);
     }
   }
@@ -79,6 +190,7 @@ class _ChatBackupSettingsScreenState extends State<ChatBackupSettingsScreen> {
   Future<bool> _ensureVaultPassword() async {
     if (await ChatVault.hasKey()) return true;
     final existing = await ChatVault.hasVaultFile();
+    if (!mounted) return false;
     final a = TextEditingController(), b = TextEditingController();
     String? error;
     bool busy = false;
@@ -141,27 +253,59 @@ class _ChatBackupSettingsScreenState extends State<ChatBackupSettingsScreen> {
     return ok == true;
   }
 
+  /// Сохранение/восстановление папки Nexus. Большая история шифруется и
+  /// расшифровывается на телефоне: показываем «N из M» и даём отменить (отзыв
+  /// 22.11 — после включения защищённой папки мессенджер переставал отвечать).
   Future<void> _vaultRun({required bool restore}) async {
     setState(() {
       _vaultBusy = true;
       _vaultMessage = null;
     });
+    final progress = ValueNotifier<(int, int)>((0, 0));
+    var cancelled = false;
+    void Function() closeDialog = () {};
     try {
       if (!await _ensureVaultPassword()) {
         if (mounted) setState(() => _vaultMessage = null);
         return;
       }
+      if (!mounted) return;
+      closeDialog = _showProgress(
+        title: restore ? tr('Восстановление из папки Nexus') : tr('Сохранение в папку Nexus'),
+        progress: progress,
+        progressText: restore
+            ? (done, total) => tr('Восстановлено {n} из {m}', {'n': done, 'm': total})
+            : (done, total) => tr('Сохранено {n} из {m}', {'n': done, 'm': total}),
+        cancelled: () => cancelled,
+        onCancel: () => cancelled = true,
+        note: tr('Уже добавленные сообщения останутся, даже если отменить или прервётся связь'),
+      );
       final repo = ChatMessagesRepository(db);
-      await ChatVault.migrateLegacy(db, repo); // прежняя открытая копия, если была, заменяется зашифрованной
-      final n = restore ? await ChatVault.restore(db, repo) : await ChatVault.sync(db);
+      void onStep(int done, int total) => progress.value = (done, total);
+      // Прежняя открытая копия, если была, заменяется зашифрованной.
+      await ChatVault.migrateLegacy(db, repo, onProgress: onStep, cancelled: () => cancelled);
+      final n = restore
+          ? await ChatVault.restore(db, repo, onProgress: onStep, cancelled: () => cancelled)
+          : await ChatVault.sync(db, onProgress: onStep, cancelled: () => cancelled);
       if (mounted) {
         setState(() => _vaultMessage = restore
-            ? (n == 0 ? tr('В папке нет ничего нового') : tr('Восстановлено сообщений: {n}', {'n': n}))
-            : (n == 0 ? tr('Всё уже сохранено') : tr('Сохранено сообщений: {n}', {'n': n})));
+            ? (cancelled
+                ? tr('Восстановление остановлено: добавлено сообщений {n}', {'n': n})
+                : (n == 0 ? tr('В папке нет ничего нового') : tr('Восстановлено сообщений: {n}', {'n': n})))
+            : (cancelled
+                ? tr('Сохранение остановлено: записано сообщений {n}', {'n': n})
+                : (n == 0 ? tr('Всё уже сохранено') : tr('Сохранено сообщений: {n}', {'n': n}))));
       }
     } catch (e) {
-      if (mounted) setState(() => _vaultMessage = tr('Нужен доступ ко всем файлам: включите его для Nexus в настройках телефона'));
+      final s = '$e';
+      if (mounted) {
+        setState(() => _vaultMessage = s.contains('доступа')
+            ? tr('Нужен доступ ко всем файлам: включите его для Nexus в настройках телефона')
+            : tr('Не удалось: {e}', {'e': friendlyError(e)}));
+      }
     } finally {
+      closeDialog();
+      progress.dispose();
       if (mounted) setState(() => _vaultBusy = false);
     }
   }
@@ -254,6 +398,10 @@ class _ChatBackupSettingsScreenState extends State<ChatBackupSettingsScreen> {
             ListTile(
               leading: const Icon(Icons.restore_outlined),
               title: Text(tr('Восстановить с Google Диска')),
+              subtitle: Text(ChatDriveBackup.restoredAt(db) != null
+                  ? tr('Уже восстанавливали {t}. Повторно — только по этой кнопке',
+                      {'t': DateFormat('dd.MM.yy HH:mm').format(ChatDriveBackup.restoredAt(db)!)})
+                  : tr('Вернуть переписку и вложения из папки Nexus/Chats на Диске')),
               onTap: _driveBusy ? null : () => _driveRun(restore: true),
             ),
           ],

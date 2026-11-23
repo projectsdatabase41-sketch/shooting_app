@@ -2,10 +2,16 @@ import '../services/secret_box.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show ValueNotifier;
+import 'package:flutter/foundation.dart' show ValueNotifier, compute;
 import 'package:http/http.dart' as http;
 
 import '../services/local_db_service.dart';
+
+/// base64 крупного файла декодируем в отдельном изоляте: несколько мегабайт
+/// фото при восстановлении истории замораживали главный изолят (отзыв 22.11 —
+/// «приложение не отвечает»). Функция верхнего уровня — изоляту нужна точка
+/// входа, а не замыкание.
+Uint8List _decodeBase64(String s) => base64Decode(s);
 
 /// Папка или файл на Google Диске (по ответу моста docs/gdrive-script.gs).
 class DriveItem {
@@ -103,6 +109,14 @@ class GDriveService {
   static const _urlKey = 'gdrive_url';
   static const _secretKey = 'gdrive_secret';
   static const chunkBytes = 3 * 1024 * 1024;
+
+  /// С этого размера base64 (туда и обратно) считаем в отдельном изоляте —
+  /// иначе декодирование вложения держит кадр и кнопки не отвечают (отзыв 22.11).
+  static const _isolateMinBytes = 512 * 1024;
+
+  /// base64 крупных данных — в изоляте, мелких — на месте (изолят дороже).
+  static Future<String> _b64(List<int> bytes) async =>
+      bytes.length >= _isolateMinBytes ? await compute(base64Encode, bytes) : base64Encode(bytes);
 
   final LocalDbService db;
   final http.Client Function() clientFactory;
@@ -392,7 +406,9 @@ class GDriveService {
 
   Future<DriveFile> get(String id) async {
     final d = await _call('get', {'id': id}) as Map<String, dynamic>;
-    return DriveFile(name: '${d['name']}', mime: '${d['mime']}', bytes: base64Decode('${d['b64']}'), url: '${d['url']}');
+    final b64 = '${d['b64']}';
+    final bytes = b64.length >= _isolateMinBytes ? await compute(_decodeBase64, b64) : base64Decode(b64);
+    return DriveFile(name: '${d['name']}', mime: '${d['mime']}', bytes: bytes, url: '${d['url']}');
   }
 
   /// Загружает файл; крупнее [chunkBytes] — частями. [overwriteId] — заменить существующий.
@@ -402,7 +418,7 @@ class GDriveService {
         'parentId': parentId,
         'name': name,
         'mime': mime,
-        'b64': base64Encode(bytes),
+        'b64': await _b64(bytes),
         if (overwriteId != null) 'overwriteId': overwriteId,
       });
       return DriveItem.fromJson(d as Map<String, dynamic>);
@@ -411,7 +427,7 @@ class GDriveService {
     final total = (bytes.length / chunkBytes).ceil();
     for (var n = 0; n < total; n++) {
       final part = bytes.sublist(n * chunkBytes, (n + 1) * chunkBytes > bytes.length ? bytes.length : (n + 1) * chunkBytes);
-      await _call('chunk', {'uploadId': uploadId, 'n': n, 'b64': base64Encode(part)});
+      await _call('chunk', {'uploadId': uploadId, 'n': n, 'b64': await _b64(part)});
     }
     final d = await _call('finish', {
       'uploadId': uploadId,

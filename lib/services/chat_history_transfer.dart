@@ -48,11 +48,17 @@ class ChatHistoryTransfer {
   static int import(ChatMessagesRepository repo, String contactId, String json, String Function() newId) {
     final root = jsonDecode(json);
     if (root is! Map || root['messages'] is! List) return 0;
+    // Уже сохранённые client id — одним запросом, а не поиском по всей таблице
+    // на каждое сообщение (тот же приём, что при восстановлении с Диска; отзыв
+    // 22.11 — на тысячах сообщений цикл вешал приложение).
+    final known = <String>{
+      for (final r in repo.db.db.select('SELECT client_message_id AS cid FROM chat_local_messages')) '${r['cid']}'
+    };
     var added = 0;
     for (final raw in root['messages'] as List) {
       if (raw is! Map) continue;
       final cid = '${raw['c']}';
-      if (cid.isEmpty || repo.existsByClientId(cid)) continue;
+      if (cid.isEmpty || !known.add(cid)) continue;
       final type = ChatMessageType.values.where((t) => t.name == raw['t']).firstOrNull ?? ChatMessageType.text;
       if (_skipTypes.contains(type)) continue;
       final incoming = raw['d'] == 'in';

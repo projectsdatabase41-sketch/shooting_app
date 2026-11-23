@@ -4,7 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:encrypt/encrypt.dart' as enc;
-import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/foundation.dart' show compute, visibleForTesting;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path/path.dart' as p;
 import 'package:permission_handler/permission_handler.dart';
@@ -16,6 +16,67 @@ import '../models/chat_message.dart';
 import 'chat_messages_repository.dart';
 import 'kdf.dart';
 import 'local_db_service.dart';
+
+/// Шифратор AES-256-GCM для ключа папки (ключ уже получен из пароля, см. Kdf).
+enc.Encrypter _crypter(Uint8List key) => enc.Encrypter(enc.AES(enc.Key(key), mode: enc.AESMode.gcm));
+
+/// Один блок: IV (12 байт) + шифртекст с тегом.
+Uint8List _sealWith(enc.Encrypter crypter, List<int> plain) {
+  final iv = enc.IV.fromSecureRandom(12);
+  final out = crypter.encryptBytes(plain, iv: iv);
+  return Uint8List.fromList([...iv.bytes, ...out.bytes]);
+}
+
+/// Обратное к [_sealWith]. Исключение — блок испорчен или ключ чужой.
+Uint8List _openWith(enc.Encrypter crypter, List<int> data) {
+  final raw = data is Uint8List ? data : Uint8List.fromList(data);
+  final out = crypter.decryptBytes(enc.Encrypted(Uint8List.sublistView(raw, 12)), iv: enc.IV(Uint8List.sublistView(raw, 0, 12)));
+  return Uint8List.fromList(out);
+}
+
+// ---- Тяжёлая работа в отдельном изоляте -------------------------------------
+// AES-GCM, base64 и JSON на тысячах сообщений замораживали главный изолят —
+// отсюда «приложение не отвечает» при входе в мессенджер (отзыв 22.11).
+// Функции верхнего уровня: изоляту нужна точка входа, а не замыкание.
+
+/// Пачка записей индекса: `[ключ, [utf8(json)…]]` → зашифрованные блоки.
+List<Uint8List> _sealManyIsolate(List<Object> args) {
+  final crypter = _crypter(args[0] as Uint8List);
+  final plains = args[1] as List<List<int>>;
+  return [for (final plain in plains) _sealWith(crypter, plain)];
+}
+
+/// Пачка записей индекса: `[ключ, [блок…]]` → `[json…]`, пустая строка — битая.
+List<String> _openManyIsolate(List<Object> args) {
+  final crypter = _crypter(args[0] as Uint8List);
+  final blobs = args[1] as List<Uint8List>;
+  final out = <String>[];
+  for (final b in blobs) {
+    try {
+      out.add(utf8.decode(_openWith(crypter, b)));
+    } catch (_) {
+      out.add('');
+    }
+  }
+  return out;
+}
+
+/// Один зашифрованный блок (файл вложения): `[ключ, блок]` → байты.
+Uint8List _openOneIsolate(List<Object> args) => _openWith(_crypter(args[0] as Uint8List), args[1] as List<int>);
+
+/// Один файл вложения на запись: `[ключ, байты]` → зашифрованный блок.
+Uint8List _sealOneIsolate(List<Object> args) => _sealWith(_crypter(args[0] as Uint8List), args[1] as List<int>);
+
+Uint8List _base64DecodeIsolate(String s) => base64Decode(s);
+
+/// Запись индекса, ждущая переноса в приложение: откуда читать и что в записи.
+class _VaultItem {
+  final String dirPath;
+  final String contactId;
+  final Map<String, dynamic> entry;
+  final bool encrypted;
+  const _VaultItem(this.dirPath, this.contactId, this.entry, {required this.encrypted});
+}
 
 /// Папка `Nexus/Chats` в общей памяти телефона: файлы переписок и их история, ЗАШИФРОВАННЫЕ
 /// паролем пользователя. Удаление приложения её не трогает; после переустановки пароль вводится
@@ -36,6 +97,8 @@ class ChatVault {
   static const _checkText = 'nexus-vault-ok';
   static const _iterations = 60000;
   static const _maxRestoreInline = 8 * 1024 * 1024; // крупнее — не грузим в память, открываем с диска
+  static const _batch = 50; // сообщений/файлов за один заход: между пачками отдаём кадр
+  static const _isolateMinBytes = 512 * 1024; // с этого размера base64-разбор — в изоляте
   static final _root = Directory('/storage/emulated/0/Nexus/Chats');
   static File get _vaultFile => File(p.join(_root.path, 'vault.json'));
 
@@ -94,18 +157,9 @@ class ChatVault {
     }
   }
 
-  static Uint8List _sealBytes(Uint8List key, List<int> plain) {
-    final iv = enc.IV.fromSecureRandom(12);
-    final out = enc.Encrypter(enc.AES(enc.Key(key), mode: enc.AESMode.gcm)).encryptBytes(plain, iv: iv);
-    return Uint8List.fromList([...iv.bytes, ...out.bytes]);
-  }
+  static Uint8List _sealBytes(Uint8List key, List<int> plain) => _sealWith(_crypter(key), plain);
 
-  static Uint8List _openBytes(Uint8List key, List<int> data) {
-    final raw = Uint8List.fromList(data);
-    final out = enc.Encrypter(enc.AES(enc.Key(key), mode: enc.AESMode.gcm))
-        .decryptBytes(enc.Encrypted(Uint8List.sublistView(raw, 12)), iv: enc.IV(Uint8List.sublistView(raw, 0, 12)));
-    return Uint8List.fromList(out);
-  }
+  static Uint8List _openBytes(Uint8List key, List<int> data) => _openWith(_crypter(key), data);
 
   /// Первый раз: создаёт хранилище с этим паролем. Хранилище уже есть: проверяет пароль по нему.
   /// Верный пароль — ключ запоминается в защищённом хранилище телефона (для фоновой работы).
@@ -154,44 +208,82 @@ class ChatVault {
     return t.isEmpty ? 'x' : (t.length > max ? t.substring(0, max) : t);
   }
 
-  static Future<void> syncIfOn(LocalDbService db) async {
+  static Future<void> syncIfOn(LocalDbService db, {Duration budget = const Duration(seconds: 8)}) async {
     if (!isOn(db)) return;
     try {
       if (!(await Permission.manageExternalStorage.isGranted || await Permission.storage.isGranted)) return;
       if (await _loadKey() == null) return; // пароль ещё не задан
-      await sync(db);
+      // Вход в мессенджер не должен ждать всю папку: проход ограничен по времени,
+      // остаток допишется при следующем открытии (отзыв 22.11 — «приложение не
+      // отвечает» при каждом входе, когда папка включена на большой истории).
+      await sync(db, budget: budget);
     } catch (_) {}
   }
 
-  static Future<void> _appendRecord(File f, Uint8List key, Map<String, dynamic> entry) async {
-    final sealed = _sealBytes(key, utf8.encode(jsonEncode(entry)));
-    final len = ByteData(4)..setUint32(0, sealed.length);
-    await f.writeAsBytes([...len.buffer.asUint8List(), ...sealed], mode: FileMode.append, flush: true);
+  /// Один проход выкладки за раз: фоновый `syncIfOn` при входе и ручное
+  /// «Сохранить сейчас» могли идти одновременно и дописать одни и те же записи
+  /// в индекс дважды (отзыв 22.11).
+  static Future<int>? _syncing;
+
+  /// Дописывает в папку всё новое с прошлого раза (по порядку записи сообщений на
+  /// телефоне). Возвращает число сохранённых сообщений.
+  ///
+  /// Работа идёт пачками по [_batch]: AES-GCM пачки записей и крупный base64 — в
+  /// отдельном изоляте, между пачками отдаём кадр (`Future.delayed(zero)`), чтобы
+  /// интерфейс не замирал (отзыв 22.11: «приложение не отвечает» после включения
+  /// защищённой папки). [onProgress] — (сохранено, всего), [cancelled] — кнопка
+  /// «Отмена» на экране, [budget] — предел времени прохода (фон при входе):
+  /// остаток откладывается до следующего раза.
+  static Future<int> sync(LocalDbService db,
+      {void Function(int done, int total)? onProgress, bool Function()? cancelled, Duration? budget}) async {
+    final running = _syncing;
+    if (running != null) {
+      // Уже идёт проход (фон при входе): дожидаемся его и делаем свой — со своим
+      // прогрессом и отменой, а не подсовываем чужой. Дублирования нет: курсор
+      // уже сдвинут.
+      try {
+        await running;
+      } catch (_) {}
+      if (identical(_syncing, running)) _syncing = null;
+    }
+    final f = _syncImpl(db, onProgress: onProgress, cancelled: cancelled, budget: budget);
+    _syncing = f;
+    // Отметку снимаем в любом исходе; ошибку гасим здесь — её ждёт вызывающий.
+    f.then<void>((_) {}, onError: (_) {}).whenComplete(() {
+      if (identical(_syncing, f)) _syncing = null;
+    });
+    return f;
   }
 
-  /// Дописывает в папку всё новое с прошлого раза (по порядку записи сообщений на телефоне).
-  /// Возвращает число сохранённых сообщений.
-  static Future<int> sync(LocalDbService db) async {
+  static Future<int> _syncImpl(LocalDbService db,
+      {void Function(int done, int total)? onProgress, bool Function()? cancelled, Duration? budget}) async {
     if (!await ensureAccess()) throw StateError('нет доступа к файлам');
     final key = await _loadKey();
     if (key == null) throw StateError('не задан пароль папки');
+    final started = DateTime.now();
+    var cursor = int.tryParse(_get(db, _cursorKey) ?? '') ?? 0;
+    final pending = db.db.select('SELECT COUNT(*) AS n FROM chat_local_messages WHERE rowid > ?', [cursor]).first['n'] as int;
+    onProgress?.call(0, pending);
     var total = 0;
     while (true) {
-      final cursor = int.tryParse(_get(db, _cursorKey) ?? '') ?? 0;
+      if (cancelled?.call() == true) break;
       final rows = db.db.select(
         'SELECT m.rowid AS rid, m.id, m.client_message_id, m.contact_id, c.nickname, m.direction, m.msg_type, m.text, '
         'm.reply_to_preview, m.attachment_name, m.attachment_mime, m.attachment_size, m.attachment_local_path, '
         '(m.attachment_base64 IS NOT NULL) AS has_blob, m.sender_id, m.created_at '
         'FROM chat_local_messages m LEFT JOIN chat_contacts c ON c.id = m.contact_id '
-        'WHERE m.rowid > ? ORDER BY m.rowid LIMIT 100',
+        'WHERE m.rowid > ? ORDER BY m.rowid LIMIT $_batch',
         [cursor],
       );
       if (rows.isEmpty) break;
+      final entries = <Map<String, dynamic>>[];
+      final dirs = <String>[];
       for (final r in rows) {
         final dir = Directory(p.join(_root.path, _folderOf(key, '${r['contact_id']}')));
         await dir.create(recursive: true);
         final meta = File(p.join(dir.path, 'contact.enc'));
         if (!await meta.exists()) {
+          // Метаданные контакта — пара сотен байт, изолят дороже самой работы.
           await meta.writeAsBytes(_sealBytes(key, utf8.encode(jsonEncode({'id': r['contact_id'], 'nickname': r['nickname']}))));
         }
         String? file;
@@ -205,16 +297,17 @@ class ChatVault {
             if (r['has_blob'] == 1) {
               final b = db.db.select('SELECT attachment_base64 AS b FROM chat_local_messages WHERE id = ?', [r['id']]);
               final s = b.isEmpty ? null : b.first['b'] as String?;
-              if (s != null) bytes = base64Decode(s);
+              if (s != null) bytes = s.length >= _isolateMinBytes ? await compute(_base64DecodeIsolate, s) : base64Decode(s);
             } else {
               final src = File('${r['attachment_local_path']}');
               if (await src.exists()) bytes = await src.readAsBytes();
             }
-            if (bytes != null) await target.writeAsBytes(_sealBytes(key, bytes));
+            // Файл вложения (мегабайты фото) шифруем в изоляте — AES-GCM в главном изоляте держал кадр (отзыв 22.11).
+            if (bytes != null) await target.writeAsBytes(await compute(_sealOneIsolate, <Object>[key, bytes]));
           }
           if (await target.exists()) file = fileName;
         }
-        await _appendRecord(File(p.join(dir.path, 'index.enc')), key, {
+        entries.add({
           'cid': r['client_message_id'],
           'dir': r['direction'],
           'type': r['msg_type'],
@@ -227,12 +320,42 @@ class ChatVault {
           'sender': r['sender_id'],
           'at': r['created_at'],
         });
-        total++;
-        _put(db, _cursorKey, '${r['rid']}');
+        dirs.add(dir.path);
       }
-      if (rows.length < 100) break;
+      // Все записи пачки шифруем одним заходом в изолят, а не по одной в UI.
+      final sealed = await compute(_sealManyIsolate, <Object>[key, [for (final e in entries) utf8.encode(jsonEncode(e))]]);
+      for (var i = 0; i < rows.length; i++) {
+        final f = File(p.join(dirs[i], 'index.enc'));
+        final len = ByteData(4)..setUint32(0, sealed[i].length);
+        await f.writeAsBytes([...len.buffer.asUint8List(), ...sealed[i]], mode: FileMode.append, flush: true);
+        // Курсор — по каждой реально записанной записи: прерванный проход
+        // продолжается с неё и не дублирует уже сохранённое.
+        cursor = rows[i]['rid'] as int;
+        _put(db, _cursorKey, '$cursor');
+        total++;
+      }
+      onProgress?.call(total, pending);
+      await Future<void>.delayed(Duration.zero);
+      if (budget != null && DateTime.now().difference(started) >= budget) break;
+      if (rows.length < _batch) break;
     }
     return total;
+  }
+
+  /// Строки зашифрованного индекса `[длина(4) + блок]…` без расшифровки — чтобы
+  /// читать их пачками в изоляте, а не всей папкой сразу.
+  static List<Uint8List> _splitRecords(Uint8List data) {
+    final out = <Uint8List>[];
+    var pos = 0;
+    final bd = ByteData.sublistView(data);
+    while (pos + 4 <= data.length) {
+      final len = bd.getUint32(pos);
+      pos += 4;
+      if (len <= 0 || pos + len > data.length) break;
+      out.add(Uint8List.sublistView(data, pos, pos + len));
+      pos += len;
+    }
+    return out;
   }
 
   /// Читает записи индекса: `[длина(4) + зашифрованный JSON]…`.
@@ -272,12 +395,21 @@ class ChatVault {
 
   /// Читает папку и добавляет в чат то, чего ещё нет (по client id сообщения). Возвращает число
   /// восстановленных сообщений. Нет доступа к файлам или пароля — исключение.
-  static Future<int> restore(LocalDbService db, ChatMessagesRepository repo) async {
+  ///
+  /// [onProgress] — (восстановлено, всего найдено), [cancelled] — кнопка
+  /// «Отмена»: останавливаемся на границе пачки, уже налитое остаётся в базе.
+  static Future<int> restore(LocalDbService db, ChatMessagesRepository repo,
+      {void Function(int done, int total)? onProgress, bool Function()? cancelled}) async {
     if (!await ensureAccess()) throw StateError('нет доступа к файлам');
     if (!await _root.exists()) return 0;
     final key = await _loadKey();
-    var restored = 0;
     final known = {for (final c in repo.listContacts()) c.id};
+    // Уже сохранённые client id — одним запросом вместо `existsByClientId` на
+    // каждое сообщение (индекса по client_message_id нет): на тысячах строк это
+    // минуты работы в главном изоляте — отсюда «приложение не отвечает» (отзыв 22.11).
+    final seen = <String>{
+      for (final r in db.db.select('SELECT client_message_id AS cid FROM chat_local_messages')) '${r['cid']}'
+    };
 
     void ensureContact(String id, String? nick) {
       if (known.add(id)) {
@@ -285,33 +417,48 @@ class ChatVault {
       }
     }
 
+    // 1. Сначала читаем индексы (расшифровка — пачками в изоляте), затем вливаем:
+    //    так «всего M» известно сразу и прогресс честный.
+    final items = <_VaultItem>[];
+    var stopped = false;
     await for (final entity in _root.list()) {
+      if (cancelled?.call() == true) {
+        stopped = true;
+        break;
+      }
       if (entity is! Directory) continue;
       final encMeta = File(p.join(entity.path, 'contact.enc'));
       final encIndex = File(p.join(entity.path, 'index.enc'));
       if (await encMeta.exists() && await encIndex.exists()) {
         if (key == null) throw StateError('не задан пароль папки');
-        final meta = jsonDecode(utf8.decode(_openBytes(key, await encMeta.readAsBytes()))) as Map<String, dynamic>;
+        final Map<String, dynamic> meta;
+        try {
+          meta = jsonDecode(utf8.decode(_openBytes(key, await encMeta.readAsBytes()))) as Map<String, dynamic>;
+        } catch (_) {
+          continue; // чужой пароль/порча папки: остальные папки всё равно восстанавливаем
+        }
         final contactId = '${meta['id']}';
         ensureContact(contactId, meta['nickname'] as String?);
-        for (final e in _readRecords(key, await encIndex.readAsBytes())) {
-          try {
-            if (repo.existsByClientId('${e['cid']}')) continue;
-            String? b64, localPath;
-            if (e['file'] != null) {
-              final f = File(p.join(entity.path, '${e['file']}'));
-              if (await f.exists()) {
-                if (await f.length() <= _maxRestoreInline + 64) {
-                  b64 = base64Encode(_openBytes(key, await f.readAsBytes()));
-                } else {
-                  localPath = null; // крупные зашифрованные вложения напрямую с диска не открыть
-                }
-              }
-            }
-            repo.addMessage(_message(e, contactId, b64, localPath));
-            restored++;
-          } catch (_) {}
+        final records = _splitRecords(await encIndex.readAsBytes());
+        for (var i = 0; i < records.length; i += _batch) {
+          if (cancelled?.call() == true) {
+            stopped = true;
+            break;
+          }
+          final end = i + _batch > records.length ? records.length : i + _batch;
+          final texts = await compute(_openManyIsolate, <Object>[key, records.sublist(i, end)]);
+          for (final t in texts) {
+            if (t.isEmpty) continue;
+            try {
+              final e = jsonDecode(t) as Map<String, dynamic>;
+              final cid = '${e['cid']}';
+              if (cid.isEmpty || !seen.add(cid)) continue;
+              items.add(_VaultItem(entity.path, contactId, e, encrypted: true));
+            } catch (_) {}
+          }
+          await Future<void>.delayed(Duration.zero);
         }
+        if (stopped) break;
         continue;
       }
       // Прежний открытый формат (до шифрования): читаем один раз, дальше он заменяется зашифрованным.
@@ -325,27 +472,129 @@ class ChatVault {
         if (raw.trim().isEmpty) continue;
         try {
           final e = jsonDecode(raw) as Map<String, dynamic>;
-          if (repo.existsByClientId('${e['cid']}')) continue;
-          String? b64, localPath;
-          if (e['file'] != null) {
-            final f = File(p.join(entity.path, '${e['file']}'));
-            if (await f.exists()) {
-              if (await f.length() <= _maxRestoreInline) {
-                b64 = base64Encode(await f.readAsBytes());
-              } else {
-                localPath = f.path;
-              }
-            }
-          }
-          repo.addMessage(_message(e, contactId, b64, localPath));
-          restored++;
+          final cid = '${e['cid']}';
+          if (cid.isEmpty || !seen.add(cid)) continue;
+          items.add(_VaultItem(entity.path, contactId, e, encrypted: false));
         } catch (_) {}
       }
     }
-    // Восстановленное уже в папке — не дописывать его туда второй раз.
-    final maxRid = db.db.select('SELECT COALESCE(MAX(rowid), 0) AS m FROM chat_local_messages').first['m'];
-    _put(db, _cursorKey, '$maxRid');
+
+    // 2. Вливаем пачками: одна транзакция и ОДИН пересчёт непрочитанных на пачку
+    //    вместо COUNT(*) на каждое входящее (отзыв 22.11).
+    final total = items.length;
+    onProgress?.call(0, total);
+    var restored = 0;
+    final batch = <ChatMessage>[];
+    Future<void> flush() async {
+      if (batch.isEmpty) return;
+      _insertBatch(db, batch);
+      batch.clear();
+      repo.refreshTotalUnread();
+      onProgress?.call(restored, total);
+      // Даём кадру отрисоваться: прогресс виден, приложение отвечает.
+      await Future<void>.delayed(Duration.zero);
+    }
+
+    try {
+      for (final it in items) {
+        if (cancelled?.call() == true) {
+          stopped = true;
+          break;
+        }
+        final e = it.entry;
+        String? b64, localPath;
+        if (e['file'] != null) {
+          final f = File(p.join(it.dirPath, '${e['file']}'));
+          if (await f.exists()) {
+            if (it.encrypted) {
+              if (await f.length() <= _maxRestoreInline + 64) {
+                final plain = await compute(_openOneIsolate, <Object>[key!, await f.readAsBytes()]);
+                b64 = plain.length >= _isolateMinBytes ? await compute(base64Encode, plain) : base64Encode(plain);
+              }
+              // Крупнее — зашифрованное вложения напрямую с диска не открыть (как и раньше).
+            } else if (await f.length() <= _maxRestoreInline) {
+              final bytes = await f.readAsBytes();
+              b64 = bytes.length >= _isolateMinBytes ? await compute(base64Encode, bytes) : base64Encode(bytes);
+            } else {
+              localPath = f.path;
+            }
+          }
+        }
+        batch.add(_message(e, it.contactId, b64, localPath));
+        restored++;
+        if (batch.length >= _batch) await flush();
+      }
+    } finally {
+      // Пачка, не дождавшаяся предела, всё равно сохраняется: при отмене и
+      // ошибке уже налитое остаётся (отзыв 22.11).
+      await flush();
+    }
+    if (!stopped) {
+      // Восстановленное уже в папке — не дописывать его туда второй раз.
+      final maxRid = db.db.select('SELECT COALESCE(MAX(rowid), 0) AS m FROM chat_local_messages').first['m'];
+      _put(db, _cursorKey, '$maxRid');
+    }
     return restored;
+  }
+
+  /// Пачка вставок одной транзакцией, без COUNT(*) на каждую строку. Колонки —
+  /// те же, что пишет `ChatMessagesRepository.addMessage`; пишем напрямую,
+  /// потому что его пересчёт непрочитанных на строку и есть блокировка UI
+  /// (отзыв 22.11).
+  static void _insertBatch(LocalDbService db, List<ChatMessage> batch) {
+    var inTx = false;
+    try {
+      db.db.execute('BEGIN');
+      inTx = true;
+    } catch (_) {}
+    try {
+      for (final m in batch) {
+        try {
+          db.db.execute(
+            'INSERT INTO chat_local_messages '
+            '(id, client_message_id, contact_id, direction, text, status, msg_type, '
+            'attachment_base64, attachment_name, attachment_mime, attachment_size, '
+            'drive_file_id, attachment_local_path, '
+            'reply_to_client_message_id, reply_to_preview, download_allowed, sender_id, created_at) '
+            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [
+              m.id,
+              m.clientMessageId,
+              m.contactId,
+              m.direction.name,
+              m.text,
+              m.status.name,
+              m.type.name,
+              m.attachmentBase64,
+              m.attachmentName,
+              m.attachmentMime,
+              m.attachmentSize,
+              m.driveFileId,
+              m.attachmentLocalPath,
+              m.replyToClientMessageId,
+              m.replyToPreview,
+              m.downloadAllowed ? 1 : 0,
+              m.senderId,
+              m.createdAt.toUtc().toIso8601String(),
+            ],
+          );
+        } catch (_) {
+          // Одна битая запись не должна ронять весь пакет.
+        }
+      }
+    } finally {
+      if (inTx) {
+        try {
+          db.db.execute('COMMIT');
+        } catch (_) {
+          // Коммит не прошёл — закрываем транзакцию откатом, иначе она останется
+          // открытой и заблокирует следующие записи.
+          try {
+            db.db.execute('ROLLBACK');
+          } catch (_) {}
+        }
+      }
+    }
   }
 
   /// Старые открытые копии (папки с `contact.json`) — до включения шифрования.
@@ -360,12 +609,16 @@ class ChatVault {
 
   /// Включение шифрования поверх старой открытой папки: забираем из неё всё в приложение,
   /// заново сохраняем зашифрованным и удаляем открытые копии.
-  static Future<void> migrateLegacy(LocalDbService db, ChatMessagesRepository repo) async {
+  static Future<void> migrateLegacy(LocalDbService db, ChatMessagesRepository repo,
+      {void Function(int done, int total)? onProgress, bool Function()? cancelled}) async {
     final legacy = await _legacyDirs();
     if (legacy.isEmpty) return;
-    await restore(db, repo);
+    await restore(db, repo, onProgress: onProgress, cancelled: cancelled);
     _put(db, _cursorKey, '0');
-    await sync(db);
+    await sync(db, onProgress: onProgress, cancelled: cancelled);
+    // Если проход отменили/прервали, открытые копии не удаляем: иначе потеряем
+    // то, что ещё не успели переписать зашифрованным (отзыв 22.11).
+    if (cancelled?.call() == true) return;
     for (final d in legacy) {
       try {
         await d.delete(recursive: true);
