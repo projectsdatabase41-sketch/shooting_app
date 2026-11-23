@@ -25,7 +25,19 @@ class _NewsScreenState extends State<NewsScreen> {
   /// Автоперевод заголовков на язык системы: кэш по ссылке новости.
   final Map<String, String> _translated = {};
 
+  /// Геометрия карточки вынесена сюда, чтобы список и шторка не разъезжались.
+  /// Скругление 16 и зазор 14 — отзыв владельца 23.11, п.1 («новости лучше
+  /// разделить, что-то типа рамок разных»): каждая новость — отдельная карточка.
+  static const double _cardRadius = 16;
+  static const double _cardGap = 14;
+  static const double _cardPad = 12;
+  static const EdgeInsets _cardPadding = EdgeInsets.all(_cardPad);
+
   static bool _hasCyrillic(String s) => RegExp(r'[а-яА-ЯёЁ]').hasMatch(s);
+
+  /// В ленте и в подвале карточки нужна только дата, а сервер отдаёт ISO-время.
+  static String _shortDate(String date) =>
+      date.length > 10 ? date.substring(0, 10) : date;
 
   @override
   void initState() {
@@ -64,63 +76,86 @@ class _NewsScreenState extends State<NewsScreen> {
     }
   }
 
-  /// Краткая карточка новости: заголовок, описание и источник внизу.
+  /// Шторка с картинкой и кратким текстом — только по долгому нажатию, как
+  /// запасной путь. Основной путь тапа — сразу источник (отзыв 23.11, п.3:
+  /// «лучше при нажатии сразу открывать источник»).
+  ///
+  /// Фон задаём явно и непрозрачный: тема в режиме «стекло» отдаёт
+  /// modalBackgroundColor полупрозрачным, из-за этого шторка просвечивала и
+  /// текст было не прочитать (отзыв 23.11, п.2). barrierColor не трогаем —
+  /// нужен затемняющий барьер по умолчанию.
   Future<void> _showDetails(NewsItem n) async {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (n.image.isNotEmpty) ...[
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: AspectRatio(
-                    aspectRatio: 16 / 9,
-                    child: Image.network(
-                      n.image,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const ColoredBox(
-                        color: Colors.black12,
-                        child: Center(child: Icon(Icons.newspaper_outlined, size: 28)),
+      backgroundColor: cs.surfaceContainerHighest,
+      builder: (ctx) => Material(
+        color: cs.surfaceContainerHighest,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (n.image.isNotEmpty) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: Image.network(
+                        n.image,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => ColoredBox(
+                          color: cs.surfaceContainerHigh,
+                          child: Center(
+                            child: Icon(Icons.newspaper_outlined,
+                                size: 28, color: cs.onSurfaceVariant),
+                          ),
+                        ),
                       ),
                     ),
                   ),
+                  const SizedBox(height: 12),
+                ],
+                Text(
+                  _translated[n.link] ?? n.title,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600, color: cs.onSurface),
                 ),
-                const SizedBox(height: 12),
-              ],
-              Text(_translated[n.link] ?? n.title,
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-              if (n.summary.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Text(n.summary, style: theme.textTheme.bodyMedium),
-              ],
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '${n.source}${n.date.isEmpty ? '' : ' · ${n.date.substring(0, n.date.length > 10 ? 10 : n.date.length)}'}',
-                      style: theme.textTheme.labelSmall,
-                    ),
-                  ),
-                  TextButton.icon(
-                    onPressed: () {
-                      Navigator.of(ctx).pop();
-                      _open(n.link);
-                    },
-                    icon: const Icon(Icons.open_in_new, size: 18),
-                    label: Text(tr('К источнику')),
+                if (n.summary.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    n.summary,
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(color: cs.onSurfaceVariant),
                   ),
                 ],
-              ),
-            ],
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${n.source}${n.date.isEmpty ? '' : ' · ${_shortDate(n.date)}'}',
+                        style: theme.textTheme.labelSmall
+                            ?.copyWith(color: cs.onSurfaceVariant),
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.of(ctx).pop();
+                        _open(n.link);
+                      },
+                      icon: const Icon(Icons.open_in_new, size: 18),
+                      label: Text(tr('К источнику')),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -132,6 +167,111 @@ class _NewsScreenState extends State<NewsScreen> {
     try {
       await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
     } catch (_) {}
+  }
+
+  /// Одна новость отдельной карточкой (отзыв 23.11, п.1): фон
+  /// surfaceContainer, скругление 16, тонкая рамка outlineVariant, отступы 12.
+  Widget _card(NewsItem n) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final date = _shortDate(n.date);
+    final title = _translated[n.link] ?? n.title;
+    // Ширина картинки: экран минус поля списка (16+16), поля карточки (12+12).
+    // Оригиналы бывают по 4000 px: без cacheWidth каждый декод съедает ~2 МБ
+    // памяти на карточку (сохранено с прошлой правки).
+    final width = MediaQuery.sizeOf(context).width - 32 - _cardPad * 2;
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final cacheWidth = (width * dpr).round().clamp(320, 1600);
+
+    return Material(
+      color: cs.surfaceContainer,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(_cardRadius),
+        side: BorderSide(color: cs.outlineVariant),
+      ),
+      child: InkWell(
+        // Тап сразу открывает источник во внешнем браузере (отзыв 23.11, п.3);
+        // долгое нажатие оставляет прежнюю шторку как запасной путь.
+        onTap: () => _open(n.link),
+        onLongPress: () => _showDetails(n),
+        child: Padding(
+          padding: _cardPadding,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (n.image.isNotEmpty)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: Image.network(
+                      n.image,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      cacheWidth: cacheWidth,
+                      filterQuality: FilterQuality.medium,
+                      errorBuilder: (_, __, ___) => ColoredBox(
+                        color: cs.surfaceContainerHigh,
+                        child: Center(
+                          child: Icon(Icons.newspaper_outlined,
+                              size: 28, color: cs.onSurfaceVariant),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              if (n.image.isNotEmpty) const SizedBox(height: 10),
+              Text(
+                title,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  height: 1.25,
+                  color: cs.onSurface,
+                ),
+              ),
+              if (n.summary.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                // Полного текста сервер не отдаёт (summary до 240 символов),
+                // поэтому показываем всё, что пришло: 4 строки вместо 2
+                // (отзыв 23.11, п.4 — «а тут писать новости полностью»).
+                Text(
+                  n.summary,
+                  maxLines: 4,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: cs.onSurfaceVariant, height: 1.35),
+                ),
+              ],
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${n.source}${date.isEmpty ? '' : ' · $date'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall
+                          ?.copyWith(color: cs.onSurfaceVariant),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Подсказка вместо шторки: тап уводит в источник
+                  // (отзыв 23.11, п.4 — «Открыть источник →»).
+                  Text(
+                    tr('Открыть источник →'),
+                    style: theme.textTheme.labelSmall
+                        ?.copyWith(color: cs.primary),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -168,67 +308,9 @@ class _NewsScreenState extends State<NewsScreen> {
             : ListView.separated(
                 padding: EdgeInsets.fromLTRB(16, MediaQuery.paddingOf(context).top + GlassHeader.height + 12, 16, 32),
                 itemCount: items.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 18),
-                itemBuilder: (_, i) {
-                  final n = items[i];
-                  final date = n.date.length > 10 ? n.date.substring(0, 10) : n.date;
-                  final title = _translated[n.link] ?? n.title;
-                  // Лента, а не список строк: крупная картинка сверху,
-                  // заголовок под ней, текст ниже, источник в подвале
-                  // (отзыв 20.11: «картинки больше должны быть, заголовок
-                  // выше, текст чуть ниже фото»).
-                  final width = MediaQuery.sizeOf(context).width - 32;
-                  final dpr = MediaQuery.devicePixelRatioOf(context);
-                  return InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () => _showDetails(n),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (n.image.isNotEmpty)
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: AspectRatio(
-                              aspectRatio: 16 / 9,
-                              child: Image.network(
-                                n.image,
-                                width: double.infinity,
-                                fit: BoxFit.cover,
-                                // Оригиналы бывают по 4000 px: без
-                                // cacheWidth на вебе и iOS каждый декод
-                                // съедает ~2 МБ памяти на карточку.
-                                cacheWidth: (width * dpr).round().clamp(320, 1600),
-                                filterQuality: FilterQuality.medium,
-                                errorBuilder: (_, __, ___) => const ColoredBox(
-                                  color: Colors.black12,
-                                  child: Center(child: Icon(Icons.newspaper_outlined, size: 28)),
-                                ),
-                              ),
-                            ),
-                          ),
-                        if (n.image.isNotEmpty) const SizedBox(height: 10),
-                        Text(
-                          title,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600, height: 1.25),
-                        ),
-                        if (n.summary.isNotEmpty) ...[
-                          const SizedBox(height: 6),
-                          Text(
-                            n.summary,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                          ),
-                        ],
-                        const SizedBox(height: 6),
-                        Text('${n.source}${date.isEmpty ? '' : ' · $date'}',
-                            style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-                      ],
-                    ),
-                  );
-                },
+                // Расстояние между карточками 14 px (отзыв 23.11, п.1).
+                separatorBuilder: (_, __) => const SizedBox(height: _cardGap),
+                itemBuilder: (_, i) => _card(items[i]),
               ),
       ),
     );

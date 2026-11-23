@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shooting_app/painters/bento_painters.dart';
@@ -47,6 +49,31 @@ void main() {
     test('пустой и нулевой вход не падает', () {
       expect(BentoTreemapPainter.squarify(const [], const Rect.fromLTWH(0, 0, 100, 100)), isEmpty);
       expect(BentoTreemapPainter.squarify([0, 0], const Rect.fromLTWH(0, 0, 100, 100)), isEmpty);
+    });
+  });
+
+  group('BentoTrendPainter', () {
+    /// Отзыв 22.11, пункт 6 («обзор график не работает»): пустой ряд,
+    /// одна точка и плоский ряд не должны ни падать, ни молча ничего не
+    /// нарисовать. Проверяем именно вызов отрисовки — пиксели здесь не
+    /// сравниваем.
+    test('пустой, одиночный и плоский ряд рисуются без падений', () {
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      const size = Size(220, 100);
+      BentoTrendPainter painter(List<double> values) => BentoTrendPainter(
+            values: values,
+            lineColor: const Color(0xFFE8A33D),
+            fillColor: const Color(0x4DE8A33D),
+            gridColor: const Color(0x33000000),
+          );
+
+      painter(const []).paint(canvas, size);
+      painter(const [9.5]).paint(canvas, size);
+      painter(const [9.5, 9.5, 9.5]).paint(canvas, size);
+      painter(const [9.1, 9.8, 9.3]).paint(canvas, size);
+
+      expect(recorder.endRecording(), isNotNull);
     });
   });
 

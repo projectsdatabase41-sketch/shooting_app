@@ -119,6 +119,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             dynamics: selection.dynamics,
             showSeries: selection.showSeries,
             mixedFacesNote: selection.mixedFacesNote,
+            // Срез «Тренировка» (и серия внутри неё) — единственный, где карточка
+            // «По месяцам» в обзоре бессмысленна: смотрим одну тренировку
+            // (отзыв владельца 22.11).
+            sessionScoped: _scope == _Scope.session,
           ),
           if (aiModuleOn(context)) ...[
             const SizedBox(height: 16),

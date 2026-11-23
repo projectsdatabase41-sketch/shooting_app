@@ -92,7 +92,13 @@ class BentoTrendPainter extends CustomPainter {
     }
 
     if (pts.length == 1) {
-      canvas.drawCircle(pts.first, 3, Paint()..color = lineColor);
+      // Одна точка — это ещё не линия, но и не пустое поле: точка по
+      // центру с ореолом читается как «данных пока мало, вот они».
+      // Отзыв владельца 22.11, пункт 6: карточка «Итог» не должна
+      // выглядеть сломанной. Радиус 4.5 и ореол 9 — одинокая точка в
+      // 3 px сливалась с сеткой.
+      canvas.drawCircle(pts.first, 9, Paint()..color = lineColor.withValues(alpha: 0.16));
+      canvas.drawCircle(pts.first, 4.5, Paint()..color = lineColor);
       return;
     }
 

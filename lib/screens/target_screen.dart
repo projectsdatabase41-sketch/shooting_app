@@ -32,6 +32,7 @@ import '../widgets/shot_wheel.dart';
 import '../services/comments_repository.dart';
 import '../logic/friendly_error.dart' show friendlyErrorDevMode;
 import '../widgets/target_canvas.dart';
+import '../theme/app_theme.dart';
 import 'ai_chat_screen.dart';
 import 'photo_scan_screen.dart';
 import '../i18n/i18n.dart';
@@ -137,8 +138,21 @@ class _WorkspaceBody extends StatefulWidget {
 }
 
 class _WorkspaceBodyState extends State<_WorkspaceBody> {
+  /// Прокрутка колонки мишени (на десктопе она своя, на мобильном мишень
+  /// закреплена и не листается вовсе).
   final _scroll = ScrollController();
-  final Map<WorkspacePage, GlobalKey> _keys = {};
+
+  /// Прокрутка выбранного раздела под переключателем. Отдельный контроллер
+  /// от [_scroll]: иначе переключение раздела дёргало бы мишень, а «перейти
+  /// к мишени» из общего списка сбрасывало бы позицию раздела.
+  final _sectionScroll = ScrollController();
+
+  /// Какой раздел показан под переключателем.
+  ///
+  /// Хранится в состоянии экрана, а не в базе: это временный вид, а не
+  /// настройка рабочего стола. `null` — раздел ещё не выбран, тогда работает
+  /// значение по умолчанию (см. [_selectedBottom]).
+  WorkspacePage? _bottomPage;
 
   /// Максимальный размер мишени на десктоп/веб (фиксированный лимит, px).
   static const double _maxTargetSizeDesktop = 720.0;
@@ -252,16 +266,114 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
   void dispose() {
     VoiceControl.instance.unregister(this);
     _scroll.dispose();
+    _sectionScroll.dispose();
     super.dispose();
   }
 
-  GlobalKey _keyOf(WorkspacePage p) => _keys.putIfAbsent(p, GlobalKey.new);
+  /// Выбранный раздел под переключателем.
+  ///
+  /// По умолчанию — «Статистика», если она доступна и в тренировке есть
+  /// зачётные выстрелы: сразу после серии стрелок смотрит разбор, а не
+  /// пустой список (решение владельца, отзывы 22.11). Иначе — первый
+  /// доступный раздел; нет ни одного — `null`, тогда показываем подсказку.
+  WorkspacePage? _selectedBottom(
+      List<WorkspacePage> bottomPages, TargetViewModel vm) {
+    final picked = _bottomPage;
+    if (picked != null && bottomPages.contains(picked)) return picked;
+    if (bottomPages.isEmpty) return null;
+    if (bottomPages.contains(WorkspacePage.statistics) &&
+        vm.session.countingShots.isNotEmpty) {
+      return WorkspacePage.statistics;
+    }
+    return bottomPages.first;
+  }
+
+  /// Выбрать раздел полосой-переключателем.
+  void _selectBottom(WorkspacePage page) {
+    if (_bottomPage == page) return;
+    setState(() => _bottomPage = page);
+    // Раздел открывается сверху: без сброса он появлялся бы на середине
+    // прокрутки предыдущего, и казалось бы, что открылось не то.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_sectionScroll.hasClients) _sectionScroll.jumpTo(0);
+    });
+  }
+
+  /// Тело одного выбранного раздела — то же, что раньше было в общей ленте.
+  Widget _bottomSection(
+      WorkspacePage page, TargetViewModel vm, double sectionH) {
+    // Статистика — плоский блок без вложенного скролла (решение владельца:
+    // разбор листается одной страницей, а не окошком внутри окошка).
+    if (page == WorkspacePage.statistics) {
+      return _StatisticsSection(
+        title: page.title,
+        child: _pageBody(page, vm),
+      );
+    }
+    // Остальные разделы — в рамке фиксированной высоты: у выстрелов,
+    // ассистента, заметок и чата с тренером своя внутренняя прокрутка.
+    Widget body = _pageBody(page, vm);
+    if (page == WorkspacePage.notes) {
+      // У ленты заметок подсветку нажатия гасим: сама лента — не кнопка, а
+      // «блик» от касания на полупрозрачных пузырях читался ровно как жалоба
+      // «комментарии к тренировке становятся фиолетовыми при пролистывании»
+      // (отзывы 22.11, №16). Фон под лентой уже непрозрачный — см. _Section.
+      body = Theme(
+        data: Theme.of(context).copyWith(
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+        ),
+        child: body,
+      );
+    }
+    return _Section(
+      title: page.title,
+      height: sectionH,
+      scroll: _sectionScroll,
+      child: body,
+    );
+  }
+
+  /// Прокрутка одного выбранного раздела.
+  ///
+  /// Индикатор перетаскивания за край выключен намеренно: при коротком
+  /// разделе он «заливал» его просвечивающим цветом темы — отзыв 22.11
+  /// «комментарии к тренировке становятся фиолетовыми при пролистывании».
+  Widget _sectionScrollView({required Widget child}) => ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(overscroll: false),
+        child: SingleChildScrollView(
+          controller: _sectionScroll,
+          physics: const ClampingScrollPhysics(),
+          child: child,
+        ),
+      );
+
+  /// Подсказка вместо раздела: все разделы скрыты в «Разделах», а пустое
+  /// место под мишенью выглядело бы поломкой.
+  Widget _noSectionsHint() => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            tr('Разделы скрыты. Включите нужные в меню «Разделы».'),
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
+      );
 
   void _jumpTo(WorkspacePage page) {
-    final ctx = _keyOf(page).currentContext;
-    if (ctx == null) return;
-    Scrollable.ensureVisible(ctx,
-        duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+    // Мишень закреплена сверху, поэтому «перейти к мишени» — прокрутить её
+    // колонку в начало (на телефоне она и так на виду).
+    if (page == WorkspacePage.target) {
+      if (_scroll.hasClients) {
+        _scroll.animateTo(0,
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOut);
+      }
+      return;
+    }
+    // Остальные разделы показывает переключатель — «перейти» значит выбрать.
+    _selectBottom(page);
   }
 
   @override
@@ -347,28 +459,39 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
                       defaultTargetPlatform == TargetPlatform.macOS ||
                       defaultTargetPlatform == TargetPlatform.linux;
 
-                  // Высота мишени.
-                  double targetH;
-                  if (isDesktopOrWeb) {
-                    final maxByWidth = box.maxWidth * 0.6;
-                    final maxByHeight = box.maxHeight * 0.8;
-                    targetH = math.min(maxByWidth, maxByHeight).clamp(220.0, _maxTargetSizeDesktop);
-                  } else {
-                    targetH = ((box.maxHeight - 125) * 0.8).clamp(220.0, 720.0);
-                  }
+                  // Разделы под переключателем. Мишень в список кнопок не
+                  // попадает — она закреплена сверху. Пустую статистику не
+                  // рисуем даже кнопкой: зачётных выстрелов нет, показывать
+                  // нечего (правило было и в длинной ленте).
+                  final bottomPages = <WorkspacePage>[
+                    for (final p in pages)
+                      if (p != WorkspacePage.target &&
+                          !(p == WorkspacePage.statistics &&
+                              vm.session.countingShots.isEmpty))
+                        p,
+                  ];
+                  final selected = _selectedBottom(bottomPages, vm);
+                  // Рамке раздела нужна фиксированная высота: у выстрелов,
+                  // ассистента, заметок и чата с тренером своя прокрутка.
                   final sectionH = math.max(380.0, box.maxHeight * 0.75);
 
-                  // На десктоп/веб: мишень слева (фикс. ширина), остальные разделы справа в скролле.
-                  // На мобильном: вертикальный скролл со всеми страницами (как было).
                   if (isDesktopOrWeb) {
-                    // Разделяем страницы: мишень отдельно, остальные — в правую колонку.
-                    final otherPages = pages.where((p) => p != WorkspacePage.target).toList();
+                    // Мишень слева: квадрат по высоте экрана, ширина чуть
+                    // больше высоты — под отступы и кнопку отмены выстрела.
+                    final maxByWidth = box.maxWidth * 0.6;
+                    final maxByHeight = box.maxHeight * 0.8;
+                    final targetH = math
+                        .min(maxByWidth, maxByHeight)
+                        .clamp(220.0, _maxTargetSizeDesktop);
                     return Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Левая колонка: мишень с ограниченной шириной.
+                        // Левая колонка: мишень, поле заметки и «крутилка».
+                        // Их рисует сам _TargetPage — отдельно больше не
+                        // добавляем, иначе под мишенью стоит два поля заметки
+                        // и два колеса подряд (так и было раньше).
                         SizedBox(
-                          width: targetH * 1.1, // ширина ~высоте (квадратная мишень + отступы)
+                          width: targetH * 1.1,
                           child: SingleChildScrollView(
                             controller: _scroll,
                             physics: vm.isEditing || vm.multiTouch
@@ -377,76 +500,112 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
                             child: Column(
                               children: [
                                 _TargetPage(height: targetH),
-                                if (vm.isEditing) const _EditActionBar() else const _ShotNoteBar(),
-                                const _ShotWheelBar(),
                                 const SizedBox(height: 24),
                               ],
                             ),
                           ),
                         ),
-                        // Правая колонка: остальные разделы в вертикальном скролле.
-                        // Статистика — плоский список без вложенного скролла (Task 4).
+                        // Правая колонка: переключатель и ОДИН выбранный
+                        // раздел. Прокрутка всех разделов подряд оставила бы
+                        // вторую ленту рядом с переключателем (решение
+                        // владельца, отзывы 22.11).
                         Expanded(
-                          child: SingleChildScrollView(
-                            physics: const ClampingScrollPhysics(),
-                            child: Column(
-                              children: [
-                                for (final page in otherPages)
-                                  // Пустую статистику (нет зачётных выстрелов) не показываем вовсе.
-                                  if (!(page == WorkspacePage.statistics &&
-                                      vm.session.countingShots.isEmpty))
-                                    if (page == WorkspacePage.statistics)
-                                      _StatisticsSection(
-                                        title: page.title,
-                                        child: _pageBody(page, vm),
-                                      )
-                                    else
-                                      _Section(
-                                        title: page.title,
-                                        height: sectionH,
-                                        scroll: _scroll, // не используется для внутренней прокрутки, но оставлен для совместимости
-                                        child: _pageBody(page, vm),
-                                      ),
-                                const SizedBox(height: 24),
-                              ],
-                            ),
+                          child: Column(
+                            children: [
+                              if (bottomPages.isNotEmpty)
+                                _SectionsSwitcher(
+                                  pages: bottomPages,
+                                  selected: selected,
+                                  onSelect: _selectBottom,
+                                ),
+                              Expanded(
+                                child: _sectionScrollView(
+                                  child: selected == null
+                                      ? _noSectionsHint()
+                                      : Column(
+                                          children: [
+                                            _bottomSection(
+                                                selected, vm, sectionH),
+                                            const SizedBox(height: 24),
+                                          ],
+                                        ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     );
                   }
 
-                  // Мобильный: вертикальный скролл со всеми страницами.
-                  // Статистика — плоский список без вложенного скролла (Task 4).
-                  return SingleChildScrollView(
-                    controller: _scroll,
-                    physics: vm.isEditing || vm.multiTouch
-                        ? const NeverScrollableScrollPhysics()
-                        : const ClampingScrollPhysics(),
-                    child: Column(
-                      children: [
-                        for (final page in pages)
-                          if (!(page == WorkspacePage.statistics &&
-                              vm.session.countingShots.isEmpty))
-                            KeyedSubtree(
-                              key: _keyOf(page),
-                              child: page == WorkspacePage.target
-                                  ? _TargetPage(height: targetH)
-                                  : page == WorkspacePage.statistics
-                                      ? _StatisticsSection(
-                                          title: page.title,
-                                          child: _pageBody(page, vm),
-                                        )
-                                      : _Section(
-                                          title: page.title,
-                                          height: sectionH,
-                                          scroll: _scroll,
-                                          child: _pageBody(page, vm),
-                                        ),
+                  // Мобильный: мишень и «крутилка» закреплены сверху, ниже —
+                  // полоса переключателя и только выбранный раздел (решение
+                  // владельца, отзывы 22.11). Раньше здесь шла одна длинная
+                  // лента всех разделов, и до нужного надо было листать мимо
+                  // остальных.
+                  //
+                  // Высоту мишени считаем от остатка: панель заметки и колесо
+                  // под ней занимают своё, полосе переключателя нужно ~48, а
+                  // разделу — хотя бы ~150, иначе он не читается. Запас в 24 —
+                  // на шрифт крупнее обычного и на строку «Попал/Мимо», чтобы
+                  // не получить переполнение колонки.
+                  const double switcherH = 48; // полоса-переключатель с отступами
+                  const double sectionMin = 150; // минимум под раздел
+                  const double barsSlack = 24; // запас на высоту панелей
+                  final double barsH = vm.face.hitMiss ? 190 : 130;
+                  final double available =
+                      box.maxHeight - switcherH - barsH - sectionMin - barsSlack;
+                  // Телефон в альбомной ориентации (высота ~360–430) не
+                  // помещает мишень, полосу и раздел одновременно. Тогда не
+                  // закрепляем мишень: пусть всё едет одной лентой, иначе
+                  // колонка переполняется и Flutter рисует полосатую плашку
+                  // поверх экрана.
+                  if (available < 160) {
+                    return SingleChildScrollView(
+                      controller: _scroll,
+                      physics: vm.isEditing || vm.multiTouch
+                          ? const NeverScrollableScrollPhysics()
+                          : const ClampingScrollPhysics(),
+                      child: Column(
+                        children: [
+                          _TargetPage(
+                              height: (box.maxHeight * 0.55).clamp(160.0, 320.0)),
+                          if (bottomPages.isNotEmpty)
+                            _SectionsSwitcher(
+                              pages: bottomPages,
+                              selected: selected,
+                              onSelect: _selectBottom,
                             ),
-                        const SizedBox(height: 24),
-                      ],
-                    ),
+                          if (selected != null)
+                            _bottomSection(selected, vm, sectionH),
+                          const SizedBox(height: 24),
+                        ],
+                      ),
+                    );
+                  }
+                  final double targetH = available.clamp(160.0, 720.0);
+                  return Column(
+                    children: [
+                      _TargetPage(height: targetH),
+                      if (bottomPages.isNotEmpty)
+                        _SectionsSwitcher(
+                          pages: bottomPages,
+                          selected: selected,
+                          onSelect: _selectBottom,
+                        ),
+                      Expanded(
+                        child: _sectionScrollView(
+                          child: selected == null
+                              ? _noSectionsHint()
+                              : Column(
+                                  children: [
+                                    _bottomSection(selected, vm, sectionH),
+                                    const SizedBox(height: 24),
+                                  ],
+                                ),
+                        ),
+                      ),
+                    ],
                   );
                 },
               ),
@@ -580,7 +739,18 @@ class _Section extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => Column(
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    // Фон раздела — явный и непрозрачный. Раньше секции стояли на
+    // прозрачном фоне экрана, и при прокрутке сквозь них выступала цветная
+    // маска обоев: «комментарии к тренировке становятся фиолетовыми»
+    // (отзывы 22.11, №16). Подсветку нажатия у самой секции снимаем в
+    // _bottomSection: у ленты заметок она не нужна.
+    return Material(
+      color: cs.surfaceContainer,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           GestureDetector(
@@ -613,7 +783,9 @@ class _Section extends StatelessWidget {
             ),
           ),
         ],
-      );
+      ),
+    );
+  }
 }
 
 /// Раздел «Разбор» без фиксированной высоты: заголовок + содержимое,
@@ -626,7 +798,15 @@ class _StatisticsSection extends StatelessWidget {
   const _StatisticsSection({required this.title, required this.child});
 
   @override
-  Widget build(BuildContext context) => Column(
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    // Тот же непрозрачный фон, что и у _Section: заголовок разбора не должен
+    // «краситься» маской обоев при прокрутке (отзывы 22.11, №16).
+    return Material(
+      color: cs.surfaceContainer,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Divider(height: 24),
@@ -642,7 +822,95 @@ class _StatisticsSection extends StatelessWidget {
           ),
           child,
         ],
-      );
+      ),
+    );
+  }
+}
+
+/// Полоса-переключатель разделов под мишенью.
+///
+/// Решение владельца (отзывы 22.11): мишень и «крутилка» остаются на месте, а
+/// полоса выбирает, что показать ниже, — вместо длинной ленты всех разделов.
+/// Кнопки строятся из уже готового списка доступных страниц, поэтому скрытые
+/// в «Разделах» и недоступный «Тренер» сюда не попадают сами собой. Полоса
+/// листается вбок: на узком телефоне пять подписей в ширину не влезают, а
+/// переносить их на вторую строку нельзя — она отнимает место у раздела.
+class _SectionsSwitcher extends StatelessWidget {
+  final List<WorkspacePage> pages;
+  final WorkspacePage? selected;
+  final ValueChanged<WorkspacePage> onSelect;
+
+  const _SectionsSwitcher({
+    required this.pages,
+    required this.selected,
+    required this.onSelect,
+  });
+
+  /// Высота кнопки: полоса должна быть компактной (~40 px по макету).
+  static const double _height = 40;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: _height,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final page in pages)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: _button(context, page),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _button(BuildContext context, WorkspacePage page) {
+    final cs = Theme.of(context).colorScheme;
+    final active = page == selected;
+    final radius = BorderRadius.circular(AppTheme.radiusMedium);
+    return SizedBox(
+      height: _height,
+      child: Material(
+        // Цвета строго из темы, выбранная кнопка — заливка primary/onPrimary.
+        // Фон явный и непрозрачный: полоса лежит на фоне экрана, и просвет
+        // маски обоев читался бы как «другой» цвет кнопки.
+        color: active ? cs.primary : cs.surfaceContainer,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: radius,
+          side: BorderSide(
+              color: active ? Colors.transparent : cs.outlineVariant),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => onSelect(page),
+          borderRadius: radius,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Center(
+              child: Text(
+                page.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                  color: active ? cs.onPrimary : cs.onSurface,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Обзор: порядок страниц перетаскиванием, скрытые — отдельным списком.
@@ -789,6 +1057,16 @@ class _ShotNoteBarState extends State<_ShotNoteBar> {
   final _ctl = TextEditingController();
   bool _scanning = false;
 
+  /// Скругление рамки поля «отметка к выстрелу».
+  ///
+  /// Владелец просил скруглить сильнее («поле ввода с текстом. сначала сделай
+  /// выстрел нужно больше округлить рамку», отзывы 22.11, №4): обычные 12 из
+  /// темы на этом поле читались как почти прямой угол. 20 — заметное
+  /// скругление, но ещё не «таблетка».
+  static const _noteBorder = OutlineInputBorder(
+    borderRadius: BorderRadius.all(Radius.circular(20)),
+  );
+
   @override
   void dispose() {
     _ctl.dispose();
@@ -902,7 +1180,17 @@ class _ShotNoteBarState extends State<_ShotNoteBar> {
                   hintText: shot == null
                       ? tr('Сначала сделайте выстрел')
                       : tr('Отметка к выстрелу'),
-                  border: const OutlineInputBorder(),
+                  // Крупное скругление у рамки и подсказки «Сначала сделайте
+                  // выстрел» (отзывы 22.11, №4) — см. _noteBorder.
+                  border: _noteBorder,
+                  enabledBorder: _noteBorder,
+                  disabledBorder: _noteBorder,
+                  focusedBorder: _noteBorder,
+                  // Явная заливка: без неё сквозь поле просвечивал фон экрана
+                  // с маской обоев, и подсказка «меняла цвет» при прокрутке
+                  // (отзывы 22.11, №16).
+                  filled: true,
+                  fillColor: cs.surfaceContainer,
                   suffixIcon: IconButton(
                     icon: Icon(Icons.send, color: cs.primary),
                     onPressed: shot == null ? null : () => _save(vm),

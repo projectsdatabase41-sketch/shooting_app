@@ -56,6 +56,19 @@ class AnalyticsPanel extends StatefulWidget {
   /// у всех мишеней), поэтому они остаются.
   final String? mixedFacesNote;
 
+  /// Срез ограничен ОДНОЙ тренировкой (или одной её серией).
+  ///
+  /// Знает об этом только экран статистики: у панели нет id тренировки,
+  /// выстрел её не хранит. Поэтому признак передаётся снаружи — так на
+  /// срезе «Тренировка» из обзора убирается карточка «По месяцам»
+  /// (отзыв владельца 22.11, пункт 2: «по месяцам график не нужно — тут
+  /// же мы по этой тренировке смотрим»).
+  ///
+  /// Параметр необязательный: экраны, которые его ещё не передают,
+  /// продолжают работать, а панель дополнительно распознаёт такой срез
+  /// по динамике (см. `_sessionScopedSlice`).
+  final bool sessionScoped;
+
   const AnalyticsPanel({
     super.key,
     required this.shots,
@@ -63,6 +76,7 @@ class AnalyticsPanel extends StatefulWidget {
     this.dynamics,
     this.showSeries = true,
     this.mixedFacesNote,
+    this.sessionScoped = false,
   });
 
   @override
@@ -75,10 +89,43 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
   /// срез он не должен.
   int _mode = 0;
 
+  /// Открытая (раскрытая под кнопками) серия. `null` — списка не видно.
+  /// Одна за раз: два открытых списка отбрасывают кнопки далеко вниз и на
+  /// телефоне уводят весь блок статистики за экран.
+  int? _openSeries;
+
+  void _toggleSeries(int seriesNo) {
+    setState(() => _openSeries = _openSeries == seriesNo ? null : seriesNo);
+  }
+
   List<Shot> get shots => widget.shots;
   TargetFace get face => widget.face;
   bool get showSeries => widget.showSeries;
   String? get mixedFacesNote => widget.mixedFacesNote;
+
+  /// Показывать ли карточку «По месяцам» в обзоре (отзыв 22.11, пункт 2).
+  bool get showMonths => !_sessionScopedSlice;
+
+  /// Срез одной тренировки — по явному флагу или по самой динамике.
+  ///
+  /// Явный флаг приходит от экрана статистики (`sessionScoped`), но
+  /// экран мишени и другие места панель вызывают без него, поэтому есть
+  /// второй, проверяемый признак: на срезе одной тренировки динамика
+  /// строится ПО ВЫСТРЕЛАМ, то есть её точки — это те же выстрелы среза
+  /// в том же порядке. В срезах пошире точки — суммы за тренировки, и их
+  /// число совпадает с числом выстрелов только у выстрела-«тренировки».
+  /// Это не догадка о номере тренировки, а проверка совпадения данных.
+  bool get _sessionScopedSlice {
+    if (widget.sessionScoped) return true;
+    final modes = widget.dynamics;
+    if (modes == null || modes.isEmpty) return false;
+    final pts = modes.first.points;
+    if (pts.isEmpty || pts.length != shots.length) return false;
+    for (var i = 0; i < pts.length; i++) {
+      if (pts[i].score != shots[i].score) return false;
+    }
+    return true;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -105,10 +152,14 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
     final blocks = <(String, Widget)>[
       // «Обзор» — четыре карточки (перенос промпта AnalyticsBento). Данные
       // те же, что у остальных блоков: срез выстрелов плюс его динамика.
+      // На срезе одной тренировки карточка «По месяцам» убирается
+      // (отзыв 22.11, пункт 2) — подпись блока это учитывает.
       ('bento', _block(
         title: tr('Обзор'),
-        subtitle: tr('Итог, серии, габариты и месяцы — по одному взгляду'),
-        child: AnalyticsBento(shots: shots, face: face, dynamics: modes),
+        subtitle: showMonths
+            ? tr('Итог, серии, габариты и месяцы — по одному взгляду')
+            : tr('Итог, серии и габариты — по одному взгляду'),
+        child: AnalyticsBento(shots: shots, face: face, dynamics: modes, showMonths: showMonths),
       )),
       if (modes.isNotEmpty)
         ('dynamics', _block(
@@ -194,19 +245,13 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
         )),
       if (showSeries && series.length > 1)
         ('series', _block(
-          title: tr('Средний результат по сериям'),
-          subtitle: tr('Видно, где результат садится к концу'),
-          child: _chartCard(
-            height: 180,
-            child: CustomPaint(
-              painter: SeriesBarsPainter(
-                series: series,
-                barColor: cs.primary,
-                axisColor: cs.onSurfaceVariant,
-              ),
-              child: const SizedBox.expand(),
-            ),
-          ),
+          // Отзыв владельца 22.11, пункт 3: вместо столбчатой диаграммы —
+          // ряд кнопок «номер серии · сумма с десятыми»; по нажатию
+          // раскрывается список выстрелов этой серии. Средний результат
+          // серии больше не пишем: по отзыву он смысла не несёт.
+          title: tr('Результат по сериям'),
+          subtitle: tr('Нажмите на серию — откроются её выстрелы'),
+          child: _SeriesButtons(shots: shots, openSeries: _openSeries, onToggle: _toggleSeries),
         )),
     ];
     blocks.insert(0, ('tiles', _tiles(context, a, accent)));
@@ -279,12 +324,14 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
   }
 
   Widget _tiles(BuildContext context, ShotAnalytics a, Color accent) {
+    // Отзыв владельца 22.11, пункт 5: плитки «Выстрелов» больше нет — она
+    // повторяла размер среза, который и так виден по графикам. Три
+    // оставшиеся плитки идут 2 + 1: три в ряд на телефоне не помещаются
+    // (значение «27.3 / 273» уже переносилось).
     return Column(
       children: [
         Row(
           children: [
-            Expanded(child: StatTile(icon: Icons.adjust, label: tr('Выстрелов'), value: '${a.count}')),
-            const SizedBox(width: 12),
             Expanded(
               child: StatTile(
                 icon: Icons.functions,
@@ -293,11 +340,7 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
                 hint: tr('с десятыми / целыми'),
               ),
             ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
+            const SizedBox(width: 12),
             Expanded(
               child: StatTile(
                 icon: Icons.speed_outlined,
@@ -307,7 +350,11 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
                 accent: true,
               ),
             ),
-            const SizedBox(width: 12),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
             Expanded(
               // Счётчик десяток заменён на отклонение СТП по осям: у
               // стрелка, который кладёт всё в десятку, счётчик всегда
@@ -461,6 +508,159 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
         child: SizedBox(height: height, child: child),
       ),
     );
+  }
+}
+
+/// Ряд кнопок «номер серии · сумма» с раскрывающимся списком выстрелов.
+///
+/// Заменил столбчатую диаграмму среднего по сериям (отзыв владельца 22.11,
+/// пункт 3: «серии — лучше делать кнопочками результатом с десятыми, а при
+/// нажатии откроется список по выстрелам (среднее нет смысла писать),
+/// кнопки в строчку друг за другом»). Сумма подписана прямо на кнопке
+/// (пункт 4 отзыва): столбцов, над которыми раньше стояли значения, больше
+/// нет, поэтому подпись переехала на кнопку.
+class _SeriesButtons extends StatelessWidget {
+  final List<Shot> shots;
+
+  /// Номер открытой серии; `null` — список выстрелов не показан.
+  final int? openSeries;
+
+  /// Переключение открытой серии — состоянием владеет панель, чтобы
+  /// перерисовки блока не сбрасывали выбор при смене среза.
+  final ValueChanged<int> onToggle;
+
+  const _SeriesButtons({
+    required this.shots,
+    required this.openSeries,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    // Группировка та же, что в `ShotAnalytics.seriesStats`, но здесь нужны
+    // сами выстрелы: серия выводится списком по номеру выстрела.
+    final bySeries = <int, List<Shot>>{};
+    for (final s in shots) {
+      bySeries.putIfAbsent(s.seriesNo, () => []).add(s);
+    }
+    final nos = bySeries.keys.toList()..sort();
+    if (nos.isEmpty) return const SizedBox.shrink();
+
+    // Открытая серия может исчезнуть вместе со сменой среза — тогда
+    // показываем только кнопки, а не падаем на null.
+    final openRow = openSeries == null ? null : bySeries[openSeries];
+    final opened = openRow == null ? const <Shot>[] : ([...openRow]..sort((x, y) => x.shotNumber.compareTo(y.shotNumber)));
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 14, 14, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Кнопки идут друг за другом с переносом: серий бывает и шесть,
+            // и десять, а `Row` на телефоне даёт переполнение.
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final n in nos) _seriesButton(context, n, bySeries[n]!),
+              ],
+            ),
+            if (opened.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                tr('Выстрелы серии {n}', {'n': openSeries}),
+                style: theme.textTheme.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+              ),
+              const SizedBox(height: 6),
+              for (final s in opened) _shotRow(context, s),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Кнопка серии: номер и сумма с десятыми. Нажатая подсвечивается
+  /// акцентом темы — иначе непонятно, к какой кнопке относится список ниже.
+  Widget _seriesButton(BuildContext context, int seriesNo, List<Shot> row) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final sum = row.fold<double>(0, (acc, s) => acc + s.score);
+    final active = openSeries == seriesNo;
+
+    return OutlinedButton(
+      onPressed: () => onToggle(seriesNo),
+      style: OutlinedButton.styleFrom(
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        foregroundColor: active ? cs.primary : cs.onSurface,
+        backgroundColor: active ? cs.primary.withValues(alpha: 0.14) : null,
+        side: BorderSide(
+          color: active ? cs.primary : cs.outlineVariant.withValues(alpha: 0.6),
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusMedium)),
+      ),
+      child: Text(
+        // Номер серии и сумма с десятыми — «1 · 105.2» (пункт 3 отзыва).
+        '$seriesNo · ${sum.toStringAsFixed(1)}',
+        style: theme.textTheme.labelLarge?.copyWith(
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
+      ),
+    );
+  }
+
+  /// Строка списка: номер выстрела, результат и — если координаты реально
+  /// есть — X/Y в мм. У синтетических точек координат нет, поэтому нули
+  /// не печатаем: «0.0 / 0.0 мм» читалось бы как настоящая пробоина в
+  /// центре.
+  Widget _shotRow(BuildContext context, Shot s) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final base = theme.textTheme.bodySmall?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]);
+    final hasMm = s.xMm != 0 || s.yMm != 0;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 32,
+            child: Text('${s.shotNumber}', style: base?.copyWith(color: cs.onSurfaceVariant)),
+          ),
+          SizedBox(
+            width: 46,
+            child: Text(
+              s.score.toStringAsFixed(1),
+              style: base?.copyWith(color: cs.onSurface, fontWeight: FontWeight.w600),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              hasMm ? tr('{x} / {y} мм', {'x': _signed(s.xMm), 'y': _signed(s.yMm)}) : '',
+              textAlign: TextAlign.right,
+              overflow: TextOverflow.ellipsis,
+              style: base?.copyWith(color: cs.onSurfaceVariant),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Знак координаты: плюс показываем явно, минус — типографский (в столбце
+  /// цифр дефис читается как перенос). Порог 0.05 — как в `_meanXyText`.
+  static String _signed(double v) {
+    final s = v.abs().toStringAsFixed(1);
+    if (v > 0.05) return '+$s';
+    if (v < -0.05) return '−$s';
+    return '0.0';
   }
 }
 

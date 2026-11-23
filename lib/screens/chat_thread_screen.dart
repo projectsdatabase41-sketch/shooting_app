@@ -42,6 +42,7 @@ import '../widgets/file_chip.dart';
 import '../widgets/photo_stack.dart';
 import 'photo_gallery_screen.dart';
 import '../widgets/voice_bubble.dart';
+import '../widgets/voice_recording_indicator.dart';
 import '../widgets/audio_file_bubble.dart';
 import 'audio_player_screen.dart';
 import 'circle_recorder_screen.dart';
@@ -2440,42 +2441,63 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           Expanded(
             child: GlassPill(
               radius: 25,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              // Отступ 12 (а не 14): индикатор записи выше прежней строки
+              // «точка + таймер», а высота пилюли остаётся 50 — как у
+              // соседних круглых кнопок, строку ввода не раздуваем.
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 children: [
-                  const Icon(Icons.fiber_manual_record,
-                      color: Colors.red, size: 14),
-                  const SizedBox(width: 8),
-                  Text(formatClock(_voiceSecs),
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(width: 12),
+                  // Во время записи вместо статичной точки и таймера —
+                  // индикатор из промпта voice-input.tsx: вращающийся квадрат,
+                  // 12 столбиков «частот» и таймер ММ:СС (Desktop\Запись
+                  // голосового сообщения.txt). Тап по кнопке останавливает
+                  // запись с отправкой; отмена — крестиком слева.
+                  VoiceRecordingIndicator(
+                    recording: _voiceRecording,
+                    elapsed: Duration(seconds: _voiceSecs),
+                    color: cs.primary,
+                    onTap: () => _finishVoice(send: true),
+                  ),
+                  const SizedBox(width: 10),
                   Expanded(
                     // Живой уровень голоса: столбики прыгают в такт громкости.
+                    // Число столбиков считаем по доступной ширине (столбик с
+                    // отступом — 5 px): рядом появился индикатор записи, и
+                    // прежние фиксированные 22 на узком экране вылезали за
+                    // край пилюли.
                     child: ValueListenableBuilder<double>(
                       valueListenable: _voice.level,
-                      builder: (_, v, __) => Row(
-                        children: [
-                          for (var i = 0; i < 22; i++)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 2),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 90),
-                                width: 3,
-                                height: 4 +
-                                    18 *
-                                        (v *
-                                                (0.35 +
-                                                    0.65 *
-                                                        ((i * 7919) % 13) /
-                                                        12))
-                                            .clamp(0.0, 1.0),
-                                decoration: BoxDecoration(
-                                  color: cs.primary.withValues(alpha: 0.85),
-                                  borderRadius: BorderRadius.circular(2),
+                      builder: (_, v, __) => LayoutBuilder(
+                        builder: (_, box) {
+                          final n = (box.maxWidth / 5)
+                              .floor()
+                              .clamp(0, 22)
+                              .toInt();
+                          return Row(
+                            children: [
+                              for (var i = 0; i < n; i++)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 2),
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 90),
+                                    width: 3,
+                                    height: 4 +
+                                        18 *
+                                            (v *
+                                                    (0.35 +
+                                                        0.65 *
+                                                            ((i * 7919) % 13) /
+                                                            12))
+                                                .clamp(0.0, 1.0),
+                                    decoration: BoxDecoration(
+                                      color: cs.primary.withValues(alpha: 0.85),
+                                      borderRadius: BorderRadius.circular(2),
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ),
-                        ],
+                            ],
+                          );
+                        },
                       ),
                     ),
                   ),

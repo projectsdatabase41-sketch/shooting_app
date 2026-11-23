@@ -29,7 +29,21 @@ class AnalyticsBento extends StatefulWidget {
   /// Динамика среза (первый режим — базовая линия для карточки «Итог»).
   final List<AnalyticsDynamics>? dynamics;
 
-  const AnalyticsBento({super.key, required this.shots, required this.face, this.dynamics});
+  /// Показывать карточку «По месяцам» (радар).
+  ///
+  /// Отзыв владельца 22.11, пункт 2: «по месяцам график не нужно — тут же
+  /// мы по этой тренировке смотрим». На срезе одной тренировки радар
+  /// вырождается в одну дату, поэтому `AnalyticsPanel` передаёт сюда
+  /// `false`, когда срез ограничен одной тренировкой.
+  final bool showMonths;
+
+  const AnalyticsBento({
+    super.key,
+    required this.shots,
+    required this.face,
+    this.dynamics,
+    this.showMonths = true,
+  });
 
   @override
   State<AnalyticsBento> createState() => _AnalyticsBentoState();
@@ -73,6 +87,22 @@ class _AnalyticsBentoState extends State<AnalyticsBento> with SingleTickerProvid
         final wide = w >= 720;
         final gap = wide ? 16.0 : 12.0;
 
+        // Отзыв 22.11, пункт 6: «обзор график не работает». Пустое поле в
+        // «Итоге» читалось ровно так. Поэтому при нуле точек — подсказка,
+        // при одной — точка по центру (BentoTrendPainter это уже умеет),
+        // и только от двух точек — линия.
+        final trendChart = data.trend.isEmpty
+            ? _placeholder(theme, tr('Мало данных'))
+            : CustomPaint(
+                painter: BentoTrendPainter(
+                  values: data.trend,
+                  lineColor: accent,
+                  fillColor: accent.withValues(alpha: 0.30),
+                  gridColor: cs.outlineVariant.withValues(alpha: 0.55),
+                ),
+                child: const SizedBox.expand(),
+              );
+
         final trend = _Card(
           wide: wide,
           title: tr('Итог'),
@@ -80,15 +110,7 @@ class _AnalyticsBentoState extends State<AnalyticsBento> with SingleTickerProvid
           delta: data.delta,
           caption: data.trendCaption,
           height: wide ? 132 : 112,
-          child: CustomPaint(
-            painter: BentoTrendPainter(
-              values: data.trend,
-              lineColor: accent,
-              fillColor: accent.withValues(alpha: 0.30),
-              gridColor: cs.outlineVariant.withValues(alpha: 0.55),
-            ),
-            child: const SizedBox.expand(),
-          ),
+          child: trendChart,
         );
 
         final waves = _Card(
@@ -159,13 +181,17 @@ class _AnalyticsBentoState extends State<AnalyticsBento> with SingleTickerProvid
               waves,
               SizedBox(height: gap),
               treemap,
-              SizedBox(height: gap),
-              radar,
+              if (widget.showMonths) ...[
+                SizedBox(height: gap),
+                radar,
+              ],
             ],
           );
         }
 
         // 12 колонок: 5+7 в первом ряду, 7+5 во втором — как в промпте.
+        // Без карточки месяцев второй ряд занимает вся ширина: одна
+        // карточка на 7 из 12 колонок оставляла бы пустую дырку.
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -175,11 +201,14 @@ class _AnalyticsBentoState extends State<AnalyticsBento> with SingleTickerProvid
               Expanded(flex: 7, child: waves),
             ]),
             SizedBox(height: gap),
-            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Expanded(flex: 7, child: treemap),
-              SizedBox(width: gap),
-              Expanded(flex: 5, child: radar),
-            ]),
+            if (!widget.showMonths)
+              treemap
+            else
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(flex: 7, child: treemap),
+                SizedBox(width: gap),
+                Expanded(flex: 5, child: radar),
+              ]),
           ],
         );
       },
@@ -237,6 +266,10 @@ class _Card extends StatelessWidget {
   final double height;
   final Widget child;
 
+  /// Порог показа дельты: половина десятой. Всё, что меньше, при
+  /// округлении до одного знака даёт «0» (отзыв 22.11, пункт 1).
+  static const double _deltaMin = 0.05;
+
   const _Card({
     required this.wide,
     required this.title,
@@ -276,7 +309,12 @@ class _Card extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              if (delta != null) _deltaChip(context, delta!),
+              // Отзыв владельца 22.11, пункт 1: рядом с числом рисовался
+              // лишний «0». Дельта меньше половины десятой при
+              // округлении до одного знака даёт именно «0», а нулевая
+              // дельта не говорит ни о росте, ни о падении — чип не
+              // показываем вовсе.
+              if (delta != null && delta!.abs() >= _deltaMin) _deltaChip(context, delta!),
             ],
           ),
           if (value != null) ...[
@@ -385,7 +423,11 @@ class BentoData {
     ];
     final trendValue = trend.isEmpty ? null : trend.last;
     final delta = trend.length >= 2 ? trend.last - trend[trend.length - 2] : null;
-    final trendCaption = trend.length < 2 ? tr('пока одна точка') : tr('к предыдущей точке');
+    // Подпись повторяет то, что видно на графике: пустой ряд — «мало
+    // данных», одна точка — «пока одна точка» (отзыв 22.11, пункт 6).
+    final trendCaption = trend.isEmpty
+        ? tr('мало данных')
+        : (trend.length < 2 ? tr('пока одна точка') : tr('к предыдущей точке'));
 
     // --- Серии ---
     final bySeries = <int, List<Shot>>{};
