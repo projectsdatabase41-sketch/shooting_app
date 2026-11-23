@@ -544,7 +544,7 @@ class _AiChatBodyState extends State<_AiChatBody> {
           12),
       itemCount: vm.messages.length + (vm.busy ? 1 : 0),
       itemBuilder: (context, i) {
-        if (i >= vm.messages.length) return _TypingBubble(phase: vm.phase, progress: vm.phaseProgress);
+        if (i >= vm.messages.length) return _ThinkingOrb(phase: vm.phase, progress: vm.phaseProgress);
         final message = vm.messages[i];
         final charts = vm.chartMessages;
         return _Bubble(
@@ -1485,27 +1485,48 @@ class _FeedbackProposalCard extends StatelessWidget {
   }
 }
 
-/// Пузырь «ассистент работает»: пульсирующие точки и подпись текущего шага
-/// («Анализирую…», «Ищу информацию…», «Думаю…», «Формулирую ответ…»).
-class _TypingBubble extends StatefulWidget {
+/// Пузырь «ассистент работает»: «думающая сфера» на CustomPainter.
+///
+/// Референс — промпт владельца 23.11 (React-компонент
+/// ai-thinking-orb-and-input.tsx): пока модель отвечает, на месте ответа
+/// видна морфящая сфера — она «собирается» в шар, шар пульсирует и
+/// вращается (кольца-дуги, мелкие частицы по орбитам, радиальные
+/// градиенты), фазы подписаны («Thinking» → «Searching» → «Analyzing» →
+/// «Composing»), затем сфера «раскрывается» в карточку ответа.
+/// Сюда переносится только сама сфера: «раскрытие» в карточку делает
+/// ListView, подменяющий пузырь готовым сообщением, — морфить
+/// незачем, иначе лента дёргается.
+class _ThinkingOrb extends StatefulWidget {
   final String phase;
 
   /// «2/3» в режиме Think — номер подхода.
   final String progress;
-  const _TypingBubble({required this.phase, this.progress = ''});
+  const _ThinkingOrb({required this.phase, this.progress = ''});
 
   @override
-  State<_TypingBubble> createState() => _TypingBubbleState();
+  State<_ThinkingOrb> createState() => _ThinkingOrbState();
 }
 
-class _TypingBubbleState extends State<_TypingBubble>
+class _ThinkingOrbState extends State<_ThinkingOrb>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 1400));
+  /// Размер сферы в пузыре: 104 px — посередине диапазона 96–120 из
+  /// задачи; фиксированный, чтобы пузырь не менял размер и не дёргал
+  /// ленту (требование «компактно, не дёргает ленту»).
+  static const double _orbD = 104;
 
-  /// «Уменьшить движение» в системе: точки замирают на середине взлёта,
+  /// Цикл вращения сферы: 2400 мс попадает в заданный диапазон
+  /// 2000–2600 мс и задан в промпте владельца как «спокойный» темп.
+  late final AnimationController _c = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 2400));
+
+  /// «Уменьшить движение» в системе: сфера замирает статичным кадром,
   /// контроллер не тикает (требование D — как у VoiceRecordingIndicator).
   bool _still = false;
+
+  /// Счётчик секунд для смены фаз: Stopwatch не зависит от повторов
+  /// контроллера (repeat сбрасывает value, а фазы должны идти подряд) —
+  /// 1 фаза ≈ 1.2 с, как в промпте владельца (labelLoop 1150 мс).
+  final Stopwatch _clock = Stopwatch()..start();
 
   // Запуск/остановка здесь, а не в инициализаторе поля: нужно сначала
   // посмотреть disableAnimations, иначе при включённом ограничении
@@ -1515,10 +1536,7 @@ class _TypingBubbleState extends State<_TypingBubble>
     super.didChangeDependencies();
     _still = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     if (_still) {
-      if (_c.isAnimating) {
-        _c.stop();
-        _c.value = 0;
-      }
+      if (_c.isAnimating) _c.stop();
     } else if (!_c.isAnimating) {
       _c.repeat();
     }
@@ -1526,8 +1544,23 @@ class _TypingBubbleState extends State<_TypingBubble>
 
   @override
   void dispose() {
+    _clock.stop();
     _c.dispose();
     super.dispose();
+  }
+
+  /// Подпись фазы под сферой. Четыре строки из промпта владельца
+  /// (Thinking/Searching/Analyzing/Composing) сменяются по внутреннему
+  /// счётчику секунд. Реальный шаг пайплайна из AiChatViewModel показываем,
+  /// когда он «дальше» декоративной ротации — сформировался ответ или
+  /// идёт проверка: правда важнее анимации.
+  String _phaseLabel() {
+    if (widget.phase == 'Формулирую ответ') return tr('Собираю ответ…');
+    if (widget.phase == 'Проверяю') return tr('Анализирую…');
+    const phases = ['Думаю…', 'Ищу…', 'Анализирую…', 'Собираю ответ…'];
+    final i = (_clock.elapsedMilliseconds ~/ 1200) % phases.length;
+    final label = tr(phases[i]);
+    return widget.progress.isEmpty ? label : '$label ${widget.progress}';
   }
 
   @override
@@ -1537,63 +1570,223 @@ class _TypingBubbleState extends State<_TypingBubble>
       alignment: Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
         decoration: BoxDecoration(
           color: cs.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(14),
         ),
-        child: AnimatedBuilder(
-          animation: _c,
-          builder: (_, __) => Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Три точки волной: каждая поднимается на 5 px, чуть
-              // растёт и становится плотнее по очереди (фаза сдвинута на
-              // треть цикла) — движение читается как «живое», а не как
-              // мигание (просьба владельца 23.11, п. 1).
-              for (var i = 0; i < 3; i++)
-                Padding(
-                  padding: const EdgeInsets.only(right: 4),
-                  child: _typingDot(_c, cs.primary, i, _still),
-                ),
-              const SizedBox(width: 6),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 250),
-                child: Text(
-                  '${tr(widget.phase)}${widget.progress.isEmpty ? '' : ' ${widget.progress}'}${'.' * (1 + (_c.value * 3).floor() % 3)}',
-                  key: ValueKey('${widget.phase}${widget.progress}'),
-                  style: TextStyle(color: cs.onSurfaceVariant),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Появление: сфера «собирается» — лёгкий разгон масштаба с
+            // мягким отскоком (Curves.easeOutBack), отсылка к фазам
+            // launch/assemble промпта владельца. Один раз при входе, без
+            // повторов — лента не дёргается.
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: 1),
+              duration: const Duration(milliseconds: 420),
+              curve: Curves.easeOutBack,
+              builder: (context, v, child) => Opacity(
+                opacity: v.clamp(0.0, 1.0),
+                child: Transform.scale(scale: 0.6 + 0.4 * v, child: child),
+              ),
+              child: SizedBox(
+                width: _orbD,
+                height: _orbD,
+                child: AnimatedBuilder(
+                  animation: _c,
+                  builder: (_, __) => CustomPaint(
+                    painter: _OrbPainter(
+                      t: _still ? 0.3 : _c.value,
+                      primary: cs.primary,
+                      tertiary: cs.tertiary,
+                    ),
+                  ),
                 ),
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 10),
+            // Смена фаз с коротким кроссфейдом — как «swapLabel» в промпте.
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              child: Text(
+                _phaseLabel(),
+                key: ValueKey(_phaseLabel()),
+                style: TextStyle(color: cs.onSurfaceVariant),
+              ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+}
+
+/// Рисовальщик сферы: радиальные градиенты из colorScheme.primary/tertiary,
+/// внутреннее свечение, вращающиеся дуги-кольца и частицы по орбитам.
+///
+/// Все позиции частиц детерминированы по индексу (золотой угол,
+/// const goldenAngle ≈ 2.39996) — никакого Random на кадр: иначе на
+/// CanvasKit/в тестах каждый кадр рисуется по-новому и включается
+/// перерисовка впустую.
+class _OrbPainter extends CustomPainter {
+  _OrbPainter({required this.t, required this.primary, required this.tertiary});
+
+  /// Фаза цикла [0..1] от AnimationController (_ThinkingOrb).
+  final double t;
+  final Color primary;
+  final Color tertiary;
+
+  static const double _tau = math.pi * 2;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+
+    // Мягкое ореольное свечение вокруг сферы — слой «halo» из промпта.
+    // Тонкий alpha у primary на тёмном фоне даёт глубину как у стекла.
+    final glowPaint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          primary.withValues(alpha: 0.30),
+          primary.withValues(alpha: 0.0),
+        ],
+        stops: const [0.0, 1.0],
+      ).createShader(Rect.fromCircle(center: center, radius: size.width / 2));
+    canvas.drawCircle(center, size.width / 2, glowPaint);
+
+    // Пульс радиуса: ±4 % — спокойное «дыхание» (аналог orb.pop в промпте).
+    final r = size.width * 0.31 * (1 + 0.04 * math.sin(t * _tau));
+
+    // Сфера: радиальный градиент со смещённым фокусом — свет сверху-слева,
+    // к краю холоднее и темнее (tertiary). Промпт рисует то же самое
+    // светло-зелёной палитрой, здесь — цвета темы приложения.
+    final light = center - Offset(r * 0.35, r * 0.4);
+    canvas.drawCircle(
+      center,
+      r,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [
+            Color.lerp(primary, Colors.white, 0.7)!,
+            primary,
+            Color.lerp(tertiary, primary, 0.25)!,
+          ],
+          stops: const [0.0, 0.55, 1.0],
+          // Фокус — Alignment в нормированных координатах круга-шейдера:
+          // свет сверху-слева (как светлая точка в промпте). Радиус фокуса
+          // — доля радиуса градиента, чтобы переход был мягким.
+          focal: const Alignment(-0.35, -0.4),
+          focalRadius: 0.05,
+        ).createShader(Rect.fromCircle(center: center, radius: r)),
+    );
+
+    // Внутреннее свечение в точке света (поток «sphere glow» из промпта).
+    canvas.drawCircle(
+      light,
+      r * 0.4,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.45),
+            Colors.white.withValues(alpha: 0.0),
+          ],
+          stops: const [0.0, 1.0],
+        ).createShader(Rect.fromCircle(center: light, radius: r * 0.4)),
+    );
+    // Тонкая кромка по краю шара отделяет его от ореола.
+    canvas.drawCircle(
+      center,
+      r,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = Colors.white.withValues(alpha: 0.10),
+    );
+
+    // Три кольца-дуги с прозрачностью: разный радиус, скорость и высота
+    // эллипса создают ощущение «3D-вращения», как у кольца-орбиты в промпте.
+    _ring(canvas, center, r * 1.22,
+        start: t * _tau,
+        sweep: _tau * 0.25,
+        width: 1.6,
+        color: primary.withValues(alpha: 0.45));
+    _ring(canvas, center, r * 1.05,
+        start: -t * _tau * 0.6 + 2.1,
+        sweep: _tau * 0.25,
+        width: 1.2,
+        color: Colors.white.withValues(alpha: 0.18));
+    // Среднее кольцо — эллипс: рисуем в сжатой системе координат.
+    canvas
+      ..save()
+      ..translate(center.dx, center.dy)
+      ..scale(1.0, 0.42);
+    _ring(canvas, Offset.zero, r * 1.5,
+        start: -t * _tau * 0.7 + 1.0,
+        sweep: _tau * 0.25,
+        width: 1.4,
+        color: tertiary.withValues(alpha: 0.5));
+    canvas.restore();
+
+    // Частицы по орбитам — 16 точек (задача: 12–20). Детерминированные
+    // позиции по индексу: золотой угол по «меридиану», три «пояса» с
+    // разными наклоном и скоростью; глубина — по синусу фазы: она
+    // управляет только яркостью и размером точки (дальние — тусклее и
+    // мельче), рисуем всё поверх шара, физического перекрытия нет.
+    const count = 16;
+    for (var i = 0; i < count; i++) {
+      final band = i % 3;
+      final phi0 = i * 2.39996;
+      final orbit = r * (0.35 + 0.18 * (band / 2));
+      // Распределение скоростей по остатку индекса — тоже детерминизм.
+      final speed = (band == 0 ? 1.0 : (band == 1 ? -0.8 : 0.6)) *
+          (0.55 + 0.1 * (i % 5));
+      final phi = phi0 + t * _tau * speed;
+      final depth = (math.sin(phi) + 1) / 2; // 0 — сзади, 1 — спереди
+      final tilt = band == 1 ? 0.35 : 0.45;
+      final p = Offset(
+        center.dx + math.cos(phi) * orbit,
+        center.dy + math.sin(phi) * orbit * tilt,
+      );
+      // Дальние точки тусклее и мельче — простая имитация глубины.
+      final dotColor = Color.lerp(tertiary, Colors.white, 0.2 + 0.6 * depth)!
+          .withValues(alpha: 0.15 + 0.5 * depth);
+      canvas.drawCircle(p, 1.1 + 1.0 * depth, Paint()..color = dotColor);
+    }
+  }
+
+  /// Одна дуга-кольцо: круг на радиусе [radius] от угла [start]
+  /// длиной [sweep], только обводка.
+  void _ring(
+    Canvas canvas,
+    Offset center,
+    double radius, {
+    required double start,
+    required double sweep,
+    required double width,
+    required Color color,
+  }) {
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      start,
+      sweep,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = width
+        ..strokeCap = StrokeCap.round
+        ..color = color,
     );
   }
 
-  /// Одна точка волны: синус с фазой `i/3` цикла даёт плавный подъём и
-  /// спад без рывков; при `_still` — фиксированная середина, без движения.
-  static Widget _typingDot(
-      AnimationController c, Color color, int i, bool still) {
-    final wave = still
-        ? 0.5
-        : 0.5 + 0.5 * math.sin((c.value - i / 3) * 2 * math.pi);
-    return Transform.translate(
-      offset: Offset(0, -5 * wave),
-      child: Transform.scale(
-        scale: 0.8 + 0.3 * wave,
-        child: Opacity(
-          opacity: 0.45 + 0.55 * wave,
-          child: Container(
-            width: 7,
-            height: 7,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-        ),
-      ),
-    );
-  }
+  @override
+  bool shouldRepaint(covariant _OrbPainter oldDelegate) =>
+      // Кадр зависит только от фазы контроллера и цветов темы: если и то и
+      // то не менялось — рисуем заново впустую, CanvasKit и так нагружен.
+      oldDelegate.t != t ||
+      oldDelegate.primary != primary ||
+      oldDelegate.tertiary != tertiary;
 }
 
 /// Свёрнутый блок «Завершено размышление».
