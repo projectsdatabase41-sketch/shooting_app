@@ -10,7 +10,6 @@ import '../models/target_face.dart';
 import '../painters/analytics_painters.dart';
 import '../painters/score_graph_painter.dart';
 import '../theme/app_theme.dart';
-import 'analytics_bento.dart';
 import 'empty_state.dart';
 import 'section_header.dart';
 import 'stat_tile.dart';
@@ -66,7 +65,7 @@ class AnalyticsPanel extends StatefulWidget {
   ///
   /// Параметр необязательный: экраны, которые его ещё не передают,
   /// продолжают работать, а панель дополнительно распознаёт такой срез
-  /// по динамике (см. `_sessionScopedSlice`).
+  /// по динамике.
   final bool sessionScoped;
 
   const AnalyticsPanel({
@@ -103,29 +102,8 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
   bool get showSeries => widget.showSeries;
   String? get mixedFacesNote => widget.mixedFacesNote;
 
-  /// Показывать ли карточку «По месяцам» в обзоре (отзыв 22.11, пункт 2).
-  bool get showMonths => !_sessionScopedSlice;
-
-  /// Срез одной тренировки — по явному флагу или по самой динамике.
-  ///
-  /// Явный флаг приходит от экрана статистики (`sessionScoped`), но
-  /// экран мишени и другие места панель вызывают без него, поэтому есть
-  /// второй, проверяемый признак: на срезе одной тренировки динамика
-  /// строится ПО ВЫСТРЕЛАМ, то есть её точки — это те же выстрелы среза
-  /// в том же порядке. В срезах пошире точки — суммы за тренировки, и их
-  /// число совпадает с числом выстрелов только у выстрела-«тренировки».
-  /// Это не догадка о номере тренировки, а проверка совпадения данных.
-  bool get _sessionScopedSlice {
-    if (widget.sessionScoped) return true;
-    final modes = widget.dynamics;
-    if (modes == null || modes.isEmpty) return false;
-    final pts = modes.first.points;
-    if (pts.isEmpty || pts.length != shots.length) return false;
-    for (var i = 0; i < pts.length; i++) {
-      if (pts[i].score != shots[i].score) return false;
-    }
-    return true;
-  }
+  // Геттеры showMonths/_sessionScopedSlice удалены вместе с блоком «Обзор»
+  // (отзыв владельца 23.11 №3) — нужны они были только ему.
 
   @override
   Widget build(BuildContext context) {
@@ -150,17 +128,9 @@ class _AnalyticsPanelState extends State<AnalyticsPanel> {
     final mode = modes.isEmpty ? 0 : _mode % modes.length;
 
     final blocks = <(String, Widget)>[
-      // «Обзор» — четыре карточки (перенос промпта AnalyticsBento). Данные
-      // те же, что у остальных блоков: срез выстрелов плюс его динамика.
-      // На срезе одной тренировки карточка «По месяцам» убирается
-      // (отзыв 22.11, пункт 2) — подпись блока это учитывает.
-      ('bento', _block(
-        title: tr('Обзор'),
-        subtitle: showMonths
-            ? tr('Итог, серии, габариты и месяцы — по одному взгляду')
-            : tr('Итог, серии и габариты — по одному взгляду'),
-        child: AnalyticsBento(shots: shots, face: face, dynamics: modes, showMonths: showMonths),
-      )),
+      // Блок «Обзор» (bento: итог, серии, габариты, месяцы) удалён
+      // (отзыв владельца 23.11 №3: «убрать из статистики … полностью,
+      // они тут лишние»).
       if (modes.isNotEmpty)
         ('dynamics', _block(
           title: modes[mode].title,

@@ -71,6 +71,17 @@ class _AthleteCoachChatState extends State<AthleteCoachChat> {
     }
   }
 
+  /// Непрозрачный фон всей области чата (отзыв 23.11 №2: «когда открываю чат
+  /// с тренером, всё кроме чата за фиолетовой маской»): прозрачные
+  /// поверхности над цветной маской обоев просвечивали — та же история, что
+  /// уже лечили у заметок. Цвет surfaceContainer, а подкраску surfaceTint
+  /// выключаем, чтобы Material не менял оттенок в тёмной и светлой теме.
+  Widget _opaque(Widget child) => Material(
+        color: Theme.of(context).colorScheme.surfaceContainer,
+        surfaceTintColor: Colors.transparent,
+        child: child,
+      );
+
   Widget _hint(String text) => Center(
         child: Padding(
             padding: const EdgeInsets.all(24),
@@ -99,20 +110,18 @@ class _AthleteCoachChatState extends State<AthleteCoachChat> {
   @override
   Widget build(BuildContext context) {
     if (!_main.isSignedIn) {
-      return _hint(tr(
-          'Чтобы переписываться с тренером, войдите в свою базу: Настройки → Данные и синхронизация → Учётная запись.'));
+      return _opaque(_hint(tr(
+          'Чтобы переписываться с тренером, войдите в свою базу: Настройки → Данные и синхронизация → Учётная запись.')));
     }
     final coaches = _coaches;
     if (coaches == null) {
-      return _error == null
-          ? const AppLoader()
-          : _hint(_error!);
+      return _opaque(_error == null ? const AppLoader() : _hint(_error!));
     }
 
     if (coaches.isNotEmpty) {
       final current = coaches.firstWhere((c) => c.id == _selected,
           orElse: () => coaches.first);
-      return Column(
+      return _opaque(Column(
         children: [
           if (coaches.length > 1)
             _chips([for (final c in coaches) (id: c.id, name: c.nickname)],
@@ -135,7 +144,7 @@ class _AthleteCoachChatState extends State<AthleteCoachChat> {
             ),
           ),
         ],
-      );
+      ));
     }
 
     final simple = _simple ?? const [];
@@ -145,7 +154,7 @@ class _AthleteCoachChatState extends State<AthleteCoachChat> {
     }
     final current = simple.firstWhere((c) => c.grantId == _selected,
         orElse: () => simple.first);
-    return Column(
+    return _opaque(Column(
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
@@ -173,7 +182,7 @@ class _AthleteCoachChatState extends State<AthleteCoachChat> {
             delete: _main.deleteCoachChat,
           ),
         ),
-      ],
-    );
+        ],
+      ));
   }
 }

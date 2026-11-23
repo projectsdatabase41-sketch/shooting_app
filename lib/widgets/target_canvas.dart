@@ -153,70 +153,193 @@ class _TargetCanvasState extends State<TargetCanvas> {
   @override
   void dispose() {
     _holdTimer?.cancel();
+    // Лупа живёт в корневом Overlay — снимаем её вручную (как в финале).
+    _loupeEntry?.remove();
+    _loupeEntry = null;
     super.dispose();
   }
 
-  /// Лупа всегда показывает ОДНО увеличение — шаг десятой доли ≈ 4,5 px, независимо от
-  /// ручного зума мишени (иначе зумы складывались и было непонятно, куда указываешь).
+  /// Лупа — точно как в финале (ShotPad в final_run_screen.dart; отзыв
+  /// владельца 23.11 «сделай лупу прямо как в финале»): диаметр 190,
+  /// увеличение формулой финала (шаг десятой доли ≈ 4,5 px, мягче прежнего —
+  /// сильное увеличение «убегало» из-под пальца), и лупа ВСЕГДА стоит над
+  /// пальцем в верхнем слое экрана (Overlay), у верхнего края просто
+  /// упираясь в него. Логика постановки/перетаскивания выстрела не менялась —
+  /// только вид и позиционирование лупы.
   static const double _loupePxPerStep = 4.5;
-  static const double _loupeSize = 220;
+  static const double _loupeSize = 190;
 
-  /// Насколько быстро лупа следует за пальцем: сдвиг пальца умножается на
-  /// этот коэффициент. Раньше лупа переписала своё положение заново у каждой
-  /// новой позиции пальца и двигалась один к одному — отметка центра центра
-  /// «скакала» вправо/влево и вверх/вниз при каждом чихе руки (отзыв 23.11
-  /// №3). Чувствительность снижена примерно вдвое: 0.5–0.6 прежней.
-  static const double _loupeFollowGain = 0.55;
+  /// От пальца до центра лупы — как в финале (ShotPad._gap).
+  static const double _loupeGap = 125;
 
-  /// Сколько пикселей лупы обязано остаться на холсте. За край уходить
-  /// частично можно (отзыв 23.11 №3: «не страшно»), но центр лупы, где стоит
-  /// выстрел, обязан оставаться видимым — иначе стрелок потеряет пробоину.
-  static const double _loupeVisiblePx = 24;
+  OverlayEntry? _loupeEntry;
 
-  /// Позиция лупы в координатах холста. Вводится при первом касании рядом с
-  /// пальцем (см. [_initialLoupePos]), дальше едет за пальцем с коэффициентом
-  /// [_loupeFollowGain] — от накопленного сдвига, а не «заново у пальца».
-  Offset _loupePos = Offset.zero;
-
-  /// Показать лупу у первого касания или переместить её вслед за пальцем.
-  void _trackFinger(Offset pos) {
-    setState(() {
-      if (_finger == null) {
-        _finger = pos;
-        _loupePos = _initialLoupePos(pos);
-      } else {
-        // Отзыв 23.11 №3: повторяем движение пальца вдвое медленнее —
-        // сглаживание тем же коэффициентом, что и понижение чувствительности.
-        _loupePos += (pos - _finger!) * _loupeFollowGain;
-        _finger = pos;
-      }
-    });
+  double _loupeZoom(TargetViewModel vm) {
+    final st = vm.face.decimalStepMm;
+    final stepMm = st > 0 ? st : 1.0;
+    return (_loupePxPerStep * vm.face.faceRadiusMm / (stepMm * _loupeSize / 2))
+        .clamp(3.0, 24.0)
+        .toDouble();
   }
 
-  /// Жёсткий кламп лупы к краям холста снят (отзыв 23.11 №3): остался только
-  /// мягкий предел, при котором центр окна не выходит за холст.
-  double _softLoupeX(double v, double w) => v.clamp(
-      -_loupeSize / 2 + _loupeVisiblePx,
-      math.max(-_loupeSize / 2 + _loupeVisiblePx, w - _loupeSize / 2 - _loupeVisiblePx)).toDouble();
+  /// Запоминает, где палец: лупа теперь стоит над пальцем и позиционируется
+  /// заново у каждой его позиции (поведение финала), без накопленного сдвига.
+  void _trackFinger(Offset pos) {
+    if (_finger == pos) return;
+    setState(() => _finger = pos);
+  }
 
-  double _softLoupeY(double v, double h) => v.clamp(
-      -_loupeSize / 2 + _loupeVisiblePx,
-      math.max(-_loupeSize / 2 + _loupeVisiblePx, h - _loupeSize / 2 - _loupeVisiblePx)).toDouble();
-
-  /// Первое положение лупы относительно пальца: над ним, а у верхнего края —
-  /// сбоку на высоте пальца (расположение то же, что было всегда — оно
-  /// проверено целевыми тестами), но уже с мягкими границами выше.
-  Offset _initialLoupePos(Offset f) {
-    const d = _loupeSize;
-    const gap = 18.0;
-    final w = _canvasSize.width, h = _canvasSize.height;
-    if (f.dy - d - gap >= 0) {
-      return Offset(_softLoupeX(f.dx - d / 2, w), f.dy - d - gap);
+  /// Показывает/прячет лупу в верхнем слое экрана — как в финале
+  /// (ShotPad._syncOverlay): слой Overlay поверх всех окон, иначе ClipRect
+  /// вокруг холста обрезал бы лупу у краёв.
+  void _syncLoupeOverlay() {
+    if (!mounted) return;
+    var show = false;
+    if (_finger != null) {
+      final vm = context.read<TargetViewModel>();
+      show = vm.isEditing || _pendingAdd;
     }
-    final toRight = f.dx < w / 2;
-    return Offset(
-      _softLoupeX(toRight ? f.dx + gap : f.dx - d - gap, w),
-      _softLoupeY(f.dy - d / 2, h),
+    if (show && _loupeEntry == null) {
+      _loupeEntry = OverlayEntry(builder: (ctx) {
+        final box = context.findRenderObject();
+        if (box is! RenderBox || !box.attached) return const SizedBox.shrink();
+        final mq = MediaQuery.of(ctx);
+        final vm = context.read<TargetViewModel>();
+        final colors = context.read<PersonalizationViewModel>().scheme;
+        return Positioned.fill(
+          child: IgnorePointer(
+            child: Stack(clipBehavior: Clip.none, children: [
+              if (_finger != null)
+                _buildLoupe(vm, colors, _finger!, _canvasSize,
+                    origin: box.localToGlobal(Offset.zero),
+                    screen: mq.size,
+                    safeTop: mq.padding.top),
+            ]),
+          ),
+        );
+      });
+      Overlay.of(context, rootOverlay: true).insert(_loupeEntry!);
+    } else if (!show && _loupeEntry != null) {
+      _loupeEntry!.remove();
+      _loupeEntry = null;
+    } else if (show) {
+      _loupeEntry!.markNeedsBuild();
+    }
+  }
+
+  /// Лупа над пальцем в координатах всего экрана — дословный перенос
+  /// ShotPad._buildLoupe из финала (отзыв 23.11 №1), отличия только в
+  /// источнике данных: правится черновик пробоины, а не откладывается выстрел.
+  Widget _buildLoupe(TargetViewModel vm, TargetColorScheme colors, Offset f, Size size,
+      {required Offset origin, required Size screen, required double safeTop}) {
+    // До начала правки (касание ещё не превратилось в черновой выстрел) лупа
+    // показывает окрестность точки под пальцем — чтобы тап был не вслепую.
+    final mm = vm.isEditing ? Offset(vm.draftXMm, vm.draftYMm) : _screenToMm(vm, f);
+    final score = vm.isEditing
+        ? formatScore(vm.draftScore ?? 0.0, vm.face)
+        : formatScore(scoreForPoint(mm.dx, mm.dy, vm.face), vm.face);
+    // Лупа ВСЕГДА над пальцем и поверх всех окон, не прыгает вниз: у самого
+    // верха экрана просто упирается в его край (как ShotPad). Нижняя граница —
+    // верх холста: он и так ниже статус-бара и верхней панели тренировки
+    // (аналог safeTop финала), и лупа не должна прятаться под панелью.
+    final g = origin + f;
+    final cx = g.dx.clamp(_loupeSize / 2, screen.width - _loupeSize / 2);
+    final cy = math.max(g.dy - _loupeGap, math.max(safeTop, origin.dy) + _loupeSize / 2);
+    final kz = _loupeSize / 2 * _loupeZoom(vm) / vm.face.faceRadiusMm;
+    // Точка выстрела — в центре лупы. Знак по Y: в мм ось вверх, на экране
+    // вниз, поэтому pan.dy = +mm.dy.
+    final pan = Offset(-mm.dx * kz, mm.dy * kz);
+    return Positioned(
+      left: cx - _loupeSize / 2,
+      top: cy - _loupeSize / 2,
+      width: _loupeSize,
+      height: _loupeSize,
+      child: IgnorePointer(
+        child: Stack(clipBehavior: Clip.none, children: [
+          DecoratedBox(
+            // Тень лупы — объём вместо плоской наклейки.
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.45),
+                    blurRadius: 22,
+                    spreadRadius: 1,
+                    offset: const Offset(0, 10)),
+              ],
+            ),
+            child: DecoratedBox(
+              // Рамка рисуется ПОВЕРХ (foreground): иначе она сужает область
+              // и центр мишени смещается на её толщину относительно перекрестия.
+              position: DecorationPosition.foreground,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white.withValues(alpha: 0.9), width: 4),
+              ),
+              child: ClipOval(
+                child: Stack(children: [
+                  Positioned.fill(
+                    child: CustomPaint(
+                      painter: TargetPainter(
+                        face: vm.face,
+                        colors: colors,
+                        visibleShots: vm.visibleShots,
+                        selectedShot: vm.selectedShot,
+                        currentSeriesNo:
+                            vm.session.shots.isEmpty ? 1 : vm.session.shots.last.seriesNo,
+                        isEditing: vm.isEditing,
+                        draftXMm: vm.isEditing ? vm.draftXMm : null,
+                        draftYMm: vm.isEditing ? vm.draftYMm : null,
+                        draftShotNumber: vm.isEditing ? vm.draftShotNumber : null,
+                        zoom: _loupeZoom(vm),
+                        pan: pan,
+                      ),
+                    ),
+                  ),
+                  // Перекрестие в центре — как в финале: кольцо ровно по
+                  // размеру пробоины (в масштабе лупы) и точка.
+                  Positioned.fill(
+                    child: CustomPaint(painter: _LoupeCentrePainter(holeR: 2.25 * kz)),
+                  ),
+                  // Блик и виньетка стекла.
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: RadialGradient(
+                          center: const Alignment(-0.45, -0.55),
+                          radius: 1.0,
+                          colors: [
+                            Colors.white.withValues(alpha: 0.28),
+                            Colors.white.withValues(alpha: 0.0),
+                            Colors.black.withValues(alpha: 0.18),
+                          ],
+                          stops: const [0.0, 0.55, 1.0],
+                        ),
+                      ),
+                    ),
+                  ),
+                ]),
+              ),
+            ),
+          ),
+          // Значение выстрела над лупой — как в финале.
+          Positioned(
+            left: 0,
+            right: 0,
+            top: -30,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                decoration: BoxDecoration(
+                    color: Colors.black87, borderRadius: BorderRadius.circular(12)),
+                child: Text(score,
+                    style: const TextStyle(
+                        color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
+              ),
+            ),
+          ),
+        ]),
+      ),
     );
   }
 
@@ -229,6 +352,9 @@ class _TargetCanvasState extends State<TargetCanvas> {
     return LayoutBuilder(
       builder: (context, constraints) {
         _canvasSize = Size(constraints.maxWidth, constraints.maxHeight);
+        // Лупа живёт в Overlay и синхронизируется после кадра, как в финале
+        // (ShotPad._syncOverlay, отзыв 23.11 №1).
+        WidgetsBinding.instance.addPostFrameCallback((_) => _syncLoupeOverlay());
         // Listener считает пальцы «сырыми» событиями, до арены жестов.
         // Ни один распознаватель этого не даёт: удержание видит только
         // свой первый палец и потому не отличает долгое нажатие от
@@ -368,69 +494,11 @@ class _TargetCanvasState extends State<TargetCanvas> {
               // в том же правом верхнем углу его наполовину закрывала
               // (отзыв владельца 22.11: «уголок пристрелки вообще не верный»).
               // Подпись серии и так выводится в шапке серии на экране мишени.
-              if (_finger != null && (vm.isEditing || _pendingAdd)) _loupe(vm, colors),
             ],
           ),
           ),
         );
       },
-    );
-  }
-
-  /// Лупа над пальцем: окрестность чернового выстрела с небольшим увеличением.
-  /// Положение плавное: вводится у пальца над ним/сбоку, дальше едет за
-  /// пальцем с пониженной чувствительностью (см. [_trackFinger]) и может
-  /// частично уходить за край холста — жёсткий кламп снят (отзыв 23.11 №3).
-  Widget _loupe(TargetViewModel vm, TargetColorScheme colors) {
-    const d = _loupeSize;
-    final w = _canvasSize.width, h = _canvasSize.height;
-    final left = _softLoupeX(_loupePos.dx, w);
-    final top = _softLoupeY(_loupePos.dy, h);
-    // Масштаб лупы фиксирован: шаг десятой доли = _loupePxPerStep пикселей.
-    final step = vm.face.decimalStepMm > 0 ? vm.face.decimalStepMm : 1.0;
-    final mmToPx = _loupePxPerStep / step;
-    final zoomL = mmToPx * vm.face.faceRadiusMm / (d / 2);
-    // До начала правки (касание ещё не превратилось в черновой выстрел) лупа
-    // показывает окрестность точки под пальцем — чтобы тап был не вслепую.
-    final mm = vm.isEditing ? null : _screenToMm(vm, _finger!);
-    final center = vm.isEditing ? Offset(vm.draftXMm, vm.draftYMm) : mm!;
-    // Как в финалах (ShotPad): точка выстрела — в ЦЕНТРЕ лупы, а сама
-    // лупа стоит над пальцем. Знак по Y: в мм ось вверх, на экране вниз,
-    // поэтому pan.dy = +mm.dy. Раньше стоял минус — точка отражалась по
-    // вертикали, отсюда «двигаю вниз, а смотрю вверх» (отзыв 17.11).
-    final pan = Offset(-center.dx * mmToPx, center.dy * mmToPx);
-    return Positioned(
-      left: left,
-      top: top,
-      width: d,
-      height: d,
-      child: IgnorePointer(
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 10)],
-            border: Border.all(color: Colors.white, width: 2),
-          ),
-          child: ClipOval(
-            child: CustomPaint(
-              painter: TargetPainter(
-                face: vm.face,
-                colors: colors,
-                visibleShots: vm.visibleShots,
-                selectedShot: vm.selectedShot,
-                currentSeriesNo: vm.session.shots.isEmpty ? 1 : vm.session.shots.last.seriesNo,
-                isEditing: vm.isEditing,
-                draftXMm: vm.isEditing ? vm.draftXMm : null,
-                draftYMm: vm.isEditing ? vm.draftYMm : null,
-                draftShotNumber: vm.isEditing ? vm.draftShotNumber : null,
-                zoom: zoomL,
-                pan: pan,
-              ),
-              size: const Size(d, d),
-            ),
-          ),
-        ),
-      ),
     );
   }
 
@@ -672,6 +740,38 @@ class _TargetCanvasState extends State<TargetCanvas> {
     final sum = shots.fold(0.0, (a, s) => a + s.score);
     return formatScore(sum, vm.face);
   }
+}
+
+/// Перекрестие лупы в центре — копия режима `lens` из ShotMarkerPainter
+/// финала (отзыв 23.11 №1 «сделай лупу прямо как в финале»): кольцо ровно
+/// по размеру пробоины (в масштабе лупы) и точка в центре (10% диаметра
+/// пробоины) — для точного прицеливания.
+class _LoupeCentrePainter extends CustomPainter {
+  final double holeR;
+  const _LoupeCentrePainter({required this.holeR});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final f = Offset(size.width / 2, size.height / 2);
+    final rr = math.max(3.0, holeR);
+    final dotR = math.max(1.2, rr * 0.1);
+    final white = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6;
+    final dark = Paint()
+      ..color = Colors.black.withValues(alpha: 0.7)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.2;
+    for (final p in [dark, white]) {
+      canvas.drawCircle(f, rr, p);
+    }
+    canvas.drawCircle(f, dotR + 0.9, Paint()..color = Colors.black.withValues(alpha: 0.7));
+    canvas.drawCircle(f, dotR, Paint()..color = Colors.white);
+  }
+
+  @override
+  bool shouldRepaint(_LoupeCentrePainter old) => old.holeR != holeR;
 }
 
 /// Значение в углу бланка. Без словесной подписи — смысл несёт само
