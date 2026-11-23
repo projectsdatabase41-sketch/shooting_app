@@ -96,8 +96,10 @@ void main() {
         expect(bounds.right, lessThanOrEqualTo(canvas.right + 1e-9));
         expect(bounds.bottom, lessThanOrEqualTo(canvas.bottom + 1e-9));
         // Катет сгиба — в разумных пределах, а не во весь экран: при 6,9×
-        // уголок не должен закрывать десятку.
-        expect(corner.fold, inInclusiveRange(8, 30));
+        // уголок не должен закрывать десятку. Границы 12…40.px — новые
+        // значения после увеличения катета на 30% (отзыв 23.11 №4),
+        // прежние были 8…30.
+        expect(corner.fold, inInclusiveRange(12, 40));
       }
     }
   });
@@ -111,6 +113,10 @@ void main() {
     // Прямой угол — в вершине; гипотенуза смотрит в сторону центра мишени.
     expect(corner.hypotenuseStart, Offset(corner.anchor.dx - corner.fold, corner.anchor.dy));
     expect(corner.hypotenuseEnd, Offset(corner.anchor.dx, corner.anchor.dy + corner.fold));
+
+    // Без зума катет — ровно 13% радиуса бланка (после увеличения на 30%,
+    // отзыв 23.11 №4), и кламп 12…40 его не трогает: 200 × 0.13 = 26.
+    expect(corner.fold, closeTo(200 * 0.13, 1e-6));
 
     final inside = corner.anchor + Offset(-corner.fold * 0.25, corner.fold * 0.25);
     final outside = corner.anchor + Offset(corner.fold * 0.25, -corner.fold * 0.25);

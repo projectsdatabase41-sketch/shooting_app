@@ -32,7 +32,6 @@ import '../widgets/shot_wheel.dart';
 import '../services/comments_repository.dart';
 import '../logic/friendly_error.dart' show friendlyErrorDevMode;
 import '../widgets/target_canvas.dart';
-import '../theme/app_theme.dart';
 import 'ai_chat_screen.dart';
 import 'photo_scan_screen.dart';
 import '../i18n/i18n.dart';
@@ -138,13 +137,15 @@ class _WorkspaceBody extends StatefulWidget {
 }
 
 class _WorkspaceBodyState extends State<_WorkspaceBody> {
-  /// Прокрутка колонки мишени (на десктопе она своя, на мобильном мишень
-  /// закреплена и не листается вовсе).
+  /// Прокрутка мишени. На десктопе листает колонку мишени, на телефоне —
+  /// всю страницу целиком: мишень, переключатель и раздел едут вместе
+  /// (отзыв 23.11 №2). Отдельно мишень больше не закреплена нигде.
   final _scroll = ScrollController();
 
-  /// Прокрутка выбранного раздела под переключателем. Отдельный контроллер
-  /// от [_scroll]: иначе переключение раздела дёргало бы мишень, а «перейти
-  /// к мишени» из общего списка сбрасывало бы позицию раздела.
+  /// Прокрутка выбранного раздела на десктопе. На телефоне не используется —
+  /// там страница одна. Отдельный контроллер от [_scroll]: иначе переключение
+  /// раздела дёргало бы мишень, а «перейти к мишени» из общего списка
+  /// сбрасывало бы позицию раздела.
   final _sectionScroll = ScrollController();
 
   /// Какой раздел показан под переключателем.
@@ -153,6 +154,11 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
   /// настройка рабочего стола. `null` — раздел ещё не выбран, тогда работает
   /// значение по умолчанию (см. [_selectedBottom]).
   WorkspacePage? _bottomPage;
+
+  /// Мобильная раскладка и высота мишени в ней: выставляются в build из
+  /// LayoutBuilder, оттуда их читает [_selectBottom].
+  bool _mobileLayout = false;
+  double _mobileTargetH = 0;
 
   /// Максимальный размер мишени на десктоп/веб (фиксированный лимит, px).
   static const double _maxTargetSizeDesktop = 720.0;
@@ -295,13 +301,29 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
     // Раздел открывается сверху: без сброса он появлялся бы на середине
     // прокрутки предыдущего, и казалось бы, что открылось не то.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_sectionScroll.hasClients) _sectionScroll.jumpTo(0);
+      if (_mobileLayout) {
+        // Мобильный: страница одна (отзыв 23.11 №2), поэтому «открыть
+        // раздел целиком» — прокрутить мишень за верх экрана; раздел стоит
+        // сразу под ней и виден с самого начала.
+        if (_scroll.hasClients) {
+          _scroll.animateTo(
+              math.min(_mobileTargetH, _scroll.position.maxScrollExtent),
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOut);
+        }
+      } else if (_sectionScroll.hasClients) {
+        _sectionScroll.jumpTo(0);
+      }
     });
   }
 
   /// Тело одного выбранного раздела — то же, что раньше было в общей ленте.
+  /// [scroll] — куда передаётся перетаскивание за заголовок раздела: на
+  /// десктопе это внутренний скролл раздела, на телефоне — общая прокрутка
+  /// страницы (отзыв 23.11 №2).
   Widget _bottomSection(
-      WorkspacePage page, TargetViewModel vm, double sectionH) {
+      WorkspacePage page, TargetViewModel vm, double sectionH,
+      {required ScrollController scroll}) {
     // Статистика — плоский блок без вложенного скролла (решение владельца:
     // разбор листается одной страницей, а не окошком внутри окошка).
     if (page == WorkspacePage.statistics) {
@@ -310,8 +332,17 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
         child: _pageBody(page, vm),
       );
     }
-    // Остальные разделы — в рамке фиксированной высоты: у выстрелов,
-    // ассистента, заметок и чата с тренером своя внутренняя прокрутка.
+    // Выстрелы — тоже плоский: список строк по сериям сам тянется вниз,
+    // внутренней прокрутки ему не нужно (отзыв 23.11 №1 — «список выстрелов
+    // / номер, значение, стрелочкой, серия n, сумма»).
+    if (page == WorkspacePage.shots) {
+      return _StatisticsSection(
+        title: page.title,
+        child: _ShotsListSection(vm: vm),
+      );
+    }
+    // Остальные разделы — в рамке фиксированной высоты: у ассистента,
+    // заметок и чата с тренером своя внутренняя прокрутка.
     Widget body = _pageBody(page, vm);
     if (page == WorkspacePage.notes) {
       // У ленты заметок подсветку нажатия гасим: сама лента — не кнопка, а
@@ -329,7 +360,7 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
     return _Section(
       title: page.title,
       height: sectionH,
-      scroll: _sectionScroll,
+      scroll: scroll,
       child: body,
     );
   }
@@ -362,8 +393,9 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
       );
 
   void _jumpTo(WorkspacePage page) {
-    // Мишень закреплена сверху, поэтому «перейти к мишени» — прокрутить её
-    // колонку в начало (на телефоне она и так на виду).
+    // «Перейти к мишени» — прокрутить страницу в начало: мишень первая
+    // колонка/блок, и на обеих раскладках она открывается прокруткой вверх
+    // (на телефоне страница одна — отзыв 23.11 №2).
     if (page == WorkspacePage.target) {
       if (_scroll.hasClients) {
         _scroll.animateTo(0,
@@ -525,7 +557,8 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
                                       : Column(
                                           children: [
                                             _bottomSection(
-                                                selected, vm, sectionH),
+                                                selected, vm, sectionH,
+                                                scroll: _sectionScroll),
                                             const SizedBox(height: 24),
                                           ],
                                         ),
@@ -538,74 +571,54 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
                     );
                   }
 
-                  // Мобильный: мишень и «крутилка» закреплены сверху, ниже —
-                  // полоса переключателя и только выбранный раздел (решение
-                  // владельца, отзывы 22.11). Раньше здесь шла одна длинная
-                  // лента всех разделов, и до нужного надо было листать мимо
-                  // остальных.
-                  //
-                  // Высоту мишени считаем от остатка: панель заметки и колесо
-                  // под ней занимают своё, полосе переключателя нужно ~48, а
-                  // разделу — хотя бы ~150, иначе он не читается. Запас в 24 —
-                  // на шрифт крупнее обычного и на строку «Попал/Мимо», чтобы
-                  // не получить переполнение колонки.
+                  // Мобильный (отзыв 23.11 №2): ОДНА общая прокрутка —
+                  // мишень, переключатель и выбранный раздел едут вместе.
+                  // Раньше мишень была закреплена, а раздел листался отдельной
+                  // лентой: после фиксации мишени под ним оставалось ~30%
+                  // экрана и листать было нельзя («ничего не видно»). Теперь
+                  // мишень при листании уходит вверх, и раздел открывается
+                  // целиком — как в прежнем режиме длинной ленты, только
+                  // показывается один выбранный раздел.
                   const double switcherH = _SectionsSwitcher.totalHeight;
-                  const double sectionMin = 150; // минимум под раздел
                   const double barsSlack = 24; // запас на высоту панелей
                   final double barsH = vm.face.hitMiss ? 190 : 130;
+                  // База высоты мишени — видимая область без панелей и
+                  // полосы переключателя (раздел больше не резервирует место:
+                  // страница листается целиком).
                   final double available =
-                      box.maxHeight - switcherH - barsH - sectionMin - barsSlack;
-                  // Телефон в альбомной ориентации (высота ~360–430) не
-                  // помещает мишень, полосу и раздел одновременно. Тогда не
-                  // закрепляем мишень: пусть всё едет одной лентой, иначе
-                  // колонка переполняется и Flutter рисует полосатую плашку
-                  // поверх экрана.
-                  if (available < 160) {
-                    return SingleChildScrollView(
-                      controller: _scroll,
-                      physics: vm.isEditing || vm.multiTouch
-                          ? const NeverScrollableScrollPhysics()
-                          : const ClampingScrollPhysics(),
-                      child: Column(
-                        children: [
-                          _TargetPage(
-                              height: (box.maxHeight * 0.55).clamp(160.0, 320.0)),
-                          if (bottomPages.isNotEmpty)
-                            _SectionsSwitcher(
-                              pages: bottomPages,
-                              selected: selected,
-                              onSelect: _selectBottom,
-                            ),
-                          if (selected != null)
-                            _bottomSection(selected, vm, sectionH),
-                          const SizedBox(height: 24),
-                        ],
-                      ),
-                    );
-                  }
-                  final double targetH = available.clamp(160.0, 720.0);
-                  return Column(
-                    children: [
-                      _TargetPage(height: targetH),
-                      if (bottomPages.isNotEmpty)
-                        _SectionsSwitcher(
-                          pages: bottomPages,
-                          selected: selected,
-                          onSelect: _selectBottom,
-                        ),
-                      Expanded(
-                        child: _sectionScrollView(
-                          child: selected == null
-                              ? _noSectionsHint()
-                              : Column(
-                                  children: [
-                                    _bottomSection(selected, vm, sectionH),
-                                    const SizedBox(height: 24),
-                                  ],
-                                ),
-                        ),
-                      ),
-                    ],
+                      box.maxHeight - switcherH - barsH - barsSlack;
+                  // В узкой альбомной ориентации (высота ~360–430) даже без
+                  // раздела места мало, потому базой служит доля высоты.
+                  final double baseH =
+                      available < 160 ? box.maxHeight * 0.55 : available;
+                  // Отзыв 23.11 №1: блок мишени меньше на 30% (× 0.7), с
+                  // жёсткими границами 160…720, чтобы мишень не исчезала
+                  // совсем и не разрасталась на планшете.
+                  final double targetH = (baseH * 0.7).clamp(160.0, 720.0);
+                  _mobileLayout = true;
+                  _mobileTargetH = targetH;
+                  return SingleChildScrollView(
+                    controller: _scroll,
+                    physics: vm.isEditing || vm.multiTouch
+                        ? const NeverScrollableScrollPhysics()
+                        : const ClampingScrollPhysics(),
+                    child: Column(
+                      children: [
+                        _TargetPage(height: targetH),
+                        if (bottomPages.isNotEmpty)
+                          _SectionsSwitcher(
+                            pages: bottomPages,
+                            selected: selected,
+                            onSelect: _selectBottom,
+                          ),
+                        if (selected == null)
+                          _noSectionsHint()
+                        else
+                          _bottomSection(selected, vm, sectionH,
+                              scroll: _scroll),
+                        const SizedBox(height: 24),
+                      ],
+                    ),
                   );
                 },
               ),
@@ -835,6 +848,145 @@ class _StatisticsSection extends StatelessWidget {
 /// в «Разделах» и недоступный «Тренер» сюда не попадают сами собой. Полоса
 /// листается вбок: на узком телефоне пять подписей в ширину не влезают, а
 /// переносить их на вторую строку нельзя — она отнимает место у раздела.
+/// Список выстрелов раздела «Выстрелы» (отзыв 23.11 №1): номер, значение,
+/// стрелка направления, заголовок «Серия N» и сумма в конце.
+///
+/// Раньше владелец просил список рядом с мишенью справа — на широком экране
+/// он и так стоит справа от мишени, на телефоне это выбранный раздел под
+/// полосой (мишень занимает верхнюю часть).
+class _ShotsListSection extends StatelessWidget {
+  final TargetViewModel vm;
+  const _ShotsListSection({required this.vm});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final shots = vm.session.countingShots;
+    if (shots.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 4),
+        child: Text(
+          tr('Зачётных выстрелов пока нет'),
+          style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+        ),
+      );
+    }
+
+    // Группировка по сериям: в списке так видно, где кончается одна серия и
+    // начинается другая, и где именно просел результат.
+    final bySeries = <int, List<dynamic>>{};
+    for (final s in shots) {
+      bySeries.putIfAbsent(s.seriesNo, () => []).add(s);
+    }
+    final seriesNos = bySeries.keys.toList()..sort();
+
+    var totalTenths = 0.0;
+    var totalWhole = 0;
+    final blocks = <Widget>[];
+    for (final n in seriesNos) {
+      final rows = bySeries[n]!..sort((a, b) => (a.shotNumber as int).compareTo(b.shotNumber as int));
+      var sum = 0.0;
+      var whole = 0;
+      for (final s in rows) {
+        sum += (s.score as double);
+        whole += (s.score as double).floor();
+      }
+      totalTenths += sum;
+      totalWhole += whole;
+      blocks.add(Padding(
+        padding: const EdgeInsets.only(top: 10, bottom: 2),
+        child: Row(
+          children: [
+            Text(
+              tr('Серия {n}', {'n': n}),
+              style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const Spacer(),
+            Text(
+              tr('Сумма {tenths} / {whole}', {
+                'tenths': sum.toStringAsFixed(1),
+                'whole': '$whole',
+              }),
+              style: theme.textTheme.labelMedium?.copyWith(color: cs.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ));
+      for (final s in rows) {
+        blocks.add(_row(context, s));
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ...blocks,
+        Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Row(
+            children: [
+              Text(
+                tr('Итого'),
+                style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const Spacer(),
+              Text(
+                '${totalTenths.toStringAsFixed(1)} / $totalWhole',
+                style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Одна строка: номер, результат, стрелка направления от центра.
+  Widget _row(BuildContext context, dynamic s) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final score = (s.score as double);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 28,
+            child: Text('${s.shotNumber}', style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+          ),
+          SizedBox(
+            width: 52,
+            child: Text(
+              score.toStringAsFixed(1),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+          _arrow(context, (s.xMm as double), (s.yMm as double)),
+        ],
+      ),
+    );
+  }
+
+  /// Стрелка отклонения от центра: экранные оси (X вправо, Y вверх).
+  ///
+  /// Владелец жаловался (отзыв 23.11, №11), что при «0.0 / −0.1» стрелка
+  /// рисовалась вниз-влево — то есть ось Y была перевёрнута. Здесь знак
+  /// берётся ровно тот же, что печатают плитки: положительный Y — вверх.
+  Widget _arrow(BuildContext context, double xMm, double yMm) {
+    final r = math.sqrt(xMm * xMm + yMm * yMm);
+    if (r < 0.15) return const SizedBox(width: 16);
+    final angle = math.atan2(xMm, yMm); // 0 — вверх, положительный — вправо
+    return Transform.rotate(
+      angle: angle,
+      child: Icon(Icons.arrow_upward_rounded, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
+    );
+  }
+}
+
 class _SectionsSwitcher extends StatefulWidget {
   final List<WorkspacePage> pages;
   final WorkspacePage? selected;
@@ -910,41 +1062,76 @@ class _SectionsSwitcherState extends State<_SectionsSwitcher> {
     );
   }
 
+  /// Иконка раздела для круглой кнопки (отзыв 23.11 №5: «круглые кнопки
+  /// с картинкой, при нажатии превращается в овальную с текстом»).
+  static IconData _iconFor(WorkspacePage page) => switch (page) {
+        WorkspacePage.target => Icons.adjust,
+        WorkspacePage.statistics => Icons.insights_outlined,
+        WorkspacePage.shots => Icons.format_list_numbered,
+        WorkspacePage.assistant => Icons.auto_awesome_outlined,
+        WorkspacePage.notes => Icons.sticky_note_2_outlined,
+        WorkspacePage.coach => Icons.person_outline,
+      };
+
   Widget _button(BuildContext context, WorkspacePage page) {
     final cs = Theme.of(context).colorScheme;
     final active = page == widget.selected;
-    final radius = BorderRadius.circular(AppTheme.radiusMedium);
-    return SizedBox(
+    final radius = BorderRadius.circular(_SectionsSwitcher._height / 2);
+    // Выбранная кнопка — овал «иконка + подпись», остальные — круг с иконкой.
+    // Анимация размеров и ширины плавная (250 мс), как просил владелец.
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOutCubic,
       height: _SectionsSwitcher._height,
-      child: Material(
-        // Цвета строго из темы, выбранная кнопка — заливка primary/onPrimary.
-        // Фон явный и непрозрачный: полоса лежит на фоне экрана, и просвет
-        // маски обоев читался бы как «другой» цвет кнопки.
+      decoration: BoxDecoration(
         color: active ? cs.primary : cs.surfaceContainer,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: radius,
-          side: BorderSide(
-              color: active ? Colors.transparent : cs.outlineVariant),
-        ),
-        clipBehavior: Clip.antiAlias,
+        borderRadius: radius,
+        border: Border.all(color: active ? Colors.transparent : cs.outlineVariant),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Material(
+        color: Colors.transparent,
         child: InkWell(
           onTap: () => widget.onSelect(page),
           borderRadius: radius,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Center(
-              child: Text(
-                page.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                  color: active ? cs.onPrimary : cs.onSurface,
+            padding: EdgeInsets.symmetric(horizontal: active ? 14 : 0),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: _SectionsSwitcher._height,
+                  child: Center(
+                    child: Icon(
+                      _iconFor(page),
+                      size: 20,
+                      color: active ? cs.onPrimary : cs.onSurface,
+                    ),
+                  ),
                 ),
-              ),
+                // Подпись появляется только у выбранной, с лёгким сдвигом —
+                // резкое появление текста рядом с круглой иконкой выглядит
+                // как подмена кнопки.
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: active
+                      ? Padding(
+                          key: const ValueKey('label'),
+                          padding: const EdgeInsets.only(right: 6, left: 2),
+                          child: Text(
+                            page.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: cs.onPrimary,
+                            ),
+                          ),
+                        )
+                      : const SizedBox.shrink(key: ValueKey('empty')),
+                ),
+              ],
             ),
           ),
         ),

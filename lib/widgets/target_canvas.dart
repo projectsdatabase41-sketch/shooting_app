@@ -139,7 +139,7 @@ class _TargetCanvasState extends State<TargetCanvas> {
     _autoAdd = vm.isEditing;
     if (_autoAdd) {
       _applyEditDrag(pos, vm);
-      setState(() => _finger = pos);
+      _trackFinger(pos);
     }
   }
 
@@ -160,6 +160,65 @@ class _TargetCanvasState extends State<TargetCanvas> {
   /// ручного зума мишени (иначе зумы складывались и было непонятно, куда указываешь).
   static const double _loupePxPerStep = 4.5;
   static const double _loupeSize = 220;
+
+  /// Насколько быстро лупа следует за пальцем: сдвиг пальца умножается на
+  /// этот коэффициент. Раньше лупа переписала своё положение заново у каждой
+  /// новой позиции пальца и двигалась один к одному — отметка центра центра
+  /// «скакала» вправо/влево и вверх/вниз при каждом чихе руки (отзыв 23.11
+  /// №3). Чувствительность снижена примерно вдвое: 0.5–0.6 прежней.
+  static const double _loupeFollowGain = 0.55;
+
+  /// Сколько пикселей лупы обязано остаться на холсте. За край уходить
+  /// частично можно (отзыв 23.11 №3: «не страшно»), но центр лупы, где стоит
+  /// выстрел, обязан оставаться видимым — иначе стрелок потеряет пробоину.
+  static const double _loupeVisiblePx = 24;
+
+  /// Позиция лупы в координатах холста. Вводится при первом касании рядом с
+  /// пальцем (см. [_initialLoupePos]), дальше едет за пальцем с коэффициентом
+  /// [_loupeFollowGain] — от накопленного сдвига, а не «заново у пальца».
+  Offset _loupePos = Offset.zero;
+
+  /// Показать лупу у первого касания или переместить её вслед за пальцем.
+  void _trackFinger(Offset pos) {
+    setState(() {
+      if (_finger == null) {
+        _finger = pos;
+        _loupePos = _initialLoupePos(pos);
+      } else {
+        // Отзыв 23.11 №3: повторяем движение пальца вдвое медленнее —
+        // сглаживание тем же коэффициентом, что и понижение чувствительности.
+        _loupePos += (pos - _finger!) * _loupeFollowGain;
+        _finger = pos;
+      }
+    });
+  }
+
+  /// Жёсткий кламп лупы к краям холста снят (отзыв 23.11 №3): остался только
+  /// мягкий предел, при котором центр окна не выходит за холст.
+  double _softLoupeX(double v, double w) => v.clamp(
+      -_loupeSize / 2 + _loupeVisiblePx,
+      math.max(-_loupeSize / 2 + _loupeVisiblePx, w - _loupeSize / 2 - _loupeVisiblePx)).toDouble();
+
+  double _softLoupeY(double v, double h) => v.clamp(
+      -_loupeSize / 2 + _loupeVisiblePx,
+      math.max(-_loupeSize / 2 + _loupeVisiblePx, h - _loupeSize / 2 - _loupeVisiblePx)).toDouble();
+
+  /// Первое положение лупы относительно пальца: над ним, а у верхнего края —
+  /// сбоку на высоте пальца (расположение то же, что было всегда — оно
+  /// проверено целевыми тестами), но уже с мягкими границами выше.
+  Offset _initialLoupePos(Offset f) {
+    const d = _loupeSize;
+    const gap = 18.0;
+    final w = _canvasSize.width, h = _canvasSize.height;
+    if (f.dy - d - gap >= 0) {
+      return Offset(_softLoupeX(f.dx - d / 2, w), f.dy - d - gap);
+    }
+    final toRight = f.dx < w / 2;
+    return Offset(
+      _softLoupeX(toRight ? f.dx + gap : f.dx - d - gap, w),
+      _softLoupeY(f.dy - d / 2, h),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -192,7 +251,7 @@ class _TargetCanvasState extends State<TargetCanvas> {
               // прокрутка»: иначе при быстром тапе пробоина ставилась вслепую
               // (отзыв 13.11 «стоит добавить лупу, чтобы видеть, куда проставляю
               // выстрел») — раньше она появлялась только после удержания.
-              setState(() => _finger = e.localPosition);
+              _trackFinger(e.localPosition);
               _holdTimer?.cancel();
               _holdTimer = Timer(_holdDelay, () {
                 if (!mounted || !_pendingAdd) return;
@@ -222,7 +281,7 @@ class _TargetCanvasState extends State<TargetCanvas> {
             }
             if (_autoAdd && _activePointers == 1) {
               _applyEditDrag(e.localPosition, vm);
-              setState(() => _finger = e.localPosition);
+              _trackFinger(e.localPosition);
             }
           },
           onPointerUp: (e) {
@@ -319,28 +378,21 @@ class _TargetCanvasState extends State<TargetCanvas> {
   }
 
   /// Лупа над пальцем: окрестность чернового выстрела с небольшим увеличением.
-  /// Положение стабильное: над пальцем, у верхнего края — сбоку от пальца на той
-  /// же высоте (никогда не прыгает вниз).
+  /// Положение плавное: вводится у пальца над ним/сбоку, дальше едет за
+  /// пальцем с пониженной чувствительностью (см. [_trackFinger]) и может
+  /// частично уходить за край холста — жёсткий кламп снят (отзыв 23.11 №3).
   Widget _loupe(TargetViewModel vm, TargetColorScheme colors) {
-    const d = _loupeSize, gap = 18.0, margin = 4.0;
-    final f = _finger!;
+    const d = _loupeSize;
     final w = _canvasSize.width, h = _canvasSize.height;
-    double left, top;
-    if (f.dy - d - gap >= 0) {
-      left = (f.dx - d / 2).clamp(margin, math.max(margin, w - d - margin));
-      top = f.dy - d - gap;
-    } else {
-      final toRight = f.dx < w / 2;
-      left = (toRight ? f.dx + gap : f.dx - d - gap).clamp(margin, math.max(margin, w - d - margin));
-      top = (f.dy - d / 2).clamp(margin, math.max(margin, h - d - margin));
-    }
+    final left = _softLoupeX(_loupePos.dx, w);
+    final top = _softLoupeY(_loupePos.dy, h);
     // Масштаб лупы фиксирован: шаг десятой доли = _loupePxPerStep пикселей.
     final step = vm.face.decimalStepMm > 0 ? vm.face.decimalStepMm : 1.0;
     final mmToPx = _loupePxPerStep / step;
     final zoomL = mmToPx * vm.face.faceRadiusMm / (d / 2);
     // До начала правки (касание ещё не превратилось в черновой выстрел) лупа
     // показывает окрестность точки под пальцем — чтобы тап был не вслепую.
-    final mm = vm.isEditing ? null : _screenToMm(vm, f);
+    final mm = vm.isEditing ? null : _screenToMm(vm, _finger!);
     final center = vm.isEditing ? Offset(vm.draftXMm, vm.draftYMm) : mm!;
     // Как в финалах (ShotPad): точка выстрела — в ЦЕНТРЕ лупы, а сама
     // лупа стоит над пальцем. Знак по Y: в мм ось вверх, на экране вниз,
@@ -432,7 +484,7 @@ class _TargetCanvasState extends State<TargetCanvas> {
     // (компас или свободное XY) решается здесь и на весь жест.
     if (vm.isEditing && !_autoAdd) {
       _applyEditDrag(details.localFocalPoint, vm);
-      setState(() => _finger = details.localFocalPoint);
+      _trackFinger(details.localFocalPoint);
     }
   }
 
@@ -452,7 +504,7 @@ class _TargetCanvasState extends State<TargetCanvas> {
       // (isAddingNew — без разницы, обе двигаются через draftX/Y).
       if (vm.isEditing && !_autoAdd) {
         _applyEditDrag(details.localFocalPoint, vm);
-        setState(() => _finger = details.localFocalPoint);
+        _trackFinger(details.localFocalPoint);
       }
       return;
     }

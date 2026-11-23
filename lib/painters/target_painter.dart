@@ -191,12 +191,14 @@ class TargetPainter extends CustomPainter {
 
   /// Наименьший и наибольший катет сгиба, px.
   ///
-  /// Катет — доля бланка (10%), но в этих пределах: при зуме 6,9× уголок
-  /// иначе закрывал бы половину десятки, а на мишени, показанной мелко,
-  /// пропадал бы совсем.
-  static const double _foldMinPx = 8;
-  static const double _foldMaxPx = 30;
-  static const double _foldFraction = 0.10;
+  /// Катет — доля бланка (13%, отзыв 23.11 №4: прежние 10% владелец просил
+  /// увеличить «на 30%»: 0.10 × 1.3 ≈ 0.13), но в этих пределах: при зуме
+  /// 6,9× уголок иначе закрывал бы половину десятки, а на мишени, показанной
+  /// мелко, пропадал бы совсем. Границы 12…40 — прежние 8…30, растянутые
+  /// на те же 30%.
+  static const double _foldMinPx = 12;
+  static const double _foldMaxPx = 40;
+  static const double _foldFraction = 0.13;
 
   /// Загнутый уголок пристрелки (отзыв 22.11, №7 — «уголок вообще не
   /// верный»). Геометрия — из [TargetProjection.sightingCorner], то есть из
@@ -212,26 +214,13 @@ class TargetPainter extends CustomPainter {
     // Причина: когда угол бланка уехал за край и уголок прижат к рамке, он
     // часто оказывается ПОВЕРХ чёрного яблока — при 6,9× яблоко занимает
     // весь экран, и чёрный уголок на нём просто исчезал. Золото читается и на
-    // светлом бланке, и на чёрном яблоке, и на тёмной теме, а контур
-    // авто-контраста отделяет его от любого фона той же палитры — тот же
-    // приём, что у маркера пристрелки в финалах.
+    // светлом бланке, и на чёрном яблоке, и на тёмной теме.
     const foldColor = Color(0xFFF2C14E);
+    // Только заливка, без обводки и линии сгиба (отзыв 23.11 №4: «располо-
+    // жение правильное, но убери границы и увеличь на 30%»): контур и
+    // гипотенуза читались как лишние линии поверх бланка; маркер — сплошной
+    // золотой уголок.
     canvas.drawPath(corner.path, Paint()..color = foldColor.withValues(alpha: 0.95));
-    canvas.drawPath(
-      corner.path,
-      Paint()
-        ..color = autoContrastTextColor(foldColor).withValues(alpha: 0.85)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2,
-    );
-    // Сгиб: линия по гипотенузе, полупрозрачная — объём загнутого уголка.
-    canvas.drawLine(
-      corner.hypotenuseStart,
-      corner.hypotenuseEnd,
-      Paint()
-        ..color = autoContrastTextColor(foldColor).withValues(alpha: 0.45)
-        ..strokeWidth = math.max(1.0, corner.fold * 0.08),
-    );
   }
 
   void _paintRings(Canvas canvas, Offset center, double mmToPx) {
@@ -475,7 +464,10 @@ class TargetProjection {
   /// же размера. Так он виден при любом зуме (отзыв 19.11) и не улетает
   /// вслед за мишенью (отзыв 22.11).
   SightingCorner sightingCorner(Size canvas, {double? foldPx}) {
-    final fold = (foldPx ?? radiusPx * 0.10).clamp(8.0, 30.0).toDouble();
+    // Границы 12…40 — те же пределы, что в [_foldMinPx/_foldMaxPx]:
+    // дублируем значениями, потому что TargetProjection не знает про
+    // painter-константы, но рассинхронить их нельзя (тест «уголок виден»).
+    final fold = (foldPx ?? radiusPx * 0.13).clamp(12.0, 40.0).toDouble();
     const margin = 2.0;
     final corner = blankRect.topRight;
     // Прямоугольник, в котором сгиб обязан поместиться целиком: катеты идут
