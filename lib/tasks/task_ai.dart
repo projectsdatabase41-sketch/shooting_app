@@ -17,22 +17,38 @@ class TaskAi {
   static Future<String> guide() async =>
       _guide ??= await rootBundle.loadString('assets/ai/tasks_guide.md');
 
-  /// Черновик задания или вопросы. [answers] — уже заданные вопросы и ответы тренера.
+  /// Черновик задания или вопросы. [answers] — уже заданные вопросы и ответы
+  /// тренера. [profileInfo] — профиль стрелка (анкета + последние упражнения:
+  /// вид оружия, дистанция, положение, выстрелов в серии), отзыв 23.11 №2:
+  /// «мой профиль не читал» — известное из профиля спрашивать нельзя.
   Future<({List<String> questions, TaskPlan? plan})> build({
     required String coachText,
     required List<({String question, String answer})> answers,
     String athletesInfo = '',
+    String profileInfo = '',
   }) async {
     final reply = await AiService(settings).ask(
       systemPrompt:
           'You help a rifle/pistol shooting coach compose a task for an athlete in the app. '
           'Below is a reference on how tasks are structured. Read the coach description and the answers to clarifying questions.\n'
+          'ATHLETE PROFILE (if given in the context) is already known: the disciplines (weapon), '
+          'usual targets/distances and positions, shots in a series from the profile and recent exercises. '
+          'Do NOT ask about anything the profile, the coach description or the previous answers already say '
+          '(weapon, distance, position, shots in a series) — take these values directly; in particular, '
+          'if the position is already known (for example, the athlete only trains standing), never ask about it again. '
           'If the STRUCTURE cannot be built correctly without clarification — return JSON {"questions": ["…", "…"]} '
-          '(1-4 short questions, only about the structure and what is unclear). Otherwise return JSON {"task": {…}} strictly in '
+          '(1-4 short questions, only about the structure and what is unclear; do not repeat a question that was '
+          'already asked or is answered by the profile). Otherwise return JSON {"task": {…}} strictly in '
           'the reference format. coach_text is the coach text in full, as written. Answer with JSON only. '
           'Write every human-readable value (titles, instructions, questions) in the language of the coach description.\n\n'
           '${await guide()}',
-      contextBlock: athletesInfo.isEmpty ? '' : 'Athletes: $athletesInfo',
+      contextBlock: [
+        if (athletesInfo.isNotEmpty) 'Athletes: $athletesInfo',
+        // Отзыв 23.11 №2: профиль стрелка — в контекст запроса, чтобы ИИ
+        // не спрашивал вид оружия, дистанцию, положение и серии повторно.
+        if (profileInfo.isNotEmpty)
+          'ATHLETE PROFILE (already known — do not ask):\n$profileInfo',
+      ].join('\n'),
       history: [
         (
           role: 'user',
@@ -51,6 +67,12 @@ class TaskAi {
         ...task.cast<String, dynamic>(),
         'stages': task['stages'] ?? const []
       });
+      // Отзыв 23.11 №3: модель вернула «задание» без этапов — это пустышка,
+      // а не результат. Падаем в ошибку: экран покажет её и оставит тренеру
+      // черновик с уже введёнными данными, а не пустой план.
+      if (plan.stages.isEmpty) {
+        throw const FormatException('ИИ вернул задание без этапов');
+      }
       if (plan.coachText.isEmpty) plan.coachText = coachText;
       plan.clarifications.addAll(answers);
       return (questions: const <String>[], plan: plan);

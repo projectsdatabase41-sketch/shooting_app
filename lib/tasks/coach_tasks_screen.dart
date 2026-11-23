@@ -12,6 +12,7 @@ import '../services/ai_settings.dart';
 import '../services/coach_access_service.dart';
 import '../services/push_service.dart';
 import '../services/supabase_auth_service.dart';
+import '../services/user_profile.dart';
 import '../state/app_data_store.dart';
 import '../widgets/glass_pill.dart';
 import '../widgets/press_3d.dart';
@@ -44,13 +45,21 @@ class _CoachTasksScreenState extends State<CoachTasksScreen> {
   late final CoachAccessService _access =
       CoachAccessService(context.read<AppDataStore>().db);
   late final CoachTaskService _service = CoachTaskService(_access);
-  late final List<CoachAthlete> _athletes = _access.listAthletes();
+
+  /// Спортсмены-получатели. Не `late final` (отзыв 23.11 №1 «выбрал мои
+  /// спортсмены, но тут есть только себе»): экран может оставаться в стеке,
+  /// пока спортсмена добавили в другом разделе — тогда старый список
+  /// выдавал в «Кому» пустоту и оставался один чип «Себе». Обновляем
+  /// список в [_load] и при открытии редактора.
+  List<CoachAthlete> _athletes = [];
   Map<String, List<_Copy>>? _groups;
   bool _openedFromPush = false;
 
   @override
   void initState() {
     super.initState();
+    // Отзыв 23.11 №1: список спортсменов читаем сразу при открытии.
+    _athletes = _access.listAthletes();
     _load();
     // Адрес устройства тренера — в базу каждого спортсмена: push «выполнено».
     PushService.deviceToken().then((t) {
@@ -62,6 +71,9 @@ class _CoachTasksScreenState extends State<CoachTasksScreen> {
   }
 
   Future<void> _load() async {
+    // Отзыв 23.11 №1: область «Мои спортсмены» должна показывать
+    // актуальный список — он мог измениться, пока экран был в стеке.
+    _athletes = _access.listAthletes();
     final copies = <_Copy>[];
     await Future.wait([
       for (final a in _athletes)
@@ -134,6 +146,10 @@ class _CoachTasksScreenState extends State<CoachTasksScreen> {
   }
 
   Future<void> _create() async {
+    // Отзыв 23.11 №1: список получателей в «Кому» читаем заново на момент
+    // создания — после возврата из другого раздела (спортсменов могли
+    // добавить) старый снимок оставлял бы в редакторе один чип «Себе».
+    _athletes = _access.listAthletes();
     final sent = await Navigator.of(context).push<bool>(MaterialPageRoute(
       builder: (_) =>
           _CoachTaskEditorScreen(service: _service, athletes: _athletes),
@@ -289,8 +305,11 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
   Future<void> _buildWithAi() async {
     if (_text.text.trim().isEmpty) return;
     setState(() => _busy = true);
+    final store = context.read<AppDataStore>();
+    // Для защиты от повторения вопросов по кругу (отзыв 23.11 №3).
+    var lastQuestions = '';
     try {
-      final ai = TaskAi(AiSettings(context.read<AppDataStore>().db));
+      final ai = TaskAi(AiSettings(store.db));
       while (true) {
         final r = await ai.build(
           coachText: _text.text.trim(),
@@ -299,6 +318,7 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
               .where((a) => _to.contains(a.id))
               .map((a) => a.name)
               .join(', '),
+          profileInfo: _profileInfo(store),
         );
         if (r.plan != null) {
           setState(() {
@@ -308,11 +328,25 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
           break;
         }
         if (!mounted) return;
+        // Отзыв 23.11 №3: ИИ снова задаёт те же вопросы — задание он так и
+        // не соберёт. Показываем ошибку и остаёмся на черновике: описание,
+        // название и уже данные ответы не теряются.
+        final key = r.questions.join('|');
+        if (r.questions.isNotEmpty && key == lastQuestions) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(tr(
+                  'ИИ не смог собрать этапы из описания. Соберите их вручную — описание и ответы сохранены.'))));
+          break;
+        }
+        lastQuestions = key;
         final answers = await _askQuestions(r.questions);
         if (answers == null) break;
         _answers.addAll(answers);
       }
     } catch (e) {
+      // Отзыв 23.11 №3: пустой/невалидный ответ ИИ — не молчать и не
+      // терять черновик: ошибка на экране, введённое остаётся в полях,
+      // данные ответы сохранены в _answers.
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(tr('ИИ не ответил: {e}', {'e': friendlyError(e)}))));
@@ -320,6 +354,34 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// Профиль стрелка для промпта ИИ. Отзыв 23.11 №2 («мой профиль не читал»,
+  /// ИИ спрашивал вид оружия, дистанцию, положение и выстрелы в серии):
+  /// анкета (UserProfile) и последние упражнения всё уже есть на устройстве —
+  /// передаём в запрос, чтобы ИИ не спрашивал то, что и так известно.
+  String _profileInfo(AppDataStore store) {
+    final db = store.db;
+    final parts = <String>[];
+    final disc = UserProfile.disciplinesOf(db);
+    if (disc.isNotEmpty) {
+      parts.add(
+          'Disciplines from the athlete profile: ${[for (final d in UserProfile.disciplines) if (disc.contains(d.$1)) tr(d.$2)].join(', ')}.');
+    }
+    // Последние упражнения: мишень даёт вид оружия и дистанцию, названия
+    // («лёжа», «стоя») — положение, seriesSize — выстрелов в серии.
+    final recent =
+        store.exercises.where((e) => !e.isDeleted).take(5).toList();
+    if (recent.isNotEmpty) {
+      parts.add('Recent exercises (the weapon, distance, series size and '
+          'position the athlete usually trains): ${[
+        for (final e in recent)
+          '${e.name} (target ${e.targetFaceCode}, '
+              '${TargetFace.byCode(e.targetFaceCode).distanceM.round()} m, '
+              '${e.seriesSize} shots per series)'
+      ].join('; ')}.');
+    }
+    return parts.join('\n');
   }
 
   /// Уточняющие вопросы ИИ — тренер отвечает текстом, по одному вопросу
@@ -445,6 +507,7 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
           Text(tr('1. Кому'), style: theme.textTheme.titleMedium),
           Wrap(
             spacing: 6,
+            runSpacing: 6,
             children: [
               if (context.read<AppDataStore>().isAthlete)
                 FilterChip(
@@ -452,6 +515,17 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
                   label: Text(tr('Себе')),
                   selected: _toMe,
                   onSelected: (v) => setState(() => _toMe = v),
+                ),
+              // Отзыв 23.11 №1: получатели — спортсмены выбранной области
+              // («Мои спортсмены»). Если их нет — не молчать: писать
+              // «Нет спортсменов», а не оставлять тихий чип «Себе».
+              if (widget.athletes.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                      tr('Нет спортсменов — добавьте их в разделе «Спортсмены»'),
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: theme.hintColor)),
                 ),
               for (final a in widget.athletes)
                 FilterChip(
@@ -476,7 +550,8 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
                   'потом смена на стоя с пристрелкой; затем стоя и с колена по 20 — в любом порядке.'),
             ),
           ),
-          const SizedBox(height: 8),
+          // Отзыв 23.11 №10: поле и кнопка срока не вплотную.
+          const SizedBox(height: 12),
           OutlinedButton.icon(
             icon: const Icon(Icons.event),
             label: Text(_due == null
@@ -494,7 +569,7 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
                   d == null ? null : DateTime(d.year, d.month, d.day, 23, 59));
             },
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Text(tr('Повторять по дням недели'),
               style: Theme.of(context).textTheme.labelMedium),
           const SizedBox(height: 4),
@@ -545,7 +620,7 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
             TextField(
                 controller: _title,
                 decoration: InputDecoration(labelText: tr('Название'))),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             _PlanEditor(plan: _plan!, onChanged: () => setState(() {})),
           ],
         ],
@@ -557,11 +632,15 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
                 padding: const EdgeInsets.all(12),
                 child: Raised3DButton(
                   icon: Icons.send,
-                  label: _to.isEmpty
+                  // Отзыв 23.11 №1: «Себе» — тоже получатель; раньше кнопка
+                  // требовала чип спортсмена и задание себе отправить
+                  // было нельзя.
+                  label: (_to.isEmpty && !_toMe)
                       ? tr('Выберите спортсменов')
-                      : tr('Отправить ({n})', {'n': _to.length}),
+                      : tr('Отправить ({n})',
+                          {'n': _to.length + (_toMe ? 1 : 0)}),
                   baseColor: theme.colorScheme.primary,
-                  onTap: _busy || _to.isEmpty ? null : _send,
+                  onTap: _busy || (_to.isEmpty && !_toMe) ? null : _send,
                 ),
               ),
             ),
@@ -583,7 +662,9 @@ class _PlanEditor extends StatelessWidget {
       children: [
         for (final (i, stage) in plan.stages.indexed)
           Padding(
-            padding: const EdgeInsets.only(bottom: 10),
+            // Отзыв 23.11 №10: больше воздуха между этапами, чтобы
+            // колонки ввода не слипались.
+            padding: const EdgeInsets.only(bottom: 14),
             child: Press3D(
               accent: stageModeColor(context, stage.mode),
               padding: const EdgeInsets.fromLTRB(12, 6, 4, 8),
@@ -629,36 +710,41 @@ class _PlanEditor extends StatelessWidget {
                     ],
                   ),
                   for (final (j, step) in stage.steps.indexed)
-                    ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(step.isShooting
-                          ? Icons.gps_fixed
-                          : Icons.self_improvement),
-                      title: Text(step.title),
-                      subtitle: Text(
-                        [
-                          if (step.isShooting)
-                            tr('{n} выстр.', {'n': step.plannedShots}),
-                          if (step.timeLimitSec != null)
-                            tr('{m} мин',
-                                {'m': (step.timeLimitSec! / 60).round()}),
-                          noteModeLabel(step.noteMode),
-                        ].join(' · '),
-                      ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.close, size: 18),
-                        onPressed: () {
-                          stage.steps.removeAt(j);
+                    Padding(
+                      // Отзыв 23.11 №10: этапы внутри ступени тоже не
+                      // должны слипаться.
+                      padding: const EdgeInsets.only(top: 2, bottom: 2),
+                      child: ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(step.isShooting
+                            ? Icons.gps_fixed
+                            : Icons.self_improvement),
+                        title: Text(step.title),
+                        subtitle: Text(
+                          [
+                            if (step.isShooting)
+                              tr('{n} выстр.', {'n': step.plannedShots}),
+                            if (step.timeLimitSec != null)
+                              tr('{m} мин',
+                                  {'m': (step.timeLimitSec! / 60).round()}),
+                            _noteModesLabel(step),
+                          ].join(' · '),
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          onPressed: () {
+                            stage.steps.removeAt(j);
+                            onChanged();
+                          },
+                        ),
+                        onTap: () async {
+                          await showGlassDialog(
+                              context: context,
+                              builder: (_) => _StepDialog(step: step));
                           onChanged();
                         },
                       ),
-                      onTap: () async {
-                        await showGlassDialog(
-                            context: context,
-                            builder: (_) => _StepDialog(step: step));
-                        onChanged();
-                      },
                     ),
                   TextButton.icon(
                     onPressed: () async {
@@ -690,6 +776,39 @@ class _PlanEditor extends StatelessWidget {
   }
 }
 
+/// Отзыв 23.11 №24: отметки этапа — мультивыбор (после каждого выстрела /
+/// в конце серии / отчёт в конце этапа), пусто = без отметок.
+/// Колонка task_steps.note_mode в базе принимает только одиночные значения
+/// (check в sql/tasks.sql), поэтому в неё пишем одиночное значение
+/// («старший» из выбранных — см. [_primaryNoteMode]), а полный набор храним
+/// в свободном jsonb exercise['note_modes']. Старые задания без набора
+/// читаются по одиночному noteMode — так ничего не ломается.
+Set<String> _noteModesOf(TaskStep s) {
+  final list = (s.exercise?['note_modes'] as List?)?.cast<String>().toSet();
+  if (list != null && list.isNotEmpty) {
+    return list.where((m) => m == 'shot' || m == 'series' || m == 'step').toSet();
+  }
+  final m = s.noteMode;
+  return (m.isEmpty || m == 'none') ? <String>{} : {m};
+}
+
+/// Одиночное значение для note_mode в базе — только из четырёх допустимых
+/// check-ограничением (sql/tasks.sql); приоритет: выстрел > серия > этап.
+String _primaryNoteMode(Set<String> modes) => modes.contains('shot')
+    ? 'shot'
+    : modes.contains('series')
+        ? 'series'
+        : modes.contains('step')
+            ? 'step'
+            : 'none';
+
+/// Подпись набора отметок в списке этапов: через запятую все выбранные.
+String _noteModesLabel(TaskStep s) {
+  final modes = _noteModesOf(s);
+  if (modes.isEmpty) return noteModeLabel('none');
+  return [for (final m in modes) noteModeLabel(m)].join(', ');
+}
+
 class _StepDialog extends StatefulWidget {
   final TaskStep step;
   const _StepDialog({required this.step});
@@ -715,10 +834,16 @@ class _StepDialogState extends State<_StepDialog> {
   late bool _shooting = s.isShooting;
   late String _face = s.faceCode;
   late bool _sighting = s.sighting?['required'] == true;
-  late String _note = s.noteMode;
+
+  /// Отзыв 23.11 №24: выбранные отметки — мультивыбор, пусто = без отметок.
+  late final Set<String> _notes = _noteModesOf(s);
   late bool _keep = s.keepStats;
 
   void _save() {
+    // Отзыв 23.11 №24: в note_mode (одиночное, ограничено check в базе
+    // sql/tasks.sql) пишем «старшего» из выбранных, полный набор —
+    // в exercise['note_modes'].
+    final notes = _notes;
     s
       ..title = _title.text.trim().isEmpty ? s.title : _title.text.trim()
       ..instructions = _instr.text.trim()
@@ -729,6 +854,7 @@ class _StepDialogState extends State<_StepDialog> {
               'series_size': int.tryParse(_series.text) ?? 10,
               if (_position.text.trim().isNotEmpty)
                 'position': _position.text.trim(),
+              if (notes.isNotEmpty) 'note_modes': [...notes],
             }
           : null
       ..timeLimitSec = int.tryParse(_minutes.text) == null
@@ -741,7 +867,7 @@ class _StepDialogState extends State<_StepDialog> {
                 'max_shots': int.parse(_sightMax.text)
             }
           : null
-      ..noteMode = _note
+      ..noteMode = _primaryNoteMode(notes)
       ..keepStats = _keep;
     Navigator.of(context).pop();
   }
@@ -757,6 +883,8 @@ class _StepDialogState extends State<_StepDialog> {
             TextField(
                 controller: _title,
                 decoration: InputDecoration(labelText: tr('Название'))),
+            // Отзыв 23.11 №10: поля этапа не должны слипаться.
+            const SizedBox(height: 12),
             TextField(
               controller: _instr,
               minLines: 2,
@@ -764,6 +892,7 @@ class _StepDialogState extends State<_StepDialog> {
               decoration: InputDecoration(
                   labelText: tr('Что делать (текст для спортсмена)')),
             ),
+            const SizedBox(height: 12),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(tr('Стрельба')),
@@ -782,6 +911,7 @@ class _StepDialogState extends State<_StepDialog> {
                 ],
                 onChanged: (v) => setState(() => _face = v ?? _face),
               ),
+              const SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(
@@ -791,7 +921,8 @@ class _StepDialogState extends State<_StepDialog> {
                         decoration:
                             InputDecoration(labelText: tr('Выстрелов'))),
                   ),
-                  const SizedBox(width: 8),
+                  // Отзыв 23.11 №10: раньше колонки были вплотную.
+                  const SizedBox(width: 12),
                   Expanded(
                     child: TextField(
                         controller: _series,
@@ -800,6 +931,7 @@ class _StepDialogState extends State<_StepDialog> {
                   ),
                 ],
               ),
+              const SizedBox(height: 12),
               TextField(
                   controller: _position,
                   decoration: InputDecoration(labelText: tr('Изготовка'))),
@@ -816,6 +948,7 @@ class _StepDialogState extends State<_StepDialog> {
                   decoration: InputDecoration(
                       labelText: tr('Пробных не больше (необязательно)')),
                 ),
+              const SizedBox(height: 12),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text(tr('Общая статистика с прошлым этапом')),
@@ -823,21 +956,35 @@ class _StepDialogState extends State<_StepDialog> {
                 onChanged: (v) => setState(() => _keep = v),
               ),
             ],
+            const SizedBox(height: 12),
             TextField(
               controller: _minutes,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
                   labelText: tr('Ограничение, мин (необязательно)')),
             ),
-            DropdownButtonFormField<String>(
-              initialValue: _note,
-              decoration: InputDecoration(labelText: tr('Отметки спортсмена')),
-              items: [
-                for (final m in ['step', 'shot', 'series', 'none'])
-                  DropdownMenuItem(value: m, child: Text(noteModeLabel(m))),
-              ],
-              onChanged: (v) => setState(() => _note = v ?? _note),
-            ),
+            const SizedBox(height: 12),
+            // Отзыв 23.11 №24: отметки спортсмена — чекбоксы (можно
+            // несколько): после каждого выстрела, в конце серии, отчёт
+            // в конце этапа. Ничего не выбрано — без отметок.
+            Text(tr('Отметки спортсмена'),
+                style: Theme.of(context).textTheme.labelMedium),
+            for (final m in const ['shot', 'series', 'step'])
+              CheckboxListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: Text(noteModeLabel(m)),
+                value: _notes.contains(m),
+                onChanged: (v) => setState(
+                    () => v == true ? _notes.add(m) : _notes.remove(m)),
+              ),
+            if (_notes.isEmpty)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(tr('Ничего не выбрано — без отметок'),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).hintColor)),
+              ),
           ],
         ),
       ),
