@@ -1,5 +1,32 @@
 # План: каталог 3D-моделей BS-Shooting в приложении
 
+## Статус на 23.11.2026 (21:00)
+
+| Этап | Состояние |
+|---|---|
+| Конвейер STEP → GLB → PNG | **готово**: 329 из 329 моделей, GLB 391,7 МБ, PNG 5,0 МБ, 20 категорий, 0 ошибок |
+| `catalog.json` | готов (329 записей, 70 КБ), `hasStep=false` — STEP не выгружаем |
+| Воркер: `/models/*` | готов и проверен локально (wrangler dev): загрузка, выдача, 404 на чужие id, AES-GCM в R2, R2-адреса наружу не отдаются |
+| Экран каталога в приложении | готов: сетка превью, поиск, чипы категорий, кэш, обновление, кнопка «Открыть файл с устройства» |
+| Загрузка на прод | **ждёт владельца**: деплой воркера + секреты, затем `node tools/upload_catalog.mjs --base <url> --token <token>` |
+| Проверка на устройстве | не сделана |
+
+Команды для владельца:
+
+```bash
+cd cloud/calls-worker
+npx wrangler secret put MODELS_KEY          # base64 32 байта
+npx wrangler secret put MODELS_ADMIN_TOKEN  # случайный hex
+npx wrangler deploy
+
+# затем с ПК:
+cd C:\Users\Admin\Documents\Документы\bs-models-export
+node tools/upload_catalog.mjs --base https://<воркер> --token <MODELS_ADMIN_TOKEN> --dry
+node tools/upload_catalog.mjs --base https://<воркер> --token <MODELS_ADMIN_TOKEN>
+```
+
+## Исходные данные
+
 Источник: `C:\Users\Admin\Desktop\Новая папка (3)\Models\` — 20 категорий
 (папки на английском), 329 файлов `.stp` (386 МБ), плюс `*.m3d/a3d` (Компас,
 3 шт.) и `Brief description.txt` в каждой папке. Категории: barrels weights,
