@@ -178,10 +178,10 @@ class LinkSignal extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final color = mode.colorOn(cs);
-    // Сокращение SB/RT/P2P — только в режиме разработчика: владелец просил
-    // убрать его для обычных пользователей (отзыв 22.11, 19:13), но сам
-    // значок связи должен видеть каждый.
-    final showLabel = friendlyErrorDevMode;
+    // Сокращений SB/RT/P2P в шапке нет вообще — ни для пользователя, ни в
+    // режиме разработчика (отзыв 23.11: «в шапке щит с буквой н, а правее
+    // п2п или сб — исправь, оставь только щит»). Состояние читается по
+    // цвету щита, подробности — в диалоге по нажатию.
     return Semantics(
       button: true,
       label: '${tr('Щит связи')}: ${mode.encryptionLevel}',
@@ -216,14 +216,6 @@ class LinkSignal extends StatelessWidget {
                     ),
                   ],
                 ),
-                if (showLabel) ...[
-                  const SizedBox(width: 4),
-                  Text(mode.label,
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: color)),
-                ],
               ],
             ),
           ),
