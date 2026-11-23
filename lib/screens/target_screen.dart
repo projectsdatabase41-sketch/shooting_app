@@ -549,7 +549,7 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
                   // разделу — хотя бы ~150, иначе он не читается. Запас в 24 —
                   // на шрифт крупнее обычного и на строку «Попал/Мимо», чтобы
                   // не получить переполнение колонки.
-                  const double switcherH = 48; // полоса-переключатель с отступами
+                  const double switcherH = _SectionsSwitcher.totalHeight;
                   const double sectionMin = 150; // минимум под раздел
                   const double barsSlack = 24; // запас на высоту панелей
                   final double barsH = vm.face.hitMiss ? 190 : 130;
@@ -835,7 +835,7 @@ class _StatisticsSection extends StatelessWidget {
 /// в «Разделах» и недоступный «Тренер» сюда не попадают сами собой. Полоса
 /// листается вбок: на узком телефоне пять подписей в ширину не влезают, а
 /// переносить их на вторую строку нельзя — она отнимает место у раздела.
-class _SectionsSwitcher extends StatelessWidget {
+class _SectionsSwitcher extends StatefulWidget {
   final List<WorkspacePage> pages;
   final WorkspacePage? selected;
   final ValueChanged<WorkspacePage> onSelect;
@@ -849,18 +849,58 @@ class _SectionsSwitcher extends StatelessWidget {
   /// Высота кнопки: полоса должна быть компактной (~40 px по макету).
   static const double _height = 40;
 
+  /// Полная высота полосы с отступами — от неё считает раскладка мишени,
+  /// поэтому константа одна: раньше в арифметике стояло 48 «на глаз».
+  static const double totalHeight = _height + 8;
+
+  @override
+  State<_SectionsSwitcher> createState() => _SectionsSwitcherState();
+}
+
+class _SectionsSwitcherState extends State<_SectionsSwitcher> {
+  /// Ключи кнопок: выбранную надо подтянуть в видимую зону. Полоса
+  /// прокручивается вбок, а выбор бывает программным (переход «к разделу»
+  /// из обзора), и без подтягивания активная кнопка остаётся за краем.
+  final Map<WorkspacePage, GlobalKey> _keys = {};
+
+  @override
+  void didUpdateWidget(covariant _SectionsSwitcher old) {
+    super.didUpdateWidget(old);
+    if (old.selected != widget.selected) _revealSelected();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _revealSelected();
+  }
+
+  void _revealSelected() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = widget.selected == null ? null : _keys[widget.selected]?.currentContext;
+      if (ctx == null || !mounted) return;
+      Scrollable.ensureVisible(
+        ctx,
+        alignment: 0.5,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: _height,
+      height: _SectionsSwitcher._height,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            for (final page in pages)
+            for (final page in widget.pages)
               Padding(
+                key: _keys.putIfAbsent(page, () => GlobalKey()),
                 padding: const EdgeInsets.only(right: 8),
                 child: _button(context, page),
               ),
@@ -872,10 +912,10 @@ class _SectionsSwitcher extends StatelessWidget {
 
   Widget _button(BuildContext context, WorkspacePage page) {
     final cs = Theme.of(context).colorScheme;
-    final active = page == selected;
+    final active = page == widget.selected;
     final radius = BorderRadius.circular(AppTheme.radiusMedium);
     return SizedBox(
-      height: _height,
+      height: _SectionsSwitcher._height,
       child: Material(
         // Цвета строго из темы, выбранная кнопка — заливка primary/onPrimary.
         // Фон явный и непрозрачный: полоса лежит на фоне экрана, и просвет
@@ -890,7 +930,7 @@ class _SectionsSwitcher extends StatelessWidget {
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: () => onSelect(page),
+          onTap: () => widget.onSelect(page),
           borderRadius: radius,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14),
