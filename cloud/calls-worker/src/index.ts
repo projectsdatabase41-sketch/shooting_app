@@ -9,10 +9,17 @@
 //   POST /task-push       {kind: 'call'|'done'|'new'|…} — вызов тренера и push заданий (без мессенджера)
 //   POST /cancel          {callId, to}             — отменить исходящий
 //   GET  /room/<callId>?token=…  (WebSocket)       — обмен offer/answer/ice/hangup
+//   GET  /models/index                    — каталог 3D-моделей (просьба владельца 23.11)
+//   GET  /models/<id>/(preview.png|model.glb|model.stp) — файлы каталога
 //
 // Секреты (wrangler secret put …): FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY,
 // FIREBASE_PROJECT_ID; TURN — либо Cloudflare (TURN_KEY_ID, TURN_KEY_API_TOKEN),
 // либо Metered (METERED_ICE_URL — адрес выдачи доступов вместе с ключом).
+// Каталог 3D-моделей (просьба владельца 23.11): MODELS_KEY (base64 32 байта —
+// AES-256-GCM для шифрования файлов в R2) и MODELS_ADMIN_TOKEN (загрузка/удаление).
+
+// Каталог 3D-моделей: новые маршруты /models/* (см. src/models.ts, просьба владельца 23.11).
+import { handleModels } from './models';
 
 export interface Env {
   ROOMS: DurableObjectNamespace;
@@ -35,6 +42,13 @@ export interface Env {
   ADMIN_TOKEN: string;
   /** Ключи Tavily через запятую: поиск в интернете для ИИ. */
   TAVILY_KEYS: string;
+  // --- Каталог 3D-моделей BS-Shooting (просьба владельца 23.11) ---
+  /** AES-256 ключ шифрования файлов моделей в R2 (base64 ровно 32 байта).
+   *  Секрет воркера (wrangler secret put MODELS_KEY); в приложение не уходит. */
+  MODELS_KEY: string;
+  /** Токен владельца для POST /models/upload и DELETE /models/<id> (x-admin-token). */
+  MODELS_ADMIN_TOKEN: string;
+  /** Маршруты каталога (см. src/models.ts) пользуются общим бакетом MEDIA. */
   /** iLoveAPI: публичный ключ проекта (секретный — для расшифровки JWT). */
   ILOVEPDF_PUBLIC_KEY: string;
   /** RSS-источники новостей через запятую. */
@@ -217,6 +231,9 @@ export default {
       const total = Math.max(0, Math.min(100, Number(b.total ?? 0)));
       const failed = Math.max(0, Math.min(total, Number(b.failed ?? 0)));
       const platform = String(b.platform ?? '').slice(0, 20);
+      // `usage` берём здесь же: раньше строка использовала переменную,
+      // объявленную ниже в другой ветке, — /diag падал с 500 (нашёл tsc).
+      const usage = env.USAGE.get(env.USAGE.idFromName('global'));
       await usage.fetch('https://u/diag', {
         method: 'POST',
         body: JSON.stringify({ total, failed, platform, at: new Date().toISOString() }),
@@ -275,6 +292,16 @@ export default {
           limitBytes: Number(env.MEDIA_LIMIT_GB || 8) * 1e9,
         },
       });
+    }
+
+    // ---------- Каталог 3D-моделей BS-Shooting ----------
+    // Публичное чтение (без токена), запись/удаление — владельцу. Реализация
+    // и шифрование в src/models.ts (каталог 3D-моделей, просьба владельца
+    // 23.11). Ставим ДО проверки пользователя: у /models своя публичная модель
+    // доступа, а ни один существующий маршрут на /models не начинается.
+    if (url.pathname === '/models' || url.pathname.startsWith('/models/')) {
+      const modelRes = await handleModels(req, env, url);
+      if (modelRes) return modelRes;
     }
 
     if (url.pathname.startsWith('/room/')) {

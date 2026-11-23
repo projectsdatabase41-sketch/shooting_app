@@ -59,3 +59,17 @@ new_sqlite_classes = ["UsageDO"]
 [[r2_buckets]]
 binding = "MEDIA"
 bucket_name = "nexusbox"
+
+# --- Каталог 3D-моделей BS-Shooting (просьба владельца 23.11) ---
+# Файлы лежат в этом же бакете MEDIA по ключам models/<id>/preview.png,
+# models/<id>/model.glb, models/<id>/model.stp, models/catalog.json — тела
+# зашифрованы AES-256-GCM секретным ключом воркера (nonce(12) | ciphertext+tag).
+# Привязка R2 новая НЕ нужна: используем MEDIA выше. Оба секрета ставит
+# владелец перед деплоем (npx wrangler secret put <ИМЯ>) и держит в тайне:
+#
+#   MODELS_KEY — base64 ровно 32 байта (AES-256). Сгенерировать один раз:
+#     node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+#   MODELS_ADMIN_TOKEN — длинная случайная строка для загрузки/удаления:
+#     node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+#
+# Загрузка (нужна только владельцу): node scripts/upload-model.mjs — см. отчёт.
