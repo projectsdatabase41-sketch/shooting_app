@@ -31,8 +31,14 @@ import '../painters/target_painter.dart';
 import '../state/app_data_store.dart';
 import '../widgets/glass_pill.dart';
 
-/// Ход финала: сверху мишень спортсмена (~40% экрана), ниже мишени соперников,
-/// свайпом вправо — таблица результатов.
+/// Ход финала. Личный монитор (по умолчанию): мишень спортсмена и список
+/// только СВОИХ выстрелов по сериям — мишени соперников с основного экрана
+/// убраны (отзыв 23.11 №2: «дать личные выстрелы списком, это личная
+/// установка»). Кнопка «Табло» в шапке переключает на экран для зрителей:
+/// таблица всех участников с миниатюрами мишеней (отзыв 23.11 №1: «общее
+/// табло»). В горизонтальном режиме на широком экране мишень слева, список
+/// выстрелов или табло справа (отзыв 23.11 №3: «горизонтальный режим
+/// проработать»).
 class FinalRunScreen extends StatefulWidget {
   final FinalRunController controller;
   final AppDataStore store;
@@ -46,13 +52,13 @@ class FinalRunScreen extends StatefulWidget {
 class _FinalRunScreenState extends State<FinalRunScreen> {
   SecondTicker? _timer;
   final List<Offset> _sightingMarks = []; // мм, пристрелка не идёт в зачёт
-  final _page = PageController(initialPage: 1);
   bool _saved = false;
-  bool _holding = false;
+
+  // Отзыв 23.11 №1: вид «Табло» для зрителей вместо бывшей таблицы на свайпе.
+  bool _board = false;
 
   /// Финал не стартует сам: часы пойдут после кнопки «Начать финал».
   bool _started = false;
-  final String _layout = 'classic'; // вид экрана один (раскладки убраны из настройки)
   late final bool _voice = FinalsPrefs.voice(widget.store.db);
   final _tracker = AnnounceTracker();
   final _phaseVoice = PhaseAnnouncer();
@@ -108,7 +114,6 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
     VoiceControl.instance.unregister(this);
     FinalsAnnouncer.stop();
     _timer?.cancel();
-    _page.dispose();
     c.removeListener(_onChange);
     super.dispose();
   }
@@ -207,13 +212,13 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
       child: Scaffold(
         extendBodyBehindAppBar: true,
         appBar: GlassHeader(
-          // «Назад»: с таблицы — на главный экран финала, оттуда — выход из финала.
+          // «Назад»: с табло — на личный монитор, оттуда — выход из финала.
           leading: IconButton(
             tooltip: tr('Назад'),
             icon: const Icon(Icons.arrow_back),
             onPressed: () {
-              if (_page.hasClients && (_page.page ?? 1) < 0.5) {
-                _page.animateToPage(1, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+              if (_board) {
+                setState(() => _board = false);
               } else {
                 _leave();
               }
@@ -228,6 +233,13 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
                     ?.copyWith(fontWeight: FontWeight.w800, fontFeatures: const [FontFeature.tabularFigures()])),
           ]),
           actions: [
+            // Отзыв 23.11 №1/№2: переключатель «личный монитор / табло для зрителей»
+            // вместо бывшей таблицы на свайпе.
+            IconButton(
+              tooltip: _board ? tr('Мой экран') : tr('Табло зрителей'),
+              icon: Icon(_board ? Icons.person : Icons.tv),
+              onPressed: () => setState(() => _board = !_board),
+            ),
             IconButton(
               tooltip: c.paused ? tr('Продолжить') : tr('Пауза'),
               icon: Icon(c.paused ? Icons.play_arrow : Icons.pause),
@@ -240,28 +252,24 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
             ),
           ],
         ),
-        // Таблица слева (свайп вправо), главный экран справа.
-        body: Stack(children: [
-          Positioned.fill(
-            child: PageView(
-              controller: _page,
-              physics: _holding ? const NeverScrollableScrollPhysics() : null,
-              children: [_layout == 'table' ? _botsPage(context) : _table(context), _main(context)],
-            ),
-          ),
-        ]),
+        // Отзыв 23.11 №1/№2: личный монитор по умолчанию, табло — по кнопке в шапке.
+        // В горизонтальном режиме на широком экране (отзыв 23.11 №3) мишень
+        // остаётся слева, а справа — список выстрелов либо табло.
+        body: LayoutBuilder(builder: (ctx, box) {
+          final mq = MediaQuery.of(ctx);
+          final wide = mq.orientation == Orientation.landscape && box.maxWidth >= 700;
+          return _body(ctx, wide: wide);
+        }),
       ),
     );
   }
 
-  Widget _main(BuildContext context) {
+  /// Одна мишень спортсмена со своими наложениями (подпись пристрелки, пауза).
+  Widget _padArea(BuildContext context) {
     final theme = Theme.of(context);
-    final top = MediaQuery.paddingOf(context).top + GlassHeader.height;
-    final h = MediaQuery.sizeOf(context).height;
-    final bots = [for (final x in c.engine.competitors) if (!x.isUser) x];
     final sighting = c.phase == RunPhase.sighting;
     final marks = _myMarks;
-    final pad = Padding(
+    return Padding(
       padding: const EdgeInsets.fromLTRB(8, 2, 8, 2),
       child: Stack(children: [
         Positioned.fill(
@@ -272,7 +280,9 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
             // Мишень прикована центром: двумя пальцами не сдвинуть, меняется
             // только масштаб (отзыв 18.11: «сделать как в тренировках»).
             lockCenter: true,
-            onHold: (v) => setState(() => _holding = v),
+            // Лупа при удержании вела себя одинаково; PAGE больше нет, поэтому
+            // свайп-блокировка не нужна — слушатель остаётся, но пустой.
+            onHold: (_) {},
             onShot: _onShot,
             sighting: sighting,
           ),
@@ -304,119 +314,86 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
           ),
       ]),
     );
-    final side = _layout == 'side';
-    // По умолчанию: три бота над моей мишенью, остальные ниже (лупа не перескакивает).
-    final stacked = !side && _layout != 'table';
-    final rest = (side || stacked) ? bots.skip(3).toList() : bots;
+  }
+
+  /// Строка статуса и кнопки («Готов», «Промах», «Назад» и т. д.).
+  /// В широкой раскладке кнопки переносятся [Wrap'ом] — ширины не хватает.
+  Widget _actionRow(BuildContext context, {required bool wide}) {
+    final sighting = c.phase == RunPhase.sighting;
+    final marks = _myMarks;
+    final status = Text(
+      sighting
+          ? (_started
+              ? tr('Пристрелка: выстрелы не идут в зачёт')
+              : tr('Освойтесь с мишенью — выстрелы не идут в зачёт. Время и команды начнутся после «Готов»'))
+          : c.userCanShoot
+              ? tr('Осталось выстрелов: {n}', {'n': c.userShotsLeft})
+              // Значения выстрелов переехали в список на мониторе (отзыв 23.11 №2),
+              // поэтому дубль строкой больше не показываем.
+              : (c.user.active ? tr('Ждите команды') : tr('Вы выбыли — боты продолжают')),
+      style: Theme.of(context).textTheme.bodyMedium,
+      maxLines: wide ? 2 : 3,
+      overflow: TextOverflow.ellipsis,
+    );
+    final buttons = <Widget>[
+      if (sighting && !_started) FilledButton(onPressed: _begin, child: Text(tr('Готов'))),
+      if (sighting && _started) TextButton(onPressed: c.skipSighting, child: Text(tr('Пропустить пристрелку'))),
+      if (!c.user.active && c.phase != RunPhase.finished)
+        TextButton(onPressed: c.fastForward, child: Text(tr('Завершить результат'))),
+      if (c.awaitingResult) FilledButton.tonal(onPressed: () => c.markMiss(c.userId), child: Text(tr('Промах'))),
+      TextButton.icon(
+        onPressed: marks.isEmpty ? null : _undo,
+        icon: const Icon(Icons.undo),
+        label: Text(tr('Назад')),
+      ),
+    ];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 8, 4),
+      // Wrap вместо Row: на любой ширине кнопки переезжают на новую строку,
+      // а не вылезают за экран (отзыв 23.11 №3, «переполнений быть не должно»).
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 8,
+        runSpacing: 4,
+        children: [
+          SizedBox(width: wide ? 260 : double.infinity, child: status),
+          ...buttons,
+        ],
+      ),
+    );
+  }
+
+  Widget _body(BuildContext context, {required bool wide}) {
+    final theme = Theme.of(context);
+    final top = MediaQuery.paddingOf(context).top + GlassHeader.height;
+    final side = _board ? _BoardView(c: c) : _FinalShotList(c: c);
+    if (wide) {
+      // Отзыв 23.11 №3: мишень слева, список выстрелов/табло справа.
+      return Column(children: [
+        SizedBox(height: top),
+        Expanded(
+          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Expanded(flex: 5, child: _padArea(context)),
+            Expanded(flex: 4, child: Column(children: [Expanded(child: side)])),
+          ]),
+        ),
+      ]);
+    }
+    if (_board) {
+      // Табло вместо всего экрана: это отдельный вид для зрителей (отзыв №1).
+      return Column(children: [SizedBox(height: top), Expanded(child: side)]);
+    }
+    // Личный монитор (портрет): мишень, затем список своих выстрелов.
     return Column(children: [
       SizedBox(height: top),
-      if (stacked)
-        SizedBox(
-          height: h * 0.14,
-          child: Row(children: [for (final b in bots.take(3)) Expanded(child: _BotCard(c: c, bot: b))]),
-        ),
       Text(c.user.name, style: theme.textTheme.titleSmall),
-      SizedBox(
-        height: stacked ? h * 0.36 : h * 0.46,
-        child: side
-            ? Row(children: [
-                Expanded(flex: 5, child: pad),
-                Expanded(
-                  flex: 3,
-                  child: Column(children: [
-                    for (final b in bots.take(3)) Expanded(child: _BotCard(c: c, bot: b)),
-                  ]),
-                ),
-              ])
-            : pad,
-      ),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 8, 4),
-        child: Row(children: [
-          Expanded(
-            child: Text(
-              sighting
-                  ? (_started
-                      ? tr('Пристрелка: выстрелы не идут в зачёт')
-                      : tr('Освойтесь с мишенью — выстрелы не идут в зачёт. Время и команды начнутся после «Готов»'))
-                  : c.userCanShoot
-                      ? tr('Осталось выстрелов: {n}', {'n': c.userShotsLeft}) +
-                          (marks.isEmpty
-                              ? ''
-                              : ' · ${[for (final m in marks) formatScore(scoreForPoint(m.dx, m.dy, c.face), c.face)].join(' ')}')
-                      : (c.user.active ? tr('Ждите команды') : tr('Вы выбыли — боты продолжают')),
-              style: theme.textTheme.bodyMedium,
-            ),
-          ),
-          if (sighting && !_started) FilledButton(onPressed: _begin, child: Text(tr('Готов'))),
-          if (sighting && _started) TextButton(onPressed: c.skipSighting, child: Text(tr('Пропустить пристрелку'))),
-          if (!c.user.active && c.phase != RunPhase.finished)
-            TextButton(onPressed: c.fastForward, child: Text(tr('Завершить результат'))),
-          if (c.awaitingResult) FilledButton.tonal(onPressed: () => c.markMiss(c.userId), child: Text(tr('Промах'))),
-          TextButton.icon(
-            onPressed: marks.isEmpty ? null : _undo,
-            icon: const Icon(Icons.undo),
-            label: Text(tr('Назад')),
-          ),
-        ]),
-      ),
-      Expanded(
-        child: _layout == 'table'
-            ? _table(context, embedded: true)
-            : GridView.count(
-                crossAxisCount: stacked ? 4 : 3,
-                childAspectRatio: stacked ? 0.8 : 0.85,
-                padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                children: [for (final b in rest) _BotCard(c: c, bot: b)],
-              ),
-      ),
+      Expanded(flex: 5, child: _padArea(context)),
+      _actionRow(context, wide: false),
+      Expanded(flex: 4, child: side),
     ]);
   }
 
-  /// Страница с мишенями соперников (вид «мишень и таблица на одной странице»).
-  Widget _botsPage(BuildContext context) {
-    final bots = [for (final x in c.engine.competitors) if (!x.isUser) x];
-    return GridView.count(
-      crossAxisCount: 3,
-      childAspectRatio: 0.85,
-      padding: EdgeInsets.fromLTRB(8, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 8, 16),
-      children: [for (final b in bots) _BotCard(c: c, bot: b)],
-    );
-  }
-
-  Widget _table(BuildContext context, {bool embedded = false}) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final rows = c.live;
-    return ListView(
-      padding: embedded
-          ? const EdgeInsets.fromLTRB(12, 0, 12, 12)
-          : EdgeInsets.fromLTRB(12, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 12, 16),
-      children: [
-        for (var i = 0; i < rows.length; i++)
-          Opacity(
-            opacity: rows[i].c.active ? 1 : 0.5,
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 4),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: rows[i].c.isUser ? cs.primary.withValues(alpha: 0.16) : cs.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(children: [
-                SizedBox(
-                    width: 26,
-                    child: Text('${rows[i].c.place ?? (i + 1)}', style: const TextStyle(fontWeight: FontWeight.w800))),
-                Expanded(child: Text(rows[i].c.name, overflow: TextOverflow.ellipsis)),
-                // Места идут по среднему выстрелу — оно и показано (у всех разное число выстрелов, пока раунд идёт).
-                Text(rows[i].shots.isEmpty ? '' : '${tr('ср')} ${rows[i].avg.toStringAsFixed(2)}  ', style: theme.textTheme.bodySmall),
-                Text(rows[i].total.toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.w700)),
-              ]),
-            ),
-          ),
-      ],
-    );
-  }
 }
 
 /// Мишень спортсмена. Удержание пальца показывает над пальцем окошко-лупу с
@@ -809,80 +786,287 @@ class _ShotPadState extends State<ShotPad> {
   }
 }
 
-/// Мишень соперника: имя, последняя пробоина, значение и направление стрелкой.
-class _BotCard extends StatelessWidget {
+/// Личный монитор: список СВОИХ выстрелов списком (отзыв 23.11 №2 — мишени
+/// соперников с основного экрана убраны): «№ · значение» со стрелкой
+/// направления, заголовок «Серия N» с суммой и «Итого» в конце — как на
+/// экране тренировки. Перестрелочные выстрелы не показываются: в зачёт они
+/// не идут.
+class _FinalShotList extends StatelessWidget {
   final FinalRunController c;
-  final FinalCompetitor bot;
-  const _BotCard({required this.c, required this.bot});
+  const _FinalShotList({required this.c});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final mine = [for (final s in c.shots) if (s.who == bot.id && !s.shootOff) s];
-    final last = mine.isEmpty ? null : mine.last;
-    return Opacity(
-      opacity: bot.active ? 1 : 0.45,
-      child: Column(children: [
-        Text(bot.name, style: theme.textTheme.labelSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
-        Expanded(
-          child: LayoutBuilder(builder: (ctx, box) {
-            // Мишень соперника приближается к центру, пока пробоина умещается;
-            // сильный промах уменьшает зум, чтобы пробоина осталась видна.
-            // Зум постоянный (видна кучность возле центра), уменьшается только если выстрел ушёл далеко:
-            // после команды «Старт» мишени не «прыгают».
-            var far = 0.0;
-            for (final sh in mine) {
-              far = math.max(far, math.sqrt(sh.x * sh.x + sh.y * sh.y));
-            }
-            final zoom = math.min(2.5, c.face.faceRadiusMm * 0.85 / math.max(far, 1.0)).clamp(1.0, 2.5).toDouble();
-            final k = box.biggest.shortestSide / 2 * zoom / c.face.faceRadiusMm;
-            return ClipRect(
-                child: Stack(children: [
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: TargetPainter(
-                    face: c.face,
-                    colors: TargetColorScheme.defaultScheme,
-                    visibleShots: const [],
-                    selectedShot: null,
-                    currentSeriesNo: 1,
-                    zoom: zoom,
-                    denseLabels: true,
-                    sighting: c.phase == RunPhase.sighting,
-                  ),
-                ),
-              ),
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: ShotMarkerPainter(
-                    last == null ? const [] : [Offset(last.x, last.y)],
-                    ghosts: [
-                      for (final g in c.sightShots[bot.id] ?? const <(double, double)>[]) Offset(g.$1, g.$2),
-                      for (final g in mine.take(math.max(0, mine.length - 1))) Offset(g.x, g.y),
-                    ],
-                    k: k,
-                    center: Offset(box.maxWidth / 2, box.maxHeight / 2),
-                  ),
-                ),
-              ),
-            ]));
-          }),
+    final cs = theme.colorScheme;
+    // Зачётные выстрелы, уже ушедшие в движок, плюс отмеченные в текущем
+    // раунде (в списке видны сразу, как только поставлены).
+    final closed = [for (final s in c.shots) if (s.who == c.userId && !s.shootOff) s];
+    final rows = <({int no, double score, Offset pt})>[
+      for (final s in closed) (no: s.index + 1, score: s.score, pt: Offset(s.x, s.y)),
+      for (var i = 0; i < c.staged.length; i++)
+        (
+          no: closed.length + i + 1,
+          score: scoreForPoint(c.staged[i].x, c.staged[i].y, c.face),
+          pt: Offset(c.staged[i].x, c.staged[i].y),
         ),
-        SizedBox(
-          height: 18,
-          child: last == null
-              ? null
-              : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Text(last.score.toStringAsFixed(1), style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700)),
-                  if (last.x != 0 || last.y != 0)
-                    Transform.rotate(
-                      angle: math.atan2(last.x, last.y), // 0 = вверх, по часовой
-                      child: const Icon(Icons.arrow_upward, size: 14),
-                    ),
-                ]),
+    ];
+    if (rows.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+        child: Text(
+          tr('Зачётных выстрелов пока нет'),
+          style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+        ),
+      );
+    }
+
+    // Группировка по сериям: границы серий берём из формата финала; выстрелы
+    // сверх всех серий (одиночные на выбывание) — в общую группу в конце.
+    final limits = c.format.seriesShots;
+    final groups = <int, List<({int no, double score, Offset pt})>>{};
+    for (final r in rows) {
+      var s = 0;
+      var acc = 0;
+      while (s < limits.length && acc + limits[s] <= r.no - 1) {
+        acc += limits[s];
+        s++;
+      }
+      groups.putIfAbsent(s < limits.length ? s + 1 : -1, () => []).add(r);
+    }
+    final keys = groups.keys.map((k) => (k, k < 0 ? 1 << 30 : k)).toList()..sort((a, b) => a.$2.compareTo(b.$2));
+
+    var totalTenths = 0.0;
+    var totalWhole = 0;
+    final blocks = <Widget>[];
+    for (final (key, _) in keys) {
+      final list = groups[key]!;
+      var sum = 0.0;
+      var whole = 0;
+      for (final r in list) {
+        sum += r.score;
+        whole += r.score.floor();
+      }
+      totalTenths += sum;
+      totalWhole += whole;
+      blocks.add(Padding(
+        padding: const EdgeInsets.only(top: 10, bottom: 2, left: 12, right: 12),
+        child: Row(children: [
+          Text(
+            key < 0 ? tr('Одиночные') : tr('Серия {n}', {'n': key}),
+            style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const Spacer(),
+          Text(
+            tr('Сумма {tenths} / {whole}', {'tenths': sum.toStringAsFixed(1), 'whole': '$whole'}),
+            style: theme.textTheme.labelMedium?.copyWith(color: cs.onSurfaceVariant),
+          ),
+        ]),
+      ));
+      for (final r in list) {
+        blocks.add(Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 12),
+          child: Row(children: [
+            SizedBox(width: 28, child: Text('${r.no}', style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant))),
+            SizedBox(
+              width: 56,
+              child: Text(
+                formatScore(r.score, c.face),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+            // Стрелка направления от центра: та же логика, что на тренировке
+            // (отзыв 23.11 №11 — ось Y вверх, положительный X вправо).
+            Builder(builder: (ctx) {
+              final rDist = math.sqrt(r.pt.dx * r.pt.dx + r.pt.dy * r.pt.dy);
+              if (rDist < 0.15) return const SizedBox(width: 16);
+              return Transform.rotate(
+                angle: math.atan2(r.pt.dx, r.pt.dy), // 0 — вверх, по часовой
+                child: Icon(Icons.arrow_upward_rounded, size: 14, color: cs.onSurfaceVariant),
+              );
+            }),
+          ]),
+        ));
+      }
+    }
+    blocks.add(Padding(
+      padding: const EdgeInsets.only(top: 10, left: 12, right: 12),
+      child: Row(children: [
+        Text(tr('Итого'), style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+        const Spacer(),
+        Text(
+          '${totalTenths.toStringAsFixed(1)} / $totalWhole',
+          style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
         ),
       ]),
+    ));
+    return ListView(children: blocks);
+  }
+}
+
+/// Табло для зрителей (отзыв 23.11 №1 «общее табло»): таблица всех участников
+/// — место, имя, отметка бота, результат в десятых и целых — и рядом миниатюра
+/// мишени каждого. Данные берутся из живой таблицы контроллера, поэтому
+/// обновляется само после каждого выстрела (экран пересобирается в _onChange).
+class _BoardView extends StatelessWidget {
+  final FinalRunController c;
+  const _BoardView({required this.c});
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = c.live;
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+      itemCount: rows.length,
+      itemBuilder: (ctx, i) => _BoardRow(c: c, row: rows[i], index: i),
     );
+  }
+}
+
+/// Строка табло: место, имя (+ бейдж бота), сумма «десятые / целые»,
+/// миниатюра мишени — если по этому участнику есть пробоины.
+class _BoardRow extends StatelessWidget {
+  final FinalRunController c;
+  final LiveRow row;
+  final int index;
+  const _BoardRow({required this.c, required this.row, required this.index});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isBot = !c.humans.contains(row.c.id);
+    // Пробоины участника: зачётные + отмеченные в текущем раунде (те же, что
+    // идут в живую таблицу); перестрелочные — бледными призраками.
+    final pts = [for (final s in c.shots) if (s.who == row.c.id && !s.shootOff) Offset(s.x, s.y)];
+    if (c.humans.contains(row.c.id) && row.c.active) {
+      for (final st in c.stagedOf(row.c.id)) {
+        pts.add(Offset(st.x, st.y));
+      }
+    }
+    final ghosts = [
+      for (final s in c.shots)
+        if (s.who == row.c.id && s.shootOff) Offset(s.x, s.y),
+    ];
+    // Целые — сумма целых частей выстрелов (как в протоколе финала).
+    final whole = row.shots.fold<int>(0, (a, b) => a + b.floor());
+    return Opacity(
+      opacity: row.c.active ? 1 : 0.5,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: row.c.isUser ? cs.primary.withValues(alpha: 0.16) : cs.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(children: [
+          SizedBox(
+            width: 34,
+            child: Text('${row.c.place ?? (index + 1)}',
+                style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+          ),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Flexible(
+                  child: Text(row.c.name,
+                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                      overflow: TextOverflow.ellipsis),
+                ),
+                // Отметка бота: на табло зритель должен сразу видеть, кто живой участник.
+                if (isBot) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(tr('Бот'), style: theme.textTheme.labelSmall),
+                  ),
+                ],
+              ]),
+              // Места идут по среднему выстрелу — оно и подписано: пока раунд
+              // идёт, у всех разное число выстрелов.
+              if (row.shots.isNotEmpty)
+                Text(
+                  '${tr('ср')} ${row.avg.toStringAsFixed(2)}',
+                  style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                ),
+            ]),
+          ),
+          Text(
+            '${row.total.toStringAsFixed(1)} / $whole',
+            style: theme.textTheme.titleLarge
+                ?.copyWith(fontWeight: FontWeight.w800, fontFeatures: const [FontFeature.tabularFigures()]),
+          ),
+          // Миниатюра мишени — только если есть пробоины (посадочных
+          // пустых квадратов на табло быть не должно).
+          if (pts.isNotEmpty) ...[
+            const SizedBox(width: 10),
+            SizedBox(
+              width: 56,
+              height: 56,
+              child: _MiniTarget(c: c, points: pts, ghosts: ghosts),
+            ),
+          ],
+        ]),
+      ),
+    );
+  }
+}
+
+/// Миниатюра мишени участника для табло: масштаб подбирается так, чтобы все
+/// пробоины уместись видимыми (как было на карточках соперников).
+class _MiniTarget extends StatelessWidget {
+  final FinalRunController c;
+  final List<Offset> points; // мм
+  final List<Offset> ghosts; // перестрелочные, бледно
+  const _MiniTarget({required this.c, required this.points, this.ghosts = const []});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (ctx, box) {
+      var far = 0.0;
+      for (final p in points) {
+        far = math.max(far, math.sqrt(p.dx * p.dx + p.dy * p.dy));
+      }
+      // Мишень приближается к центру, пока пробоины умещаются; сильный промах
+      // уменьшает зум, чтобы пробоина осталась видна.
+      final zoom = math.min(2.5, c.face.faceRadiusMm * 0.85 / math.max(far, 1.0)).clamp(1.0, 2.5).toDouble();
+      final k = box.biggest.shortestSide / 2 * zoom / c.face.faceRadiusMm;
+      return ClipRect(
+        child: Stack(children: [
+          Positioned.fill(
+            child: CustomPaint(
+              painter: TargetPainter(
+                face: c.face,
+                colors: TargetColorScheme.defaultScheme,
+                visibleShots: const [],
+                selectedShot: null,
+                currentSeriesNo: 1,
+                zoom: zoom,
+                denseLabels: true,
+                sighting: c.phase == RunPhase.sighting,
+              ),
+            ),
+          ),
+          Positioned.fill(
+            child: CustomPaint(
+              painter: ShotMarkerPainter(
+                points.isEmpty ? const [] : [points.last],
+                ghosts: [...ghosts, for (final p in points.take(math.max(0, points.length - 1))) p],
+                k: k,
+                center: Offset(box.maxWidth / 2, box.maxHeight / 2),
+              ),
+            ),
+          ),
+        ]),
+      );
+    });
   }
 }
 

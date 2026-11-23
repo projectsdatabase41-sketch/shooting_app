@@ -13,7 +13,10 @@ import 'package:shooting_app/services/local_db_service.dart';
 import 'package:shooting_app/state/app_data_store.dart';
 
 void main() {
-  testWidgets('мишени соперников видны, пока выстрелов ещё нет', (tester) async {
+  // Отзыв владельца 23.11 №1/№2: мишени соперников убраны с личного монитора
+  // (там свой список выстрелов), а все мишени целиком переехали на вид «Табло»
+  // (кнопка в шапке). Именно это и проверяем.
+  testWidgets('на мониторе не видно мишеней соперников, на табло видны все', (tester) async {
     final db = LocalDbService();
     await db.open(overridePath: ':memory:');
     final store = AppDataStore(db)..loadAll();
@@ -29,15 +32,38 @@ void main() {
       bots: {for (var i = 1; i <= 7; i++) 'b$i': BotShooter(const ShotStats(0, 0, 3, 3, 100), BotDifficulty.medium, face, math.Random(i))},
       rng: math.Random(1),
     );
+    addTearDown(c.dispose);
     await tester.binding.setSurfaceSize(const Size(400, 800));
     await tester.pumpWidget(ChangeNotifierProvider<AppDataStore>.value(
       value: store,
       child: MaterialApp(home: FinalRunScreen(controller: c, store: store)),
     ));
     await tester.pump(const Duration(milliseconds: 300));
-    final painters = tester.widgetList<CustomPaint>(find.byType(CustomPaint)).where((p) => p.painter is TargetPainter).toList();
-    // 7 соперников + моя мишень (стартовая раскладка: 3 сверху, остальные внизу сеткой)
-    expect(painters.length, greaterThanOrEqualTo(8));
-    c.dispose();
+    Iterable<TargetPainter> painters() =>
+        tester.widgetList<CustomPaint>(find.byType(CustomPaint)).map((p) => p.painter).whereType<TargetPainter>();
+    // Личный монитор: только своя мишень.
+    expect(painters().length, 1);
+    // У ботов должны появиться пробоины: иначе на табло корректно нет
+    // миниатюр («если есть данные — иначе только таблица»).
+    c.skipSighting();
+    var ticks = 0;
+    while (c.shots.length < 25 && ticks < 20000) {
+      while (c.userCanShoot) {
+        c.submitUserShot(0, -5); // свой выстрел: миниатюра и на моей строке
+      }
+      for (final id in c.missingIds) {
+        while (c.canShootFor(id)) {
+          c.markMiss(id);
+        }
+      }
+      c.tick();
+      ticks++;
+    }
+    await tester.pump(const Duration(milliseconds: 300));
+    // Переключаемся на табло кнопкой в шапке (иконка «Табло зрителей»).
+    await tester.tap(find.byIcon(Icons.tv));
+    await tester.pump(const Duration(milliseconds: 300));
+    // На табло: 7 соперников + своя мишень.
+    expect(painters().length, greaterThanOrEqualTo(8));
   });
 }
