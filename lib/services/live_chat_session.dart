@@ -146,6 +146,10 @@ class LiveChatSession {
     dirFor: () async => Directory(p.join((await getApplicationDocumentsDirectory()).path, 'p2p_inbox')),
   )..onBackground = (active, text, progress) => PushService.setTransferActive(active, text: text, progress: progress);
   int _rtcTries = 0;
+
+  /// Когда текущий прямой канал открылся — по нему решаем, «работал» ли он
+  /// достаточно долго, чтобы простить израсходованные попытки (см. onState).
+  DateTime? _linkOpenedAt;
   static const int _maxRtcTries = 4;
 
   /// Пауза после неудачного входа (лимит соединений, отказ RLS): не
@@ -527,10 +531,22 @@ class LiveChatSession {
     l.onState = () {
       if (_link != l) return;
       if (l.isOpen) {
+        _linkOpenedAt = DateTime.now();
         _restIdle();
         return;
       }
       _link = null;
+      // Канал реально РАБОТАЛ (дольше 5 секунд) — счётчик неудач обнуляем.
+      // Раньше лимит в 4 попытки считался за весь диалог, поэтому после
+      // нескольких разрывов P2P больше не поднимался до переоткрытия чата
+      // (отзыв 21.11: «P2P как будто периодически выключается»). Короткое
+      // «мигание» соединения счётчик не сбрасывает — иначе дребезжащий линк
+      // переподключался бы бесконечно.
+      final opened = _linkOpenedAt;
+      if (opened != null && DateTime.now().difference(opened) > const Duration(seconds: 5)) {
+        _rtcTries = 0;
+      }
+      _linkOpenedAt = null;
       files.abortAll(); // передачи по оборванному P2P останавливаем
       if (_closed) return;
       // Канал сигнализации мог быть закрыт «на отдыхе» (P2P и так работал) —
