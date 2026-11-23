@@ -278,8 +278,9 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
           ),
         ),
         if (sighting)
-          // Маркер пристрелки живёт на РАМКЕ, а не на самой мишени: при любом
-          // зуме и сдвиге он остаётся на месте и виден (отзывы 18–19.11).
+          // Только подпись: сам уголок пристрелки теперь рисует TargetPainter
+          // (SightingCorner) прямо по углу бланка — раньше здесь висела вторая
+          // метка, и на финалах их было две (отзыв владельца 22.11).
           Positioned(
             top: 6,
             right: 6,
@@ -290,11 +291,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
                   color: Colors.black.withValues(alpha: 0.55),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  CustomPaint(size: const Size(14, 14), painter: _FoldCornerPainter()),
-                  const SizedBox(width: 6),
-                  Text(tr('Пристрелка'), style: const TextStyle(fontSize: 11, color: Colors.white)),
-                ]),
+                child: Text(tr('Пристрелка'), style: const TextStyle(fontSize: 11, color: Colors.white)),
               ),
             ),
           ),
@@ -1185,25 +1182,3 @@ class _ResultVoiceState extends State<_ResultVoice> {
   Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
-/// Загнутый уголок для маркера пристрелки на рамке (вне мишени).
-class _FoldCornerPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final p = Path()
-      ..moveTo(size.width * 0.25, 0)
-      ..lineTo(size.width, 0)
-      ..lineTo(size.width, size.height * 0.75)
-      ..close();
-    canvas.drawPath(p, Paint()..color = const Color(0xFFF2C14E));
-    canvas.drawLine(
-      Offset(size.width * 0.25, 0),
-      Offset(size.width, size.height * 0.75),
-      Paint()
-        ..color = const Color(0xFFF2C14E)
-        ..strokeWidth = 1.2,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
