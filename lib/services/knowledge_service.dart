@@ -613,16 +613,21 @@ class KnowledgeService {
 
   /// Собирает найденное в блок для системного промпта, соблюдая общий
   /// лимит символов.
+  ///
+  /// Сжато 22.11 (отзыв владельца: «сокращения для экономии токенов»).
+  /// Было: отдельная строка «Current date and time» (дубль — та же дата
+  /// уже есть в блоке КОНТЕКСТ, `AiContext.buildContextBlock`) и абзац
+  /// правил про каталог на ~800 знаков, который уходил в КАЖДЫЙ запрос
+  /// с книгами. Стало: дата только в КОНТЕКСТ, правила — двумя короткими
+  /// фразами с тем же смыслом; заголовок куска — одной строкой
+  /// `[источник:файл • раздел • дата]`; каталог по-прежнему списком имён
+  /// (по нему модель понимает, что книга вообще есть, но не выдумывает её
+  /// содержание).
   static String? asPromptBlock(List<KnowledgeChunk> chunks,
       {List<KnowledgeTableConfig> tables = const [],
       List<String> catalog = const []}) {
     if (chunks.isEmpty && tables.isEmpty && catalog.isEmpty) return null;
-    // Текущие дата и время — отдельной строкой один раз, а не в каждом
-    // куске: модель должна знать "сейчас", чтобы отличать "давно" от
-    // "недавно" у дат самих записей (пункт: "какое сейчас время и дату
-    // записи, чтобы лучше понимать пользователя").
-    final buf = StringBuffer(
-        'Current date and time: ${DateTime.now().toIso8601String()}\n\n');
+    final buf = StringBuffer();
     // Какие свои таблицы подключил пользователь — ИИ должен знать о них,
     // даже если в этот раз ничего из них не нашлось.
     if (tables.isNotEmpty) {
@@ -637,10 +642,11 @@ class KnowledgeService {
           : '');
     }
     if (catalog.isNotEmpty) {
-      // Перечень материалов — модель должна знать, что в базе вообще есть,
+      // Перечень материалов: модель должна знать, что в базе вообще есть,
       // и не говорить «такой книги нет», когда она просто не попала в выдачу.
+      // Одной строкой с правилом — это не содержание, только оглавление.
       buf.writeln(
-          'Knowledge-base materials (file names): ${catalog.take(80).join('; ')}. A listed book IS in the base; if no excerpt below, say none was found for this question, not that the book is missing. IMPORTANT: this is only a LIST OF FILE NAMES, not their content — never say what a document contains and never cite a file as a source unless its excerpt is given below. With no relevant excerpt: say plainly that the base had no excerpt on this question, give a SHORT answer from general knowledge marked as such, do not invent details, and mention devices (e.g. SCATT) or user data only if they are present in CONTEXT. Do not quote or summarise materials unless the user asks about them: no excerpts, no citations and no from-the-materials preambles when the question does not ask for them.');
+          'Knowledge-base materials (file names): ${catalog.take(80).join('; ')}. A listed book IS in the base. It is a LIST of names, not content: never describe a document and never cite it unless its excerpt is given below. No relevant excerpt: say plainly that the base had no excerpt on this question, then a SHORT answer from general knowledge marked as such; no invented details, no SCATT or user data unless it is in CONTEXT; do not quote or summarise the materials unless asked.');
       buf.writeln();
     }
     for (final c in chunks) {
@@ -651,10 +657,9 @@ class KnowledgeService {
       final tableTag = c.tableDescription.isEmpty
           ? c.tableLabel
           : '${c.tableLabel}: ${c.tableDescription}';
-      final dateTag =
-          c.recordDate == null ? '' : ', record from ${c.recordDate}';
+      final dateTag = c.recordDate == null ? '' : ' • ${c.recordDate}';
       final piece =
-          '[$tableTag — ${c.source}${c.heading.isEmpty ? '' : ', ${c.heading}'}$dateTag]\n${c.text}\n\n';
+          '[$tableTag — ${c.source}${c.heading.isEmpty ? '' : ' • ${c.heading}'}$dateTag]\n${c.text}\n\n';
       if (buf.length + piece.length > totalCharLimit) break;
       buf.write(piece);
     }

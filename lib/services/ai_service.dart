@@ -220,8 +220,10 @@ class AiService {
     if (booksExcerpt != null && booksExcerpt.isNotEmpty) {
       system
         ..writeln()
-        ..writeln(
-            'KNOWLEDGE BASE (books, rules; for theory) and the connected personal tables (the user own records):')
+        // Заголовок блока — тоже часть промпта и уходит в каждый запрос:
+        // было длинное предложение с повтором правил таблиц, стало одно
+        // название (отзыв 22.11 — экономия токенов без потери смысла).
+        ..writeln('KNOWLEDGE BASE + personal tables:')
         ..writeln(booksExcerpt);
     }
     // Интерфейс не на русском — ответ на языке интерфейса (инструкции

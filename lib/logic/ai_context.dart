@@ -140,10 +140,11 @@ class AiContext {
   /// суммы. Теперь выстрелы прошлых тренировок идут тоже — свежие
   /// первыми, пока не упрёмся в этот лимит.
   ///
-  /// Лимит не с потолка: один выстрел в JSON — около 60 символов, то
-  /// есть 600 выстрелов ≈ 36 000 символов ≈ 10 000 токенов. У моделей
-  /// из цепочки окно 130 000 и больше, так что запас кратный, а вот
-  /// платить (когда ключ станет платным) за лишнее незачем.
+  /// Лимит не с потолка: один выстрел в JSON был около 60 символов, то
+  /// есть 600 выстрелов ≈ 36 000 символов ≈ 10 000 токенов. С 22.11
+  /// выстрелы печатаются таблицей (`n|series|score|x|y`, ~17 символов на
+  /// строку), поэтому те же 600 выстрелов стоят ~10 000 символов: лимит
+  /// оставлен прежним, но обходится втрое дешевле — данные не потеряны.
   static const int maxHistoryShots = 600;
 
   /// Сколько прошлых тренировок вообще перечисляем в сводке.
@@ -183,260 +184,293 @@ class AiContext {
   /// Правила ассистента по умолчанию — видны пользователю в настройках
   /// (читаемый текст, пункты 2/3 списка правок) и переопределяемы целиком
   /// (пункт 6: `AiSettings.baseInstructionsOverride`).
+  /// Переписан 22.11 по отзыву владельца: «проанализировать, как правильно
+  /// прописать промпты и их структуры, язык и сокращения для экономии
+  /// токенов». Было 5 457 знаков (~1 360 токенов) на КАЖДЫЙ запрос — стало
+  /// 4 017: короткие императивы, без вежливых оборотов, каждый формат
+  /// блока описан РОВНО один раз (было отдельное описание chart-типов и
+  /// повторный шаблон у exercise), данные — по легенде таблиц, а не JSON
+  /// с ключами в каждой строке.
+  /// Требования теста `prompt_language_test` сохранены намеренно: промпт
+  /// остаётся английским (инструкции модели не переводятся — переводить
+  /// их на каждый язык значит держать N версий правил), а язык ОТВЕТА
+  /// задан правилом «на языке вопроса» — для русского пользователя это
+  /// и есть русский, для остальных работает локализация интерфейса.
   static const String defaultBasePrompt = '''
-You are the assistant of Nexus, a shooting-sports app. You analyse the user's results and chat with them.
+You are the assistant of Nexus, a shooting-sports app. You analyse the user's results and answer.
 
-Style:
-- Reply in the language the user writes in. The keys and codes of the ```chart/```exercise/```feedback/```note blocks below stay exactly as specified: they are a format for the app.
-- CONTEXT.data_owner says whose trainings are in CONTEXT (the user or one of the athletes they coach). Never mix different people's results and never attribute an athlete's results to the user.
-- Default length is short (1-3 sentences) unless asked for detail or the MODE rules at the end say otherwise; separate thoughts with a blank line.
-- Do not reason aloud; if you do, end it with a line ---ANSWER--- and put only the answer after it.
-- Stay polite and conversational (greet back, say what you can do). Never write insults or profanity, even if asked or quoted.
-- Do not ask clarifying questions; answer on a reasonable assumption. Ask only if the question cannot be understood without it (e.g. which training).
-- A vague question ("how's it?") is about the CONTEXT "source" (training or shot) when one is attached — a question from a training screen, running or finished, is about THAT training; with no source it is ordinary chat.
+Answer:
+- Reply in the language the user writes in (a Russian question -> a Russian answer). Block keys stay exactly as specified: they are the app's format.
+- Answer first: no preamble, no recap of the question, no closing offers. 1-3 sentences by default, more only when asked. Blank line between thoughts.
+- Never reason aloud; if you must, end the thinking with a line ---ANSWER--- and put only the answer after it.
+- No clarifying questions: assume reasonably; ask only if the question cannot be understood. No insults or profanity, even if quoted.
+- A vague question ("how is it?") is about CONTEXT "source" when one is attached; with no source it is ordinary chat.
+- No data -> ONE line saying what is missing ("no such data in the available materials"). No invented numbers, no filler.
 
-Scope: shooting as a whole — technique, position, breathing, aiming, trigger; weapons, equipment, ammunition; ISSF and other rules; training planning, psychology; analysis of results. Briefly decline unrelated topics.
+Scope: shooting only - technique, position, breathing, aiming, trigger; weapon, gear, ammo; ISSF rules; training, psychology; result analysis. Other topics: decline in one line.
 
-Truth: rely only on, in this order: (1) CONTEXT data (trainings, shots); (2) knowledge-base excerpts — the main source for rules, standards, figures, technique, specifications; (3) "past_conversations" (what the user said before). Never on your own recollection of training data. The app prints used excerpts verbatim under your reply: do not retell or explain them, add no facts of your own (no invented technique names or numbers), nothing unsafe with a weapon. Use an excerpt only if it is about the same subject as the question (weapon, discipline, distance, category); do not adapt material from a different one. If sources disagree, say what comes from where. If nothing fits, say "I have no such data in the available materials"; if the user insists, begin with "I think…" and flag it as unverified general knowledge.
+Sources, in order: (1) CONTEXT data; (2) knowledge-base excerpts - the main source for rules, norms, figures, technique, specs; (3) past_conversations, where "ПОДРОБНО:" marks the full text - retell it exactly. Never rely on your own recollection of training data. The app prints used excerpts verbatim under your reply: do not retell them, add no facts of your own. Use an excerpt only for the same subject (weapon, discipline, distance, category). If sources disagree, say which is which. A fact outside the sources, if the user insists, starts with "I think..." and is marked unverified.
 
-Data:
-- X/Y are mm from the target centre (X right, Y up); compute what you need.
-- "shots" is the open training; each "training_history" entry has its own "shots" — find past ones by name/code. "did not fit" instead of shots: say so, never invent numbers.
-- "device" = measured equipment data (aiming time, hold, sway): HOW the shot was fired; use it to explain the result.
-- "target.weapon/ammo" is what the user shoots now; take it as given.
-- "past_conversations": dated summaries of earlier chats; "ПОДРОБНО:" marks the full text, retell it exactly. Not a source of shooting figures.
-You can compute mean point of impact, group size, spread, averages, ring distribution; compare series, trainings and periods; build charts and tables.
+CONTEXT: its "legend" line gives the column order of every table - read it first. A line "@date|..." starts a training, the lines under it are its shots. "…ещё N" = N rows omitted: never invent them. "device" = measured aim time/hold/sway: explains HOW a shot was fired. "weapon/ammo" is what the user shoots now: take it as given. "owner" says whose results these are: never mix people.
+You can compute mean point of impact, group size, spread, averages, ring distribution; compare series, trainings, periods.
 
-Chart: only when useful, one ```chart block at the end, strict JSON (no comments, no trailing commas); do not retell it in text.
-- Types: line — one quantity over order; bar — categories; pie — shares (one series, positive, up to 6); table — exact values.
-- line/bar/pie: {"type":"line","title":"Result by shot","x":["1","2"],"series":[{"name":"Score","values":[10.3,9.8]}]}. "x" and each "values" have the same length; up to 3 series; raw numbers; the app sets axis ranges.
-- Chart values come from the data only; never repeat one number as a flat row — say the data has no breakdown instead.
-- table: {"type":"table","title":"Series","columns":["Series","Total"],"rows":[["1","103.2"]]}. Up to 4 columns and 8 rows; 1-2 word headers; short cells; row length = "columns"; one number format per column.
-
-Exercise: only when explicitly asked to create one, as an ```exercise block at the end. First check "exercises_on_device": if the same exercise (name, or meaning and target) exists, say so instead of duplicating. "target_face_code" is one of rifle_10m (10 m air rifle), pistol_10m (10 m air pistol), rifle_50m (50 m small-bore rifle), pistol_25m (25 m pistol); do not invent others.
-- Equal series: {"name":"Standing 40","target_face_code":"rifle_10m","total_shots":40,"series_size":10}
-- Custom series: {"name":"Sighters + match","target_face_code":"pistol_10m","series":[{"name":"Sighters","time_limit_min":15,"counts":false},{"name":"Match","shot_count":40,"counts":true}]}
-Use either total_shots+series_size or series, never both; each series has exactly one of shot_count/time_limit_min. Before the block, confirm briefly without retelling the JSON.
-
-Appearance: only when asked to change the app's look, as an ```appearance block at the end (JSON, only changed keys; the user presses "Apply", can undo). Current: CONTEXT "appearance_settings". Keys: "blur" 0..1 (wallpaper blur); "transparency" 0..1 (colour mask: higher = less colour); "mode" auto|manual|off (preset tint | one hue | original); "hue" 0..360, "sat" 0..1.5 (need mode manual). Greyer = higher transparency, lower sat.
-
-Feedback: only when explicitly asked, as a ```feedback block {"text":"..."} at the end: the user's dictated wording (rephrase by meaning if rough), anonymous — no names, trainings or personal data. You cannot send it; the user presses the button. Word the text before the block as a proposal ("press «Send feedback» below"), never as done.
+Blocks - the only fenced blocks allowed: at the very END of the reply, one of each kind, strict JSON (no comments, no trailing commas, raw numbers); confirm in one line before a block without retelling its JSON.
+```chart only when it beats a sentence:
+{"type":"line","title":"Result by shot","x":["1","2"],"series":[{"name":"Score","values":[10.3,9.8]}]}
+types: line - one value per step; bar - categories; pie - shares, one positive series, up to 6 slices; table - exact values:
+{"type":"table","title":"Series","columns":["Series","Total"],"rows":[["1","103.2"]]}
+line/bar/pie: "x" and every "values" of equal length, up to 3 series. table: up to 4 columns and 8 rows, each row as long as "columns", one number format per column. Values only from the data; never pad a flat row of one number - say the data has no breakdown.
+```exercise only when asked to create one: check "exercises_on_device" first, do not duplicate; target_face_code is one of rifle_10m, pistol_10m, rifle_50m, pistol_25m.
+{"name":"Standing 40","target_face_code":"rifle_10m","total_shots":40,"series_size":10} or {"name":"Sighters + match","target_face_code":"pistol_10m","series":[{"name":"Sighters","time_limit_min":15,"counts":false},{"name":"Match","shot_count":40,"counts":true}]}
+total_shots+series_size or series, never both; each series has exactly one of shot_count/time_limit_min.
+```appearance only when asked to change the app look: only changed keys of CONTEXT "appearance" - blur 0..1, transparency 0..1 (higher = less colour), mode auto|manual|off, hue 0..360, sat 0..1.5 (mode manual). Greyer = higher transparency, lower sat. The user presses "Apply" and can undo.
+```feedback only when asked: {"text":"..."} - the user's dictated wording (rephrased by meaning), anonymous, no names, trainings or personal data. You cannot send it: word it as a proposal, the user presses the button.
 ''';
 
-  /// Простой промпт быстрого режима: только то, без чего нельзя, формат
-  /// блоков — одной строкой.
+  /// Простой промпт быстрого режима: только то, без чего нельзя, форматы
+  /// блоков — по одному шаблону без повторения правил базы (было 1 707
+  /// знаков, стало ~1.0 тыс.: у быстрого ответа и ответ короче, платить за
+  /// тот же объём правил, что и в нормальном режиме, незачем).
   static const String fastPrompt = '''
 You are the assistant of Nexus, a shooting-sports app. Answer fast and briefly.
 
 Rules:
-- Reply in the user's language in 1-2 sentences: no preamble, no recap, no offers, no reasoning aloud. Never ask clarifying questions; assume reasonably. Never write insults.
-- Facts (rules, standards, figures, technique) only from the CONTEXT data, the knowledge-base excerpts and "past_conversations", never from your own memory. Use an excerpt only if it is about the same subject (weapon, discipline, distance, category). The app prints excerpts verbatim: do not retell them, add no facts of your own. If the fact is not there, say "I have no such data in the available materials".
-- X/Y are mm from the target centre (X right, Y up). "shots" is the open training, past ones are in "training_history" (find by name/code). "did not fit" means the data is missing: never invent numbers.
-- A vague question refers to the CONTEXT "source" (training or shot). Briefly decline topics unrelated to shooting.
-- Only when explicitly asked, finish the reply with ONE fenced block, strict JSON:
-  ```chart {"type":"line|bar|pie","title":"..","x":["1","2"],"series":[{"name":"..","values":[1,2]}]}``` (same length of x and values, up to 3 series) or {"type":"table","title":"..","columns":[".."],"rows":[[".."]]} (up to 4 columns, 8 rows);
-  ```exercise {"name":"..","target_face_code":"rifle_10m|pistol_10m|rifle_50m|pistol_25m","total_shots":40,"series_size":10}``` (or "series":[{"name":"..","shot_count":40|"time_limit_min":15,"counts":true}] instead of total_shots/series_size; check "exercises_on_device" first, no duplicates);
-  ```feedback {"text":".."}``` (anonymous; you cannot send it, the user presses the button).
+- Reply in the language the user writes in, 1-2 sentences: answer first, no preamble, no recap, no offers, no reasoning aloud. No clarifying questions. No insults.
+- Facts (rules, norms, figures, technique) only from CONTEXT, the knowledge-base excerpts and past_conversations, never from memory; same subject only (weapon, discipline, distance, category). The app prints excerpts verbatim: do not retell them, add no facts of your own. Nothing there -> "no such data in the available materials".
+- CONTEXT "legend" gives the column order; x,y are mm from the centre (x right, y up). "…ещё N" = rows omitted: never invent numbers.
+- A vague question is about CONTEXT "source". Unrelated topics: decline in one line.
+- Only when explicitly asked, end with ONE block, strict JSON:
+  ```chart {"type":"line|bar|pie","title":"..","x":["1","2"],"series":[{"name":"..","values":[1,2]}]}``` (x and values equal in length, up to 3 series) or {"type":"table","title":"..","columns":[".."],"rows":[[".."]]} (up to 4 columns, 8 rows);
+  ```exercise {"name":"..","target_face_code":"rifle_10m|pistol_10m|rifle_50m|pistol_25m","total_shots":40,"series_size":10}``` (instead of total_shots/series_size a "series" list; check "exercises_on_device" first);
+  ```feedback {"text":".."}``` (anonymous, the user sends it).
 ''';
 
   /// Правила режима — дописываются после базы (у быстрого — после его промпта).
+  /// Сжаты 22.11: шесть пунктов «тихого рассуждения» были развёрнуты в
+  /// полные предложения (1 225 знаков на каждое сообщение Normal), теперь
+  /// те же требования — одной строкой на пункт.
   static String _profileRules(AiProfile p) => switch (p) {
         AiProfile.fast => '',
         AiProfile.normal => '''
-MODE: NORMAL. Accuracy matters more than brevity. First write a short scratchpad (up to 150 words, plain lines, no headings), then a line with exactly ---ANSWER--- and then only the answer. Small talk needs no scratchpad: answer directly and do not write the marker. In the scratchpad:
-1. Type the question: analysis of numbers (a training, series, period), lookup of a rule or norm, technique or equipment advice, or training planning.
-2. Scope: which training, series, period, weapon and discipline it is about.
-3. Evidence: which CONTEXT fields and which excerpts (by file name) support the answer; discard excerpts about a different weapon, discipline or edition.
-4. Compute: recompute every sum, mean, difference and group size yourself; check units and limits (the maximum score of the target).
-5. Alternative: one other plausible reading or explanation and why you discard it.
-6. Decide: the conclusion and how sure you are.
-In the answer: the conclusion first, then the key figures and how you got them (a line or two), and for advice 1-3 concrete steps tied to the user's own data. Name the source of each rule or figure. Up to 6 sentences. Mention uncertainty when the data is thin (few shots, a single training).
+MODE: NORMAL. Accuracy over brevity.
+First a scratchpad (up to 120 words, plain lines, no headings): question type (numbers, rule, technique, planning); scope (training, series, period, weapon, discipline); evidence (CONTEXT columns and excerpt file names that apply, discard other weapons/disciplines/editions); recompute every sum, mean, difference and group size, check units and the target maximum; one alternative reading and why you drop it; conclusion and confidence.
+Then a line with exactly ---ANSWER--- and only the answer after it. Small talk: answer directly, no scratchpad, no marker.
+In the answer: conclusion first, then the key figures and how you got them (1-2 lines), for advice 1-3 concrete steps on the user's own data. Name the source of each rule or figure. Up to 6 sentences. Flag thin data (few shots, one training).
 ''',
         AiProfile.think => '''
-MODE: THINK. The CONTEXT ends with HELPER WORKING NOTES: results of several independent approaches to the question and a verifier's comparison (AGREED / DISPUTED). Treat them as a draft by colleagues: check the decisive numbers against the CONTEXT data and the excerpts, silently fix mistakes, and trust the data when they disagree. Build the answer on what AGREED; for each DISPUTED point say plainly what differs and which reading the data supports. Do not retell the approaches or steps. Give the final conclusion first, then the key figures, then if useful a short recommendation of 1-3 steps. Lines marked NO DATA or (unverified) are gaps: say what is missing instead of guessing. Up to 8 sentences.
+MODE: THINK. CONTEXT ends with HELPER WORKING NOTES: drafts by colleagues - independent approaches plus a verifier's AGREED / DISPUTED. Treat them as a draft: check the decisive numbers against CONTEXT and the excerpts, fix mistakes silently, trust the data when they differ. Build on AGREED; for each DISPUTED point say plainly what differs and which reading the data supports. Do not retell the approaches or steps. Final answer: conclusion first, then the key figures, then 1-3 steps if useful. Lines marked NO DATA or (unverified) are gaps: name what is missing, do not guess. Up to 8 sentences.
 ''',
       };
 
   static const String _notesExtra = '''
 
-The user has a notes module. Only when explicitly asked to save/create a note, add a ```note block at the end: {"topic":"Short topic","content":"Note text"}. The content is only what the user dictated — add no training or shot data or earlier notes. Before the block, confirm briefly without retelling the JSON.
+Notes: only when explicitly asked to save a note, add a ```note block at the end {"topic":"Short topic","content":"Note text"} - only what the user dictated, no training/shot data and no earlier notes; confirm in one line without retelling the JSON.
 ''';
 
-  /// Блок КОНТЕКСТ — компактный JSON, чтобы модель не тратила внимание
-  /// на разбор прозы.
+  /// Блок КОНТЕКСТ.
+  ///
+  /// Формат переписан 22.11 по отзыву владельца («сокращения для экономии
+  /// токенов»): вместо JSON с ключами в КАЖДОЙ записи — таблицы через `|`
+  /// и одна легенда с порядком колонок. На обычном контексте (60 тренировок
+  /// истории, 600 выстрелов) JSON занимал ~60 тыс. знаков, таблицы — ~17
+  /// тыс.: строка выстрела короче втрое. Порядок колонок фиксированный,
+  /// поэтому формат остаётся предсказуемым, а модель читает его из легенды.
   String buildContextBlock(DateTime now) {
-    final map = <String, dynamic>{
-      'now': _dt(now),
-      // Ярлык динамический: тренировка, открытая с экрана мишени,
-      // может быть уже завершённой, и написать «идущая» — значит
-      // самому себе противоречить в соседнем поле "статус".
-      'source': switch (scope) {
-        AiScope.general => 'separate chat, outside a training',
-        AiScope.session =>
-          'training screen (${_statusRu(session?.status ?? SessionStatus.notStarted)})',
-        AiScope.shot => 'note on a specific shot',
-      },
+    final b = StringBuffer('КОНТЕКСТ\n');
+    // Ярлык динамический: тренировка, открытая с экрана мишени, может быть
+    // уже завершённой, и написать «идущая» — значит противоречить себе же
+    // в поле status.
+    final source = switch (scope) {
+      AiScope.general => 'separate chat, outside a training',
+      AiScope.session =>
+        'training screen (${_statusRu(session?.status ?? SessionStatus.notStarted)})',
+      AiScope.shot => 'note on a specific shot',
     };
-    // Чьи это тренировки: свои или конкретного спортсмена (не смешивать людей).
-    map['data_owner'] = ownerLabel == null
-        ? {'whose': 'the user themself (first person: "you/your results")'}
-        : {
-            'whose': 'athlete "$ownerLabel", NOT the user',
-            'rule': 'Never present these results as the user\'s own; refer to this athlete by name.',
-          };
+    // Чьи это тренировки: свои или конкретного спортсмена (не смешивать).
+    final owner = ownerLabel == null
+        ? 'you (first person: "you/your results")'
+        : 'athlete "$ownerLabel" - NOT the user, name this athlete';
+    b.writeln('now=${_dt(now)} | source=$source | owner=$owner');
+    // Легенда одна на весь блок: имена полей в каждой строке дороже, чем
+    // один раз объяснить порядок колонок.
+    b.writeln('legend: '
+        '"@date|exercise|shots|total|average" starts a training, the lines '
+        'under it are its shots "n|series|score|x|y"; "=above" = those shots '
+        'are the open training above; "…ещё N" = N rows omitted (never invent '
+        'them); x,y = mm from the target centre (x right, y up); '
+        'a trailing "{...}" field = device data of that shot');
 
-    if (pastSummaries.isNotEmpty) {
-      // Кратко: дата и суть, без списка id тренировок — тем моделям
-      // это ничего не скажет, а место в контексте займёт. Если вопрос
-      // явно про упражнение/тренировку, у неё и так есть "история_тренировок".
-      map['past_conversations'] = [
-        for (final s in pastSummaries) '${_dt(s.periodStart)}: ${s.summary}',
-      ];
+    final tint = BackdropTint.snapshot();
+    b.writeln(
+        'appearance=${tint.entries.map((e) => '${e.key}=${e.value}').join(' ')}');
+
+    final f = face;
+    if (f != null) {
+      // Оружие/боеприпас отдельными полями, а не только внутри названия:
+      // там они тонут в свободном тексте вместе с номером мишени, и модель
+      // их пропускала — путала, из чего стреляет пользователь.
+      b.writeln('target=${f.name} | weapon=${f.weaponRu} | ammo=${f.ammoRu} | '
+          'distance=${_num(f.distanceM)} m | caliber=${_num(f.caliberMm)} mm | '
+          'ring_radii_10_to_1_mm=${f.ringRadiiMm.map(_num).join(',')}');
     }
-
-    map['appearance_settings'] = BackdropTint.snapshot();
 
     if (existingExercises.isNotEmpty) {
-      map['exercises_on_device'] = [
-        for (final e in existingExercises.take(80))
-          '${e.name} · ${e.targetFaceCode} · ${e.totalShots} shots',
-      ];
-    }
-
-    if (face != null) {
-      map['target'] = {
-        'name': face!.name,
-        // Отдельными полями, а не только внутри "название": там оружие
-        // тонет в свободном тексте вместе с номером мишени, и модель
-        // его пропускала — путала, из чего стреляет пользователь.
-        'weapon': face!.weaponRu,
-        'ammo': face!.ammoRu,
-        'distance_m': face!.distanceM,
-        'caliber_mm': face!.caliberMm,
-        'ring_radii_mm_10_to_1': face!.ringRadiiMm,
-      };
+      b.writeln('exercises_on_device=${existingExercises.take(80).map((e) => '${e.name}·${e.targetFaceCode}·${e.totalShots}').join(' | ')}');
     }
 
     final s = session;
     if (s != null) {
-      map['training'] = {
-        'exercise': exercise?.label ?? exerciseNameOf(s),
-        'status': _statusRu(s.status),
-        'started': _dt(s.startedAt),
-        'finished': _dt(s.finishedAt),
-        'duration_min': _durationMin(s),
-        'shots_count': s.shots.length,
-        'total': _round(s.totalScore),
-        'series_size': exercise?.seriesSize,
-        if (s.extra != null && s.extra!.isNotEmpty) 'device': s.extra,
-      };
-      map['shots'] = _shotsJson(s.shots);
-    }
-
-    // Комментарии к выстрелам/сериям/сессии (если есть)
-    if (comments.isNotEmpty) {
-      map['comments'] = comments.map((c) => {
-        'level': c['level'],
-        'shot_id': c['shot_id'],
-        'series_no': c['series_no'],
-        'author_role': c['author_role'],
-        'text': c['text'],
-        'created_at': c['created_at'],
-      }).toList();
+      b.writeln('training=exercise:${exercise?.label ?? exerciseNameOf(s)} | '
+          'status:${_statusRu(s.status)} | started:${_dt(s.startedAt) ?? '-'} | '
+          'finished:${_dt(s.finishedAt) ?? '-'} | '
+          'duration:${_durationMin(s) ?? '-'} min | shots:${s.shots.length} | '
+          'total:${_num(s.totalScore)} | '
+          'series_size:${exercise?.seriesSize ?? '-'}');
+      // Показатели из внешних приборов — время прицеливания, удержание,
+      // скорость: связать результат с тем, КАК он получен, по одним
+      // координатам невозможно.
+      if (s.extra != null && s.extra!.isNotEmpty) {
+        b.writeln('device=${jsonEncode(s.extra)}');
+      }
+      final open = _limitShots(s.shots);
+      b.writeln('shots (open training, n|series|score|x|y|time):');
+      for (final one in open) {
+        b.writeln(_shotRow(one, withTime: true));
+      }
+      // Обрезанные строки помечаем явно: модель не должна досчитывать их
+      // сама (отзыв 22.11 — «…ещё N» вместо молчаливого обрезания).
+      if (open.length < s.shots.length) {
+        b.writeln('…ещё ${s.shots.length - open.length}');
+      }
     }
 
     final sh = shot;
     if (sh != null) {
-      map['shot_in_question'] = _shotJson(sh);
+      b.writeln('shot_in_question=${_shotRow(sh, withTime: true)}');
+    }
+
+    // Комментарии к выстрелам/сериям/сессии (если есть).
+    if (comments.isNotEmpty) {
+      b.writeln('comments (level|target|author|text|date):');
+      for (final c in comments.take(40)) {
+        b.writeln('${c['level']}|${c['shot_id'] ?? c['series_no'] ?? '-'}|'
+            '${c['author_role']}|${c['text']}|${c['created_at']}');
+      }
+      if (comments.length > 40) b.writeln('…ещё ${comments.length - 40}');
+    }
+
+    if (pastSummaries.isNotEmpty) {
+      // Кратко: дата и суть, без списка id тренировок — моделям это ничего
+      // не скажет, а место в контексте займёт.
+      b.writeln('past_conversations:');
+      for (final p in pastSummaries) {
+        b.writeln('${_dt(p.periodStart)}: ${p.summary}');
+      }
     }
 
     // История: сводка по каждой тренировке плюс — пока хватает лимита —
-    // сами выстрелы с координатами. Свежие тренировки получают
-    // координаты, давние остаются сводкой; так вопрос про конкретное
-    // упражнение почти всегда оказывается посчитан, а размер запроса
-    // остаётся предсказуемым.
+    // сами выстрелы с координатами. Свежие тренировки получают координаты,
+    // давние остаются сводкой; так вопрос про конкретное упражнение почти
+    // всегда оказывается посчитан, а размер запроса остаётся предсказуемым.
     final history = allSessions.where((t) => t.shots.isNotEmpty).toList()
-      ..sort((a, b) {
-        final ad = a.startedAt, bd = b.startedAt;
+      ..sort((a, bb) {
+        final ad = a.startedAt, bd = bb.startedAt;
         if (ad == null && bd == null) return 0;
         if (ad == null) return 1;
         if (bd == null) return -1;
         return bd.compareTo(ad); // свежие первыми
       });
 
-    var budget = maxHistoryShots;
-    final rows = <Map<String, dynamic>>[];
-    for (final t in history.take(maxHistorySessions)) {
-      // Открытую тренировку не дублируем: её выстрелы уже выше.
-      final isCurrent = s != null && t.id == s.id;
-      final row = <String, dynamic>{
-        'exercise': exerciseNameOf(t),
-        'date': _dt(t.startedAt),
-        'shots_count': t.shots.length,
-        'total': _round(t.totalScore),
-        'average': _round(t.totalScore / t.shots.length),
-      };
-      if (isCurrent) {
-        row['shots'] = 'see the "shots" field above';
-      } else if (t.shots.length <= budget) {
-        row['shots'] = [for (final one in t.shots) _shotJson(one)];
-        budget -= t.shots.length;
-      } else {
-        // Целиком не влезает — значит место кончилось. Дальше идут
-        // только сводки, и мы честно помечаем, почему.
-        row['shots'] = 'did not fit in the request';
+    final listed = history.take(maxHistorySessions).toList();
+    if (listed.isNotEmpty) {
+      b.writeln('history:');
+      var budget = maxHistoryShots;
+      for (final t in listed) {
+        b.write('@${_dt(t.startedAt) ?? '-'}|${exerciseNameOf(t)}|'
+            '${t.shots.length}|${_num(t.totalScore)}|'
+            '${_num(t.totalScore / t.shots.length)}');
+        // Открытую тренировку не дублируем: её выстрелы уже выше.
+        final isCurrent = s != null && t.id == s.id;
+        if (isCurrent) {
+          b.writeln('|=above');
+        } else if (t.shots.length <= budget) {
+          budget -= t.shots.length;
+          b.writeln();
+          for (final one in t.shots) {
+            b.writeln(_shotRow(one));
+          }
+        } else {
+          // Целиком не влезает — место кончилось. Дальше идут только
+          // сводки, и мы честно помечаем, сколько выстрелов не отдано.
+          b.writeln('|…ещё ${t.shots.length}');
+        }
       }
-      rows.add(row);
+      if (history.length > listed.length) {
+        b.writeln('…ещё ${history.length - listed.length} training summaries');
+      }
     }
-    map['training_history'] = rows;
 
-    // Спортсмены тренера: кратко, по имени — чтобы не путать людей.
+    // Спортсмены тренера: по имени — чтобы не путать людей.
     if (athletes.isNotEmpty) {
-      map['athletes_training_history'] = [
-        for (final a in athletes)
-          {
-            'athlete': a.name,
-            'note': 'NOT the user; refer to this athlete by name',
-            'sessions': [
-              for (final t in (a.sessions.where((t) => t.shots.isNotEmpty).toList()
-                    ..sort((x, y) => (y.startedAt ?? DateTime(0)).compareTo(x.startedAt ?? DateTime(0))))
-                  .take(15))
-                {
-                  'exercise': a.nameOf(t),
-                  'date': _dt(t.startedAt),
-                  'shots_count': t.shots.length,
-                  'total': _round(t.totalScore),
-                  'average': _round(t.totalScore / t.shots.length),
-                },
-            ],
-          },
-      ];
+      b.writeln('athletes (name|date|exercise|shots|total|average):');
+      for (final a in athletes) {
+        final list = a.sessions.where((t) => t.shots.isNotEmpty).toList()
+          ..sort((x, y) => (y.startedAt ?? DateTime(0))
+              .compareTo(x.startedAt ?? DateTime(0)));
+        final take = list.take(15).toList();
+        for (final t in take) {
+          b.writeln('${a.name} (NOT the user)|${_dt(t.startedAt) ?? '-'}|'
+              '${a.nameOf(t)}|${t.shots.length}|${_num(t.totalScore)}|'
+              '${_num(t.totalScore / t.shots.length)}');
+        }
+        if (list.length > take.length) {
+          b.writeln('${a.name}|…ещё ${list.length - take.length} training summaries');
+        }
+      }
     }
 
-    return 'КОНТЕКСТ:\n${const JsonEncoder().convert(map)}';
+    return b.toString().trimRight();
   }
 
-  List<Map<String, dynamic>> _shotsJson(List<Shot> shots) {
-    // Если выстрелов больше лимита — берём последние: свежие важнее.
-    final list = shots.length <= maxDetailedShots
-        ? shots
-        : shots.sublist(shots.length - maxDetailedShots);
-    return [for (final s in list) _shotJson(s)];
+  /// Выстрелы открытой тренировки: если больше лимита — берём последние,
+  /// свежие важнее.
+  static List<Shot> _limitShots(List<Shot> shots) =>
+      shots.length <= maxDetailedShots
+          ? shots
+          : shots.sublist(shots.length - maxDetailedShots);
+
+  /// Одна строка выстрела: n|series|score|x|y[|time][|device].
+  ///
+  /// Время печатаем только у открытой тренировки (по нему видно темп
+  /// серии): в истории это 600 строк по 9 знаков ради данных, которые
+  /// почти не спрашивают.
+  static String _shotRow(Shot s, {bool withTime = false}) => <String>[
+        '${s.shotNumber}',
+        '${s.seriesNo}',
+        _num(s.score),
+        _num(s.xMm),
+        _num(s.yMm),
+        if (withTime) _hm(s.time),
+        // Показатели из внешних приборов — время прицеливания, удержание,
+        // скорость. Ради них поле и заводилось: связать результат с тем,
+        // КАК он получен, по одним координатам невозможно.
+        if (s.extra != null && s.extra!.isNotEmpty) jsonEncode(s.extra),
+      ].join('|');
+
+  /// Число для таблицы: два знака после точки, у целых — без «.0» (экономит
+  /// по 2 знака на каждое из трёх чисел в каждой строке выстрела).
+  static String _num(double v) {
+    final r = _round(v);
+    return r == r.roundToDouble() ? r.toInt().toString() : r.toString();
   }
 
-  Map<String, dynamic> _shotJson(Shot s) => {
-        'n': s.shotNumber,
-        'series': s.seriesNo,
-        'score': _round(s.score),
-        'x': _round(s.xMm),
-        'y': _round(s.yMm),
-        'time': _dt(s.time),
-        // Показатели из внешних приборов — время прицеливания,
-        // удержание, скорость. Ради них поле и заводилось: связать
-        // результат с тем, КАК он получен, по одним координатам
-        // невозможно.
-        if (s.extra != null && s.extra!.isNotEmpty) 'device': s.extra,
-      };
+  /// Время выстрела в открытой тренировке: ч:мм:сс, без даты — дата
+  /// тренировки уже есть строкой выше.
+  static String _hm(DateTime d) {
+    final l = d.toLocal();
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${two(l.hour)}:${two(l.minute)}:${two(l.second)}';
+  }
 
   static double _round(double v) => (v * 100).roundToDouble() / 100;
 
