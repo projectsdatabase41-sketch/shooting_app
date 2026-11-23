@@ -1,5 +1,5 @@
 import '../gdrive/gdrive_screen.dart';
-import '../viewer/step_viewer_screen.dart';
+import '../viewer/models_catalog_screen.dart';
 import 'news_screen.dart';
 import '../services/sync_status.dart';
 import 'sync_progress_screen.dart';
@@ -318,7 +318,9 @@ class _HomeShellState extends State<HomeShell> {
       'notes' => const CoachDiaryNotesScreen(),
       'finals' => const FinalsScreen(),
       'drive' => const GDriveScreen(),
-      'viewer' => const StepViewerScreen(),
+      // Каталог 3D-моделей вместо голого вьюера (просьба владельца 23.11);
+      // старый выбор файла остался кнопкой внутри каталога.
+      'viewer' => const ModelsCatalogScreen(),
       'news' => const NewsScreen(),
       'pdf' => const PdfToolsScreen(),
       'messenger' => ChatHomeScreen(
