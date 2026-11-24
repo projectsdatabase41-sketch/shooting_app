@@ -186,81 +186,137 @@ int clockDirection(Shot shot) {
 String formatScore(double v, TargetFace face) =>
     face.integerScoring ? v.round().toString() : v.toStringAsFixed(1);
 
-/// Попала ли стрела во внутреннюю десятку (X) — только для мишеней, где она
-/// есть (лук). Меряется так же, как зона: по краю древка, ближайшему к центру.
-bool isInnerTen(double distanceMm, TargetFace face) {
-  final inner = face.innerTenRadiusMm;
-  if (inner == null) return false;
-  return distanceMm + face.gaugingOffsetMm <= inner + 1e-9;
-}
-
 // ---------------------------------------------------------------------------
-// «Центральные» выстрелы (запрос владельца 24.11: экран «как SIUS»).
+// «Центральные» выстрелы (inner ten) — геометрия (владелец 24.11, п. A).
 //
 // На SIUS-дисплее рядом с общим результатом стоит число центральных
-// пробоин — десятые доли, начиная с некоего порога. Порог не совпадает
-// с внутренней десяткой по правилам (она нужна там для целочисленного
-// подсчёта при разборе равных результатов), здесь это ОТДЕЛЬНАЯ
-// статистическая метка на дисплее.
+// пробоин. Критерий — ЕВКЛИДОВ радиус r = √(x² + y²) от центра мишени до
+// центра пробоины, а НЕ порог по округлённому десятичному баллу (старая
+// модель «десятая доля не ниже N» удалена как ошибочная).
+//
+// Два правила (владелец 24.11):
+// - **«Полное выбивание точки»** (правило inward-замера калибра точки):
+//   у № 8 внутренняя десятка — белая точка 0.5 мм, отдельной окружности
+//   на бланке нет; десятка внутренняя, если пробоина выбила точку целиком:
+//   r ≤ (dCal − d10)/2. Для rifle_10m: (4.50 − 0.50)/2 = 2.00 мм — это
+//   граница десятых 10.1/10.2, НЕ 10.5;
+// - **«Касание» (touch, замер калибромером «наружу»):** край пробоины
+//   коснулся окружности внутренней десятки: r ≤ (dInner + dCal)/2 —
+//   rifle_50m (№ 7): (5.00 + 5.60)/2 = 5.30 мм, pistol_10m (№ 9):
+//   (5.00 + 4.50)/2 = 4.75 мм.
+//
+// Десятичный балл это не затрагивает: scoreForPoint считается как раньше,
+// здесь только признак «центральный/нет» для панели «как SIUS» и статистики.
 // ---------------------------------------------------------------------------
 
-/// Таблица порогов «центрального» выстрела: минимальная десятая доля,
-/// с которой выстрел считается центральным на дисплее «как SIUS».
-///
-/// **Ориентировочно, уточняется у владельца / по ISSF (отзыв владельца
-/// 24.11):** пороги одной таблицей, чтобы править в одном месте, без
-/// поисков по коду. Значения — от финальной выверки владельца 24.11:
-/// - `rifle_50m` (№ 7, винтовка 50 м) — 10.3…10.9 считается центральным;
-/// - `rifle_10m` (№ 8, пневматическая винтовка 10 м) — внутренняя десятка
-///   там по процедуре выбитой точки, порог выше — 10.5;
-/// - `pistol_10m` (№ 9, пневматический пистолет) — 10.4;
-/// - остальные мишени — прикидка 10.4, владелец порогов не давал.
-///
-/// Список пар, а не Map: у `double`-значений тот же формат, что в
-/// контрольной таблице ТЗ (см. `test/scoring_test.dart`), — читать и
-/// править таблицу одним взглядом.
-const List<(String, double)> _centralThresholds = [
-  ('rifle_50m', 10.3),
-  ('rifle_10m', 10.5),
-  ('pistol_10m', 10.4),
-];
+/// Геометрия центрального выстрела одной мишени: константы + правило.
+class InnerTenSpec {
+  final String code; // код мишени (TargetFace.code)
+  final double d10; // диаметр десятки, мм (для № 8 — выбиваемая точка 0.5 мм)
+  final double dInner; // диаметр внутренней десятки (10X), мм
+  final double dCal; // калибр пули, мм
+  final bool dotPunch; // правило «полное выбивание точки» (иначе — «касание»)
+  final bool needsConfirm; // константа добавлена — уточнить у владельца/по ISSF
 
-/// Порог десятой доли по умолчанию для мишеней, которых нет в таблице.
-/// См. комментарий к [_centralThresholds] — ориентировочно, владелец 24.11.
-const double _defaultCentralThreshold = 10.4;
-
-/// Порог десятой доли, начиная с которого выстрел считается «центральным»
-/// на дисплее «как SIUS» (запрос владельца 24.11).
-///
-/// Порядок приоритета: явный порог самой мишени
-/// (`TargetFace.centralTenThreshold`, если когда-нибудь задан) → таблица
-/// по коду мишени ([_centralThresholds]) → значение по умолчанию.
-double centralThresholdFor(TargetFace face) {
-  final own = face.centralTenThreshold;
-  if (own != null) return own;
-  for (final (code, threshold) in _centralThresholds) {
-    if (face.code == code) return threshold;
-  }
-  return _defaultCentralThreshold;
+  const InnerTenSpec(
+    this.code,
+    this.d10,
+    this.dInner,
+    this.dCal, {
+    this.dotPunch = false,
+    this.needsConfirm = false,
+  });
 }
 
-/// Сколько выстрелов «центральных» — десятая доля каждого не ниже порога
-/// [centralThresholdFor] для этой мишени. Пристрелочные выстрелы здесь
-/// НЕ отфильтровываются: на дисплее их и не должно быть в подсчёте,
-/// отбор зачётных — забота вызывающего (см. `SiusPanel`).
-int countCentral(Iterable<Shot> shots, TargetFace face) =>
-    countCentralScores([for (final s in shots) s.score], face);
+/// Таблица мишеней с критерием центрального выстрела (владелец 24.11).
+///
+/// Точные значения — rifle_10m, rifle_50m, pistol_10m. Остальные добавлены
+/// по той же арифметике, но помечены [InnerTenSpec.needsConfirm] —
+/// **уточнить у владельца/по ISSF**. Мишени, которых нет в таблице
+/// (бегущие, лук, биатлон, IPSC, тарелки), центральных не считают.
+const List<InnerTenSpec> _innerTenSpecs = [
+  // № 8, винтовка 10 м: r ≤ (4.50 − 0.50)/2 = 2.00 мм (граница 10.1/10.2).
+  InnerTenSpec('rifle_10m', 0.50, 0.50, 4.50, dotPunch: true),
+  // № 7, винтовка 50 м: r ≤ (5.00 + 5.60)/2 = 5.30 мм.
+  InnerTenSpec('rifle_50m', 10.40, 5.00, 5.60),
+  // № 9, пистолет 10 м: r ≤ (5.00 + 4.50)/2 = 4.75 мм.
+  InnerTenSpec('pistol_10m', 11.50, 5.00, 4.50),
+  // № 4, пистолет 25/50 м — одна мишень на обе дистанции (и ПП-25/50, и
+  // скоростной): r ≤ (25.0 + 5.60)/2 = 15.30 мм. УТОЧНИТЬ у владельца/по ISSF.
+  InnerTenSpec('pistol_25m', 50.0, 25.0, 5.60, needsConfirm: true),
+  // 300 м винтовка (№ 15/16, калибр 7.62 как в TargetFace.rifle300m):
+  // r ≤ (50.0 + 7.62)/2 = 28.81 мм. УТОЧНИТЬ у владельца/по ISSF.
+  InnerTenSpec('rifle_300m', 100.0, 50.0, 7.62, needsConfirm: true),
+];
 
-/// То же по готовым значениям выстрелов: финалы хранят `RunShot` со
-/// своим полем `score`, а не модели `Shot`, и заворачивать их в `Shot`
-/// ради одного поля незачем.
-int countCentralScores(Iterable<double> scores, TargetFace face) {
-  final threshold = centralThresholdFor(face);
+/// Порог центрального выстрела: максимальный евклидов радиус центра
+/// пробоины (мм) для этой мишени. `null` — критерия для мишени нет,
+/// центральные не считаются (см. [_innerTenSpecs]).
+double? innerTenLimitMm(TargetFace face) {
+  for (final s in _innerTenSpecs) {
+    if (face.code == s.code) {
+      return s.dotPunch ? (s.dCal - s.d10) / 2 : (s.dInner + s.dCal) / 2;
+    }
+  }
+  return null;
+}
+
+/// Центральный (внутренняя десятка, X) ли выстрел — по геометрии (владелец
+/// 24.11): евклидов радиус точки попадания не больше порога мишени
+/// [innerTenLimitMm]. Для мишеней без критерия — false (не считать).
+///
+/// Два вида вызова (совместить в одном имени, т.к. старая форма уже
+/// используется тестами лука):
+/// - `isInnerTen(xMm, yMm, face)` — точка попадания в мм от центра (y вверх),
+///   геометрический критерий этой секции;
+/// - `isInnerTen(distanceMm, face)` — старая форма для лука: расстояние до
+///   края древка, ближайшего к центру (X внизу бланка лука).
+class InnerTenCheck {
+  const InnerTenCheck._();
+
+  bool call(double xOrDistanceMm, [Object? yOrFace, Object? maybeFace]) {
+    if (maybeFace is TargetFace) {
+      return _byPoint(xOrDistanceMm, yOrFace! as double, maybeFace);
+    }
+    if (yOrFace is TargetFace) return _byShaftEdge(xOrDistanceMm, yOrFace);
+    // Сюда попасть компилятор не даёт (нет второго аргумента).
+    throw ArgumentError('isInnerTen: ожидается (x, y, face) или (distance, face)');
+  }
+
+  bool _byPoint(double xMm, double yMm, TargetFace face) {
+    final limit = innerTenLimitMm(face);
+    if (limit == null) return false;
+    final r = math.sqrt(xMm * xMm + yMm * yMm);
+    // Допуск 1e-9: выстрел ровно на границе — центральный (граница
+    // принадлежит более высокому достоинству, как и в подсчёте очков).
+    return r <= limit + 1e-9;
+  }
+
+  bool _byShaftEdge(double distanceMm, TargetFace face) {
+    final inner = face.innerTenRadiusMm;
+    if (inner == null) return false;
+    return distanceMm + face.gaugingOffsetMm <= inner + 1e-9;
+  }
+}
+
+/// См. [InnerTenCheck] — формы вызова и правила.
+const InnerTenCheck isInnerTen = InnerTenCheck._();
+
+/// Сколько центральных выстрелов в наборе [Shot]. Пристрелочные здесь
+/// НЕ отфильтровываются: отбор зачётных — забота вызывающего (см. `SiusPanel`).
+int countInnerTen(Iterable<Shot> shots, TargetFace face) =>
+    countInnerTenPoints([for (final s in shots) (s.xMm, s.yMm)], face);
+
+/// То же по готовым точкам (x, y) в мм от центра мишени: финалы хранят
+/// `RunShot` со своими полями x/y, панель «как SIUS» — `Offset`, заворачивать
+/// их в модель `Shot` ради двух координат незачем.
+int countInnerTenPoints(Iterable<(double, double)> points, TargetFace face) {
+  final limit = innerTenLimitMm(face);
+  if (limit == null) return 0;
   var n = 0;
-  // Допуск 1e-9: значение ровно на пороге — центральный (граница
-  // принадлежит более высокому габариту, как и в самом подсчёте очков).
-  for (final s in scores) {
-    if (s + 1e-9 >= threshold) n++;
+  // Допуск 1e-9 — как в [InnerTenCheck].
+  for (final (x, y) in points) {
+    if (math.sqrt(x * x + y * y) <= limit + 1e-9) n++;
   }
   return n;
 }

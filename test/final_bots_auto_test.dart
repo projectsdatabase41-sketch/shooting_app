@@ -49,6 +49,34 @@ void main() {
     });
   });
 
+  group('ЕВСК 2026–2029 (приказ Минспорта от 10.03.2026 № 201, прил. 22; владелец 24.11)', () {
+    test('avg = нормативная сумма / число выстрелов; целые → десятичный эквивалент', () {
+      // В таблицу ботов средний выстрел записан с точностью до тысячных —
+      // для калибровки бота этого достаточно, поэтому допуск 1e-3.
+      // ВП-60 (десятые): 629.5/60, 606.0/60; III только в целых: 560/60.
+      expect(RankNorms.averageFor('rifle_10m', 'МСМК'), closeTo(629.5 / 60, 1e-3));
+      expect(RankNorms.averageFor('rifle_10m', '1 взрослый'), closeTo(606.0 / 60, 1e-3));
+      expect(RankNorms.averageFor('rifle_10m', '3 взрослый'), closeTo(560 / 60, 1e-3));
+      // Юношеские маппируются на возрастное упражнение: ВП-40, I юн. 360/40.
+      expect(RankNorms.averageFor('rifle_10m', '1 юношеский'), closeTo(360 / 40, 1e-3));
+      // ПП-60: 578/60; III нет → из ПП-40: 336/40.
+      expect(RankNorms.averageFor('pistol_10m', 'МС'), closeTo(578 / 60, 1e-3));
+      expect(RankNorms.averageFor('pistol_10m', '3 взрослый'), closeTo(336 / 40, 1e-3));
+      // МВ-3×40 (120 выстрелов): 1160/120; II нет → МВ-3×20, II: 540/60.
+      expect(RankNorms.averageFor('rifle_50m', 'МС'), closeTo(1160 / 120, 1e-3));
+      expect(RankNorms.averageFor('rifle_50m', '2 взрослый'), closeTo(540 / 60, 1e-3));
+    });
+
+    test('предметы ЕВСК и коды мишеней ведут в одну таблицу ботов', () {
+      expect(RankNorms.averageFor('ВП-60', 'МС'), RankNorms.averageFor('rifle_10m', 'МС'));
+      expect(RankNorms.averageFor('ПП-40', 'КМС'), RankNorms.averageFor('pistol_10m', 'КМС'));
+      expect(RankNorms.averageFor('МВ-3×40', 'МСМК'), RankNorms.averageFor('rifle_50m', 'МСМК'));
+      // Сырые суммы справочника ЕВСК доступны для выверки.
+      expect(RankNorms.ewskSumFor('ПП-40', 'I'), closeTo(363, 1e-9));
+      expect(RankNorms.ewskSumFor('МВ-60 (десятые)', 'КМС'), closeTo(617.0, 1e-9));
+    });
+  });
+
   group('авто-уровень бота (отзыв владельца 24.11)', () {
     const face = TargetFace.rifle50m;
     final rng = math.Random(11);
