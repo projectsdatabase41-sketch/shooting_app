@@ -56,8 +56,47 @@ enum BotDifficulty {
   /// Каждый финал — одна случайная тренировка, и случайные колебания.
   unpredictable,
 
-  /// Ручная настройка: мин/макс выстрел, STP, направление разброса.
+  /// Ручной режим: мин/макс выстрел, STP, направление разброса.
   manual,
+
+  /// Авто (по умолчанию, отзыв владельца 24.11): статистику и уровень бот
+  /// берёт из тренировок спортсмена по этой мишени и изготовке (средний
+  /// результат бота калибруется под средний результат спортсмена), а если
+  /// тренировок мало — из разряда профиля и нормативной таблицы
+  /// (`rank_norms.dart`). Множители сложности не применяются.
+  auto,
+}
+
+/// Коды изготовок ботов (отзыв владельца 24.11): фильтр истории тренировок и
+/// отдельная статистика по положениям в финале 3P.
+const String stanceProne = 'prone'; // лёжа
+const String stanceKneeling = 'kneeling'; // с колена
+const String stanceStanding = 'standing'; // стоя
+
+/// Изготовка по названию упражнения: «лёжа», «с колена»/«колено», «стоя».
+/// В названии нет изготовки — `null` (история не фильтруется по изготовке).
+String? stanceFromName(String name) {
+  final s = name.toLowerCase();
+  if (s.contains('лёж')) return stanceProne;
+  if (s.contains('колен')) return stanceKneeling;
+  if (s.contains('стоя') || s.contains('стойк')) return stanceStanding;
+  return null;
+}
+
+/// Этап ожидания бота перед выстрелом (отзыв владельца 24.11): пауза между
+/// выстрелами — не плоская задержка, а стадии «отдых», «прицеливание»,
+/// «перезарядка», каждая стоит времени и видна в статусе бота.
+enum BotStage { rest, aim, reload }
+
+/// Длительности этапов одного выстрела бота (в секундах симуляции).
+class BotStagePlan {
+  final int rest;
+  final int aim;
+  final int reload;
+  const BotStagePlan(this.rest, this.aim, this.reload);
+
+  /// Полное время от конца предыдущего выстрела до следующего.
+  int get total => rest + aim + reload;
 }
 
 /// Бот: стреляет настоящими выстрелами (точка попадания), которые считаются
@@ -76,23 +115,44 @@ class BotShooter {
   final double? manualMaxShot;
   final double? manualStp;
   final double? manualDispersionDeg;
-  
-  late final ShotStats _active = _pick();
 
-  BotShooter(this.stats, this.difficulty, this.face, this.rng, {this.sessions = const [], 
-    this.manualMinShot, this.manualMaxShot, this.manualStp, this.manualDispersionDeg});
+  /// Статистика по отдельным изготовкам для 3P (отзыв владельца 24.11):
+  /// в финале из трёх положений бот стреляет по каждой изготовке своим
+  /// уровнем. Ключ — код изготовки (`stanceProne`, `stanceKneeling`,
+  /// `stanceStanding`). Пусто — общий уровень [stats].
+  final Map<String, ShotStats> byStance;
 
+  /// Текущая изготовка; контроллер финала меняет её при смене положения
+  /// (в 3P с колена → лёжа → стоя).
+  String? stance;
+
+  BotShooter(this.stats, this.difficulty, this.face, this.rng,
+      {this.sessions = const [],
+      this.manualMinShot,
+      this.manualMaxShot,
+      this.manualStp,
+      this.manualDispersionDeg,
+      this.byStance = const {}});
+
+  /// Статистика для текущего выстрела: «непредсказуемый» каждый финал —
+  /// случайная тренировка; при заданной изготовке — её статистика.
   ShotStats _pick() {
-    if (difficulty != BotDifficulty.unpredictable || sessions.isEmpty) return stats;
-    return sessions[rng.nextInt(sessions.length)];
+    if (difficulty == BotDifficulty.unpredictable && sessions.isNotEmpty) {
+      return sessions[rng.nextInt(sessions.length)];
+    }
+    final s = byStance[stance];
+    return s ?? stats;
   }
 
   /// (смещение СТП, разброс) для сложности; у «непредсказуемого» — случайно.
+  /// «Авто» — множители не применяются: калибровка под среднего спортсмена
+  /// уже сделана при создании бота (см. [calibrated]).
   (double, double) get _scales => switch (difficulty) {
         BotDifficulty.easy => (1.35, 1.18),
         BotDifficulty.medium => (1.0, 1.0),
         BotDifficulty.hard => (0.65, 0.88),
         BotDifficulty.unpredictable => (0.6 + rng.nextDouble() * 0.9, 0.8 + rng.nextDouble() * 0.45),
+        BotDifficulty.auto => (1.0, 1.0),
         BotDifficulty.manual => (1.0, 1.0), // не используется в ручном режиме
       };
 
@@ -148,10 +208,68 @@ class BotShooter {
     form = (0.7 * form + 0.6 * volatility * _gauss()).clamp(-1.5, 1.5);
     final dm = math.exp(-0.22 * form); // разброс
     final bm = math.exp(-0.3 * form); // смещение СТП
+    final act = _pick(); // один выбор на выстрел: СТП и разброс из одной статистики
     return (
-      mpi * bm * _active.mx + disp * dm * _active.sx * _gauss(),
-      mpi * bm * _active.my + disp * dm * _active.sy * _gauss(),
+      mpi * bm * act.mx + disp * dm * act.sx * _gauss(),
+      mpi * bm * act.my + disp * dm * act.sy * _gauss(),
     );
+  }
+
+  /// Детерминированные квантили стандартного нормального распределения.
+  /// Нужны для калибровки без случайности: средний результат бота оценивается
+  /// по фиксированной решётке, поэтому одинаков у всех ботов и воспроизводим
+  /// в тестах.
+  static const _quantiles = [
+    -2.054, -1.5, -1.1, -0.8, -0.55, -0.32, -0.1, 0.1, 0.32, 0.55, 0.8, 1.1, 1.5, 2.054,
+  ];
+
+  /// Средний результат бота со статистикой [st] без «формы» и случайности —
+  /// по той же формуле `shotPoint`, но по детерминированной решётке квантилей.
+  static double meanScoreFor(ShotStats st, TargetFace face) {
+    var sum = 0.0;
+    for (final zx in _quantiles) {
+      for (final zy in _quantiles) {
+        sum += scoreForPoint(st.mx + st.sx * zx, st.my + st.sy * zy, face);
+      }
+    }
+    return sum / (_quantiles.length * _quantiles.length);
+  }
+
+  /// Статистика бота «под средний результат» (отзыв владельца 24.11):
+  /// одним множителем масштабируются и СТП, и разброс исходной статистики
+  /// [base] так, чтобы средний выстрел бота был равен [targetAvg] — среднему
+  /// результату спортсмена в тренировках. Без этого обычные множители давали
+  /// не «соперника того же уровня», а случайно слабого бота (3–5 очков).
+  static ShotStats calibrated(ShotStats base, double targetAvg, TargetFace face) {
+    if (targetAvg <= 0 || targetAvg >= face.maxScore || base.sx <= 0 || base.sy <= 0) {
+      return base;
+    }
+    ShotStats apply(double k) =>
+        ShotStats(base.mx * k, base.my * k, base.sx * k, base.sy * k, base.n);
+    // Чем больше множитель, тем хуже стреляет бот — ищем им бисекцией.
+    var lo = 0.05, hi = 4.0;
+    if (meanScoreFor(apply(lo), face) <= targetAvg) return apply(lo);
+    if (meanScoreFor(apply(hi), face) >= targetAvg) return apply(hi);
+    for (var i = 0; i < 24; i++) {
+      final mid = (lo + hi) / 2;
+      if (meanScoreFor(apply(mid), face) > targetAvg) {
+        lo = mid;
+      } else {
+        hi = mid;
+      }
+    }
+    return apply((lo + hi) / 2);
+  }
+
+  /// Статистика бота по среднему [avg] и разбросу [sdPoints] в очках —
+  /// из нормативной таблицы (`rank_norms.dart`, отзыв владельца 24.11):
+  /// центр в нуле, σ очков переводится в миллиметры по цене десятой доли
+  /// мишени (0.1 очка = `decimalStepMm` мм), затем ровно так же калибруется
+  /// под средний результат, как и статистика тренировок.
+  static ShotStats forAverage(double avg, double sdPoints, TargetFace face) {
+    final sigma = (sdPoints * 10 * face.decimalStepMm).clamp(0.1, face.faceRadiusMm).toDouble();
+    final target = avg.clamp(0.1, face.maxScore - 0.05).toDouble();
+    return calibrated(ShotStats(0, 0, sigma, sigma, 1), target, face);
   }
   
   /// Один выстрел: результат с десятыми по правилам мишени.
@@ -165,9 +283,41 @@ class BotShooter {
   /// Не быстрее, чем раз в 4 секунды: человеку нужно перезарядить винтовку,
   /// встать в изготовку и прицелиться — по отзыву 17.11 это «не менее 5 секунд».
   /// Медленнее — можно (до лимита на выстрел), быстрее — нельзя.
+  ///
+  /// Живой план пауз ботов — [stagePause] с разбиением на «отдых/прицеливание/
+  /// перезарядку» (отзыв владельца 24.11); метод оставлен для совместимости
+  /// (используется старыми тестами).
   double delaySeconds(int limitSeconds) {
     final base = limitSeconds * (0.35 + rng.nextDouble() * 0.5);
     final atLeastHuman = math.max(4.0, base);
     return math.min(limitSeconds.toDouble(), atLeastHuman);
+  }
+
+  /// Диапазоны этапов паузы бота (отзыв владельца 24.11):
+  /// винтовка — отдых 4–9 с, прицеливание 3–7 с, перезарядка 2–4 с;
+  /// пистолет — 2–5 / 2–4 / 1–2 с. Смена положения и пристрелка между сериями
+  /// 3P учитываются отдельно (`FinalFormat.changeAfterSeries`).
+  static const List<(int, int)> _rifleStages = [(4, 9), (3, 7), (2, 4)];
+  static const List<(int, int)> _pistolStages = [(2, 5), (2, 4), (1, 2)];
+
+  bool get isRifle => face.code.startsWith('rifle');
+
+  /// План стадий перед одним выстрелом: отдых → прицеливание → перезарядка →
+  /// выстрел. [slotSeconds] — слот этого выстрела в раунде: сумма стадий не
+  /// превышает его; если слот меньше (свой формат с плотной сеткой), стадии
+  /// пропорционально сжимаются (но не короче секунды каждая). Контроллер
+  /// дополнительно держит зазор между выстрелами не меньше 5 с.
+  BotStagePlan stagePause(int slotSeconds) {
+    final ranges = isRifle ? _rifleStages : _pistolStages;
+    int pick((int, int) r) => r.$1 + rng.nextInt(r.$2 - r.$1 + 1);
+    var rest = pick(ranges[0]), aim = pick(ranges[1]), reload = pick(ranges[2]);
+    final total = rest + aim + reload;
+    if (slotSeconds > 0 && total > slotSeconds) {
+      final k = slotSeconds / total;
+      rest = math.max(1, (rest * k).floor());
+      aim = math.max(1, (aim * k).floor());
+      reload = math.max(1, (reload * k).floor());
+    }
+    return BotStagePlan(rest, aim, reload);
   }
 }

@@ -102,8 +102,11 @@ class FinalRunController extends ChangeNotifier {
   /// Пристрелочные выстрелы ботов (не в зачёт): показываются бледно на их мишенях.
   final Map<String, List<(double, double)>> sightShots = {};
 
-  final Map<String, List<int>> _botTimes =
-      {}; // секунды раунда, когда стреляет бот
+  /// План выстрелов бота в текущем раунде (id → момент в секундах раунда и
+  /// длительности стадий «отдых/прицеливание/перезарядка»). Отзыв владельца
+  /// 24.11: пауза бота не плоская — каждая стадия стоит времени и видна в
+  /// статусе ([botStageOf]).
+  final Map<String, List<({int at, BotStagePlan plan})>> _botShots = {};
   final Map<String, int> _roundFired = {};
   List<String> _shooters = [];
 
@@ -317,7 +320,7 @@ class FinalRunController extends ChangeNotifier {
     roundSeconds = 0;
     _shooters = _currentShooters();
     _roundFired.clear();
-    _botTimes.clear();
+    _botShots.clear();
     for (final l in _staged.values) {
       l.clear();
     }
@@ -332,25 +335,60 @@ class FinalRunController extends ChangeNotifier {
       shotsPerShooter = 1;
       roundLimit = format.singleSeconds;
     }
+    // 3P: бот в каждой изготовке стреляет своим уровнем (отзыв владельца 24.11).
+    final stance = _currentStance();
     for (final id in _shooters) {
       final bot = bots[id];
       if (bot == null) continue;
-      final times = <int>[];
+      bot.stance = stance;
+      final plans = <({int at, BotStagePlan plan})>[];
+      final slot = roundLimit / shotsPerShooter;
       for (var k = 0; k < shotsPerShooter; k++) {
-        // Равномерно по времени серии с разбросом; никто не стреляет на последней секунде.
-        final slot = roundLimit / shotsPerShooter;
-        final t = (slot * k + bot.delaySeconds(slot.round()) + 1)
-            .round()
-            .clamp(1, roundLimit - 1);
-        times.add(t);
+        // Стадии «отдых/прицеливание/перезарядка» на этот выстрел (отзыв 24.11);
+        // никто не стреляет на последней секунде раунда.
+        final plan = bot.stagePause(slot.round());
+        final t = (slot * k + plan.total + 1).round().clamp(1, roundLimit - 1);
+        plans.add((at: t, plan: plan));
       }
-      times.sort();
-      // Два выстрела одного стрелка не быстрее чем через 5 секунд.
-      for (var k = 1; k < times.length; k++) {
-        if (times[k] < times[k - 1] + 5) times[k] = times[k - 1] + 5;
+      plans.sort((a, b) => a.at.compareTo(b.at));
+      // Два выстрела одного стрелка не быстрее чем через 5 секунд
+      // (отзыв 17.11); за пределы лимита раунда зазор не тянем —
+      // выстрел позже лимита в любом случае не прозвучит.
+      for (var k = 1; k < plans.length; k++) {
+        if (plans[k].at < plans[k - 1].at + 5) {
+          plans[k] = (at: math.min(plans[k - 1].at + 5, roundLimit - 1), plan: plans[k].plan);
+        }
       }
-      _botTimes[id] = times;
+      _botShots[id] = plans;
     }
+  }
+
+  /// Изготовка текущего раунда для 3P (отзыв владельца 24.11): бот по ней
+  /// выбирает статистику ([BotShooter.byStance]). Перестрелка — стоя. Для
+  /// остальных мишеней `null` — общий уровень бота.
+  String? _currentStance() {
+    if (face.code != 'rifle_50m') return null;
+    if (inShootOff) return stanceStanding;
+    if (roundIndex < 3) return stanceKneeling; // 3 серии с колена
+    if (roundIndex < 6) return stanceProne; // 3 серии лёжа
+    return stanceStanding; // 2 серии стоя и одиночные
+  }
+
+  /// Стадия бота в текущую секунду раунда: 'rest' | 'aim' | 'reload';
+  /// '' — бот уже отстрелял в этом раунде либо это не бот.
+  ///
+  /// Отзыв владельца 24.11: экран показывает, чем занят бот — отдыхает,
+  /// целится или перезаряжает, а выстрел — последняя стадия плана.
+  String botStageOf(String id) {
+    final plans = _botShots[id];
+    if (plans == null) return '';
+    for (final p in plans) {
+      if (roundSeconds >= p.at) continue;
+      if (roundSeconds >= p.at - p.plan.reload) return BotStage.reload.name;
+      if (roundSeconds >= p.at - p.plan.reload - p.plan.aim) return BotStage.aim.name;
+      return BotStage.rest.name;
+    }
+    return '';
   }
 
   /// Сила камбэков ботов (0.15…1): чем лучше стреляет спортсмен относительно
@@ -369,10 +407,10 @@ class FinalRunController extends ChangeNotifier {
   }
 
   void _fireDueBots() {
-    for (final id in List.of(_botTimes.keys)) {
-      final times = _botTimes[id]!;
-      while (times.isNotEmpty && times.first <= roundSeconds) {
-        times.removeAt(0);
+    for (final id in List.of(_botShots.keys)) {
+      final plans = _botShots[id]!;
+      while (plans.isNotEmpty && plans.first.at <= roundSeconds) {
+        plans.removeAt(0);
         final bot = bots[id]!;
         final (x, y) = bot.shotPoint(volatility: comebackLevel);
         _record(id, x, y, scoreForPoint(x, y, face));
@@ -423,7 +461,7 @@ class FinalRunController extends ChangeNotifier {
     for (final id in _shooters) {
       if (humans.contains(id)) {
         if (stagedOf(id).length < shotsPerShooter) return false;
-      } else if ((_botTimes[id] ?? const []).isNotEmpty) {
+      } else if ((_botShots[id] ?? const []).isNotEmpty) {
         return false;
       }
     }

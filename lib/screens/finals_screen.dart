@@ -15,7 +15,9 @@ import '../finals/bot.dart';
 import '../finals/final_engine.dart';
 import '../finals/final_run.dart';
 import '../finals/finals_repository.dart';
+import '../finals/rank_norms.dart';
 import '../i18n/i18n.dart';
+import '../logic/scoring.dart';
 import '../models/target_face.dart';
 import '../state/app_data_store.dart';
 import '../widgets/glass_pill.dart';
@@ -24,6 +26,7 @@ import '../services/chat_auth_service.dart';
 import '../services/ai_service.dart';
 import '../services/ai_settings.dart';
 import '../finals/finals_session_service.dart';
+import '../services/local_db_service.dart';
 import '../services/user_profile.dart';
 import 'champions_screen.dart';
 import '../finals/finals_board.dart';
@@ -161,7 +164,9 @@ class FinalSetupScreen extends StatefulWidget {
 }
 
 class _FinalSetupScreenState extends State<FinalSetupScreen> {
-  String _level = 'mixed'; // mixed | easy | medium | hard | unpredictable | manual
+  // По умолчанию — «Авто» (отзыв владельца 24.11):
+  // auto | mixed | easy | medium | hard | unpredictable | manual | champions
+  String _level = 'auto';
   bool _custom = false; // свой финал: не публикуется
   int _cSeries = 2, _cPerSeries = 5, _cSingles = 14, _cSeriesSec = 250, _cSingleSec = 50, _cStep = 2, _cSightingSec = 300;
   // Ручной режим сложности ботов
@@ -188,17 +193,88 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
 
   static const _names = ['Бывалый', 'Татошка', 'Кость', 'Я в свое время тоже стрельбой занимался', 'Рыцарь', 'Сахарок', 'Усталый'];
 
-  /// Выстрелы тренировок на мишени этого финала.
-  ({List<(double, double)> all, List<ShotStats> sessions}) _history(AppDataStore store) {
-    final all = <(double, double)>[];
-    final per = <ShotStats>[];
+  /// Тренировки на мишени этого финала по сессиям: точки зачётных выстрелов и
+  /// изготовка. Отзыв владельца 24.11: вид оружия финала задаёт саму мишень
+  /// (`faceCode`), а изготовку берём из названия упражнения (`Exercise.name`:
+  /// «лёжа», «стоя», «с колена», «колено»); если в названии её нет — `null`,
+  /// такая тренировка подходит под любой фильтр.
+  List<({List<(double, double)> pts, String? stance})> _sessionHistory(AppDataStore store) {
+    final out = <({List<(double, double)> pts, String? stance})>[];
     for (final s in store.sessions) {
       if (s.targetFaceCode != widget.format.faceCode) continue;
-      final pts = [for (final sh in s.countingShots) (sh.xMm, sh.yMm)];
-      all.addAll(pts);
-      if (pts.length >= 5) per.add(ShotStats.fromPoints(pts));
+      final ex = store.exerciseFor(s);
+      out.add((
+        pts: [for (final sh in s.countingShots) (sh.xMm, sh.yMm)],
+        stance: ex == null ? null : stanceFromName(ex.name),
+      ));
     }
-    return (all: all, sessions: per);
+    return out;
+  }
+
+  /// Точки тренировок с фильтром по изготовке ([stance] `null` — все);
+  /// сессии без изготовки в названии подходят под любой фильтр.
+  List<(double, double)> _pointsOf(
+          List<({List<(double, double)> pts, String? stance})> hist, {String? stance}) =>
+      [for (final s in hist) if (stance == null || s.stance == null || s.stance == stance) ...s.pts];
+
+  /// Те же сессии, но как статистика для «непредсказуемых» ботов.
+  List<ShotStats> _sessionStatsOf(
+          List<({List<(double, double)> pts, String? stance})> hist, {String? stance}) =>
+      [
+        for (final s in hist)
+          if ((stance == null || s.stance == null || s.stance == stance) && s.pts.length >= 5)
+            ShotStats.fromPoints(s.pts)
+      ];
+
+  /// Средний результат спортсмена по точкам (в очках мишени).
+  double _avgOf(List<(double, double)> pts, TargetFace face) {
+    if (pts.isEmpty) return 0;
+    final sum = pts.fold<double>(0, (a, p) => a + scoreForPoint(p.$1, p.$2, face));
+    return sum / pts.length;
+  }
+
+  /// Статистика ботов «под среднего спортсмена»: те же СТП и разброс, но
+  /// множитель калиброван так, чтобы средний результат бота был равен
+  /// среднему спортсмена, а не случайно 3–5 очков (отзыв владельца 24.11).
+  ShotStats _calibratedStats(List<(double, double)> pts, TargetFace face) =>
+      BotShooter.calibrated(ShotStats.fromPoints(pts), _avgOf(pts, face), face);
+
+  /// Статистика бота по разряду из профиля и нормативной таблице
+  /// (`rank_norms.dart`, отзыв владельца 24.11): применяется, когда
+  /// тренировок на этой мишени/изготовке ещё мало.
+  ShotStats _normStats(LocalDbService db, TargetFace face) {
+    final rank = UserProfile.rankOf(db);
+    return BotShooter.forAverage(
+      RankNorms.averageFor(face.code, rank),
+      RankNorms.spreadFor(face.code, rank),
+      face,
+    );
+  }
+
+  /// Статистика одной изготовки 3P (отзыв владельца 24.11). Если по этой
+  /// изготовке набрано ≥20 зачётных выстрелов — бот стреляет по самой
+  /// изготовке; иначе — общая статистика с поправкой [stanceCorrection].
+  /// Поправки подтверждены владельцем по порядку (лёжа лучше, стоя хуже)
+  /// и собраны здесь, чтобы легко править.
+  static const stanceCorrection = {
+    stanceProne: 0.75, // лёжа — заметно кучнее и ближе к центру
+    stanceKneeling: 1.0, // с колена — как общая статистика
+    stanceStanding: 1.3, // стоя — самый большой разброс и увод СТП
+  };
+
+  ShotStats _stanceStats({
+    required List<(double, double)> stancePts,
+    required ShotStats overall,
+    required double corr,
+    required bool calibrated,
+    required TargetFace face,
+  }) {
+    if (stancePts.length >= 20) {
+      return calibrated ? _calibratedStats(stancePts, face) : ShotStats.fromPoints(stancePts);
+    }
+    // Мало данных по изготовке — общая статистика с поправкой: направление
+    // СТП сохраняется, разброс и увод от центра масштабируются.
+    return ShotStats(overall.mx * corr, overall.my * corr, overall.sx * corr, overall.sy * corr, overall.n);
   }
 
   /// Статистика по умолчанию, пока своих тренировок мало.
@@ -220,11 +296,13 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
   void _start(AppDataStore store) {
     final fmt = _fmt;
     if (fmt == null) return;
-    
-    // Проверка: если нет истории тренировок и не выбран ручной режим — показываем предупреждение
-    final h = _history(store);
-    final enough = h.all.length >= 20;
-    if (!enough && _level != 'manual' && _level != 'champions') {
+
+    // Проверка: если нет истории тренировок и не выбран ручной режим — показываем предупреждение.
+    // «Авто» (отзыв владельца 24.11) без истории не предупреждает: боты стреляют
+    // по разряду из профиля и нормативной таблице.
+    final hist = _sessionHistory(store);
+    final enough = _pointsOf(hist).length >= 20;
+    if (!enough && _level != 'manual' && _level != 'champions' && _level != 'auto') {
       showGlassDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -236,20 +314,41 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
           ],
         ),
       ).then((confirmed) {
-        if (confirmed == true) _doStart(store, enough, h);
+        if (confirmed == true) _doStart(store, enough, hist);
       });
       return;
     }
-    _doStart(store, enough, h);
+    _doStart(store, enough, hist);
   }
 
-  void _doStart(AppDataStore store, bool enough, ({List<(double, double)> all, List<ShotStats> sessions}) h) {
+  void _doStart(
+    AppDataStore store,
+    bool enough,
+    List<({List<(double, double)> pts, String? stance})> hist,
+  ) {
     final fmt = _fmt!;
     // Недостающие записи диктора для участников готовим в фоне (если они уже есть — ничего не делается).
     VoicePacks.ensureNames(store.db, [_myName(store), for (final o in _opps) o.name]);
     final face = TargetFace.byCode(widget.format.faceCode);
-    final stats = enough ? ShotStats.fromPoints(h.all) : _fallback;
+    final auto = _level == 'auto';
     final rng = math.Random();
+
+    // Источник уровня ботов (отзыв владельца 24.11): по умолчанию «Авто».
+    // Вид оружия и изготовка уже в самой истории: мишень = вид оружия,
+    // изготовка — из названия упражнения; финал 10 м стреляется стоя.
+    final scopeStance = switch (fmt.faceCode) {
+      'rifle_10m' || 'pistol_10m' => stanceStanding,
+      _ => null,
+    };
+    final scopedPts = _pointsOf(hist, stance: scopeStance);
+    final allPts = _pointsOf(hist);
+    // Данные конкретной изготовки ценнее общих: фильтруем по изготовке финала,
+    // если по ней достаточно выстрелов.
+    final primary = scopedPts.length >= 20 ? scopedPts : allPts;
+    final primaryStats = primary.length >= 20
+        ? (auto ? _calibratedStats(primary, face) : ShotStats.fromPoints(primary))
+        : (auto ? _normStats(store.db, face) : _fallback);
+
     const mixed = [
       BotDifficulty.easy,
       BotDifficulty.easy,
@@ -261,7 +360,28 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
     ];
     final levels = _level == 'mixed'
         ? ([...mixed]..shuffle(rng))
-        : List.filled(7, BotDifficulty.values.firstWhere((d) => d.name == _level));
+        // Режим «Чемпионы» — не сложность бота: недостающих заменяют запасные
+        // боты среднего уровня (раньше здесь падал firstWhere по имени).
+        : List.filled(
+            7,
+            BotDifficulty.values
+                .where((d) => d.name == _level)
+                .firstOrNull ?? BotDifficulty.medium);
+
+    // 3P: у каждой изготовки свой уровень (отзыв владельца 24.11).
+    final Map<String, ShotStats> byStance = fmt.faceCode == 'rifle_50m'
+        ? {
+            for (final e in stanceCorrection.entries)
+              e.key: _stanceStats(
+                stancePts: _pointsOf(hist, stance: e.key),
+                overall: primaryStats,
+                corr: e.value,
+                calibrated: auto,
+                face: face,
+              ),
+          }
+        : const {};
+
     final competitors = [
       FinalCompetitor('me', _myName(store), isUser: true),
       for (var i = 0; i < 7; i++) FinalCompetitor('b$i', '${_opps[i].name} (Bot)'),
@@ -273,8 +393,15 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
       userId: 'me',
       bots: {
         for (var i = 0; i < 7; i++)
-          'b$i': _createBotShooter(_opps[i].stats ?? stats, _opps[i].stats != null ? BotDifficulty.medium : levels[i], face,
-              math.Random(rng.nextInt(1 << 30)), h.sessions),
+          'b$i': _createBotShooter(
+            _opps[i].stats ?? primaryStats,
+            _opps[i].stats != null ? BotDifficulty.medium : levels[i],
+            face,
+            math.Random(rng.nextInt(1 << 30)),
+            auto && _opps[i].stats == null ? BotDifficulty.auto : null,
+            _sessionStatsOf(hist, stance: scopeStance),
+            byStance,
+          ),
       },
       rng: rng,
     );
@@ -283,9 +410,17 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
     ));
   }
 
-  BotShooter _createBotShooter(ShotStats stats, BotDifficulty diff, TargetFace face, math.Random rng, List<ShotStats> sessions) {
+  BotShooter _createBotShooter(
+    ShotStats stats,
+    BotDifficulty diff,
+    TargetFace face,
+    math.Random rng,
+    BotDifficulty? autoOverride,
+    List<ShotStats> sessions,
+    Map<String, ShotStats> byStance,
+  ) {
     if (_level == 'manual') {
-      return BotShooter(stats, BotDifficulty.manual, face, rng, 
+      return BotShooter(stats, BotDifficulty.manual, face, rng,
         sessions: sessions,
         manualMinShot: _manualMinShot,
         manualMaxShot: _manualMaxShot,
@@ -293,7 +428,8 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
         manualDispersionDeg: _manualDispersion,
       );
     }
-    return BotShooter(stats, diff, face, rng, sessions: sessions);
+    return BotShooter(stats, autoOverride ?? diff, face, rng,
+        sessions: sessions, byStance: byStance);
   }
 
   /// ИИ подбирает параметры ручной сложности по истории тренировок на этой
@@ -306,13 +442,13 @@ class _FinalSetupScreenState extends State<FinalSetupScreen> {
       return;
     }
     final face = TargetFace.byCode(widget.format.faceCode);
-    final h = _history(store);
-    final enough = h.all.length >= 20;
-    final stats = enough ? ShotStats.fromPoints(h.all) : _fallback;
+    final hist = _sessionHistory(store);
+    final enough = _pointsOf(hist).length >= 20;
+    final stats = enough ? ShotStats.fromPoints(_pointsOf(hist)) : _fallback;
 
     final prompt = '''
 Формат финала: ${tr(widget.format.nameKey)} (мишень ${face.name}), ${widget.format.finalists} финалистов.
-${enough ? 'У спортсмена ${h.all.length} тренировочных выстрелов: СТП (${stats.mx.toStringAsFixed(1)}, ${stats.my.toStringAsFixed(1)}), разброс X ${stats.sx.toStringAsFixed(1)}, Y ${stats.sy.toStringAsFixed(1)}.' : 'У спортсмена мало выстрелов (${h.all.length}) — бери типичные значения для этой мишени.'}
+${enough ? 'У спортсмена ${_pointsOf(hist).length} тренировочных выстрелов: СТП (${stats.mx.toStringAsFixed(1)}, ${stats.my.toStringAsFixed(1)}), разброс X ${stats.sx.toStringAsFixed(1)}, Y ${stats.sy.toStringAsFixed(1)}.' : 'У спортсмена мало выстрелов (${_pointsOf(hist).length}) — бери типичные значения для этой мишени.'}
 Подбери сложность семи ботов: min_shot и max_shot — значение выстрела (0.0–10.9),
 stp — сколько выстрелов до пика формы (1–30), dispersion_deg — направление смещения группы в градусах (-180…180).
 ''';
@@ -453,8 +589,8 @@ stp — сколько выстрелов до пика формы (1–30), dis
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final f = widget.format;
-    final h = _history(store);
-    final enough = h.all.length >= 20;
+    final hist = _sessionHistory(store);
+    final enough = _pointsOf(hist).length >= 20;
     Widget chips<T>(List<(T, String)> items, T value, ValueChanged<T> onPick) => Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -493,7 +629,10 @@ stp — сколько выстрелов до пика формы (1–30), dis
                 // 2. Соперники.
                 Text(tr('Соперники (7 ботов)'), style: theme.textTheme.titleSmall),
                 const SizedBox(height: 8),
+                // «Авто» — по умолчанию (отзыв владельца 24.11):
+                // тренировки спортсмена, а без истории — разряд и нормативы.
                 chips<String>([
+                  ('auto', tr('Авто')),
                   ('mixed', tr('Разные')),
                   ('easy', tr('Лёгкие')),
                   ('medium', tr('Средние')),
@@ -503,7 +642,7 @@ stp — сколько выстрелов до пика формы (1–30), dis
                   ('champions', tr('Чемпионы (недостающих заменят боты)')),
                 ], _level, (v) => _level = v),
                 const SizedBox(height: 6),
-                if (!enough && _level != 'manual' && _level != 'champions')
+                if (!enough && _level != 'manual' && _level != 'champions' && _level != 'auto')
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
@@ -538,6 +677,7 @@ stp — сколько выстрелов до пика формы (1–30), dis
                   const SizedBox(height: 6),
                 ],
                 Text(switch (_level) {
+                  'auto' => tr('Авто: по умолчанию. Боты стреляют по вашим тренировкам на этой мишени и изготовке, средний результат бота равен вашему среднему. Если тренировок мало — по разряду из профиля и нормативам.'),
                   'easy' => tr('Лёгкие: стреляют чуть хуже вас — средняя точка дальше от центра, разброс больше.'),
                   'medium' => tr('Средние: стреляют как вы — по вашей манере и разбросу.'),
                   'hard' => tr('Сложные: стреляют чуть лучше вас — точка ближе к центру, разброс меньше.'),
@@ -639,8 +779,8 @@ stp — сколько выстрелов до пика формы (1–30), dis
                     Expanded(
                       child: Text(
                         enough
-                            ? tr('Боты стреляют по вашим тренировкам на этой мишени: {n} выстрелов, учитываются средняя точка попадания, направление смещения и разброс.', {'n': h.all.length})
-                            : tr('На этой мишени у вас мало выстрелов в тренировках ({n}). Боты будут стрелять по типичным для спортсмена значениям; после 20 выстрелов — по вашим.', {'n': h.all.length}),
+                            ? tr('Боты стреляют по вашим тренировкам на этой мишени и изготовке (режим «Авто»): {n} выстрелов — средняя точка попадания, направление смещения, разброс; средний результат бота равен вашему среднему.', {'n': _pointsOf(hist).length})
+                            : tr('На этой мишени у вас мало выстрелов в тренировках ({n}). В режиме «Авто» боты возьмут средний результат по разряду из вашего профиля и нормативам; после 20 выстрелов — по вашим тренировкам.', {'n': _pointsOf(hist).length}),
                         style: theme.textTheme.bodySmall,
                       ),
                     ),
@@ -757,9 +897,11 @@ class _InvitesState extends State<_Invites> {
             leading: const Icon(Icons.mail_outline),
             title: Text(tr('Приглашение в финал')),
             subtitle: Text(switch (i.role) {
+              // «Финалист» — только про попадание в финал (владелец 24.11 п.5);
+              // coach — тренер, у главного судьи — его подпись.
               FinalsRole.athlete => tr('Вы — финалист'),
               FinalsRole.helper => tr('Вы — помощник'),
-              FinalsRole.coach => tr('Вы — судья'),
+              FinalsRole.coach => i.chief ? tr('Вы — главный судья') : tr('Вы — тренер'),
               FinalsRole.spectator => tr('Вы — зритель'),
             }),
             trailing: FilledButton(
@@ -840,7 +982,8 @@ class _PublicBoardState extends State<_PublicBoard> {
                 if (r.region.isNotEmpty) Text(r.region, style: theme.textTheme.bodySmall),
                 if (r.status == 'live') Text(tr('Пройдено {p}% (пристрелка не в счёт)', {'p': r.pct}), style: theme.textTheme.bodySmall),
                 const SizedBox(height: 8),
-                Text(tr('Судья'), style: theme.textTheme.labelLarge),
+                // Список жюри на табло подписывается «Жюри», а не «Судья» (владелец 24.11 п.5).
+                Text(tr('Жюри'), style: theme.textTheme.labelLarge),
                 Text(r.jury.isEmpty ? '—' : r.jury.join(', ')),
                 const SizedBox(height: 8),
                 Text(tr('Участники'), style: theme.textTheme.labelLarge),

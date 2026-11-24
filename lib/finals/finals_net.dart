@@ -185,6 +185,10 @@ class FinalsSnapshot {
                 for (final st in c.stagedOf(r.c.id)) [st.x, st.y]
               ],
             if (c.humans.contains(r.c.id)) 'can': c.canShootFor(r.c.id),
+            // Отзыв владельца 24.11: чем занят бот — отдых/прицеливание,
+            // перезарядка. Поле необязательное, гости прошлых версий его
+            // просто игнорируют, протокол не ломается.
+            if (!c.humans.contains(r.c.id)) 'botst': c.botStageOf(r.c.id),
           }
       ],
     });

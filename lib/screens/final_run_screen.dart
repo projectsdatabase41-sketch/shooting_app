@@ -30,6 +30,7 @@ import '../models/target_face.dart';
 import '../painters/target_painter.dart';
 import '../state/app_data_store.dart';
 import '../widgets/glass_pill.dart';
+import '../widgets/sius_panel.dart';
 
 /// Ход финала. Личный монитор (по умолчанию): мишень спортсмена и список
 /// только СВОИХ выстрелов по сериям — мишени соперников с основного экрана
@@ -151,6 +152,90 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
       _ => c.secondsLeft,
     };
     return '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
+  }
+
+  /// Общее время упражнения для панели «как SIUS»: с начала «Готов»,
+  /// включая пристрелку (циферблат финала идёт и там — только команды нет).
+  String _totalTime() {
+    if (!_started) return '0:00';
+    final sightElapsed =
+        c.phase == RunPhase.sighting ? c.format.sightingSeconds - c.secondsLeft : 0;
+    final s = (c.clock + sightElapsed).clamp(0, 9999);
+    return '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
+  }
+
+  /// Номер серии (с 1) по сквозному номеру выстрела [no] (с 1); 0 —
+  /// выстрел сверх всех серий формата (одиночные на выбывание). Границы —
+  /// те же, что в списке выстрелов ([_FinalShotList]).
+  int _seriesOfShotNo(int no) {
+    final limits = c.format.seriesShots;
+    var s = 1;
+    var acc = 0;
+    while (s <= limits.length && acc + limits[s - 1] <= no - 1) {
+      acc += limits[s - 1];
+      s++;
+    }
+    return s <= limits.length ? s : 0;
+  }
+
+  /// Панель «как SIUS» с живыми данными личного монитора (владелец 24.11):
+  /// список своих выстрелов, суммы серий, последний выстрел крупно, время и
+  /// обратный отсчёт раунда. В пристрелке — режим «последние 5» и MPI.
+  Widget _siusPanel() {
+    final limits = c.format.seriesShots;
+    final rows = <SiusShotRow>[];
+    if (c.phase == RunPhase.sighting) {
+      // Пристрелка (в зачёт не идёт): строки «P» и подсчёт последних пяти.
+      for (var i = 0; i < _sightingMarks.length; i++) {
+        final m = _sightingMarks[i];
+        rows.add(SiusShotRow(
+          number: i + 1,
+          series: 1,
+          score: scoreForPoint(m.dx, m.dy, c.face),
+          point: m,
+          sighting: true,
+        ));
+      }
+    } else {
+      // Зачётные выстрелы движка плюс отмеченные в текущем раунде — тот же
+      // набор, что в списке личного монитора, чтобы цифры совпадали.
+      final closed = [for (final s in c.shots) if (s.who == c.userId && !s.shootOff) s];
+      var no = 0;
+      for (final s in closed) {
+        no = s.index + 1;
+        rows.add(SiusShotRow(
+          number: no,
+          series: _seriesOfShotNo(no),
+          score: s.score,
+          point: Offset(s.x, s.y),
+        ));
+      }
+      for (var i = 0; i < c.staged.length; i++) {
+        final s = c.staged[i];
+        rows.add(SiusShotRow(
+          number: closed.length + i + 1,
+          series: _seriesOfShotNo(closed.length + i + 1),
+          score: scoreForPoint(s.x, s.y, c.face),
+          point: Offset(s.x, s.y),
+        ));
+      }
+    }
+    // Подпись серии только в серийных раундах: одиночные и перестрелка вне серий.
+    final seriesLabel =
+        !c.inShootOff && c.roundIndex < limits.length && c.roundIndex >= 0 && c.phase != RunPhase.sighting
+            ? tr('Серия {n} из {m}', {'n': c.roundIndex + 1, 'm': limits.length})
+            : null;
+    final countdown = _time();
+    return SiusPanel(
+      face: c.face,
+      shots: rows,
+      title: c.face.name,
+      seriesLabel: seriesLabel,
+      timeText: _totalTime(),
+      countdownText: countdown.isEmpty ? null : countdown,
+      seriesShots: limits,
+      lastFiveMode: c.phase == RunPhase.sighting,
+    );
   }
 
   bool get _canPlace => c.phase == RunPhase.sighting || c.userCanShoot;
@@ -370,12 +455,24 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
     final side = _board ? _BoardView(c: c) : _FinalShotList(c: c);
     if (wide) {
       // Отзыв 23.11 №3: мишень слева, список выстрелов/табло справа.
+      // Владелец 24.11 («как SIUS»): на широком экране вместо плоского
+      // списка — SiusPanel с живыми данными; табло остаётся по кнопке в
+      // шапке. Портретная раскладка не меняется.
       return Column(children: [
         SizedBox(height: top),
         Expanded(
           child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Expanded(flex: 5, child: _padArea(context)),
-            Expanded(flex: 4, child: Column(children: [Expanded(child: side)])),
+            Expanded(
+              flex: 4,
+              child: _board
+                  ? side
+                  : Padding(
+                      // Те же отступы, что у мишени рядом.
+                      padding: const EdgeInsets.fromLTRB(0, 2, 8, 2),
+                      child: _siusPanel(),
+                    ),
+            ),
           ]),
         ),
       ]);
@@ -987,6 +1084,26 @@ class _BoardRow extends StatelessWidget {
                     ),
                     child: Text(tr('Бот'), style: theme.textTheme.labelSmall),
                   ),
+                  // Чем занят бот (отзыв владельца 24.11): отдых, прицеливание
+                  // или перезарядка — пауза между выстрелами видна в статусе.
+                  Builder(builder: (_) {
+                    final st = c.botStageOf(row.c.id);
+                    if (st.isEmpty) return const SizedBox.shrink();
+                    return Flexible(
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 6),
+                        child: Text(
+                          tr(switch (st) {
+                            'aim' => 'целится',
+                            'reload' => 'перезаряжает',
+                            _ => 'отдых',
+                          }),
+                          style: theme.textTheme.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    );
+                  }),
                 ],
               ]),
               // Места идут по среднему выстрелу — оно и подписано: пока раунд
