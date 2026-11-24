@@ -10,7 +10,15 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { attachMassPanel } from './mass.js';
+import { MassTools, scanStepMaterials } from './mass.js';
+import {
+  hashBytes,
+  readCache,
+  writeCache,
+  deserializeMeshes,
+  cacheStats,
+  clearCache,
+} from './cache.js';
 
 const MODEL_COLOR = 0xc7d0dd;
 const EDGE_COLOR = 0x151a22;
@@ -26,12 +34,28 @@ const THEMES = {
 
 // Качество триангуляции: доля габарита + угловой шаг в радианах.
 // Меньше значения — больше треугольников и глаже кривые поверхности.
-const TESSELLATION = {
-  linearUnit: 'millimeter',
-  linearDeflectionType: 'bounding_box_ratio',
-  linearDeflection: 0.0004,
-  angularDeflection: 0.25,
+/**
+ * Два уровня триангуляции: черновик открывается заметно быстрее, точный —
+ * даёт полную детализацию. Большие файлы сначала показываем черновиком,
+ * а точное качество включается кнопкой (или сразу из кэша).
+ */
+const TESSELLATION_PRESETS = {
+  draft: {
+    linearUnit: 'millimeter',
+    linearDeflectionType: 'bounding_box_ratio',
+    linearDeflection: 0.008,
+    angularDeflection: 0.7,
+  },
+  fine: {
+    linearUnit: 'millimeter',
+    linearDeflectionType: 'bounding_box_ratio',
+    linearDeflection: 0.0004,
+    angularDeflection: 0.25,
+  },
 };
+
+/** Файлы больше 4 МБ сначала открываются черновиком. */
+const DRAFT_THRESHOLD_BYTES = 4 * 1024 * 1024;
 
 const VIEWS = {
   iso: new THREE.Vector3(0.85, -1, 0.72),
@@ -56,6 +80,9 @@ const dom = {
   overlayText: document.getElementById('overlay-text'),
   overlaySub: document.getElementById('overlay-sub'),
   toast: document.getElementById('toast'),
+  qualityBtn: document.getElementById('quality-btn'),
+  cacheClearBtn: document.getElementById('cache-clear'),
+  cacheInfo: document.getElementById('cache-info'),
 };
 
 const state = {
@@ -73,10 +100,17 @@ const state = {
   fileName: '',
   loading: false,
   timings: {},
+  userInteracted: false,
   theme: 'dark',
   themeUserPicked: false,
   modelLuminance: 0.7,
   edgeColor: EDGE_COLOR,
+  quality: 'fine',
+  qualityUserChoice: null,
+  lastBuffer: null,
+  currentHash: '',
+  modelKind: 'step',
+  cacheHit: false,
 };
 
 /* ------------------------------------------------------------------ */
@@ -116,6 +150,11 @@ controls.mouseButtons = {
 };
 controls.target.set(0, 0, 0);
 
+// Если пользователь ещё не трогал камеру, окно можно ресайзить — вписываем заново.
+controls.addEventListener('start', () => {
+  state.userInteracted = true;
+});
+
 renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
 
 const pmrem = new THREE.PMREMGenerator(renderer);
@@ -138,6 +177,63 @@ scene.add(modelRoot);
 const emptyGroupState = new THREE.Group(); // резерв под будущие вспомогательные объекты
 scene.add(emptyGroupState);
 
+// Масса, центр тяжести, карта массы
+/* ------------------------------------------------------------------ */
+/* Чувствительность мыши (сохраняется в localStorage)                  */
+/* ------------------------------------------------------------------ */
+
+const SENSITIVITY_KEY = 'stepViewer.sensitivity';
+const SENSITIVITY_DEFAULTS = { rotate: 1, pan: 1, zoom: 1 };
+const BASE_SPEEDS = { rotate: 0.85, pan: 0.9, zoom: 0.95 };
+
+function loadSensitivity() {
+  try {
+    const raw = localStorage.getItem(SENSITIVITY_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        rotate: clampSensitivity(parsed.rotate),
+        pan: clampSensitivity(parsed.pan),
+        zoom: clampSensitivity(parsed.zoom),
+      };
+    }
+  } catch {
+    // битые настройки — берём значения по умолчанию
+  }
+  return { ...SENSITIVITY_DEFAULTS };
+}
+
+function clampSensitivity(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 1;
+  return Math.min(2.5, Math.max(0.2, number));
+}
+
+const sensitivity = loadSensitivity();
+
+function applySensitivity() {
+  controls.rotateSpeed = BASE_SPEEDS.rotate * sensitivity.rotate;
+  controls.panSpeed = BASE_SPEEDS.pan * sensitivity.pan;
+  controls.zoomSpeed = BASE_SPEEDS.zoom * sensitivity.zoom;
+}
+
+function saveSensitivity() {
+  try {
+    localStorage.setItem(SENSITIVITY_KEY, JSON.stringify(sensitivity));
+  } catch {
+    // приватный режим — не страшно
+  }
+}
+
+applySensitivity();
+
+const massTools = new MassTools({
+  scene,
+  modelRoot,
+  getTheme: () => state.theme,
+  setTheme: (theme) => applyTheme(theme, true),
+});
+
 function resize() {
   const w = dom.viewport.clientWidth || window.innerWidth;
   const h = dom.viewport.clientHeight || window.innerHeight;
@@ -146,6 +242,10 @@ function resize() {
   renderer.domElement.style.height = h + 'px';
   camera.aspect = w / Math.max(h, 1);
   camera.updateProjectionMatrix();
+
+  // Окно изменило размер до первого движения камеры (например, развернулось
+  // на весь экран после загрузки модели) — вписываем модель заново.
+  if (state.modelGroup && !state.userInteracted) fitView();
 }
 
 window.addEventListener('resize', resize);
@@ -234,7 +334,10 @@ function parseStepInWorker(bytes, params) {
 
     worker.addEventListener('message', onMessage);
     worker.addEventListener('error', onError);
-    worker.postMessage({ id, bytes, params }, [bytes.buffer]);
+
+    // передаём воркеру копию: исходные байты нужны для кэша и повторного разбора
+    const transferable = bytes.slice();
+    worker.postMessage({ id, bytes: transferable, params }, [transferable.buffer]);
   });
 }
 
@@ -246,10 +349,15 @@ function parseStepInWorker(bytes, params) {
 function loadBuffer(buffer, fileName) {
   const name = fileName || 'model.stp';
   if (/\.(glb|gltf)$/i.test(name)) return loadGltfBuffer(buffer, name);
+
+  // новый файл — снова выбираем качество автоматически
+  state.currentHash = '';
+  state.qualityUserChoice = null;
+  state.cacheHit = false;
   return loadStepBuffer(buffer, name);
 }
 
-async function loadStepBuffer(buffer, fileName) {
+async function loadStepBuffer(buffer, fileName, options = {}) {
   if (!buffer || buffer.byteLength < 32) throw new Error('Файл пустой или повреждён');
   if (buffer.byteLength > MAX_FILE_BYTES) throw new Error('Файл слишком большой для просмотра в браузере');
 
@@ -258,15 +366,60 @@ async function loadStepBuffer(buffer, fileName) {
   const marks = {};
   state.loading = true;
   state.fileName = fileName || 'model.stp';
+  state.lastBuffer = buffer;
+  state.modelKind = 'step';
+
+  const quality = options.quality
+    || state.qualityUserChoice
+    || pickQuality(buffer.byteLength);
+  state.quality = quality;
 
   try {
     const bytes = new Uint8Array(buffer);
-    const fallback = bytes.slice(); // на случай, если Worker недоступен
-    startElapsed('Читаю STEP…', buffer.byteLength);
+    const hash = state.currentHash || (await hashBytes(bytes));
+    state.currentHash = hash;
 
+    showQualityState(quality, false);
+    startElapsed(
+      quality === 'draft' ? 'Черновой разбор STEP…' : 'Точный разбор STEP…',
+      buffer.byteLength
+    );
+
+    // 1) сначала смотрим кэш разобранной геометрии
+    let cached = await readCache(hash, quality);
+    if (loadId !== state.loadId) return;
+
+    // если точная версия уже лежит в кэше — берём её, даже когда файл большой
+    const autoQuality = !options.quality && !state.qualityUserChoice;
+    if (!cached && autoQuality && quality === 'draft') {
+      const fineCache = await readCache(hash, 'fine');
+      if (fineCache) {
+        cached = fineCache;
+        quality = 'fine';
+        state.quality = 'fine';
+        showQualityState('fine', true);
+      }
+    }
+
+    if (cached) {
+      marks.cache = true;
+      marks.cacheBytes = cached.size || 0;
+      showOverlay('Беру из кэша…', formatBytes(cached.size || 0));
+      await paint();
+      const result = deserializeMeshes(cached.data);
+      const tBuild = performance.now();
+      buildScene(result, loadId);
+      marks.build = performance.now() - tBuild;
+      finishLoad(loadId, performance.now() - t0, marks);
+      return;
+    }
+
+    const fallback = bytes.slice(); // на случай, если Worker недоступен
+    const tessellation = TESSELLATION_PRESETS[quality];
     let parsed = null;
+
     try {
-      parsed = await parseStepInWorker(bytes, TESSELLATION);
+      parsed = await parseStepInWorker(bytes, tessellation);
       marks.worker = true;
     } catch (error) {
       console.warn('[viewer] Worker недоступен, читаю в основном потоке:', error);
@@ -279,9 +432,10 @@ async function loadStepBuffer(buffer, fileName) {
       await paint();
       const occt = await getOcct();
       marks.wasm = performance.now() - t0;
-      const result = occt.ReadStepFile(fallback, TESSELLATION);
+      const result = occt.ReadStepFile(fallback, tessellation);
       parsed = {
         success: result && result.success,
+        materials: scanStepMaterials(fallback),
         meshes: (result?.meshes || []).map((mesh) => ({
           name: mesh.name,
           color: mesh.color,
@@ -309,18 +463,64 @@ async function loadStepBuffer(buffer, fileName) {
     marks.build = performance.now() - tBuild;
 
     finishLoad(loadId, performance.now() - t0, marks);
+
+    // 2) сохраняем в кэш, чтобы следующее открытие было мгновенным
+    if (parsed.meshes.length) {
+      void writeCache(hash, quality, state.fileName, parsed.meshes).then((bytes) => {
+        if (bytes) console.info(`[cache] сохранено ${formatBytes(bytes)} (${quality})`);
+      });
+    }
   } catch (error) {
     if (loadId === state.loadId) abortLoading();
     throw error;
   }
 }
 
+/** Выбор качества: большие файлы сначала показываем черновиком. */
+function pickQuality(bytesLength) {
+  if (state.qualityUserChoice) return state.qualityUserChoice;
+  return bytesLength > DRAFT_THRESHOLD_BYTES ? 'draft' : 'fine';
+}
+
+/**
+ * Переключение качества уже загруженного STEP: сначала кэш, иначе повторный разбор.
+ */
+async function switchQuality(quality) {
+  if (!state.lastBuffer || state.modelKind !== 'step') return;
+  if (state.quality === quality) return;
+
+  state.qualityUserChoice = quality;
+  if (quality === 'fine' && state.lastBuffer.byteLength > DRAFT_THRESHOLD_BYTES) {
+    showToast('Точный разбор — это повторное чтение файла, может занять десятки секунд');
+  }
+
+  try {
+    await loadStepBuffer(state.lastBuffer, state.fileName, { quality });
+  } catch (error) {
+    fail(error);
+  }
+}
+
+function showQualityState(quality, fromCache) {
+  if (!dom.qualityBtn) return;
+  dom.qualityBtn.hidden = state.modelKind !== 'step';
+  dom.qualityBtn.textContent = quality === 'draft' ? 'Качество: черновик' : 'Качество: точно';
+  dom.qualityBtn.classList.toggle('is-on', quality === 'fine');
+  dom.qualityBtn.title = fromCache
+    ? 'Геометрия взята из кэша — переключение мгновенное'
+    : 'Переключить качество триангуляции (большие файлы сначала открываются черновиком)';
+}
 /** Быстрый путь: готовый GLB/glTF (например, заранее сконвертированный STEP). */
 async function loadGltfBuffer(buffer, fileName) {
   const loadId = ++state.loadId;
   const t0 = performance.now();
   state.loading = true;
   state.fileName = fileName || 'model.glb';
+  state.modelKind = 'glb';
+  state.lastBuffer = null;
+  state.currentHash = '';
+  state.cacheHit = false;
+  showQualityState('fine', false);
 
   try {
     startElapsed('Читаю GLB…', buffer.byteLength);
@@ -331,7 +531,7 @@ async function loadGltfBuffer(buffer, fileName) {
     const { group, sources, parts, triangles } = collectFromObject(gltf.scene);
     if (loadId !== state.loadId) return;
 
-    installGroup(group, sources, parts, triangles, loadId);
+    installGroup(group, sources, parts, triangles, loadId, []);
     finishLoad(loadId, performance.now() - t0, { glb: true });
   } catch (error) {
     if (loadId === state.loadId) abortLoading();
@@ -345,10 +545,14 @@ function finishLoad(loadId, elapsed, marks) {
   hideOverlay();
   state.loading = false;
   dom.empty.classList.add('is-hidden');
+  state.cacheHit = !!marks.cache;
   updateInfo(elapsed);
   fitView();
   marks.total = elapsed;
+  marks.quality = state.quality;
   state.timings = marks;
+  showQualityState(state.quality, !!marks.cache);
+  updateCacheInfo();
 }
 
 function abortLoading() {
@@ -414,11 +618,11 @@ function buildScene(result, loadId) {
   }
 
   state.model = result;
-  installGroup(group, sources, parts, triangles, loadId);
+  installGroup(group, sources, parts, triangles, loadId, []);
 }
 
 /** Ставит готовую группу в сцену: тема, сетка, рёбра, статистика. */
-function installGroup(group, sources, parts, triangles, loadId) {
+function installGroup(group, sources, parts, triangles, loadId, materials = []) {
   if (!parts) {
     throw new Error('В файле не найдено поверхностей для отображения');
   }
@@ -432,9 +636,8 @@ function installGroup(group, sources, parts, triangles, loadId) {
   state.triangles = triangles;
   state.edges = null;
   state.modelLuminance = computeLuminance(group);
-
-  // Масса, объём и центр тяжести по каждой детали (см. mass.js).
-  state.massPanel = attachMassPanel(modelRoot, state.massPanel);
+  state.userInteracted = false;
+  massTools.onModelInstalled(group, { materials });
 
   // Тёмная деталь на тёмном фоне не видна — автоматически переключаем фон.
   applyTheme(state.themeUserPicked ? state.theme : state.modelLuminance < 0.34 ? 'light' : 'dark', true);
@@ -458,6 +661,9 @@ function buildMeshFromOcct(meshData) {
   const normal = meshData?.attributes?.normal?.array;
   if (normal && normal.length === position.length) {
     geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normal, 3));
+  } else {
+    // кэш не хранит нормали — считаем их сами (CAD-сетка уже с разрывом граней)
+    geometry.computeVertexNormals();
   }
 
   geometry.setIndex(new THREE.BufferAttribute(Uint32Array.from(index), 1));
@@ -859,8 +1065,23 @@ function updateInfo(elapsedMs) {
     dims = ` · габарит ${formatNumber(s.x)} × ${formatNumber(s.y)} × ${formatNumber(s.z)}`;
   }
 
-  dom.infoStats.textContent = `${parts} тел · ${tris} треугольников · ${time}${dims}`;
+  let extra = '';
+  if (state.modelKind === 'step') {
+    extra += state.quality === 'draft' ? ' · черновик' : ' · точно';
+    if (state.cacheHit) extra += ' · из кэша';
+  }
+
+  dom.infoStats.textContent = `${parts} тел · ${tris} треугольников · ${time}${dims}${extra}`;
   dom.info.classList.remove('is-empty');
+}
+
+/** Размер кэша в настройках. */
+async function updateCacheInfo() {
+  if (!dom.cacheInfo) return;
+  const stats = await cacheStats();
+  dom.cacheInfo.textContent = stats.count
+    ? `${stats.count} модел${stats.count === 1 ? 'ь' : 'ей'} · ${formatBytes(stats.bytes)}`
+    : 'пусто';
 }
 
 function formatNumber(value) {
@@ -896,25 +1117,15 @@ async function loadFile(file) {
 
 async function loadUrl(url, name) {
   try {
-    // В подписи показываем только имя файла: адрес модели может быть
-    // приватным (подписанная ссылка Google Диска), и показывать его
-    // пользователю, а тем более в кодах ошибок, нельзя (отзыв 10.11).
-    const fileName = name || decodeURIComponent((url.split('?')[0].split('/').pop() || 'файл'));
-    showOverlay('Скачиваю файл…', fileName);
+    showOverlay('Скачиваю файл…', url);
     const response = await fetch(url);
     if (!response.ok) throw new Error(`Не удалось скачать файл (HTTP ${response.status})`);
     const buffer = await response.arrayBuffer();
     hideOverlay();
-    await loadBuffer(buffer, fileName);
+    await loadBuffer(buffer, name || url.split('/').pop());
   } catch (err) {
     fail(err);
   }
-}
-
-/** Прячет ссылки в сообщениях об ошибках: приватные адреса моделей не должны
- *  попадать ни в интерфейс, ни в отчёты. */
-function redactLinks(text) {
-  return String(text).replace(/https?:\/\/[^\s"'`]+/g, '<ссылка скрыта>');
 }
 
 function fail(err) {
@@ -922,7 +1133,7 @@ function fail(err) {
   hideOverlay();
   state.loading = false;
   const message = err && err.message ? err.message : String(err);
-  showToast('Не удалось открыть файл: ' + redactLinks(message));
+  showToast('Не удалось открыть файл: ' + message);
 }
 
 /* ------------------------------------------------------------------ */
@@ -940,10 +1151,7 @@ function disposeObject(object) {
 }
 
 function disposeModel() {
-  if (state.massPanel) {
-    state.massPanel.dispose();
-    state.massPanel = null;
-  }
+  massTools.clear();
   state.modelGroup = null;
   state.edgeSources = [];
   state.edges = null;
@@ -976,6 +1184,81 @@ dom.fitBtn.addEventListener('click', () => fitView());
 dom.edgesBtn.addEventListener('click', () => setEdgesEnabled(!state.edgesEnabled));
 
 dom.themeBtn?.addEventListener('click', () => applyTheme(state.theme === 'light' ? 'dark' : 'light'));
+
+/* Настройки чувствительности мыши */
+const settingsBtn = document.getElementById('settings-btn');
+const settingsPanel = document.getElementById('settings-panel');
+const sensitivityControls = {
+  rotate: document.getElementById('sensitivity-rotate'),
+  pan: document.getElementById('sensitivity-pan'),
+  zoom: document.getElementById('sensitivity-zoom'),
+};
+const sensitivityOutputs = {
+  rotate: document.getElementById('sensitivity-rotate-out'),
+  pan: document.getElementById('sensitivity-pan-out'),
+  zoom: document.getElementById('sensitivity-zoom-out'),
+};
+
+function syncSensitivityUi() {
+  for (const key of Object.keys(sensitivityControls)) {
+    const input = sensitivityControls[key];
+    const output = sensitivityOutputs[key];
+    if (input) input.value = String(sensitivity[key]);
+    if (output) output.textContent = sensitivity[key].toFixed(1);
+  }
+}
+
+syncSensitivityUi();
+
+settingsBtn?.addEventListener('click', (event) => {
+  event.stopPropagation();
+  if (!settingsPanel) return;
+  const willShow = settingsPanel.hidden;
+  settingsPanel.hidden = !willShow;
+  settingsBtn.classList.toggle('is-on', willShow);
+  if (willShow) {
+    syncSensitivityUi();
+    void updateCacheInfo();
+    // не перекрываем панель массы, если она открыта
+    const massPanel = document.getElementById('mass-panel');
+    const offset = massPanel && !massPanel.hidden ? massPanel.offsetWidth + 28 : 14;
+    settingsPanel.style.right = `${offset}px`;
+  }
+});
+
+document.addEventListener('click', (event) => {
+  if (!settingsPanel || settingsPanel.hidden) return;
+  if (settingsPanel.contains(event.target) || settingsBtn?.contains(event.target)) return;
+  settingsPanel.hidden = true;
+  settingsBtn?.classList.remove('is-on');
+});
+
+for (const key of Object.keys(sensitivityControls)) {
+  sensitivityControls[key]?.addEventListener('input', () => {
+    sensitivity[key] = clampSensitivity(sensitivityControls[key].value);
+    if (sensitivityOutputs[key]) sensitivityOutputs[key].textContent = sensitivity[key].toFixed(1);
+    applySensitivity();
+    saveSensitivity();
+  });
+}
+
+dom.qualityBtn?.addEventListener('click', () => {
+  if (state.modelKind !== 'step' || !state.lastBuffer) return;
+  void switchQuality(state.quality === 'fine' ? 'draft' : 'fine');
+});
+
+dom.cacheClearBtn?.addEventListener('click', async () => {
+  await clearCache();
+  await updateCacheInfo();
+  showToast('Кэш геометрии очищен');
+});
+
+document.getElementById('sensitivity-reset')?.addEventListener('click', () => {
+  Object.assign(sensitivity, SENSITIVITY_DEFAULTS);
+  syncSensitivityUi();
+  applySensitivity();
+  saveSensitivity();
+});
 
 dom.viewButtons.forEach((btn) => {
   btn.addEventListener('click', () => setView(btn.dataset.view));
@@ -1027,6 +1310,7 @@ window.addEventListener('keydown', (event) => {
   else if (key === 'e') { event.preventDefault(); setEdgesEnabled(!state.edgesEnabled); }
   else if (key === 'o') { event.preventDefault(); dom.fileInput.click(); }
   else if (key === 't') { event.preventDefault(); applyTheme(state.theme === 'light' ? 'dark' : 'light'); }
+  else if (key === 'm') { event.preventDefault(); massTools.togglePanel(); }
   else if (key === '1') setView('iso');
   else if (key === '2') setView('front');
   else if (key === '3') setView('top');
@@ -1034,8 +1318,85 @@ window.addEventListener('keydown', (event) => {
 });
 
 /* ------------------------------------------------------------------ */
-/* Публичное API для встраивания (Flutter WebView / iframe)            */
+
 /* ------------------------------------------------------------------ */
+/* Превью для проводника Windows (рендер в offscreen-таргет)           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Рисует модель в PNG (data URL) без изменения видимой сцены.
+ * Нужно для превью в проводнике: Windows-миниатюры делает shell-расширение,
+ * которому этот файл передаёт приложение.
+ */
+function renderThumbnailDataUrl(size = 800) {
+  if (!state.modelGroup) return null;
+
+  const s = Math.max(128, Math.min(1600, Math.round(Number(size)) || 800));
+  const box = new THREE.Box3().setFromObject(modelRoot);
+  if (box.isEmpty()) return null;
+
+  const savedBackground = scene.background;
+  const savedGridVisible = state.grid ? state.grid.visible : null;
+  const savedMarkerVisible = massTools.marker ? massTools.marker.visible : null;
+
+  const target = new THREE.WebGLRenderTarget(s, s, {
+    colorSpace: THREE.SRGBColorSpace,
+    samples: 4,
+  });
+
+  try {
+    scene.background = new THREE.Color(0xf2f5f9);
+    if (state.grid) state.grid.visible = false;
+    if (massTools.marker) massTools.marker.visible = false;
+
+    const center = box.getCenter(new THREE.Vector3());
+    const direction = VIEWS.iso.clone().normalize();
+
+    const prevAspect = camera.aspect;
+    camera.aspect = 1;
+    const distance = fitDistance(box, center, direction);
+    camera.aspect = prevAspect;
+
+    const thumbCamera = camera.clone();
+    thumbCamera.aspect = 1;
+    thumbCamera.position.copy(center).addScaledVector(direction, distance);
+    thumbCamera.up.copy(camera.up);
+    thumbCamera.near = Math.max(distance / 400, 0.01);
+    thumbCamera.far = Math.max(distance * 40, 100);
+    thumbCamera.lookAt(center);
+    thumbCamera.updateProjectionMatrix();
+
+    renderer.setRenderTarget(target);
+    renderer.render(scene, thumbCamera);
+    const pixels = new Uint8Array(s * s * 4);
+    renderer.readRenderTargetPixels(target, 0, 0, s, s, pixels);
+    renderer.setRenderTarget(null);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = s;
+    canvas.height = s;
+    const context = canvas.getContext('2d');
+    const image = context.createImageData(s, s);
+    const rowBytes = s * 4;
+    for (let y = 0; y < s; y += 1) {
+      const sourceStart = (s - 1 - y) * rowBytes;
+      image.data.set(pixels.subarray(sourceStart, sourceStart + rowBytes), y * rowBytes);
+    }
+    context.putImageData(image, 0, 0);
+    return canvas.toDataURL('image/png');
+  } finally {
+    scene.background = savedBackground;
+    if (state.grid && savedGridVisible !== null) state.grid.visible = savedGridVisible;
+    if (massTools.marker && savedMarkerVisible !== null) massTools.marker.visible = savedMarkerVisible;
+    renderer.setRenderTarget(null);
+    target.dispose();
+    renderer.render(scene, camera);
+  }
+}/* Публичное API для встраивания (Flutter WebView / iframe)            */
+/* ------------------------------------------------------------------ */
+
+// Отладочная ручка (используется тестами): доступ к внутреннему состоянию панели массы
+window.__massTools = massTools;
 
 window.StepViewer = {
   version: '1.0.0',
@@ -1056,6 +1417,40 @@ window.StepViewer = {
   fit: () => fitView(),
   setView: (name) => setView(name),
   setEdges: (enabled) => setEdgesEnabled(!!enabled),
+  toggleMass: (visible) => massTools.togglePanel(visible),
+  renderThumbnail: (size) => renderThumbnailDataUrl(size),
+  getMassReport: () => massTools.report(),
+  setMassUnits: (units) => {
+    const allowed = ['mm', 'cm', 'm', 'inch'];
+    if (allowed.includes(units)) {
+      massTools.units = units;
+      if (massTools.dom.units) massTools.dom.units.value = units;
+      massTools.update();
+    }
+  },
+
+  setMassHeatmap: (enabled) => massTools.setViewMode(enabled ? 'cloud' : 'off'),
+  setMassView: (mode) => massTools.setViewMode(mode),
+  setSensitivity: (values = {}) => {
+    for (const key of ['rotate', 'pan', 'zoom']) {
+      if (values[key] !== undefined) sensitivity[key] = clampSensitivity(values[key]);
+    }
+    applySensitivity();
+    saveSensitivity();
+    syncSensitivityUi();
+    return { ...sensitivity };
+  },
+  getSensitivity: () => ({ ...sensitivity }),
+  setMassContrast: (value) => massTools.setCloudContrast(Number(value) || 1),
+  setMassOpacity: (value) => massTools.setVisualOpacity(Number(value) || 0.85),
+  setMassFill: (value) => massTools.setWallFill(Number(value)),
+  setMassSolid: (enabled) => {
+    if (enabled !== massTools.isSolid()) massTools.toggleSolidFill();
+    return massTools.isSolid();
+  },
+  setQuality: (quality) => switchQuality(quality === 'draft' ? 'draft' : 'fine'),
+  getCacheInfo: () => cacheStats(),
+  clearGeometryCache: () => clearCache(),
   setTheme: (theme) => applyTheme(theme === 'light' ? 'light' : 'dark'),
   autoTheme: () => {
     state.themeUserPicked = false;
@@ -1072,9 +1467,69 @@ window.StepViewer = {
     target: controls.target.toArray(),
     bbox: state.bbox ? { min: state.bbox.min.toArray(), max: state.bbox.max.toArray() } : null,
     timings: state.timings,
+    quality: state.quality,
+    cacheHit: state.cacheHit,
+    modelKind: state.modelKind,
     theme: state.theme,
     luminance: +state.modelLuminance.toFixed(3),
   }),
+};
+
+/* ------------------------------------------------------------------ */
+/* Публичный API для приложения (window.NexusViewer)                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Короткий адаптер для вызова из Flutter через evaluateJavascript
+ * (просьба владельца 24.11): приложение вызывает
+ * window.NexusViewer.openFile() / edges(true) / mass(true) / display(true) /
+ * fit() / load(url). Все методы — тонкие обёртки над теми же функциями,
+ * что дергают усыпальные¹ кнопки вьюера, поэтому поведение идентично
+ * обычному режиму и ничего не дублируется.
+ * ¹ — то есть существующие обработчики кнопок (open-btn / edges-btn / mass-btn).
+ */
+window.NexusViewer = {
+  /** «Открыть файл»: тот же клик по скрытому input #file-input, что и у кнопки «Открыть STEP». */
+  openFile: () => dom.fileInput.click(),
+
+  /** Рёбра: true — включить, false — выключить, без аргумента — переключить (как кнопка «Рёбра» / E). */
+  edges: (on) => setEdgesEnabled(typeof on === 'boolean' ? on : !state.edgesEnabled),
+
+  /** Панель «Масса и центр тяжести»: true — открыть, false — закрыть (как кнопка «Масса» / M). */
+  mass: (open) => massTools.togglePanel(typeof open === 'boolean' ? open : true),
+
+  /**
+   * Блок «Отображение» в панели массы: показать ползунки заливки/прозрачности
+   * (нужны приложению для оценки объёма материала) и прокрутить к ним.
+   * open=false — снова спрятать ползунки, как это делает смена «Вида» на «Обычный».
+   */
+  display: (open = true) => {
+    if (open === false) {
+      massTools.hideFill?.();
+      massTools.hideContrast?.();
+      return false;
+    }
+    massTools.togglePanel(true); // панель должна быть открыта, иначе прокручивать нечего
+    massTools.showContrast?.(); // поднимает и прозрачность
+    massTools.showFill?.(); // отвечает за ползунок «Заливка» и кнопку «Сплошная заливка»
+    const target = massTools.dom?.fillField || massTools.dom?.opacityField;
+    if (target) {
+      requestAnimationFrame(() =>
+        target.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+      );
+    }
+    return true;
+  },
+
+  /** Подогнать модель под экран (как кнопка «Подогнать» / F). */
+  fit: () => fitView(),
+
+  /** Загрузить модель по прямой ссылке — то же, что ?url=/?model= при старте. */
+  load: (url, name) => {
+    if (typeof url !== 'string' || !url.trim()) return false;
+    loadUrl(url.trim(), name || undefined);
+    return true;
+  },
 };
 
 /* ------------------------------------------------------------------ */
@@ -1082,27 +1537,28 @@ window.StepViewer = {
 /* ------------------------------------------------------------------ */
 
 // На тач-устройствах перетаскивания нет — подсказываем кнопку.
+// (Владелец, 24.11: в приложении чипы примеров не бандлятся — см. index.html,
+// поэтому подсказку о «примерах» в этой сборке тоже убираем.)
 if (window.matchMedia && window.matchMedia('(hover: none)').matches) {
   const sub = document.getElementById('empty-sub');
-  if (sub) sub.textContent = 'Нажмите «Открыть STEP» или выберите пример — файл обрабатывается локально, на устройстве';
+  if (sub) sub.textContent = 'Нажмите «Открыть STEP» — файл обрабатывается локально, на устройстве';
 }
 
 const params = new URLSearchParams(window.location.search);
+
 // Для встраивания (Тильда/iframe): ?ui=min — только 3D, без панелей и подсказок.
 if (params.get('ui') === 'min' || params.get('minimal') === '1') {
   document.body.classList.add('ui-minimal');
 }
+
+// Режим встраивания в приложение (?embed=1, просьба владельца 24.11):
+// страхуем inline-скрипт в index.html — класс вешаем и здесь, если его ещё
+// нет (например, страницу открыли по ссылке, собранной без параметров шапки).
+if (params.get('embed') === '1') {
+  document.documentElement.classList.add('embed-viewer');
+}
 const modelUrl = params.get('model') || params.get('url');
-const modelName = params.get('name') || undefined;
-// Адрес модели — приватный (подписанная ссылка Google Диска), поэтому после
-// чтения убираем его из адресной строки и истории: страница остаётся той же,
-// но ссылки в URL больше нет (отзыв 10.11 — «ключи и ссылки не показывать»).
 if (modelUrl) {
-  try {
-    window.history.replaceState({}, '', window.location.pathname);
-  } catch (e) {
-    /* старые WebView могут запрещать — не критично */
-  }
-  loadUrl(modelUrl, modelName);
+  loadUrl(modelUrl, params.get('name') || undefined);
 }
 

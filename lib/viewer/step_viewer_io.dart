@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -18,17 +20,35 @@ String _redactLinks(String text) =>
 /// Встроенный показ возможен только там, где есть WebView и AssetLoader.
 bool get _canEmbed => defaultTargetPlatform == TargetPlatform.android;
 
-Widget buildViewer(BuildContext context, {String? modelUrl}) {
+/// Сборка вьюера. [embed] — режим встраивания (`?embed=1` скрывает
+/// собственную шапку вьюера, просьба владельца 24.11). [onJs] вызывается,
+/// когда страница вьюера догрузилась и отдала публичный API
+/// `window.NexusViewer`; для платформ без моста (здесь это всё, кроме
+/// Android) он не вызывается никогда.
+Widget buildViewer(
+  BuildContext context, {
+  String? modelUrl,
+  bool embed = true,
+  void Function(StepViewerJs? js)? onJs,
+}) {
   if (!_canEmbed) return stepViewerFallback(context);
-  return _Viewer(modelUrl: modelUrl);
+  return _Viewer(modelUrl: modelUrl, embed: embed, onJs: onJs);
 }
 
 /// Вьюер внутри APK: открывает файлы с телефона (кнопка «Открыть STEP» —
-/// системный выбор файла поднимает сам WebView) и модели по ссылке
-/// (`?url=…`, страница скачивает и разбирает локально).
+/// теперь через `NexusViewer.openFile()`, владелец 24.11) и модели по
+/// ссылке (`?url=…`, страница скачивает и разбирает локально).
 class _Viewer extends StatefulWidget {
   final String? modelUrl;
-  const _Viewer({this.modelUrl});
+
+  /// Приложение само рисует верхнюю панель — собственную шапку вьюера
+  /// прячем параметром `?embed=1` (поддержка embed добавлена в
+  /// assets/webview, просьба владельца 24.11).
+  final bool embed;
+
+  final void Function(StepViewerJs? js)? onJs;
+
+  const _Viewer({this.modelUrl, required this.embed, this.onJs});
 
   @override
   State<_Viewer> createState() => _ViewerState();
@@ -37,12 +57,42 @@ class _Viewer extends StatefulWidget {
 class _ViewerState extends State<_Viewer> {
   double _progress = 0;
   String? _error;
+  InAppWebViewController? _controller;
+
+  /// Догрузилась ли страница: до этого `evaluateJavascript` бессмыслен —
+  /// `window.NexusViewer` ещё может не существовать.
+  bool _pageReady = false;
 
   Uri get _initialUrl {
     final base = Uri.parse('${_viewerBase}index.html');
-    final url = widget.modelUrl;
-    if (url == null || url.isEmpty) return base;
-    return base.replace(queryParameters: {'url': url});
+    return base.replace(queryParameters: {
+      // Шапку вьюера скрываем: вся навигация теперь в панели приложения
+      // (единый экран вместо двух — просьба владельца 24.11).
+      'embed': widget.embed ? '1' : '0',
+      if (widget.modelUrl != null && widget.modelUrl!.isNotEmpty)
+        'url': widget.modelUrl!,
+    });
+  }
+
+  /// Мост к `window.NexusViewer`. Небезопасные аргументы кодируем через
+  /// `jsonEncode` (строки с кавычками/слэшами не ломают вызов). Возвращаем
+  /// `null` и при отсутствии контроллера, и при отсутствии `window.NexusViewer`
+  /// — внешне это одно и то же: «вьюер ещё не готов, пересоздай с ?url=».
+  Future<Object?> _invoke(String method, List<Object?> args) async {
+    final controller = _controller;
+    if (!_pageReady || controller == null) return null;
+    final jsArgs = [for (final a in args) jsonEncode(a)].join(',');
+    try {
+      final res = await controller.evaluateJavascript(
+        source: 'window.NexusViewer'
+            ' ? (window.NexusViewer.$method($jsArgs) ?? true)'
+            ' : null',
+      );
+      return res;
+    } catch (_) {
+      // Страница в середине перезагрузки: мост временно недоступен.
+      return null;
+    }
   }
 
   @override
@@ -50,7 +100,6 @@ class _ViewerState extends State<_Viewer> {
     return Stack(
       children: [
         InAppWebView(
-          key: ValueKey(_initialUrl.toString()),
           initialUrlRequest: URLRequest(url: WebUri(_initialUrl.toString())),
           initialSettings: InAppWebViewSettings(
             // Отдаёт /assets/flutter_assets/** из APK под https-origin.
@@ -72,6 +121,17 @@ class _ViewerState extends State<_Viewer> {
           },
           onReceivedError: (controller, request, error) {
             if (mounted) setState(() => _error = _redactLinks(error.description));
+          },
+          onLoadStop: (controller, url) {
+            _controller = controller;
+            _pageReady = true;
+            // Отдаём мост экрану: с этого момента доступны
+            // `NexusViewer.load/edges/mass/display/openFile`.
+            widget.onJs?.call(StepViewerJs(
+              hasJs: true,
+              ready: true,
+              invoke: _invoke,
+            ));
           },
           onConsoleMessage: (controller, message) {
             if (kDebugMode) {

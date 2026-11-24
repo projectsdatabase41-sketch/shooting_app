@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>STEP Viewer</title>
+<script>
+  // Режим встраивания в приложение (?embed=1, просьба владельца 24.11):
+  // класс вешаем как можно раньше, до отрисовки, чтобы шапка вьюера
+  // не мигала на экране перед тем, как CSS её спрячет.
+  if (new URLSearchParams(location.search).get('embed') === '1') {
+    document.documentElement.classList.add('embed-viewer');
+  }
+</script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230e1219'/%3E%3Cpath d='M9 21.5 16 7l7 14.5' stroke='%234c8dff' stroke-width='2.6' fill='none' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="./styles.css">
 <script type="importmap">
@@ -49,6 +57,9 @@
     </button>
     <button id="edges-btn" class="btn is-on" type="button" title="Показывать рёбра (E)">Рёбра</button>
     <button id="theme-btn" class="btn" type="button" title="Светлый / тёмный фон (T)">Фон</button>
+    <button id="mass-btn" class="btn" type="button" title="Масса, центр тяжести и объём модели (M)">Масса</button>
+    <button id="quality-btn" class="btn" type="button" hidden title="Качество триангуляции: черновик открывается быстрее">Качество: точно</button>
+    <button id="settings-btn" class="btn btn-icon" type="button" title="Чувствительность мыши и кэш">⚙</button>
   </div>
 </header>
 
@@ -57,8 +68,58 @@
   <div id="info-stats" class="info-stats">Откройте .stp / .step / .glb файл</div>
 </aside>
 
-<aside id="mass" class="mass" hidden aria-live="polite"></aside>
 
+<aside id="mass-panel" class="mass-panel" hidden>
+  <header class="mass-panel-head">
+    <div class="mass-panel-title">Масса и центр тяжести</div>
+    <button id="mass-close" class="mass-close" type="button" title="Закрыть">×</button>
+  </header>
+
+  <div class="mass-controls">
+    <label class="mass-field">Единицы
+      <select id="mass-units">
+        <option value="mm" selected>мм</option>
+        <option value="cm">см</option>
+        <option value="m">м</option>
+        <option value="inch">дюйм</option>
+      </select>
+    </label>
+    <label class="mass-field" id="mass-contrast-field" hidden>Контраст
+      <input type="range" id="mass-contrast" min="0.2" max="4" step="0.1" value="1.2">
+    </label>
+    <label class="mass-field" id="mass-opacity-field" hidden>Прозрачность
+      <input type="range" id="mass-opacity" min="0.05" max="1" step="0.05" value="0.85">
+      <output id="mass-opacity-out">85%</output>
+    </label>
+    <label class="mass-field" id="mass-fill-field" hidden>Заливка
+      <input type="range" id="mass-fill" min="0" max="1" step="0.05" value="0.35">
+      <output id="mass-fill-out">35%</output>
+    </label>
+    <button id="mass-solid" class="btn mass-solid" type="button" hidden title="Заполнить деталь целиком: зазор 0 и полная заливка">Сплошная заливка</button>
+    <label class="mass-field">Вид
+      <select id="mass-view">
+        <option value="off" selected>Обычный</option>
+        <option value="cloud">Дым (объём)</option>
+        <option value="points">Частицы (объём)</option>
+        <option value="walls">Стенки (прозрачность)</option>
+      </select>
+    </label>
+  </div>
+
+  <div id="mass-note" class="mass-note" hidden></div>
+  <div id="mass-legend" class="mass-legend" hidden>
+    <span>мало массы</span>
+    <span class="mass-legend-bar"></span>
+    <span>много массы</span>
+    <div id="mass-legend-text" class="mass-legend-text"></div>
+  </div>
+  <div id="mass-table" class="mass-table"></div>
+  <div id="mass-totals" class="mass-totals"></div>
+
+  <footer class="mass-panel-foot">
+    <button id="mass-copy" class="btn" type="button">Скопировать отчёт</button>
+  </footer>
+</aside>
 <div class="hint">
   <span><b>ЛКМ</b> — вращать</span>
   <span><b>ПКМ / wheel‑клик</b> — панорама</span>
@@ -66,9 +127,14 @@
   <span><b>F</b> — подогнать</span>
 </div>
 
-<div id="empty" class="empty">  <div class="empty-card">
+<div id="empty" class="empty">
+  <div class="empty-card">
     <div class="empty-title">Откройте STEP‑файл</div>
     <div id="empty-sub" class="empty-sub">Кнопка «Открыть STEP» или перетащите файл (.stp / .step / .glb) — всё обрабатывается локально, на устройстве</div>
+    <!-- Чипы «Посмотреть на примере» из версии для ПК убраны (владелец, 24.11):
+         папка samples/ не объявлена в pubspec (править его нельзя) и не попадёт
+         в APK/сборку, поэтому ссылки вели бы на несуществующие файлы.
+         Открывается по-прежнему через файл или ?url=/?model=. -->
   </div>
 </div>
 
@@ -79,6 +145,30 @@
     <div id="overlay-sub" class="overlay-sub"></div>
   </div>
 </div>
+
+<aside id="settings-panel" class="settings-panel" hidden>
+  <div class="settings-title">Чувствительность мыши</div>
+  <label class="settings-row">Вращение
+    <input type="range" id="sensitivity-rotate" min="0.2" max="2.5" step="0.05" value="1">
+    <output id="sensitivity-rotate-out">1.0</output>
+  </label>
+  <label class="settings-row">Панорама
+    <input type="range" id="sensitivity-pan" min="0.2" max="2.5" step="0.05" value="1">
+    <output id="sensitivity-pan-out">1.0</output>
+  </label>
+  <label class="settings-row">Зум
+    <input type="range" id="sensitivity-zoom" min="0.2" max="2.5" step="0.05" value="1">
+    <output id="sensitivity-zoom-out">1.0</output>
+  </label>
+  <div class="settings-actions">
+    <button id="sensitivity-reset" class="btn" type="button">Сбросить</button>
+  </div>
+  <div class="settings-title">Кэш геометрии</div>
+  <div class="settings-row settings-row-cache">
+    <span id="cache-info">пусто</span>
+    <button id="cache-clear" class="btn" type="button">Очистить</button>
+  </div>
+</aside>
 
 <div id="toast" class="toast" hidden></div>
 

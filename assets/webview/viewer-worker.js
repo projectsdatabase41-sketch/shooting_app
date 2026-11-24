@@ -26,6 +26,36 @@ function getOcct() {
   return occtPromise;
 }
 
+/** Материалы из текста STEP (см. mass.js.scanStepMaterials) — здесь копия, воркер классический. */
+function scanMaterials(bytes) {
+  try {
+    const text = new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(bytes));
+    if (!/MATERIAL|DENSITY/i.test(text)) return [];
+
+    const names = new Set();
+    for (const match of text.matchAll(/MATERIAL_DESIGNATION\s*\(\s*'([^']{1,80})'/gi)) {
+      const name = match[1].trim();
+      if (name) names.add(name);
+    }
+
+    const densities = [];
+    for (const match of text.matchAll(/MASS_DENSITY_MEASURE\s*\(\s*([0-9]+(?:\.[0-9]*)?(?:[eE][+-]?[0-9]+)?)/gi)) {
+      const value = Number(match[1]);
+      if (Number.isFinite(value) && value > 1) densities.push(value / 1000);
+    }
+
+    if (names.size === 0 && densities.length === 0) return [];
+
+    const density = densities.length ? densities[0] : null;
+    const list = names.size === 0
+      ? [{ name: 'материал из файла', density }]
+      : Array.from(names).map((name) => ({ name, density }));
+    return list.slice(0, 20);
+  } catch {
+    return [];
+  }
+}
+
 self.onmessage = async (event) => {
   const { id, bytes, params } = event.data || {};
   try {
@@ -57,7 +87,7 @@ self.onmessage = async (event) => {
       };
     });
 
-    self.postMessage({ id, success: !!result.success, meshes }, transfer);
+    self.postMessage({ id, success: !!result.success, meshes, materials: scanMaterials(bytes) }, transfer);
   } catch (error) {
     self.postMessage({ id, error: String((error && error.message) || error) });
   }

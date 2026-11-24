@@ -12,10 +12,18 @@ import '../widgets/app_backdrop.dart';
 import '../widgets/app_loader.dart';
 
 import '../widgets/glass_pill.dart';
+import 'step_viewer_common.dart' show catalogErrorView;
 import 'step_viewer_screen.dart';
 
-/// Каталог 3D-моделей (просьба владельца 23.11): сетка превью с сервера
-/// звонков (`GET <воркер>/models/index`), вместо старого голого вьюера.
+/// Каталог 3D-моделей: сетка превью с сервера звонков
+/// (`GET <воркер>/models/index`).
+///
+/// С 24.11 содержимое каталога живёт в переиспользуемом
+/// [ModelsCatalogBody]: владелец просил один экран 3D-модуля, а каталог —
+/// окошком «почти на весь экран» поверх вьюера (отзыв 24.11). Обёртка
+/// [ModelsCatalogScreen] осталась для старого пути — вкладка теперь
+/// открывает единый `StepViewerScreen`, но каталог как отдельная страница
+/// никуда не делись (не ломаем то, что могло прижиться).
 ///
 /// Адрес воркера нигде не показывается и не логируется: и ссылки на модель,
 /// и ошибки сети остаются внутри этого файла — в интерфейсе только названия,
@@ -30,8 +38,83 @@ class ModelsCatalogScreen extends StatefulWidget {
 }
 
 class _ModelsCatalogScreenState extends State<ModelsCatalogScreen> {
-  /// Идёт фоновая подгрузка: спиннер живёт в шапке, список не заменяем
-  /// (как на новостях, отзыв владельца 23.11, п.2 — «подгрузку в фоне»).
+  /// Переход к модели: адрес собирает [ModelsCatalog.modelUrl] и внутрь
+  /// вьюера передаётся напрямую — пользователь его не видит и в диалогах
+  /// не печатается.
+  void _open(String id) {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => StepViewerScreen(modelUrl: ModelsCatalog.modelUrl(id)),
+    ));
+  }
+
+  /// Старый путь: открыть файл с устройства или по ссылке без каталога
+  /// (вьюер в полном режиме со своей шапкой — кнопки «Открыть STEP» и
+  /// «Открыть по ссылке» там свои).
+  void _openFromFile() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const StepViewerScreen()),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: GlassHeader(
+        title: Text(tr('3D-модели')),
+        actions: [
+          // Старое поведение — открыть файл с устройства/по ссылке
+          // (сохранено, чтобы простой просмотр не сломался).
+          IconButton(
+            tooltip: tr('Открыть файл с устройства'),
+            icon: const Icon(Icons.folder_open_outlined),
+            onPressed: _openFromFile,
+          ),
+        ],
+      ),
+      body: AppBackdrop(
+        kind: 'settings',
+        // Содержимое каталога и в шапке страницы, и в окошке поверх вьюера
+        // — одно и то же (требование C, владелец 24.11).
+        child: ModelsCatalogBody(
+          onPick: _open,
+          // Отступ под стеклянной шапкой страницы.
+          topInset:
+              MediaQuery.paddingOf(context).top + GlassHeader.height + 12,
+        ),
+      ),
+    );
+  }
+}
+
+/// Содержимое каталога: поиск, чипы категорий, сетка превью, кэш и
+/// ошибка с повтором. Переиспользуется страницей [ModelsCatalogScreen]
+/// и окошком каталога внутри [StepViewerScreen] (владелец 24.11):
+/// тап по карточке отдаёт id наружу через [onPick], навигацию решает
+/// вызывающий.
+class ModelsCatalogBody extends StatefulWidget {
+  /// Выбор модели: получают готовый id записи каталога, адрес модели
+  /// собирает вызывающий (см. `ModelsCatalog.modelUrl`).
+  final void Function(String id) onPick;
+
+  /// Верхний отступ: на странице каталог живёт под стеклянной шапкой, в
+  /// окошке — сразу под собственным заголовком.
+  final double topInset;
+
+  const ModelsCatalogBody({
+    super.key,
+    required this.onPick,
+    this.topInset = 0,
+  });
+
+  @override
+  State<ModelsCatalogBody> createState() => _ModelsCatalogBodyState();
+}
+
+class _ModelsCatalogBodyState extends State<ModelsCatalogBody> {
+  /// Идёт фоновая подгрузка: спиннер живёт рядом с поиском, список не
+  /// заменяем (как на новостях, отзыв владельца 23.11, п.2 — «подгрузку
+  /// в фоне»).
   bool _refreshing = false;
 
   /// Итог последнего обновления: сети не было. Кэш при этом остаётся на
@@ -57,7 +140,7 @@ class _ModelsCatalogScreenState extends State<ModelsCatalogScreen> {
     //    без ожидания сети (как кэш новостей, отзыв владельца 23.11).
     _hasAnyItems = ModelsCatalog.loadCached(_db);
     // 2) Обновление в фоне: первый build увидит _refreshing = true и нарисует
-    //    спиннер в шапке, список не блокируется.
+    //    спиннер рядом с поиском, список не блокируется.
     _refresh(force: false, notify: false);
   }
 
@@ -107,61 +190,10 @@ class _ModelsCatalogScreenState extends State<ModelsCatalogScreen> {
     ];
   }
 
-  /// Переход к модели. Адрес собирается здесь и внутрь вьюера передаётся
-  /// напрямую — пользователь его не видит и в диалогах не печатается.
-  void _open(CatalogModel m) {
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => StepViewerScreen(modelUrl: ModelsCatalog.modelUrl(m.id)),
-    ));
-  }
-
-  /// Старый путь: открыть свой файл или ссылку без каталога
-  /// (прежнее поведение вкладки «3D-модели», сохранено по просьбе владельца).
-  void _openFromFile() {
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => const StepViewerScreen(),
-    ));
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final items = _filtered;
-
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: GlassHeader(
-        title: Text(tr('3D-модели')),
-        actions: [
-          // Старое поведение — открыть файл с устройства/по ссылке
-          // (просьба владельца 23.11 сохранить доступ к нему).
-          IconButton(
-            tooltip: tr('Открыть файл с устройства'),
-            icon: const Icon(Icons.folder_open_outlined),
-            onPressed: _openFromFile,
-          ),
-          // Обновление каталога. Список во время запроса не заменяем —
-          // крутится только иконка (как в новостях, отзыв 23.11, п.2).
-          IconButton(
-            tooltip: tr('Обновить'),
-            onPressed: _refreshing ? null : () => _refresh(force: true),
-            icon: _refreshing
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.refresh),
-          ),
-        ],
-      ),
-      body: AppBackdrop(
-        kind: 'settings',
-        child: _body(theme, items),
-      ),
-    );
-  }
-
-  Widget _body(ThemeData theme, List<CatalogModel> items) {
     final loading = _refreshing && !_hasAnyItems;
 
     if (loading) {
@@ -169,32 +201,13 @@ class _ModelsCatalogScreenState extends State<ModelsCatalogScreen> {
       return const Center(child: AppLoader());
     }
     if (!_hasAnyItems && _loadFailed) {
-      // Сети нет и кэша тоже — экран ошибки с повтором. Адрес сервера тут
-      // не показываем и в текст не подставляем (просьба владельца: без URL
-      // в интерфейсе).
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.wifi_off_outlined,
-                  size: 40, color: theme.colorScheme.onSurfaceVariant),
-              const SizedBox(height: 12),
-              Text(
-                tr('Не удалось загрузить каталог'),
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 8),
-              FilledButton.icon(
-                onPressed: () => _refresh(force: true),
-                icon: const Icon(Icons.refresh, size: 18),
-                label: Text(tr('Повторить')),
-              ),
-            ],
-          ),
-        ),
+      // Сети нет и кэша тоже — экран ошибки с повтором (требование D).
+      // Код ошибки виден только в режиме разработчика: обычному
+      // пользователю «HTTP 401» ничего не говорит.
+      return catalogErrorView(
+        context,
+        errorCode: ModelsCatalog.lastErrorCode,
+        onRetry: () => _refresh(force: true),
       );
     }
     if (!_hasAnyItems) {
@@ -216,33 +229,49 @@ class _ModelsCatalogScreenState extends State<ModelsCatalogScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(
-            height:
-                MediaQuery.paddingOf(context).top + GlassHeader.height + 12),
-        // Поиск по названию.
+        SizedBox(height: widget.topInset, width: double.infinity),
+        // Поиск по названию + фоновое обновление. «Обновить» переехало сюда
+        // из шапки: в окошке поверх вьюера шапки-страницы нет (владелец
+        // 24.11 — каталог показывается целиком одним блоком).
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-          child: TextField(
-            controller: _search,
-            onChanged: (v) => setState(() => _query = v),
-            decoration: InputDecoration(
-              isDense: true,
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _query.isEmpty
-                  ? null
-                  : IconButton(
-                      tooltip: tr('Очистить'),
-                      icon: const Icon(Icons.clear),
-                      onPressed: () => setState(() {
-                        _search.clear();
-                        _query = '';
-                      }),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _search,
+                  onChanged: (v) => setState(() => _query = v),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _query.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: tr('Очистить'),
+                            icon: const Icon(Icons.clear),
+                            onPressed: () => setState(() {
+                              _search.clear();
+                              _query = '';
+                            }),
+                          ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+                    hintText: tr('Поиск по названию'),
+                  ),
+                ),
               ),
-              hintText: tr('Поиск по названию'),
-            ),
+              IconButton(
+                tooltip: tr('Обновить'),
+                onPressed: _refreshing ? null : () => _refresh(force: true),
+                icon: _refreshing
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.refresh),
+              ),
+            ],
           ),
         ),
         // Категории: «Все» + все, что пришло от сервера. Горизонтальная
@@ -344,6 +373,7 @@ class _ModelsCatalogScreenState extends State<ModelsCatalogScreen> {
 
   /// Карточка модели: скругление 16, фон surfaceContainer, тонкая рамка —
   /// как карточки новостей (стиль каталога по образцу news_screen).
+  /// Владелец 24.11: «там будут расположены модели в виде картинки».
   Widget _card(CatalogModel m, double tileW) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
@@ -362,7 +392,7 @@ class _ModelsCatalogScreenState extends State<ModelsCatalogScreen> {
         side: BorderSide(color: cs.outlineVariant),
       ),
       child: InkWell(
-        onTap: () => _open(m),
+        onTap: () => widget.onPick(m.id),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -432,6 +462,11 @@ class ModelsCatalog {
   /// Время обновления на сервере ({updatedAt} из ответа).
   static String? updatedAt;
 
+  /// Код последней ошибки (HTTP-статус или тип исключения). Показываем
+  /// только в режиме разработчика — обычному пользователю он не нужен
+  /// (требование D, владелец 24.11).
+  static String? lastErrorCode;
+
   static DateTime? _fetchedAt;
 
   /// Пауза между фоновыми обновлениями: каталог меняется редко, дёргать
@@ -475,15 +510,23 @@ class ModelsCatalog {
       return items.isNotEmpty; // в паузу сеть не трогаем — ошибки нет
     }
     _fetchedAt = now;
+    lastErrorCode = null;
     // Пока идёт запрос, всё равно показываем сохранённое.
     if (items.isEmpty) loadCached(db);
     try {
       final res = await http
           .get(Uri.parse('${CallService.url}/models/index'))
           .timeout(const Duration(seconds: 20));
-      if (res.statusCode != 200) return false;
+      if (res.statusCode != 200) {
+        // Понятная причина сбоя для режима разработчика (требование D).
+        lastErrorCode = 'HTTP ${res.statusCode}';
+        return false;
+      }
       final data = jsonDecode(utf8.decode(res.bodyBytes));
-      if (data is! Map) return false;
+      if (data is! Map) {
+        lastErrorCode = 'bad payload';
+        return false;
+      }
       final list = _parseList(data['items']);
       // Пустой ответ сервера — не повод затирать показанное.
       if (list.isEmpty) return items.isNotEmpty;
@@ -514,9 +557,10 @@ class ModelsCatalog {
         // Кэш в базу не лёг — это не мешает уже загруженному списку.
       }
       return true;
-    } catch (_) {
+    } catch (e) {
       // Сеть отвалилась: показанное (кэш/память) не трогаем, экран покажет
       // подпись или экран ошибки в зависимости от того, был ли список.
+      lastErrorCode = '${e.runtimeType}';
       return false;
     }
   }
