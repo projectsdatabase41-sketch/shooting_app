@@ -10,7 +10,8 @@
    "id": "16EeW8nLeawaq9_Ib9BUyvS_xENNakPKs",
    "kind": "step",
    "previewId": null,
-   "order": 0
+   "order": 0,
+   "previewAsset": "assets/models/previews/16EeW8nLeawaq9_Ib9BUyvS_xENNakPKs.png"
   },
   {
    "name": "G2",
@@ -20,7 +21,8 @@
    "id": "12OvMBZ2p_X3H5Cmw2bMwd3zGsA_sD4Lo",
    "kind": "step",
    "previewId": null,
-   "order": 1
+   "order": 1,
+   "previewAsset": "assets/models/previews/12OvMBZ2p_X3H5Cmw2bMwd3zGsA_sD4Lo.png"
   },
   {
    "name": "G3",
@@ -30,7 +32,8 @@
    "id": "17yi42lSgH7srvDGAS7rCPWqIZ26-SbHd",
    "kind": "step",
    "previewId": null,
-   "order": 2
+   "order": 2,
+   "previewAsset": "assets/models/previews/17yi42lSgH7srvDGAS7rCPWqIZ26-SbHd.png"
   },
   {
    "name": "G4",
@@ -40,7 +43,8 @@
    "id": "1uCH4Qlk-8jHliui0XGvMnHaO9gcndInI",
    "kind": "step",
    "previewId": null,
-   "order": 3
+   "order": 3,
+   "previewAsset": "assets/models/previews/1uCH4Qlk-8jHliui0XGvMnHaO9gcndInI.png"
   },
   {
    "name": "G5",
@@ -50,7 +54,8 @@
    "id": "1gg3jUzezwl0uq-KD6J-2qv9FJOu73Hxm",
    "kind": "step",
    "previewId": null,
-   "order": 4
+   "order": 4,
+   "previewAsset": "assets/models/previews/1gg3jUzezwl0uq-KD6J-2qv9FJOu73Hxm.png"
   },
   {
    "name": "1.2",
@@ -60,7 +65,8 @@
    "id": "1ZKKgHfhoWRx0s7tWpgAI5bdm_9LY_0cl",
    "kind": "step",
    "previewId": null,
-   "order": 5
+   "order": 5,
+   "previewAsset": "assets/models/previews/1ZKKgHfhoWRx0s7tWpgAI5bdm_9LY_0cl.png"
   },
   {
    "name": "1.2.2",
@@ -70,7 +76,8 @@
    "id": "1QLz79OwWTcKzkQBnloYYWNzduI20v0e1",
    "kind": "step",
    "previewId": null,
-   "order": 6
+   "order": 6,
+   "previewAsset": "assets/models/previews/1QLz79OwWTcKzkQBnloYYWNzduI20v0e1.png"
   },
   {
    "name": "2.2",
@@ -80,7 +87,8 @@
    "id": "10YNxBcD9rrF9PXN1l9bUiMfya5bQfgKp",
    "kind": "step",
    "previewId": null,
-   "order": 7
+   "order": 7,
+   "previewAsset": "assets/models/previews/10YNxBcD9rrF9PXN1l9bUiMfya5bQfgKp.png"
   },
   {
    "name": "K",
@@ -90,7 +98,8 @@
    "id": "1L3UZ3SsEdyKgEcmpHV5gvsFl7vYaQlf4",
    "kind": "step",
    "previewId": null,
-   "order": 8
+   "order": 8,
+   "previewAsset": "assets/models/previews/1L3UZ3SsEdyKgEcmpHV5gvsFl7vYaQlf4.png"
   },
   {
    "name": "K1",
@@ -100,7 +109,8 @@
    "id": "1mg-jSzAtlrn5dBnsRaC7ywMV2ZOU5cvW",
    "kind": "step",
    "previewId": null,
-   "order": 9
+   "order": 9,
+   "previewAsset": "assets/models/previews/1mg-jSzAtlrn5dBnsRaC7ywMV2ZOU5cvW.png"
   },
   {
    "name": "K2",
@@ -110,7 +120,8 @@
    "id": "1MYYmbV8Wnn2E8U6AVEVz4dp5A9qKd42H",
    "kind": "step",
    "previewId": null,
-   "order": 10
+   "order": 10,
+   "previewAsset": "assets/models/previews/1MYYmbV8Wnn2E8U6AVEVz4dp5A9qKd42H.png"
   },
   {
    "name": "KA",
@@ -120,7 +131,8 @@
    "id": "1gSwud-ry61rhZgc-KAkQApTTdBHyPwjn",
    "kind": "step",
    "previewId": null,
-   "order": 11
+   "order": 11,
+   "previewAsset": "assets/models/previews/1gSwud-ry61rhZgc-KAkQApTTdBHyPwjn.png"
   },
   {
    "name": "KL 2",
@@ -130,7 +142,8 @@
    "id": "1_UMoFbZdxDPnqha2B2V049fvG_rn8mE4",
    "kind": "step",
    "previewId": null,
-   "order": 12
+   "order": 12,
+   "previewAsset": "assets/models/previews/1_UMoFbZdxDPnqha2B2V049fvG_rn8mE4.png"
   },
   {
    "name": "Kp 4 3D",
@@ -140,7 +153,8 @@
    "id": "1A_BHs1_2tTo-dLXnHxlSgRHHQwIeXhEZ",
    "kind": "step",
    "previewId": null,
-   "order": 13
+   "order": 13,
+   "previewAsset": "assets/models/previews/1A_BHs1_2tTo-dLXnHxlSgRHHQwIeXhEZ.png"
   },
   {
    "name": "Kp 4L 3D",
@@ -150,7 +164,8 @@
    "id": "11lGovT00fP_hfwestR6XXLJ0zkkomRno",
    "kind": "step",
    "previewId": null,
-   "order": 14
+   "order": 14,
+   "previewAsset": "assets/models/previews/11lGovT00fP_hfwestR6XXLJ0zkkomRno.png"
   },
   {
    "name": "KpZ",
@@ -160,7 +175,8 @@
    "id": "16VfE78igpP1ej3u0PWEtn0QQgdFiqqlC",
    "kind": "step",
    "previewId": null,
-   "order": 15
+   "order": 15,
+   "previewAsset": "assets/models/previews/16VfE78igpP1ej3u0PWEtn0QQgdFiqqlC.png"
   },
   {
    "name": "Krep",
@@ -170,7 +186,8 @@
    "id": "1faqo4R33rtLfWuPUEMzodifawIj5fwvr",
    "kind": "step",
    "previewId": null,
-   "order": 16
+   "order": 16,
+   "previewAsset": "assets/models/previews/1faqo4R33rtLfWuPUEMzodifawIj5fwvr.png"
   },
   {
    "name": "Krep 4 3D",
@@ -180,7 +197,8 @@
    "id": "1JNGTsioYxL8kavR3IVhmQuZl0ozq0EAr",
    "kind": "step",
    "previewId": null,
-   "order": 17
+   "order": 17,
+   "previewAsset": "assets/models/previews/1JNGTsioYxL8kavR3IVhmQuZl0ozq0EAr.png"
   },
   {
    "name": "Krep+r",
@@ -190,7 +208,8 @@
    "id": "1UCvb48ECi3MClvinn-tvIStxu8kK1HRn",
    "kind": "step",
    "previewId": null,
-   "order": 18
+   "order": 18,
+   "previewAsset": "assets/models/previews/1UCvb48ECi3MClvinn-tvIStxu8kK1HRn.png"
   },
   {
    "name": "Krep10mm",
@@ -200,7 +219,8 @@
    "id": "1hUOKNoliwv-tFwGa6YnzRXqBkGaVcg2S",
    "kind": "step",
    "previewId": null,
-   "order": 19
+   "order": 19,
+   "previewAsset": "assets/models/previews/1hUOKNoliwv-tFwGa6YnzRXqBkGaVcg2S.png"
   },
   {
    "name": "Krep12mm",
@@ -210,7 +230,8 @@
    "id": "14q5PBl7LmJeGxrXCFGAwBMFgEc0cy3I1",
    "kind": "step",
    "previewId": null,
-   "order": 20
+   "order": 20,
+   "previewAsset": "assets/models/previews/14q5PBl7LmJeGxrXCFGAwBMFgEc0cy3I1.png"
   },
   {
    "name": "KZ1KD",
@@ -220,7 +241,8 @@
    "id": "1sMeiKBrzW_vB7zM4qd9163hONi-KjpUb",
    "kind": "step",
    "previewId": null,
-   "order": 21
+   "order": 21,
+   "previewAsset": "assets/models/previews/1sMeiKBrzW_vB7zM4qd9163hONi-KjpUb.png"
   },
   {
    "name": "KZ1KK",
@@ -230,7 +252,8 @@
    "id": "1Dm4rpP182TgmWkelhPuLg0iJyUbIGRKi",
    "kind": "step",
    "previewId": null,
-   "order": 22
+   "order": 22,
+   "previewAsset": "assets/models/previews/1Dm4rpP182TgmWkelhPuLg0iJyUbIGRKi.png"
   },
   {
    "name": "L 3D 150mm",
@@ -240,7 +263,8 @@
    "id": "1BNivQcLaOInO9efF0Qkdod66-kTfiIcX",
    "kind": "step",
    "previewId": null,
-   "order": 23
+   "order": 23,
+   "previewAsset": "assets/models/previews/1BNivQcLaOInO9efF0Qkdod66-kTfiIcX.png"
   },
   {
    "name": "L 3D 150mm",
@@ -250,7 +274,8 @@
    "id": "1aFqwdkOFcWJqmse_9-db_sB6_3bYb_Wy",
    "kind": "step",
    "previewId": null,
-   "order": 24
+   "order": 24,
+   "previewAsset": "assets/models/previews/1aFqwdkOFcWJqmse_9-db_sB6_3bYb_Wy.png"
   },
   {
    "name": "L 3D 150mm Strong",
@@ -260,7 +285,8 @@
    "id": "1_CUK2IyX7pwF60IF514Gbfym1W-poA5l",
    "kind": "step",
    "previewId": null,
-   "order": 25
+   "order": 25,
+   "previewAsset": "assets/models/previews/1_CUK2IyX7pwF60IF514Gbfym1W-poA5l.png"
   },
   {
    "name": "L3D",
@@ -270,7 +296,8 @@
    "id": "1znj3Z0bU4yvWYTl7XeF-7GjnpTSVWXgW",
    "kind": "step",
    "previewId": null,
-   "order": 26
+   "order": 26,
+   "previewAsset": "assets/models/previews/1znj3Z0bU4yvWYTl7XeF-7GjnpTSVWXgW.png"
   },
   {
    "name": "L_n",
@@ -280,7 +307,8 @@
    "id": "1B3HMbim6PADXkFcGxADuQJBM9jKIyAzH",
    "kind": "step",
    "previewId": null,
-   "order": 27
+   "order": 27,
+   "previewAsset": "assets/models/previews/1B3HMbim6PADXkFcGxADuQJBM9jKIyAzH.png"
   },
   {
    "name": "L_n+r",
@@ -290,7 +318,8 @@
    "id": "1_ZoE35lcj3SV1XmVhDBAKLIswbkcMSUO",
    "kind": "step",
    "previewId": null,
-   "order": 28
+   "order": 28,
+   "previewAsset": "assets/models/previews/1_ZoE35lcj3SV1XmVhDBAKLIswbkcMSUO.png"
   },
   {
    "name": "L_v",
@@ -300,7 +329,8 @@
    "id": "1R36FNho2KqzdJBioreHRMD9K5F5KapS2",
    "kind": "step",
    "previewId": null,
-   "order": 29
+   "order": 29,
+   "previewAsset": "assets/models/previews/1R36FNho2KqzdJBioreHRMD9K5F5KapS2.png"
   },
   {
    "name": "L_v+r",
@@ -310,7 +340,8 @@
    "id": "1zr7HGddvNe8HFLniPwI34Sp9GBhqwbcQ",
    "kind": "step",
    "previewId": null,
-   "order": 30
+   "order": 30,
+   "previewAsset": "assets/models/previews/1zr7HGddvNe8HFLniPwI34Sp9GBhqwbcQ.png"
   },
   {
    "name": "Lk",
@@ -320,7 +351,8 @@
    "id": "1womHAx56x0_K7FiYetCjTIJqkC6oxTf3",
    "kind": "step",
    "previewId": null,
-   "order": 31
+   "order": 31,
+   "previewAsset": "assets/models/previews/1womHAx56x0_K7FiYetCjTIJqkC6oxTf3.png"
   },
   {
    "name": "Ln",
@@ -330,7 +362,8 @@
    "id": "16XHYXee4jPZSNaEjsnJKRTJASd7s82se",
    "kind": "step",
    "previewId": null,
-   "order": 32
+   "order": 32,
+   "previewAsset": "assets/models/previews/16XHYXee4jPZSNaEjsnJKRTJASd7s82se.png"
   },
   {
    "name": "LN 2",
@@ -340,7 +373,8 @@
    "id": "1ACI88MxoOTSfsOJQyq8i8C1PraFu2sG7",
    "kind": "step",
    "previewId": null,
-   "order": 33
+   "order": 33,
+   "previewAsset": "assets/models/previews/1ACI88MxoOTSfsOJQyq8i8C1PraFu2sG7.png"
   },
   {
    "name": "LN 3D",
@@ -350,7 +384,8 @@
    "id": "1k91rNCX58UsVnzW5HE3GLjVfphudpauD",
    "kind": "step",
    "previewId": null,
-   "order": 34
+   "order": 34,
+   "previewAsset": "assets/models/previews/1k91rNCX58UsVnzW5HE3GLjVfphudpauD.png"
   },
   {
    "name": "LN_2",
@@ -360,7 +395,8 @@
    "id": "1PHOjE3Biuxbt91O0abEvyBL7ZKiPG_M7",
    "kind": "step",
    "previewId": null,
-   "order": 35
+   "order": 35,
+   "previewAsset": "assets/models/previews/1PHOjE3Biuxbt91O0abEvyBL7ZKiPG_M7.png"
   },
   {
    "name": "LS 2",
@@ -370,7 +406,8 @@
    "id": "1XuuspaQBNqAbPKRKH4qEh1IqBxa6OmZr",
    "kind": "step",
    "previewId": null,
-   "order": 36
+   "order": 36,
+   "previewAsset": "assets/models/previews/1XuuspaQBNqAbPKRKH4qEh1IqBxa6OmZr.png"
   },
   {
    "name": "LS 3D",
@@ -380,7 +417,8 @@
    "id": "13aS637KpmvTOCQcOMClgxlSw9o3FJTAU",
    "kind": "step",
    "previewId": null,
-   "order": 37
+   "order": 37,
+   "previewAsset": "assets/models/previews/13aS637KpmvTOCQcOMClgxlSw9o3FJTAU.png"
   },
   {
    "name": "LS_2",
@@ -390,7 +428,8 @@
    "id": "1Xv7n7jBB-2oloUXH8JDkufeJsp60UWWk",
    "kind": "step",
    "previewId": null,
-   "order": 38
+   "order": 38,
+   "previewAsset": "assets/models/previews/1Xv7n7jBB-2oloUXH8JDkufeJsp60UWWk.png"
   },
   {
    "name": "Lv",
@@ -400,7 +439,8 @@
    "id": "1YwR7rqoFlKgmA8aXSVtpk5sObdB3-vty",
    "kind": "step",
    "previewId": null,
-   "order": 39
+   "order": 39,
+   "previewAsset": "assets/models/previews/1YwR7rqoFlKgmA8aXSVtpk5sObdB3-vty.png"
   },
   {
    "name": "LV 2",
@@ -410,7 +450,8 @@
    "id": "1uAr1FB33Di1rMAY_-bfjJF-AfgaLg9UQ",
    "kind": "step",
    "previewId": null,
-   "order": 40
+   "order": 40,
+   "previewAsset": "assets/models/previews/1uAr1FB33Di1rMAY_-bfjJF-AfgaLg9UQ.png"
   },
   {
    "name": "LV 3D",
@@ -420,7 +461,8 @@
    "id": "1Gg6f9i26YkHl9cdE17Y3opASVPoxtAE3",
    "kind": "step",
    "previewId": null,
-   "order": 41
+   "order": 41,
+   "previewAsset": "assets/models/previews/1Gg6f9i26YkHl9cdE17Y3opASVPoxtAE3.png"
   },
   {
    "name": "LV_2",
@@ -430,7 +472,8 @@
    "id": "1TvV1oQwGIAZtuk8eBhGSjqWrl33h2I1J",
    "kind": "step",
    "previewId": null,
-   "order": 42
+   "order": 42,
+   "previewAsset": "assets/models/previews/1TvV1oQwGIAZtuk8eBhGSjqWrl33h2I1J.png"
   },
   {
    "name": "N",
@@ -440,7 +483,8 @@
    "id": "1Kr9er6sABOYLVo8Kw-uKc1ty4kfNs1tO",
    "kind": "step",
    "previewId": null,
-   "order": 43
+   "order": 43,
+   "previewAsset": "assets/models/previews/1Kr9er6sABOYLVo8Kw-uKc1ty4kfNs1tO.png"
   },
   {
    "name": "NZ",
@@ -450,7 +494,8 @@
    "id": "1d2DfEpZECEvEWLqWVl3iQxccY9Dt3hRk",
    "kind": "step",
    "previewId": null,
-   "order": 44
+   "order": 44,
+   "previewAsset": "assets/models/previews/1d2DfEpZECEvEWLqWVl3iQxccY9Dt3hRk.png"
   },
   {
    "name": "NZ003",
@@ -460,7 +505,8 @@
    "id": "1skOUY0W7W7Q7sx5y7_7UIO9tM-Xs6_yW",
    "kind": "step",
    "previewId": null,
-   "order": 45
+   "order": 45,
+   "previewAsset": "assets/models/previews/1skOUY0W7W7Q7sx5y7_7UIO9tM-Xs6_yW.png"
   },
   {
    "name": "NZ003_3D",
@@ -470,7 +516,8 @@
    "id": "1Eve8hy0COvVdsoui4K7TY81RkBp9dcZq",
    "kind": "step",
    "previewId": null,
-   "order": 46
+   "order": 46,
+   "previewAsset": "assets/models/previews/1Eve8hy0COvVdsoui4K7TY81RkBp9dcZq.png"
   },
   {
    "name": "Pl",
@@ -480,7 +527,8 @@
    "id": "1RdZyw_ngM2So6WtnxYMhHnh2jU-McLKR",
    "kind": "step",
    "previewId": null,
-   "order": 47
+   "order": 47,
+   "previewAsset": "assets/models/previews/1RdZyw_ngM2So6WtnxYMhHnh2jU-McLKR.png"
   },
   {
    "name": "PL_3D",
@@ -490,7 +538,8 @@
    "id": "17gqj12C9oowZk-RtJktVU5ZiU-_Zb5TZ",
    "kind": "step",
    "previewId": null,
-   "order": 48
+   "order": 48,
+   "previewAsset": "assets/models/previews/17gqj12C9oowZk-RtJktVU5ZiU-_Zb5TZ.png"
   },
   {
    "name": "PL_CNC",
@@ -500,7 +549,8 @@
    "id": "1uGFqNKYO1oWLMA_yDrLZBnyNPc4NYY0u",
    "kind": "step",
    "previewId": null,
-   "order": 49
+   "order": 49,
+   "previewAsset": "assets/models/previews/1uGFqNKYO1oWLMA_yDrLZBnyNPc4NYY0u.png"
   },
   {
    "name": "Sborka",
@@ -510,7 +560,8 @@
    "id": "1FsZGdTQeIMJzxIukEWihhL22STedqMGc",
    "kind": "step",
    "previewId": null,
-   "order": 50
+   "order": 50,
+   "previewAsset": "assets/models/previews/1FsZGdTQeIMJzxIukEWihhL22STedqMGc.png"
   },
   {
    "name": "U3D",
@@ -520,7 +571,8 @@
    "id": "1g_L9nEAprxj6W_WJ1HkGtwjGcdKa1BfM",
    "kind": "step",
    "previewId": null,
-   "order": 51
+   "order": 51,
+   "previewAsset": "assets/models/previews/1g_L9nEAprxj6W_WJ1HkGtwjGcdKa1BfM.png"
   },
   {
    "name": "VD_K",
@@ -530,7 +582,8 @@
    "id": "1IegTLajf784nStab5NdGUCUcvZIbrZ4w",
    "kind": "step",
    "previewId": null,
-   "order": 52
+   "order": 52,
+   "previewAsset": "assets/models/previews/1IegTLajf784nStab5NdGUCUcvZIbrZ4w.png"
   },
   {
    "name": "VK_D",
@@ -540,7 +593,8 @@
    "id": "17OnO3oXHYPP4LH3wre4rbA6bmRLHCXB-",
    "kind": "step",
    "previewId": null,
-   "order": 53
+   "order": 53,
+   "previewAsset": "assets/models/previews/17OnO3oXHYPP4LH3wre4rbA6bmRLHCXB-.png"
   },
   {
    "name": "VK_K",
@@ -550,7 +604,8 @@
    "id": "1BxK6jmB36eKm5_-2aqtzGg8QFuwF1ow3",
    "kind": "step",
    "previewId": null,
-   "order": 54
+   "order": 54,
+   "previewAsset": "assets/models/previews/1BxK6jmB36eKm5_-2aqtzGg8QFuwF1ow3.png"
   },
   {
    "name": "VK_K",
@@ -560,7 +615,8 @@
    "id": "1Mfl4JLdtwLP9UTrDHj-bbtPTg_tkOgCd",
    "kind": "step",
    "previewId": null,
-   "order": 55
+   "order": 55,
+   "previewAsset": "assets/models/previews/1Mfl4JLdtwLP9UTrDHj-bbtPTg_tkOgCd.png"
   },
   {
    "name": "VVD_K",
@@ -570,7 +626,8 @@
    "id": "1xSeqilX-fegmOXDy3J1nTVz-Hjnr6POg",
    "kind": "step",
    "previewId": null,
-   "order": 56
+   "order": 56,
+   "previewAsset": "assets/models/previews/1xSeqilX-fegmOXDy3J1nTVz-Hjnr6POg.png"
   },
   {
    "name": "Y",
@@ -580,7 +637,8 @@
    "id": "1rr_qMsjeZr6dJELWzXOPzec41Tt8Oflt",
    "kind": "step",
    "previewId": null,
-   "order": 57
+   "order": 57,
+   "previewAsset": "assets/models/previews/1rr_qMsjeZr6dJELWzXOPzec41Tt8Oflt.png"
   },
   {
    "name": "Y",
@@ -590,7 +648,8 @@
    "id": "1SClXaNfs3oSu7EP-2AAlibMUOE-gS4KD",
    "kind": "step",
    "previewId": null,
-   "order": 58
+   "order": 58,
+   "previewAsset": "assets/models/previews/1SClXaNfs3oSu7EP-2AAlibMUOE-gS4KD.png"
   },
   {
    "name": "y",
@@ -600,7 +659,8 @@
    "id": "1UZOVa-f4TbmBEnSdhwwqBIelrARPFJmb",
    "kind": "step",
    "previewId": null,
-   "order": 59
+   "order": 59,
+   "previewAsset": "assets/models/previews/1UZOVa-f4TbmBEnSdhwwqBIelrARPFJmb.png"
   },
   {
    "name": "Y2",
@@ -610,7 +670,8 @@
    "id": "1fmrdAYQsYd9EcF9l9DuCMqqaIQMmf1K4",
    "kind": "step",
    "previewId": null,
-   "order": 60
+   "order": 60,
+   "previewAsset": "assets/models/previews/1fmrdAYQsYd9EcF9l9DuCMqqaIQMmf1K4.png"
   },
   {
    "name": "ZK 3D",
@@ -620,7 +681,8 @@
    "id": "1aWdjznimUDRion6Zxm73yakrJ_eDOApR",
    "kind": "step",
    "previewId": null,
-   "order": 61
+   "order": 61,
+   "previewAsset": "assets/models/previews/1aWdjznimUDRion6Zxm73yakrJ_eDOApR.png"
   },
   {
    "name": "ZK_3D",
@@ -630,7 +692,8 @@
    "id": "1zPCpNoGOaE-MFPYQ15hX0NBocqkDKFf7",
    "kind": "step",
    "previewId": null,
-   "order": 62
+   "order": 62,
+   "previewAsset": "assets/models/previews/1zPCpNoGOaE-MFPYQ15hX0NBocqkDKFf7.png"
   },
   {
    "name": "ZKA_3D",
@@ -640,7 +703,8 @@
    "id": "169IQQkb_i26wLLuv78tPtv75-3854qep",
    "kind": "step",
    "previewId": null,
-   "order": 63
+   "order": 63,
+   "previewAsset": "assets/models/previews/169IQQkb_i26wLLuv78tPtv75-3854qep.png"
   },
   {
    "name": "ZKL_3D",
@@ -650,7 +714,8 @@
    "id": "1ES4BZdBbejarWo3Wm49qN8iG-Hp_RaN-",
    "kind": "step",
    "previewId": null,
-   "order": 64
+   "order": 64,
+   "previewAsset": "assets/models/previews/1ES4BZdBbejarWo3Wm49qN8iG-Hp_RaN-.png"
   },
   {
    "name": "ZT4NZ1WKZ3L",
@@ -660,7 +725,8 @@
    "id": "1UU23_AETNp5gilSRBK3x_dqy1nXPY8xP",
    "kind": "step",
    "previewId": null,
-   "order": 65
+   "order": 65,
+   "previewAsset": "assets/models/previews/1UU23_AETNp5gilSRBK3x_dqy1nXPY8xP.png"
   },
   {
    "name": "ZT7NZ1WRZ3L_3D",
@@ -670,7 +736,8 @@
    "id": "1u2mNyZPvgY9WfYC93mil4bt5jsplcN31",
    "kind": "step",
    "previewId": null,
-   "order": 66
+   "order": 66,
+   "previewAsset": "assets/models/previews/1u2mNyZPvgY9WfYC93mil4bt5jsplcN31.png"
   },
   {
    "name": "Psh160",
@@ -680,7 +747,8 @@
    "id": "1JANLaVFdvwoyb20o76DUmeGZaFK-j4hi",
    "kind": "step",
    "previewId": null,
-   "order": 67
+   "order": 67,
+   "previewAsset": "assets/models/previews/1JANLaVFdvwoyb20o76DUmeGZaFK-j4hi.png"
   },
   {
    "name": "Sborka",
@@ -690,7 +758,8 @@
    "id": "1ToChLvndHqx5yZ6Xfy2Biy41z1x87oM-",
    "kind": "step",
    "previewId": null,
-   "order": 68
+   "order": 68,
+   "previewAsset": "assets/models/previews/1ToChLvndHqx5yZ6Xfy2Biy41z1x87oM-.png"
   },
   {
    "name": "Sborka",
@@ -700,7 +769,8 @@
    "id": "1qC-3R2CDYAA1OzicdCKxaSpAAbmfivMz",
    "kind": "step",
    "previewId": null,
-   "order": 69
+   "order": 69,
+   "previewAsset": "assets/models/previews/1qC-3R2CDYAA1OzicdCKxaSpAAbmfivMz.png"
   },
   {
    "name": "Sh 160mm 2",
@@ -710,7 +780,8 @@
    "id": "1sqVuxl2x-wGKdixQwOlsJbuQ2EaznNwH",
    "kind": "step",
    "previewId": null,
-   "order": 70
+   "order": 70,
+   "previewAsset": "assets/models/previews/1sqVuxl2x-wGKdixQwOlsJbuQ2EaznNwH.png"
   },
   {
    "name": "Sh 160mm 3",
@@ -720,7 +791,8 @@
    "id": "1RiU4vPhCyg0cf5m5p6AiBUK_0iArvGAw",
    "kind": "step",
    "previewId": null,
-   "order": 71
+   "order": 71,
+   "previewAsset": "assets/models/previews/1RiU4vPhCyg0cf5m5p6AiBUK_0iArvGAw.png"
   },
   {
    "name": "g1",
@@ -730,7 +802,8 @@
    "id": "1J2YriHdlmK4E4meVOsQgGROjudZ5WzNW",
    "kind": "step",
    "previewId": null,
-   "order": 72
+   "order": 72,
+   "previewAsset": "assets/models/previews/1J2YriHdlmK4E4meVOsQgGROjudZ5WzNW.png"
   },
   {
    "name": "NZ001Y_3D",
@@ -740,7 +813,8 @@
    "id": "1G0utZUhq5PGF3HBoPtHWL1TtVVVDbbHY",
    "kind": "step",
    "previewId": null,
-   "order": 73
+   "order": 73,
+   "previewAsset": "assets/models/previews/1G0utZUhq5PGF3HBoPtHWL1TtVVVDbbHY.png"
   },
   {
    "name": "NZ001Y_3D_2",
@@ -750,7 +824,8 @@
    "id": "1b9cz7vD8Tyb0Ab4wWBZwM5xdDn5YFP78",
    "kind": "step",
    "previewId": null,
-   "order": 74
+   "order": 74,
+   "previewAsset": "assets/models/previews/1b9cz7vD8Tyb0Ab4wWBZwM5xdDn5YFP78.png"
   },
   {
    "name": "PL1",
@@ -760,7 +835,8 @@
    "id": "1N3jwdKWQLBd8u2KO6STgE03v-qHVWKfZ",
    "kind": "step",
    "previewId": null,
-   "order": 75
+   "order": 75,
+   "previewAsset": "assets/models/previews/1N3jwdKWQLBd8u2KO6STgE03v-qHVWKfZ.png"
   },
   {
    "name": "Plank3D",
@@ -770,7 +846,8 @@
    "id": "1TtjOVLScw1FAnjPYGtndbDYfeDexxWgx",
    "kind": "step",
    "previewId": null,
-   "order": 76
+   "order": 76,
+   "previewAsset": "assets/models/previews/1TtjOVLScw1FAnjPYGtndbDYfeDexxWgx.png"
   },
   {
    "name": "Plank3D_2",
@@ -780,7 +857,8 @@
    "id": "1gLQ2WLUQf-_XfuSqqM6K4nX-JIr-gnlM",
    "kind": "step",
    "previewId": null,
-   "order": 77
+   "order": 77,
+   "previewAsset": "assets/models/previews/1gLQ2WLUQf-_XfuSqqM6K4nX-JIr-gnlM.png"
   },
   {
    "name": "Val10x110",
@@ -790,7 +868,8 @@
    "id": "1Ahg-1qQGkqnakSTxzkbUzyfau-BrlQGB",
    "kind": "step",
    "previewId": null,
-   "order": 78
+   "order": 78,
+   "previewAsset": "assets/models/previews/1Ahg-1qQGkqnakSTxzkbUzyfau-BrlQGB.png"
   },
   {
    "name": "1",
@@ -800,7 +879,8 @@
    "id": "1g5mNiZuHxQLWZK7agXKzDo8bXqSUYjdj",
    "kind": "step",
    "previewId": null,
-   "order": 79
+   "order": 79,
+   "previewAsset": "assets/models/previews/1g5mNiZuHxQLWZK7agXKzDo8bXqSUYjdj.png"
   },
   {
    "name": "1",
@@ -810,7 +890,8 @@
    "id": "1hQJgcWwx98XXkuZKbB-QpePXiM6Ylfe6",
    "kind": "step",
    "previewId": null,
-   "order": 80
+   "order": 80,
+   "previewAsset": "assets/models/previews/1hQJgcWwx98XXkuZKbB-QpePXiM6Ylfe6.png"
   },
   {
    "name": "2",
@@ -820,7 +901,8 @@
    "id": "1TBpaw_XhcBabP8LQfR-gr_h2fJUpKj2s",
    "kind": "step",
    "previewId": null,
-   "order": 81
+   "order": 81,
+   "previewAsset": "assets/models/previews/1TBpaw_XhcBabP8LQfR-gr_h2fJUpKj2s.png"
   },
   {
    "name": "Al",
@@ -830,7 +912,8 @@
    "id": "1dGXUjjDLhpIPObSqA2ag6sfkR2BXNQfG",
    "kind": "step",
    "previewId": null,
-   "order": 82
+   "order": 82,
+   "previewAsset": "assets/models/previews/1dGXUjjDLhpIPObSqA2ag6sfkR2BXNQfG.png"
   },
   {
    "name": "G",
@@ -840,7 +923,8 @@
    "id": "1F6FdsmdsNZhcxKr2pGdy8Xj2H1bYI2li",
    "kind": "step",
    "previewId": null,
-   "order": 83
+   "order": 83,
+   "previewAsset": "assets/models/previews/1F6FdsmdsNZhcxKr2pGdy8Xj2H1bYI2li.png"
   },
   {
    "name": "KR2",
@@ -850,7 +934,8 @@
    "id": "1SghNhJkEzRck5rZPCqASMXF87BNgsvPF",
    "kind": "step",
    "previewId": null,
-   "order": 84
+   "order": 84,
+   "previewAsset": "assets/models/previews/1SghNhJkEzRck5rZPCqASMXF87BNgsvPF.png"
   },
   {
    "name": "Kreplenie",
@@ -860,7 +945,8 @@
    "id": "1LWjbtvkerE0J9KBXHEk57ZOvdi4gQckX",
    "kind": "step",
    "previewId": null,
-   "order": 85
+   "order": 85,
+   "previewAsset": "assets/models/previews/1LWjbtvkerE0J9KBXHEk57ZOvdi4gQckX.png"
   },
   {
    "name": "KY",
@@ -870,7 +956,8 @@
    "id": "1n4b15TJIxnsc_7oouwIKnO_ADdLNExM7",
    "kind": "step",
    "previewId": null,
-   "order": 86
+   "order": 86,
+   "previewAsset": "assets/models/previews/1n4b15TJIxnsc_7oouwIKnO_ADdLNExM7.png"
   },
   {
    "name": "KY2",
@@ -880,7 +967,8 @@
    "id": "1nq3Z-kyPgslHrqoej0xm4p-Xnbf9C7p5",
    "kind": "step",
    "previewId": null,
-   "order": 87
+   "order": 87,
+   "previewAsset": "assets/models/previews/1nq3Z-kyPgslHrqoej0xm4p-Xnbf9C7p5.png"
   },
   {
    "name": "N_H",
@@ -890,7 +978,8 @@
    "id": "1NXwTVpxENFELi6jfuUmjJCAnIK87dmL7",
    "kind": "step",
    "previewId": null,
-   "order": 88
+   "order": 88,
+   "previewAsset": "assets/models/previews/1NXwTVpxENFELi6jfuUmjJCAnIK87dmL7.png"
   },
   {
    "name": "N_L",
@@ -900,7 +989,8 @@
    "id": "18rSCTJntpw9uZywfTMGNNpGJHCD0ahwT",
    "kind": "step",
    "previewId": null,
-   "order": 89
+   "order": 89,
+   "previewAsset": "assets/models/previews/18rSCTJntpw9uZywfTMGNNpGJHCD0ahwT.png"
   },
   {
    "name": "Nap",
@@ -910,7 +1000,8 @@
    "id": "1w5lcQi9Mggjrodhi8NdGqBe53FRJm6Pz",
    "kind": "step",
    "previewId": null,
-   "order": 90
+   "order": 90,
+   "previewAsset": "assets/models/previews/1w5lcQi9Mggjrodhi8NdGqBe53FRJm6Pz.png"
   },
   {
    "name": "Nap1",
@@ -920,7 +1011,8 @@
    "id": "1nnCa95wu_kISSvp2RsA_VBXxGfnzX_F-",
    "kind": "step",
    "previewId": null,
-   "order": 91
+   "order": 91,
+   "previewAsset": "assets/models/previews/1nnCa95wu_kISSvp2RsA_VBXxGfnzX_F-.png"
   },
   {
    "name": "Napr",
@@ -930,7 +1022,8 @@
    "id": "1M4sTri77l9reFZJQE6VF5NKYcIHKlEET",
    "kind": "step",
    "previewId": null,
-   "order": 92
+   "order": 92,
+   "previewAsset": "assets/models/previews/1M4sTri77l9reFZJQE6VF5NKYcIHKlEET.png"
   },
   {
    "name": "Np_3D",
@@ -940,7 +1033,8 @@
    "id": "14LS_Ash6r4owPecjpPlTrVduHeBk0Os6",
    "kind": "step",
    "previewId": null,
-   "order": 93
+   "order": 93,
+   "previewAsset": "assets/models/previews/14LS_Ash6r4owPecjpPlTrVduHeBk0Os6.png"
   },
   {
    "name": "Os_3D",
@@ -950,7 +1044,8 @@
    "id": "1HxWOpuLhgMxf2LCSLt2qkLUGqqNn9wPO",
    "kind": "step",
    "previewId": null,
-   "order": 94
+   "order": 94,
+   "previewAsset": "assets/models/previews/1HxWOpuLhgMxf2LCSLt2qkLUGqqNn9wPO.png"
   },
   {
    "name": "Osn",
@@ -960,7 +1055,8 @@
    "id": "1BBFbD4bdMsWOFQpV3ZiMTP8_cMMX50qZ",
    "kind": "step",
    "previewId": null,
-   "order": 95
+   "order": 95,
+   "previewAsset": "assets/models/previews/1BBFbD4bdMsWOFQpV3ZiMTP8_cMMX50qZ.png"
   },
   {
    "name": "Planka",
@@ -970,7 +1066,8 @@
    "id": "1G-T9XQo8K_xPSCClrRiScg0yUEDgJPur",
    "kind": "step",
    "previewId": null,
-   "order": 96
+   "order": 96,
+   "previewAsset": "assets/models/previews/1G-T9XQo8K_xPSCClrRiScg0yUEDgJPur.png"
   },
   {
    "name": "Plastic",
@@ -980,7 +1077,8 @@
    "id": "1wxWFGal-LKMmXSqCoPekZ5NEpa2Ztrsq",
    "kind": "step",
    "previewId": null,
-   "order": 97
+   "order": 97,
+   "previewAsset": "assets/models/previews/1wxWFGal-LKMmXSqCoPekZ5NEpa2Ztrsq.png"
   },
   {
    "name": "PlaV6.3.1",
@@ -990,7 +1088,8 @@
    "id": "1qB77vqIyzbGDsleo_xrjzH6WVczdwODP",
    "kind": "step",
    "previewId": null,
-   "order": 98
+   "order": 98,
+   "previewAsset": "assets/models/previews/1qB77vqIyzbGDsleo_xrjzH6WVczdwODP.png"
   },
   {
    "name": "ploshadkaV6.4L",
@@ -1000,7 +1099,8 @@
    "id": "1Y0UjpmpuPGuU7E70oMFZVKQFdjj2k5fT",
    "kind": "step",
    "previewId": null,
-   "order": 99
+   "order": 99,
+   "previewAsset": "assets/models/previews/1Y0UjpmpuPGuU7E70oMFZVKQFdjj2k5fT.png"
   },
   {
    "name": "PLV6.6L 3d",
@@ -1010,7 +1110,8 @@
    "id": "12ddRneNaMD6EGmsnjZjEGO5SKZUM4Fvy",
    "kind": "step",
    "previewId": null,
-   "order": 100
+   "order": 100,
+   "previewAsset": "assets/models/previews/12ddRneNaMD6EGmsnjZjEGO5SKZUM4Fvy.png"
   },
   {
    "name": "PLV6.6L Carbon3d",
@@ -1020,7 +1121,8 @@
    "id": "1LvuzDqQ7qRv8B-PAFiSK6X7eP6ZNjrhy",
    "kind": "step",
    "previewId": null,
-   "order": 101
+   "order": 101,
+   "previewAsset": "assets/models/previews/1LvuzDqQ7qRv8B-PAFiSK6X7eP6ZNjrhy.png"
   },
   {
    "name": "PLV6.6L Steel3d2",
@@ -1030,7 +1132,8 @@
    "id": "1zj-viRl0reDkjqaIlUFLH4khGG8C7745",
    "kind": "step",
    "previewId": null,
-   "order": 102
+   "order": 102,
+   "previewAsset": "assets/models/previews/1zj-viRl0reDkjqaIlUFLH4khGG8C7745.png"
   },
   {
    "name": "PP",
@@ -1040,7 +1143,8 @@
    "id": "1uYnLkgUIDJO0bgofKgWYFQcAh-zNRqLH",
    "kind": "step",
    "previewId": null,
-   "order": 103
+   "order": 103,
+   "previewAsset": "assets/models/previews/1uYnLkgUIDJO0bgofKgWYFQcAh-zNRqLH.png"
   },
   {
    "name": "PR",
@@ -1050,7 +1154,8 @@
    "id": "1VzwODlxpopJII_EEIZlIilYkslvm0Fqg",
    "kind": "step",
    "previewId": null,
-   "order": 104
+   "order": 104,
+   "previewAsset": "assets/models/previews/1VzwODlxpopJII_EEIZlIilYkslvm0Fqg.png"
   },
   {
    "name": "PR5",
@@ -1060,7 +1165,8 @@
    "id": "1TkGF1Sptw9eMJb4EVWXyIlT9p-O7ymp7",
    "kind": "step",
    "previewId": null,
-   "order": 105
+   "order": 105,
+   "previewAsset": "assets/models/previews/1TkGF1Sptw9eMJb4EVWXyIlT9p-O7ymp7.png"
   },
   {
    "name": "Sborka",
@@ -1070,7 +1176,8 @@
    "id": "1Q4Y6jW6tJHMJ_BLqOFmYT8J09F3sJgG9",
    "kind": "step",
    "previewId": null,
-   "order": 106
+   "order": 106,
+   "previewAsset": "assets/models/previews/1Q4Y6jW6tJHMJ_BLqOFmYT8J09F3sJgG9.png"
   },
   {
    "name": "Sborka",
@@ -1080,7 +1187,8 @@
    "id": "130rlR7boqdp4zXgCJKMYWk6PqzYI7Rrk",
    "kind": "step",
    "previewId": null,
-   "order": 107
+   "order": 107,
+   "previewAsset": "assets/models/previews/130rlR7boqdp4zXgCJKMYWk6PqzYI7Rrk.png"
   },
   {
    "name": "Sborka",
@@ -1090,7 +1198,8 @@
    "id": "1hfUBDUy-wzjgMFctsmfJ1rpzXBxtC5lo",
    "kind": "step",
    "previewId": null,
-   "order": 108
+   "order": 108,
+   "previewAsset": "assets/models/previews/1hfUBDUy-wzjgMFctsmfJ1rpzXBxtC5lo.png"
   },
   {
    "name": "Sborka",
@@ -1100,7 +1209,8 @@
    "id": "1KLOeHFADhazETJaOEpTfI3YCKMMB_J4X",
    "kind": "step",
    "previewId": null,
-   "order": 109
+   "order": 109,
+   "previewAsset": "assets/models/previews/1KLOeHFADhazETJaOEpTfI3YCKMMB_J4X.png"
   },
   {
    "name": "Sborka",
@@ -1110,7 +1220,8 @@
    "id": "1pK57an5ACTCdC-h2JPigH2fMYb0fG629",
    "kind": "step",
    "previewId": null,
-   "order": 110
+   "order": 110,
+   "previewAsset": "assets/models/previews/1pK57an5ACTCdC-h2JPigH2fMYb0fG629.png"
   },
   {
    "name": "Sborka",
@@ -1120,7 +1231,8 @@
    "id": "1d7hz6vJwXv6weXTZWKohqUMrgP0ZKdJa",
    "kind": "step",
    "previewId": null,
-   "order": 111
+   "order": 111,
+   "previewAsset": "assets/models/previews/1d7hz6vJwXv6weXTZWKohqUMrgP0ZKdJa.png"
   },
   {
    "name": "Sborka",
@@ -1130,7 +1242,8 @@
    "id": "12U-llCu9VE2YiJNwHEtaEs0TGecysU0v",
    "kind": "step",
    "previewId": null,
-   "order": 112
+   "order": 112,
+   "previewAsset": "assets/models/previews/12U-llCu9VE2YiJNwHEtaEs0TGecysU0v.png"
   },
   {
    "name": "Sborka PR005",
@@ -1140,7 +1253,8 @@
    "id": "1rsThaoqWVZhhIYlelSG6BIKKIy_HNaYc",
    "kind": "step",
    "previewId": null,
-   "order": 113
+   "order": 113,
+   "previewAsset": "assets/models/previews/1rsThaoqWVZhhIYlelSG6BIKKIy_HNaYc.png"
   },
   {
    "name": "Sborka V5",
@@ -1150,7 +1264,8 @@
    "id": "1LcgnQKr9eZskCaw-P-BtuiOGNQt_gGAE",
    "kind": "step",
    "previewId": null,
-   "order": 114
+   "order": 114,
+   "previewAsset": "assets/models/previews/1LcgnQKr9eZskCaw-P-BtuiOGNQt_gGAE.png"
   },
   {
    "name": "t1y",
@@ -1160,7 +1275,8 @@
    "id": "1CNrpSJhp2gxFsHCvpTBf7NUucqhe_AzA",
    "kind": "step",
    "previewId": null,
-   "order": 115
+   "order": 115,
+   "previewAsset": "assets/models/previews/1CNrpSJhp2gxFsHCvpTBf7NUucqhe_AzA.png"
   },
   {
    "name": "t2y",
@@ -1170,7 +1286,8 @@
    "id": "1Y-MugfcMQHEShxE7pDNqH2XcHGKwXGtL",
    "kind": "step",
    "previewId": null,
-   "order": 116
+   "order": 116,
+   "previewAsset": "assets/models/previews/1Y-MugfcMQHEShxE7pDNqH2XcHGKwXGtL.png"
   },
   {
    "name": "Val_H",
@@ -1180,7 +1297,8 @@
    "id": "1SFze_loHl9m7xv10pSz2Am5lRdQUDBnq",
    "kind": "step",
    "previewId": null,
-   "order": 117
+   "order": 117,
+   "previewAsset": "assets/models/previews/1SFze_loHl9m7xv10pSz2Am5lRdQUDBnq.png"
   },
   {
    "name": "Val_L",
@@ -1190,7 +1308,8 @@
    "id": "1G-qsAA3j66bZ5G1Avy0HPcbzJIXvvkS-",
    "kind": "step",
    "previewId": null,
-   "order": 118
+   "order": 118,
+   "previewAsset": "assets/models/previews/1G-qsAA3j66bZ5G1Avy0HPcbzJIXvvkS-.png"
   },
   {
    "name": "Y 3D",
@@ -1200,7 +1319,8 @@
    "id": "1XK1xb6VI7cTUbW-R8CK44Gl1NKCtQyca",
    "kind": "step",
    "previewId": null,
-   "order": 119
+   "order": 119,
+   "previewAsset": "assets/models/previews/1XK1xb6VI7cTUbW-R8CK44Gl1NKCtQyca.png"
   },
   {
    "name": "yhCarbon",
@@ -1210,7 +1330,8 @@
    "id": "1K120wgR6Qz7WZz07wVuRcRPiInwfZ_aX",
    "kind": "step",
    "previewId": null,
-   "order": 120
+   "order": 120,
+   "previewAsset": "assets/models/previews/1K120wgR6Qz7WZz07wVuRcRPiInwfZ_aX.png"
   },
   {
    "name": "yhCarbon2",
@@ -1220,7 +1341,8 @@
    "id": "1p0UIqoV1sUPSJMNpnXD7yQOI_GK7A5mr",
    "kind": "step",
    "previewId": null,
-   "order": 121
+   "order": 121,
+   "previewAsset": "assets/models/previews/1p0UIqoV1sUPSJMNpnXD7yQOI_GK7A5mr.png"
   },
   {
    "name": "Yhys",
@@ -1230,7 +1352,8 @@
    "id": "1d9gRyD-q6_J5GH43D-GziKKn5bVM5XR3",
    "kind": "step",
    "previewId": null,
-   "order": 122
+   "order": 122,
+   "previewAsset": "assets/models/previews/1d9gRyD-q6_J5GH43D-GziKKn5bVM5XR3.png"
   },
   {
    "name": "Ymini",
@@ -1240,7 +1363,8 @@
    "id": "1k4-P6qf2ohD_JlhUL6_1Fep5FVA0uo16",
    "kind": "step",
    "previewId": null,
-   "order": 123
+   "order": 123,
+   "previewAsset": "assets/models/previews/1k4-P6qf2ohD_JlhUL6_1Fep5FVA0uo16.png"
   },
   {
    "name": "ZY",
@@ -1250,7 +1374,8 @@
    "id": "1W-di7mc_MsZdJbpi6T4o9O0lZHCZ2JXF",
    "kind": "step",
    "previewId": null,
-   "order": 124
+   "order": 124,
+   "previewAsset": "assets/models/previews/1W-di7mc_MsZdJbpi6T4o9O0lZHCZ2JXF.png"
   },
   {
    "name": "11",
@@ -1260,7 +1385,8 @@
    "id": "1Yf-cXJQZz8HPgGJLSUQfMmERQoGq9vgb",
    "kind": "step",
    "previewId": null,
-   "order": 125
+   "order": 125,
+   "previewAsset": "assets/models/previews/1Yf-cXJQZz8HPgGJLSUQfMmERQoGq9vgb.png"
   },
   {
    "name": "PPS",
@@ -1270,7 +1396,8 @@
    "id": "1pB1mqgxmNt4rlu7lM5y6kMNBCqBcdcX2",
    "kind": "step",
    "previewId": null,
-   "order": 126
+   "order": 126,
+   "previewAsset": "assets/models/previews/1pB1mqgxmNt4rlu7lM5y6kMNBCqBcdcX2.png"
   },
   {
    "name": "PPZ",
@@ -1280,7 +1407,8 @@
    "id": "1bBMCgbV4R2zQRxG08lmzF4xHwRjg--hw",
    "kind": "step",
    "previewId": null,
-   "order": 127
+   "order": 127,
+   "previewAsset": "assets/models/previews/1bBMCgbV4R2zQRxG08lmzF4xHwRjg--hw.png"
   },
   {
    "name": "PZ",
@@ -1290,7 +1418,8 @@
    "id": "1PC6jjZ9469T3VBcH-t6DCCJtMBoL6ip4",
    "kind": "step",
    "previewId": null,
-   "order": 128
+   "order": 128,
+   "previewAsset": "assets/models/previews/1PC6jjZ9469T3VBcH-t6DCCJtMBoL6ip4.png"
   },
   {
    "name": "Sborka",
@@ -1300,7 +1429,8 @@
    "id": "18kkz10cVCYNNbCvZKVUHi170CbAWLqrw",
    "kind": "step",
    "previewId": null,
-   "order": 129
+   "order": 129,
+   "previewAsset": "assets/models/previews/18kkz10cVCYNNbCvZKVUHi170CbAWLqrw.png"
   },
   {
    "name": "SborkaS",
@@ -1310,7 +1440,8 @@
    "id": "1AFJYL7oShErqnmhqAf3aZkW63bcMGxK1",
    "kind": "step",
    "previewId": null,
-   "order": 130
+   "order": 130,
+   "previewAsset": "assets/models/previews/1AFJYL7oShErqnmhqAf3aZkW63bcMGxK1.png"
   },
   {
    "name": "ZPPS",
@@ -1320,7 +1451,8 @@
    "id": "1aein2xyuxrtKwZEaLVjoDta96cIy4mtz",
    "kind": "step",
    "previewId": null,
-   "order": 131
+   "order": 131,
+   "previewAsset": "assets/models/previews/1aein2xyuxrtKwZEaLVjoDta96cIy4mtz.png"
   },
   {
    "name": "Gt",
@@ -1330,7 +1462,8 @@
    "id": "1dXZk28RC1SAfwbh_K9a1ixJ1IIAg7_Gj",
    "kind": "step",
    "previewId": null,
-   "order": 132
+   "order": 132,
+   "previewAsset": "assets/models/previews/1dXZk28RC1SAfwbh_K9a1ixJ1IIAg7_Gj.png"
   },
   {
    "name": "NagBS",
@@ -1340,7 +1473,8 @@
    "id": "1YgX_KyjAQrzpcQy1vfL-3Oh5M2diDGuH",
    "kind": "step",
    "previewId": null,
-   "order": 133
+   "order": 133,
+   "previewAsset": "assets/models/previews/1YgX_KyjAQrzpcQy1vfL-3Oh5M2diDGuH.png"
   },
   {
    "name": "NCarbon",
@@ -1350,7 +1484,8 @@
    "id": "151y8xniwUOLbYayaRHuBytE2_IJ5_T88",
    "kind": "step",
    "previewId": null,
-   "order": 134
+   "order": 134,
+   "previewAsset": "assets/models/previews/151y8xniwUOLbYayaRHuBytE2_IJ5_T88.png"
   },
   {
    "name": "NG",
@@ -1360,7 +1495,8 @@
    "id": "1blnjMQIZQVRg9l3TjyvwkRJMkyFbXNqD",
    "kind": "step",
    "previewId": null,
-   "order": 135
+   "order": 135,
+   "previewAsset": "assets/models/previews/1blnjMQIZQVRg9l3TjyvwkRJMkyFbXNqD.png"
   },
   {
    "name": "NG2",
@@ -1370,7 +1506,8 @@
    "id": "1-jSWHL07104kbuCUldYTa6yX1aVDcXkW",
    "kind": "step",
    "previewId": null,
-   "order": 136
+   "order": 136,
+   "previewAsset": "assets/models/previews/1-jSWHL07104kbuCUldYTa6yX1aVDcXkW.png"
   },
   {
    "name": "NG3",
@@ -1380,7 +1517,8 @@
    "id": "1lgr2ZG-lXk3WuRyTK7nCP7TAlU1k6hfB",
    "kind": "step",
    "previewId": null,
-   "order": 137
+   "order": 137,
+   "previewAsset": "assets/models/previews/1lgr2ZG-lXk3WuRyTK7nCP7TAlU1k6hfB.png"
   },
   {
    "name": "Sborka",
@@ -1390,7 +1528,8 @@
    "id": "1_1PUtWm5mF4fwDwkBXiFwZ1CGBw5kQNA",
    "kind": "step",
    "previewId": null,
-   "order": 138
+   "order": 138,
+   "previewAsset": "assets/models/previews/1_1PUtWm5mF4fwDwkBXiFwZ1CGBw5kQNA.png"
   },
   {
    "name": "2",
@@ -1400,7 +1539,8 @@
    "id": "14buyLYeGl0WZ70oAHeNeHk76j1itC7ER",
    "kind": "step",
    "previewId": null,
-   "order": 139
+   "order": 139,
+   "previewAsset": "assets/models/previews/14buyLYeGl0WZ70oAHeNeHk76j1itC7ER.png"
   },
   {
    "name": "Falsh",
@@ -1410,7 +1550,8 @@
    "id": "1h4zaasW-W6_i13wDk_v91dlhM_rUYWjY",
    "kind": "step",
    "previewId": null,
-   "order": 140
+   "order": 140,
+   "previewAsset": "assets/models/previews/1h4zaasW-W6_i13wDk_v91dlhM_rUYWjY.png"
   },
   {
    "name": "Falsh2",
@@ -1420,7 +1561,8 @@
    "id": "13pa2ZSgyBpGUPgD0jGi51ipzL1pV7smV",
    "kind": "step",
    "previewId": null,
-   "order": 141
+   "order": 141,
+   "previewAsset": "assets/models/previews/13pa2ZSgyBpGUPgD0jGi51ipzL1pV7smV.png"
   },
   {
    "name": "FM001Y",
@@ -1430,7 +1572,8 @@
    "id": "18pyWWeEnSoO0y__KIp8WRvy5EFxycF_y",
    "kind": "step",
    "previewId": null,
-   "order": 142
+   "order": 142,
+   "previewAsset": "assets/models/previews/18pyWWeEnSoO0y__KIp8WRvy5EFxycF_y.png"
   },
   {
    "name": "FM002Y",
@@ -1440,7 +1583,8 @@
    "id": "1XGlihFWR2Qlb0rB3LVB32KAZ3j7dVrlm",
    "kind": "step",
    "previewId": null,
-   "order": 143
+   "order": 143,
+   "previewAsset": "assets/models/previews/1XGlihFWR2Qlb0rB3LVB32KAZ3j7dVrlm.png"
   },
   {
    "name": "FM2",
@@ -1450,7 +1594,8 @@
    "id": "1A95Cb5qttYWRLjV3-boTKdzcX8nX1-FB",
    "kind": "step",
    "previewId": null,
-   "order": 144
+   "order": 144,
+   "previewAsset": "assets/models/previews/1A95Cb5qttYWRLjV3-boTKdzcX8nX1-FB.png"
   },
   {
    "name": "FP001",
@@ -1460,7 +1605,8 @@
    "id": "1lxW3VWERLu5DfWb2zZ5Jp5yx-86ZXiAM",
    "kind": "step",
    "previewId": null,
-   "order": 145
+   "order": 145,
+   "previewAsset": "assets/models/previews/1lxW3VWERLu5DfWb2zZ5Jp5yx-86ZXiAM.png"
   },
   {
    "name": "FP001 steel 28",
@@ -1470,7 +1616,8 @@
    "id": "1WahEQYFzifg3UopIDFFLSGOH_iUqxKDR",
    "kind": "step",
    "previewId": null,
-   "order": 146
+   "order": 146,
+   "previewAsset": "assets/models/previews/1WahEQYFzifg3UopIDFFLSGOH_iUqxKDR.png"
   },
   {
    "name": "FP002",
@@ -1480,7 +1627,8 @@
    "id": "1PQKHzzSPnd_cZZJPiE7X1JZALINT6JSS",
    "kind": "step",
    "previewId": null,
-   "order": 147
+   "order": 147,
+   "previewAsset": "assets/models/previews/1PQKHzzSPnd_cZZJPiE7X1JZALINT6JSS.png"
   },
   {
    "name": "FP003",
@@ -1490,7 +1638,8 @@
    "id": "12-bfPc_7NfHva0TZb0zW-DmwO8WW9QPL",
    "kind": "step",
    "previewId": null,
-   "order": 148
+   "order": 148,
+   "previewAsset": "assets/models/previews/12-bfPc_7NfHva0TZb0zW-DmwO8WW9QPL.png"
   },
   {
    "name": "FS003Y",
@@ -1500,7 +1649,8 @@
    "id": "19IVGKAmI9qrxhuCKViebJ02UWBsIyXhD",
    "kind": "step",
    "previewId": null,
-   "order": 149
+   "order": 149,
+   "previewAsset": "assets/models/previews/19IVGKAmI9qrxhuCKViebJ02UWBsIyXhD.png"
   },
   {
    "name": "FS004Y",
@@ -1510,7 +1660,8 @@
    "id": "1OfN2wizV5eSZXj26xxog5t4tSCxtlrDo",
    "kind": "step",
    "previewId": null,
-   "order": 150
+   "order": 150,
+   "previewAsset": "assets/models/previews/1OfN2wizV5eSZXj26xxog5t4tSCxtlrDo.png"
   },
   {
    "name": "MFM",
@@ -1520,7 +1671,8 @@
    "id": "1-n9gp97Mlu0NCSB3gyN6Bs9C4cE1fagj",
    "kind": "step",
    "previewId": null,
-   "order": 151
+   "order": 151,
+   "previewAsset": "assets/models/previews/1-n9gp97Mlu0NCSB3gyN6Bs9C4cE1fagj.png"
   },
   {
    "name": "ZF001",
@@ -1530,7 +1682,8 @@
    "id": "1U0voFDQALEltQ9L3pwp55g8whUc0UQES",
    "kind": "step",
    "previewId": null,
-   "order": 152
+   "order": 152,
+   "previewAsset": "assets/models/previews/1U0voFDQALEltQ9L3pwp55g8whUc0UQES.png"
   },
   {
    "name": "G",
@@ -1540,7 +1693,8 @@
    "id": "1ztcmJtyUi79EVE8Q-ErZnuySS0KAmG80",
    "kind": "step",
    "previewId": null,
-   "order": 153
+   "order": 153,
+   "previewAsset": "assets/models/previews/1ztcmJtyUi79EVE8Q-ErZnuySS0KAmG80.png"
   },
   {
    "name": "Ke",
@@ -1550,7 +1704,8 @@
    "id": "1mHvGwGcF7-ok92EFcyySJnWW0QOeF_T9",
    "kind": "step",
    "previewId": null,
-   "order": 154
+   "order": 154,
+   "previewAsset": "assets/models/previews/1mHvGwGcF7-ok92EFcyySJnWW0QOeF_T9.png"
   },
   {
    "name": "Napr_H",
@@ -1560,7 +1715,8 @@
    "id": "1MfHChyg23GLN-vqyO4IDe_f4rRUttiwy",
    "kind": "step",
    "previewId": null,
-   "order": 155
+   "order": 155,
+   "previewAsset": "assets/models/previews/1MfHChyg23GLN-vqyO4IDe_f4rRUttiwy.png"
   },
   {
    "name": "Napr_L",
@@ -1570,7 +1726,8 @@
    "id": "154XdTdRp3asWSC0zsIIXrt0C8TvYKPrY",
    "kind": "step",
    "previewId": null,
-   "order": 156
+   "order": 156,
+   "previewAsset": "assets/models/previews/154XdTdRp3asWSC0zsIIXrt0C8TvYKPrY.png"
   },
   {
    "name": "NP1",
@@ -1580,7 +1737,8 @@
    "id": "1y2t2m9RBqWfIQgwxO-9Nn72pS9z_I242",
    "kind": "step",
    "previewId": null,
-   "order": 157
+   "order": 157,
+   "previewAsset": "assets/models/previews/1y2t2m9RBqWfIQgwxO-9Nn72pS9z_I242.png"
   },
   {
    "name": "NP1L",
@@ -1590,7 +1748,8 @@
    "id": "1AXHcAjoLt686IlH2qTavsY5e7frSyKg6",
    "kind": "step",
    "previewId": null,
-   "order": 158
+   "order": 158,
+   "previewAsset": "assets/models/previews/1AXHcAjoLt686IlH2qTavsY5e7frSyKg6.png"
   },
   {
    "name": "PL-H",
@@ -1600,7 +1759,8 @@
    "id": "1G0ZqyHrV6pDw4LTn9mCr5icSwXbPaqVd",
    "kind": "step",
    "previewId": null,
-   "order": 159
+   "order": 159,
+   "previewAsset": "assets/models/previews/1G0ZqyHrV6pDw4LTn9mCr5icSwXbPaqVd.png"
   },
   {
    "name": "PL-L",
@@ -1610,7 +1770,8 @@
    "id": "1g7ljOwN8VQSUbyHO-z6V7Wdj4zXNf_g6",
    "kind": "step",
    "previewId": null,
-   "order": 160
+   "order": 160,
+   "previewAsset": "assets/models/previews/1g7ljOwN8VQSUbyHO-z6V7Wdj4zXNf_g6.png"
   },
   {
    "name": "PN1",
@@ -1620,7 +1781,8 @@
    "id": "1TEcTqEVblMXI9a8D2pYmL0suDDjEqgI_",
    "kind": "step",
    "previewId": null,
-   "order": 161
+   "order": 161,
+   "previewAsset": "assets/models/previews/1TEcTqEVblMXI9a8D2pYmL0suDDjEqgI_.png"
   },
   {
    "name": "PP",
@@ -1630,7 +1792,8 @@
    "id": "12eFOYo1nfI4k73fq1Ic-f8bnhVDlDzde",
    "kind": "step",
    "previewId": null,
-   "order": 162
+   "order": 162,
+   "previewAsset": "assets/models/previews/12eFOYo1nfI4k73fq1Ic-f8bnhVDlDzde.png"
   },
   {
    "name": "PP1",
@@ -1640,7 +1803,8 @@
    "id": "1uP0qcmSE9H5TJwuE9ArKY3xfmNfu8Roh",
    "kind": "step",
    "previewId": null,
-   "order": 163
+   "order": 163,
+   "previewAsset": "assets/models/previews/1uP0qcmSE9H5TJwuE9ArKY3xfmNfu8Roh.png"
   },
   {
    "name": "PP1",
@@ -1650,7 +1814,8 @@
    "id": "1dLRXOCvBMBM5WvYOhRL26SUcQEAjSVGV",
    "kind": "step",
    "previewId": null,
-   "order": 164
+   "order": 164,
+   "previewAsset": "assets/models/previews/1dLRXOCvBMBM5WvYOhRL26SUcQEAjSVGV.png"
   },
   {
    "name": "PP1L",
@@ -1660,7 +1825,8 @@
    "id": "1ndzi0XzxrNUPjOdLGm0yJyWGgxf9VbGl",
    "kind": "step",
    "previewId": null,
-   "order": 165
+   "order": 165,
+   "previewAsset": "assets/models/previews/1ndzi0XzxrNUPjOdLGm0yJyWGgxf9VbGl.png"
   },
   {
    "name": "Pric",
@@ -1670,7 +1836,8 @@
    "id": "1Z24ggXOtdVa3cqzY--XerOgdWLrT6VOW",
    "kind": "step",
    "previewId": null,
-   "order": 166
+   "order": 166,
+   "previewAsset": "assets/models/previews/1Z24ggXOtdVa3cqzY--XerOgdWLrT6VOW.png"
   },
   {
    "name": "Pric1",
@@ -1680,7 +1847,8 @@
    "id": "1QyhYAq-isw-yA4hxvRahl8ylrVgz8_HI",
    "kind": "step",
    "previewId": null,
-   "order": 167
+   "order": 167,
+   "previewAsset": "assets/models/previews/1QyhYAq-isw-yA4hxvRahl8ylrVgz8_HI.png"
   },
   {
    "name": "Sborka",
@@ -1690,7 +1858,8 @@
    "id": "1jmoVwgrRegZWdYv0F-6SuNb5yWOoL2hU",
    "kind": "step",
    "previewId": null,
-   "order": 168
+   "order": 168,
+   "previewAsset": "assets/models/previews/1jmoVwgrRegZWdYv0F-6SuNb5yWOoL2hU.png"
   },
   {
    "name": "Sborka",
@@ -1700,7 +1869,8 @@
    "id": "1swzw3vUK9rK0XFkR7lo7P89pcMPgWr4B",
    "kind": "step",
    "previewId": null,
-   "order": 169
+   "order": 169,
+   "previewAsset": "assets/models/previews/1swzw3vUK9rK0XFkR7lo7P89pcMPgWr4B.png"
   },
   {
    "name": "Sborka",
@@ -1710,7 +1880,8 @@
    "id": "1IwK9bYB3H1dGlhuOPrABv0IIJN6Z19t9",
    "kind": "step",
    "previewId": null,
-   "order": 170
+   "order": 170,
+   "previewAsset": "assets/models/previews/1IwK9bYB3H1dGlhuOPrABv0IIJN6Z19t9.png"
   },
   {
    "name": "VN",
@@ -1720,7 +1891,8 @@
    "id": "1r0oiWKHCohiyZViYsVjga1YOyxd-GQY3",
    "kind": "step",
    "previewId": null,
-   "order": 171
+   "order": 171,
+   "previewAsset": "assets/models/previews/1r0oiWKHCohiyZViYsVjga1YOyxd-GQY3.png"
   },
   {
    "name": "Zazhim",
@@ -1730,7 +1902,8 @@
    "id": "1vIFXAZ2Rl31klTyVXv_0WIIuP-UVoUat",
    "kind": "step",
    "previewId": null,
-   "order": 172
+   "order": 172,
+   "previewAsset": "assets/models/previews/1vIFXAZ2Rl31klTyVXv_0WIIuP-UVoUat.png"
   },
   {
    "name": "ZP",
@@ -1740,7 +1913,8 @@
    "id": "1v1tiEmOdw4QK_KLO_dQUHUsRP50EfFm9",
    "kind": "step",
    "previewId": null,
-   "order": 173
+   "order": 173,
+   "previewAsset": "assets/models/previews/1v1tiEmOdw4QK_KLO_dQUHUsRP50EfFm9.png"
   },
   {
    "name": "ZP1",
@@ -1750,7 +1924,8 @@
    "id": "13vFr1IwM_suVPsdXNP5E6YL3pnskf3Ie",
    "kind": "step",
    "previewId": null,
-   "order": 174
+   "order": 174,
+   "previewAsset": "assets/models/previews/13vFr1IwM_suVPsdXNP5E6YL3pnskf3Ie.png"
   },
   {
    "name": "ZP1",
@@ -1760,7 +1935,8 @@
    "id": "17O0eBnEmT9e5E23xGo1BHPKGmMgBFvLf",
    "kind": "step",
    "previewId": null,
-   "order": 175
+   "order": 175,
+   "previewAsset": "assets/models/previews/17O0eBnEmT9e5E23xGo1BHPKGmMgBFvLf.png"
   },
   {
    "name": "ZP1L",
@@ -1770,7 +1946,8 @@
    "id": "1xvQ4-k-FnczLUDd0Ey4_aNoVUv3IC_60",
    "kind": "step",
    "previewId": null,
-   "order": 176
+   "order": 176,
+   "previewAsset": "assets/models/previews/1xvQ4-k-FnczLUDd0Ey4_aNoVUv3IC_60.png"
   },
   {
    "name": "ZP1L",
@@ -1780,7 +1957,8 @@
    "id": "10t7lUc8plupw11wCr3JfeIbVI5h79yxy",
    "kind": "step",
    "previewId": null,
-   "order": 177
+   "order": 177,
+   "previewAsset": "assets/models/previews/10t7lUc8plupw11wCr3JfeIbVI5h79yxy.png"
   },
   {
    "name": "ZZ",
@@ -1790,7 +1968,8 @@
    "id": "16bBDUTiO9WZdLokpeLZZVeKU7Asx_O_t",
    "kind": "step",
    "previewId": null,
-   "order": 178
+   "order": 178,
+   "previewAsset": "assets/models/previews/16bBDUTiO9WZdLokpeLZZVeKU7Asx_O_t.png"
   },
   {
    "name": "D25L20Kg0.60",
@@ -1800,7 +1979,8 @@
    "id": "1PQkPAtMbrweloyrxmI_PYU5EFqzE5jpz",
    "kind": "step",
    "previewId": null,
-   "order": 179
+   "order": 179,
+   "previewAsset": "assets/models/previews/1PQkPAtMbrweloyrxmI_PYU5EFqzE5jpz.png"
   },
   {
    "name": "GN001",
@@ -1810,7 +1990,8 @@
    "id": "1QY-e4nzqzKND9vn0FwjZ45ZJ_Y5FvgJe",
    "kind": "step",
    "previewId": null,
-   "order": 180
+   "order": 180,
+   "previewAsset": "assets/models/previews/1QY-e4nzqzKND9vn0FwjZ45ZJ_Y5FvgJe.png"
   },
   {
    "name": "1",
@@ -1820,7 +2001,8 @@
    "id": "1CrEXatdC78hcl0uUHvWultC2dNhSxCf9",
    "kind": "step",
    "previewId": null,
-   "order": 181
+   "order": 181,
+   "previewAsset": "assets/models/previews/1CrEXatdC78hcl0uUHvWultC2dNhSxCf9.png"
   },
   {
    "name": "1.1",
@@ -1830,7 +2012,8 @@
    "id": "1xwFwAiWfeMnJV4YYQ0AcVz9FrSq5FS-8",
    "kind": "step",
    "previewId": null,
-   "order": 182
+   "order": 182,
+   "previewAsset": "assets/models/previews/1xwFwAiWfeMnJV4YYQ0AcVz9FrSq5FS-8.png"
   },
   {
    "name": "1.2",
@@ -1840,7 +2023,8 @@
    "id": "1OHhCsyaqzehUhEUJyUm3DKjiV63K9Dur",
    "kind": "step",
    "previewId": null,
-   "order": 183
+   "order": 183,
+   "previewAsset": "assets/models/previews/1OHhCsyaqzehUhEUJyUm3DKjiV63K9Dur.png"
   },
   {
    "name": "1.4 st",
@@ -1850,7 +2034,8 @@
    "id": "1VTC0ndda0bYmEPtlZys5iru_yqQaZAOV",
    "kind": "step",
    "previewId": null,
-   "order": 184
+   "order": 184,
+   "previewAsset": "assets/models/previews/1VTC0ndda0bYmEPtlZys5iru_yqQaZAOV.png"
   },
   {
    "name": "1.5",
@@ -1860,7 +2045,8 @@
    "id": "1jvyWbFBr3B4pKWfdIGsYvpnUMhj0UBeW",
    "kind": "step",
    "previewId": null,
-   "order": 185
+   "order": 185,
+   "previewAsset": "assets/models/previews/1jvyWbFBr3B4pKWfdIGsYvpnUMhj0UBeW.png"
   },
   {
    "name": "1.6 st",
@@ -1870,7 +2056,8 @@
    "id": "1Nz2Ian6LUpTGo2Gp_Zub419PVM52oqKc",
    "kind": "step",
    "previewId": null,
-   "order": 186
+   "order": 186,
+   "previewAsset": "assets/models/previews/1Nz2Ian6LUpTGo2Gp_Zub419PVM52oqKc.png"
   },
   {
    "name": "1.7 st",
@@ -1880,7 +2067,8 @@
    "id": "1DrEm_046VHyz_YMd1SsxG1kh03Lc_RV9",
    "kind": "step",
    "previewId": null,
-   "order": 187
+   "order": 187,
+   "previewAsset": "assets/models/previews/1DrEm_046VHyz_YMd1SsxG1kh03Lc_RV9.png"
   },
   {
    "name": "1.9",
@@ -1890,7 +2078,8 @@
    "id": "1eFrHCvuqtskdMeVpUPSJ62ag-aFom8kN",
    "kind": "step",
    "previewId": null,
-   "order": 188
+   "order": 188,
+   "previewAsset": "assets/models/previews/1eFrHCvuqtskdMeVpUPSJ62ag-aFom8kN.png"
   },
   {
    "name": "CL008ML",
@@ -1900,7 +2089,8 @@
    "id": "1bUJslRgpiDA9h6fHrQiysVxhv63m3ArJ",
    "kind": "step",
    "previewId": null,
-   "order": 189
+   "order": 189,
+   "previewAsset": "assets/models/previews/1bUJslRgpiDA9h6fHrQiysVxhv63m3ArJ.png"
   },
   {
    "name": "CL009L",
@@ -1910,7 +2100,8 @@
    "id": "1ATolgc8linUYLe84z3fDPZdqrTxJRbaV",
    "kind": "step",
    "previewId": null,
-   "order": 190
+   "order": 190,
+   "previewAsset": "assets/models/previews/1ATolgc8linUYLe84z3fDPZdqrTxJRbaV.png"
   },
   {
    "name": "CLl",
@@ -1920,7 +2111,8 @@
    "id": "13p38W1Elh3997EzPqHbkummwi2Jb6HmA",
    "kind": "step",
    "previewId": null,
-   "order": 191
+   "order": 191,
+   "previewAsset": "assets/models/previews/13p38W1Elh3997EzPqHbkummwi2Jb6HmA.png"
   },
   {
    "name": "G 14x12",
@@ -1930,7 +2122,8 @@
    "id": "17KJP-mjpwQ3W-lcAqRSr3omXR46VmawO",
    "kind": "step",
    "previewId": null,
-   "order": 192
+   "order": 192,
+   "previewAsset": "assets/models/previews/17KJP-mjpwQ3W-lcAqRSr3omXR46VmawO.png"
   },
   {
    "name": "GcL",
@@ -1940,7 +2133,8 @@
    "id": "1aJv4fhrgXWUMR6xJNiM-TO9-Hzha46kX",
    "kind": "step",
    "previewId": null,
-   "order": 193
+   "order": 193,
+   "previewAsset": "assets/models/previews/1aJv4fhrgXWUMR6xJNiM-TO9-Hzha46kX.png"
   },
   {
    "name": "GcP",
@@ -1950,7 +2144,8 @@
    "id": "1pjYWjyH2kDIxE-rCUDYo2rSRHtuv3meE",
    "kind": "step",
    "previewId": null,
-   "order": 194
+   "order": 194,
+   "previewAsset": "assets/models/previews/1pjYWjyH2kDIxE-rCUDYo2rSRHtuv3meE.png"
   },
   {
    "name": "GpLG_3D",
@@ -1960,7 +2155,8 @@
    "id": "1yzDZCmjkLZyz5q1QjYd9c4Iaje8CGa1-",
    "kind": "step",
    "previewId": null,
-   "order": 195
+   "order": 195,
+   "previewAsset": "assets/models/previews/1yzDZCmjkLZyz5q1QjYd9c4Iaje8CGa1-.png"
   },
   {
    "name": "GrLG_3D",
@@ -1970,7 +2166,8 @@
    "id": "1k9uRzNkQ0I1NyedKzqVwVYvM3rHS6pBU",
    "kind": "step",
    "previewId": null,
-   "order": 196
+   "order": 196,
+   "previewAsset": "assets/models/previews/1k9uRzNkQ0I1NyedKzqVwVYvM3rHS6pBU.png"
   },
   {
    "name": "HSB",
@@ -1980,7 +2177,8 @@
    "id": "1yeUdRxaPvOcKieCTR9Cqhg5UJZO3vaGj",
    "kind": "step",
    "previewId": null,
-   "order": 197
+   "order": 197,
+   "previewAsset": "assets/models/previews/1yeUdRxaPvOcKieCTR9Cqhg5UJZO3vaGj.png"
   },
   {
    "name": "KL",
@@ -1990,7 +2188,8 @@
    "id": "14u5WvYji92FjryyBYS90SE0pgO3qN_BO",
    "kind": "step",
    "previewId": null,
-   "order": 198
+   "order": 198,
+   "previewAsset": "assets/models/previews/14u5WvYji92FjryyBYS90SE0pgO3qN_BO.png"
   },
   {
    "name": "KP",
@@ -2000,7 +2199,8 @@
    "id": "1-2fZF1SdVRaM-rNJEO8EGvz3PmLIGLDW",
    "kind": "step",
    "previewId": null,
-   "order": 199
+   "order": 199,
+   "previewAsset": "assets/models/previews/1-2fZF1SdVRaM-rNJEO8EGvz3PmLIGLDW.png"
   },
   {
    "name": "KP300",
@@ -2010,7 +2210,8 @@
    "id": "1hs224fQD9oCiITAySTD-fEy56XHD6wqK",
    "kind": "step",
    "previewId": null,
-   "order": 200
+   "order": 200,
+   "previewAsset": "assets/models/previews/1hs224fQD9oCiITAySTD-fEy56XHD6wqK.png"
   },
   {
    "name": "KpL",
@@ -2020,7 +2221,8 @@
    "id": "1RUVzshoeOH81xinihT91qPzT8uEglSX5",
    "kind": "step",
    "previewId": null,
-   "order": 201
+   "order": 201,
+   "previewAsset": "assets/models/previews/1RUVzshoeOH81xinihT91qPzT8uEglSX5.png"
   },
   {
    "name": "KPL002G",
@@ -2030,7 +2232,8 @@
    "id": "1_exeK-ZNNNaDCbHdwlBvLpB7pCAGFd4r",
    "kind": "step",
    "previewId": null,
-   "order": 202
+   "order": 202,
+   "previewAsset": "assets/models/previews/1_exeK-ZNNNaDCbHdwlBvLpB7pCAGFd4r.png"
   },
   {
    "name": "KpLG",
@@ -2040,7 +2243,8 @@
    "id": "1niBc5IYjQKOmceOrUBJB8lutnkZM_QWm",
    "kind": "step",
    "previewId": null,
-   "order": 203
+   "order": 203,
+   "previewAsset": "assets/models/previews/1niBc5IYjQKOmceOrUBJB8lutnkZM_QWm.png"
   },
   {
    "name": "KpP",
@@ -2050,7 +2254,8 @@
    "id": "11izszkZJmVtodmU01viaHIgvfiGRG0FB",
    "kind": "step",
    "previewId": null,
-   "order": 204
+   "order": 204,
+   "previewAsset": "assets/models/previews/11izszkZJmVtodmU01viaHIgvfiGRG0FB.png"
   },
   {
    "name": "KZs",
@@ -2060,7 +2265,8 @@
    "id": "1Zt-IYACxaA2SxBX0R_DNtbFjxrn3zXSx",
    "kind": "step",
    "previewId": null,
-   "order": 205
+   "order": 205,
+   "previewAsset": "assets/models/previews/1Zt-IYACxaA2SxBX0R_DNtbFjxrn3zXSx.png"
   },
   {
    "name": "KZz",
@@ -2070,7 +2276,8 @@
    "id": "1-tO820JsDCLhy9bqMtnqi24dp5g6LFY8",
    "kind": "step",
    "previewId": null,
-   "order": 206
+   "order": 206,
+   "previewAsset": "assets/models/previews/1-tO820JsDCLhy9bqMtnqi24dp5g6LFY8.png"
   },
   {
    "name": "LC001",
@@ -2080,7 +2287,8 @@
    "id": "1z_cyGUNBMXAiGvnZHDvMNWSgfKUP-vi-",
    "kind": "step",
    "previewId": null,
-   "order": 207
+   "order": 207,
+   "previewAsset": "assets/models/previews/1z_cyGUNBMXAiGvnZHDvMNWSgfKUP-vi-.png"
   },
   {
    "name": "LG005W2",
@@ -2090,7 +2298,8 @@
    "id": "1FuF6Qhdut5ymfsRWCrRayBTu726p981E",
    "kind": "step",
    "previewId": null,
-   "order": 208
+   "order": 208,
+   "previewAsset": "assets/models/previews/1FuF6Qhdut5ymfsRWCrRayBTu726p981E.png"
   },
   {
    "name": "LG009L 3 D32",
@@ -2100,7 +2309,8 @@
    "id": "1zU92CTcttuopm3fsHwUM8XmrUesBItMk",
    "kind": "step",
    "previewId": null,
-   "order": 209
+   "order": 209,
+   "previewAsset": "assets/models/previews/1zU92CTcttuopm3fsHwUM8XmrUesBItMk.png"
   },
   {
    "name": "LG009L 3+ D32 2",
@@ -2110,7 +2320,8 @@
    "id": "1WWLpiiNhNSDl4aAzaPoxEly9UqMfk80_",
    "kind": "step",
    "previewId": null,
-   "order": 210
+   "order": 210,
+   "previewAsset": "assets/models/previews/1WWLpiiNhNSDl4aAzaPoxEly9UqMfk80_.png"
   },
   {
    "name": "LG009L 3+ D32V2",
@@ -2120,7 +2331,8 @@
    "id": "1dW_ylIiVQ_QSPp2vrqhzEDb1r-nOJ2eF",
    "kind": "step",
    "previewId": null,
-   "order": 211
+   "order": 211,
+   "previewAsset": "assets/models/previews/1dW_ylIiVQ_QSPp2vrqhzEDb1r-nOJ2eF.png"
   },
   {
    "name": "LG2sm",
@@ -2130,7 +2342,8 @@
    "id": "1l19ex8ybUdNB8Drk2sLJTMrZbo4MFcP_",
    "kind": "step",
    "previewId": null,
-   "order": 212
+   "order": 212,
+   "previewAsset": "assets/models/previews/1l19ex8ybUdNB8Drk2sLJTMrZbo4MFcP_.png"
   },
   {
    "name": "LG2sm",
@@ -2140,7 +2353,8 @@
    "id": "1lM26Pb4fdQtV1hwsojOGkuLWFOKKzcmi",
    "kind": "step",
    "previewId": null,
-   "order": 213
+   "order": 213,
+   "previewAsset": "assets/models/previews/1lM26Pb4fdQtV1hwsojOGkuLWFOKKzcmi.png"
   },
   {
    "name": "LG2sm_mini",
@@ -2150,7 +2364,8 @@
    "id": "1BoKlDy2aiFVpblo9b_OQ_1oFwdk5WD0p",
    "kind": "step",
    "previewId": null,
-   "order": 214
+   "order": 214,
+   "previewAsset": "assets/models/previews/1BoKlDy2aiFVpblo9b_OQ_1oFwdk5WD0p.png"
   },
   {
    "name": "PC001",
@@ -2160,7 +2375,8 @@
    "id": "1jDsQUX3q6Zmbd7v38yqr9nyivPIdICBp",
    "kind": "step",
    "previewId": null,
-   "order": 215
+   "order": 215,
+   "previewAsset": "assets/models/previews/1jDsQUX3q6Zmbd7v38yqr9nyivPIdICBp.png"
   },
   {
    "name": "PL001KK500+",
@@ -2170,7 +2386,8 @@
    "id": "15HT2feWsn3zx_YjS6JGKMdY6g6jcVkVg",
    "kind": "step",
    "previewId": null,
-   "order": 216
+   "order": 216,
+   "previewAsset": "assets/models/previews/15HT2feWsn3zx_YjS6JGKMdY6g6jcVkVg.png"
   },
   {
    "name": "PL001KK500L",
@@ -2180,7 +2397,8 @@
    "id": "10i8EIo6SRxl6QNdXYg_3whv6GHYOBny4",
    "kind": "step",
    "previewId": null,
-   "order": 217
+   "order": 217,
+   "previewAsset": "assets/models/previews/10i8EIo6SRxl6QNdXYg_3whv6GHYOBny4.png"
   },
   {
    "name": "PL001KK500L+",
@@ -2190,7 +2408,8 @@
    "id": "1jUkhUmnX56Gb-Jh5cnt_CMkyNpBGEyOe",
    "kind": "step",
    "previewId": null,
-   "order": 218
+   "order": 218,
+   "previewAsset": "assets/models/previews/1jUkhUmnX56Gb-Jh5cnt_CMkyNpBGEyOe.png"
   },
   {
    "name": "PL001KK500L_3D",
@@ -2200,7 +2419,8 @@
    "id": "1wblfSYlf_ly9M0QGHpfJ0fy5aSyaSyBJ",
    "kind": "step",
    "previewId": null,
-   "order": 219
+   "order": 219,
+   "previewAsset": "assets/models/previews/1wblfSYlf_ly9M0QGHpfJ0fy5aSyaSyBJ.png"
   },
   {
    "name": "PL002G",
@@ -2210,7 +2430,8 @@
    "id": "10b2Bci2HHduA_nhPfZ1ds8AXQqTa6PNg",
    "kind": "step",
    "previewId": null,
-   "order": 220
+   "order": 220,
+   "previewAsset": "assets/models/previews/10b2Bci2HHduA_nhPfZ1ds8AXQqTa6PNg.png"
   },
   {
    "name": "PLGal",
@@ -2220,7 +2441,8 @@
    "id": "1ro55yIMv9WOBgFv_tlmOcIFJxgBxjzYh",
    "kind": "step",
    "previewId": null,
-   "order": 221
+   "order": 221,
+   "previewAsset": "assets/models/previews/1ro55yIMv9WOBgFv_tlmOcIFJxgBxjzYh.png"
   },
   {
    "name": "RLG",
@@ -2230,7 +2452,8 @@
    "id": "1D87LIhIsRg1fKh3KNCd3yZ2_aOpPtOEV",
    "kind": "step",
    "previewId": null,
-   "order": 222
+   "order": 222,
+   "previewAsset": "assets/models/previews/1D87LIhIsRg1fKh3KNCd3yZ2_aOpPtOEV.png"
   },
   {
    "name": "Sborka",
@@ -2240,7 +2463,8 @@
    "id": "1wvmbENsHRnwHi8KSkImudvGL7iK7d_QM",
    "kind": "step",
    "previewId": null,
-   "order": 223
+   "order": 223,
+   "previewAsset": "assets/models/previews/1wvmbENsHRnwHi8KSkImudvGL7iK7d_QM.png"
   },
   {
    "name": "Sborka",
@@ -2250,7 +2474,8 @@
    "id": "1OF1Tz8SzEX5wcu4pCmK2hEAQFCPjOavW",
    "kind": "step",
    "previewId": null,
-   "order": 224
+   "order": 224,
+   "previewAsset": "assets/models/previews/1OF1Tz8SzEX5wcu4pCmK2hEAQFCPjOavW.png"
   },
   {
    "name": "Sborka",
@@ -2260,7 +2485,8 @@
    "id": "1PNeC4SQBTS6YReUqlqaY7Dtz1_LUBtSy",
    "kind": "step",
    "previewId": null,
-   "order": 225
+   "order": 225,
+   "previewAsset": "assets/models/previews/1PNeC4SQBTS6YReUqlqaY7Dtz1_LUBtSy.png"
   },
   {
    "name": "Sborka",
@@ -2270,7 +2496,8 @@
    "id": "1PYnH-0rdxd2seiFbFplnEeXKv7KM8vga",
    "kind": "step",
    "previewId": null,
-   "order": 226
+   "order": 226,
+   "previewAsset": "assets/models/previews/1PYnH-0rdxd2seiFbFplnEeXKv7KM8vga.png"
   },
   {
    "name": "Sborka",
@@ -2280,7 +2507,8 @@
    "id": "1K91MxNM8XCduRnpQMKouGwNyQ2TW5Zvj",
    "kind": "step",
    "previewId": null,
-   "order": 227
+   "order": 227,
+   "previewAsset": "assets/models/previews/1K91MxNM8XCduRnpQMKouGwNyQ2TW5Zvj.png"
   },
   {
    "name": "Sborka",
@@ -2290,7 +2518,8 @@
    "id": "1NjQkO8dseqaNj4tGIwpWenAaKG1JoCq0",
    "kind": "step",
    "previewId": null,
-   "order": 228
+   "order": 228,
+   "previewAsset": "assets/models/previews/1NjQkO8dseqaNj4tGIwpWenAaKG1JoCq0.png"
   },
   {
    "name": "Sborka",
@@ -2300,7 +2529,8 @@
    "id": "1mnsOJdRZ2ATQIvnAIKGpx0wKotaiok8p",
    "kind": "step",
    "previewId": null,
-   "order": 229
+   "order": 229,
+   "previewAsset": "assets/models/previews/1mnsOJdRZ2ATQIvnAIKGpx0wKotaiok8p.png"
   },
   {
    "name": "Sborka",
@@ -2310,7 +2540,8 @@
    "id": "1ujDji8a3g12VehpsFTj8f_7Zh2S3oXON",
    "kind": "step",
    "previewId": null,
-   "order": 230
+   "order": 230,
+   "previewAsset": "assets/models/previews/1ujDji8a3g12VehpsFTj8f_7Zh2S3oXON.png"
   },
   {
    "name": "Sborka",
@@ -2320,7 +2551,8 @@
    "id": "1LFqnsCpLVVCvwaZf_1qon5PXz0AniJC8",
    "kind": "step",
    "previewId": null,
-   "order": 231
+   "order": 231,
+   "previewAsset": "assets/models/previews/1LFqnsCpLVVCvwaZf_1qon5PXz0AniJC8.png"
   },
   {
    "name": "Sborka",
@@ -2330,7 +2562,8 @@
    "id": "11NibkanCrhZ5e4TyuTlQg9hI7z6IQGN9",
    "kind": "step",
    "previewId": null,
-   "order": 232
+   "order": 232,
+   "previewAsset": "assets/models/previews/11NibkanCrhZ5e4TyuTlQg9hI7z6IQGN9.png"
   },
   {
    "name": "Sborka",
@@ -2340,7 +2573,8 @@
    "id": "1RP1gvfM4qq8ZIWP0dhNN1GotDXgHhjH5",
    "kind": "step",
    "previewId": null,
-   "order": 233
+   "order": 233,
+   "previewAsset": "assets/models/previews/1RP1gvfM4qq8ZIWP0dhNN1GotDXgHhjH5.png"
   },
   {
    "name": "Sborka",
@@ -2350,7 +2584,8 @@
    "id": "1Wci3CFWt98ebcOqYJiCkKTjhcNjAuB8Z",
    "kind": "step",
    "previewId": null,
-   "order": 234
+   "order": 234,
+   "previewAsset": "assets/models/previews/1Wci3CFWt98ebcOqYJiCkKTjhcNjAuB8Z.png"
   },
   {
    "name": "Sh",
@@ -2360,7 +2595,8 @@
    "id": "1GBTaSqmB705afG-dzmzt-jhceC8Yykz7",
    "kind": "step",
    "previewId": null,
-   "order": 235
+   "order": 235,
+   "previewAsset": "assets/models/previews/1GBTaSqmB705afG-dzmzt-jhceC8Yykz7.png"
   },
   {
    "name": "ShLG",
@@ -2370,7 +2606,8 @@
    "id": "1vYLwdVWtXStRVjLP7c1Lhxfis_ACpYij",
    "kind": "step",
    "previewId": null,
-   "order": 236
+   "order": 236,
+   "previewAsset": "assets/models/previews/1vYLwdVWtXStRVjLP7c1Lhxfis_ACpYij.png"
   },
   {
    "name": "ShPLG_3D",
@@ -2380,7 +2617,8 @@
    "id": "1eM-txiiA7cC9vHe7ay6k8XBpCkZixqy4",
    "kind": "step",
    "previewId": null,
-   "order": 237
+   "order": 237,
+   "previewAsset": "assets/models/previews/1eM-txiiA7cC9vHe7ay6k8XBpCkZixqy4.png"
   },
   {
    "name": "ShR_3D",
@@ -2390,7 +2628,8 @@
    "id": "1DYgUFLfcOCVDJoMi-DpxCqCIQQb8s7qN",
    "kind": "step",
    "previewId": null,
-   "order": 238
+   "order": 238,
+   "previewAsset": "assets/models/previews/1DYgUFLfcOCVDJoMi-DpxCqCIQQb8s7qN.png"
   },
   {
    "name": "SKB",
@@ -2400,7 +2639,8 @@
    "id": "1Qi1QGt1q96y6ZP3zI_K94fR-fiUoKn44",
    "kind": "step",
    "previewId": null,
-   "order": 239
+   "order": 239,
+   "previewAsset": "assets/models/previews/1Qi1QGt1q96y6ZP3zI_K94fR-fiUoKn44.png"
   },
   {
    "name": "SKB_mini",
@@ -2410,7 +2650,8 @@
    "id": "1NJUDwQLty3aEK9WIxIkLMRq_JW-E-pDz",
    "kind": "step",
    "previewId": null,
-   "order": 240
+   "order": 240,
+   "previewAsset": "assets/models/previews/1NJUDwQLty3aEK9WIxIkLMRq_JW-E-pDz.png"
   },
   {
    "name": "SKD_1.1._1.5",
@@ -2420,7 +2661,8 @@
    "id": "1x_F8KS21yx_XCpMaMsHLbBI1TX7wdDcL",
    "kind": "step",
    "previewId": null,
-   "order": 241
+   "order": 241,
+   "previewAsset": "assets/models/previews/1x_F8KS21yx_XCpMaMsHLbBI1TX7wdDcL.png"
   },
   {
    "name": "SKD_1.2",
@@ -2430,7 +2672,8 @@
    "id": "1jNI5XuI76gDdf3NsTojeQR6A7RCmmcWr",
    "kind": "step",
    "previewId": null,
-   "order": 242
+   "order": 242,
+   "previewAsset": "assets/models/previews/1jNI5XuI76gDdf3NsTojeQR6A7RCmmcWr.png"
   },
   {
    "name": "SKD_1.2._1.5",
@@ -2440,7 +2683,8 @@
    "id": "1jh-tN1tBQqpnWyvEowuEOtLkgzP7N2HN",
    "kind": "step",
    "previewId": null,
-   "order": 243
+   "order": 243,
+   "previewAsset": "assets/models/previews/1jh-tN1tBQqpnWyvEowuEOtLkgzP7N2HN.png"
   },
   {
    "name": "SKD_1_1.5",
@@ -2450,7 +2694,8 @@
    "id": "1myZTksyuWtcCEU2Yfrg6chHIojUcdnKt",
    "kind": "step",
    "previewId": null,
-   "order": 244
+   "order": 244,
+   "previewAsset": "assets/models/previews/1myZTksyuWtcCEU2Yfrg6chHIojUcdnKt.png"
   },
   {
    "name": "SKD_2.1_1.5",
@@ -2460,7 +2705,8 @@
    "id": "1KeYlUCJHyooCi1ZK7yP6mN4xzaG-Zvmf",
    "kind": "step",
    "previewId": null,
-   "order": 245
+   "order": 245,
+   "previewAsset": "assets/models/previews/1KeYlUCJHyooCi1ZK7yP6mN4xzaG-Zvmf.png"
   },
   {
    "name": "SKD_2.2",
@@ -2470,7 +2716,8 @@
    "id": "1eUjaWEr1YklkmoClUozfaraa9AA7UCLD",
    "kind": "step",
    "previewId": null,
-   "order": 246
+   "order": 246,
+   "previewAsset": "assets/models/previews/1eUjaWEr1YklkmoClUozfaraa9AA7UCLD.png"
   },
   {
    "name": "SKD_2.2_1.5",
@@ -2480,7 +2727,8 @@
    "id": "16QCfqkn8UK4t2dbaW6lfn35JUhQj-hZU",
    "kind": "step",
    "previewId": null,
-   "order": 247
+   "order": 247,
+   "previewAsset": "assets/models/previews/16QCfqkn8UK4t2dbaW6lfn35JUhQj-hZU.png"
   },
   {
    "name": "SKD_2_1.5",
@@ -2490,7 +2738,8 @@
    "id": "1H2HGS6DIoRWqgObdVZvijWWMNIdqQaRa",
    "kind": "step",
    "previewId": null,
-   "order": 248
+   "order": 248,
+   "previewAsset": "assets/models/previews/1H2HGS6DIoRWqgObdVZvijWWMNIdqQaRa.png"
   },
   {
    "name": "SKP_3D 10x45",
@@ -2500,7 +2749,8 @@
    "id": "1kYU0ICY3hRQTRTsFtKTM6u17VmCTffAF",
    "kind": "step",
    "previewId": null,
-   "order": 249
+   "order": 249,
+   "previewAsset": "assets/models/previews/1kYU0ICY3hRQTRTsFtKTM6u17VmCTffAF.png"
   },
   {
    "name": "SKP_3D 10x70",
@@ -2510,7 +2760,8 @@
    "id": "18V45O1shZ0cJ7_GRn00qwZJJF3Gaw5__",
    "kind": "step",
    "previewId": null,
-   "order": 250
+   "order": 250,
+   "previewAsset": "assets/models/previews/18V45O1shZ0cJ7_GRn00qwZJJF3Gaw5__.png"
   },
   {
    "name": "SKP_3D 2 10x45",
@@ -2520,7 +2771,8 @@
    "id": "16y4TEMaRhzZRBbtPgfS2MbbhNSWrznGo",
    "kind": "step",
    "previewId": null,
-   "order": 251
+   "order": 251,
+   "previewAsset": "assets/models/previews/16y4TEMaRhzZRBbtPgfS2MbbhNSWrznGo.png"
   },
   {
    "name": "SKP_3D 2 10x70",
@@ -2530,7 +2782,8 @@
    "id": "1z3o7DE4ZU4GDkf_ZXaTu_V55jtB1__sF",
    "kind": "step",
    "previewId": null,
-   "order": 252
+   "order": 252,
+   "previewAsset": "assets/models/previews/1z3o7DE4ZU4GDkf_ZXaTu_V55jtB1__sF.png"
   },
   {
    "name": "SSh",
@@ -2540,7 +2793,8 @@
    "id": "1jpOHpogzJdz0EjjDvURwYFSscBx-FH9w",
    "kind": "step",
    "previewId": null,
-   "order": 253
+   "order": 253,
+   "previewAsset": "assets/models/previews/1jpOHpogzJdz0EjjDvURwYFSscBx-FH9w.png"
   },
   {
    "name": "VR",
@@ -2550,7 +2804,8 @@
    "id": "1XuarckH4NQu2gMD23-Mab3TlGN6bUk2l",
    "kind": "step",
    "previewId": null,
-   "order": 254
+   "order": 254,
+   "previewAsset": "assets/models/previews/1XuarckH4NQu2gMD23-Mab3TlGN6bUk2l.png"
   },
   {
    "name": "VR2",
@@ -2560,7 +2815,8 @@
    "id": "1X0HwngJ9MvBGKmzBpCQS8h051ydrSrSx",
    "kind": "step",
    "previewId": null,
-   "order": 255
+   "order": 255,
+   "previewAsset": "assets/models/previews/1X0HwngJ9MvBGKmzBpCQS8h051ydrSrSx.png"
   },
   {
    "name": "ZK",
@@ -2570,7 +2826,8 @@
    "id": "1ykPQ8dwNF7XCPnGcxMJcX5ZSQ3YNUmqy",
    "kind": "step",
    "previewId": null,
-   "order": 256
+   "order": 256,
+   "previewAsset": "assets/models/previews/1ykPQ8dwNF7XCPnGcxMJcX5ZSQ3YNUmqy.png"
   },
   {
    "name": "Сборка1",
@@ -2580,7 +2837,8 @@
    "id": "1ns-K4Nvk3z2QxYAALr7iO8NtBpzt5-Xs",
    "kind": "step",
    "previewId": null,
-   "order": 257
+   "order": 257,
+   "previewAsset": "assets/models/previews/1ns-K4Nvk3z2QxYAALr7iO8NtBpzt5-Xs.png"
   },
   {
    "name": "HS20mm",
@@ -2590,7 +2848,8 @@
    "id": "1zaOzDqgYh0dw0kvV2s6t-s94eme5ahYo",
    "kind": "step",
    "previewId": null,
-   "order": 258
+   "order": 258,
+   "previewAsset": "assets/models/previews/1zaOzDqgYh0dw0kvV2s6t-s94eme5ahYo.png"
   },
   {
    "name": "HS22mm",
@@ -2600,7 +2859,8 @@
    "id": "1tpUonRuLc3AqBs-XDRvpfzd7ff7eq7P3",
    "kind": "step",
    "previewId": null,
-   "order": 259
+   "order": 259,
+   "previewAsset": "assets/models/previews/1tpUonRuLc3AqBs-XDRvpfzd7ff7eq7P3.png"
   },
   {
    "name": "KPG",
@@ -2610,7 +2870,8 @@
    "id": "1kPSHXI48ordpWM4_8NlixqGsqM3plzF6",
    "kind": "step",
    "previewId": null,
-   "order": 260
+   "order": 260,
+   "previewAsset": "assets/models/previews/1kPSHXI48ordpWM4_8NlixqGsqM3plzF6.png"
   },
   {
    "name": "KPG",
@@ -2620,7 +2881,8 @@
    "id": "1PAu7XydXgHcg3FcdwJeNfdSb6PJXe0ev",
    "kind": "step",
    "previewId": null,
-   "order": 261
+   "order": 261,
+   "previewAsset": "assets/models/previews/1PAu7XydXgHcg3FcdwJeNfdSb6PJXe0ev.png"
   },
   {
    "name": "OS2",
@@ -2630,7 +2892,8 @@
    "id": "1IgUu0yyxshjK_2awB-vr0xf9QueFVr4K",
    "kind": "step",
    "previewId": null,
-   "order": 262
+   "order": 262,
+   "previewAsset": "assets/models/previews/1IgUu0yyxshjK_2awB-vr0xf9QueFVr4K.png"
   },
   {
    "name": "PG",
@@ -2640,7 +2903,8 @@
    "id": "1kezivI9oEjG82TeRHm75wquQcyyto0bx",
    "kind": "step",
    "previewId": null,
-   "order": 263
+   "order": 263,
+   "previewAsset": "assets/models/previews/1kezivI9oEjG82TeRHm75wquQcyyto0bx.png"
   },
   {
    "name": "PG",
@@ -2650,7 +2914,8 @@
    "id": "13yzupuLzd23fuI_mHTjisu6zl34fMUYa",
    "kind": "step",
    "previewId": null,
-   "order": 264
+   "order": 264,
+   "previewAsset": "assets/models/previews/13yzupuLzd23fuI_mHTjisu6zl34fMUYa.png"
   },
   {
    "name": "PpS",
@@ -2660,7 +2925,8 @@
    "id": "1zbz3JzUR2Ckerhafd_fY37Sv5DIomb68",
    "kind": "step",
    "previewId": null,
-   "order": 265
+   "order": 265,
+   "previewAsset": "assets/models/previews/1zbz3JzUR2Ckerhafd_fY37Sv5DIomb68.png"
   },
   {
    "name": "PS",
@@ -2670,7 +2936,8 @@
    "id": "1yA-xpXF58FDJyODkK65VZiEZI8EwkKCq",
    "kind": "step",
    "previewId": null,
-   "order": 266
+   "order": 266,
+   "previewAsset": "assets/models/previews/1yA-xpXF58FDJyODkK65VZiEZI8EwkKCq.png"
   },
   {
    "name": "PS3",
@@ -2680,7 +2947,8 @@
    "id": "1NuHlU8lhVadxM5RgM30KW9V2KESYQwdM",
    "kind": "step",
    "previewId": null,
-   "order": 267
+   "order": 267,
+   "previewAsset": "assets/models/previews/1NuHlU8lhVadxM5RgM30KW9V2KESYQwdM.png"
   },
   {
    "name": "PsM",
@@ -2690,7 +2958,8 @@
    "id": "1XoaLQR30W0HFtH6kcK9LFKkuDFkxFLPz",
    "kind": "step",
    "previewId": null,
-   "order": 268
+   "order": 268,
+   "previewAsset": "assets/models/previews/1XoaLQR30W0HFtH6kcK9LFKkuDFkxFLPz.png"
   },
   {
    "name": "Sborka",
@@ -2700,7 +2969,8 @@
    "id": "1eSeLZj4C1JI_-vf-bPi7wnazL-vsDp8q",
    "kind": "step",
    "previewId": null,
-   "order": 269
+   "order": 269,
+   "previewAsset": "assets/models/previews/1eSeLZj4C1JI_-vf-bPi7wnazL-vsDp8q.png"
   },
   {
    "name": "ZKPG",
@@ -2710,7 +2980,8 @@
    "id": "1dAlYNEWHKEFRkVRIVeuBPCeuT0Kp2Zud",
    "kind": "step",
    "previewId": null,
-   "order": 270
+   "order": 270,
+   "previewAsset": "assets/models/previews/1dAlYNEWHKEFRkVRIVeuBPCeuT0Kp2Zud.png"
   },
   {
    "name": "ZP",
@@ -2720,7 +2991,8 @@
    "id": "1vpZmPORUeZ4D4Kn8t73f_K0UzNFYAhS8",
    "kind": "step",
    "previewId": null,
-   "order": 271
+   "order": 271,
+   "previewAsset": "assets/models/previews/1vpZmPORUeZ4D4Kn8t73f_K0UzNFYAhS8.png"
   },
   {
    "name": "ZR",
@@ -2730,7 +3002,8 @@
    "id": "1ZAIdY8Lbu_60ekY_cgcskz4vC1vxffC1",
    "kind": "step",
    "previewId": null,
-   "order": 272
+   "order": 272,
+   "previewAsset": "assets/models/previews/1ZAIdY8Lbu_60ekY_cgcskz4vC1vxffC1.png"
   },
   {
    "name": "Bar Boc",
@@ -2740,7 +3013,8 @@
    "id": "1GtAZrOPVhah9qQ3nLQbczbG-H3Q1pDgA",
    "kind": "step",
    "previewId": null,
-   "order": 273
+   "order": 273,
+   "previewAsset": "assets/models/previews/1GtAZrOPVhah9qQ3nLQbczbG-H3Q1pDgA.png"
   },
   {
    "name": "Bar Ver",
@@ -2750,7 +3024,8 @@
    "id": "1uXGc5LfLdMwv5c8jYs5yI2K-L6m07OMb",
    "kind": "step",
    "previewId": null,
-   "order": 274
+   "order": 274,
+   "previewAsset": "assets/models/previews/1uXGc5LfLdMwv5c8jYs5yI2K-L6m07OMb.png"
   },
   {
    "name": "Bash",
@@ -2760,7 +3035,8 @@
    "id": "1bPVW7pOhKrFDEHT066cp-iDCVegTlgxT",
    "kind": "step",
    "previewId": null,
-   "order": 275
+   "order": 275,
+   "previewAsset": "assets/models/previews/1bPVW7pOhKrFDEHT066cp-iDCVegTlgxT.png"
   },
   {
    "name": "bk",
@@ -2770,7 +3046,8 @@
    "id": "11AiDm633DuHU-lZW_FWtvAlPXWV2Lmyz",
    "kind": "step",
    "previewId": null,
-   "order": 276
+   "order": 276,
+   "previewAsset": "assets/models/previews/11AiDm633DuHU-lZW_FWtvAlPXWV2Lmyz.png"
   },
   {
    "name": "bk",
@@ -2780,7 +3057,8 @@
    "id": "1FAp9uBX_U_cTd06P1v5aEQX5hhJs0qky",
    "kind": "step",
    "previewId": null,
-   "order": 277
+   "order": 277,
+   "previewAsset": "assets/models/previews/1FAp9uBX_U_cTd06P1v5aEQX5hhJs0qky.png"
   },
   {
    "name": "bn",
@@ -2790,7 +3068,8 @@
    "id": "1yCXIqORCRpHMSkHGcuM5_i-sD24tvzgd",
    "kind": "step",
    "previewId": null,
-   "order": 278
+   "order": 278,
+   "previewAsset": "assets/models/previews/1yCXIqORCRpHMSkHGcuM5_i-sD24tvzgd.png"
   },
   {
    "name": "BP",
@@ -2800,7 +3079,8 @@
    "id": "13n_xq9DF2NhG-LUSmD1iCmlcVh9nRUXI",
    "kind": "step",
    "previewId": null,
-   "order": 279
+   "order": 279,
+   "previewAsset": "assets/models/previews/13n_xq9DF2NhG-LUSmD1iCmlcVh9nRUXI.png"
   },
   {
    "name": "D4.0",
@@ -2810,7 +3090,8 @@
    "id": "1QMes-6nuEPR4er4y10yLlMzgR0J3H82q",
    "kind": "step",
    "previewId": null,
-   "order": 280
+   "order": 280,
+   "previewAsset": "assets/models/previews/1QMes-6nuEPR4er4y10yLlMzgR0J3H82q.png"
   },
   {
    "name": "Gp",
@@ -2820,7 +3101,8 @@
    "id": "1h8VIyT6YMTL5_pnicxz6JsTigOexxG1z",
    "kind": "step",
    "previewId": null,
-   "order": 281
+   "order": 281,
+   "previewAsset": "assets/models/previews/1h8VIyT6YMTL5_pnicxz6JsTigOexxG1z.png"
   },
   {
    "name": "k",
@@ -2830,7 +3112,8 @@
    "id": "1jYtpl6XvzgeYXi82n_sE9A7uU_L5XCWH",
    "kind": "step",
    "previewId": null,
-   "order": 282
+   "order": 282,
+   "previewAsset": "assets/models/previews/1jYtpl6XvzgeYXi82n_sE9A7uU_L5XCWH.png"
   },
   {
    "name": "k",
@@ -2840,7 +3123,8 @@
    "id": "1NsLeht2kcn4a3L0STZNPKtYLzYk9Spgn",
    "kind": "step",
    "previewId": null,
-   "order": 283
+   "order": 283,
+   "previewAsset": "assets/models/previews/1NsLeht2kcn4a3L0STZNPKtYLzYk9Spgn.png"
   },
   {
    "name": "kk",
@@ -2850,7 +3134,8 @@
    "id": "1nXbNtkYjoEyDKURidc0bAKSgAaefnvln",
    "kind": "step",
    "previewId": null,
-   "order": 284
+   "order": 284,
+   "previewAsset": "assets/models/previews/1nXbNtkYjoEyDKURidc0bAKSgAaefnvln.png"
   },
   {
    "name": "kk",
@@ -2860,7 +3145,8 @@
    "id": "1a4AGOFmnZLLhufmiD9Y29tQ2p_QfbHAB",
    "kind": "step",
    "previewId": null,
-   "order": 285
+   "order": 285,
+   "previewAsset": "assets/models/previews/1a4AGOFmnZLLhufmiD9Y29tQ2p_QfbHAB.png"
   },
   {
    "name": "KK",
@@ -2870,7 +3156,8 @@
    "id": "1h10xyprU5JpNtQbbetf4y4h0lXIZ9igS",
    "kind": "step",
    "previewId": null,
-   "order": 286
+   "order": 286,
+   "previewAsset": "assets/models/previews/1h10xyprU5JpNtQbbetf4y4h0lXIZ9igS.png"
   },
   {
    "name": "KP",
@@ -2880,7 +3167,8 @@
    "id": "135OIz98WHnNpMJnJtLWJfmV6drBSpzwF",
    "kind": "step",
    "previewId": null,
-   "order": 287
+   "order": 287,
+   "previewAsset": "assets/models/previews/135OIz98WHnNpMJnJtLWJfmV6drBSpzwF.png"
   },
   {
    "name": "Napr Bar",
@@ -2890,7 +3178,8 @@
    "id": "1xHUu2NfjjEFpz0lC6g2IbbhcwL8DPyMs",
    "kind": "step",
    "previewId": null,
-   "order": 288
+   "order": 288,
+   "previewAsset": "assets/models/previews/1xHUu2NfjjEFpz0lC6g2IbbhcwL8DPyMs.png"
   },
   {
    "name": "NPOL",
@@ -2900,7 +3189,8 @@
    "id": "1zUgBfsJbG-fgrqBwGeEcmIKD_TTdwuae",
    "kind": "step",
    "previewId": null,
-   "order": 289
+   "order": 289,
+   "previewAsset": "assets/models/previews/1zUgBfsJbG-fgrqBwGeEcmIKD_TTdwuae.png"
   },
   {
    "name": "Pas",
@@ -2910,7 +3200,8 @@
    "id": "1MjQgDzCWDt6F8NxWznJsRWpKRtWxorlr",
    "kind": "step",
    "previewId": null,
-   "order": 290
+   "order": 290,
+   "previewAsset": "assets/models/previews/1MjQgDzCWDt6F8NxWznJsRWpKRtWxorlr.png"
   },
   {
    "name": "Sborka",
@@ -2920,7 +3211,8 @@
    "id": "1JCSfjLl8fwhQiaMwlV37NDS-DWBMJX5e",
    "kind": "step",
    "previewId": null,
-   "order": 291
+   "order": 291,
+   "previewAsset": "assets/models/previews/1JCSfjLl8fwhQiaMwlV37NDS-DWBMJX5e.png"
   },
   {
    "name": "Sborka",
@@ -2930,7 +3222,8 @@
    "id": "1HAAgNiULoVPcHA_PK7PkaeJ3KSI4HsZZ",
    "kind": "step",
    "previewId": null,
-   "order": 292
+   "order": 292,
+   "previewAsset": "assets/models/previews/1HAAgNiULoVPcHA_PK7PkaeJ3KSI4HsZZ.png"
   },
   {
    "name": "Sborka",
@@ -2940,7 +3233,8 @@
    "id": "1o6EqPH1pSRPCkoKctlc8WLxTj-0NxKnQ",
    "kind": "step",
    "previewId": null,
-   "order": 293
+   "order": 293,
+   "previewAsset": "assets/models/previews/1o6EqPH1pSRPCkoKctlc8WLxTj-0NxKnQ.png"
   },
   {
    "name": "Sborka",
@@ -2950,7 +3244,8 @@
    "id": "1v0DMP9lpPx2IhXWKim5Mfxt47CDpQKLB",
    "kind": "step",
    "previewId": null,
-   "order": 294
+   "order": 294,
+   "previewAsset": "assets/models/previews/1v0DMP9lpPx2IhXWKim5Mfxt47CDpQKLB.png"
   },
   {
    "name": "Sborka",
@@ -2960,7 +3255,8 @@
    "id": "1T0dBkj-UcAxyo_wubRT-mv1HRomGJzxq",
    "kind": "step",
    "previewId": null,
-   "order": 295
+   "order": 295,
+   "previewAsset": "assets/models/previews/1T0dBkj-UcAxyo_wubRT-mv1HRomGJzxq.png"
   },
   {
    "name": "Sborka",
@@ -2970,7 +3266,8 @@
    "id": "1CnupsdOY2ZAzytxRsB-DO6kS-mdJB4qh",
    "kind": "step",
    "previewId": null,
-   "order": 296
+   "order": 296,
+   "previewAsset": "assets/models/previews/1CnupsdOY2ZAzytxRsB-DO6kS-mdJB4qh.png"
   },
   {
    "name": "Stan",
@@ -2980,7 +3277,8 @@
    "id": "1L60XxK1vpDHyVaO-6Y59I7Npt9GhHxMh",
    "kind": "step",
    "previewId": null,
-   "order": 297
+   "order": 297,
+   "previewAsset": "assets/models/previews/1L60XxK1vpDHyVaO-6Y59I7Npt9GhHxMh.png"
   },
   {
    "name": "z",
@@ -2990,7 +3288,8 @@
    "id": "1VOohYweD7F1f5doh6IKOHs0oHgexOWRI",
    "kind": "step",
    "previewId": null,
-   "order": 298
+   "order": 298,
+   "previewAsset": "assets/models/previews/1VOohYweD7F1f5doh6IKOHs0oHgexOWRI.png"
   },
   {
    "name": "Zaz",
@@ -3000,7 +3299,8 @@
    "id": "1ied8vvsazp1GeT9l4_EPBVnQ9AVtsOL3",
    "kind": "step",
    "previewId": null,
-   "order": 299
+   "order": 299,
+   "previewAsset": "assets/models/previews/1ied8vvsazp1GeT9l4_EPBVnQ9AVtsOL3.png"
   },
   {
    "name": "ZB",
@@ -3010,7 +3310,8 @@
    "id": "152G-g1oXfMOEHm-Jfc8Qs9BVyCxjWQbz",
    "kind": "step",
    "previewId": null,
-   "order": 300
+   "order": 300,
+   "previewAsset": "assets/models/previews/152G-g1oXfMOEHm-Jfc8Qs9BVyCxjWQbz.png"
   },
   {
    "name": "zk",
@@ -3020,7 +3321,8 @@
    "id": "12CyBszJDK0iN3CVAn4gCYdMUS808VQiF",
    "kind": "step",
    "previewId": null,
-   "order": 301
+   "order": 301,
+   "previewAsset": "assets/models/previews/12CyBszJDK0iN3CVAn4gCYdMUS808VQiF.png"
   },
   {
    "name": "Zp",
@@ -3030,7 +3332,8 @@
    "id": "1ZzbkQ0LMQgHBIZHiOt_OG5_2ywx5QN6H",
    "kind": "step",
    "previewId": null,
-   "order": 302
+   "order": 302,
+   "previewAsset": "assets/models/previews/1ZzbkQ0LMQgHBIZHiOt_OG5_2ywx5QN6H.png"
   },
   {
    "name": "ZP",
@@ -3040,7 +3343,8 @@
    "id": "1HNc3gZ3UdgZrXrnbg3RIFeAJjlxApO4K",
    "kind": "step",
    "previewId": null,
-   "order": 303
+   "order": 303,
+   "previewAsset": "assets/models/previews/1HNc3gZ3UdgZrXrnbg3RIFeAJjlxApO4K.png"
   },
   {
    "name": "KGcl_3D",
@@ -3050,7 +3354,8 @@
    "id": "1c1bCgfgL4Cf3HYlPj1WJ7oW7A_7zfsQp",
    "kind": "step",
    "previewId": null,
-   "order": 304
+   "order": 304,
+   "previewAsset": "assets/models/previews/1c1bCgfgL4Cf3HYlPj1WJ7oW7A_7zfsQp.png"
   },
   {
    "name": "KNGcl",
@@ -3060,7 +3365,8 @@
    "id": "1gcdaSsyPxqyvTkqvStql1gdEUEeofcKF",
    "kind": "step",
    "previewId": null,
-   "order": 305
+   "order": 305,
+   "previewAsset": "assets/models/previews/1gcdaSsyPxqyvTkqvStql1gdEUEeofcKF.png"
   },
   {
    "name": "Ng",
@@ -3070,7 +3376,8 @@
    "id": "1WQsYCrZ1i_5n8a0-sR2XknjtPALSoWAh",
    "kind": "step",
    "previewId": null,
-   "order": 306
+   "order": 306,
+   "previewAsset": "assets/models/previews/1WQsYCrZ1i_5n8a0-sR2XknjtPALSoWAh.png"
   },
   {
    "name": "Sborka",
@@ -3080,7 +3387,8 @@
    "id": "14qVQxxZZ3inZ9GLqq67PGoXZrTk-RgUm",
    "kind": "step",
    "previewId": null,
-   "order": 307
+   "order": 307,
+   "previewAsset": "assets/models/previews/14qVQxxZZ3inZ9GLqq67PGoXZrTk-RgUm.png"
   },
   {
    "name": "V10",
@@ -3090,7 +3398,8 @@
    "id": "1mzPG-L0qHgWNoNk-dlmY4Kahqr6BnpJM",
    "kind": "step",
    "previewId": null,
-   "order": 308
+   "order": 308,
+   "previewAsset": "assets/models/previews/1mzPG-L0qHgWNoNk-dlmY4Kahqr6BnpJM.png"
   },
   {
    "name": "GpL",
@@ -3100,7 +3409,8 @@
    "id": "1BuKV67CYTUKA4FIp3lT-8ZzzPc4DOaho",
    "kind": "step",
    "previewId": null,
-   "order": 309
+   "order": 309,
+   "previewAsset": "assets/models/previews/1BuKV67CYTUKA4FIp3lT-8ZzzPc4DOaho.png"
   },
   {
    "name": "Gf40g",
@@ -3110,7 +3420,8 @@
    "id": "11sIrSn5tP9jBgKWl0Py2VlmChyDTMFf6",
    "kind": "step",
    "previewId": null,
-   "order": 310
+   "order": 310,
+   "previewAsset": "assets/models/previews/11sIrSn5tP9jBgKWl0Py2VlmChyDTMFf6.png"
   },
   {
    "name": "GFS28mm",
@@ -3120,7 +3431,8 @@
    "id": "1oLqN36BtOCUNdwKK0xenr32ope1emTKp",
    "kind": "step",
    "previewId": null,
-   "order": 311
+   "order": 311,
+   "previewAsset": "assets/models/previews/1oLqN36BtOCUNdwKK0xenr32ope1emTKp.png"
   },
   {
    "name": "G",
@@ -3130,7 +3442,8 @@
    "id": "1fmv7mVQToPso8olLZc7tpplbbFYkxX-8",
    "kind": "step",
    "previewId": null,
-   "order": 312
+   "order": 312,
+   "previewAsset": "assets/models/previews/1fmv7mVQToPso8olLZc7tpplbbFYkxX-8.png"
   },
   {
    "name": "Sborka",
@@ -3140,7 +3453,8 @@
    "id": "1lpdHXF3Fn5rAgZZj3bszkDPGT9IB5p-j",
    "kind": "step",
    "previewId": null,
-   "order": 313
+   "order": 313,
+   "previewAsset": "assets/models/previews/1lpdHXF3Fn5rAgZZj3bszkDPGT9IB5p-j.png"
   },
   {
    "name": "V10x90",
@@ -3150,7 +3464,8 @@
    "id": "19pUeDeXTi_P-hKlgQYDkB-gauzF2IqxF",
    "kind": "step",
    "previewId": null,
-   "order": 314
+   "order": 314,
+   "previewAsset": "assets/models/previews/19pUeDeXTi_P-hKlgQYDkB-gauzF2IqxF.png"
   },
   {
    "name": "A",
@@ -3160,7 +3475,8 @@
    "id": "1usujkDz_39ZbX1olJUHNzidjoO1AEpbV",
    "kind": "step",
    "previewId": null,
-   "order": 315
+   "order": 315,
+   "previewAsset": "assets/models/previews/1usujkDz_39ZbX1olJUHNzidjoO1AEpbV.png"
   },
   {
    "name": "M5",
@@ -3170,7 +3486,8 @@
    "id": "1fymCQGK6KWrUhtEICm23yVtSDNik7RVV",
    "kind": "step",
    "previewId": null,
-   "order": 316
+   "order": 316,
+   "previewAsset": "assets/models/previews/1fymCQGK6KWrUhtEICm23yVtSDNik7RVV.png"
   },
   {
    "name": "P",
@@ -3180,7 +3497,8 @@
    "id": "1q4uiqLNGV8vkgLOEhEwfgJrBgXtCvFvc",
    "kind": "step",
    "previewId": null,
-   "order": 317
+   "order": 317,
+   "previewAsset": "assets/models/previews/1q4uiqLNGV8vkgLOEhEwfgJrBgXtCvFvc.png"
   },
   {
    "name": "Sborka",
@@ -3190,7 +3508,8 @@
    "id": "1JX1QVkRT1Xq7sGtuNz2eyFu6nqlF8uvA",
    "kind": "step",
    "previewId": null,
-   "order": 318
+   "order": 318,
+   "previewAsset": "assets/models/previews/1JX1QVkRT1Xq7sGtuNz2eyFu6nqlF8uvA.png"
   },
   {
    "name": "Sborka",
@@ -3200,7 +3519,8 @@
    "id": "1P7EABZXwskb21M8IbracDiWcngCn5bTE",
    "kind": "step",
    "previewId": null,
-   "order": 319
+   "order": 319,
+   "previewAsset": "assets/models/previews/1P7EABZXwskb21M8IbracDiWcngCn5bTE.png"
   },
   {
    "name": "GP",
@@ -3210,7 +3530,8 @@
    "id": "1oFs_cLrQIiaoXsL4krC0INYG-rY-LRA3",
    "kind": "step",
    "previewId": null,
-   "order": 320
+   "order": 320,
+   "previewAsset": "assets/models/previews/1oFs_cLrQIiaoXsL4krC0INYG-rY-LRA3.png"
   },
   {
    "name": "GR",
@@ -3220,7 +3541,8 @@
    "id": "1srg_elQ1uqqbz9zXQlXc7SN54JUKY1Ly",
    "kind": "step",
    "previewId": null,
-   "order": 321
+   "order": 321,
+   "previewAsset": "assets/models/previews/1srg_elQ1uqqbz9zXQlXc7SN54JUKY1Ly.png"
   },
   {
    "name": "Груз - посадка под перпендикулярный вал",
@@ -3230,7 +3552,8 @@
    "id": "1a8RPcJYQ6_v1KbV4qAw0DgTHeGBzXHYN",
    "kind": "step",
    "previewId": null,
-   "order": 322
+   "order": 322,
+   "previewAsset": "assets/models/previews/1a8RPcJYQ6_v1KbV4qAw0DgTHeGBzXHYN.png"
   },
   {
    "name": "Груз 30гр. Эксцентрик",
@@ -3240,7 +3563,8 @@
    "id": "1F7CzOzqADJOlyeJLV98qlJw9vKnpwseP",
    "kind": "step",
    "previewId": null,
-   "order": 323
+   "order": 323,
+   "previewAsset": "assets/models/previews/1F7CzOzqADJOlyeJLV98qlJw9vKnpwseP.png"
   },
   {
    "name": "Груз к прикладу Вальтер",
@@ -3250,7 +3574,8 @@
    "id": "102X-L39MIJMVQwWD8sBkD4HjbvtfbMWA",
    "kind": "step",
    "previewId": null,
-   "order": 324
+   "order": 324,
+   "previewAsset": "assets/models/previews/102X-L39MIJMVQwWD8sBkD4HjbvtfbMWA.png"
   },
   {
    "name": "Груз к прикладу Вальтер 1",
@@ -3260,7 +3585,8 @@
    "id": "1-JgyXjWgEcQaFwhDSvX9S9GYpmsZ5TXC",
    "kind": "step",
    "previewId": null,
-   "order": 325
+   "order": 325,
+   "previewAsset": "assets/models/previews/1-JgyXjWgEcQaFwhDSvX9S9GYpmsZ5TXC.png"
   },
   {
    "name": "Груз на рельсу",
@@ -3270,7 +3596,8 @@
    "id": "11K8b9UumsKeBDfckscN0i1i94ocVgpqK",
    "kind": "step",
    "previewId": null,
-   "order": 326
+   "order": 326,
+   "previewAsset": "assets/models/previews/11K8b9UumsKeBDfckscN0i1i94ocVgpqK.png"
   },
   {
    "name": "Груз под щеку Файна 100гр",
@@ -3280,7 +3607,8 @@
    "id": "17gp45LmZq4HV6P8Iw7binWswsYk-eESp",
    "kind": "step",
    "previewId": null,
-   "order": 327
+   "order": 327,
+   "previewAsset": "assets/models/previews/17gp45LmZq4HV6P8Iw7binWswsYk-eESp.png"
   },
   {
    "name": "Под приклад штеер 2шт",
@@ -3290,7 +3618,8 @@
    "id": "1ImCaqMqfLbXQvmDn3dOxDcQBEnxg0GZV",
    "kind": "step",
    "previewId": null,
-   "order": 328
+   "order": 328,
+   "previewAsset": "assets/models/previews/1ImCaqMqfLbXQvmDn3dOxDcQBEnxg0GZV.png"
   }
  ]
 }

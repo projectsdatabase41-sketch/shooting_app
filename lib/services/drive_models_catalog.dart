@@ -102,6 +102,9 @@ class DriveModelsCatalog {
         previewId: rawPreview == null || '$rawPreview'.isEmpty
             ? null
             : '$rawPreview',
+        previewAsset: (m['previewAsset'] is String && '${m['previewAsset']}'.isNotEmpty)
+            ? '${m['previewAsset']}'
+            : null,
         order: m['order'] is num ? (m['order'] as num).toInt() : 0,
       ));
     }
@@ -127,10 +130,13 @@ class DriveCatalogModel {
   /// Путь внутри Drive-дерева, например `Категория/G1.stp`.
   final String path;
 
-  /// Идентификатор картинки-превью на Drive; null — превью пока нет и
-  /// карточка рисуется заглушкой (иконка + название, владелец 24.11):
-  /// картинки на Drive пока не размещены.
+  /// Идентификатор картинки-превью на Drive; null — картинки на Drive нет.
   final String? previewId;
+
+  /// Превью, вложенное в ассеты приложения (наш рендер модели): картинки
+  /// видны сразу и без сети. Если поля нет — берём превью с Drive по
+  /// [previewId], иначе рисуем заглушку.
+  final String? previewAsset;
 
   final int order;
 
@@ -141,10 +147,12 @@ class DriveCatalogModel {
     this.category = '',
     this.path = '',
     this.previewId,
+    this.previewAsset,
     this.order = 0,
   });
 
-  /// Есть ли превью на Drive (пока картинки не размещены — везде null).
+  /// Есть ли чем показать картинку: вложенный ассет или ссылка Drive.
   bool get hasPreview =>
-      previewId != null && previewId!.trim().isNotEmpty;
+      (previewAsset != null && previewAsset!.isNotEmpty) ||
+      (previewId != null && previewId!.trim().isNotEmpty);
 }

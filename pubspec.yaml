@@ -147,6 +147,9 @@ flutter:
     # владелец 24.11 — «модели должны лететь с гугл диска»). Читается
     # сервисом lib/services/drive_models_catalog.dart.
     - assets/models/
+    # PNG-превью моделей: наши рендеры (329 шт., ~5 МБ). Каталог моделей
+    # лежит на Google Диске, картинок там нет, поэтому они вшиты в APK.
+    - assets/models/previews/
     # Каталог готовых пакетов озвучки финалов (модуль «Озвучка», владелец
     # 24.11): lang/file/bytes/phrases/driveId, читает voice_pack_store.dart.
     - assets/voice/

@@ -352,16 +352,26 @@ class _ModelsCatalogBodyState extends State<ModelsCatalogBody> {
           children: [
             AspectRatio(
               aspectRatio: 4 / 3,
-              child: m.hasPreview
-                  ? Image.network(
-                      DriveModelsCatalog.previewUrl(m.previewId!),
+              // Сначала вложенное в приложение превью (наш рендер модели —
+              // картинки видны сразу и без сети), затем картинка с Drive,
+              // иначе заглушка с иконкой.
+              child: m.previewAsset != null && m.previewAsset!.isNotEmpty
+                  ? Image.asset(
+                      m.previewAsset!,
                       fit: BoxFit.cover,
                       filterQuality: FilterQuality.medium,
-                      // Превью не догрузилось — та же заглушка, что без
-                      // превью: сетка не «мигает» чужими картинками.
                       errorBuilder: (_, __, ___) => _previewPlaceholder(cs),
                     )
-                  : _previewPlaceholder(cs),
+                  : m.hasPreview
+                      ? Image.network(
+                          DriveModelsCatalog.previewUrl(m.previewId!),
+                          fit: BoxFit.cover,
+                          filterQuality: FilterQuality.medium,
+                          // Превью не догрузилось — та же заглушка, что без
+                          // превью: сетка не «мигает» чужими картинками.
+                          errorBuilder: (_, __, ___) => _previewPlaceholder(cs),
+                        )
+                      : _previewPlaceholder(cs),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
