@@ -31,10 +31,13 @@ class TaskAi {
       systemPrompt:
           'You help a rifle/pistol shooting coach compose a task for an athlete in the app. '
           'Below is a reference on how tasks are structured. Read the coach description and the answers to clarifying questions.\n'
-          'ATHLETE PROFILE (if given in the context) is already known: the disciplines (weapon), '
+          // Отзыв 24.11: в контексте передаётся и разряд — учитывать его
+          // при подборе нагрузки, нормативов и целей.
+          'ATHLETE PROFILE (if given in the context) is already known: the rank (sports class), '
+          'the disciplines (weapon), '
           'usual targets/distances and positions, shots in a series from the profile and recent exercises. '
           'Do NOT ask about anything the profile, the coach description or the previous answers already say '
-          '(weapon, distance, position, shots in a series) — take these values directly; in particular, '
+          '(rank, weapon, distance, position, shots in a series) — take these values directly; in particular, '
           'if the position is already known (for example, the athlete only trains standing), never ask about it again. '
           'If the STRUCTURE cannot be built correctly without clarification — return JSON {"questions": ["…", "…"]} '
           '(1-4 short questions, only about the structure and what is unclear; do not repeat a question that was '

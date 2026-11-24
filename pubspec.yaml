@@ -143,6 +143,10 @@ flutter:
     - assets/webview/vendor/jsm/environments/
     - assets/webview/vendor/jsm/loaders/
     - assets/webview/vendor/jsm/utils/
+    # Каталог 3D-моделей с Google Drive (лист ID файлов собран заранее,
+    # владелец 24.11 — «модели должны лететь с гугл диска»). Читается
+    # сервисом lib/services/drive_models_catalog.dart.
+    - assets/models/
     # Встроенные словари интерфейса (en/de/zh), см. lib/i18n/i18n.dart.
     - assets/i18n/
     # Справочник ИИ по заданиям тренера (lib/tasks/task_ai.dart).

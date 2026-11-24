@@ -158,21 +158,9 @@ html, body {
   border-color: rgba(76, 141, 255, 0.36);
 }
 
-.segmented {
-  display: flex;
-  gap: 2px;
-  padding: 2px;
-  border-radius: 9px;
-  background: rgba(0, 0, 0, 0.22);
-}
-
-.btn-seg { height: 26px; padding: 0 9px; font-size: 12px; }
-
-.is-on.btn-seg {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.1);
-  border-color: var(--line-strong);
-}
+/* Блок ракурсов (.segmented / .btn-seg) удалён вместе с разметкой —
+   замечание 1 владельца 24.11: виды (сбоку, спереди,…) могут быть
+   перепутаны, в шапке оставлены только «Подогнать» и прочие кнопки. */
 
 /* ---------- info panel ---------- */
 
@@ -796,12 +784,11 @@ body.ui-minimal .empty {
   display: none !important;
 }
 
-/* ---------- режим встраивания в приложение (?embed=1) ---------- */
-/* Просьба владельца 24.11: у приложения своя шапка, поэтому собственную
-   шапку вьюера (header.topbar) с кнопками прячем, а панели, которые в
-   обычном режиме опущены под шапкой (top: 64px), поднимаем выше — к краю.
-   Спецификатор html.embed-viewer выше, чем у правил в медиазапросе ниже,
-   поэтому поднять панели на телефоне тоже получается без !important. */
+/* ---------- режим встраивания (?embed=1) ---------- */
+/* Внешние страницы (Тильда/iframe) могут открыть вьюер без шапки.
+   Приложение этот режим больше не включает: шапку вьюера вернули
+   (замечание 1 владельца 24.11 — панели перекрывались Flutter-шапкой),
+   но поддержку embed для внешних пользователей сохраняем. */
 
 html.embed-viewer .topbar { display: none !important; }
 
@@ -831,17 +818,13 @@ html.embed-viewer .settings-panel { top: 8px; }
 
   .sep { display: none; }
 
+  /* На мобильных «Каталог» и «Открыть STEP» на первой строке, за ними
+     fit/edges — тоже: сегментированный блок ракурсов убран (замечание 1
+     владельца 24.11), поэтому вторая строка больше не нужна. */
+  .toolbar #catalog-btn,
   .toolbar #open-btn { order: 1; flex: 1 1 auto; justify-content: center; }
   .toolbar #fit-btn,
   .toolbar #edges-btn { order: 1; }
-
-  .segmented {
-    order: 2;
-    flex: 1 1 100%;
-    justify-content: space-between;
-  }
-
-  .btn-seg { flex: 1 1 0; justify-content: center; padding: 0 4px; }
 
   .btn { padding: 0 9px; font-size: 12px; }
 

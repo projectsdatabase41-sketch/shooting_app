@@ -10,6 +10,7 @@ import '../state/app_data_store.dart';
 import '../widgets/glass_pill.dart';
 import '../widgets/press_3d.dart';
 import '../widgets/swipe_to_delete.dart';
+import 'coach_tasks_screen.dart';
 import 'task_models.dart';
 import 'task_run_screen.dart';
 import 'task_service.dart';
@@ -88,6 +89,14 @@ class _AthleteTasksScreenState extends State<AthleteTasksScreen> {
     _load();
   }
 
+  /// Отзыв 24.11: «если выберу чьи данные — я, то кнопка + задание
+  /// отсутствует» — на экране «Я» создаём задание себе тем же редактором,
+  /// что и у тренера (получатель — один чип «Себе»).
+  Future<void> _create() async {
+    final sent = await openSelfTaskEditor(context);
+    if (sent) _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -107,9 +116,23 @@ class _AthleteTasksScreenState extends State<AthleteTasksScreen> {
               ? const AppLoader()
               : Text(_error!));
     } else if (_tasks!.isEmpty) {
+      // Отзыв 24.11: пустой экран — не только подсказка, но и кнопка
+      // «+ задание» (создать задание себе).
       body = Center(
-          child: Text(tr('Заданий пока нет'),
-              style: TextStyle(color: theme.hintColor)));
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(tr('Заданий пока нет'),
+                style: TextStyle(color: theme.hintColor)),
+            const SizedBox(height: 16),
+            FilledButton.tonalIcon(
+              onPressed: _create,
+              icon: const Icon(Icons.add),
+              label: Text(tr('Задание')),
+            ),
+          ],
+        ),
+      );
     } else {
       final active = [..._tasks!]..sort((a, b) {
           int rank(TaskPlan t) =>
@@ -204,6 +227,15 @@ class _AthleteTasksScreenState extends State<AthleteTasksScreen> {
               onTap: _load)
         ],
       ),
+      // Отзыв 24.11: в режиме «Я» кнопка «+ задание» должна быть — создаём
+      // задание себе. Пока нет своей базы — кнопки нет (создавать некуда).
+      // Появляется также и при пустом списке заданий.
+      floatingActionButton: _service.available
+          ? FloatingActionButton.extended(
+              onPressed: _create,
+              icon: const Icon(Icons.add),
+              label: Text(tr('Задание')))
+          : null,
       body: widget.top == null
           ? body
           : Column(children: [

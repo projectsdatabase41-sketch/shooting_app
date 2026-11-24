@@ -1,0 +1,3296 @@
+{
+ "source": "google-drive",
+ "rootId": "1jctM_rUtijeK3ts8lPUfRW5NSzT88VFO",
+ "items": [
+  {
+   "name": "G1",
+   "fileName": "G1.stp",
+   "category": "20mm barrel weight for air rifles",
+   "path": "20mm barrel weight for air rifles/G1.stp",
+   "id": "16EeW8nLeawaq9_Ib9BUyvS_xENNakPKs",
+   "kind": "step",
+   "previewId": null,
+   "order": 0
+  },
+  {
+   "name": "G2",
+   "fileName": "G2.stp",
+   "category": "20mm barrel weight for air rifles",
+   "path": "20mm barrel weight for air rifles/G2.stp",
+   "id": "12OvMBZ2p_X3H5Cmw2bMwd3zGsA_sD4Lo",
+   "kind": "step",
+   "previewId": null,
+   "order": 1
+  },
+  {
+   "name": "G3",
+   "fileName": "G3.stp",
+   "category": "20mm barrel weight for air rifles",
+   "path": "20mm barrel weight for air rifles/G3.stp",
+   "id": "17yi42lSgH7srvDGAS7rCPWqIZ26-SbHd",
+   "kind": "step",
+   "previewId": null,
+   "order": 2
+  },
+  {
+   "name": "G4",
+   "fileName": "G4.stp",
+   "category": "20mm barrel weight for air rifles",
+   "path": "20mm barrel weight for air rifles/G4.stp",
+   "id": "1uCH4Qlk-8jHliui0XGvMnHaO9gcndInI",
+   "kind": "step",
+   "previewId": null,
+   "order": 3
+  },
+  {
+   "name": "G5",
+   "fileName": "G5.stp",
+   "category": "20mm barrel weight for air rifles",
+   "path": "20mm barrel weight for air rifles/G5.stp",
+   "id": "1gg3jUzezwl0uq-KD6J-2qv9FJOu73Hxm",
+   "kind": "step",
+   "previewId": null,
+   "order": 4
+  },
+  {
+   "name": "1.2",
+   "fileName": "1.2.stp",
+   "category": "butt plates",
+   "path": "butt plates/Buttplate hooks/KZ002/1.2.stp",
+   "id": "1ZKKgHfhoWRx0s7tWpgAI5bdm_9LY_0cl",
+   "kind": "step",
+   "previewId": null,
+   "order": 5
+  },
+  {
+   "name": "1.2.2",
+   "fileName": "1.2.2.stp",
+   "category": "butt plates",
+   "path": "butt plates/Buttplate hooks/KZ002/1.2.2.stp",
+   "id": "1QLz79OwWTcKzkQBnloYYWNzduI20v0e1",
+   "kind": "step",
+   "previewId": null,
+   "order": 6
+  },
+  {
+   "name": "2.2",
+   "fileName": "2.2.stp",
+   "category": "butt plates",
+   "path": "butt plates/Buttplate hooks/KZ002/2.2.stp",
+   "id": "10YNxBcD9rrF9PXN1l9bUiMfya5bQfgKp",
+   "kind": "step",
+   "previewId": null,
+   "order": 7
+  },
+  {
+   "name": "K",
+   "fileName": "K.stp",
+   "category": "butt plates",
+   "path": "butt plates/Buttplate hooks/KZ031_3D/K.stp",
+   "id": "1L3UZ3SsEdyKgEcmpHV5gvsFl7vYaQlf4",
+   "kind": "step",
+   "previewId": null,
+   "order": 8
+  },
+  {
+   "name": "K1",
+   "fileName": "K1.stp",
+   "category": "butt plates",
+   "path": "butt plates/Buttplate hooks/KZ001/K1.stp",
+   "id": "1mg-jSzAtlrn5dBnsRaC7ywMV2ZOU5cvW",
+   "kind": "step",
+   "previewId": null,
+   "order": 9
+  },
+  {
+   "name": "K2",
+   "fileName": "K2.stp",
+   "category": "butt plates",
+   "path": "butt plates/Buttplate hooks/KZ001/K2.stp",
+   "id": "1MYYmbV8Wnn2E8U6AVEVz4dp5A9qKd42H",
+   "kind": "step",
+   "previewId": null,
+   "order": 10
+  },
+  {
+   "name": "KA",
+   "fileName": "KA.stp",
+   "category": "butt plates",
+   "path": "butt plates/Mount for buttplate/Corner/V1/KA.stp",
+   "id": "1gSwud-ry61rhZgc-KAkQApTTdBHyPwjn",
+   "kind": "step",
+   "previewId": null,
+   "order": 11
+  },
+  {
+   "name": "KL 2",
+   "fileName": "KL 2.stp",
+   "category": "butt plates",
+   "path": "butt plates/ErgoHex_3D/KL 2.stp",
+   "id": "1_UMoFbZdxDPnqha2B2V049fvG_rn8mE4",
+   "kind": "step",
+   "previewId": null,
+   "order": 12
+  },
+  {
+   "name": "Kp 4 3D",
+   "fileName": "Kp 4 3D.stp",
+   "category": "butt plates",
+   "path": "butt plates/Mount for buttplate/Corner/V2/Kp 4 3D.stp",
+   "id": "1A_BHs1_2tTo-dLXnHxlSgRHHQwIeXhEZ",
+   "kind": "step",
+   "previewId": null,
+   "order": 13
+  },
+  {
+   "name": "Kp 4L 3D",
+   "fileName": "Kp 4L 3D.stp",
+   "category": "butt plates",
+   "path": "butt plates/Mount for buttplate/Corner/V2 mini/Kp 4L 3D.stp",
+   "id": "11lGovT00fP_hfwestR6XXLJ0zkkomRno",
+   "kind": "step",
+   "previewId": null,
+   "order": 14
+  },
+  {
+   "name": "KpZ",
+   "fileName": "KpZ.stp",
+   "category": "butt plates",
+   "path": "butt plates/Start/KpZ.stp",
+   "id": "16VfE78igpP1ej3u0PWEtn0QQgdFiqqlC",
+   "kind": "step",
+   "previewId": null,
+   "order": 15
+  },
+  {
+   "name": "Krep",
+   "fileName": "Krep.stp",
+   "category": "butt plates",
+   "path": "butt plates/Start/Krep.stp",
+   "id": "1faqo4R33rtLfWuPUEMzodifawIj5fwvr",
+   "kind": "step",
+   "previewId": null,
+   "order": 16
+  },
+  {
+   "name": "Krep 4 3D",
+   "fileName": "Krep 4 3D.stp",
+   "category": "butt plates",
+   "path": "butt plates/Mount for buttplate/Rounding/Krep 4 3D.stp",
+   "id": "1JNGTsioYxL8kavR3IVhmQuZl0ozq0EAr",
+   "kind": "step",
+   "previewId": null,
+   "order": 17
+  },
+  {
+   "name": "Krep+r",
+   "fileName": "Krep+r.stp",
+   "category": "butt plates",
+   "path": "butt plates/Start/Krep+r.stp",
+   "id": "1UCvb48ECi3MClvinn-tvIStxu8kK1HRn",
+   "kind": "step",
+   "previewId": null,
+   "order": 18
+  },
+  {
+   "name": "Krep10mm",
+   "fileName": "Krep10mm.stp",
+   "category": "butt plates",
+   "path": "butt plates/Buttplate hooks/KZ031_3D/Krep10mm.stp",
+   "id": "1hUOKNoliwv-tFwGa6YnzRXqBkGaVcg2S",
+   "kind": "step",
+   "previewId": null,
+   "order": 19
+  },
+  {
+   "name": "Krep12mm",
+   "fileName": "Krep12mm.stp",
+   "category": "butt plates",
+   "path": "butt plates/Buttplate hooks/KZ031_3D/Krep12mm.stp",
+   "id": "14q5PBl7LmJeGxrXCFGAwBMFgEc0cy3I1",
+   "kind": "step",
+   "previewId": null,
+   "order": 20
+  },
+  {
+   "name": "KZ1KD",
+   "fileName": "KZ1KD.stp",
+   "category": "butt plates",
+   "path": "butt plates/Buttplate hooks/KZ001_3D/KZ1KD.stp",
+   "id": "1sMeiKBrzW_vB7zM4qd9163hONi-KjpUb",
+   "kind": "step",
+   "previewId": null,
+   "order": 21
+  },
+  {
+   "name": "KZ1KK",
+   "fileName": "KZ1KK.stp",
+   "category": "butt plates",
+   "path": "butt plates/Buttplate hooks/KZ001_3D/KZ1KK.stp",
+   "id": "1Dm4rpP182TgmWkelhPuLg0iJyUbIGRKi",
+   "kind": "step",
+   "previewId": null,
+   "order": 22
+  },
+  {
+   "name": "L 3D 150mm",
+   "fileName": "L 3D 150mm.stp",
+   "category": "butt plates",
+   "path": "butt plates/Mount for buttplate/Corner/L 3D 150mm.stp",
+   "id": "1BNivQcLaOInO9efF0Qkdod66-kTfiIcX",
+   "kind": "step",
+   "previewId": null,
+   "order": 23
+  },
+  {
+   "name": "L 3D 150mm",
+   "fileName": "L 3D 150mm.stp",
+   "category": "butt plates",
+   "path": "butt plates/Mount for buttplate/Rounding/L 3D 150mm.stp",
+   "id": "1aFqwdkOFcWJqmse_9-db_sB6_3bYb_Wy",
+   "kind": "step",
+   "previewId": null,
+   "order": 24
+  },
+  {
+   "name": "L 3D 150mm Strong",
+   "fileName": "L 3D 150mm Strong.stp",
+   "category": "butt plates",
+   "path": "butt plates/Mount for buttplate/Corner/L 3D 150mm Strong.stp",
+   "id": "1_CUK2IyX7pwF60IF514Gbfym1W-poA5l",
+   "kind": "step",
+   "previewId": null,
+   "order": 25
+  },
+  {
+   "name": "L3D",
+   "fileName": "L3D.stp",
+   "category": "butt plates",
+   "path": "butt plates/Universal_3D/L3D.stp",
+   "id": "1znj3Z0bU4yvWYTl7XeF-7GjnpTSVWXgW",
+   "kind": "step",
+   "previewId": null,
+   "order": 26
+  },
+  {
+   "name": "L_n",
+   "fileName": "L_n.stp",
+   "category": "butt plates",
+   "path": "butt plates/Start/L_n.stp",
+   "id": "1B3HMbim6PADXkFcGxADuQJBM9jKIyAzH",
+   "kind": "step",
+   "previewId": null,
+   "order": 27
+  },
+  {
+   "name": "L_n+r",
+   "fileName": "L_n+r.stp",
+   "category": "butt plates",
+   "path": "butt plates/Start/L_n+r.stp",
+   "id": "1_ZoE35lcj3SV1XmVhDBAKLIswbkcMSUO",
+   "kind": "step",
+   "previewId": null,
+   "order": 28
+  },
+  {
+   "name": "L_v",
+   "fileName": "L_v.stp",
+   "category": "butt plates",
+   "path": "butt plates/Start/L_v.stp",
+   "id": "1R36FNho2KqzdJBioreHRMD9K5F5KapS2",
+   "kind": "step",
+   "previewId": null,
+   "order": 29
+  },
+  {
+   "name": "L_v+r",
+   "fileName": "L_v+r.stp",
+   "category": "butt plates",
+   "path": "butt plates/Start/L_v+r.stp",
+   "id": "1zr7HGddvNe8HFLniPwI34Sp9GBhqwbcQ",
+   "kind": "step",
+   "previewId": null,
+   "order": 30
+  },
+  {
+   "name": "Lk",
+   "fileName": "Lk.stp",
+   "category": "butt plates",
+   "path": "butt plates/ErgoHex/Lk.stp",
+   "id": "1womHAx56x0_K7FiYetCjTIJqkC6oxTf3",
+   "kind": "step",
+   "previewId": null,
+   "order": 31
+  },
+  {
+   "name": "Ln",
+   "fileName": "Ln.stp",
+   "category": "butt plates",
+   "path": "butt plates/ErgoHex/Ln.stp",
+   "id": "16XHYXee4jPZSNaEjsnJKRTJASd7s82se",
+   "kind": "step",
+   "previewId": null,
+   "order": 32
+  },
+  {
+   "name": "LN 2",
+   "fileName": "LN 2.stp",
+   "category": "butt plates",
+   "path": "butt plates/ErgoHex_3D/LN 2.stp",
+   "id": "1ACI88MxoOTSfsOJQyq8i8C1PraFu2sG7",
+   "kind": "step",
+   "previewId": null,
+   "order": 33
+  },
+  {
+   "name": "LN 3D",
+   "fileName": "LN 3D.stp",
+   "category": "butt plates",
+   "path": "butt plates/Universal_3D/LN 3D.stp",
+   "id": "1k91rNCX58UsVnzW5HE3GLjVfphudpauD",
+   "kind": "step",
+   "previewId": null,
+   "order": 34
+  },
+  {
+   "name": "LN_2",
+   "fileName": "LN_2.stp",
+   "category": "butt plates",
+   "path": "butt plates/Universal/LN_2.stp",
+   "id": "1PHOjE3Biuxbt91O0abEvyBL7ZKiPG_M7",
+   "kind": "step",
+   "previewId": null,
+   "order": 35
+  },
+  {
+   "name": "LS 2",
+   "fileName": "LS 2.stp",
+   "category": "butt plates",
+   "path": "butt plates/ErgoHex_3D/LS 2.stp",
+   "id": "1XuuspaQBNqAbPKRKH4qEh1IqBxa6OmZr",
+   "kind": "step",
+   "previewId": null,
+   "order": 36
+  },
+  {
+   "name": "LS 3D",
+   "fileName": "LS 3D.stp",
+   "category": "butt plates",
+   "path": "butt plates/Universal_3D/LS 3D.stp",
+   "id": "13aS637KpmvTOCQcOMClgxlSw9o3FJTAU",
+   "kind": "step",
+   "previewId": null,
+   "order": 37
+  },
+  {
+   "name": "LS_2",
+   "fileName": "LS_2.stp",
+   "category": "butt plates",
+   "path": "butt plates/Universal/LS_2.stp",
+   "id": "1Xv7n7jBB-2oloUXH8JDkufeJsp60UWWk",
+   "kind": "step",
+   "previewId": null,
+   "order": 38
+  },
+  {
+   "name": "Lv",
+   "fileName": "Lv.stp",
+   "category": "butt plates",
+   "path": "butt plates/ErgoHex/Lv.stp",
+   "id": "1YwR7rqoFlKgmA8aXSVtpk5sObdB3-vty",
+   "kind": "step",
+   "previewId": null,
+   "order": 39
+  },
+  {
+   "name": "LV 2",
+   "fileName": "LV 2.stp",
+   "category": "butt plates",
+   "path": "butt plates/ErgoHex_3D/LV 2.stp",
+   "id": "1uAr1FB33Di1rMAY_-bfjJF-AfgaLg9UQ",
+   "kind": "step",
+   "previewId": null,
+   "order": 40
+  },
+  {
+   "name": "LV 3D",
+   "fileName": "LV 3D.stp",
+   "category": "butt plates",
+   "path": "butt plates/Universal_3D/LV 3D.stp",
+   "id": "1Gg6f9i26YkHl9cdE17Y3opASVPoxtAE3",
+   "kind": "step",
+   "previewId": null,
+   "order": 41
+  },
+  {
+   "name": "LV_2",
+   "fileName": "LV_2.stp",
+   "category": "butt plates",
+   "path": "butt plates/Universal/LV_2.stp",
+   "id": "1TvV1oQwGIAZtuk8eBhGSjqWrl33h2I1J",
+   "kind": "step",
+   "previewId": null,
+   "order": 42
+  },
+  {
+   "name": "N",
+   "fileName": "N.stp",
+   "category": "butt plates",
+   "path": "butt plates/Buttplate hooks/KZ031_3D/N.stp",
+   "id": "1Kr9er6sABOYLVo8Kw-uKc1ty4kfNs1tO",
+   "kind": "step",
+   "previewId": null,
+   "order": 43
+  },
+  {
+   "name": "NZ",
+   "fileName": "NZ.stp",
+   "category": "butt plates",
+   "path": "butt plates/Mount for buttplate/Minimum/NZ.stp",
+   "id": "1d2DfEpZECEvEWLqWVl3iQxccY9Dt3hRk",
+   "kind": "step",
+   "previewId": null,
+   "order": 44
+  },
+  {
+   "name": "NZ003",
+   "fileName": "NZ003.stp",
+   "category": "butt plates",
+   "path": "butt plates/Buttplate hooks/KZ003_3D/NZ003.stp",
+   "id": "1skOUY0W7W7Q7sx5y7_7UIO9tM-Xs6_yW",
+   "kind": "step",
+   "previewId": null,
+   "order": 45
+  },
+  {
+   "name": "NZ003_3D",
+   "fileName": "NZ003_3D.stp",
+   "category": "butt plates",
+   "path": "butt plates/Buttplate hooks/KZ003_3D/NZ003_3D.stp",
+   "id": "1Eve8hy0COvVdsoui4K7TY81RkBp9dcZq",
+   "kind": "step",
+   "previewId": null,
+   "order": 46
+  },
+  {
+   "name": "Pl",
+   "fileName": "Pl.stp",
+   "category": "butt plates",
+   "path": "butt plates/Start/Pl.stp",
+   "id": "1RdZyw_ngM2So6WtnxYMhHnh2jU-McLKR",
+   "kind": "step",
+   "previewId": null,
+   "order": 47
+  },
+  {
+   "name": "PL_3D",
+   "fileName": "PL_3D.stp",
+   "category": "butt plates",
+   "path": "butt plates/Mount for buttplate/United/PL_3D.stp",
+   "id": "17gqj12C9oowZk-RtJktVU5ZiU-_Zb5TZ",
+   "kind": "step",
+   "previewId": null,
+   "order": 48
+  },
+  {
+   "name": "PL_CNC",
+   "fileName": "PL_CNC.stp",
+   "category": "butt plates",
+   "path": "butt plates/Mount for buttplate/United/PL_CNC.stp",
+   "id": "1uGFqNKYO1oWLMA_yDrLZBnyNPc4NYY0u",
+   "kind": "step",
+   "previewId": null,
+   "order": 49
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "butt plates",
+   "path": "butt plates/Start/Sborka.stp",
+   "id": "1FsZGdTQeIMJzxIukEWihhL22STedqMGc",
+   "kind": "step",
+   "previewId": null,
+   "order": 50
+  },
+  {
+   "name": "U3D",
+   "fileName": "U3D.stp",
+   "category": "butt plates",
+   "path": "butt plates/SimpleSix_3D/U3D.stp",
+   "id": "1g_L9nEAprxj6W_WJ1HkGtwjGcdKa1BfM",
+   "kind": "step",
+   "previewId": null,
+   "order": 51
+  },
+  {
+   "name": "VD_K",
+   "fileName": "VD_K.stp",
+   "category": "butt plates",
+   "path": "butt plates/Buttplate hooks/KZ002_3D/VD_K.stp",
+   "id": "1IegTLajf784nStab5NdGUCUcvZIbrZ4w",
+   "kind": "step",
+   "previewId": null,
+   "order": 52
+  },
+  {
+   "name": "VK_D",
+   "fileName": "VK_D.stp",
+   "category": "butt plates",
+   "path": "butt plates/Buttplate hooks/KZ003_3D/VK_D.stp",
+   "id": "17OnO3oXHYPP4LH3wre4rbA6bmRLHCXB-",
+   "kind": "step",
+   "previewId": null,
+   "order": 53
+  },
+  {
+   "name": "VK_K",
+   "fileName": "VK_K.stp",
+   "category": "butt plates",
+   "path": "butt plates/Buttplate hooks/KZ002_3D/VK_K.stp",
+   "id": "1BxK6jmB36eKm5_-2aqtzGg8QFuwF1ow3",
+   "kind": "step",
+   "previewId": null,
+   "order": 54
+  },
+  {
+   "name": "VK_K",
+   "fileName": "VK_K.stp",
+   "category": "butt plates",
+   "path": "butt plates/Buttplate hooks/KZ003_3D/VK_K.stp",
+   "id": "1Mfl4JLdtwLP9UTrDHj-bbtPTg_tkOgCd",
+   "kind": "step",
+   "previewId": null,
+   "order": 55
+  },
+  {
+   "name": "VVD_K",
+   "fileName": "VVD_K.stp",
+   "category": "butt plates",
+   "path": "butt plates/Buttplate hooks/KZ002_3D/VVD_K.stp",
+   "id": "1xSeqilX-fegmOXDy3J1nTVz-Hjnr6POg",
+   "kind": "step",
+   "previewId": null,
+   "order": 56
+  },
+  {
+   "name": "Y",
+   "fileName": "Y.stp",
+   "category": "butt plates",
+   "path": "butt plates/ErgoHex/Y.stp",
+   "id": "1rr_qMsjeZr6dJELWzXOPzec41Tt8Oflt",
+   "kind": "step",
+   "previewId": null,
+   "order": 57
+  },
+  {
+   "name": "Y",
+   "fileName": "Y.stp",
+   "category": "butt plates",
+   "path": "butt plates/ErgoHex_3D/Y.stp",
+   "id": "1SClXaNfs3oSu7EP-2AAlibMUOE-gS4KD",
+   "kind": "step",
+   "previewId": null,
+   "order": 58
+  },
+  {
+   "name": "y",
+   "fileName": "y.stp",
+   "category": "butt plates",
+   "path": "butt plates/Universal/y.stp",
+   "id": "1UZOVa-f4TbmBEnSdhwwqBIelrARPFJmb",
+   "kind": "step",
+   "previewId": null,
+   "order": 59
+  },
+  {
+   "name": "Y2",
+   "fileName": "Y2.stp",
+   "category": "butt plates",
+   "path": "butt plates/ErgoHex/Y2.stp",
+   "id": "1fmrdAYQsYd9EcF9l9DuCMqqaIQMmf1K4",
+   "kind": "step",
+   "previewId": null,
+   "order": 60
+  },
+  {
+   "name": "ZK 3D",
+   "fileName": "ZK 3D.stp",
+   "category": "butt plates",
+   "path": "butt plates/Mount for buttplate/Rounding/ZK 3D.stp",
+   "id": "1aWdjznimUDRion6Zxm73yakrJ_eDOApR",
+   "kind": "step",
+   "previewId": null,
+   "order": 61
+  },
+  {
+   "name": "ZK_3D",
+   "fileName": "ZK_3D.stp",
+   "category": "butt plates",
+   "path": "butt plates/Mount for buttplate/Corner/V2/ZK_3D.stp",
+   "id": "1zPCpNoGOaE-MFPYQ15hX0NBocqkDKFf7",
+   "kind": "step",
+   "previewId": null,
+   "order": 62
+  },
+  {
+   "name": "ZKA_3D",
+   "fileName": "ZKA_3D.stp",
+   "category": "butt plates",
+   "path": "butt plates/Mount for buttplate/Corner/V1/ZKA_3D.stp",
+   "id": "169IQQkb_i26wLLuv78tPtv75-3854qep",
+   "kind": "step",
+   "previewId": null,
+   "order": 63
+  },
+  {
+   "name": "ZKL_3D",
+   "fileName": "ZKL_3D.stp",
+   "category": "butt plates",
+   "path": "butt plates/Mount for buttplate/Corner/V2 mini/ZKL_3D.stp",
+   "id": "1ES4BZdBbejarWo3Wm49qN8iG-Hp_RaN-",
+   "kind": "step",
+   "previewId": null,
+   "order": 64
+  },
+  {
+   "name": "ZT4NZ1WKZ3L",
+   "fileName": "ZT4NZ1WKZ3L.stp",
+   "category": "butt plates",
+   "path": "butt plates/SimpleSix_3D/ZT4NZ1WKZ3L.stp",
+   "id": "1UU23_AETNp5gilSRBK3x_dqy1nXPY8xP",
+   "kind": "step",
+   "previewId": null,
+   "order": 65
+  },
+  {
+   "name": "ZT7NZ1WRZ3L_3D",
+   "fileName": "ZT7NZ1WRZ3L_3D.stp",
+   "category": "butt plates",
+   "path": "butt plates/ErgoHex_3D/ZT7NZ1WRZ3L_3D.stp",
+   "id": "1u2mNyZPvgY9WfYC93mil4bt5jsplcN31",
+   "kind": "step",
+   "previewId": null,
+   "order": 66
+  },
+  {
+   "name": "Psh160",
+   "fileName": "Psh160.stp",
+   "category": "Cheek rest",
+   "path": "Cheek rest/Base/Прикладки/Carbon/Psh160.stp",
+   "id": "1JANLaVFdvwoyb20o76DUmeGZaFK-j4hi",
+   "kind": "step",
+   "previewId": null,
+   "order": 67
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Cheek rest",
+   "path": "Cheek rest/Base/V1/Sborka.stp",
+   "id": "1ToChLvndHqx5yZ6Xfy2Biy41z1x87oM-",
+   "kind": "step",
+   "previewId": null,
+   "order": 68
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Cheek rest",
+   "path": "Cheek rest/Base/V2/Sborka.stp",
+   "id": "1qC-3R2CDYAA1OzicdCKxaSpAAbmfivMz",
+   "kind": "step",
+   "previewId": null,
+   "order": 69
+  },
+  {
+   "name": "Sh 160mm 2",
+   "fileName": "Sh 160mm 2.stp",
+   "category": "Cheek rest",
+   "path": "Cheek rest/Base/Прикладки/Petg-CF/Sh 160mm 2.stp",
+   "id": "1sqVuxl2x-wGKdixQwOlsJbuQ2EaznNwH",
+   "kind": "step",
+   "previewId": null,
+   "order": 70
+  },
+  {
+   "name": "Sh 160mm 3",
+   "fileName": "Sh 160mm 3.stp",
+   "category": "Cheek rest",
+   "path": "Cheek rest/Base/Прикладки/Petg-CF/Sh 160mm 3.stp",
+   "id": "1RiU4vPhCyg0cf5m5p6AiBUK_0iArvGAw",
+   "kind": "step",
+   "previewId": null,
+   "order": 71
+  },
+  {
+   "name": "g1",
+   "fileName": "g1.stp",
+   "category": "Guides",
+   "path": "Guides/g1.stp",
+   "id": "1J2YriHdlmK4E4meVOsQgGROjudZ5WzNW",
+   "kind": "step",
+   "previewId": null,
+   "order": 72
+  },
+  {
+   "name": "NZ001Y_3D",
+   "fileName": "NZ001Y_3D.stp",
+   "category": "Guides",
+   "path": "Guides/NZ001Y/NZ001Y_3D.stp",
+   "id": "1G0utZUhq5PGF3HBoPtHWL1TtVVVDbbHY",
+   "kind": "step",
+   "previewId": null,
+   "order": 73
+  },
+  {
+   "name": "NZ001Y_3D_2",
+   "fileName": "NZ001Y_3D_2.stp",
+   "category": "Guides",
+   "path": "Guides/NZ001Y/NZ001Y_3D_2.stp",
+   "id": "1b9cz7vD8Tyb0Ab4wWBZwM5xdDn5YFP78",
+   "kind": "step",
+   "previewId": null,
+   "order": 74
+  },
+  {
+   "name": "PL1",
+   "fileName": "PL1.stp",
+   "category": "Guides",
+   "path": "Guides/NZ001W/PL1.stp",
+   "id": "1N3jwdKWQLBd8u2KO6STgE03v-qHVWKfZ",
+   "kind": "step",
+   "previewId": null,
+   "order": 75
+  },
+  {
+   "name": "Plank3D",
+   "fileName": "Plank3D.stp",
+   "category": "Guides",
+   "path": "Guides/NZ001W/Plank3D.stp",
+   "id": "1TtjOVLScw1FAnjPYGtndbDYfeDexxWgx",
+   "kind": "step",
+   "previewId": null,
+   "order": 76
+  },
+  {
+   "name": "Plank3D_2",
+   "fileName": "Plank3D_2.stp",
+   "category": "Guides",
+   "path": "Guides/NZ001W/Plank3D_2.stp",
+   "id": "1gLQ2WLUQf-_XfuSqqM6K4nX-JIr-gnlM",
+   "kind": "step",
+   "previewId": null,
+   "order": 77
+  },
+  {
+   "name": "Val10x110",
+   "fileName": "Val10x110.stp",
+   "category": "Guides",
+   "path": "Guides/Val10x110.stp",
+   "id": "1Ahg-1qQGkqnakSTxzkbUzyfau-BrlQGB",
+   "kind": "step",
+   "previewId": null,
+   "order": 78
+  },
+  {
+   "name": "1",
+   "fileName": "1.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V4/1.stp",
+   "id": "1g5mNiZuHxQLWZK7agXKzDo8bXqSUYjdj",
+   "kind": "step",
+   "previewId": null,
+   "order": 79
+  },
+  {
+   "name": "1",
+   "fileName": "1.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V5/1.stp",
+   "id": "1hQJgcWwx98XXkuZKbB-QpePXiM6Ylfe6",
+   "kind": "step",
+   "previewId": null,
+   "order": 80
+  },
+  {
+   "name": "2",
+   "fileName": "2.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V5/2.stp",
+   "id": "1TBpaw_XhcBabP8LQfR-gr_h2fJUpKj2s",
+   "kind": "step",
+   "previewId": null,
+   "order": 81
+  },
+  {
+   "name": "Al",
+   "fileName": "Al.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V5/Al.stp",
+   "id": "1dGXUjjDLhpIPObSqA2ag6sfkR2BXNQfG",
+   "kind": "step",
+   "previewId": null,
+   "order": 82
+  },
+  {
+   "name": "G",
+   "fileName": "G.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V5/G.stp",
+   "id": "1F6FdsmdsNZhcxKr2pGdy8Xj2H1bYI2li",
+   "kind": "step",
+   "previewId": null,
+   "order": 83
+  },
+  {
+   "name": "KR2",
+   "fileName": "KR2.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V1.1/KR2.stp",
+   "id": "1SghNhJkEzRck5rZPCqASMXF87BNgsvPF",
+   "kind": "step",
+   "previewId": null,
+   "order": 84
+  },
+  {
+   "name": "Kreplenie",
+   "fileName": "Kreplenie.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V4/Kreplenie.stp",
+   "id": "1LWjbtvkerE0J9KBXHEk57ZOvdi4gQckX",
+   "kind": "step",
+   "previewId": null,
+   "order": 85
+  },
+  {
+   "name": "KY",
+   "fileName": "KY.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V1.1/KY.stp",
+   "id": "1n4b15TJIxnsc_7oouwIKnO_ADdLNExM7",
+   "kind": "step",
+   "previewId": null,
+   "order": 86
+  },
+  {
+   "name": "KY2",
+   "fileName": "KY2.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V1.1/KY2.stp",
+   "id": "1nq3Z-kyPgslHrqoej0xm4p-Xnbf9C7p5",
+   "kind": "step",
+   "previewId": null,
+   "order": 87
+  },
+  {
+   "name": "N_H",
+   "fileName": "N_H.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V2.1/N_H.stp",
+   "id": "1NXwTVpxENFELi6jfuUmjJCAnIK87dmL7",
+   "kind": "step",
+   "previewId": null,
+   "order": 88
+  },
+  {
+   "name": "N_L",
+   "fileName": "N_L.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V2.1/N_L.stp",
+   "id": "18rSCTJntpw9uZywfTMGNNpGJHCD0ahwT",
+   "kind": "step",
+   "previewId": null,
+   "order": 89
+  },
+  {
+   "name": "Nap",
+   "fileName": "Nap.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V5/Nap.stp",
+   "id": "1w5lcQi9Mggjrodhi8NdGqBe53FRJm6Pz",
+   "kind": "step",
+   "previewId": null,
+   "order": 90
+  },
+  {
+   "name": "Nap1",
+   "fileName": "Nap1.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V5/Nap1.stp",
+   "id": "1nnCa95wu_kISSvp2RsA_VBXxGfnzX_F-",
+   "kind": "step",
+   "previewId": null,
+   "order": 91
+  },
+  {
+   "name": "Napr",
+   "fileName": "Napr.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V4/Napr.stp",
+   "id": "1M4sTri77l9reFZJQE6VF5NKYcIHKlEET",
+   "kind": "step",
+   "previewId": null,
+   "order": 92
+  },
+  {
+   "name": "Np_3D",
+   "fileName": "Np_3D.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V5_3D/Np_3D.stp",
+   "id": "14LS_Ash6r4owPecjpPlTrVduHeBk0Os6",
+   "kind": "step",
+   "previewId": null,
+   "order": 93
+  },
+  {
+   "name": "Os_3D",
+   "fileName": "Os_3D.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V5_3D/Os_3D.stp",
+   "id": "1HxWOpuLhgMxf2LCSLt2qkLUGqqNn9wPO",
+   "kind": "step",
+   "previewId": null,
+   "order": 94
+  },
+  {
+   "name": "Osn",
+   "fileName": "Osn.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V5/Osn.stp",
+   "id": "1BBFbD4bdMsWOFQpV3ZiMTP8_cMMX50qZ",
+   "kind": "step",
+   "previewId": null,
+   "order": 95
+  },
+  {
+   "name": "Planka",
+   "fileName": "Planka.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V2/Planka.stp",
+   "id": "1G-T9XQo8K_xPSCClrRiScg0yUEDgJPur",
+   "kind": "step",
+   "previewId": null,
+   "order": 96
+  },
+  {
+   "name": "Plastic",
+   "fileName": "Plastic.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V4/Plastic.stp",
+   "id": "1wxWFGal-LKMmXSqCoPekZ5NEpa2Ztrsq",
+   "kind": "step",
+   "previewId": null,
+   "order": 97
+  },
+  {
+   "name": "PlaV6.3.1",
+   "fileName": "PlaV6.3.1.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V2/PlaV6.3.1.stp",
+   "id": "1qB77vqIyzbGDsleo_xrjzH6WVczdwODP",
+   "kind": "step",
+   "previewId": null,
+   "order": 98
+  },
+  {
+   "name": "ploshadkaV6.4L",
+   "fileName": "ploshadkaV6.4L.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V2.1/ploshadkaV6.4L.stp",
+   "id": "1Y0UjpmpuPGuU7E70oMFZVKQFdjj2k5fT",
+   "kind": "step",
+   "previewId": null,
+   "order": 99
+  },
+  {
+   "name": "PLV6.6L 3d",
+   "fileName": "PLV6.6L 3d.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V2.2/PLV6.6L 3d.stp",
+   "id": "12ddRneNaMD6EGmsnjZjEGO5SKZUM4Fvy",
+   "kind": "step",
+   "previewId": null,
+   "order": 100
+  },
+  {
+   "name": "PLV6.6L Carbon3d",
+   "fileName": "PLV6.6L Carbon3d.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V2.2/PLV6.6L Carbon3d.stp",
+   "id": "1LvuzDqQ7qRv8B-PAFiSK6X7eP6ZNjrhy",
+   "kind": "step",
+   "previewId": null,
+   "order": 101
+  },
+  {
+   "name": "PLV6.6L Steel3d2",
+   "fileName": "PLV6.6L Steel3d2.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V2.2/PLV6.6L Steel3d2.stp",
+   "id": "1zj-viRl0reDkjqaIlUFLH4khGG8C7745",
+   "kind": "step",
+   "previewId": null,
+   "order": 102
+  },
+  {
+   "name": "PP",
+   "fileName": "PP.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V2.2/PP.stp",
+   "id": "1uYnLkgUIDJO0bgofKgWYFQcAh-zNRqLH",
+   "kind": "step",
+   "previewId": null,
+   "order": 103
+  },
+  {
+   "name": "PR",
+   "fileName": "PR.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V2.2/PR.stp",
+   "id": "1VzwODlxpopJII_EEIZlIilYkslvm0Fqg",
+   "kind": "step",
+   "previewId": null,
+   "order": 104
+  },
+  {
+   "name": "PR5",
+   "fileName": "PR5.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V5/PR5.stp",
+   "id": "1TkGF1Sptw9eMJb4EVWXyIlT9p-O7ymp7",
+   "kind": "step",
+   "previewId": null,
+   "order": 105
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V1/Sborka.stp",
+   "id": "1Q4Y6jW6tJHMJ_BLqOFmYT8J09F3sJgG9",
+   "kind": "step",
+   "previewId": null,
+   "order": 106
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V1.1/Sborka.stp",
+   "id": "130rlR7boqdp4zXgCJKMYWk6PqzYI7Rrk",
+   "kind": "step",
+   "previewId": null,
+   "order": 107
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V2/Sborka.stp",
+   "id": "1hfUBDUy-wzjgMFctsmfJ1rpzXBxtC5lo",
+   "kind": "step",
+   "previewId": null,
+   "order": 108
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V2.1/Sborka.stp",
+   "id": "1KLOeHFADhazETJaOEpTfI3YCKMMB_J4X",
+   "kind": "step",
+   "previewId": null,
+   "order": 109
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V2.2/Sborka.stp",
+   "id": "1pK57an5ACTCdC-h2JPigH2fMYb0fG629",
+   "kind": "step",
+   "previewId": null,
+   "order": 110
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V4/Sborka.stp",
+   "id": "1d7hz6vJwXv6weXTZWKohqUMrgP0ZKdJa",
+   "kind": "step",
+   "previewId": null,
+   "order": 111
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V5_3D/Sborka.stp",
+   "id": "12U-llCu9VE2YiJNwHEtaEs0TGecysU0v",
+   "kind": "step",
+   "previewId": null,
+   "order": 112
+  },
+  {
+   "name": "Sborka PR005",
+   "fileName": "Sborka PR005.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V5/Sborka PR005.stp",
+   "id": "1rsThaoqWVZhhIYlelSG6BIKKIy_HNaYc",
+   "kind": "step",
+   "previewId": null,
+   "order": 113
+  },
+  {
+   "name": "Sborka V5",
+   "fileName": "Sborka V5.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V5/Sborka V5.stp",
+   "id": "1LcgnQKr9eZskCaw-P-BtuiOGNQt_gGAE",
+   "kind": "step",
+   "previewId": null,
+   "order": 114
+  },
+  {
+   "name": "t1y",
+   "fileName": "t1y.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V1.1/Hand grip/t1y.stp",
+   "id": "1CNrpSJhp2gxFsHCvpTBf7NUucqhe_AzA",
+   "kind": "step",
+   "previewId": null,
+   "order": 115
+  },
+  {
+   "name": "t2y",
+   "fileName": "t2y.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V1.1/Hand grip/t2y.stp",
+   "id": "1Y-MugfcMQHEShxE7pDNqH2XcHGKwXGtL",
+   "kind": "step",
+   "previewId": null,
+   "order": 116
+  },
+  {
+   "name": "Val_H",
+   "fileName": "Val_H.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V2/Val_H.stp",
+   "id": "1SFze_loHl9m7xv10pSz2Am5lRdQUDBnq",
+   "kind": "step",
+   "previewId": null,
+   "order": 117
+  },
+  {
+   "name": "Val_L",
+   "fileName": "Val_L.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V2/Val_L.stp",
+   "id": "1G-qsAA3j66bZ5G1Avy0HPcbzJIXvvkS-",
+   "kind": "step",
+   "previewId": null,
+   "order": 118
+  },
+  {
+   "name": "Y 3D",
+   "fileName": "Y 3D.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V2.2/Y 3D.stp",
+   "id": "1XK1xb6VI7cTUbW-R8CK44Gl1NKCtQyca",
+   "kind": "step",
+   "previewId": null,
+   "order": 119
+  },
+  {
+   "name": "yhCarbon",
+   "fileName": "yhCarbon.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V1.1/Hand grip/yhCarbon.stp",
+   "id": "1K120wgR6Qz7WZz07wVuRcRPiInwfZ_aX",
+   "kind": "step",
+   "previewId": null,
+   "order": 120
+  },
+  {
+   "name": "yhCarbon2",
+   "fileName": "yhCarbon2.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V1.1/Hand grip/yhCarbon2.stp",
+   "id": "1p0UIqoV1sUPSJMNpnXD7yQOI_GK7A5mr",
+   "kind": "step",
+   "previewId": null,
+   "order": 121
+  },
+  {
+   "name": "Yhys",
+   "fileName": "Yhys.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V1.1/Hand grip/Yhys.stp",
+   "id": "1d9gRyD-q6_J5GH43D-GziKKn5bVM5XR3",
+   "kind": "step",
+   "previewId": null,
+   "order": 122
+  },
+  {
+   "name": "Ymini",
+   "fileName": "Ymini.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V2.2/Ymini.stp",
+   "id": "1k4-P6qf2ohD_JlhUL6_1Fep5FVA0uo16",
+   "kind": "step",
+   "previewId": null,
+   "order": 123
+  },
+  {
+   "name": "ZY",
+   "fileName": "ZY.stp",
+   "category": "Hand rest",
+   "path": "Hand rest/V1.1/ZY.stp",
+   "id": "1W-di7mc_MsZdJbpi6T4o9O0lZHCZ2JXF",
+   "kind": "step",
+   "previewId": null,
+   "order": 124
+  },
+  {
+   "name": "11",
+   "fileName": "11.stp",
+   "category": "Hämmerli",
+   "path": "Hämmerli/11.stp",
+   "id": "1Yf-cXJQZz8HPgGJLSUQfMmERQoGq9vgb",
+   "kind": "step",
+   "previewId": null,
+   "order": 125
+  },
+  {
+   "name": "PPS",
+   "fileName": "PPS.stp",
+   "category": "Hämmerli",
+   "path": "Hämmerli/PPS.stp",
+   "id": "1pB1mqgxmNt4rlu7lM5y6kMNBCqBcdcX2",
+   "kind": "step",
+   "previewId": null,
+   "order": 126
+  },
+  {
+   "name": "PPZ",
+   "fileName": "PPZ.stp",
+   "category": "Hämmerli",
+   "path": "Hämmerli/PPZ.stp",
+   "id": "1bBMCgbV4R2zQRxG08lmzF4xHwRjg--hw",
+   "kind": "step",
+   "previewId": null,
+   "order": 127
+  },
+  {
+   "name": "PZ",
+   "fileName": "PZ.stp",
+   "category": "Hämmerli",
+   "path": "Hämmerli/PZ.stp",
+   "id": "1PC6jjZ9469T3VBcH-t6DCCJtMBoL6ip4",
+   "kind": "step",
+   "previewId": null,
+   "order": 128
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Hämmerli",
+   "path": "Hämmerli/Sborka.stp",
+   "id": "18kkz10cVCYNNbCvZKVUHi170CbAWLqrw",
+   "kind": "step",
+   "previewId": null,
+   "order": 129
+  },
+  {
+   "name": "SborkaS",
+   "fileName": "SborkaS.stp",
+   "category": "Hämmerli",
+   "path": "Hämmerli/SborkaS.stp",
+   "id": "1AFJYL7oShErqnmhqAf3aZkW63bcMGxK1",
+   "kind": "step",
+   "previewId": null,
+   "order": 130
+  },
+  {
+   "name": "ZPPS",
+   "fileName": "ZPPS.stp",
+   "category": "Hämmerli",
+   "path": "Hämmerli/ZPPS.stp",
+   "id": "1aein2xyuxrtKwZEaLVjoDta96cIy4mtz",
+   "kind": "step",
+   "previewId": null,
+   "order": 131
+  },
+  {
+   "name": "Gt",
+   "fileName": "Gt.stp",
+   "category": "Little things",
+   "path": "Little things/Gt.stp",
+   "id": "1dXZk28RC1SAfwbh_K9a1ixJ1IIAg7_Gj",
+   "kind": "step",
+   "previewId": null,
+   "order": 132
+  },
+  {
+   "name": "NagBS",
+   "fileName": "NagBS.stp",
+   "category": "Little things",
+   "path": "Little things/Eyecups/NagBS.stp",
+   "id": "1YgX_KyjAQrzpcQy1vfL-3Oh5M2diDGuH",
+   "kind": "step",
+   "previewId": null,
+   "order": 133
+  },
+  {
+   "name": "NCarbon",
+   "fileName": "NCarbon.stp",
+   "category": "Little things",
+   "path": "Little things/Eyecups/NCarbon.stp",
+   "id": "151y8xniwUOLbYayaRHuBytE2_IJ5_T88",
+   "kind": "step",
+   "previewId": null,
+   "order": 134
+  },
+  {
+   "name": "NG",
+   "fileName": "NG.stp",
+   "category": "Little things",
+   "path": "Little things/Eyecups/NG.stp",
+   "id": "1blnjMQIZQVRg9l3TjyvwkRJMkyFbXNqD",
+   "kind": "step",
+   "previewId": null,
+   "order": 135
+  },
+  {
+   "name": "NG2",
+   "fileName": "NG2.stp",
+   "category": "Little things",
+   "path": "Little things/Eyecups/NG2.stp",
+   "id": "1-jSWHL07104kbuCUldYTa6yX1aVDcXkW",
+   "kind": "step",
+   "previewId": null,
+   "order": 136
+  },
+  {
+   "name": "NG3",
+   "fileName": "NG3.stp",
+   "category": "Little things",
+   "path": "Little things/Eyecups/NG3.stp",
+   "id": "1lgr2ZG-lXk3WuRyTK7nCP7TAlU1k6hfB",
+   "kind": "step",
+   "previewId": null,
+   "order": 137
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Little things",
+   "path": "Little things/Box/Sborka.stp",
+   "id": "1_1PUtWm5mF4fwDwkBXiFwZ1CGBw5kQNA",
+   "kind": "step",
+   "previewId": null,
+   "order": 138
+  },
+  {
+   "name": "2",
+   "fileName": "2.stp",
+   "category": "Muzzle end",
+   "path": "Muzzle end/Rifle 4.5mm/2.stp",
+   "id": "14buyLYeGl0WZ70oAHeNeHk76j1itC7ER",
+   "kind": "step",
+   "previewId": null,
+   "order": 139
+  },
+  {
+   "name": "Falsh",
+   "fileName": "Falsh.stp",
+   "category": "Muzzle end",
+   "path": "Muzzle end/Rifle 4.5mm/Falsh.stp",
+   "id": "1h4zaasW-W6_i13wDk_v91dlhM_rUYWjY",
+   "kind": "step",
+   "previewId": null,
+   "order": 140
+  },
+  {
+   "name": "Falsh2",
+   "fileName": "Falsh2.stp",
+   "category": "Muzzle end",
+   "path": "Muzzle end/Rifle 4.5mm/Falsh2.stp",
+   "id": "13pa2ZSgyBpGUPgD0jGi51ipzL1pV7smV",
+   "kind": "step",
+   "previewId": null,
+   "order": 141
+  },
+  {
+   "name": "FM001Y",
+   "fileName": "FM001Y.stp",
+   "category": "Muzzle end",
+   "path": "Muzzle end/Rifle 5.6mm/FM001Y.stp",
+   "id": "18pyWWeEnSoO0y__KIp8WRvy5EFxycF_y",
+   "kind": "step",
+   "previewId": null,
+   "order": 142
+  },
+  {
+   "name": "FM002Y",
+   "fileName": "FM002Y.stp",
+   "category": "Muzzle end",
+   "path": "Muzzle end/Rifle 5.6mm/FM002Y.stp",
+   "id": "1XGlihFWR2Qlb0rB3LVB32KAZ3j7dVrlm",
+   "kind": "step",
+   "previewId": null,
+   "order": 143
+  },
+  {
+   "name": "FM2",
+   "fileName": "FM2.stp",
+   "category": "Muzzle end",
+   "path": "Muzzle end/Pistol 4.5mm/FM2.stp",
+   "id": "1A95Cb5qttYWRLjV3-boTKdzcX8nX1-FB",
+   "kind": "step",
+   "previewId": null,
+   "order": 144
+  },
+  {
+   "name": "FP001",
+   "fileName": "FP001.stp",
+   "category": "Muzzle end",
+   "path": "Muzzle end/Rifle 4.5mm/FP001.stp",
+   "id": "1lxW3VWERLu5DfWb2zZ5Jp5yx-86ZXiAM",
+   "kind": "step",
+   "previewId": null,
+   "order": 145
+  },
+  {
+   "name": "FP001 steel 28",
+   "fileName": "FP001 steel 28.stp",
+   "category": "Muzzle end",
+   "path": "Muzzle end/Rifle 4.5mm/FP001 steel 28.stp",
+   "id": "1WahEQYFzifg3UopIDFFLSGOH_iUqxKDR",
+   "kind": "step",
+   "previewId": null,
+   "order": 146
+  },
+  {
+   "name": "FP002",
+   "fileName": "FP002.stp",
+   "category": "Muzzle end",
+   "path": "Muzzle end/Rifle 4.5mm/FP002.stp",
+   "id": "1PQKHzzSPnd_cZZJPiE7X1JZALINT6JSS",
+   "kind": "step",
+   "previewId": null,
+   "order": 147
+  },
+  {
+   "name": "FP003",
+   "fileName": "FP003.stp",
+   "category": "Muzzle end",
+   "path": "Muzzle end/Rifle 4.5mm/FP003.stp",
+   "id": "12-bfPc_7NfHva0TZb0zW-DmwO8WW9QPL",
+   "kind": "step",
+   "previewId": null,
+   "order": 148
+  },
+  {
+   "name": "FS003Y",
+   "fileName": "FS003Y.stp",
+   "category": "Muzzle end",
+   "path": "Muzzle end/Rifle 5.6mm/FS003Y.stp",
+   "id": "19IVGKAmI9qrxhuCKViebJ02UWBsIyXhD",
+   "kind": "step",
+   "previewId": null,
+   "order": 149
+  },
+  {
+   "name": "FS004Y",
+   "fileName": "FS004Y.stp",
+   "category": "Muzzle end",
+   "path": "Muzzle end/Rifle 5.6mm/FS004Y.stp",
+   "id": "1OfN2wizV5eSZXj26xxog5t4tSCxtlrDo",
+   "kind": "step",
+   "previewId": null,
+   "order": 150
+  },
+  {
+   "name": "MFM",
+   "fileName": "MFM.stp",
+   "category": "Muzzle end",
+   "path": "Muzzle end/Pistol 4.5mm/MFM.stp",
+   "id": "1-n9gp97Mlu0NCSB3gyN6Bs9C4cE1fagj",
+   "kind": "step",
+   "previewId": null,
+   "order": 151
+  },
+  {
+   "name": "ZF001",
+   "fileName": "ZF001.stp",
+   "category": "Muzzle end",
+   "path": "Muzzle end/Rifle 5.6mm/ZF001.stp",
+   "id": "1U0voFDQALEltQ9L3pwp55g8whUc0UQES",
+   "kind": "step",
+   "previewId": null,
+   "order": 152
+  },
+  {
+   "name": "G",
+   "fileName": "G.stp",
+   "category": "Scope rests",
+   "path": "Scope rests/PP001/G.stp",
+   "id": "1ztcmJtyUi79EVE8Q-ErZnuySS0KAmG80",
+   "kind": "step",
+   "previewId": null,
+   "order": 153
+  },
+  {
+   "name": "Ke",
+   "fileName": "Ke.stp",
+   "category": "Scope rests",
+   "path": "Scope rests/PP001L/Ke.stp",
+   "id": "1mHvGwGcF7-ok92EFcyySJnWW0QOeF_T9",
+   "kind": "step",
+   "previewId": null,
+   "order": 154
+  },
+  {
+   "name": "Napr_H",
+   "fileName": "Napr_H.stp",
+   "category": "Scope rests",
+   "path": "Scope rests/PP001/Napr_H.stp",
+   "id": "1MfHChyg23GLN-vqyO4IDe_f4rRUttiwy",
+   "kind": "step",
+   "previewId": null,
+   "order": 155
+  },
+  {
+   "name": "Napr_L",
+   "fileName": "Napr_L.stp",
+   "category": "Scope rests",
+   "path": "Scope rests/PP001/Napr_L.stp",
+   "id": "154XdTdRp3asWSC0zsIIXrt0C8TvYKPrY",
+   "kind": "step",
+   "previewId": null,
+   "order": 156
+  },
+  {
+   "name": "NP1",
+   "fileName": "NP1.stp",
+   "category": "Scope rests",
+   "path": "Scope rests/PP001L_3D/NP1.stp",
+   "id": "1y2t2m9RBqWfIQgwxO-9Nn72pS9z_I242",
+   "kind": "step",
+   "previewId": null,
+   "order": 157
+  },
+  {
+   "name": "NP1L",
+   "fileName": "NP1L.stp",
+   "category": "Scope rests",
+   "path": "Scope rests/PP001L_3D/NP1L.stp",
+   "id": "1AXHcAjoLt686IlH2qTavsY5e7frSyKg6",
+   "kind": "step",
+   "previewId": null,
+   "order": 158
+  },
+  {
+   "name": "PL-H",
+   "fileName": "PL-H.stp",
+   "category": "Scope rests",
+   "path": "Scope rests/PP001L/PL-H.stp",
+   "id": "1G0ZqyHrV6pDw4LTn9mCr5icSwXbPaqVd",
+   "kind": "step",
+   "previewId": null,
+   "order": 159
+  },
+  {
+   "name": "PL-L",
+   "fileName": "PL-L.stp",
+   "category": "Scope rests",
+   "path": "Scope rests/PP001L/PL-L.stp",
+   "id": "1g7ljOwN8VQSUbyHO-z6V7Wdj4zXNf_g6",
+   "kind": "step",
+   "previewId": null,
+   "order": 160
+  },
+  {
+   "name": "PN1",
+   "fileName": "PN1.stp",
+   "category": "Scope rests",
+   "path": "Scope rests/PP001lite/PN1.stp",
+   "id": "1TEcTqEVblMXI9a8D2pYmL0suDDjEqgI_",
+   "kind": "step",
+   "previewId": null,
+   "order": 161
+  },
+  {
+   "name": "PP",
+   "fileName": "PP.stp",
+   "category": "Scope rests",
+   "path": "Scope rests/PP001_3D/PP.stp",
+   "id": "12eFOYo1nfI4k73fq1Ic-f8bnhVDlDzde",
+   "kind": "step",
+   "previewId": null,
+   "order": 162
+  },
+  {
+   "name": "PP1",
+   "fileName": "PP1.stp",
+   "category": "Scope rests",
+   "path": "Scope rests/PP001L_3D/PP1.stp",
+   "id": "1uP0qcmSE9H5TJwuE9ArKY3xfmNfu8Roh",
+   "kind": "step",
+   "previewId": null,
+   "order": 163
+  },
+  {
+   "name": "PP1",
+   "fileName": "PP1.stp",
+   "category": "Scope rests",
+   "path": "Scope rests/PP001lite/PP1.stp",
+   "id": "1dLRXOCvBMBM5WvYOhRL26SUcQEAjSVGV",
+   "kind": "step",
+   "previewId": null,
+   "order": 164
+  },
+  {
+   "name": "PP1L",
+   "fileName": "PP1L.stp",
+   "category": "Scope rests",
+   "path": "Scope rests/PP001L_3D/PP1L.stp",
+   "id": "1ndzi0XzxrNUPjOdLGm0yJyWGgxf9VbGl",
+   "kind": "step",
+   "previewId": null,
+   "order": 165
+  },
+  {
+   "name": "Pric",
+   "fileName": "Pric.stp",
+   "category": "Scope rests",
+   "path": "Scope rests/PP001/Pric.stp",
+   "id": "1Z24ggXOtdVa3cqzY--XerOgdWLrT6VOW",
+   "kind": "step",
+   "previewId": null,
+   "order": 166
+  },
+  {
+   "name": "Pric1",
+   "fileName": "Pric1.stp",
+   "category": "Scope rests",
+   "path": "Scope rests/PP001/Pric1.stp",
+   "id": "1QyhYAq-isw-yA4hxvRahl8ylrVgz8_HI",
+   "kind": "step",
+   "previewId": null,
+   "order": 167
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Scope rests",
+   "path": "Scope rests/PP001/Sborka.stp",
+   "id": "1jmoVwgrRegZWdYv0F-6SuNb5yWOoL2hU",
+   "kind": "step",
+   "previewId": null,
+   "order": 168
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Scope rests",
+   "path": "Scope rests/PP001L_3D/Sborka.stp",
+   "id": "1swzw3vUK9rK0XFkR7lo7P89pcMPgWr4B",
+   "kind": "step",
+   "previewId": null,
+   "order": 169
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Scope rests",
+   "path": "Scope rests/PP001lite/Sborka.stp",
+   "id": "1IwK9bYB3H1dGlhuOPrABv0IIJN6Z19t9",
+   "kind": "step",
+   "previewId": null,
+   "order": 170
+  },
+  {
+   "name": "VN",
+   "fileName": "VN.stp",
+   "category": "Scope rests",
+   "path": "Scope rests/PP001_3D/VN.stp",
+   "id": "1r0oiWKHCohiyZViYsVjga1YOyxd-GQY3",
+   "kind": "step",
+   "previewId": null,
+   "order": 171
+  },
+  {
+   "name": "Zazhim",
+   "fileName": "Zazhim.stp",
+   "category": "Scope rests",
+   "path": "Scope rests/PP001/Zazhim.stp",
+   "id": "1vIFXAZ2Rl31klTyVXv_0WIIuP-UVoUat",
+   "kind": "step",
+   "previewId": null,
+   "order": 172
+  },
+  {
+   "name": "ZP",
+   "fileName": "ZP.stp",
+   "category": "Scope rests",
+   "path": "Scope rests/PP001_3D/ZP.stp",
+   "id": "1v1tiEmOdw4QK_KLO_dQUHUsRP50EfFm9",
+   "kind": "step",
+   "previewId": null,
+   "order": 173
+  },
+  {
+   "name": "ZP1",
+   "fileName": "ZP1.stp",
+   "category": "Scope rests",
+   "path": "Scope rests/PP001L_3D/ZP1.stp",
+   "id": "13vFr1IwM_suVPsdXNP5E6YL3pnskf3Ie",
+   "kind": "step",
+   "previewId": null,
+   "order": 174
+  },
+  {
+   "name": "ZP1",
+   "fileName": "ZP1.stp",
+   "category": "Scope rests",
+   "path": "Scope rests/PP001lite/ZP1.stp",
+   "id": "17O0eBnEmT9e5E23xGo1BHPKGmMgBFvLf",
+   "kind": "step",
+   "previewId": null,
+   "order": 175
+  },
+  {
+   "name": "ZP1L",
+   "fileName": "ZP1L.stp",
+   "category": "Scope rests",
+   "path": "Scope rests/PP001L_3D/ZP1L.stp",
+   "id": "1xvQ4-k-FnczLUDd0Ey4_aNoVUv3IC_60",
+   "kind": "step",
+   "previewId": null,
+   "order": 176
+  },
+  {
+   "name": "ZP1L",
+   "fileName": "ZP1L.stp",
+   "category": "Scope rests",
+   "path": "Scope rests/PP001lite/ZP1L.stp",
+   "id": "10t7lUc8plupw11wCr3JfeIbVI5h79yxy",
+   "kind": "step",
+   "previewId": null,
+   "order": 177
+  },
+  {
+   "name": "ZZ",
+   "fileName": "ZZ.stp",
+   "category": "Scope rests",
+   "path": "Scope rests/PP001lite/ZZ.stp",
+   "id": "16bBDUTiO9WZdLokpeLZZVeKU7Asx_O_t",
+   "kind": "step",
+   "previewId": null,
+   "order": 178
+  },
+  {
+   "name": "D25L20Kg0.60",
+   "fileName": "D25L20Kg0.60.stp",
+   "category": "Sleeve weight + fastenings for",
+   "path": "Sleeve weight + fastenings for/D25L20Kg0.60.stp",
+   "id": "1PQkPAtMbrweloyrxmI_PYU5EFqzE5jpz",
+   "kind": "step",
+   "previewId": null,
+   "order": 179
+  },
+  {
+   "name": "GN001",
+   "fileName": "GN001.stp",
+   "category": "Sleeve weight + fastenings for",
+   "path": "Sleeve weight + fastenings for/GN001.stp",
+   "id": "1QY-e4nzqzKND9vn0FwjZ45ZJ_Y5FvgJe",
+   "kind": "step",
+   "previewId": null,
+   "order": 180
+  },
+  {
+   "name": "1",
+   "fileName": "1.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/V4 Carbon/1.stp",
+   "id": "1CrEXatdC78hcl0uUHvWultC2dNhSxCf9",
+   "kind": "step",
+   "previewId": null,
+   "order": 181
+  },
+  {
+   "name": "1.1",
+   "fileName": "1.1.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/V4 Carbon/1.1.stp",
+   "id": "1xwFwAiWfeMnJV4YYQ0AcVz9FrSq5FS-8",
+   "kind": "step",
+   "previewId": null,
+   "order": 182
+  },
+  {
+   "name": "1.2",
+   "fileName": "1.2.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/V4 Carbon/1.2.stp",
+   "id": "1OHhCsyaqzehUhEUJyUm3DKjiV63K9Dur",
+   "kind": "step",
+   "previewId": null,
+   "order": 183
+  },
+  {
+   "name": "1.4 st",
+   "fileName": "1.4 st.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/V4 Carbon/1.4 st.stp",
+   "id": "1VTC0ndda0bYmEPtlZys5iru_yqQaZAOV",
+   "kind": "step",
+   "previewId": null,
+   "order": 184
+  },
+  {
+   "name": "1.5",
+   "fileName": "1.5.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/V4 Carbon/1.5.stp",
+   "id": "1jvyWbFBr3B4pKWfdIGsYvpnUMhj0UBeW",
+   "kind": "step",
+   "previewId": null,
+   "order": 185
+  },
+  {
+   "name": "1.6 st",
+   "fileName": "1.6 st.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/V4 Carbon/1.6 st.stp",
+   "id": "1Nz2Ian6LUpTGo2Gp_Zub419PVM52oqKc",
+   "kind": "step",
+   "previewId": null,
+   "order": 186
+  },
+  {
+   "name": "1.7 st",
+   "fileName": "1.7 st.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/V4 Carbon/1.7 st.stp",
+   "id": "1DrEm_046VHyz_YMd1SsxG1kh03Lc_RV9",
+   "kind": "step",
+   "previewId": null,
+   "order": 187
+  },
+  {
+   "name": "1.9",
+   "fileName": "1.9.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/V4 Carbon/1.9.stp",
+   "id": "1eFrHCvuqtskdMeVpUPSJ62ag-aFom8kN",
+   "kind": "step",
+   "previewId": null,
+   "order": 188
+  },
+  {
+   "name": "CL008ML",
+   "fileName": "CL008ML.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/Yral/V2/CL008ML.stp",
+   "id": "1bUJslRgpiDA9h6fHrQiysVxhv63m3ArJ",
+   "kind": "step",
+   "previewId": null,
+   "order": 189
+  },
+  {
+   "name": "CL009L",
+   "fileName": "CL009L.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/SM-2/V2/CL009L.stp",
+   "id": "1ATolgc8linUYLe84z3fDPZdqrTxJRbaV",
+   "kind": "step",
+   "previewId": null,
+   "order": 190
+  },
+  {
+   "name": "CLl",
+   "fileName": "CLl.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 4.5mm/V1 Walther/CLl.stp",
+   "id": "13p38W1Elh3997EzPqHbkummwi2Jb6HmA",
+   "kind": "step",
+   "previewId": null,
+   "order": 191
+  },
+  {
+   "name": "G 14x12",
+   "fileName": "G 14x12.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/Lever/G 14x12.stp",
+   "id": "17KJP-mjpwQ3W-lcAqRSr3omXR46VmawO",
+   "kind": "step",
+   "previewId": null,
+   "order": 192
+  },
+  {
+   "name": "GcL",
+   "fileName": "GcL.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 4.5mm/V1 Walther/GcL.stp",
+   "id": "1aJv4fhrgXWUMR6xJNiM-TO9-Hzha46kX",
+   "kind": "step",
+   "previewId": null,
+   "order": 193
+  },
+  {
+   "name": "GcP",
+   "fileName": "GcP.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 4.5mm/V1 Walther/GcP.stp",
+   "id": "1pjYWjyH2kDIxE-rCUDYo2rSRHtuv3meE",
+   "kind": "step",
+   "previewId": null,
+   "order": 194
+  },
+  {
+   "name": "GpLG_3D",
+   "fileName": "GpLG_3D.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/Yral/V4/GpLG_3D.stp",
+   "id": "1yzDZCmjkLZyz5q1QjYd9c4Iaje8CGa1-",
+   "kind": "step",
+   "previewId": null,
+   "order": 195
+  },
+  {
+   "name": "GrLG_3D",
+   "fileName": "GrLG_3D.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/Yral/V4/GrLG_3D.stp",
+   "id": "1k9uRzNkQ0I1NyedKzqVwVYvM3rHS6pBU",
+   "kind": "step",
+   "previewId": null,
+   "order": 196
+  },
+  {
+   "name": "HSB",
+   "fileName": "HSB.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 4.5mm/V1 Walther/HSB.stp",
+   "id": "1yeUdRxaPvOcKieCTR9Cqhg5UJZO3vaGj",
+   "kind": "step",
+   "previewId": null,
+   "order": 197
+  },
+  {
+   "name": "KL",
+   "fileName": "KL.stp",
+   "category": "Stock",
+   "path": "Stock/Gunstocks/Stock mounts/Quick-detach stock attachment/KL.stp",
+   "id": "14u5WvYji92FjryyBYS90SE0pgO3qN_BO",
+   "kind": "step",
+   "previewId": null,
+   "order": 198
+  },
+  {
+   "name": "KP",
+   "fileName": "KP.stp",
+   "category": "Stock",
+   "path": "Stock/Gunstocks/Stock mounts/Quick-detach stock attachment/KP.stp",
+   "id": "1-2fZF1SdVRaM-rNJEO8EGvz3PmLIGLDW",
+   "kind": "step",
+   "previewId": null,
+   "order": 199
+  },
+  {
+   "name": "KP300",
+   "fileName": "KP300.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/SM-2/V5 AL+Carbon/KP300.stp",
+   "id": "1hs224fQD9oCiITAySTD-fEy56XHD6wqK",
+   "kind": "step",
+   "previewId": null,
+   "order": 200
+  },
+  {
+   "name": "KpL",
+   "fileName": "KpL.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 4.5mm/V1 Walther/KpL.stp",
+   "id": "1RUVzshoeOH81xinihT91qPzT8uEglSX5",
+   "kind": "step",
+   "previewId": null,
+   "order": 201
+  },
+  {
+   "name": "KPL002G",
+   "fileName": "KPL002G.stp",
+   "category": "Stock",
+   "path": "Stock/Gunstocks/PLG/KPL002G.stp",
+   "id": "1_exeK-ZNNNaDCbHdwlBvLpB7pCAGFd4r",
+   "kind": "step",
+   "previewId": null,
+   "order": 202
+  },
+  {
+   "name": "KpLG",
+   "fileName": "KpLG.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/Anschutz/Match 54/KpLG.stp",
+   "id": "1niBc5IYjQKOmceOrUBJB8lutnkZM_QWm",
+   "kind": "step",
+   "previewId": null,
+   "order": 203
+  },
+  {
+   "name": "KpP",
+   "fileName": "KpP.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 4.5mm/V1 Walther/KpP.stp",
+   "id": "11izszkZJmVtodmU01viaHIgvfiGRG0FB",
+   "kind": "step",
+   "previewId": null,
+   "order": 204
+  },
+  {
+   "name": "KZs",
+   "fileName": "KZs.stp",
+   "category": "Stock",
+   "path": "Stock/Gunstocks/PLG/KZs.stp",
+   "id": "1Zt-IYACxaA2SxBX0R_DNtbFjxrn3zXSx",
+   "kind": "step",
+   "previewId": null,
+   "order": 205
+  },
+  {
+   "name": "KZz",
+   "fileName": "KZz.stp",
+   "category": "Stock",
+   "path": "Stock/Gunstocks/PLG/KZz.stp",
+   "id": "1-tO820JsDCLhy9bqMtnqi24dp5g6LFY8",
+   "kind": "step",
+   "previewId": null,
+   "order": 206
+  },
+  {
+   "name": "LC001",
+   "fileName": "LC001.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 4.5mm/V1 Walther/LC001.stp",
+   "id": "1z_cyGUNBMXAiGvnZHDvMNWSgfKUP-vi-",
+   "kind": "step",
+   "previewId": null,
+   "order": 207
+  },
+  {
+   "name": "LG005W2",
+   "fileName": "LG005W2.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/SM-2/V5 AL+Carbon/LG005W2.stp",
+   "id": "1FuF6Qhdut5ymfsRWCrRayBTu726p981E",
+   "kind": "step",
+   "previewId": null,
+   "order": 208
+  },
+  {
+   "name": "LG009L 3 D32",
+   "fileName": "LG009L 3 D32.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/Yral/V2/LG009L 3 D32.stp",
+   "id": "1zU92CTcttuopm3fsHwUM8XmrUesBItMk",
+   "kind": "step",
+   "previewId": null,
+   "order": 209
+  },
+  {
+   "name": "LG009L 3+ D32 2",
+   "fileName": "LG009L 3+ D32 2.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/Yral/V4/LG009L 3+ D32 2.stp",
+   "id": "1WWLpiiNhNSDl4aAzaPoxEly9UqMfk80_",
+   "kind": "step",
+   "previewId": null,
+   "order": 210
+  },
+  {
+   "name": "LG009L 3+ D32V2",
+   "fileName": "LG009L 3+ D32V2.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/Yral/V3/LG009L 3+ D32V2.stp",
+   "id": "1dW_ylIiVQ_QSPp2vrqhzEDb1r-nOJ2eF",
+   "kind": "step",
+   "previewId": null,
+   "order": 211
+  },
+  {
+   "name": "LG2sm",
+   "fileName": "LG2sm.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/SM-2/V2/LG2sm.stp",
+   "id": "1l19ex8ybUdNB8Drk2sLJTMrZbo4MFcP_",
+   "kind": "step",
+   "previewId": null,
+   "order": 212
+  },
+  {
+   "name": "LG2sm",
+   "fileName": "LG2sm.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/SM-2/V3/LG2sm.stp",
+   "id": "1lM26Pb4fdQtV1hwsojOGkuLWFOKKzcmi",
+   "kind": "step",
+   "previewId": null,
+   "order": 213
+  },
+  {
+   "name": "LG2sm_mini",
+   "fileName": "LG2sm_mini.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/SM-2/V3/LG2sm_mini.stp",
+   "id": "1BoKlDy2aiFVpblo9b_OQ_1oFwdk5WD0p",
+   "kind": "step",
+   "previewId": null,
+   "order": 214
+  },
+  {
+   "name": "PC001",
+   "fileName": "PC001.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 4.5mm/V1 Walther/PC001.stp",
+   "id": "1jDsQUX3q6Zmbd7v38yqr9nyivPIdICBp",
+   "kind": "step",
+   "previewId": null,
+   "order": 215
+  },
+  {
+   "name": "PL001KK500+",
+   "fileName": "PL001KK500+.stp",
+   "category": "Stock",
+   "path": "Stock/Gunstocks/V1_Long/PL001KK500+.stp",
+   "id": "15HT2feWsn3zx_YjS6JGKMdY6g6jcVkVg",
+   "kind": "step",
+   "previewId": null,
+   "order": 216
+  },
+  {
+   "name": "PL001KK500L",
+   "fileName": "PL001KK500L.stp",
+   "category": "Stock",
+   "path": "Stock/Gunstocks/V2/PL001KK500L.stp",
+   "id": "10i8EIo6SRxl6QNdXYg_3whv6GHYOBny4",
+   "kind": "step",
+   "previewId": null,
+   "order": 217
+  },
+  {
+   "name": "PL001KK500L+",
+   "fileName": "PL001KK500L+.stp",
+   "category": "Stock",
+   "path": "Stock/Gunstocks/V1_Long/PL001KK500L+.stp",
+   "id": "1jUkhUmnX56Gb-Jh5cnt_CMkyNpBGEyOe",
+   "kind": "step",
+   "previewId": null,
+   "order": 218
+  },
+  {
+   "name": "PL001KK500L_3D",
+   "fileName": "PL001KK500L_3D.stp",
+   "category": "Stock",
+   "path": "Stock/Gunstocks/V2/V2_3D/PL001KK500L_3D.stp",
+   "id": "1wblfSYlf_ly9M0QGHpfJ0fy5aSyaSyBJ",
+   "kind": "step",
+   "previewId": null,
+   "order": 219
+  },
+  {
+   "name": "PL002G",
+   "fileName": "PL002G.stp",
+   "category": "Stock",
+   "path": "Stock/Gunstocks/PLG/PL002G.stp",
+   "id": "10b2Bci2HHduA_nhPfZ1ds8AXQqTa6PNg",
+   "kind": "step",
+   "previewId": null,
+   "order": 220
+  },
+  {
+   "name": "PLGal",
+   "fileName": "PLGal.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/Anschutz/Match 54/PLGal.stp",
+   "id": "1ro55yIMv9WOBgFv_tlmOcIFJxgBxjzYh",
+   "kind": "step",
+   "previewId": null,
+   "order": 221
+  },
+  {
+   "name": "RLG",
+   "fileName": "RLG.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/Anschutz/Match 54/RLG.stp",
+   "id": "1D87LIhIsRg1fKh3KNCd3yZ2_aOpPtOEV",
+   "kind": "step",
+   "previewId": null,
+   "order": 222
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Stock",
+   "path": "Stock/Gunstocks/PLG/Sborka.stp",
+   "id": "1wvmbENsHRnwHi8KSkImudvGL7iK7d_QM",
+   "kind": "step",
+   "previewId": null,
+   "order": 223
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Stock",
+   "path": "Stock/Gunstocks/V1/Sborka.stp",
+   "id": "1OF1Tz8SzEX5wcu4pCmK2hEAQFCPjOavW",
+   "kind": "step",
+   "previewId": null,
+   "order": 224
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Stock",
+   "path": "Stock/Gunstocks/V1_Long/Sborka.stp",
+   "id": "1PNeC4SQBTS6YReUqlqaY7Dtz1_LUBtSy",
+   "kind": "step",
+   "previewId": null,
+   "order": 225
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Stock",
+   "path": "Stock/Gunstocks/V2/V2_3D/Sborka.stp",
+   "id": "1PYnH-0rdxd2seiFbFplnEeXKv7KM8vga",
+   "kind": "step",
+   "previewId": null,
+   "order": 226
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Stock",
+   "path": "Stock/Gunstocks/V2/Sborka.stp",
+   "id": "1K91MxNM8XCduRnpQMKouGwNyQ2TW5Zvj",
+   "kind": "step",
+   "previewId": null,
+   "order": 227
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 4.5mm/V1 Walther/Sborka.stp",
+   "id": "1NjQkO8dseqaNj4tGIwpWenAaKG1JoCq0",
+   "kind": "step",
+   "previewId": null,
+   "order": 228
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 4.5mm/V2 Stayer/Sborka.stp",
+   "id": "1mnsOJdRZ2ATQIvnAIKGpx0wKotaiok8p",
+   "kind": "step",
+   "previewId": null,
+   "order": 229
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/Anschutz/Match 54/Sborka.stp",
+   "id": "1ujDji8a3g12VehpsFTj8f_7Zh2S3oXON",
+   "kind": "step",
+   "previewId": null,
+   "order": 230
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/SM-2/V5 AL+Carbon/Sborka.stp",
+   "id": "1LFqnsCpLVVCvwaZf_1qon5PXz0AniJC8",
+   "kind": "step",
+   "previewId": null,
+   "order": 231
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/V4 Carbon/Sborka.stp",
+   "id": "11NibkanCrhZ5e4TyuTlQg9hI7z6IQGN9",
+   "kind": "step",
+   "previewId": null,
+   "order": 232
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/Yral/V2/Sborka.stp",
+   "id": "1RP1gvfM4qq8ZIWP0dhNN1GotDXgHhjH5",
+   "kind": "step",
+   "previewId": null,
+   "order": 233
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/Yral/V4/Sborka.stp",
+   "id": "1Wci3CFWt98ebcOqYJiCkKTjhcNjAuB8Z",
+   "kind": "step",
+   "previewId": null,
+   "order": 234
+  },
+  {
+   "name": "Sh",
+   "fileName": "Sh.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/SM-2/V3/Sh.stp",
+   "id": "1GBTaSqmB705afG-dzmzt-jhceC8Yykz7",
+   "kind": "step",
+   "previewId": null,
+   "order": 235
+  },
+  {
+   "name": "ShLG",
+   "fileName": "ShLG.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/Lever/ShLG.stp",
+   "id": "1vYLwdVWtXStRVjLP7c1Lhxfis_ACpYij",
+   "kind": "step",
+   "previewId": null,
+   "order": 236
+  },
+  {
+   "name": "ShPLG_3D",
+   "fileName": "ShPLG_3D.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/Yral/V4/ShPLG_3D.stp",
+   "id": "1eM-txiiA7cC9vHe7ay6k8XBpCkZixqy4",
+   "kind": "step",
+   "previewId": null,
+   "order": 237
+  },
+  {
+   "name": "ShR_3D",
+   "fileName": "ShR_3D.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/Yral/V4/ShR_3D.stp",
+   "id": "1DYgUFLfcOCVDJoMi-DpxCqCIQQb8s7qN",
+   "kind": "step",
+   "previewId": null,
+   "order": 238
+  },
+  {
+   "name": "SKB",
+   "fileName": "SKB.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/Staples/SKB.stp",
+   "id": "1Qi1QGt1q96y6ZP3zI_K94fR-fiUoKn44",
+   "kind": "step",
+   "previewId": null,
+   "order": 239
+  },
+  {
+   "name": "SKB_mini",
+   "fileName": "SKB_mini.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/Staples/SKB_mini.stp",
+   "id": "1NJUDwQLty3aEK9WIxIkLMRq_JW-E-pDz",
+   "kind": "step",
+   "previewId": null,
+   "order": 240
+  },
+  {
+   "name": "SKD_1.1._1.5",
+   "fileName": "SKD_1.1._1.5.stp",
+   "category": "Stock",
+   "path": "Stock/Gunstocks/Stock mounts/With a downward extension/Downward offset - 10 mm/SKD_1.1._1.5.stp",
+   "id": "1x_F8KS21yx_XCpMaMsHLbBI1TX7wdDcL",
+   "kind": "step",
+   "previewId": null,
+   "order": 241
+  },
+  {
+   "name": "SKD_1.2",
+   "fileName": "SKD_1.2.stp",
+   "category": "Stock",
+   "path": "Stock/Gunstocks/Stock mounts/Lines/3D/SKD_1.2.stp",
+   "id": "1jNI5XuI76gDdf3NsTojeQR6A7RCmmcWr",
+   "kind": "step",
+   "previewId": null,
+   "order": 242
+  },
+  {
+   "name": "SKD_1.2._1.5",
+   "fileName": "SKD_1.2._1.5.stp",
+   "category": "Stock",
+   "path": "Stock/Gunstocks/Stock mounts/With a downward extension/Downward offset - 10 mm/SKD_1.2._1.5.stp",
+   "id": "1jh-tN1tBQqpnWyvEowuEOtLkgzP7N2HN",
+   "kind": "step",
+   "previewId": null,
+   "order": 243
+  },
+  {
+   "name": "SKD_1_1.5",
+   "fileName": "SKD_1_1.5.stp",
+   "category": "Stock",
+   "path": "Stock/Gunstocks/Stock mounts/With a downward extension/Downward offset - 15 mm/SKD_1_1.5.stp",
+   "id": "1myZTksyuWtcCEU2Yfrg6chHIojUcdnKt",
+   "kind": "step",
+   "previewId": null,
+   "order": 244
+  },
+  {
+   "name": "SKD_2.1_1.5",
+   "fileName": "SKD_2.1_1.5.stp",
+   "category": "Stock",
+   "path": "Stock/Gunstocks/Stock mounts/With a downward extension/Downward offset - 10 mm/SKD_2.1_1.5.stp",
+   "id": "1KeYlUCJHyooCi1ZK7yP6mN4xzaG-Zvmf",
+   "kind": "step",
+   "previewId": null,
+   "order": 245
+  },
+  {
+   "name": "SKD_2.2",
+   "fileName": "SKD_2.2.stp",
+   "category": "Stock",
+   "path": "Stock/Gunstocks/Stock mounts/Lines/3D/SKD_2.2.stp",
+   "id": "1eUjaWEr1YklkmoClUozfaraa9AA7UCLD",
+   "kind": "step",
+   "previewId": null,
+   "order": 246
+  },
+  {
+   "name": "SKD_2.2_1.5",
+   "fileName": "SKD_2.2_1.5.stp",
+   "category": "Stock",
+   "path": "Stock/Gunstocks/Stock mounts/With a downward extension/Downward offset - 10 mm/SKD_2.2_1.5.stp",
+   "id": "16QCfqkn8UK4t2dbaW6lfn35JUhQj-hZU",
+   "kind": "step",
+   "previewId": null,
+   "order": 247
+  },
+  {
+   "name": "SKD_2_1.5",
+   "fileName": "SKD_2_1.5.stp",
+   "category": "Stock",
+   "path": "Stock/Gunstocks/Stock mounts/With a downward extension/Downward offset - 15 mm/SKD_2_1.5.stp",
+   "id": "1H2HGS6DIoRWqgObdVZvijWWMNIdqQaRa",
+   "kind": "step",
+   "previewId": null,
+   "order": 248
+  },
+  {
+   "name": "SKP_3D 10x45",
+   "fileName": "SKP_3D 10x45.stp",
+   "category": "Stock",
+   "path": "Stock/Gunstocks/Clamps/Clamps_3D/SKP_3D 10x45.stp",
+   "id": "1kYU0ICY3hRQTRTsFtKTM6u17VmCTffAF",
+   "kind": "step",
+   "previewId": null,
+   "order": 249
+  },
+  {
+   "name": "SKP_3D 10x70",
+   "fileName": "SKP_3D 10x70.stp",
+   "category": "Stock",
+   "path": "Stock/Gunstocks/Clamps/Clamps_3D/SKP_3D 10x70.stp",
+   "id": "18V45O1shZ0cJ7_GRn00qwZJJF3Gaw5__",
+   "kind": "step",
+   "previewId": null,
+   "order": 250
+  },
+  {
+   "name": "SKP_3D 2 10x45",
+   "fileName": "SKP_3D 2 10x45.stp",
+   "category": "Stock",
+   "path": "Stock/Gunstocks/Clamps/Clamps_3D/SKP_3D 2 10x45.stp",
+   "id": "16y4TEMaRhzZRBbtPgfS2MbbhNSWrznGo",
+   "kind": "step",
+   "previewId": null,
+   "order": 251
+  },
+  {
+   "name": "SKP_3D 2 10x70",
+   "fileName": "SKP_3D 2 10x70.stp",
+   "category": "Stock",
+   "path": "Stock/Gunstocks/Clamps/Clamps_3D/SKP_3D 2 10x70.stp",
+   "id": "1z3o7DE4ZU4GDkf_ZXaTu_V55jtB1__sF",
+   "kind": "step",
+   "previewId": null,
+   "order": 252
+  },
+  {
+   "name": "SSh",
+   "fileName": "SSh.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 4.5mm/V1 Walther/SSh.stp",
+   "id": "1jpOHpogzJdz0EjjDvURwYFSscBx-FH9w",
+   "kind": "step",
+   "previewId": null,
+   "order": 253
+  },
+  {
+   "name": "VR",
+   "fileName": "VR.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/Lever/VR.stp",
+   "id": "1XuarckH4NQu2gMD23-Mab3TlGN6bUk2l",
+   "kind": "step",
+   "previewId": null,
+   "order": 254
+  },
+  {
+   "name": "VR2",
+   "fileName": "VR2.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/Lever/VR2.stp",
+   "id": "1X0HwngJ9MvBGKmzBpCQS8h051ydrSrSx",
+   "kind": "step",
+   "previewId": null,
+   "order": 255
+  },
+  {
+   "name": "ZK",
+   "fileName": "ZK.stp",
+   "category": "Stock",
+   "path": "Stock/Gunstocks/Stock mounts/Quick-detach stock attachment/ZK.stp",
+   "id": "1ykPQ8dwNF7XCPnGcxMJcX5ZSQ3YNUmqy",
+   "kind": "step",
+   "previewId": null,
+   "order": 256
+  },
+  {
+   "name": "Сборка1",
+   "fileName": "Сборка1.stp",
+   "category": "Stock",
+   "path": "Stock/Rifle 5.6mm/Cozy/Yral/V3/Сборка1.stp",
+   "id": "1ns-K4Nvk3z2QxYAALr7iO8NtBpzt5-Xs",
+   "kind": "step",
+   "previewId": null,
+   "order": 257
+  },
+  {
+   "name": "HS20mm",
+   "fileName": "HS20mm.stp",
+   "category": "Tripod",
+   "path": "Tripod/HS20mm.stp",
+   "id": "1zaOzDqgYh0dw0kvV2s6t-s94eme5ahYo",
+   "kind": "step",
+   "previewId": null,
+   "order": 258
+  },
+  {
+   "name": "HS22mm",
+   "fileName": "HS22mm.stp",
+   "category": "Tripod",
+   "path": "Tripod/HS22mm.stp",
+   "id": "1tpUonRuLc3AqBs-XDRvpfzd7ff7eq7P3",
+   "kind": "step",
+   "previewId": null,
+   "order": 259
+  },
+  {
+   "name": "KPG",
+   "fileName": "KPG.stp",
+   "category": "Tripod",
+   "path": "Tripod/Scope stand 2/KPG.stp",
+   "id": "1kPSHXI48ordpWM4_8NlixqGsqM3plzF6",
+   "kind": "step",
+   "previewId": null,
+   "order": 260
+  },
+  {
+   "name": "KPG",
+   "fileName": "KPG.stp",
+   "category": "Tripod",
+   "path": "Tripod/Scope stand 3/KPG.stp",
+   "id": "1PAu7XydXgHcg3FcdwJeNfdSb6PJXe0ev",
+   "kind": "step",
+   "previewId": null,
+   "order": 261
+  },
+  {
+   "name": "OS2",
+   "fileName": "OS2.stp",
+   "category": "Tripod",
+   "path": "Tripod/OS2.stp",
+   "id": "1IgUu0yyxshjK_2awB-vr0xf9QueFVr4K",
+   "kind": "step",
+   "previewId": null,
+   "order": 262
+  },
+  {
+   "name": "PG",
+   "fileName": "PG.stp",
+   "category": "Tripod",
+   "path": "Tripod/Scope stand 2/PG.stp",
+   "id": "1kezivI9oEjG82TeRHm75wquQcyyto0bx",
+   "kind": "step",
+   "previewId": null,
+   "order": 263
+  },
+  {
+   "name": "PG",
+   "fileName": "PG.stp",
+   "category": "Tripod",
+   "path": "Tripod/Scope stand 3/PG.stp",
+   "id": "13yzupuLzd23fuI_mHTjisu6zl34fMUYa",
+   "kind": "step",
+   "previewId": null,
+   "order": 264
+  },
+  {
+   "name": "PpS",
+   "fileName": "PpS.stp",
+   "category": "Tripod",
+   "path": "Tripod/PpS.stp",
+   "id": "1zbz3JzUR2Ckerhafd_fY37Sv5DIomb68",
+   "kind": "step",
+   "previewId": null,
+   "order": 265
+  },
+  {
+   "name": "PS",
+   "fileName": "PS.stp",
+   "category": "Tripod",
+   "path": "Tripod/PS.stp",
+   "id": "1yA-xpXF58FDJyODkK65VZiEZI8EwkKCq",
+   "kind": "step",
+   "previewId": null,
+   "order": 266
+  },
+  {
+   "name": "PS3",
+   "fileName": "PS3.stp",
+   "category": "Tripod",
+   "path": "Tripod/PS3.stp",
+   "id": "1NuHlU8lhVadxM5RgM30KW9V2KESYQwdM",
+   "kind": "step",
+   "previewId": null,
+   "order": 267
+  },
+  {
+   "name": "PsM",
+   "fileName": "PsM.stp",
+   "category": "Tripod",
+   "path": "Tripod/PsM.stp",
+   "id": "1XoaLQR30W0HFtH6kcK9LFKkuDFkxFLPz",
+   "kind": "step",
+   "previewId": null,
+   "order": 268
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Tripod",
+   "path": "Tripod/Sborka.stp",
+   "id": "1eSeLZj4C1JI_-vf-bPi7wnazL-vsDp8q",
+   "kind": "step",
+   "previewId": null,
+   "order": 269
+  },
+  {
+   "name": "ZKPG",
+   "fileName": "ZKPG.stp",
+   "category": "Tripod",
+   "path": "Tripod/Scope stand 3/ZKPG.stp",
+   "id": "1dAlYNEWHKEFRkVRIVeuBPCeuT0Kp2Zud",
+   "kind": "step",
+   "previewId": null,
+   "order": 270
+  },
+  {
+   "name": "ZP",
+   "fileName": "ZP.stp",
+   "category": "Tripod",
+   "path": "Tripod/Scope stand 2/ZP.stp",
+   "id": "1vpZmPORUeZ4D4Kn8t73f_K0UzNFYAhS8",
+   "kind": "step",
+   "previewId": null,
+   "order": 271
+  },
+  {
+   "name": "ZR",
+   "fileName": "ZR.stp",
+   "category": "Tripod",
+   "path": "Tripod/ZR.stp",
+   "id": "1ZAIdY8Lbu_60ekY_cgcskz4vC1vxffC1",
+   "kind": "step",
+   "previewId": null,
+   "order": 272
+  },
+  {
+   "name": "Bar Boc",
+   "fileName": "Bar Boc.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/PW005/Bar Boc.stp",
+   "id": "1GtAZrOPVhah9qQ3nLQbczbG-H3Q1pDgA",
+   "kind": "step",
+   "previewId": null,
+   "order": 273
+  },
+  {
+   "name": "Bar Ver",
+   "fileName": "Bar Ver.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/PW005/Bar Ver.stp",
+   "id": "1uXGc5LfLdMwv5c8jYs5yI2K-L6m07OMb",
+   "kind": "step",
+   "previewId": null,
+   "order": 274
+  },
+  {
+   "name": "Bash",
+   "fileName": "Bash.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/PW005/Bash.stp",
+   "id": "1bPVW7pOhKrFDEHT066cp-iDCVegTlgxT",
+   "kind": "step",
+   "previewId": null,
+   "order": 275
+  },
+  {
+   "name": "bk",
+   "fileName": "bk.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/PW002/bk.stp",
+   "id": "11AiDm633DuHU-lZW_FWtvAlPXWV2Lmyz",
+   "kind": "step",
+   "previewId": null,
+   "order": 276
+  },
+  {
+   "name": "bk",
+   "fileName": "bk.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/PW002L/bk.stp",
+   "id": "1FAp9uBX_U_cTd06P1v5aEQX5hhJs0qky",
+   "kind": "step",
+   "previewId": null,
+   "order": 277
+  },
+  {
+   "name": "bn",
+   "fileName": "bn.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/PW001/bn.stp",
+   "id": "1yCXIqORCRpHMSkHGcuM5_i-sD24tvzgd",
+   "kind": "step",
+   "previewId": null,
+   "order": 278
+  },
+  {
+   "name": "BP",
+   "fileName": "BP.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/PW004L/BP.stp",
+   "id": "13n_xq9DF2NhG-LUSmD1iCmlcVh9nRUXI",
+   "kind": "step",
+   "previewId": null,
+   "order": 279
+  },
+  {
+   "name": "D4.0",
+   "fileName": "D4.0.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/NM001/D4.0.stp",
+   "id": "1QMes-6nuEPR4er4y10yLlMzgR0J3H82q",
+   "kind": "step",
+   "previewId": null,
+   "order": 280
+  },
+  {
+   "name": "Gp",
+   "fileName": "Gp.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/NM001/Gp.stp",
+   "id": "1h8VIyT6YMTL5_pnicxz6JsTigOexxG1z",
+   "kind": "step",
+   "previewId": null,
+   "order": 281
+  },
+  {
+   "name": "k",
+   "fileName": "k.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/PW001/k.stp",
+   "id": "1jYtpl6XvzgeYXi82n_sE9A7uU_L5XCWH",
+   "kind": "step",
+   "previewId": null,
+   "order": 282
+  },
+  {
+   "name": "k",
+   "fileName": "k.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/PW002/k.stp",
+   "id": "1NsLeht2kcn4a3L0STZNPKtYLzYk9Spgn",
+   "kind": "step",
+   "previewId": null,
+   "order": 283
+  },
+  {
+   "name": "kk",
+   "fileName": "kk.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/PW001/kk.stp",
+   "id": "1nXbNtkYjoEyDKURidc0bAKSgAaefnvln",
+   "kind": "step",
+   "previewId": null,
+   "order": 284
+  },
+  {
+   "name": "kk",
+   "fileName": "kk.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/PW002/kk.stp",
+   "id": "1a4AGOFmnZLLhufmiD9Y29tQ2p_QfbHAB",
+   "kind": "step",
+   "previewId": null,
+   "order": 285
+  },
+  {
+   "name": "KK",
+   "fileName": "KK.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/PW004L/KK.stp",
+   "id": "1h10xyprU5JpNtQbbetf4y4h0lXIZ9igS",
+   "kind": "step",
+   "previewId": null,
+   "order": 286
+  },
+  {
+   "name": "KP",
+   "fileName": "KP.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/PW004L/KP.stp",
+   "id": "135OIz98WHnNpMJnJtLWJfmV6drBSpzwF",
+   "kind": "step",
+   "previewId": null,
+   "order": 287
+  },
+  {
+   "name": "Napr Bar",
+   "fileName": "Napr Bar.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/PW005/Napr Bar.stp",
+   "id": "1xHUu2NfjjEFpz0lC6g2IbbhcwL8DPyMs",
+   "kind": "step",
+   "previewId": null,
+   "order": 288
+  },
+  {
+   "name": "NPOL",
+   "fileName": "NPOL.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/NM001/NPOL.stp",
+   "id": "1zUgBfsJbG-fgrqBwGeEcmIKD_TTdwuae",
+   "kind": "step",
+   "previewId": null,
+   "order": 289
+  },
+  {
+   "name": "Pas",
+   "fileName": "Pas.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/NM001/Pas.stp",
+   "id": "1MjQgDzCWDt6F8NxWznJsRWpKRtWxorlr",
+   "kind": "step",
+   "previewId": null,
+   "order": 290
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/NM001/Sborka.stp",
+   "id": "1JCSfjLl8fwhQiaMwlV37NDS-DWBMJX5e",
+   "kind": "step",
+   "previewId": null,
+   "order": 291
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/PW001/Sborka.stp",
+   "id": "1HAAgNiULoVPcHA_PK7PkaeJ3KSI4HsZZ",
+   "kind": "step",
+   "previewId": null,
+   "order": 292
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/PW002/Sborka.stp",
+   "id": "1o6EqPH1pSRPCkoKctlc8WLxTj-0NxKnQ",
+   "kind": "step",
+   "previewId": null,
+   "order": 293
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/PW002L/Sborka.stp",
+   "id": "1v0DMP9lpPx2IhXWKim5Mfxt47CDpQKLB",
+   "kind": "step",
+   "previewId": null,
+   "order": 294
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/PW004L/Sborka.stp",
+   "id": "1T0dBkj-UcAxyo_wubRT-mv1HRomGJzxq",
+   "kind": "step",
+   "previewId": null,
+   "order": 295
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/PW005/Sborka.stp",
+   "id": "1CnupsdOY2ZAzytxRsB-DO6kS-mdJB4qh",
+   "kind": "step",
+   "previewId": null,
+   "order": 296
+  },
+  {
+   "name": "Stan",
+   "fileName": "Stan.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/PW005/Stan.stp",
+   "id": "1L60XxK1vpDHyVaO-6Y59I7Npt9GhHxMh",
+   "kind": "step",
+   "previewId": null,
+   "order": 297
+  },
+  {
+   "name": "z",
+   "fileName": "z.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/PW001/z.stp",
+   "id": "1VOohYweD7F1f5doh6IKOHs0oHgexOWRI",
+   "kind": "step",
+   "previewId": null,
+   "order": 298
+  },
+  {
+   "name": "Zaz",
+   "fileName": "Zaz.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/PW005/Zaz.stp",
+   "id": "1ied8vvsazp1GeT9l4_EPBVnQ9AVtsOL3",
+   "kind": "step",
+   "previewId": null,
+   "order": 299
+  },
+  {
+   "name": "ZB",
+   "fileName": "ZB.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/PW004L/ZB.stp",
+   "id": "152G-g1oXfMOEHm-Jfc8Qs9BVyCxjWQbz",
+   "kind": "step",
+   "previewId": null,
+   "order": 300
+  },
+  {
+   "name": "zk",
+   "fileName": "zk.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/PW002/zk.stp",
+   "id": "12CyBszJDK0iN3CVAn4gCYdMUS808VQiF",
+   "kind": "step",
+   "previewId": null,
+   "order": 301
+  },
+  {
+   "name": "Zp",
+   "fileName": "Zp.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/NM001/Zp.stp",
+   "id": "1ZzbkQ0LMQgHBIZHiOt_OG5_2ywx5QN6H",
+   "kind": "step",
+   "previewId": null,
+   "order": 302
+  },
+  {
+   "name": "ZP",
+   "fileName": "ZP.stp",
+   "category": "Weapon sight",
+   "path": "Weapon sight/PW004L/ZP.stp",
+   "id": "1HNc3gZ3UdgZrXrnbg3RIFeAJjlxApO4K",
+   "kind": "step",
+   "previewId": null,
+   "order": 303
+  },
+  {
+   "name": "KGcl_3D",
+   "fileName": "KGcl_3D.stp",
+   "category": "Weight + magnetic feet",
+   "path": "Weight + magnetic feet/KGcl_3D.stp",
+   "id": "1c1bCgfgL4Cf3HYlPj1WJ7oW7A_7zfsQp",
+   "kind": "step",
+   "previewId": null,
+   "order": 304
+  },
+  {
+   "name": "KNGcl",
+   "fileName": "KNGcl.stp",
+   "category": "Weight + magnetic feet",
+   "path": "Weight + magnetic feet/KNGcl.stp",
+   "id": "1gcdaSsyPxqyvTkqvStql1gdEUEeofcKF",
+   "kind": "step",
+   "previewId": null,
+   "order": 305
+  },
+  {
+   "name": "Ng",
+   "fileName": "Ng.stp",
+   "category": "Weight + magnetic feet",
+   "path": "Weight + magnetic feet/Ng.stp",
+   "id": "1WQsYCrZ1i_5n8a0-sR2XknjtPALSoWAh",
+   "kind": "step",
+   "previewId": null,
+   "order": 306
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Weight + magnetic feet",
+   "path": "Weight + magnetic feet/Sborka.stp",
+   "id": "14qVQxxZZ3inZ9GLqq67PGoXZrTk-RgUm",
+   "kind": "step",
+   "previewId": null,
+   "order": 307
+  },
+  {
+   "name": "V10",
+   "fileName": "V10.stp",
+   "category": "Weight + magnetic feet",
+   "path": "Weight + magnetic feet/V10.stp",
+   "id": "1mzPG-L0qHgWNoNk-dlmY4Kahqr6BnpJM",
+   "kind": "step",
+   "previewId": null,
+   "order": 308
+  },
+  {
+   "name": "GpL",
+   "fileName": "GpL.stp",
+   "category": "Weight for a rifle stock",
+   "path": "Weight for a rifle stock/GpL.stp",
+   "id": "1BuKV67CYTUKA4FIp3lT-8ZzzPc4DOaho",
+   "kind": "step",
+   "previewId": null,
+   "order": 309
+  },
+  {
+   "name": "Gf40g",
+   "fileName": "Gf40g.stp",
+   "category": "Weights for 28mm-diameter muzzle attachments",
+   "path": "Weights for 28mm-diameter muzzle attachments/Gf40g.stp",
+   "id": "11sIrSn5tP9jBgKWl0Py2VlmChyDTMFf6",
+   "kind": "step",
+   "previewId": null,
+   "order": 310
+  },
+  {
+   "name": "GFS28mm",
+   "fileName": "GFS28mm.stp",
+   "category": "Weights for 28mm-diameter muzzle attachments",
+   "path": "Weights for 28mm-diameter muzzle attachments/GFS28mm.stp",
+   "id": "1oLqN36BtOCUNdwKK0xenr32ope1emTKp",
+   "kind": "step",
+   "previewId": null,
+   "order": 311
+  },
+  {
+   "name": "G",
+   "fileName": "G.stp",
+   "category": "Weights for the stocks of air rifles (Steyr)",
+   "path": "Weights for the stocks of air rifles (Steyr)/G.stp",
+   "id": "1fmv7mVQToPso8olLZc7tpplbbFYkxX-8",
+   "kind": "step",
+   "previewId": null,
+   "order": 312
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Weights for the stocks of air rifles (Steyr)",
+   "path": "Weights for the stocks of air rifles (Steyr)/Sborka.stp",
+   "id": "1lpdHXF3Fn5rAgZZj3bszkDPGT9IB5p-j",
+   "kind": "step",
+   "previewId": null,
+   "order": 313
+  },
+  {
+   "name": "V10x90",
+   "fileName": "V10x90.stp",
+   "category": "Weights for the stocks of air rifles (Steyr)",
+   "path": "Weights for the stocks of air rifles (Steyr)/V10x90.stp",
+   "id": "19pUeDeXTi_P-hKlgQYDkB-gauzF2IqxF",
+   "kind": "step",
+   "previewId": null,
+   "order": 314
+  },
+  {
+   "name": "A",
+   "fileName": "A.stp",
+   "category": "Абсорбер Stayer",
+   "path": "Абсорбер Stayer/A.stp",
+   "id": "1usujkDz_39ZbX1olJUHNzidjoO1AEpbV",
+   "kind": "step",
+   "previewId": null,
+   "order": 315
+  },
+  {
+   "name": "M5",
+   "fileName": "M5.stp",
+   "category": "Абсорбер Stayer",
+   "path": "Абсорбер Stayer/M5.stp",
+   "id": "1fymCQGK6KWrUhtEICm23yVtSDNik7RVV",
+   "kind": "step",
+   "previewId": null,
+   "order": 316
+  },
+  {
+   "name": "P",
+   "fileName": "P.stp",
+   "category": "Абсорбер Stayer",
+   "path": "Абсорбер Stayer/P.stp",
+   "id": "1q4uiqLNGV8vkgLOEhEwfgJrBgXtCvFvc",
+   "kind": "step",
+   "previewId": null,
+   "order": 317
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "Абсорбер Stayer",
+   "path": "Абсорбер Stayer/Sborka.stp",
+   "id": "1JX1QVkRT1Xq7sGtuNz2eyFu6nqlF8uvA",
+   "kind": "step",
+   "previewId": null,
+   "order": 318
+  },
+  {
+   "name": "Sborka",
+   "fileName": "Sborka.stp",
+   "category": "В шпоночный паз",
+   "path": "В шпоночный паз/Sborka.stp",
+   "id": "1P7EABZXwskb21M8IbracDiWcngCn5bTE",
+   "kind": "step",
+   "previewId": null,
+   "order": 319
+  },
+  {
+   "name": "GP",
+   "fileName": "GP.stp",
+   "category": "Прочее",
+   "path": "GP.stp",
+   "id": "1oFs_cLrQIiaoXsL4krC0INYG-rY-LRA3",
+   "kind": "step",
+   "previewId": null,
+   "order": 320
+  },
+  {
+   "name": "GR",
+   "fileName": "GR.stp",
+   "category": "Прочее",
+   "path": "GR.stp",
+   "id": "1srg_elQ1uqqbz9zXQlXc7SN54JUKY1Ly",
+   "kind": "step",
+   "previewId": null,
+   "order": 321
+  },
+  {
+   "name": "Груз - посадка под перпендикулярный вал",
+   "fileName": "Груз - посадка под перпендикулярный вал.stp",
+   "category": "Прочее",
+   "path": "Груз - посадка под перпендикулярный вал.stp",
+   "id": "1a8RPcJYQ6_v1KbV4qAw0DgTHeGBzXHYN",
+   "kind": "step",
+   "previewId": null,
+   "order": 322
+  },
+  {
+   "name": "Груз 30гр. Эксцентрик",
+   "fileName": "Груз 30гр. Эксцентрик.stp",
+   "category": "Прочее",
+   "path": "Груз 30гр. Эксцентрик.stp",
+   "id": "1F7CzOzqADJOlyeJLV98qlJw9vKnpwseP",
+   "kind": "step",
+   "previewId": null,
+   "order": 323
+  },
+  {
+   "name": "Груз к прикладу Вальтер",
+   "fileName": "Груз к прикладу Вальтер.stp",
+   "category": "Прочее",
+   "path": "Груз к прикладу Вальтер.stp",
+   "id": "102X-L39MIJMVQwWD8sBkD4HjbvtfbMWA",
+   "kind": "step",
+   "previewId": null,
+   "order": 324
+  },
+  {
+   "name": "Груз к прикладу Вальтер 1",
+   "fileName": "Груз к прикладу Вальтер 1.stp",
+   "category": "Прочее",
+   "path": "Груз к прикладу Вальтер 1.stp",
+   "id": "1-JgyXjWgEcQaFwhDSvX9S9GYpmsZ5TXC",
+   "kind": "step",
+   "previewId": null,
+   "order": 325
+  },
+  {
+   "name": "Груз на рельсу",
+   "fileName": "Груз на рельсу.stp",
+   "category": "Прочее",
+   "path": "Груз на рельсу.stp",
+   "id": "11K8b9UumsKeBDfckscN0i1i94ocVgpqK",
+   "kind": "step",
+   "previewId": null,
+   "order": 326
+  },
+  {
+   "name": "Груз под щеку Файна 100гр",
+   "fileName": "Груз под щеку Файна 100гр.stp",
+   "category": "Прочее",
+   "path": "Груз под щеку Файна 100гр.stp",
+   "id": "17gp45LmZq4HV6P8Iw7binWswsYk-eESp",
+   "kind": "step",
+   "previewId": null,
+   "order": 327
+  },
+  {
+   "name": "Под приклад штеер 2шт",
+   "fileName": "Под приклад штеер 2шт.stp",
+   "category": "Прочее",
+   "path": "Под приклад штеер 2шт.stp",
+   "id": "1ImCaqMqfLbXQvmDn3dOxDcQBEnxg0GZV",
+   "kind": "step",
+   "previewId": null,
+   "order": 328
+  }
+ ]
+}

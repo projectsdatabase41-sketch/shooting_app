@@ -27,6 +27,21 @@ import 'task_ui.dart';
 /// Одно задание у одного спортсмена (у каждого — своя копия в его базе).
 typedef _Copy = ({CoachAthlete athlete, TaskPlan task});
 
+/// Отзыв 24.11: «если выберу чьи данные — я, то кнопка + задание
+/// отсутствует». Открывает редактор задания в режиме «только себе»
+/// (тот же экран, что у тренера, но получатель — один чип «Себе»).
+/// Возвращает true, если задание отправлено.
+Future<bool> openSelfTaskEditor(BuildContext context) async {
+  final sent = await Navigator.of(context).push<bool>(MaterialPageRoute(
+    builder: (_) => const _CoachTaskEditorScreen(
+        // Сервис не нужен: отправка идёт в свою базу (AthleteTaskService).
+        service: null,
+        athletes: [],
+        selfOnly: true),
+  ));
+  return sent == true;
+}
+
 /// «Задания» у тренера: задания сгруппированы — одно задание нескольким
 /// спортсменам — одна карточка. [openTaskId] — открыть группу с этим
 /// заданием (тап по push «выполнено»).
@@ -167,16 +182,32 @@ class _CoachTasksScreenState extends State<CoachTasksScreen> {
             style: theme.textTheme.titleMedium
                 ?.copyWith(fontWeight: FontWeight.w600)),
       ),
-      floatingActionButton: _athletes.isEmpty && !context.read<AppDataStore>().isAthlete
-          ? null
-          : FloatingActionButton.extended(
-              onPressed: _create,
-              icon: const Icon(Icons.add),
-              label: Text(tr('Задание'))),
+      // Отзыв 24.11: «если выбрал ранее мои спортсмены … нет спортсменов —
+      // добавить кнопку + задание». Кнопка доступна всегда: задание можно
+      // создать себе (чип «Себе»), даже когда список спортсменов пуст —
+      // раньше без спортсменов и без режима «спортсмен» кнопка пряталась.
+      floatingActionButton: FloatingActionButton.extended(
+          onPressed: _create,
+          icon: const Icon(Icons.add),
+          label: Text(tr('Задание'))),
       body: _withTop(_athletes.isEmpty
           ? Center(
-              child: Text(tr('Сначала добавьте спортсмена'),
-                  style: TextStyle(color: theme.hintColor)))
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(tr('Сначала добавьте спортсмена'),
+                      style: TextStyle(color: theme.hintColor)),
+                  // Отзыв 24.11: пустой экран — не только подсказка, но и
+                  // кнопка: задание можно создать, например, себе.
+                  const SizedBox(height: 16),
+                  FilledButton.tonalIcon(
+                    onPressed: _create,
+                    icon: const Icon(Icons.add),
+                    label: Text(tr('Задание')),
+                  ),
+                ],
+              ),
+            )
           : groups == null
               ? const AppLoader()
               : groups.isEmpty
@@ -249,9 +280,17 @@ class _CoachTasksScreenState extends State<CoachTasksScreen> {
 // ---------------- Создание ----------------
 
 class _CoachTaskEditorScreen extends StatefulWidget {
-  final CoachTaskService service;
+  /// Сервис тренерской отправки; null в режиме «только себе» — задание
+  /// уходит в свою базу через AthleteTaskService, сервис не нужен.
+  final CoachTaskService? service;
   final List<CoachAthlete> athletes;
-  const _CoachTaskEditorScreen({required this.service, required this.athletes});
+
+  /// Отзыв 24.11: «если выберу чьи данные — я, то кнопка + задание
+  /// отсутствует». Режим «только себе» с экрана спортсмена: чип «Себе»
+  /// единственный получатель, списка спортсменов и подсказки о них нет.
+  final bool selfOnly;
+  const _CoachTaskEditorScreen(
+      {required this.service, required this.athletes, this.selfOnly = false});
 
   @override
   State<_CoachTaskEditorScreen> createState() => _CoachTaskEditorScreenState();
@@ -294,6 +333,13 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
   TaskPlan? _plan;
   final List<({String question, String answer})> _answers = [];
   bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Отзыв 24.11: в режиме «только себе» получатель уже выбран.
+    if (widget.selfOnly) _toMe = true;
+  }
 
   @override
   void dispose() {
@@ -363,10 +409,16 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
   String _profileInfo(AppDataStore store) {
     final db = store.db;
     final parts = <String>[];
+    // Отзыв 24.11: разряд — из профиля стрелка.
+    final rank = UserProfile.rankOf(db);
+    if (rank.isNotEmpty) {
+      parts.add('Rank (sports class) from the athlete profile: ${tr(rank)}.');
+    }
     final disc = UserProfile.disciplinesOf(db);
     if (disc.isNotEmpty) {
+      // Отзыв 24.11: дисциплины/оружие — тоже из профиля стрелка.
       parts.add(
-          'Disciplines from the athlete profile: ${[for (final d in UserProfile.disciplines) if (disc.contains(d.$1)) tr(d.$2)].join(', ')}.');
+          'Weapon/disciplines from the athlete profile: ${[for (final d in UserProfile.disciplines) if (disc.contains(d.$1)) tr(d.$2)].join(', ')}.');
     }
     // Последние упражнения: мишень даёт вид оружия и дистанцию, названия
     // («лёжа», «стоя») — положение, seriesSize — выстрелов в серии.
@@ -469,9 +521,12 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
       }
     }
     for (final a in widget.athletes.where((a) => _to.contains(a.id))) {
+      // Сервис есть всегда, когда есть получатели-спортсмены (не «себе»).
+      final service = widget.service;
+      if (service == null) continue;
       try {
-        final id = (await widget.service.create(a, plan)).replaceAll('"', '');
-        await widget.service.push(a, 'new', id, plan.title);
+        final id = (await service.create(a, plan)).replaceAll('"', '');
+        await service.push(a, 'new', id, plan.title);
       } catch (e) {
         failed.add(a.name);
       }
@@ -509,31 +564,42 @@ class _CoachTaskEditorScreenState extends State<_CoachTaskEditorScreen> {
             spacing: 6,
             runSpacing: 6,
             children: [
-              if (context.read<AppDataStore>().isAthlete)
+              // Отзыв 24.11: в режиме «только себе» — один чип «Себе»,
+              // без списка спортсменов и подсказок о нём.
+              if (widget.selfOnly)
                 FilterChip(
                   avatar: const Icon(Icons.person, size: 16),
                   label: Text(tr('Себе')),
                   selected: _toMe,
                   onSelected: (v) => setState(() => _toMe = v),
-                ),
-              // Отзыв 23.11 №1: получатели — спортсмены выбранной области
-              // («Мои спортсмены»). Если их нет — не молчать: писать
-              // «Нет спортсменов», а не оставлять тихий чип «Себе».
-              if (widget.athletes.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                      tr('Нет спортсменов — добавьте их в разделе «Спортсмены»'),
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: theme.hintColor)),
-                ),
-              for (final a in widget.athletes)
-                FilterChip(
-                  label: Text(a.name),
-                  selected: _to.contains(a.id),
-                  onSelected: (v) =>
-                      setState(() => v ? _to.add(a.id) : _to.remove(a.id)),
-                ),
+                )
+              else ...[
+                if (context.read<AppDataStore>().isAthlete)
+                  FilterChip(
+                    avatar: const Icon(Icons.person, size: 16),
+                    label: Text(tr('Себе')),
+                    selected: _toMe,
+                    onSelected: (v) => setState(() => _toMe = v),
+                  ),
+                // Отзыв 23.11 №1: получатели — спортсмены выбранной области
+                // («Мои спортсмены»). Если их нет — не молчать: писать
+                // «Нет спортсменов», а не оставлять тихий чип «Себе».
+                if (widget.athletes.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                        tr('Нет спортсменов — добавьте их в разделе «Спортсмены»'),
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: theme.hintColor)),
+                  ),
+                for (final a in widget.athletes)
+                  FilterChip(
+                    label: Text(a.name),
+                    selected: _to.contains(a.id),
+                    onSelected: (v) =>
+                        setState(() => v ? _to.add(a.id) : _to.remove(a.id)),
+                  ),
+              ],
             ],
           ),
           const SizedBox(height: 16),

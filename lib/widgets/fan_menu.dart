@@ -2,8 +2,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../theme/glass.dart';
-
 /// Пункт веера: значок/надпись, подпись и действие.
 class FanItem {
   final Widget child;
@@ -349,33 +347,14 @@ class _FanButtonState extends State<FanButton> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    // Отзыв владельца 22.11: «в строке ввода, где текст пишу. стиль так и не
-    // применялся к плюсику». Раньше главная кнопка веера рисовала только
-    // голую иконку, а соседние кнопки композера — заливку с обводкой.
-    // Теперь так же: в режиме «стекло» — прозрачная с обводкой outlineVariant
-    // (фон и так размывается под кнопкой), иначе — сплошная surfaceContainer,
-    // как у остальных кнопок строки. Размер/радиус прежние (48, круг).
-    // Если icon уже сам оформленная стеклянная кнопка (веер кнопок на экране
-    // в demo_mode), вторую подложку не рисуем — иначе рамка задвоится.
-    final ownFace = widget.icon is Icon;
-    final face = Container(
-      decoration: ownFace
-          ? BoxDecoration(
-              shape: BoxShape.circle,
-              color: GlassTheme.enabled ? Colors.transparent : cs.surfaceContainer,
-              border: Border.all(
-                color: GlassTheme.enabled
-                    ? cs.outlineVariant
-                    : cs.onSurface.withValues(alpha: 0.08),
-              ),
-            )
-          : null,
-      child: Center(
-        child: IconTheme.merge(
-          data: IconThemeData(color: cs.onSurface),
-          child: widget.icon,
-        ),
-      ),
+    // Отзыв владельца 23.11: «+ в поле ввода не делай кнопкой, пусть просто +
+    // будет». Возвращаем голую иконку без подложки, обводки и фона (тот вид
+    // был до «стиля» 22.11) — cs.onSurface, без Container/BoxDecoration.
+    // Поведение прежнее: тап/потягивание открывают пункты веера, Tooltip
+    // остаётся. Размер зоны нажатия прежний (48, круг).
+    final face = IconTheme.merge(
+      data: IconThemeData(color: cs.onSurface),
+      child: widget.icon,
     );
     final button = CompositedTransformTarget(
       link: _link,
@@ -384,7 +363,7 @@ class _FanButtonState extends State<FanButton> {
         onPointerMove: _move,
         onPointerUp: _up,
         onPointerCancel: (_) => _hide(),
-        child: SizedBox(width: 48, height: 48, child: face),
+        child: SizedBox(width: 48, height: 48, child: Center(child: face)),
       ),
     );
     return widget.tooltip.isEmpty ? button : Tooltip(message: widget.tooltip, child: button);

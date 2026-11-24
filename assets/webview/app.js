@@ -71,7 +71,8 @@ const dom = {
   fitBtn: document.getElementById('fit-btn'),
   edgesBtn: document.getElementById('edges-btn'),
   themeBtn: document.getElementById('theme-btn'),
-  viewButtons: Array.from(document.querySelectorAll('[data-view]')),
+  // Блок ракурсов ([data-view]) убран из разметки (замечание 1 владельца
+  // 24.11: виды могут быть перепутаны) — отдельного dom-поля больше нет.
   empty: document.getElementById('empty'),
   info: document.getElementById('info'),
   infoTitle: document.getElementById('info-title'),
@@ -883,7 +884,8 @@ function setView(name) {
   applyClipPlanes(radius, distance);
   controls.update();
 
-  dom.viewButtons.forEach((btn) => btn.classList.toggle('is-on', btn.dataset.view === name));
+  // Кнопок ракурсов в шапке больше нет (убраны, замечание 1 владельца
+  // 24.11): подсветка .is-on не нужна, состояние никуда не рисуем.
 }
 
 /**
@@ -1179,6 +1181,40 @@ dom.fileInput.addEventListener('change', () => {
   if (file) loadFile(file);
 });
 
+// Кнопка «Каталог» — первая слева в шапке (замечания владельца 24.11):
+// открывает окошко каталога в приложении через мост. Показываем кнопку,
+// только когда мост есть (window.NexusApp, который поднимает Flutter,
+// или window.flutter_inappwebview на Android-WebView); на вебе и в
+// standalone кнопка остаётся скрытой — «Каталог» там рисует сам Flutter.
+const catalogBtn = document.getElementById('catalog-btn');
+
+/** Показать кнопку и привязать клик (защита от повторного вызова). */
+let _catalogWired = false;
+
+function wireCatalogBtn() {
+  if (!catalogBtn || _catalogWired) return;
+  _catalogWired = true;
+  catalogBtn.hidden = false;
+  catalogBtn.addEventListener('click', () => {
+    if (window.NexusApp && typeof window.NexusApp.openCatalog === 'function') {
+      window.NexusApp.openCatalog();
+    } else {
+      // Приложение ещё не подставило NexusApp — зовём хендлер напрямую
+      // (Flutter регистрирует JS-хендлер «NexusApp», см. step_viewer_io.dart).
+      window.flutter_inappwebview?.callHandler?.('NexusApp', 'openCatalog');
+    }
+  });
+}
+
+if (window.NexusApp || window.flutter_inappwebview) {
+  wireCatalogBtn();
+} else {
+  // Мост может появиться после старта модуля: плагин объявляет
+  // готовность событием flutterInAppWebViewPlatformReady — реагируем и на
+  // него, чтобы «Каталог» не потерялся при медленной инициализации WebView.
+  window.addEventListener('flutterInAppWebViewPlatformReady', wireCatalogBtn, { once: true });
+}
+
 dom.fitBtn.addEventListener('click', () => fitView());
 
 dom.edgesBtn.addEventListener('click', () => setEdgesEnabled(!state.edgesEnabled));
@@ -1260,13 +1296,9 @@ document.getElementById('sensitivity-reset')?.addEventListener('click', () => {
   saveSensitivity();
 });
 
-dom.viewButtons.forEach((btn) => {
-  btn.addEventListener('click', () => setView(btn.dataset.view));
-});
-
-document.querySelectorAll('[data-sample]').forEach((btn) => {
-  btn.addEventListener('click', () => loadUrl(btn.dataset.sample));
-});
+// Слушатели кнопок ракурсов ([data-view]) удалены вместе с самими
+// кнопками (замечание 1 владельца 24.11). Быстрые клавиши 1–4 (ниже,
+// window keydown) оставлены: на ПК они не загромождают интерфейс.
 
 let dragDepth = 0;
 

@@ -20,35 +20,36 @@ String _redactLinks(String text) =>
 /// Встроенный показ возможен только там, где есть WebView и AssetLoader.
 bool get _canEmbed => defaultTargetPlatform == TargetPlatform.android;
 
-/// Сборка вьюера. [embed] — режим встраивания (`?embed=1` скрывает
-/// собственную шапку вьюера, просьба владельца 24.11). [onJs] вызывается,
-/// когда страница вьюера догрузилась и отдала публичный API
-/// `window.NexusViewer`; для платформ без моста (здесь это всё, кроме
-/// Android) он не вызывается никогда.
+/// Сборка вьюера. Вьюер открывается в ПОЛНОМ режиме — со своей шапкой
+/// (замечания владельца 24.11, п.1: вернули собственную шапку, панели не
+/// перекрываются). [onJs] вызывается, когда страница вьюера догрузилась и
+/// отдала публичный API `window.NexusViewer`; для платформ без моста
+/// (здесь это всё, кроме Android) он не вызывается никогда.
+/// [onOpenCatalog] — кнопка «Каталог» в шапке самого вьюера: она зовёт
+/// JS-хендлер `NexusApp` (метод openCatalog), зарегистрированный ниже.
 Widget buildViewer(
   BuildContext context, {
   String? modelUrl,
-  bool embed = true,
   void Function(StepViewerJs? js)? onJs,
+  VoidCallback? onOpenCatalog,
 }) {
   if (!_canEmbed) return stepViewerFallback(context);
-  return _Viewer(modelUrl: modelUrl, embed: embed, onJs: onJs);
+  return _Viewer(modelUrl: modelUrl, onJs: onJs, onOpenCatalog: onOpenCatalog);
 }
 
-/// Вьюер внутри APK: открывает файлы с телефона (кнопка «Открыть STEP» —
-/// теперь через `NexusViewer.openFile()`, владелец 24.11) и модели по
-/// ссылке (`?url=…`, страница скачивает и разбирает локально).
+/// Вьюер внутри APK: открывает файлы с телефона (кнопка «Открыть STEP»
+/// в собственной шапке вьюера) и модели по ссылке (`?url=…`, страница
+/// скачивает и разбирает локально).
 class _Viewer extends StatefulWidget {
   final String? modelUrl;
 
-  /// Приложение само рисует верхнюю панель — собственную шапку вьюера
-  /// прячем параметром `?embed=1` (поддержка embed добавлена в
-  /// assets/webview, просьба владельца 24.11).
-  final bool embed;
-
   final void Function(StepViewerJs? js)? onJs;
 
-  const _Viewer({this.modelUrl, required this.embed, this.onJs});
+  /// Тап по «Каталог» в шапке вьюера → открыть окошко каталога в Flutter
+  /// (владелец 24.11: каталог как окошко, не отдельная страница).
+  final VoidCallback? onOpenCatalog;
+
+  const _Viewer({this.modelUrl, this.onJs, this.onOpenCatalog});
 
   @override
   State<_Viewer> createState() => _ViewerState();
@@ -66,9 +67,8 @@ class _ViewerState extends State<_Viewer> {
   Uri get _initialUrl {
     final base = Uri.parse('${_viewerBase}index.html');
     return base.replace(queryParameters: {
-      // Шапку вьюера скрываем: вся навигация теперь в панели приложения
-      // (единый экран вместо двух — просьба владельца 24.11).
-      'embed': widget.embed ? '1' : '0',
+      // Шапку вьюера НЕ прячем (возврат «как было ранее», замечание 1
+      // владельца 24.11) — параметр embed больше не отправляем.
       if (widget.modelUrl != null && widget.modelUrl!.isNotEmpty)
         'url': widget.modelUrl!,
     });
@@ -116,6 +116,25 @@ class _ViewerState extends State<_Viewer> {
             allowContentAccess: false,
             transparentBackground: false,
           ),
+          onWebViewCreated: (controller) {
+            // JS-хендлер «NexusApp» (замечания владельца 24.11, п.C):
+            // кнопка «Каталог» — первая слева в шапке самого вьюера —
+            // зовёт window.NexusApp.openCatalog() или
+            // window.flutter_inappwebview.callHandler('NexusApp',
+            // 'openCatalog'). Здесь открываем окошко каталога. Хендлер
+            // регистрируем сразу при создании WebView, чтобы кнопка
+            // работала даже до onLoadStop.
+            controller.addJavaScriptHandler(
+              handlerName: 'NexusApp',
+              callback: (args) {
+                if (args.isEmpty || args.first == 'openCatalog') {
+                  widget.onOpenCatalog?.call();
+                }
+                // Возвращаем null: ответ JS не ожидает (fire-and-forget).
+                return null;
+              },
+            );
+          },
           onProgressChanged: (controller, progress) {
             if (mounted) setState(() => _progress = progress / 100);
           },

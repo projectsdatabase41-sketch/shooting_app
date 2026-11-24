@@ -9,20 +9,22 @@ import 'step_viewer_common.dart';
 /// поэтому показываем его iframe того же origin — без плагинов и без
 /// отдельной публикации сайта вьюера.
 ///
-/// Моста `window.NexusViewer` снаружи iframe не достать: [onJs] на вебе
-/// не вызывается никогда, а «Открыть STEP» работает через показ вьюера в
-/// полном режиме (со своей шапкой) — требование A/B, владелец 24.11.
+/// Вьюер открывается в ПОЛНОМ режиме — со своей шапкой (замечания
+/// владельца 24.11, п.1 возвращаем как было). Моста `window.NexusViewer`
+/// снаружи iframe не достать: [onJs] на вебе не вызывается никогда.
+/// Кнопка «Каталог» внутри iframe спрятана (моста нет) — на вебе «Каталог»
+/// рисует сам Flutter (FAB над iframe), поэтому [onOpenCatalog] тут не
+/// используется, принят для одинаковой сигнатуры с step_viewer_io.
 Widget buildViewer(
   BuildContext context, {
   String? modelUrl,
-  bool embed = true,
   void Function(StepViewerJs? js)? onJs,
+  VoidCallback? onOpenCatalog,
 }) {
   var uri = Uri.base.resolve('assets/assets/webview/index.html');
   final params = <String, String>{
-    // Приложение само рисует верхнюю панель — собственную шапку вьюера
-    // прячем (поддержка embed в assets/webview, владелец 24.11).
-    if (embed) 'embed': '1',
+    // Шапку вьюера НЕ прячем (возврат «как было ранее», замечание 1
+    // владельца 24.11) — параметр embed больше не отправляем.
     if (modelUrl != null && modelUrl.isNotEmpty) 'url': modelUrl,
   };
   if (params.isNotEmpty) uri = uri.replace(queryParameters: params);

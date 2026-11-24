@@ -203,8 +203,13 @@ class LinkSignal extends StatelessWidget {
                   alignment: Alignment.center,
                   children: [
                     Icon(Icons.shield_outlined, size: _shieldSize, color: color),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 1),
+                    // Отзыв 23.11: «буквоку н в щите как будто надо на пару
+                    // пикселей выше двинуть». Было Padding top: 1 (буква на
+                    // 1 px ниже центра); теперь центр щита минус 1 px —
+                    // ровно на 2 px выше, чем было, и на 18 px щите буква
+                    // (высота ≈9 px) остаётся внутри контура.
+                    Transform.translate(
+                      offset: const Offset(0, -1),
                       child: Text(
                         'N',
                         style: TextStyle(

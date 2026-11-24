@@ -25,6 +25,12 @@ class Wallpaper extends StatelessWidget {
   }
 
   /// Кладёт в кэш картинки главного экрана заранее - первый показ без декодирования.
+  ///
+  /// Через `ImageStream` с пустым `onError`, а не `precacheImage`: тот при
+  /// неудаче загрузки всё равно сообщает об ошибке через `FlutterError.onError`,
+  /// и в отзывы уходило «Unable to load asset assets/wall/home_dark.jpg», хотя
+  /// файл в бандле есть и приложение работает (отзывы 21.11 и 24.11).
+  /// Здесь ошибка просто проглатывается — обои нарисуются при обычной загрузке.
   static Future<void> warmUp(BuildContext context) async {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final w = cacheWidthFor(context);
@@ -32,7 +38,12 @@ class Wallpaper extends StatelessWidget {
       final name = 'assets/wall/${k}_${dark ? 'dark' : 'light'}';
       for (final suffix in const ['.jpg', '_b.jpg']) {
         if (!context.mounted) return;
-        await precacheImage(ResizeImage(AssetImage('$name$suffix'), width: w), context).catchError((_) {});
+        final provider = ResizeImage(AssetImage('$name$suffix'), width: w);
+        final stream = provider.resolve(ImageConfiguration.empty);
+        final listener = ImageStreamListener((_, __) {}, onError: (_, __) {});
+        stream.addListener(listener);
+        // Сразу снимаем слушателя: картинка осталась в кэше, ошибка подавлена.
+        stream.removeListener(listener);
       }
     }
   }
