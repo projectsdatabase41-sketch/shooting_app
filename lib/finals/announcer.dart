@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
+import '../i18n/i18n.dart';
 import '../services/local_db_service.dart';
+import '../services/voice_pack_store.dart';
 import 'voice_packs.dart';
 import 'voice_texts.dart';
 
@@ -142,9 +144,30 @@ class FinalsAnnouncer {
   static final FlutterTts _tts = FlutterTts();
   static bool _ready = false;
 
-  /// Произнести фразу: готовыми записями ИИ-озвучки ([refs], склейка), а если их нет — голосом
-  /// телефона. [queue] — не обрывать то, что уже звучит.
+  /// Произнести фразу по выбранному в модуле «Озвучка» движку (владелец 24.11):
+  /// - «Пакет» ([VoicePackStore.enginePackage]): сначала готовые записи
+  ///   скачанного пакета языка интерфейса (команды, счёт, фразы про ботов по
+  ///   умолчанию), чего нет — ИИ своим ключом (существующий кэш), затем голос
+  ///   телефона;
+  /// - «ИИ» ([VoicePackStore.engineAi]): готовые записи ИИ-озвучки, нет записи —
+  ///   голос телефона (прежнее поведение, ничего не сломано);
+  /// - «Машинная» ([VoicePackStore.engineTts]): сразу голос телефона.
+  ///
+  /// [refs] — список записей для склейки; [queue] — не обрывать уже звучащее.
   static Future<void> say(LocalDbService db, String text, {List<String>? refs, bool queue = true}) async {
+    final engine = VoicePackStore.engineOf(db);
+    if (engine == VoicePackStore.engineTts) {
+      await speak(text, queue: queue);
+      return;
+    }
+    if (engine == VoicePackStore.enginePackage && refs != null && refs.isNotEmpty) {
+      try {
+        final keys = await VoicePackStore.packKeysFor(I18n.code, refs);
+        if (keys != null && await VoicePackStore.play(I18n.code, keys, queue: queue)) return;
+      } catch (_) {
+        // Пакет не читается/не играет — дальше по цепочке, финал не ждёт.
+      }
+    }
     if (refs != null && refs.isNotEmpty) {
       try {
         if (await VoicePacks.play(db, refs, queue: queue)) return;
@@ -174,6 +197,7 @@ class FinalsAnnouncer {
   }
 
   static Future<void> stop() async {
+    await VoicePackStore.stop();
     await VoicePacks.stop();
     try {
       await _tts.stop();

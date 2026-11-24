@@ -50,6 +50,9 @@ class _SettingsModulesScreenState extends State<SettingsModulesScreen> {
         'viewer' => AppModule.viewer,
         'news' => AppModule.news,
         'pdf' => AppModule.pdf,
+        // Модуль озвучки финалов (владелец 24.11): без этой строки в списке
+        // «Модулей» вместо названия показывался технический id.
+        'voice' => AppModule.voice,
         _ => null,
       };
 

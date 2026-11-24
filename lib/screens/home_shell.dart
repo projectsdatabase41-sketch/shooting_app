@@ -45,6 +45,7 @@ import 'service_tile_screen.dart';
 import 'settings_screen.dart';
 import 'statistics_screen.dart';
 import 'target_screen.dart';
+import 'voice_module_screen.dart';
 import '../i18n/i18n.dart';
 
 /// Домашняя оболочка с нижней навигацией. Состав вкладок задают включённые
@@ -70,7 +71,9 @@ class _HomeShellState extends State<HomeShell> {
   void initState() {
     super.initState();
     final db = context.read<AppDataStore>().db;
-    _tabs = HomeTabsViewModel(db, mode: 'all', allIds: allTabIds, unhidable: unhidableTabs);
+    // Модуль «Озвучка» добавлен позже остальных (владелец 24.11): id дописывается
+    // к общему списку, порядок плитки пользователь расставит сам.
+    _tabs = HomeTabsViewModel(db, mode: 'all', allIds: [...allTabIds, voiceTabId], unhidable: unhidableTabs);
     _services = CustomServicesRepository(db);
     _personalization = context.read<PersonalizationViewModel>();
     _services.addListener(_onServicesChanged);
@@ -143,6 +146,10 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   Map<String, HomeTabSpec> _specsWithServices() => {
+        // Плитка модуля «Озвучка» (владелец 24.11): иконка и подпись здесь,
+        // а не в home_tab_specs.dart, чтобы остальные экраны не видели вкладку
+        // при выключенном модуле.
+        voiceTabId: const HomeTabSpec(icon: Icons.record_voice_over, label: 'Озвучка'),
         ...homeTabSpecs,
         for (final s in _services.list())
           '$serviceTabPrefix${s.id}':
@@ -170,6 +177,7 @@ class _HomeShellState extends State<HomeShell> {
       if (!on(AppModule.news)) 'news',
       if (!on(AppModule.pdf)) 'pdf',
       if (!on(AppModule.notes)) 'notes',
+      if (!on(AppModule.voice)) voiceTabId,
       // Финалы — только в режиме разработчика и при включённом модуле.
       if (!on(AppModule.finals)) 'finals',
       if (!on(AppModule.services))
@@ -323,6 +331,8 @@ class _HomeShellState extends State<HomeShell> {
       'viewer' => const StepViewerScreen(),
       'news' => const NewsScreen(),
       'pdf' => const PdfToolsScreen(),
+      // Экран модуля озвучки: движок (пакет/ИИ/TTS) и скачивание пакетов.
+      voiceTabId => VoiceModuleScreen(db: store.db),
       'messenger' => ChatHomeScreen(
           onClose: null),
       _ => SettingsScreen(homeTabs: tabs, services: _services),

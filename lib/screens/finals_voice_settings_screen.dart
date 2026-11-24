@@ -6,6 +6,7 @@ import '../services/ai_settings.dart';
 import '../services/local_db_service.dart';
 import '../widgets/glass_pill.dart';
 import 'finals_voice_clips_screen.dart';
+import 'voice_module_screen.dart';
 
 /// Отдельный экран «Голос ИИ для финалов» (открывается из финалов); те же настройки лежат в
 /// настройках ИИ, если добавлен свой ключ.
@@ -161,6 +162,15 @@ class _FinalsVoicePanelState extends State<FinalsVoicePanel> {
           },
           icon: const Icon(Icons.list_alt_outlined),
           label: Text(tr('Записи по одной')),
+        ),
+        // Модуль озвучки (владелец 24.11): выбор движка и готовые пакеты —
+        // рядом с настройками ИИ-озвучки, чтобы их было видно отсюда.
+        OutlinedButton.icon(
+          onPressed: () {
+            Navigator.of(context).push(MaterialPageRoute(builder: (_) => VoiceModuleScreen(db: widget.db)));
+          },
+          icon: const Icon(Icons.record_voice_over_outlined),
+          label: Text(tr('Модуль озвучки')),
         ),
         OutlinedButton.icon(
           onPressed: _busy
