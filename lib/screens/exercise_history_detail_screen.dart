@@ -25,12 +25,12 @@ import '../state/exercise_detail_view_model.dart';
 import '../state/personalization_view_model.dart';
 import '../state/target_view_model.dart';
 import '../theme/app_theme.dart';
-import '../widgets/analytics_bento.dart';
-import '../widgets/analytics_panel.dart' show AnalyticsDynamics;
+import '../widgets/analytics_bento.dart';import '../widgets/analytics_panel.dart' show AnalyticsDynamics;
 import '../widgets/comments_thread.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/section_header.dart';
 import '../widgets/shot_wheel.dart';
+import '../widgets/sius_panel.dart';
 import '../widgets/stats_blocks.dart';
 import '../widgets/target_canvas.dart';
 import 'ai_chat_screen.dart';
@@ -99,6 +99,75 @@ class _DetailBodyState extends State<_DetailBody> {
   /// `notifyListeners` у вью-модели защищённый и извне недоступен —
   /// иначе список и мишень остались бы со старыми выстрелами.
   void _onShotEdited() => setState(() {});
+
+  /// Панель «как SIUS» для wide-режима истории (владелец 24.11): тот же
+  /// виджет, что в финалах, но без обратного отсчёта — вместо него
+  /// прошедшее время тренировки (от старта до последнего выстрела, в
+  /// простое паузы не считаются).
+  Widget _siusPanel(BuildContext context, TrainingSession session) {
+    final exercise = widget.exercise;
+    final rows = <SiusShotRow>[
+      for (final s in session.shots)
+        SiusShotRow(
+          number: s.shotNumber,
+          series: s.seriesNo,
+          score: s.score,
+          point: Offset(s.xMm, s.yMm),
+          // Пристрелка (fitting): серия упражнения с counts == false, а для
+          // старых тренировок — флаг самого выстрела.
+          sighting: !s.counts || !exercise.countsSeries(s.seriesNo),
+        ),
+    ];
+    // Лимиты серий из описания упражнения; серия, ограниченная временем,
+    // лимита по числу выстрелов не имеет (−1: завершённой станет, только
+    // когда началась следующая). Для упражнений старого вида — пары
+    // totalShots/seriesSize.
+    List<int>? limits;
+    if (exercise.series.isNotEmpty) {
+      limits = [for (final spec in exercise.series) spec.shotCount ?? -1];
+    } else if (exercise.seriesSize > 0 && exercise.totalShots > 0) {
+      limits = List.filled(
+          (exercise.totalShots / exercise.seriesSize).ceil(),
+          exercise.seriesSize);
+    }
+    // Подпись текущей серии — по последнему зачётному выстрелу.
+    final counting = session.countingShots;
+    final currentSeries =
+        counting.isEmpty ? 0 : counting.last.seriesNo;
+    final totalSeries = limits?.length ??
+        (exercise.seriesSize > 0
+            ? (exercise.totalShots / exercise.seriesSize).ceil()
+            : 0);
+    final seriesLabel = currentSeries > 0
+        ? tr('Серия {n} из {m}', {'n': currentSeries, 'm': totalSeries})
+        : null;
+    // Прошедшее время: старт → финиш (или последний выстрел), минус
+    // паузы. Даты отсюда уже из прошлого — тип времени «помер».
+    String? timeText;
+    final end = session.finishedAt ??
+        (session.shots.isEmpty ? null : session.shots.last.time);
+    if (session.startedAt != null && end != null) {
+      var s =
+          end.difference(session.startedAt!).inSeconds.clamp(0, 99999);
+      for (final p in session.pauseIntervals) {
+        // Пауза может быть ещё не закрыта (без resumedAt): её длительность
+        // неизвестна — в прошедшее время не считаем, нулями не «удлиняем».
+        final resumed = p.resumedAt;
+        if (resumed != null) s -= resumed.difference(p.pausedAt).inSeconds;
+      }
+      s = s.clamp(0, 999999);
+      timeText = '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
+    }
+    return SiusPanel(
+      face: widget.face,
+      shots: rows,
+      title: exercise.label,
+      seriesLabel: seriesLabel,
+      timeText: timeText,
+      seriesShots: (limits != null && limits.every((n) => n > 0)) ? limits : null,
+      lastFiveMode: false,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -189,6 +258,12 @@ class _DetailBodyState extends State<_DetailBody> {
                   padding: const EdgeInsets.only(bottom: 12),
                   child: Text(tr('{p} очка ({p2})', {'p': total.toStringAsFixed(1), 'p2': total.round()})),
                 ),
+                // Владелец 24.11 («экран как SIUS»): на широком экране в
+                // правой колонке — панель со списком выстрелов, суммами
+                // серий и числом центральных. Обратного отсчёта здесь нет —
+                // тренировка уже прошла; показываем прошедшее время.
+                SizedBox(height: 280, child: _siusPanel(context, session)),
+                const SizedBox(height: 16),
                 _ShotsListBlock(onChanged: _onShotEdited),
                 const SizedBox(height: 16),
                 for (final block in rightBlocks) ...[
