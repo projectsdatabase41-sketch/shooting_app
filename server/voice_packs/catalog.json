@@ -1,0 +1,68 @@
+{
+ "updatedAt": null,
+ "packs": [
+  {
+   "lang": "de",
+   "file": "de.zip",
+   "bytes": 17367271,
+   "phrases": 385,
+   "sourceBytes": 59295398
+  },
+  {
+   "lang": "en",
+   "file": "en.zip",
+   "bytes": 16870906,
+   "phrases": 385,
+   "sourceBytes": 57520216
+  },
+  {
+   "lang": "es",
+   "file": "es.zip",
+   "bytes": 15199517,
+   "phrases": 385,
+   "sourceBytes": 51278332
+  },
+  {
+   "lang": "fr",
+   "file": "fr.zip",
+   "bytes": 18186567,
+   "phrases": 385,
+   "sourceBytes": 61802040
+  },
+  {
+   "lang": "it",
+   "file": "it.zip",
+   "bytes": 16964699,
+   "phrases": 385,
+   "sourceBytes": 57169832
+  },
+  {
+   "lang": "pl",
+   "file": "pl.zip",
+   "bytes": 3507818,
+   "phrases": 385,
+   "sourceBytes": 12142372
+  },
+  {
+   "lang": "pt",
+   "file": "pt.zip",
+   "bytes": 19420258,
+   "phrases": 385,
+   "sourceBytes": 64786898
+  },
+  {
+   "lang": "ru",
+   "file": "ru.zip",
+   "bytes": 16797155,
+   "phrases": 385,
+   "sourceBytes": 58030712
+  },
+  {
+   "lang": "zh",
+   "file": "zh.zip",
+   "bytes": 11776799,
+   "phrases": 385,
+   "sourceBytes": 40923914
+  }
+ ]
+}
