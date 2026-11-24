@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
+import '../i18n/i18n.dart';
 import '../logic/scoring.dart';
 import '../models/target_face.dart';
 import 'bot.dart';
@@ -18,7 +19,8 @@ enum RunPhase {
   shooting,
 
   /// После команды «Стоп»: спортсмен ещё может отметить выстрел, сделанный
-  /// в срок (выстрел за секунды до «Стоп» — не опоздание).
+  /// в срок (выстрел за секунды до «Стоп» — не опоздание). Только в сетевом
+  /// финале ([FinalRunController.allowGraceAfterStop]).
   grace,
   finished,
 }
@@ -69,11 +71,35 @@ class FinalRunController extends ChangeNotifier {
   /// по таймеру, а подаются кнопкой «Далее» ([advance]). Время выстрелов
   /// засекается с «Старта»; «Стоп» тренер может подать раньше срока.
   final bool manual;
+
+  /// Окно отметки выстрелов после «Стоп» включено. По ISSF 2026 выстрел, не
+  /// отмеченный к команде «Стоп», не засчитывается — в одиночном (несетевом)
+  /// финале окно выключено (по умолчанию). В совместном сетевом финале окно
+  /// остаётся включённым: компенсация задержки сети, выстрел, сделанный в
+  /// последний момент, не должен потеряться из-за медленного канала
+  /// (владелец 24.11).
+  final bool allowGraceAfterStop;
   final math.Random rng;
   final Map<String, BotShooter> bots;
 
   RunPhase phase = RunPhase.sighting;
   bool paused = false;
+
+  /// Паузы по ISSF 2026 / владельцу 24.11: остановить время может спортсмен
+  /// (неисправность) или судья, не больше [maxPauses] раз за финал и не
+  /// дольше [maxPauseSeconds]; при превышении — сообщение ([pauseNotice]) и
+  /// автопродолжение времени ([tick]).
+  static const maxPauses = 2;
+  static const maxPauseSeconds = 120;
+
+  /// Сколько пауз осталось за финал.
+  int pausesLeft = maxPauses;
+
+  /// Сколько секунд осталось в текущей паузе (`null` — время не остановлено).
+  int? pauseSecondsLeft;
+
+  /// Сообщение для экрана: пауза отклонена или время продолжилось само.
+  String? pauseNotice;
 
   /// Секунд до конца этапа (подготовка / «заряжай»).
   int secondsLeft;
@@ -102,6 +128,10 @@ class FinalRunController extends ChangeNotifier {
   /// Пристрелочные выстрелы ботов (не в зачёт): показываются бледно на их мишенях.
   final Map<String, List<(double, double)>> sightShots = {};
 
+  /// Стартовые номера после жеребьёвки (id → номер с 1). По ISSF 2026
+  /// жеребьёвка проводится после пристрелки, перед первой зачётной серией.
+  final Map<String, int> startNumbers = {};
+
   /// План выстрелов бота в текущем раунде (id → момент в секундах раунда и
   /// длительности стадий «отдых/прицеливание/перезарядка»). Отзыв владельца
   /// 24.11: пауза бота не плоская — каждая стадия стоит времени и видна в
@@ -119,6 +149,7 @@ class FinalRunController extends ChangeNotifier {
     required this.rng,
     Set<String> otherHumans = const {},
     this.manual = false,
+    this.allowGraceAfterStop = false,
   })  : humans = {userId, ...otherHumans},
         secondsLeft = format.sightingSeconds;
 
@@ -154,8 +185,10 @@ class FinalRunController extends ChangeNotifier {
   /// Секунд на отметку выстрелов после «Стоп».
   static const graceSeconds = 10;
 
-  /// Окно после «Стоп» для отметки последних выстрелов. В совместном финале ведущий увеличивает его на запас под
+  /// Окно после «Стоп» для отметки последних выстрелов; работает только при
+  /// [allowGraceAfterStop]. В совместном финале ведущий увеличивает его на запас под
   /// задержку сети: выстрел, сделанный в последний момент, не должен потеряться из-за медленного канала.
+  /// В одиночном финале окно выключено: выстрел после «Стоп» не засчитывается (ISSF 2026).
   int graceLimit = graceSeconds;
 
   /// Номер раунда для сети: выстрел, пришедший с опозданием из прошлого раунда, не засчитывается в новый.
@@ -192,15 +225,34 @@ class FinalRunController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void pause() {
+  /// Остановить время: спортсмен при неисправности или судья. По ISSF 2026
+  /// не больше [maxPauses] раз за финал — лишний запрос отклоняется с
+  /// сообщением.
+  ///
+  /// [counted] = false — команда «Стоп» тренера в ручном режиме ([advance]):
+  /// это остановка раунда, а не пауза финала, лимит не расходует.
+  void pause({bool counted = true}) {
     if (paused || phase == RunPhase.finished) return;
+    if (counted) {
+      if (pausesLeft <= 0) {
+        pauseNotice = tr('Лимит пауз исчерпан: не больше 2 за финал');
+        log.add({'e': 'pause_denied', 't': clock});
+        notifyListeners();
+        return;
+      }
+      pausesLeft--;
+      pauseSecondsLeft = maxPauseSeconds;
+    }
     paused = true;
+    pauseNotice = null;
     log.add({'e': 'pause', 't': clock});
     notifyListeners();
   }
 
   void resume() {
     pausedBy = null;
+    pauseSecondsLeft = null;
+    pauseNotice = null;
     if (!paused) return;
     paused = false;
     log.add({'e': 'resume', 't': clock});
@@ -209,7 +261,20 @@ class FinalRunController extends ChangeNotifier {
 
   /// Прошла одна секунда.
   void tick() {
-    if (paused || phase == RunPhase.finished) return;
+    if (phase == RunPhase.finished) return;
+    if (paused) {
+      // Автопродолжение: пауза не держится дольше 120 с (ISSF 2026 / владелец 24.11).
+      final left = pauseSecondsLeft;
+      if (left != null && left <= 1) {
+        resume();
+        pauseNotice = tr('Пауза окончена — время пошло (лимит 120 с)');
+        notifyListeners();
+      } else {
+        if (left != null) pauseSecondsLeft = left - 1;
+        notifyListeners();
+      }
+      return;
+    }
     switch (phase) {
       case RunPhase.sighting:
         // Боты тоже пристреливаются: до 5 выстрелов, примерно раз в 3–6 секунд.
@@ -252,8 +317,9 @@ class FinalRunController extends ChangeNotifier {
   void advance() {
     // «Стоп» во время стрельбы — пауза (время и боты замирают), «Старт» продолжает ту же серию, а не переходит к
     // следующей: серия закрывается только по времени или когда все отстреляли.
+    // Это команда раунда, а не пауза финала: лимит пауз ISSF не расходует.
     if (phase == RunPhase.shooting) {
-      paused ? resume() : pause();
+      paused ? resume() : pause(counted: false);
       return;
     }
     if (paused) return;
@@ -305,9 +371,30 @@ class FinalRunController extends ChangeNotifier {
   int _doneTicks = 0;
 
   void _beginLoading(int seconds) {
+    // Первая загрузка после пристрелки — жеребьёвка стартовых номеров
+    // (ISSF 2026, п. 6.17.2 / владелец 24.11).
+    if (phase == RunPhase.sighting) _drawStartNumbers();
     phase = RunPhase.loading;
     secondsLeft = seconds;
   }
+
+  /// Жеребьёвка стартовых номеров: перемешиваем участников случайностью,
+  /// выведенной из id финала, — при том же финале на всех устройствах номера
+  /// совпадают (детерминированный [math.Random] с seed из [FinalFormat.id]).
+  void _drawStartNumbers() {
+    var seed = 0;
+    for (final cu in format.id.codeUnits) {
+      seed = (seed * 31 + cu) & 0x7fffffff;
+    }
+    final draw = math.Random(seed);
+    final ids = [for (final c in engine.competitors) c.id]..shuffle(draw);
+    for (var i = 0; i < ids.length; i++) {
+      startNumbers[ids[i]] = i + 1;
+    }
+  }
+
+  /// Стартовый номер участника (`null` — жеребьёвка ещё не проводилась).
+  int? startNumberOf(String id) => startNumbers[id];
 
   List<String> _currentShooters() => inShootOff
       ? [for (final c in engine.shootOffShooters) c.id]
@@ -500,9 +587,11 @@ class FinalRunController extends ChangeNotifier {
       .where(humans.contains)
       .every((id) => stagedOf(id).length >= shotsPerShooter);
 
-  /// Время раунда вышло («Стоп»): если человек отметил не всё — короткое окно.
+  /// Время раунда вышло («Стоп»): если человек отметил не всё — короткое окно,
+  /// но только в сетевом финале ([allowGraceAfterStop]); в одиночном выстрел
+  /// после «Стоп» не засчитывается (ISSF 2026) — раунд закрывается сразу.
   void _stopRound() {
-    if (!_humansDone()) {
+    if (allowGraceAfterStop && !_humansDone()) {
       phase = RunPhase.grace;
       secondsLeft = graceLimit;
       log.add({'e': 'stop', 't': clock});
@@ -550,10 +639,10 @@ class FinalRunController extends ChangeNotifier {
     _beginLoading(change ?? (announcerSeconds + 5));
   }
 
-  /// Живая таблица: активные — по среднему выстрелу (у всех разное число
-  /// выстрелов, пока раунд идёт), включая уже отмеченные, но ещё не закрытые
-  /// выстрелы спортсмена; выбывшие — ниже по местам. Пересчитывается после
-  /// каждого выстрела.
+  /// Живая таблица: активные — по сумме (ISSF 2026: места на табло решает
+  /// сумма на контрольной точке; средний выстрел — только подпись), включая
+  /// уже отмеченные, но ещё не закрытые выстрелы спортсмена; выбывшие — ниже
+  /// по местам. Пересчитывается после каждого выстрела.
   List<LiveRow> get live {
     final rows = <LiveRow>[];
     for (final c in engine.competitors) {
@@ -569,8 +658,8 @@ class FinalRunController extends ChangeNotifier {
       for (final r in rows)
         if (r.c.active) r
     ]..sort((a, b) {
-        final byAvg = b.avg.compareTo(a.avg);
-        return byAvg != 0 ? byAvg : b.total.compareTo(a.total);
+        final byTotal = b.total.compareTo(a.total);
+        return byTotal != 0 ? byTotal : b.avg.compareTo(a.avg);
       });
     final out = [
       for (final r in rows)

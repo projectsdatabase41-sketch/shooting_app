@@ -73,7 +73,8 @@ String _nextLabel(String phase, int secondsLeft, bool paused) => switch (phase) 
     };
 
 /// Общий экран финала для всех ролей, устроен как в пневматике: справа (главная страница) своя мишень
-/// и мишени соперников, слева (свайп вправо) таблица результатов по среднему выстрелу.
+/// и мишени соперников, слева (свайп вправо) таблица результатов по сумме (ISSF 2026: места на табло
+/// решает сумма на контрольной точке, средний выстрел — подпись).
 /// Тренер (жюри, красная рамка на весь финал; у главного — «Главный судья») нажимает на спортсмена
 /// в таблице и вводит выстрелы на его мишени на той же странице, без выезжающих окон. Зритель видит мишени
 /// всех и жмёт кричалки. На широком альбомном экране — раскладка «таблица слева, мишени справа» (24.11 п.8).
@@ -198,6 +199,8 @@ class _FinalRoomViewState extends State<FinalRoomView> {
       _local.clear(); // новый раунд — отметки снова берутся из снимка
       _localKey = key;
     }
+    // Пауза — по ISSF 2026 / владельцу 24.11: спортсмен (неисправность) или судья;
+    // лимит числа (2) и длительности (120 с) проверяет FinalRunController.
     final canRequestPause = widget.onRequestPause != null && !s.paused && (s.phase == 'shooting' || s.phase == 'grace');
     final own = widget.ownId == null ? null : s.row(widget.ownId!);
     // Подписи ролей по ISSF (владелец 24.11 п.5): helper — «Помощник» (у одного
@@ -303,7 +306,8 @@ class _FinalRoomViewState extends State<FinalRoomView> {
   EdgeInsets _pad(BuildContext context) =>
       EdgeInsets.fromLTRB(12, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 12, 12);
 
-  /// Слева: таблица по среднему выстрелу. Судья нажимает на спортсмена — открывается его мишень.
+  /// Слева: таблица по сумме (ISSF 2026: места решает сумма, средний выстрел — подпись),
+  /// у каждого — стартовый номер после жеребьёвки. Судья нажимает на спортсмена — открывается его мишень.
   /// В wide-раскладке таблица стоит слева постоянно: выбор только выделяет спортсмена,
   /// свайпа страницы нет (владелец 24.11 п.8).
   Widget _table(BuildContext context, FinalsSnapshot s, {required bool wide}) {
@@ -348,7 +352,8 @@ class _FinalRoomViewState extends State<FinalRoomView> {
                 ),
                 child: Row(children: [
                   SizedBox(width: 26, child: Text('${rows[i]['place'] ?? (i + 1)}', style: const TextStyle(fontWeight: FontWeight.w800))),
-                  Expanded(child: Text('${rows[i]['name']}${rows[i]['site'] != null && s.siteCount > 1 ? ' · ${tr('Тир {n}', {'n': rows[i]['site']})}' : ''}', overflow: TextOverflow.ellipsis)),
+                  // Стартовый номер (жеребьёвка после пристрелки, ISSF 2026 / владелец 24.11).
+                  Expanded(child: Text('${rows[i]['no'] == null ? '' : '№${rows[i]['no']} · '}${rows[i]['name']}${rows[i]['site'] != null && s.siteCount > 1 ? ' · ${tr('Тир {n}', {'n': rows[i]['site']})}' : ''}', overflow: TextOverflow.ellipsis)),
                   Text(((rows[i]['shots'] as List).isEmpty) ? '' : '${tr('ср')} ${(rows[i]['avg'] as num).toStringAsFixed(2)}  ', style: theme.textTheme.bodySmall),
                   Text((rows[i]['total'] as num).toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.w700)),
                 ]),
@@ -449,11 +454,16 @@ class _FinalRoomViewState extends State<FinalRoomView> {
         if (s.paused)
           Padding(
             padding: const EdgeInsets.only(bottom: 4),
-            child: Text(
-              s.data['pb'] != null ? tr('Пауза: время остановил {name}', {'name': s.data['pb']}) : tr('Пауза'),
-              textAlign: TextAlign.center,
-              style: theme.textTheme.titleMedium,
-            ),
+            child: Column(children: [
+              Text(
+                s.data['pb'] != null ? tr('Пауза: время остановил {name}', {'name': s.data['pb']}) : tr('Пауза'),
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleMedium,
+              ),
+              // Сообщение о лимитах пауз (отклонена или время продолжилось само) — ISSF 2026.
+              if (s.data['pn'] != null)
+                Text('${s.data['pn']}', textAlign: TextAlign.center, style: theme.textTheme.bodySmall),
+            ]),
           ),
         if (widget.cheers != null)
           ListenableBuilder(
@@ -829,6 +839,9 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
       engine: FinalEngine(f, competitors.take(f.finalists).toList()),
       userId: athletes.first.targetId!,
       otherHumans: {for (final a in athletes.skip(1)) a.targetId!},
+      // Совместный сетевой финал: окно после «Стоп» включено — компенсация
+      // задержки сети (владелец 24.11); по ISSF 2026 в одиночном финале оно выключено.
+      allowGraceAfterStop: true,
       bots: {
         for (var i = 0; i < botCount; i++)
           'b$i': BotShooter(fallback, levels[i % levels.length], face,

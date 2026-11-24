@@ -88,4 +88,24 @@ void main() {
     expect(find.text('Тир 1: 2/2'), findsOneWidget);
     expect(find.text('Тир 2: 1/3'), findsOneWidget);
   });
+
+  // Жеребьёвка стартовых номеров (ISSF 2026 / владелец 24.11): после пристрелки
+  // в таблице у каждого — свой номер, одинаковый на всех устройствах (seed из id финала).
+  testWidgets('после жеребьёвки в таблице видны стартовые номера', (tester) async {
+    tester.view.physicalSize = const Size(900, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final c = _c()..skipSighting(); // пристрелка окончена — жеребьёвка проведена
+    expect(c.startNumbers.values.toSet(), {1, 2, 3, 4, 5, 6, 7, 8});
+    await tester.pumpWidget(MaterialApp(
+      home: FinalRoomView(snapshot: FinalsSnapshot.of(c), role: FinalsRole.coach, onShoot: (_, __) {}, onUndo: (_) {}),
+    ));
+    // Номера в таблице: в альбомной wide-раскладке таблица стоит слева постоянно.
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    await tester.pumpWidget(MaterialApp(
+      home: FinalRoomView(snapshot: FinalsSnapshot.of(c), role: FinalsRole.coach, onShoot: (_, __) {}, onUndo: (_) {}),
+    ));
+    expect(find.textContaining('№'), findsWidgets); // «№1 · Анна» и т. д. в таблице
+  });
 }

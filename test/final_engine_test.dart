@@ -191,11 +191,10 @@ void main() {
       expect([for (final c in cs) c.shots.length], [45, 45, 44, 43, 42, 41, 40, 40]);
     });
 
-    test('ничья двоих внизу после 40-го — по счёту серий, без перестрелки', () {
+    test('ничья двоих внизу после 40-го — перестрелка (ISSF 2026), а не счёт серий', () {
       final cs = [for (var i = 0; i < 8; i++) FinalCompetitor('c$i', 'C$i')];
       final e = FinalEngine(f, cs);
-      // c6: 35×10.0 + 5×9.0 = 395; c7: 30×10.0 + 5×9.0 + 5×10.0 = 395 — сумма равна,
-      // но в последней серии c7 сильнее, значит c6 выбывает 8-м.
+      // c6: 35×10.0 + 5×9.0 = 395; c7: 30×10.0 + 5×9.0 + 5×10.0 = 395 — суммы равны.
       for (var n = 0; n < 40; n++) {
         for (var i = 0; i < 8; i++) {
           final v = switch (i) {
@@ -206,9 +205,26 @@ void main() {
           e.submit('c$i', v);
         }
       }
-      expect(e.phase, FinalPhase.match);
+      // Раньше ничью решал счёт по последним сериям; по ISSF 2026 — перестрелка,
+      // даже когда выбывание двоих и «серия» одного из ничейных сильнее.
+      expect(e.phase, FinalPhase.shootOff);
+      expect([for (final c in e.shootOffShooters) c.id]..sort(), ['c6', 'c7']);
+      e.submit('c6', 9.4);
+      e.submit('c7', 10.1);
+      expect(e.phase, FinalPhase.match); // худший выбыл
       expect(cs[6].place, 8);
+      expect(cs[6].shootoff.length, 1); // перестрелочные в зачёт не идут
+      // Второй ничейный на той же контрольной точке занимает второе место
+      // выбывания (7-е) своей суммой — без повторной перестрелки.
       expect(cs[7].place, 7);
+      // Дальше обычные одиночные выстрелы — до конца финала.
+      for (var n = 40; n < 45; n++) {
+        for (var i = 0; i < 8; i++) {
+          if (cs[i].active && !e.isFinished) e.submit('c$i', 10.9 - i * 0.1);
+        }
+      }
+      expect(e.isFinished, isTrue);
+      expect([for (final c in cs) c.place], [1, 2, 3, 4, 5, 6, 8, 7]);
     });
   });
 

@@ -205,6 +205,7 @@ void lateShotsTest() {
       bots: const {},
       rng: Random(1),
       manual: true,
+      allowGraceAfterStop: true, // сетевой финал: окно после «Стоп» включено (ISSF 2026 / владелец 24.11)
     );
     c.graceLimit = 15;
     final host = FinalsHost(controller: c, channel: hostCh, allowed: (_) => null);

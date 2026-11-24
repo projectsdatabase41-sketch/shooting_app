@@ -161,6 +161,9 @@ class FinalsSnapshot {
       'rid': c.roundId,
       'sites': c.siteStatus,
       'pb': c.pausedBy,
+      // Сообщение о лимите пауз (ISSF 2026: не больше двух, не дольше 120 с) —
+      // показывается у всех во время паузы.
+      if (c.pauseNotice != null) 'pn': c.pauseNotice,
       'aw': c.missingIds,
       // В конце финала участникам уходят все выстрелы с координатами — из них у каждого собирается протокол.
       if (c.phase == RunPhase.finished)
@@ -170,6 +173,8 @@ class FinalsSnapshot {
           {
             'id': r.c.id,
             'name': r.c.name,
+            // Стартовый номер (жеребьёвка после пристрелки, ISSF 2026 / владелец 24.11).
+            if (c.startNumbers[r.c.id] != null) 'no': c.startNumbers[r.c.id],
             if (c.sites[r.c.id] != null) 'site': c.sites[r.c.id],
             'human': c.humans.contains(r.c.id),
             'active': r.c.active,
@@ -274,6 +279,8 @@ class FinalsHost {
     if (author.isNotEmpty && author != 'null') onSeen?.call(author);
     if (event == 'ping') return;
     if (event == 'pause') {
+      // Пауза — по ISSF 2026: спортсмен (неисправность) или судья ([canPause]);
+      // лимит числа и длительности проверяет контроллер ([FinalRunController.pause]).
       if (canPause?.call(author) == true && !controller.paused) {
         controller.pausedBy = cheerName?.call(author);
         controller.pause();

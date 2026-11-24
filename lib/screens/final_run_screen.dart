@@ -394,7 +394,31 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
           Positioned.fill(
             child: ColoredBox(
               color: Colors.black54,
-              child: Center(child: Text(tr('Пауза'), style: theme.textTheme.headlineMedium?.copyWith(color: Colors.white))),
+              child: Center(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text(tr('Пауза'), style: theme.textTheme.headlineMedium?.copyWith(color: Colors.white)),
+                  // Остаток времени паузы и сообщение о лимитах (ISSF 2026: 2 паузы по 120 с).
+                  if (c.pauseSecondsLeft != null)
+                    Text(tr('До автопродолжения: {n} с', {'n': c.pauseSecondsLeft}),
+                        style: theme.textTheme.titleSmall?.copyWith(color: Colors.white)),
+                  if (c.pauseNotice != null)
+                    Text(c.pauseNotice!, textAlign: TextAlign.center, style: theme.textTheme.titleSmall?.copyWith(color: Colors.white)),
+                ]),
+              ),
+            ),
+          ),
+        // Пауза отклонена (лимит пауз исчерпан): показываем, пока время идёт.
+        if (!c.paused && c.pauseNotice != null)
+          Positioned(
+            bottom: 4,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.55), borderRadius: BorderRadius.circular(8)),
+                child: Text(c.pauseNotice!, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, color: Colors.white)),
+              ),
             ),
           ),
       ]),
@@ -1060,10 +1084,17 @@ class _BoardRow extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(children: [
+          // Место и, после жеребьёвки, стартовый номер (ISSF 2026 / владелец 24.11):
+          // номер — под местом, чтобы строка не разъезжалась на узком экране.
           SizedBox(
             width: 34,
-            child: Text('${row.c.place ?? (index + 1)}',
-                style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text('${row.c.place ?? (index + 1)}',
+                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+              if (c.startNumbers[row.c.id] != null)
+                Text('№${c.startNumbers[row.c.id]}',
+                    style: theme.textTheme.labelSmall?.copyWith(color: cs.onSurfaceVariant)),
+            ]),
           ),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1106,8 +1137,8 @@ class _BoardRow extends StatelessWidget {
                   }),
                 ],
               ]),
-              // Места идут по среднему выстрелу — оно и подписано: пока раунд
-              // идёт, у всех разное число выстрелов.
+              // Места идут по сумме на контрольной точке (ISSF 2026); средний
+              // выстрел — только подпись.
               if (row.shots.isNotEmpty)
                 Text(
                   '${tr('ср')} ${row.avg.toStringAsFixed(2)}',

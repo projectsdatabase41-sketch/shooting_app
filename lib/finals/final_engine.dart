@@ -32,7 +32,8 @@ class FinalFormat {
   final List<int> eliminationAfter;
 
   /// Сколько выбывает на каждой контрольной точке (по умолчанию по одному).
-  /// 50 м из трёх положений: после 30-го выстрела сразу двое (п. 6.17.3).
+  /// 50 м из трёх положений: после 40-го выстрела сразу двое (п. 6.17.3) —
+  /// поправка 24.11 по владельцу (было ошибочное «после 30-го»).
   final List<int>? eliminationCounts;
 
   /// Открытый этап без команд (лёжа и с колена): первая «серия» из
@@ -45,10 +46,6 @@ class FinalFormat {
 
   /// Смена изготовки: после серии с номером (с нуля) — сколько секунд занимает смена и пристрелка.
   final Map<int, int> changeAfterSeries;
-
-  /// Размеры блоков для разрыва ничьей по счёту при выбывании двоих
-  /// (последняя серия, предыдущая серия, затем отдельные выстрелы назад).
-  final List<int> countbackBlocks;
 
   const FinalFormat({
     required this.id,
@@ -65,7 +62,6 @@ class FinalFormat {
     this.openSeconds = 0,
     this.seriesSecondsList,
     this.changeAfterSeries = const {},
-    this.countbackBlocks = const [],
   });
 
   int eliminationsAt(int checkpoint) =>
@@ -121,7 +117,6 @@ class FinalFormat {
     singleShots: 5,
     eliminationAfter: [40, 41, 42, 43, 44],
     eliminationCounts: [2, 1, 1, 1, 1],
-    countbackBlocks: [5, 5],
   );
 
   /// Свой финал (конструктор): серии, одиночные выстрелы и время задаёт
@@ -322,14 +317,12 @@ class FinalEngine {
           ].length;
       if (lows.length == 1) {
         lows.first.place = place;
-      } else if (lows.length == 2 &&
-          k == 2 &&
-          _elimInCp == 0 &&
-          _countback(lows[0], lows[1], n) != 0) {
-        // Двое с равной суммой при выбывании двоих: худший по счёту серий — 8-й.
-        final worse = _countback(lows[0], lows[1], n) < 0 ? lows[0] : lows[1];
-        worse.place = place;
       } else {
+        // Ничья на контрольной точке с выбыванием — одиночная перестрелка:
+        // ничейные стреляют по выстрелу, худший выбывает (ISSF 2026,
+        // п. 6.17.8/6.17.9; владелец 24.11: перестрелка вместо счёта по
+        // последним сериям). Если выбывают двое, второй ничейный продолжит
+        // и покинет финал на следующей контрольной точке.
         _startShootOff(lows, forGold: false, place: place);
         return;
       }
@@ -341,25 +334,9 @@ class FinalEngine {
     }
   }
 
-  /// Сравнение по счёту ([FinalFormat.countbackBlocks]): >0 — [a] лучше.
-  int _countback(FinalCompetitor a, FinalCompetitor b, int n) {
-    var end = n;
-    for (final size in format.countbackBlocks) {
-      final sa =
-          a.shots.sublist(end - size, end).fold<double>(0, (x, y) => x + y);
-      final sb =
-          b.shots.sublist(end - size, end).fold<double>(0, (x, y) => x + y);
-      final r = ((sa - sb) * 10).round();
-      if (r != 0) return r;
-      end -= size;
-    }
-    for (var i = end - 1; i >= 0; i--) {
-      final r = ((a.shots[i] - b.shots[i]) * 10).round();
-      if (r != 0) return r;
-    }
-    return 0;
-  }
-
+  /// Сравнение по счёту (countback) убрано 24.11 по решению владельца: по
+  /// правилам ISSF 2026 ничья на контрольной точке решается перестрелкой,
+  /// а не суммами последних серий.
   void _startShootOff(List<FinalCompetitor> tied,
       {required bool forGold, required int place}) {
     phase = FinalPhase.shootOff;

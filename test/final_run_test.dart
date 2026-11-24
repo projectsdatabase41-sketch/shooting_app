@@ -4,9 +4,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shooting_app/finals/bot.dart';
 import 'package:shooting_app/finals/final_engine.dart';
 import 'package:shooting_app/finals/final_run.dart';
+import 'package:shooting_app/logic/scoring.dart';
 import 'package:shooting_app/models/target_face.dart';
 
-FinalRunController _make(int seed, {BotDifficulty d = BotDifficulty.medium, FinalFormat format = FinalFormat.airRifle10m}) {
+FinalRunController _make(
+  int seed, {
+  BotDifficulty d = BotDifficulty.medium,
+  FinalFormat format = FinalFormat.airRifle10m,
+  bool network = false,
+}) {
   final face = TargetFace.byCode(format.faceCode);
   final rng = math.Random(seed);
   const stats = ShotStats(0.5, -0.5, 3.0, 3.0, 100);
@@ -21,6 +27,8 @@ FinalRunController _make(int seed, {BotDifficulty d = BotDifficulty.medium, Fina
     userId: 'me',
     bots: {for (var i = 1; i <= 7; i++) 'b$i': BotShooter(stats, d, face, math.Random(seed * 31 + i))},
     rng: rng,
+    // Сетевой финал: окно отметки после «Стоп» включено (компенсация задержки сети).
+    allowGraceAfterStop: network,
   );
 }
 
@@ -140,11 +148,9 @@ void main() {
     for (var i = 0; i < 250; i++) {
       c.tick();
     }
-    expect(c.awaitingResult, isFalse);
-    for (var i = 0; i < 10; i++) {
-      c.tick();
-    }
-    expect(c.awaitingResult, isTrue);
+    // Окна после «Стоп» в одиночном финале нет (ISSF 2026): неотмеченное — нули, раунд закрыт.
+    expect(c.phase, RunPhase.loading);
+    expect(c.user.shots.length, 5);
     expect(c.exclude('me'), isTrue);
     expect(c.user.place, 8);
     expect(c.user.active, isFalse);
@@ -154,7 +160,7 @@ void main() {
     expect({for (final x in c.engine.competitors) x.place}, {1, 2, 3, 4, 5, 6, 7, 8});
   });
 
-  test('«назад» убирает выстрел; после «Стоп» ещё 10 с на отметку', () {
+  test('одиночный финал: окно после «Стоп» выключено, не отмеченное — нули (ISSF 2026 / владелец 24.11)', () {
     final c = _make(11);
     c.skipSighting();
     for (var i = 0; i < 5; i++) {
@@ -168,24 +174,86 @@ void main() {
     for (var i = 0; i < 250; i++) {
       c.tick();
     }
-    expect(c.phase, RunPhase.grace); // 4 выстрела не отмечены — окно открыто
-    expect(c.userCanShoot, isTrue);
-    c.submitUserShot(0, 0);
-    for (var i = 0; i < 10; i++) {
+    // «Стоп»: раунд закрывается сразу, без окна — выстрел после «Стоп» не засчитан.
+    expect(c.phase, RunPhase.loading);
+    expect(c.awaitingResult, isFalse);
+    expect(c.user.shots.length, 5); // 1 отмеченный + 4 нуля
+    expect(c.user.shots.where((v) => v == 0.0).length, 4);
+    expect(c.staged, isEmpty);
+  });
+
+  test('сетевой финал: окно после «Стоп» включено (компенсация задержки сети)', () {
+    final c = _make(11, network: true);
+    c.skipSighting();
+    for (var i = 0; i < 5; i++) {
       c.tick();
     }
-    // Окно вышло, а 3 выстрела не указаны: дальше не идём, пока не будет результата («Промах»).
-    expect(c.phase, RunPhase.grace);
-    expect(c.awaitingResult, isTrue);
-    expect(c.missingIds, ['me']);
-    while (c.canShootFor('me')) {
-      c.markMiss('me');
+    for (var i = 0; i < 250; i++) {
+      c.tick();
     }
+    expect(c.phase, RunPhase.grace);
+    expect(c.userCanShoot, isTrue);
+    c.submitUserShot(0, 0);
+    expect(c.staged.length, 1);
+  });
+
+  test('лимит пауз: две за финал, по 120 с, лишняя отклоняется (ISSF 2026 / владелец 24.11)', () {
+    final c = _make(1);
+    // Длительность: 120 с — потом время продолжается само.
+    c.pause();
+    for (var i = 0; i < 119; i++) {
+      c.tick();
+    }
+    expect(c.paused, isTrue);
     c.tick();
-    expect(c.phase, RunPhase.loading);
-    expect(c.user.shots.length, 5); // 2 отмеченных + 3 промаха
-    expect(c.user.shots.where((v) => v == 0.0).length, 3);
-    expect(c.staged, isEmpty);
+    expect(c.paused, isFalse);
+    expect(c.pauseNotice, isNotNull);
+    c.resume();
+    c.pause(); // вторая пауза — разрешена
+    c.resume();
+    expect(c.pausesLeft, 0);
+    c.pause(); // третья — отклонена, время идёт
+    expect(c.paused, isFalse);
+    expect(c.pauseNotice, isNotNull);
+  });
+
+  test('«Стоп» тренера в ручном режиме — не пауза финала: лимит не расходует', () {
+    final face = TargetFace.rifle10m;
+    const stats = ShotStats(0, 0, 3.0, 3.0, 100);
+    final c = FinalRunController(
+      format: FinalFormat.airRifle10m,
+      face: face,
+      engine: FinalEngine(FinalFormat.airRifle10m, [
+        FinalCompetitor('me', 'Я', isUser: true),
+        for (var i = 1; i <= 7; i++) FinalCompetitor('b$i', 'Бот $i'),
+      ]),
+      userId: 'me',
+      bots: {for (var i = 1; i <= 7; i++) 'b$i': BotShooter(stats, BotDifficulty.medium, face, math.Random(i))},
+      rng: math.Random(1),
+      manual: true,
+    );
+    c.advance(); // «Заряжай»
+    c.advance(); // «Старт»
+    expect(c.phase, RunPhase.shooting);
+    c.advance(); // «Стоп» — остановка раунда
+    expect(c.paused, isTrue);
+    c.advance(); // «Старт» — та же серия
+    expect(c.paused, isFalse);
+    expect(c.pausesLeft, FinalRunController.maxPauses); // лимит пауз не тронут
+  });
+
+  test('жеребьёвка стартовых номеров: по id финала, одинаковая на всех устройствах', () {
+    // До пристрелки номеров ещё нет.
+    final before = _make(1);
+    expect(before.startNumbers, isEmpty);
+    // Жеребьёвка после пристрелки: результат зависит только от id финала,
+    // а не от seed генератора ботов — у всех устройств совпадёт.
+    final a = _make(1);
+    final b = _make(2);
+    a.skipSighting();
+    b.skipSighting();
+    expect(a.startNumbers, equals(b.startNumbers));
+    expect(a.startNumbers.values.toSet(), {1, 2, 3, 4, 5, 6, 7, 8});
   });
 
   test('все отстреляли — «Стоп» раньше срока; диктор перед следующей командой', () {
@@ -272,6 +340,39 @@ void main() {
     expect(c.live.first.avg, 0);
   });
 
+  test('живой рейтинг — по сумме на контрольной точке (ISSF 2026 / владелец 24.11), средний выстрел — подпись', () {
+    final face = TargetFace.rifle10m;
+    final competitors = [
+      FinalCompetitor('a', 'A', isUser: true),
+      FinalCompetitor('h', 'H'),
+      for (var i = 1; i <= 6; i++) FinalCompetitor('b$i', 'Бот $i'),
+    ];
+    final c = FinalRunController(
+      format: FinalFormat.airRifle10m,
+      face: face,
+      engine: FinalEngine(FinalFormat.airRifle10m, competitors),
+      userId: 'a',
+      otherHumans: {'h'},
+      bots: {for (var i = 1; i <= 6; i++) 'b$i': BotShooter(const ShotStats(0, 0, 3.0, 3.0, 100), BotDifficulty.medium, face, math.Random(i))},
+      rng: math.Random(1),
+    );
+    c.skipSighting();
+    for (var i = 0; i < 5; i++) {
+      c.tick();
+    }
+    // A: один выстрел в десятку; H: пять выстрелов похуже — по среднему впереди
+    // был бы A, по сумме на контрольной точке впереди H.
+    c.submitShotFor('a', 0, 0);
+    final outerScore = scoreForPoint(3.0, 0, face);
+    expect(outerScore, lessThan(10.0));
+    for (var i = 0; i < 5; i++) {
+      c.submitShotFor('h', 3.0, 0);
+    }
+    expect(c.live[0].c.id, 'h'); // сумма решает
+    expect(c.live[1].c.id, 'a');
+    expect(c.live[1].avg, greaterThan(c.live[0].avg)); // средний сохранился как подпись
+  });
+
   test('несколько людей: каждый ставит свои выстрелы, раунд ждёт всех, нули за неотмеченное', () {
     final face = TargetFace.rifle10m;
     const stats = ShotStats(0, 0, 3.0, 3.0, 100);
@@ -303,15 +404,8 @@ void main() {
     for (var i = 0; i < 250; i++) {
       c.tick();
     }
-    expect(c.phase, RunPhase.grace); // у H не все выстрелы
-    for (var i = 0; i < 10; i++) {
-      c.tick();
-    }
-    expect(c.missingIds, ['h']); // ждём результат H
-    while (c.canShootFor('h')) {
-      c.markMiss('h');
-    }
-    c.tick();
+    // Окна после «Стоп» нет (одиночный финал): раунд закрылся сразу, у H — нули за не отмеченное.
+    expect(c.phase, RunPhase.loading);
     final h = c.engine.byId('h');
     expect(h.shots.length, 5);
     expect(h.shots.where((v) => v == 0.0).length, 4); // 1 отмечен + 4 нуля
