@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Финал — просмотр</title>
+<!--
+  Публичная read-only страница просмотра финала в реальном времени (без видео).
+  Владелец 24.11: «Публичные финалы и возможности просмотра их в реальном времени
+  + трансляция финалов» — ответ «Без видео», поэтому страница только слушает:
+  GET табло, RPC finals_board_join и Broadcast realtime. Никаких записей в базу,
+  никаких токенов пользователя; anon-ключ — публичный ключ той же базы, что и
+  у приложения (config/chat-config.json → chat.url/anonKey).
+
+  Файл самодостаточен (без CDN), работает на GitHub Pages: web/final.html?id=<uuid>.
+-->
+<style>
+  :root{
+    --bg:#101418; --card:#1a2027; --card2:#20272f; --line:#2c3540;
+    --fg:#e8edf2; --dim:#93a1b0; --accent:#e2543f; --ok:#39c07a; --warn:#e0a63c;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--fg);
+    font:15px/1.45 system-ui,'Segoe UI',Roboto,Arial,sans-serif;
+    -webkit-text-size-adjust:100%;
+  }
+  header.page{
+    padding:14px 16px 10px; border-bottom:1px solid var(--line);
+    position:sticky; top:0; background:var(--bg); z-index:5;
+  }
+  h1{margin:0; font-size:18px; font-weight:600}
+  .subline{color:var(--dim); font-size:13px; margin-top:2px}
+  .phase-row{display:flex; flex-wrap:wrap; gap:8px; align-items:baseline; margin-top:8px}
+  .chip{
+    display:inline-block; padding:3px 10px; border-radius:12px;
+    background:var(--card2); border:1px solid var(--line); font-size:13px;
+  }
+  .chip.run{border-color:var(--ok); color:var(--ok)}
+  .chip.pause{border-color:var(--warn); color:var(--warn)}
+  .timer{
+    font-size:44px; font-weight:700; font-variant-numeric:tabular-nums;
+    letter-spacing:1px; margin-left:auto;
+  }
+  .timer.low{color:var(--accent)}
+  .banner{
+    display:none; padding:8px 16px; background:#3a2020; color:#f4b8ad;
+    border-bottom:1px solid #6b3328; font-size:14px;
+  }
+  .banner.show{display:block}
+  .notice{
+    display:none; margin:10px 16px 0; padding:10px 14px; border-radius:10px;
+    background:var(--card2); border:1px solid var(--warn); color:var(--warn); font-size:14px;
+  }
+  .notice.show{display:block}
+  main{padding:14px 16px 40px}
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:12px;
+    padding:12px 14px; margin-bottom:14px; overflow-x:auto;
+  }
+  table{border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums}
+  th,td{padding:7px 10px; text-align:right; white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  th:nth-child(3), td.name{text-align:left}
+  thead th{color:var(--dim); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.4px; border-bottom:1px solid var(--line)}
+  tbody tr{border-bottom:1px solid var(--line)}
+  tbody tr:last-child{border-bottom:none}
+  tr.out td{opacity:.45}
+  td.place{font-weight:700}
+  td.name{font-weight:600; max-width:44vw; overflow:hidden; text-overflow:ellipsis}
+  td.x{color:var(--warn)}
+  tr.active td.name::after{
+    content:'●'; color:var(--ok); font-size:9px; vertical-align:super; margin-left:6px;
+  }
+  .targets{
+    display:grid; gap:14px;
+    grid-template-columns:repeat(auto-fill,minmax(230px,1fr));
+  }
+  @media (min-width:1200px){ .targets{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))} }
+  .target-card{
+    background:var(--card); border:1px solid var(--line); border-radius:12px;
+    padding:10px 12px 12px; text-align:center;
+  }
+  .target-card svg{width:100%; height:auto; display:block}
+  .target-name{
+    font-size:14px; font-weight:600; margin-bottom:2px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .target-sum{
+    font-size:22px; font-weight:700; font-variant-numeric:tabular-nums; margin-top:4px;
+  }
+  .target-series{color:var(--dim); font-size:12px; margin-top:2px}
+  .target-shot{color:var(--accent); font-size:30px; font-weight:700; font-variant-numeric:tabular-nums; height:34px}
+  .list-item{
+    display:block; background:var(--card); border:1px solid var(--line); border-radius:12px;
+    padding:12px 14px; margin-bottom:10px; color:var(--fg); text-decoration:none;
+  }
+  .list-item:hover{border-color:#3d4a58}
+  .list-item .t{font-weight:600; font-size:16px}
+  .list-item .s{color:var(--dim); font-size:13px; margin-top:2px}
+  .pill{
+    display:inline-block; padding:2px 8px; border-radius:10px; font-size:12px;
+    background:#173324; color:var(--ok); border:1px solid #1f5637; margin-left:8px;
+  }
+  .empty{color:var(--dim); text-align:center; padding:40px 0}
+  footer{color:var(--dim); font-size:12px; padding:0 16px 30px}
+  a.back{color:var(--dim)}
+  .final-over{
+    display:none; margin:10px 16px 0; padding:12px 14px; border-radius:10px;
+    background:#14261b; border:1px solid var(--ok); color:var(--ok);
+    font-size:16px; font-weight:600;
+  }
+  .final-over.show{display:block}
+</style>
+</head>
+<body>
+
+<!-- Константы базы табло. ЕДИНСТВЕННОЕ место, где они заданы для страницы.
+     Значения те же, что в lib/services/chat_settings.dart (_defaultUrl/_defaultAnonKey)
+     и config/chat-config.json (chat.url/chat.anonKey) — приложение в веб-сборке берёт
+     их оттуда и дублирует их в "константы --dart-define" не нужно: страница читает
+     их отсюда. Если владелец сменит базу мессенджера (config/chat-config.json),
+     обновить здесь те же два значения (владелец 24.11: просмотр финалов без видео).
+     Это публичный anon-ключ (sb_publishable_...), как и в самом приложении. -->
+<script>
+'use strict';
+const DEFAULT_BOARD_URL  = 'https://yirvomezybprdlntxyas.supabase.co';
+const DEFAULT_BOARD_ANON = 'sb_publishable_2nW7G7lKueMQamuFeoC3Cw_iql48Xj3';
+</script>
+
+<div class="banner" id="banner"></div>
+<div class="final-over" id="over">Финал окончен</div>
+<div class="notice" id="notice"></div>
+
+<header class="page" id="head" style="display:none">
+  <h1 id="title">Финал</h1>
+  <div class="subline" id="subtitle"></div>
+  <div class="phase-row">
+    <span class="chip" id="phase">—</span>
+    <span class="chip" id="round" style="display:none"></span>
+    <div class="timer" id="timer"></div>
+  </div>
+</header>
+
+<main id="main"></main>
+<footer id="foot">Просмотр без видео · обновляется в реальном времени · <span id="conn">—</span></footer>
+
+<script>
+'use strict';
+/* =========================================================================
+   Публичная страница просмотра финала (read-only).
+   Протокол снят с приложения, чтобы рисунок и цифры совпадали с ним:
+   - табло и вход зрителя: lib/finals/finals_board.dart, sql/finals-board.sql;
+   - канал и события: lib/finals/final_publish.dart → FinalsHost рассылает
+     событие `state` с полным снимком финала (lib/finals/final_net.dart →
+     FinalsSnapshot.of). Канал публичного финала НЕ приватный
+     (FinalsSessionService.publicChannel, private:false), токен — anon-ключ,
+   поэтому страница подключается так же, как гость приложения, только
+   ничего не отправляет, кроме `hello` (так же, как зритель в приложении:
+   lib/screens/final_room_screens.dart → joinPublicFinal).
+   ========================================================================= */
+
+/* ---------- Мишени: геометрия из lib/models/target_face.dart ---------- */
+/* Кольца — официальные диаметры границ 10..1, мм (TargetFace.ringDiametersMm);
+   blank — размер бланка (масштаб SVG по радиусу бланка — решение по владельцу
+   24.11: «для 50 м и 10 м винтовки — масштаб по радиусу бланка»);
+   inner — диаметр внутренней десятки; xl — порог центрального выстрела
+   (евклидов радиус точки попадания, мм) из logic/scoring.dart _innerTenSpecs,
+   null — центральные на этой мишени не считаются. */
+const FACES = {
+  rifle_10m:        { blank: 80,  bull: 30.5,  inner: null, cal: 4.5,
+    rings: [0.5, 5.5, 10.5, 15.5, 20.5, 25.5, 30.5, 35.5, 40.5, 45.5], xl: 2.00 },
+  pistol_10m:       { blank: 170, bull: 59.5,  inner: 5.0,  cal: 4.5,
+    rings: [11.5, 27.5, 43.5, 59.5, 75.5, 91.5, 107.5, 123.5, 139.5, 155.5], xl: 4.75 },
+  rifle_50m:        { blank: 250, bull: 112.4, inner: 5.0,  cal: 5.6,
+    rings: [10.4, 26.4, 42.4, 58.4, 74.4, 90.4, 106.4, 122.4, 138.4, 154.4], xl: 5.30 },
+  pistol_25m:       { blank: 550, bull: 200,   inner: 25,   cal: 5.6,
+    rings: [50, 100, 150, 200, 250, 300, 350, 400, 450, 500], xl: 15.30 },
+  rifle_300m:       { blank: 1300, bull: 600,  inner: 50,   cal: 7.62,
+    rings: [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000], xl: 28.81 },
+  pistol_25m_rapid: { blank: 550, bull: 500,   inner: 50,   cal: 5.6,
+    rings: [100, 180, 260, 340, 420, 500], xl: 15.30 },
+  moving_50m:       { blank: 400, bull: 366,   inner: 30,   cal: 5.6,
+    rings: [60, 94, 128, 162, 196, 230, 264, 298, 332, 366], xl: null },
+  moving_10m:       { blank: 70,  bull: 30.5,  inner: 0.5,  cal: 4.5,
+    rings: [5.5, 10.5, 15.5, 20.5, 25.5, 30.5, 35.5, 40.5, 45.5, 50.5], xl: 0.75 },
+  biathlon_prone:    { blank: 150, bull: 115, inner: null, cal: 5.6, rings: [45],  xl: null },
+  biathlon_standing: { blank: 150, bull: 115, inner: null, cal: 5.6, rings: [115], xl: null },
+  clay:              { blank: 150, bull: 110, inner: null, cal: 2.5, rings: [110], xl: null }
+};
+// Лук: 10 равных зон, X = половина десятки (world archery, как в target_face.dart).
+for (const [code, ten, n, blank, inner] of [
+  ['archery_122', 122, 10, 1220, 61], ['archery_80', 80, 10, 800, 40],
+  ['archery_80_6', 80, 6, 480, 40],   ['archery_60', 60, 10, 600, 30],
+  ['archery_60_c', 60, 10, 600, null],['archery_40', 40, 10, 400, 20],
+  ['archery_40_c', 40, 10, 400, null],['archery_40_3', 40, 5, 200, 20],
+  ['archery_40_3_c', 40, 5, 200, null]]) {
+  FACES[code] = { blank, bull: ten * 2, inner,
+    rings: Array.from({ length: n }, (_, i) => ten * (i + 1)), xl: null };
+}
+
+// Названия форматов финалов (lib/finals/final_engine.dart FinalFormat.id).
+const FORMATS = {
+  air_rifle_10m:  'Пневматическая винтовка 10 м',
+  air_pistol_10m: 'Пневматический пистолет 10 м',
+  rifle_3p_50m:   'Винтовка 50 м, три положения',
+  custom:         'Свой финал'
+};
+
+// Порог центральных (X) выстрелов по коду мишени — прицельная опора цифры
+// «Σ … — N» из SIUS-панели (lib/widgets/sius_panel.dart, владелец 24.11).
+function innerTenLimit(faceCode) {
+  const f = FACES[faceCode];
+  return f ? f.xl : null;
+}
+
+// Названия фаз: enum RunPhase (lib/finals/final_run.dart).
+const PHASES = {
+  sighting: 'Пристрелка',
+  loading:  'Заряжай',
+  shooting: 'Стрельба',
+  grace:    'Стоп — добить выстрел',
+  finished: 'Финал окончен'
+};
+
+// Подпись раунда — как finalRoundLabel (lib/finals/round_label.dart):
+// «sighting» → пристрелка, «series:N» → серия, «single:N» → одиночный выстрел;
+// для 3×50 м добавляем положение (колено/лёжа/стоя).
+function roundText(fmt, round, spp) {
+  if (!round) return '';
+  if (round === 'sighting') return 'Пристрелка';
+  const n = parseInt(round.split(':')[1] || '0', 10);
+  if (round.startsWith('series')) {
+    if (n >= 1 && n <= 8) {
+      if (fmt === 'rifle_3p_50m') {
+        const p = n <= 3 ? 'колено' : (n <= 6 ? 'лёжа' : 'стоя');
+        const k = n <= 3 ? n : (n <= 6 ? n - 3 : n - 6);
+        const of = n <= 6 ? 3 : 2;
+        return `Серия ${k} из ${of} · ${p} · по ${spp || 5} выстр.`;
+      }
+      return `Серия ${n} · по ${spp || '?'} выстр.`;
+    }
+    return `Серия ${n}`;
+  }
+  return `Выстрел ${n}`;
+}
+
+function fmtTime(s) {
+  s = Math.max(0, Math.round(s));
+  const m = Math.floor(s / 60);
+  return m + ':' + String(s % 60).padStart(2, '0');
+}
+
+// Сумма/среднее с одной десятой для кольцевых мишеней, целое — для остального.
+function fmtScore(v, faceCode) {
+  const f = FACES[faceCode];
+  const dec = v - Math.floor(v);
+  if (f && f.rings.length < 10 && (dec < 1e-9 || dec > 1 - 1e-9)) return String(Math.round(v));
+  return (Math.round(v * 10) / 10).toFixed(1);
+}
+
+// Центральные (X) по точкам попадания — тот же критерий, что в панели SIUS
+// (countInnerTenPoints, logic/scoring.dart): r ≤ порога мишени.
+function countX(pts, faceCode) {
+  const limit = innerTenLimit(faceCode);
+  if (limit === null || !pts) return null;
+  let n = 0;
+  for (const p of pts) {
+    if (Math.sqrt(p[0] * p[0] + p[1] * p[1]) <= limit + 1e-9) n++;
+  }
+  return n;
+}
+
+const $ = id => document.getElementById(id);
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+/* ---------- Заголовки без innerHTML: текст участника не должен стать разметкой ---------- */
+function setTitle(t) { $('title').textContent = t; }
+function setSubtitle(t) { $('subtitle').textContent = t || ''; }
+function showHead(show) { $('head').style.display = show ? '' : 'none'; }
+
+function banner(text) {
+  const b = $('banner');
+  if (!text) { b.classList.remove('show'); b.textContent = ''; return; }
+  b.textContent = text;
+  b.classList.add('show');
+}
+function notice(text) {
+  const n = $('notice');
+  if (!text) { n.classList.remove('show'); n.textContent = ''; return; }
+  n.textContent = text;
+  n.classList.add('show');
+}
+function connText(t) { $('conn').textContent = t; }
+
+/* ================= Список живых финалов (без id) ================= */
+async function loadList() {
+  const main = $('main');
+  try {
+    // GET табло — ровно то же, что листает приложение (FinalsBoardService.list):
+    // читать может любой, писать нельзя (sql/finals-board.sql, RLS policy board_read).
+    const res = await fetch(
+      DEFAULT_BOARD_URL + '/rest/v1/finals_board' +
+      '?select=id,host_name,region,format_id,status,people,updated_at' +
+      '&status=eq.live&order=updated_at.desc&limit=50',
+      { headers: { apikey: DEFAULT_BOARD_ANON, Authorization: 'Bearer ' + DEFAULT_BOARD_ANON } });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const rows = await res.json();
+    renderList(rows);
+    banner('');
+  } catch (e) {
+    banner('Нет связи с табло. Проверьте сеть — список обновится сам.');
+  }
+}
+
+function renderList(rows) {
+  const main = $('main');
+  main.replaceChildren();
+  if (!rows.length) {
+    main.append(el('div', 'empty',
+      'Сейчас никто не транслирует финал. Живые финалы появятся здесь автоматически.'));
+    return;
+  }
+  for (const r of rows) {
+    const a = el('a', 'list-item');
+    a.href = 'final.html?id=' + encodeURIComponent(r.id);
+    const p = (r.people || {});
+    const who = Array.isArray(p.athletes) && p.athletes.length
+      ? p.athletes.join(', ')
+      : 'список участников появится по ссылке';
+    const tRow = el('div', 't');
+    tRow.textContent = [FORMATS[r.format_id] || r.format_id, r.host_name, r.region]
+      .filter(Boolean).join(' · ') + ' ';
+    tRow.append(el('span', 'pill', 'в эфире'));
+    a.append(tRow, el('div', 's', who));
+    main.append(a);
+  }
+  const t = el('div', 'subline');
+  t.style.padding = '8px 0 20px';
+  t.textContent = 'Список обновляется каждые 20 секунд.';
+  main.append(t);
+}
+
+/* ================= Просмотр финала (id в адресе) ================= */
+let lastState = null;      // последний снимок `state`
+let lastStateAt = 0;       // когда получен (для плавного таймера между пакетами)
+let wsJoined = false;
+let stopped = false;       // финал окончен/недоступен — переподключение не нужно
+let retryDelay = 1000;
+let reconnectTimer = null;
+let currentId = null;
+let currentBase = DEFAULT_BOARD_URL;
+let currentAnon = DEFAULT_BOARD_ANON;
+let boardTitle = '';
+let connInfo = 'нет данных';
+// Локальный «автор» зрителя — как newFinalsToken() в приложении: случайный токен,
+// который хозяин засчитывает зрителем, пока есть места (finals_invite.dart:accept).
+// В базу не пишется и нигде не показывается.
+const myToken = 'web-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+let ws = null;
+let hbTimer = null;
+let myRef = 0;
+let joinRef = null;
+
+function uuidValid(s) { return /^[0-9a-fA-F-]{32,36}$/.test(s); }
+
+function showUnavailable(msg, fatal) {
+  const main = $('main');
+  main.replaceChildren();
+  main.append(el('div', 'empty', msg));
+  const back = el('a', 'back', '← К списку живых финалов');
+  back.href = 'final.html';
+  const w = el('div', 'empty');
+  w.append(back);
+  main.append(w);
+  if (fatal) stopped = true;
+  banner('');
+}
+
+async function startView(id) {
+  if (!uuidValid(id)) {
+    showUnavailable('Неверный адрес: параметр id не похож на идентификатор финала.', true);
+    return;
+  }
+  currentId = id;
+  showHead(true);
+  connText('подключение…');
+  // Заголовок и статус берём с табло (GET, публичная колонка people/top);
+  // часть данных (ключ канала) страницу не интересует — их здесь нет.
+  fetchBoardRow(id);
+  await joinFlow('Первое подключение');
+}
+
+async function fetchBoardRow(id) {
+  try {
+    // Название и регион — публичные колонки табло (board_read): только для заголовка.
+    const res2 = await fetch(
+      DEFAULT_BOARD_URL + '/rest/v1/finals_board' +
+      '?id=eq.' + encodeURIComponent(id) +
+      '&select=host_name,region,format_id,people,top&limit=1',
+      { headers: { apikey: DEFAULT_BOARD_ANON, Authorization: 'Bearer ' + DEFAULT_BOARD_ANON } });
+    if (res2.ok) {
+      const arr = await res2.json();
+      if (arr.length) {
+        const r = arr[0];
+        const parts = [];
+        if (FORMATS[r.format_id]) parts.push(FORMATS[r.format_id]);
+        if (r.host_name) parts.push(r.host_name);
+        if (r.region) parts.push(r.region);
+        boardTitle = parts.join(' — ');
+        if ($('title').textContent === 'Финал') setTitle(boardTitle || 'Финал');
+      }
+    }
+  } catch (e) { /* заголовок не критичен */ }
+}
+
+// Вход зрителя: RPC отдаёт секретное имя канала и адрес базы ведущего
+// (lib/finals/finals_board.dart → join). Дальше страница слушает канал.
+async function joinFlow(stageLabel) {
+  banner(stageLabel === 'upgrade' ? 'Обновление подключения…' : 'Подключаемся к финалу…');
+  try {
+    const res = await fetch(DEFAULT_BOARD_URL + '/rest/v1/rpc/finals_board_join', {
+      method: 'POST',
+      headers: {
+        apikey: DEFAULT_BOARD_ANON,
+        Authorization: 'Bearer ' + DEFAULT_BOARD_ANON,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ p_id: currentId })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const arr = await res.json();
+    if (!Array.isArray(arr) || !arr.length || !arr[0].key) {
+      // Финал стал finished или истёк: сервер ключ больше не отдаёт (finals-board.sql).
+      showUnavailable('Финал уже недоступен: запись окончена или убрана с табло.', true);
+      return;
+    }
+    // База ведущего (если финал идёт у него в своей базе) важнее дефолтной.
+    const m = arr[0];
+    currentBase = (m.url && m.anon_key) ? String(m.url) : DEFAULT_BOARD_URL;
+    currentAnon = (m.url && m.anon_key) ? String(m.anon_key) : DEFAULT_BOARD_ANON;
+    openChannel(String(m.key));
+  } catch (e) {
+    scheduleReconnect('Нет связи с табло');
+  }
+}
+
+/* ---------- Phoenix-клиент: минимальный аналог realtime_client.dart ---------- */
+/* WS-адрес и параметры кадра повторяют RealtimeChannelClient.join:
+   wss://<host>/realtime/v1/websocket?apikey=…&vsn=1.0.0, topic realtime:final:<key>,
+   config.broadcast {self:false, ack:false}, private:false (как publicChannel). */
+function openChannel(secretKey) {
+  if (stopped) return;
+  closeWs();
+  const wsUrl = currentBase.replace(/^http/, 'ws') +
+    '/realtime/v1/websocket?apikey=' + encodeURIComponent(currentAnon) + '&vsn=1.0.0';
+  try {
+    ws = new WebSocket(wsUrl);
+  } catch (e) {
+    scheduleReconnect('Нет связи');
+    return;
+  }
+  const topic = 'realtime:final:' + secretKey;
+  ws.onopen = () => {
+    joinRef = String(++myRef);
+    ws.send(JSON.stringify({
+      topic, event: 'phx_join',
+      payload: {
+        config: {
+          broadcast: { self: false, ack: false },
+          presence: { key: myToken },
+          // Канал публичного финала НЕ приватный (FinalsSessionService.publicChannel,
+          // private:false) — иначе anon-зритель не был бы допущен.
+          private: false
+        },
+        access_token: currentAnon
+      },
+      ref: joinRef, join_ref: joinRef
+    }));
+  };
+  ws.onmessage = ev => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch (e) { return; }
+    if (!msg || typeof msg !== 'object') return;
+    if (msg.event === 'phx_reply') {
+      if (String(msg.ref) === joinRef) {
+        if (msg.payload && msg.payload.status === 'ok') {
+          wsJoined = true;
+          retryDelay = 1000;
+          banner('');
+          connText('в эфире');
+          // «hello» — как FinalsGuest.hello():просим хозяина прислать текущий
+          // снимок сразу, не дожидаясь следующего выстрела. Ссылка на владельца
+          // 24.11: зритель в приложении делает то же самое.
+          sendRaw(topic, 'hello', { author: myToken, who: '', name: 'Зритель (веб)' });
+        } else {
+          scheduleReconnect('Финальный канал не открылся');
+        }
+      }
+      return;
+    }
+    if (msg.event === 'phx_error' || msg.event === 'phx_close') {
+      scheduleReconnect('Связь с финалом прервалась');
+      return;
+    }
+    if (msg.event === 'broadcast') {
+      const p = msg.payload || {};
+      const name = p.event;
+      // Снимок: сервер кладёт содержимое в payload.payload (как в
+      // realtime_client.dart._onData); подстраховка на другой вариант кадра.
+      const inner = (p.payload && typeof p.payload === 'object') ? p.payload :
+        (p.rows ? p : null);
+      if (name === 'state' && inner) onState(inner);
+      else if (name === 'ended') onEnded();
+      else if (name === 'denied' && p.payload && p.payload.to === myToken) {
+        showUnavailable(
+          p.payload.full
+            ? 'Мест для зрителей нет: лимит подключений для этого финала исчерпан.'
+            : 'Ведущий не принял подключение к этому финалу.', true);
+      }
+    }
+  };
+  ws.onclose = () => { if (!stopped) scheduleReconnect('Связь с финалом прервалась'); };
+  ws.onerror = () => { /* разберёт onclose */ };
+  clearInterval(hbTimer);
+  hbTimer = setInterval(() => sendRaw('phoenix', 'heartbeat', {}), 25000);
+}
+
+function sendRaw(topic, event, payload) {
+  if (!ws || ws.readyState !== 1) return;
+  try {
+    ws.send(JSON.stringify({
+      topic, event, payload, ref: String(++myRef), join_ref: joinRef
+    }));
+  } catch (e) { /* закроется само */ }
+}
+
+function closeWs() {
+  clearInterval(hbTimer);
+  wsJoined = false;
+  if (ws) {
+    try { ws.onclose = null; ws.close(); } catch (e) {}
+    ws = null;
+  }
+}
+
+function scheduleReconnect(reason) {
+  wsJoined = false;
+  banner(reason + '. Переподключаемся…');
+  connText('нет связи');
+  if (stopped || reconnectTimer) return;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    if (!stopped) joinFlow('upgrade');
+  }, retryDelay);
+  retryDelay = Math.min(retryDelay * 2, 15000); // 1 → 2 → … → 15 с, не чаще
+}
+
+function onEnded() {
+  stopped = true;
+  closeWs();
+  $('over').classList.add('show');
+  connText('финал окончен');
+  banner('');
+}
+function onDenied() { /* обрабатывается на месте входящего кадра */ }
+
+/* ================= Отрисовка снимка финала ================= */
+function onState(s) {
+  lastState = s;
+  lastStateAt = Date.now();
+  $('over').classList.toggle('show', s.phase === 'finished');
+  // Пауза по ISSF 2026: текст причины уходит в снимке полем pn
+  // (finals_net.dart, лимит пауз — сообщение хозяина).
+  notice(s.paused ? ('ПАУЗА' + (s.pb ? ' — ' + s.pb : '') +
+    (s.pn ? '. ' + s.pn : '')) : '');
+  connText('в эфире');
+  banner('');
+  renderHeader(s);
+  renderTable(s);
+  renderTargets(s);
+  showHead(true);
+}
+
+function renderHeader(s) {
+  if (boardTitle) setTitle(boardTitle);
+  const chip = $('phase');
+  chip.textContent = PHASES[s.phase] || s.phase;
+  chip.className = 'chip' + (s.paused ? ' pause' : '');
+  const rl = $('round');
+  const txt = roundText(s.fmt, s.round, s.spp);
+  if (txt && s.phase !== 'sighting' && s.phase !== 'finished') {
+    rl.textContent = txt;
+    rl.style.display = '';
+  } else {
+    rl.style.display = 'none';
+  }
+  tickTimer();
+}
+
+// Таймер «плавает» между пакетами: снимок приходит раз в выстрел/секунду,
+// а хозяин шлёт состояния не чаще раза в 150 мс (FinalsHost.minInterval),
+// при сотне зрителей — реже. Поэтому секунды доматываем локально.
+function tickTimer() {
+  if (!lastState) return;
+  const s = lastState;
+  const running = !s.paused && s.phase !== 'finished';
+  const left = running ? Math.max(0, s.left - (Date.now() - lastStateAt) / 1000) : s.left;
+  const t = $('timer');
+  t.textContent = fmtTime(left);
+  t.classList.toggle('low', left <= 10 && running);
+}
+
+function renderTable(s) {
+  const main = $('main');
+  let tableCard = $('tableCard');
+  if (!tableCard) {
+    tableCard = el('div', 'card');
+    tableCard.id = 'tableCard';
+    // Таблица должна быть выше мишеней: место и сумма важнее картины.
+    main.prepend(tableCard);
+  }
+  tableCard.replaceChildren();
+  const table = el('table');
+  const head = el('thead');
+  const hr = el('tr');
+  for (const h of ['Место', '№', 'Имя', 'Сумма', 'Средн', 'X', 'Выстр.']) {
+    hr.append(el('th', null, h));
+  }
+  head.append(hr);
+  table.append(head);
+  const body = el('tbody');
+  const rowsSorted = [...(s.rows || [])].sort((a, b) =>
+    (a.place ?? 99) - (b.place ?? 99));
+  for (const r of rowsSorted) {
+    const tr = el('tr');
+    if (r.active === false) tr.className = 'out'; // выбыл (перестрелки/финальные выбывания)
+    tr.append(
+      el('td', 'place', r.place != null ? String(r.place) : '—'),
+      el('td', null, r.no != null ? String(r.no) : '—'),
+      el('td', 'name', r.name || '—'),
+      el('td', null, r.total != null ? fmtScore(r.total, s.face) : '—'),
+      el('td', null, r.avg != null ? fmtScore(r.avg, s.face) : '—'),
+      el('td', 'x', countX(r.pts, s.face) != null ? String(countX(r.pts, s.face) ?? '') : '—'),
+      el('td', null, r.shots != null ? String(r.shots) : '—')
+    );
+    body.append(tr);
+  }
+  table.append(body);
+  tableCard.append(table);
+}
+
+/* ---------- Мишень: SVG с кольцами по targetFaceCode ---------- */
+function faceDef(code) {
+  const known = FACES[code];
+  if (known) return known;
+  // Неизвестный код (новая мишень в приложении, страница не обновлялась):
+  // рисуем универсальную — внешняя окружность по самой дальней пробоине
+  // (минимум 60 мм), кольца равные. Ошибки не будет, но числа могут
+  // врать по кольцам — см. «что осталось» в docs/final-web.md.
+  return { blank: null, rings: [], cal: 5, inner: null, xl: null, fallback: true };
+}
+
+function renderTargets(s) {
+  const main = $('main');
+  let grid = $('targets');
+  if (!grid) {
+    grid = el('div', 'targets');
+    grid.id = 'targets';
+    main.append(grid);
+  }
+  grid.replaceChildren();
+  const def = faceDef(s.face);
+  const rows = [...(s.rows || [])].sort((a, b) => (a.place ?? 99) - (b.place ?? 99));
+  for (const r of rows) {
+    const card = el('div', 'target-card');
+    const nm = el('div', 'target-name',
+      (r.place != null ? r.place + '. ' : '') + (r.name || ''));
+    card.append(nm);
+    const svg = svgTarget(def, r, s);
+    card.append(svg);
+    // Крупный результат последнего выстрела + «Σ — N центральных» как в SIUS
+    // (владелец 24.11): число после тире — центральные, если мишень их имеет.
+    const xs = countX(r.pts, s.face);
+    const totalTxt = r.total != null
+      ? 'Σ ' + fmtScore(r.total, s.face) + (xs != null ? ' — ' + xs : '')
+      : '';
+    const lastPts = r.pts && r.pts.length ? r.pts[r.pts.length - 1] : null;
+    card.append(el('div', 'target-shot',
+      lastPts ? fmtScore(scoreOf(lastPts, s.face), s.face) : ''));
+    card.append(el('div', 'target-sum', totalTxt));
+    card.append(el('div', 'target-series',
+      s.phase === 'sighting' ? 'пристрелочные' :
+      (r.shots != null ? 'выстрелов: ' + r.shots : '')));
+    grid.append(card);
+  }
+}
+
+// Последний выстрел крупно, как в SIUS-панели.
+
+
+// Оценка последней точки по геометрии колец (как в logic/scoring.dart:
+// R_calc ≤ радиуса границы кольца даёт 10−i). Снимок десятых долей не несёт,
+// поэтому для подписи у пробоины берём ближайший целый результат.
+function scoreOf(p, faceCode) {
+  const f = FACES[faceCode];
+  if (!f || !f.rings.length) return 0;
+  const rad = Math.sqrt(p[0] * p[0] + p[1] * p[1]);
+  const radii = f.rings.map(d => d / 2);
+  for (let i = 0; i < radii.length; i++) {
+    if (rad <= radii[i]) return 10 - i;
+  }
+  return 0;
+}
+
+// SVG мишени. Масштаб по радиусу бланка (владелец 24.11): 1 мм = k px координат
+// viewBox, viewBox центрирован на (0,0), y вверх у выстрелов → в SVG y вниз.
+const SVGNS = 'http://www.w3.org/2000/svg';
+function svgEl(name, attrs) {
+  const e = document.createElementNS(SVGNS, name);
+  for (const k in attrs || {}) e.setAttribute(k, attrs[k]);
+  return e;
+}
+
+function svgTarget(def, row, s) {
+  const pts = row.pts || [];
+  // Габарит: радиус бланка; для fallback — по самой дальней пробоине ×1.35.
+  let R;
+  let rings = def.rings;
+  if (def.fallback) {
+    let maxd = 60;
+    for (const p of pts) maxd = Math.max(maxd, Math.sqrt(p[0] * p[0] + p[1] * p[1]));
+    R = maxd * 1.35;
+  } else {
+    R = def.blank / 2;
+  }
+  const pad = 1.06;
+  const svg = svgEl('svg', {
+    viewBox: `${-R * pad} ${-R * pad} ${2 * R * pad} ${2 * R * pad}`,
+    role: 'img',
+    'aria-label': 'мишень: ' + (row.name || '')
+  });
+
+  if (def.fallback) {
+    // Неизвестный код: одна светлая зона и тёмный центр, ограничений колец нет.
+    svg.append(svgEl('circle', { cx: 0, cy: 0, r: R, fill: '#e9e6df', stroke: '#9a9a9a', 'stroke-width': R * 0.01 }));
+  } else {
+    // Бланк (светлая зона) и чёрное яблоко — как на бумажной мишени; кольца
+    // рисуем ПОСЛЕ яблока, чтобы граница десятки была видна в нём светлой.
+    svg.append(svgEl('circle', { cx: 0, cy: 0, r: R, fill: '#e9e6df', stroke: '#8b8b8b', 'stroke-width': R * 0.004 }));
+    svg.append(svgEl('circle', { cx: 0, cy: 0, r: def.bull / 2, fill: '#16181b' }));
+  }
+  const bullR = def.bull / 2;
+  for (const d of rings) {
+    const r = d / 2;
+    const inside = r <= bullR + 1e-9;
+    svg.append(svgEl('circle', {
+      cx: 0, cy: 0, r,
+      fill: 'none',
+      stroke: inside ? '#cfd3d8' : '#5a5f66',
+      'stroke-width': R * 0.004
+    }));
+  }
+  // Внутренняя десятка (X): светлый пунктир по большой оси бланка (ISSF inner ten).
+  if (!def.fallback && def.inner) {
+    svg.append(svgEl('circle', {
+      cx: 0, cy: 0, r: def.inner / 2, fill: 'none',
+      stroke: '#f2f2f2', 'stroke-width': R * 0.004, 'stroke-dasharray': '2 2'
+    }));
+  }
+  // Пробоины: последняя — крупнее и подписана; y выстрела вверх, в SVG — вниз.
+  const dotR = Math.max((def.cal || 4.5) / 2, R * 0.012);
+  pts.forEach((p, idx) => {
+    const last = idx === pts.length - 1;
+    svg.append(svgEl('circle', {
+      cx: p[0], cy: -p[1], r: last ? dotR * 1.5 : dotR,
+      fill: last ? '#ff5d3b' : '#d92c2c',
+      stroke: last ? '#fff' : '#5a0f0f', 'stroke-width': R * 0.004
+    }));
+    if (last && pts.length > 1) {
+      const tx = svgEl('text', {
+        x: p[0], y: -p[1] - dotR * 2, 'text-anchor': 'middle',
+        'font-size': String(R * 0.07), fill: '#ff5d3b',
+        'font-family': 'system-ui, sans-serif', 'font-weight': '700'
+      });
+      tx.textContent = fmtScore(scoreOf(p, s.face), s.face);
+      svg.append(tx);
+    }
+  });
+  return svg;
+}
+/* ================= ================================ ================= */
+
+setInterval(tickTimer, 250);
+
+/* ---------- Точка входа: final.html?id=<uuid> | ?board=<uuid> | без параметров ---------- */
+(function init() {
+  const q = new URLSearchParams(location.search);
+  const id = q.get('id') || q.get('board');
+  if (!id) {
+    // Без id — только список живых финалов, никаких подключений к каналам.
+    loadList();
+    setInterval(loadList, 20000);
+    connText('список живых финалов');
+    return;
+  }
+  startView(id);
+})();
+</script>
+</body>
+</html>
