@@ -9,6 +9,7 @@ import '../finals/voice_packs.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:provider/provider.dart';
 
 import '../finals/bot.dart';
@@ -33,6 +34,12 @@ import '../finals/finals_board.dart';
 import '../finals/finals_invite.dart';
 import 'final_room_screens.dart';
 import 'final_run_screen.dart';
+
+/// Адрес публичной страницы просмотра финала (web/final.html в сборке
+/// GitHub Pages). Ссылку получают зрители: страница read-only, без видео
+/// (владелец 24.11).
+const String _publicBoardBase =
+    'https://projectsdatabase41-sketch.github.io/shooting_app/final.html';
 
 /// Вкладка «Финалы»: форматы по правилам ISSF и история своих финалов.
 class FinalsScreen extends StatefulWidget {
@@ -996,6 +1003,22 @@ class _PublicBoardState extends State<_PublicBoard> {
               ]),
             ),
             actions: [
+              // Ссылка на публичную страницу для зрителей (владелец 24.11:
+              // смотреть финал в реальном времени без видео — web/final.html).
+              // Раньше страница была, но добраться до неё из приложения было
+              // нечем: ссылку негде было взять.
+              TextButton.icon(
+                onPressed: () {
+                  final url = '$_publicBoardBase?id=${r.id}';
+                  Clipboard.setData(ClipboardData(text: url));
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(tr('Ссылка для зрителей скопирована'))),
+                  );
+                },
+                icon: const Icon(Icons.link, size: 18),
+                label: Text(tr('Ссылка')),
+              ),
               TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Закрыть'))),
               if (r.status != 'finished')
                 FilledButton(
