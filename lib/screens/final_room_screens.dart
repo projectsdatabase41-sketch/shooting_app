@@ -74,8 +74,9 @@ String _nextLabel(String phase, int secondsLeft, bool paused) => switch (phase) 
 
 /// Общий экран финала для всех ролей, устроен как в пневматике: справа (главная страница) своя мишень
 /// и мишени соперников, слева (свайп вправо) таблица результатов по среднему выстрелу.
-/// Судья (красная рамка на весь финал) нажимает на спортсмена в таблице и вводит выстрелы на его мишени
-/// на той же странице, без выезжающих окон. Зритель видит мишени всех и жмёт кричалки.
+/// Тренер (жюри, красная рамка на весь финал; у главного — «Главный судья») нажимает на спортсмена
+/// в таблице и вводит выстрелы на его мишени на той же странице, без выезжающих окон. Зритель видит мишени
+/// всех и жмёт кричалки. На широком альбомном экране — раскладка «таблица слева, мишени справа» (24.11 п.8).
 class FinalRoomView extends StatefulWidget {
   final FinalsSnapshot snapshot;
   final FinalsRole role;
@@ -101,6 +102,10 @@ class FinalRoomView extends StatefulWidget {
   /// Нет связи: показываем последнее состояние и предупреждение.
   final bool offline;
 
+  /// Главный судья (флаг из приглашения жюри): по владельцу 24.11 п.5 роль coach
+  /// в подписи разделяется — «Главный судья» у главного, иначе «Тренер».
+  final bool chief;
+
   const FinalRoomView({
     super.key,
     required this.snapshot,
@@ -118,6 +123,7 @@ class FinalRoomView extends StatefulWidget {
     this.cheers,
     this.onCheer,
     this.offline = false,
+    this.chief = false,
   });
 
   @override
@@ -194,11 +200,15 @@ class _FinalRoomViewState extends State<FinalRoomView> {
     }
     final canRequestPause = widget.onRequestPause != null && !s.paused && (s.phase == 'shooting' || s.phase == 'grace');
     final own = widget.ownId == null ? null : s.row(widget.ownId!);
-    final label = _judge
-        ? tr('Судья')
-        : widget.role == FinalsRole.spectator
-            ? tr('Зритель')
-            : tr('Участник') + (own == null ? '' : ' · ${own['name']}');
+    // Подписи ролей по ISSF (владелец 24.11 п.5): helper — «Помощник» (у одного
+    // спортсмена, не судья); coach — «Главный судья»/«Тренер»; единое слово
+    // для спортсмена — «Спортсмен». Права ролей не меняются.
+    final label = switch (widget.role) {
+      FinalsRole.coach => widget.chief ? tr('Главный судья') : tr('Тренер'),
+      FinalsRole.helper => tr('Помощник'),
+      FinalsRole.spectator => tr('Зритель'),
+      FinalsRole.athlete => tr('Спортсмен') + (own == null ? '' : ' · ${own['name']}'),
+    };
     final body = Scaffold(
       extendBodyBehindAppBar: true,
       appBar: GlassHeader(
@@ -215,11 +225,25 @@ class _FinalRoomViewState extends State<FinalRoomView> {
       ),
       body: Column(children: [
         Expanded(
-          child: PageView(
-            controller: _page,
-            physics: _holding ? const NeverScrollableScrollPhysics() : null,
-            children: [_table(context, s), _main(context, s)],
-          ),
+          // Горизонтальный режим комнатного финала (владелец 24.11 п.8): на
+          // широком альбомном экране слева таблица результатов, справа мишени —
+          // по образцу wide-раскладки final_run_screen.dart.
+          child: LayoutBuilder(builder: (ctx, box) {
+            final mq = MediaQuery.of(ctx);
+            final wide = mq.orientation == Orientation.landscape && box.maxWidth >= 700;
+            if (wide) {
+              return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                Expanded(flex: 4, child: _table(ctx, s, wide: true)),
+                Expanded(flex: 7, child: _main(ctx, s, wide: true)),
+              ]);
+            }
+            // Портрет как раньше: свайп между таблицей и мишенями.
+            return PageView(
+              controller: _page,
+              physics: _holding ? const NeverScrollableScrollPhysics() : null,
+              children: [_table(context, s, wide: false), _main(context, s, wide: false)],
+            );
+          }),
         ),
         SafeArea(
           top: false,
@@ -280,7 +304,9 @@ class _FinalRoomViewState extends State<FinalRoomView> {
       EdgeInsets.fromLTRB(12, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 12, 12);
 
   /// Слева: таблица по среднему выстрелу. Судья нажимает на спортсмена — открывается его мишень.
-  Widget _table(BuildContext context, FinalsSnapshot s) {
+  /// В wide-раскладке таблица стоит слева постоянно: выбор только выделяет спортсмена,
+  /// свайпа страницы нет (владелец 24.11 п.8).
+  Widget _table(BuildContext context, FinalsSnapshot s, {required bool wide}) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final rows = s.rows;
@@ -291,7 +317,10 @@ class _FinalRoomViewState extends State<FinalRoomView> {
         if (_judge)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: Text(tr('Нажмите на спортсмена — откроется его мишень'), style: theme.textTheme.bodySmall),
+            child: Text(
+                // В wide мишень справа уже видна: нажатие только выбирает спортсмена.
+                wide ? tr('Нажмите на спортсмена — его мишень справа') : tr('Нажмите на спортсмена — откроется его мишень'),
+                style: theme.textTheme.bodySmall),
           ),
         for (var i = 0; i < rows.length; i++)
           Opacity(
@@ -301,7 +330,11 @@ class _FinalRoomViewState extends State<FinalRoomView> {
               onTap: _judge && rows[i]['human'] == true && rows[i]['active'] == true
                   ? () {
                       setState(() => _sel = '${rows[i]['id']}');
-                      _page.animateToPage(1, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+                      // В wide страницы нет: переключаемся, только если PageView
+                      // реально прикреплён (портрет), иначе контроллер упадёт.
+                      if (_page.hasClients) {
+                        _page.animateToPage(1, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+                      }
                     }
                   : null,
               child: Container(
@@ -355,7 +388,9 @@ class _FinalRoomViewState extends State<FinalRoomView> {
   }
 
   /// Справа: мишени. Спортсмен/судья — крупная мишень, вокруг мишени остальных; зритель — все мишени сеткой.
-  Widget _main(BuildContext context, FinalsSnapshot s) {
+  /// В wide-раскладке ручка «Результаты» скрыта (таблица слева и так видна),
+  /// иначе RotatedBox наезжает на мишени в горизонтальном режиме (владелец 24.11 п.8).
+  Widget _main(BuildContext context, FinalsSnapshot s, {required bool wide}) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final h = MediaQuery.sizeOf(context).height;
@@ -443,8 +478,10 @@ class _FinalRoomViewState extends State<FinalRoomView> {
           ),
         if (widget.role == FinalsRole.spectator)
           Expanded(
+            // Зритель на широком экране: 2–3 колонки мишеней вместо двух,
+            // чтобы сетка не оставляла пустую половину экрана (владелец 24.11 п.8).
             child: GridView.count(
-              crossAxisCount: 2,
+              crossAxisCount: wide ? 3 : 2,
               childAspectRatio: 1.0,
               children: [for (final r in s.rows) _RoomCard(face: face, row: r, me: false)],
             ),
@@ -479,7 +516,7 @@ class _FinalRoomViewState extends State<FinalRoomView> {
           ] else
             Expanded(
               child: Center(
-                child: Text(_judge ? tr('Нет участников-людей') : tr('Вы выбыли'), style: theme.textTheme.titleMedium),
+                child: Text(_judge ? tr('Нет спортсменов-людей') : tr('Вы выбыли'), style: theme.textTheme.titleMedium),
               ),
             ),
           for (var i = 0; i < rest.length; i += 4)
@@ -489,7 +526,9 @@ class _FinalRoomViewState extends State<FinalRoomView> {
       ),
       // Язычок слева: слева страница с таблицей результатов (отзыв 16.11:
       // «сделать стрелочку, что слева есть список результатов»).
-      if (widget.role != FinalsRole.spectator)
+      // В wide-раскладке не нужен: таблица стоит слева постоянно, а RotatedBox
+      // на альбомном экране ломал бы геометрию мишеней (владелец 24.11 п.8).
+      if (widget.role != FinalsRole.spectator && !wide)
         Positioned(
           left: 0,
           top: top0 + h * 0.28,
@@ -657,12 +696,13 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
       builder: (ctx) => SimpleDialog(title: Text(c.nickname), children: [
         SimpleDialogOption(
             onPressed: () => Navigator.pop(ctx, FinalsRole.athlete),
-            child: Text(tr('Участник'))),
+            child: Text(tr('Спортсмен'))),
         // Жюри: объявляют команды и вносят результаты, права равные; кто чем занят —
-        // договариваются сами (отдельных ролей внутри жюри нет).
+        // договариваются сами (отдельных ролей внутри жюри нет). По ISSF и
+        // владельцу 24.11 п.5 это тренер, а «Главный судья» — отмечается чипом «Главный».
         SimpleDialogOption(
             onPressed: () => Navigator.pop(ctx, FinalsRole.coach),
-            child: Text(tr('Судья (команды и ввод результатов)'))),
+            child: Text(tr('Тренер (команды и ввод результатов)'))),
         SimpleDialogOption(
             onPressed: () => Navigator.pop(ctx, FinalsRole.spectator),
             child: Text(tr('Зритель (болеет, кричалки)'))),
@@ -842,7 +882,7 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
                   style: theme.textTheme.titleMedium),
               const SizedBox(height: 6),
               Text(
-                  tr('Вы ведёте финал: подаёте команды кнопкой «Далее», остальных финалистов до 8 заменят боты.'),
+                  tr('Вы ведёте финал: подаёте команды кнопкой «Далее», остальных спортсменов до 8 заменят боты.'),
                   style: theme.textTheme.bodySmall),
               const SizedBox(height: 16),
               SwitchListTile(
@@ -891,9 +931,10 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
                   contentPadding: EdgeInsets.zero,
                   title: Text(p.contact.nickname),
                   subtitle: Text(switch (p.role) {
-                    FinalsRole.athlete => tr('Участник'),
-                    FinalsRole.helper => tr('Судья'),
-                    FinalsRole.coach => tr('Судья'),
+                    FinalsRole.athlete => tr('Спортсмен'),
+                    // helper — помощник одного спортсмена, а не судья (владелец 24.11 п.5).
+                    FinalsRole.helper => tr('Помощник'),
+                    FinalsRole.coach => p.chief ? tr('Главный судья') : tr('Тренер'),
                     FinalsRole.spectator => tr('Зритель'),
                   }),
                   trailing: started
@@ -908,7 +949,7 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
                       : Row(mainAxisSize: MainAxisSize.min, children: [
                           if (p.role == FinalsRole.coach)
                             FilterChip(
-                              label: Text(tr('Главный')),
+                              label: Text(tr('Главный судья')),
                               selected: p.chief,
                               onSelected: (v) => setState(() {
                                 for (final o in _picks) {
@@ -1599,6 +1640,8 @@ class _FinalGuestScreenState extends State<FinalGuestScreen> {
     return FinalRoomView(
       snapshot: snap,
       role: role,
+      // Флаг главного судьи из приглашения: coach показывается «Главным судьёй» (владелец 24.11 п.5).
+      chief: widget.member.chief,
       ownId: widget.member.targetId,
       onShoot: (who, mm) => g?.shoot(who, mm.dx, mm.dy),
       onUndo: (who) => g?.undo(who),
@@ -1646,7 +1689,7 @@ Future<void> offerFinalInvites(BuildContext context, AppDataStore store) async {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Приглашение в финал')),
-        content: Text(tr('Вас приглашают участвовать {r}. Войти сейчас?', {'r': _roleWord(inv.role)})),
+        content: Text(tr('Вас приглашают участвовать {r}. Войти сейчас?', {'r': _roleWord(inv.role, chief: inv.chief)})),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Позже'))),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Принять'))),
@@ -1664,10 +1707,12 @@ Future<void> offerFinalInvites(BuildContext context, AppDataStore store) async {
   }
 }
 
-String _roleWord(FinalsRole r) => switch (r) {
+// Слово роли для приглашения: «финалистом» — только здесь, текст про попадание
+// в финал (владелец 24.11 п.5). Главный судья — coach с флагом chief.
+String _roleWord(FinalsRole r, {bool chief = false}) => switch (r) {
       FinalsRole.athlete => tr('финалистом'),
       FinalsRole.helper => tr('помощником'),
-      FinalsRole.coach => tr('судьёй'),
+      FinalsRole.coach => chief ? tr('главным судьёй') : tr('тренером'),
       FinalsRole.spectator => tr('зрителем'),
     };
 
@@ -1683,8 +1728,8 @@ Future<void> joinFinal(BuildContext context, AppDataStore store, FinalsInvite in
           member: inv.member, service: FinalsSessionService(ChatAuthService(store.db)), url: inv.url, anonKey: inv.anonKey)));
 }
 
-/// Слово роли для текста приглашения («финалистом», «жюри»…).
-String finalRoleWord(FinalsRole r) => _roleWord(r);
+/// Слово роли для текста приглашения («финалистом», «жюри»…); chief — для «главным судьёй».
+String finalRoleWord(FinalsRole r, {bool chief = false}) => _roleWord(r, chief: chief);
 
 /// Войти зрителем в публичный финал с табло (приглашение не нужно: токен зритель создаёт сам).
 /// Секретное имя канала выдаёт сервер только для ещё не оконченного финала и нигде не показывается.

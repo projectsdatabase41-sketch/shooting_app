@@ -47,8 +47,20 @@ void main() {
     expect(find.text('Заряжай'), findsOneWidget);
     await tester.tap(find.text('Заряжай'));
     expect(next, 1);
-    expect(find.text('Судья'), findsWidgets); // подпись роли внизу
+    expect(find.text('Тренер'), findsWidgets); // подпись роли внизу (терминология 24.11: coach — «Тренер»)
     expect(find.byIcon(Icons.gps_fixed), findsNothing); // ввод — на странице, без выезжающих окон
+
+    // Главный судья (флаг chief из приглашения) подписывается иначе.
+    await tester.pumpWidget(MaterialApp(
+      home: FinalRoomView(
+        snapshot: FinalsSnapshot.of(c),
+        role: FinalsRole.coach,
+        chief: true,
+        onShoot: (_, __) {},
+        onUndo: (_) {},
+      ),
+    ));
+    expect(find.text('Главный судья'), findsWidgets);
 
     await tester.pumpWidget(MaterialApp(
       home: FinalRoomView(
@@ -60,7 +72,7 @@ void main() {
       ),
     ));
     expect(find.text('Назад'), findsOneWidget);
-    expect(find.text('Участник · Анна'), findsOneWidget);
+    expect(find.text('Спортсмен · Анна'), findsOneWidget);
   });
 
   testWidgets('несколько тиров: у каждого виден статус связи и тир у участника', (tester) async {
