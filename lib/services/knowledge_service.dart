@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../logic/ai_context.dart';
 import '../logic/text_search.dart';
 import 'ai_service.dart';
 import 'ai_settings.dart';
@@ -316,6 +317,106 @@ class KnowledgeService {
     return out;
   }
 
+  /// ====== Требование владельца 24.11 (п.11): инструкции приложения ======
+  ///
+  /// В ЛИЧНОЙ базе пользователя таблица `AiSettings.guideDocsTable`
+  /// (`table_docs`) содержит строки `guide:*` (finals/drive/messenger/…):
+  /// что умеет приложение и где это настраивается. Таблица остаётся в
+  /// `AiSettings.appOwnTables` (иначе вернулась бы в выбор «Таблицы для ИИ»
+  /// как рядовой справочник), поэтому guide-строки отдаёт эта отдельная
+  /// выборка — по ключевым словам «как настроить / подключить / инструкция».
+  /// [KnowledgeService.guideDocsCache] — кэш на сессию: строки редко меняются,
+  /// а запрос на каждое «как настроить…» лишний.
+  static final Map<String, List<List<String>>> guideDocsCache = {};
+
+  /// Основы слов вопроса, по которым guide-строки стоит подтягивать.
+  static const List<String> _appHelpWords = [
+    'настро',
+    'подключ',
+    'инструкц',
+    'как работает',
+    'как работать',
+  ];
+
+  /// Выборка guide-строк (`guide:*`) из table_docs личной базы под вопрос.
+  /// Пусто — если вопрос не про настройку/подключение, базы нет или она
+  /// недоступна: тогда ассистент отвечает по ассету app_guide.md (см.
+  /// `AiContext.prepareAppGuide`), без запросов к базе.
+  Future<List<KnowledgeChunk>> tableDocsForHelp(String question) async {
+    final q = question.toLowerCase();
+    if (!_appHelpWords.any(q.contains)) return const [];
+    final auth = personalAuth;
+    if (auth == null || !auth.hasBase) return const [];
+    final baseUrl = '${auth.url}/rest/v1';
+    try {
+      List<List<String>> rows;
+      final cached = guideDocsCache[baseUrl];
+      if (cached != null) {
+        rows = cached;
+      } else {
+        final token = await auth.ensureFreshToken() ?? auth.anonKey;
+        final res = await _client
+            .get(
+              Uri.parse('$baseUrl/${AiSettings.guideDocsTable}').replace(
+                queryParameters: {
+                  'select': 'entry_key,title,body',
+                  // Только guide-строки: table_docs хранит и правила схемы,
+                  // которые ассистенту в этом вопросе не нужны.
+                  'entry_key': 'ilike.${AiSettings.guideDocsPrefix}*',
+                },
+              ),
+              headers: {
+                'Accept': 'application/json',
+                if (token.isNotEmpty) 'apikey': token,
+                if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+              },
+            )
+            .timeout(_timeout);
+        if (res.statusCode != 200) return const [];
+        final data = jsonDecode(utf8.decode(res.bodyBytes));
+        if (data is! List) return const [];
+        rows = [
+          for (final row in data)
+            if (row is Map)
+              [
+                '${row['entry_key'] ?? ''}',
+                '${row['title'] ?? ''}',
+                '${row['body'] ?? ''}',
+              ],
+        ];
+        guideDocsCache[baseUrl] = rows;
+      }
+      // Ранжирование словами вопроса: вопрос про Диск получает guide:drive,
+      // а не весь список инструкций (лимит и масштаб — как у обычного поиска).
+      final words = keywords(question);
+      final scored = <(int, KnowledgeChunk)>[];
+      for (final row in rows) {
+        // Строка приходит списком [entry_key, title, body] — выше при загрузке.
+        final key = row[0], title = row[1], body = row[2];
+        if (key.isEmpty || body.trim().isEmpty) continue;
+        final score = TextSearch.weightedRelevance(title, body, words);
+        if (score <= 0) continue;
+        scored.add((
+          score,
+          KnowledgeChunk(
+            table: AiSettings.guideDocsTable,
+            tableLabel: tr('Инструкции приложения'),
+            tableDescription:
+                tr('что умеет приложение и где это настраивается'),
+            source: key,
+            heading: title,
+            text: _clean(body),
+          )
+        ));
+      }
+      scored.sort((a, b) => b.$1.compareTo(a.$1));
+      return [for (final (_, c) in scored.take(3)) c];
+    } catch (_) {
+      // Инструкции — необязательное усиление: чат работает и без базы.
+      return const [];
+    }
+  }
+
   /// Ищет по всем подключённым таблицам. Пустой список — не нашли, не
   /// искали или база недоступна; для чата это не ошибка, просто ответ
   /// будет без справочных материалов.
@@ -326,6 +427,13 @@ class KnowledgeService {
   Future<List<KnowledgeChunk>> search(String question,
       {List<String> extraTerms = const []}) async {
     final trimmed = question.trim();
+    // Требование владельца 24.11 (п.11): вопросы о функциях приложения
+    // («как настроить Google Диск» и т.п.) должны приходить к ассистенту вместе
+    // с разделом справочника assets/ai/app_guide.md. Экран чата передаёт
+    // вопрос только сюда (systemPrompt он собирает позже, синхронно), поэтому
+    // блок «ИНСТРУКЦИИ ПРИЛОЖЕНИЯ» готовится здесь: ставится ДО сборки
+    // промпта и честно сбрасывается, если вопрос сменился на посторонний.
+    await AiContext.prepareAppGuide(trimmed);
     if (trimmed.length < minQuestionLength) return const [];
     if (isSmallTalk(trimmed)) return const [];
     final words = withSynonyms(withExtraTerms(keywords(trimmed), extraTerms));
@@ -385,6 +493,16 @@ class KnowledgeService {
         results.addAll(await _latest(table, baseUrl, token));
       } else {
         results.addAll(ranked.take(perTableLimit));
+      }
+    }
+    // Требование владельца 24.11 (п.11): вопросы вида «как настроить /
+    // подключить / инструкция» получают и строки guide:* из table_docs
+    // личной базы (обычный поиск к этой таблице не ходит — она в appOwnTables).
+    final help = await tableDocsForHelp(trimmed);
+    if (help.isNotEmpty) {
+      final seen = {for (final c in results) c.text};
+      for (final c in help) {
+        if (seen.add(c.text)) results.add(c);
       }
     }
     return results;

@@ -1,3 +1,5 @@
+import 'package:flutter/services.dart' show rootBundle;
+
 import '../theme/backdrop_tint.dart';
 import 'dart:convert';
 
@@ -150,6 +152,207 @@ class AiContext {
   /// Сколько прошлых тренировок вообще перечисляем в сводке.
   static const int maxHistorySessions = 60;
 
+  // ==================== ИНСТРУКЦИИ ПРИЛОЖЕНИЯ ====================
+  // Требование владельца 24.11 (п.11): «Инструкции ко всем функциям в
+  // приложении (интеграция Supabase, Google Диск, мессенджер и др.) — дать
+  // возможность ИИ читать их, чтобы помочь пользователю».
+  //
+  // Как это устроено: файл assets/ai/app_guide.md загружается ОДИН раз и
+  // кэшируется здесь, в статике (тот же приём, что и у каталога книг в
+  // KnowledgeService). Вопрос о приложении доходит до ассистента только
+  // через KnowledgeService.search (экран чата собирает systemPrompt сам,
+  // синхронно, и этот файл выбирать не положено) — поэтому блок инструкций
+  // готовит prepareAppGuide, который knowledge_service.dart вызывает в
+  // начале поиска, ДО сборки промпта. Вопрос не про приложение — блок
+  // сбрасывается в null и обычный вопрос за него не платит.
+
+  /// Путь к файлу-справочнику (объявлен в pubspec.yaml, каталог assets/ai/).
+  static const String appGuideAssetPath = 'assets/ai/app_guide.md';
+
+  /// Предел блока инструкций, символов: раздел отвечает на вопрос целиком,
+  /// но на обычный запрос системный блокinflate не должен (~2 КБ).
+  static const int appGuideCharLimit = 1500;
+
+  /// Кэш на сессию: поток загрузки ассета. Пока Future не отработал,
+  /// повторные вопросы ждут его же — двойной загрузки нет. Ошибка чтения
+  /// (в тестовой среде/без связи с ассетами) гасится: ассистент отвечает
+  /// без блока, падение справочника не должно ломать чат.
+  static Future<Map<String, String>?>? _appGuideLoading;
+
+  /// Блок «ИНСТРУКЦИИ ПРИЛОЖЕНИЯ» для ТЕКУЩЕГО вопроса. null — вопрос не про
+  /// приложение (или справочник не прочитан): в системный промпт не добавляется.
+  static String? appGuideBlock;
+
+  /// Секции справочника и основы слов, по которым вопрос попадает в секцию.
+  /// Список намеренно узкий: «обычный» стрелковый вопрос («сравни серии»)
+  /// не должен тянуть за собой ~1500 символов инструкций.
+  static const Map<String, List<String>> _appGuideSectionWords = {
+    'Приложение и настройки': ['приложен', 'модул', 'настро', 'обновлен', 'язык', 'блокир', 'pin', 'пин', 'интерфейс'],
+    'Supabase: базы данных': ['supabase', 'баз', 'таблиц', ' sql', 'sql ', 'вход', 'синхрон', 'проверк', 'учетн', 'учётн', 'rls', 'anon'],
+    'Google Диск': ['диск', 'drive', 'гугл', 'google', 'резерв', 'бэкап', 'копия', 'копи', 'восстанов', 'apps script', 'скрипт'],
+    'Мессенджер и звонки': ['мессендж', 'чат', 'сообщен', 'звон', 'push', 'пуш', 'друг', 'контакт', 'групп', 'голосов', 'p2p', 'realtime'],
+    'Финалы и чемпионы': ['финал', 'чемпио', 'судья', 'зритель', 'табло', 'приглаш', 'диктор'],
+    '3D-модели': ['3d', '3д', 'модел', 'step', 'glb', 'stp'],
+    'PDF-инструменты': ['pdf', 'импорт', 'scatt', 'отчет', 'отчёт', 'ilove'],
+    'Задания тренера': ['задани', 'тренер', 'стадия', 'стади', 'шаг'],
+    'Статистика': ['статист', 'график', 'аналитик', 'дневник'],
+  };
+
+  /// Вопрос звучит как вопрос о приложении (есть пересечение со словами любых
+  /// секций). Чистая строковая проверка — файл не читает и ничего не кэширует.
+  static bool isAppQuestion(String question) {
+    final q = question.toLowerCase();
+    if (q.length < 4) return false;
+    for (final words in _appGuideSectionWords.values) {
+      if (words.any(q.contains)) return true;
+    }
+    return false;
+  }
+
+  /// Загружает справочник (один раз), выбирает секцию под [question] и кладёт
+  /// её в [appGuideBlock]; вопрос не про приложение — блок сбрасывается в null.
+  ///
+  /// Вызывается из KnowledgeService.search (причина — см. комментарий BLOCK
+  /// выше). Сбои чтения ассета гасим: ассистент просто отвечает без блока,
+  /// падение справочника не должно ломать чат.
+  static Future<void> prepareAppGuide(String question) async {
+    final q = question.toLowerCase();
+    if (q.length >= 4) {
+      final sections = await _loadAppGuide();
+      if (sections != null) {
+        String? best;
+        var bestScore = 0;
+        for (final e in _appGuideSectionWords.entries) {
+          var score = 0;
+          for (final w in e.value) {
+            if (q.contains(w)) score++;
+          }
+          if (score > bestScore) {
+            bestScore = score;
+            best = e.key;
+          }
+        }
+        final body = best == null ? null : sections[best];
+        if (body != null) {
+          appGuideBlock = _cropAppGuide(body, q);
+          return;
+        }
+      }
+    }
+    // Не про приложение (или секцию не определить) — блок НЕ добавляем,
+    // чтобы обычный вопрос не дорожал (решение в задаче E).
+    appGuideBlock = null;
+  }
+
+  static Future<Map<String, String>?> _loadAppGuide() {
+    // Двойная загрузка исключаем: пока Future не отработал, ждём его же.
+    _appGuideLoading ??= _readAppGuide();
+    return _appGuideLoading!;
+  }
+
+  static Future<Map<String, String>?> _readAppGuide() async {
+    try {
+      final raw = await rootBundle.loadString(appGuideAssetPath);
+      final sections = <String, String>{};
+      String? heading;
+      final buf = StringBuffer();
+      for (final line in raw.split('\n')) {
+        if (line.startsWith('## ')) {
+          if (heading != null) sections[heading] = buf.toString();
+          heading = line.substring(3).trim();
+          buf.clear();
+        } else if (heading != null) {
+          buf.writeln(line);
+        }
+      }
+      if (heading != null) sections[heading] = buf.toString();
+      return sections.isEmpty ? null : sections;
+    } catch (_) {
+      // В тестовой среде/без связи с ассетами ассет недоступен — не падаем.
+      return null;
+    }
+  }
+
+  /// Секция до [limit] символов (лимит [appGuideCharLimit]).
+  ///
+  /// Секции длиннее лимита (например, «Google Диск»: и подключение моста, и
+  /// резервная копия) обрезаются не «сверху», а ПО ПУНКТАМ: берутся те
+  /// маркерованные абзацы, где чаще встречаются основы слов вопроса, в
+  /// исходном порядке. Иначе вопрос «как восстановить резервную копию»
+  /// получил бы только начало секции (шаги подключения), а сам ответ —
+  /// пункты про восстановление — остался бы спилен.
+  static String _cropAppGuide(String section, String question) {
+    final t = section.trim();
+    if (t.length <= appGuideCharLimit) return t;
+    // Основы слов вопроса (до 6 букв): «восстановление» → «восстан».
+    final stems = <String>{
+      for (final m in RegExp('[a-zа-яё0-9]+').allMatches(question))
+        if (m.group(0)!.length >= 3)
+          (m.group(0)!.length > 6
+              ? m.group(0)!.substring(0, 6)
+              : m.group(0)!),
+    };
+    // Пункты — блоки строк, начинающиеся с «-» (или первая строка
+    // перед первым маркером).
+    final lines = t.split('\n');
+    final starts = <int>[0, for (var i = 1; i < lines.length; i++) if (lines[i].startsWith('- ')) i];
+    int scoreOf(int from, int to) {
+      final low = lines.sublist(from, to).join(' ').toLowerCase();
+      var score = 0;
+      for (final s in stems) {
+        if (low.contains(s)) score++;
+      }
+      return score;
+    }
+
+    final blockCount = <int, int>{}; // начало блока → конец (не включён)
+    for (var i = 0; i < starts.length; i++) {
+      blockCount[starts[i]] = i + 1 == starts.length ? lines.length : starts[i + 1];
+    }
+    final ranked = blockCount.entries.map((e) => (e.key, e.value, scoreOf(e.key, e.value))).toList()
+      ..sort((a, b) => b.$3.compareTo(a.$3));
+    // Отбираем пункты по релевантности, выдаём в исходном порядке.
+    final chosen = <int>{};
+    var used = 0;
+    for (final (start, end, _) in ranked) {
+      final len = lines.sublist(start, end).join('\n').length + 1;
+      if (used + len > appGuideCharLimit) continue;
+      chosen.add(start);
+      used += len;
+      if (chosen.length == starts.length) break;
+    }
+    if (stems.isEmpty || chosen.isEmpty) {
+      // Совпадений не нашлось (странная строка вопроса) — берём сверху, как раньше.
+      var out = '';
+      for (final line in t.split('\n')) {
+        if (out.length + line.length + 1 > appGuideCharLimit - 1) break;
+        out = out.isEmpty ? line : '$out\n$line';
+      }
+      return out;
+    }
+    final out = StringBuffer();
+    final ordered = blockCount.keys.toList()..sort();
+    // Первый проход — уже отобранные (в порядке документа).
+    for (final start in ordered) {
+      if (!chosen.contains(start)) continue;
+      out
+        ..writeln()
+        ..write(lines.sublist(start, blockCount[start]!).join('\n'));
+    }
+    // Дописываем остальные пункты тоже (в порядке документа), пока влезают:
+    // место после релевантных всё равно дешевле пустоты в ответе.
+    for (final start in ordered) {
+      if (chosen.contains(start)) continue;
+      final piece = lines.sublist(start, blockCount[start]!).join('\n');
+      if (out.length + piece.length + 2 > appGuideCharLimit) continue;
+      out
+        ..writeln()
+        ..write(piece);
+    }
+    return out.toString().trim();
+  }
+
+
   /// Системный промпт. Короткий намеренно: длинные инструкции
   /// бесплатные модели держат хуже, а лишние правила чаще ломают ответ,
   /// чем помогают.
@@ -174,9 +377,20 @@ class AiContext {
             ? baseOverride
             : defaultBasePrompt;
     final withCoach = '${(coachMode || notesEnabled) ? '$base$_notesExtra' : base}\n${_profileRules(profile)}';
+    // Блок «ИНСТРУКЦИИ ПРИЛОЖЕНИЯ» (требование владельца 24.11, п.11). Он
+    // ставится prepareAppGuide (вызывается из KnowledgeService.search) только
+    // для вопросов о приложении, поэтому обычный стрелковый вопрос платит за
+    // него ноль. Тексты секций — на русском: это ДАННЫЕ (как и цитаты книг),
+    // а не правила; сами правила промпта остаются на английском.
+    final guide = appGuideBlock?.trim();
+    final withGuide = (guide == null || guide.isEmpty)
+        ? withCoach
+        : '$withCoach\n'
+            'APP GUIDE (instructions for the app features, matched to the question; answer such questions from it):\n'
+            '$guide\n';
     final extra = customInstructions?.trim();
-    if (extra == null || extra.isEmpty) return withCoach;
-    return '$withCoach\n'
+    if (extra == null || extra.isEmpty) return withGuide;
+    return '$withGuide\n'
         'ADDITIONAL INSTRUCTION FROM THE USER (must not contradict the rules above):\n'
         '$extra\n';
   }
@@ -207,7 +421,7 @@ Answer:
 - A vague question ("how is it?") is about CONTEXT "source" when one is attached; with no source it is ordinary chat.
 - No data -> ONE line saying what is missing ("no such data in the available materials"). No invented numbers, no filler.
 
-Scope: shooting only - technique, position, breathing, aiming, trigger; weapon, gear, ammo; ISSF rules; training, psychology; result analysis. Other topics: decline in one line.
+Scope: shooting - technique, position, breathing, aiming, trigger; weapon, gear, ammo; ISSF rules; training, psychology; result analysis. Also the app itself: questions about Nexus features and settings (Supabase connection, Google Drive, messenger, calls, finals, 3D models, PDF tools, coach tasks, statistics, updates, security) are answered too - from the APP GUIDE excerpt when one is given, otherwise from your knowledge of the app, honestly admitting what you don't know. Unrelated topics (weather, politics, other software): decline in one line.
 
 Sources, in order: (1) CONTEXT data; (2) knowledge-base excerpts - the main source for rules, norms, figures, technique, specs; (3) past_conversations, where "ПОДРОБНО:" marks the full text - retell it exactly. Never rely on your own recollection of training data. The app prints used excerpts verbatim under your reply: do not retell them, add no facts of your own. Use an excerpt only for the same subject (weapon, discipline, distance, category). If sources disagree, say which is which. A fact outside the sources, if the user insists, starts with "I think..." and is marked unverified.
 
@@ -238,7 +452,7 @@ Rules:
 - Reply in the language the user writes in, 1-2 sentences: answer first, no preamble, no recap, no offers, no reasoning aloud. No clarifying questions. No insults.
 - Facts (rules, norms, figures, technique) only from CONTEXT, the knowledge-base excerpts and past_conversations, never from memory; same subject only (weapon, discipline, distance, category). The app prints excerpts verbatim: do not retell them, add no facts of your own. Nothing there -> "no such data in the available materials".
 - CONTEXT "legend" gives the column order; x,y are mm from the centre (x right, y up). "…ещё N" = rows omitted: never invent numbers.
-- A vague question is about CONTEXT "source". Unrelated topics: decline in one line.
+- A vague question is about CONTEXT "source". App questions (Google Drive, messenger, finals, settings) are answered as well, 1-2 lines, from the APP GUIDE excerpt or what you know of the app. Unrelated topics (weather, politics): decline in one line.
 - Only when explicitly asked, end with ONE block, strict JSON:
   ```chart {"type":"line|bar|pie","title":"..","x":["1","2"],"series":[{"name":"..","values":[1,2]}]}``` (x and values equal in length, up to 3 series) or {"type":"table","title":"..","columns":[".."],"rows":[[".."]]} (up to 4 columns, 8 rows);
   ```exercise {"name":"..","target_face_code":"rifle_10m|pistol_10m|rifle_50m|pistol_25m","total_shots":40,"series_size":10}``` (instead of total_shots/series_size a "series" list; check "exercises_on_device" first);
