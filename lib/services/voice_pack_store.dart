@@ -27,7 +27,13 @@ class VoiceCatalogEntry {
 
   /// Id файла на Google Drive; `null` — файл ещё не залит (в списке «недоступен»).
   final String? driveId;
-  const VoiceCatalogEntry(this.lang, this.file, this.bytes, this.phrases, this.driveId);
+
+  /// Прямая ссылка на архив пакета (например, raw-файл на GitHub).
+  /// Приоритетнее `driveId`: ссылка публичная, без ключей и без подтверждения
+  /// Google Диска (владелец 24.11: пакеты скачиваются при включении модуля).
+  final String? url;
+  const VoiceCatalogEntry(this.lang, this.file, this.bytes, this.phrases, this.driveId,
+      {this.url});
 }
 
 /// Состояние пакета для списка в модуле озвучки.
@@ -108,12 +114,14 @@ class VoicePackStore {
           final lang = '${m['lang']}';
           if (lang.isEmpty || lang == 'null') continue;
           final drive = m['driveId'];
+          final direct = m['url'];
           list.add(VoiceCatalogEntry(
             lang,
             '${m['file'] ?? '$lang.zip'}',
             m['bytes'] is num ? (m['bytes'] as num).toInt() : 0,
             m['phrases'] is num ? (m['phrases'] as num).toInt() : 0,
             drive == null || '$drive'.isEmpty || '$drive' == 'null' ? null : '$drive',
+            url: direct == null || '$direct'.isEmpty || '$direct' == 'null' ? null : '$direct',
           ));
         }
       }
@@ -195,7 +203,9 @@ class VoicePackStore {
     for (final e in _catalog.value) {
       map[e.lang] = await isDownloaded(e.lang)
           ? VoicePackState.downloaded
-          : (e.driveId == null ? VoicePackState.unavailable : VoicePackState.notDownloaded);
+          : (e.driveId == null && (e.url == null || e.url!.isEmpty)
+            ? VoicePackState.unavailable
+            : VoicePackState.notDownloaded);
     }
     status.value = map;
   }
@@ -204,19 +214,47 @@ class VoicePackStore {
 
   static final _busy = <String>{};
 
+  /// Скачивает архив по прямой публичной ссылке (raw-файл репозитория).
+  /// Ключей не требует; прогресс показываем по мере накопления байтов.
+  static Future<Uint8List?> _fetchDirect(String lang, String url) async {
+    final client = http.Client();
+    try {
+      final req = http.Request('GET', Uri.parse(url));
+      final res = await client.send(req).timeout(const Duration(seconds: 30));
+      if (res.statusCode >= 400) return null;
+      final total = res.contentLength ?? 0;
+      final out = BytesBuilder(copy: false);
+      var received = 0;
+      await for (final chunk in res.stream.timeout(const Duration(seconds: 60))) {
+        out.add(chunk);
+        received += chunk.length;
+        progress.value = {...progress.value, lang: (received: received, total: total)};
+      }
+      return out.takeBytes();
+    } catch (_) {
+      return null;
+    } finally {
+      client.close();
+    }
+  }
+
   /// Скачивает и распаковывает пакет языка. Возвращает null — успех, иначе
   /// понятный текст ошибки (без адресов и ключей: в интерфейсе их не показываем).
   static Future<String?> download(String lang) async {
     final entry = entryFor(lang);
     if (entry == null) return tr('Для этого языка нет пакета');
-    if (entry.driveId == null || entry.driveId!.isEmpty) {
+    final directUrl = entry.url;
+    final driveId = entry.driveId;
+    if ((directUrl == null || directUrl.isEmpty) && (driveId == null || driveId.isEmpty)) {
       _setStatus(lang, VoicePackState.unavailable);
-      return tr('Пакет ещё не выложен на диск — недоступен');
+      return tr('Пакет ещё не выложен — недоступен');
     }
     if (_busy.contains(lang)) return null;
     _busy.add(lang);
     try {
-      final bytes = await _fetchZip(lang, entry.driveId!);
+      final bytes = directUrl != null && directUrl.isNotEmpty
+          ? await _fetchDirect(lang, directUrl)
+          : await _fetchZip(lang, driveId!);
       if (bytes == null) {
         _setStatus(lang, VoicePackState.unavailable);
         return tr('Не удалось скачать пакет: нет связи с диском');
