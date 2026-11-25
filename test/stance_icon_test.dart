@@ -1,8 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shooting_app/widgets/stance_icon.dart';
 
 void main() {
+  testWidgets('ассеты изготовок вшиты в приложение', (tester) async {
+    for (final name in [
+      'standing_rifle.png',
+      'standing_pistol.png',
+      'kneeling_rifle.png',
+      'prone_rifle.png',
+    ]) {
+      final data = await rootBundle.load('assets/stances/$name');
+      expect(data.lengthInBytes, greaterThan(1000), reason: name);
+    }
+  });
   // Все комбинации изготовка × оружие в двух размерах: pumpWidget не роняет
   // исключений, виджет находится и рисуется (paint вызывается в тестовой
   // среде при отрисовке кадра).

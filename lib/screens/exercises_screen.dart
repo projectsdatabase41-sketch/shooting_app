@@ -293,15 +293,15 @@ class _ExerciseCard extends StatelessWidget {
           child: Row(
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: 48,
+                height: 44,
                 decoration: BoxDecoration(
                   color: cs.primaryContainer,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Center(
                   child: StanceIcon(
-                    size: 24,
+                    size: 30,
                     stance: stance,
                     weapon: weapon,
                     color: cs.onPrimaryContainer,

@@ -2826,7 +2826,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             child: Column(
               children: [
                 Expanded(
-                  child: Container(
+                  // Отзыв 49e2ed6b: фон чата был полупрозрачным, и когда он
+                  // открывался поверх экрана мишени, сквозь него просвечивала
+                  // цветная маска обоев — мишень «накрывало» фиолетовым.
+                  // Непрозрачная подложка под обоями закрывает это.
+                  child: ColoredBox(
+                    color: Theme.of(context).colorScheme.surface,
+                    child: Container(
                     decoration: EconomyMode.on ? null : widget.prefs.wallpaperDecoration,
                     child: Stack(
                       children: [
@@ -2979,6 +2985,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                     ),
                   ),
                 ),
+              ),
                 if (_emojiOpen)
                   EmojiPicker(
                     textEditingController: _input,
