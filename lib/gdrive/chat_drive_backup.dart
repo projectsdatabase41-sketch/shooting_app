@@ -71,12 +71,13 @@ class ChatDriveBackup {
   static DateTime? lastRun(LocalDbService db) => DateTime.tryParse(_get(db, _lastKey) ?? '')?.toLocal();
 
   /// Хранение переписок ТОЛЬКО на Диске (отзыв 25.11: в Supabase мало места
-  /// на переписки). Выключен по умолчанию, чтобы случайно не удалить уже
-  /// загруженную облачную историю. Включён — после успешного экспорта
-  /// переписки ([ChatAiExport]) старые строки её транзита удаляются из
-  /// Supabase (chat_messages), свежие остаются для доставки.
+  /// на переписки). По умолчанию ВКЛЮЧЕНО — владелец попросил убрать другие
+  /// копии и хранить историю на Диске (отзывы 73e72e2e, 75a2fd00, 9a52a30d).
+  /// Включён — после успешного экспорта переписки ([ChatAiExport]) старые
+  /// строки её транзита удаляются из Supabase (chat_messages), свежие
+  /// остаются для доставки.
   static const _driveOnlyKey = 'chat_store_drive_only';
-  static bool driveOnlyOn(LocalDbService db) => _get(db, _driveOnlyKey) == '1';
+  static bool driveOnlyOn(LocalDbService db) => _get(db, _driveOnlyKey) != '0';
   static void setDriveOnly(LocalDbService db, bool v) => _put(db, _driveOnlyKey, v ? '1' : '0');
 
   /// Когда переписка последний раз восстанавливалась с Диска (null — ещё ни разу).

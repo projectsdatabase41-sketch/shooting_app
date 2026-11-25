@@ -2,23 +2,20 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// Положение стрелка для значка упражнения (отзыв a69f8d83).
-///
-/// [allThree] — дисциплина из трёх положений: рисуются три фигуры в один
-/// ряд по глубине — лёжа впереди, с колена за ним, стоя сзади.
+/// Положение стрелка для значка упражнения (отзыв a69f8d83, уточнён 25.11):
+/// фигуры читаемые, как пиктограммы SCATT — человек с оружием, а не набор
+/// линий. [allThree] — три положения в один ряд: лёжа, с колена, стоя.
 enum StanceKind { standing, kneeling, prone, allThree }
 
 /// Оружие: винтовка — длинный ствол; пистолет — короткий, у вытянутой руки.
 enum WeaponKind { rifle, pistol }
 
-/// Декоративный силуэт стрелка в изготовке: голова, корпус, руки, оружие —
-/// простыми формами (окружности и скруглённые линии), без деталей лица и
-/// пальцев. Цвет задаёт вызывающий — цвет плитки/кнопки из персонализации.
+/// Декоративный силуэт стрелка в изготовке. Рисуется простыми, но
+/// анатомически узнаваемыми формами: голова, корпус, руки, ноги, оружие.
+/// Цвет задаёт вызывающий — цвет плитки из персонализации.
 ///
-/// Рисунок строится в нормализованных координатах 0..1 и масштабируется
-/// по [size]: смена размеров не требует правки геометрии, радиусы и толщина
-/// линий — положительные константы, отрицательных значений не возникает;
-/// при size <= 0 ничего не рисуется.
+/// Геометрия — в виртуальном квадрате 100×100 и масштабируется по [size]:
+/// при size <= 0 ничего не рисуется, отрицательных радиусов не возникает.
 class StanceIcon extends StatelessWidget {
   final StanceKind stance;
   final WeaponKind weapon;
@@ -67,98 +64,99 @@ class _StancePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final s = math.min(size.width, size.height);
     if (s <= 0) return;
-    final fill = Paint()..color = color;
-    final stroke = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
-      ..isAntiAlias = true;
-
     switch (stance) {
       case StanceKind.standing:
-        _drawStanding(canvas, fill, stroke, 0, 0, s);
+        _figure(canvas, s, const Rect.fromLTWH(0, 0, 100, 100), _drawStanding);
       case StanceKind.kneeling:
-        _drawKneeling(canvas, fill, stroke, 0, 0, s);
+        _figure(canvas, s, const Rect.fromLTWH(0, 0, 100, 100), _drawKneeling);
       case StanceKind.prone:
-        _drawProne(canvas, fill, stroke, 0, 0, s);
+        _figure(canvas, s, const Rect.fromLTWH(0, 0, 100, 100), _drawProne);
       case StanceKind.allThree:
-        // Ряд по глубине: стоя сзади (выше и мельче) рисуем первым, с колена
-        // в середине, лёжа впереди (ниже и крупнее) — последним. Все фигуры
-        // в одном цвете, перекрытие допустимо.
-        _drawStanding(canvas, fill, stroke, 0.64 * s, 0, 0.32 * s);
-        _drawKneeling(canvas, fill, stroke, 0.30 * s, 0.30 * s, 0.36 * s);
-        _drawProne(canvas, fill, stroke, 0, 0.36 * s, 0.64 * s);
+        // Три положения в ряд, без наложений: лёжа снизу слева, с колена в
+        // середине, стоя справа. Слоты разнесены, чтобы силуэты не липли.
+        _figure(canvas, s, const Rect.fromLTWH(2, 58, 58, 40), _drawProne);
+        _figure(canvas, s, const Rect.fromLTWH(34, 34, 50, 62), _drawKneeling);
+        _figure(canvas, s, const Rect.fromLTWH(60, 2, 40, 96), _drawStanding);
     }
   }
 
-  /// Стоя с винтовкой/пистолетом.
-  void _drawStanding(Canvas canvas, Paint fill, Paint stroke, double dx, double dy, double sc) {
-    if (sc <= 0) return;
+  /// Рисует фигуру в прямоугольник [box] (координаты базовой сетки 0..100).
+  void _figure(Canvas canvas, double s, Rect box, void Function(Canvas, _Ink) draw) {
+    final basis = s / 100.0; // виртуальная единица → пиксели
+    final m = math.min(box.width, box.height) / 100.0; // фигура → её слот
+    if (m <= 0) return;
     canvas.save();
-    canvas.translate(dx, dy);
-    canvas.scale(sc);
-    if (weapon == WeaponKind.rifle) {
-      // Винтовка: длинный ствол поперёк корпуса, дульной частью вперёд.
-      _line(canvas, stroke, 0.14, 0.46, 0.88, 0.34, 0.08);
-      // Рука, придерживающая оружие.
-      _line(canvas, stroke, 0.50, 0.34, 0.70, 0.36, 0.10);
-    } else {
-      // Пистолет: вытянутая вперёд рука и короткое толстое оружие у кисти.
-      _line(canvas, stroke, 0.50, 0.34, 0.84, 0.26, 0.11);
-      _line(canvas, stroke, 0.84, 0.26, 0.98, 0.235, 0.14);
-    }
-    canvas.drawCircle(const Offset(0.50, 0.15), 0.10, fill); // голова
-    _line(canvas, stroke, 0.50, 0.29, 0.50, 0.60, 0.17); // корпус
-    _line(canvas, stroke, 0.50, 0.58, 0.41, 0.94, 0.12); // ноги
-    _line(canvas, stroke, 0.50, 0.58, 0.59, 0.94, 0.12);
+    canvas.translate(box.left * basis, box.top * basis);
+    canvas.scale(basis * m);
+    draw(canvas, _Ink(color));
     canvas.restore();
   }
 
-  /// С колена: корпус чуть вперёд, передняя нога согнута, задняя на колене.
-  void _drawKneeling(Canvas canvas, Paint fill, Paint stroke, double dx, double dy, double sc) {
-    if (sc <= 0) return;
-    canvas.save();
-    canvas.translate(dx, dy);
-    canvas.scale(sc);
+  // ---- Позы (сетка 100×100, стрелок смотрит вправо) ---------------------
+
+  void _drawStanding(Canvas canvas, _Ink ink) {
+    // Ноги: устойчивая стойка, ступни чуть в стороны.
+    ink.limb(canvas, 46, 56, 40, 88, 9);
+    ink.limb(canvas, 54, 56, 62, 88, 9);
+    ink.limb(canvas, 40, 88, 35, 91, 7);
+    ink.limb(canvas, 62, 88, 67, 91, 7);
+    // Корпус и голова.
+    ink.limb(canvas, 50, 30, 50, 58, 13);
+    ink.head(canvas, 47, 18, 8.5);
+    // Оружие и руки.
     if (weapon == WeaponKind.rifle) {
-      // Винтовка лежит на руке, локоть опирается на колено.
-      _line(canvas, stroke, 0.30, 0.64, 0.92, 0.48, 0.08);
-      _line(canvas, stroke, 0.56, 0.38, 0.72, 0.60, 0.10);
+      ink.limb(canvas, 22, 40, 88, 32, 5); // винтовка
+      ink.limb(canvas, 46, 36, 60, 32, 6); // рука к цевью
+      ink.limb(canvas, 52, 34, 44, 40, 6); // рука к прикладу
     } else {
-      _line(canvas, stroke, 0.56, 0.38, 0.90, 0.30, 0.11);
-      _line(canvas, stroke, 0.90, 0.30, 0.99, 0.275, 0.14);
+      ink.limb(canvas, 50, 32, 78, 25, 8); // вытянутая рука
+      _pistol(canvas, ink, 78, 25, 0.55);
     }
-    canvas.drawCircle(const Offset(0.56, 0.22), 0.10, fill); // голова
-    _line(canvas, stroke, 0.48, 0.72, 0.56, 0.35, 0.17); // корпус
-    _line(canvas, stroke, 0.48, 0.72, 0.72, 0.62, 0.12); // бедро передней
-    _line(canvas, stroke, 0.72, 0.62, 0.72, 0.94, 0.12); // голень передней
-    _line(canvas, stroke, 0.48, 0.72, 0.30, 0.94, 0.12); // задняя на колене
-    canvas.restore();
   }
 
-  /// Лёжа: корпус вдоль земли головой вперёд (вправо), оружие впереди.
-  void _drawProne(Canvas canvas, Paint fill, Paint stroke, double dx, double dy, double sc) {
-    if (sc <= 0) return;
-    canvas.save();
-    canvas.translate(dx, dy);
-    canvas.scale(sc);
+  void _drawKneeling(Canvas canvas, _Ink ink) {
+    // Передняя нога согнута, задняя стоит на КОЛЕНЕ (колено — на земле).
+    ink.limb(canvas, 48, 58, 66, 68, 9); // бедро передней
+    ink.limb(canvas, 66, 68, 66, 89, 8); // голень передней
+    ink.limb(canvas, 66, 89, 73, 91, 6); // ступня
+    ink.limb(canvas, 46, 58, 32, 84, 9); // бедро задней — вниз к земле
+    ink.head(canvas, 30, 86, 4.5); // само колено на земле
+    ink.limb(canvas, 30, 86, 14, 88, 8); // голень лежит назад
+    // Корпус и голова.
+    ink.limb(canvas, 48, 32, 48, 58, 12);
+    ink.head(canvas, 46, 20, 8);
     if (weapon == WeaponKind.rifle) {
-      _line(canvas, stroke, 0.70, 0.58, 0.99, 0.56, 0.08);
-      // Локоть упирается в землю под оружием.
-      _line(canvas, stroke, 0.62, 0.74, 0.72, 0.62, 0.10);
+      ink.limb(canvas, 20, 44, 88, 36, 5); // винтовка
+      ink.limb(canvas, 44, 40, 58, 36, 6); // рука
     } else {
-      _line(canvas, stroke, 0.72, 0.68, 0.92, 0.60, 0.11);
-      _line(canvas, stroke, 0.92, 0.60, 1.00, 0.575, 0.14);
+      ink.limb(canvas, 48, 34, 74, 27, 8);
+      _pistol(canvas, ink, 74, 27, 0.55);
     }
-    canvas.drawCircle(const Offset(0.80, 0.64), 0.10, fill); // голова
-    _line(canvas, stroke, 0.70, 0.70, 0.28, 0.78, 0.17); // корпус
-    _line(canvas, stroke, 0.28, 0.78, 0.05, 0.86, 0.13); // ноги
-    canvas.restore();
   }
 
-  void _line(Canvas canvas, Paint stroke, double x1, double y1, double x2, double y2, double w) {
-    canvas.drawLine(Offset(x1, y1), Offset(x2, y2), stroke..strokeWidth = w);
+  void _drawProne(Canvas canvas, _Ink ink) {
+    // Тело вдоль земли; голова — отдельно впереди, ноги — отдельно сзади:
+    // раньше всё сливалось в один горизонтальный брус и человек не читался.
+    ink.head(canvas, 74, 54, 7.5); // голова
+    ink.limb(canvas, 68, 58, 64, 62, 6); // шея
+    ink.limb(canvas, 64, 62, 34, 68, 9); // корпус — тоньше, чтобы не «бревно»
+    ink.limb(canvas, 34, 68, 20, 74, 7); // бедро
+    ink.limb(canvas, 20, 74, 8, 80, 7); // голень
+    ink.limb(canvas, 36, 68, 24, 82, 6); // вторая нога отдельной линией
+    if (weapon == WeaponKind.rifle) {
+      ink.limb(canvas, 50, 50, 96, 47, 4.5); // винтовка над телом
+      ink.limb(canvas, 58, 72, 63, 56, 6); // локоть-упор к земле
+    } else {
+      ink.limb(canvas, 68, 56, 84, 50, 7);
+      _pistol(canvas, ink, 84, 50, 0.5);
+    }
+  }
+
+  /// Пистолет: короткий ствол и рукоять вниз — иначе он не отличается от
+  /// просто вытянутой руки (замечание по превью значков, 25.11).
+  void _pistol(Canvas canvas, _Ink ink, double x, double y, double k) {
+    ink.limb(canvas, x, y, x + 14 * k, y - 2 * k, 5); // ствол
+    ink.limb(canvas, x + 2 * k, y + 1, x + 2 * k, y + 9 * k, 6); // рукоять
   }
 
   @override
@@ -166,4 +164,27 @@ class _StancePainter extends CustomPainter {
       oldDelegate.stance != stance ||
       oldDelegate.weapon != weapon ||
       oldDelegate.color != color;
+}
+
+/// Мелкие помощники рисования: толстые скруглённые линии и голова.
+class _Ink {
+  final Color color;
+  _Ink(this.color);
+
+  Paint get _paint => Paint()
+    ..color = color
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round
+    ..strokeJoin = StrokeJoin.round
+    ..isAntiAlias = true;
+
+  /// Конечность/оружие: линия толщиной [w] (в единицах сетки 100).
+  void limb(Canvas canvas, double x1, double y1, double x2, double y2, double w) {
+    canvas.drawLine(Offset(x1, y1), Offset(x2, y2), _paint..strokeWidth = w);
+  }
+
+  /// Голова — залитый круг.
+  void head(Canvas canvas, double x, double y, double r) {
+    canvas.drawCircle(Offset(x, y), r, Paint()..color = color);
+  }
 }

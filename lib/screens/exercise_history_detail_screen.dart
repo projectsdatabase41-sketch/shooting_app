@@ -210,7 +210,11 @@ class _DetailBodyState extends State<_DetailBody> {
               child: Text(tr('{p} очка ({p2})', {'p': total.toStringAsFixed(1), 'p2': total.round()})),
             ),
             for (final block in blocks.visible) ...[
-              _buildBlock(context, block, showSeriesBlock: true),
+              // «Результат по сериям» — под мишенью (отзыв 7dacac57); в
+              // статистике он повторяется только если блок серий скрыт,
+              // иначе получался дубль в двух местах.
+              _buildBlock(context, block,
+                  showSeriesBlock: !blocks.visible.contains(ExerciseDetailBlock.series)),
               const SizedBox(height: 16),
             ],
             // В узкой раскладке списка выстрелов нет нигде, кроме этой

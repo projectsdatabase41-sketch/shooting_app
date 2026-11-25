@@ -46,8 +46,19 @@ class DriveModelsCatalog {
   /// Проверено владельцем: ответ 200 и CORS `*`, при этом вьюер читает
   /// файл по URL в память — на диск ничего не попадает (владелец 24.11:
   /// «не скачиваются на устройство … методом замещения URL»).
+  /// Прямая ссылка на модель, которую открывает вьюер.
+  ///
+  /// Google Drive браузерный `fetch` не отдаёт (страница получает
+  /// «Failed to fetch» — проверено в Chrome, все варианты `uc`/`usercontent`
+  /// без исключения), поэтому модели лежат в самом репозитории в
+  /// `server/models/<id>.stp.gz`: raw.githubusercontent отдаёт их с CORS и
+  /// без скачивания на устройство. Сжатие в 4 раза — STP это текст.
+  /// Отзыв d8c68001: «failed to fetch при попытке открыть любую модель».
   static String modelUrl(String id) =>
-      'https://drive.usercontent.google.com/download?id=$id&export=download';
+      '$_rawBase/$id.stp.gz';
+
+  static const _rawBase =
+      'https://raw.githubusercontent.com/projectsdatabase41-sketch/shooting_app/main/server/models';
 
   /// Превью: публичная ссылка на картинку через хостинг миниатюр Google
   /// (работает только если файл картинка доступен по ссылке).

@@ -96,9 +96,9 @@ class LinkSignal extends StatelessWidget {
   const LinkSignal({super.key, required this.mode});
 
   /// Размер щита: в шапке чата рядом с именем собеседника, крупнее не влезает.
-  /// Размер щита: отзыв 25.11 — «щит с буковкой N сделать больше в 2 раза»,
-  /// было 18. Шапка чата выдерживает 36: имя собеседника переносится.
-  static const double _shieldSize = 36;
+  /// Размер щита: 25.11 было 36, владелец попросил «на 20% меньше, линии
+  /// тоньше, свечение мягче, буква ровно по центру» — 28.8 ≈ 29.
+  static const double _shieldSize = 29;
 
   static void explain(BuildContext context, LinkMode current) {
     showGlassDialog<void>(
@@ -205,18 +205,15 @@ class LinkSignal extends StatelessWidget {
                   alignment: Alignment.center,
                   children: [
                     Icon(Icons.shield_outlined, size: _shieldSize, color: color),
-                    // Щит 36 px — буква вдвое крупнее (18 px, высота ≈18 px),
-                    // сдвиг тоже вдвое: центр щита минус 2 px.
-                    Transform.translate(
-                      offset: const Offset(0, -2),
-                      child: Text(
-                        'N',
-                        style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: color,
-                            height: 1),
-                      ),
+                    // Щит 29 px: буква по центру (без сдвига), тоньше и
+                    // мягче — отзыв 70c12914.
+                    Text(
+                      'N',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: color.withValues(alpha: 0.92),
+                          height: 1),
                     ),
                   ],
                 ),

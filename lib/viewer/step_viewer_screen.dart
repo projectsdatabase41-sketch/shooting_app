@@ -5,6 +5,7 @@ import '../i18n/i18n.dart';
 import '../services/drive_models_catalog.dart' show DriveModelsCatalog;
 import '../widgets/app_backdrop.dart';
 import '../widgets/glass_pill.dart';
+import '../widgets/glass_route.dart';
 import 'models_catalog_screen.dart' show ModelsCatalogBody;
 import 'step_viewer_common.dart';
 import 'step_viewer_io.dart'
@@ -104,12 +105,13 @@ class _StepViewerScreenState extends State<StepViewerScreen> {
         barrierColor: Theme.of(context).brightness == Brightness.dark
             ? Colors.black54
             : Colors.black26,
-        builder: (ctx) => Padding(
-          // Клавиатура не должна накрывать список моделей: диалог сам
-          // ужимается на высоту keyboard (владелец 24.11, п.2 — при
-          // открытии клавиатуры «дёргало» интерфейс), а список внутри
-          // прокручивается.
-          padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(ctx).bottom),
+        // Клавиатура НЕ сжимает диалог: при открытии она пересчитывала
+        // высоту всего окошка и список «сворачивался» (отзыв 140cf047).
+        // Теперь диалог стоит на месте, клавиатура просто накрывает его
+        // нижнюю часть — поиск вверху остаётся доступным.
+        builder: (ctx) => MediaQuery.removeViewInsets(
+          context: ctx,
+          removeBottom: true,
           child: Dialog(
             backgroundColor: cs.surface,
             // Радиус и рамка — из темы, как у остальных карточек приложения.
@@ -142,6 +144,11 @@ class _StepViewerScreenState extends State<StepViewerScreen> {
                           ),
                         ),
                         GlassCircleButton(
+                          tooltip: tr('Открыть по ссылке'),
+                          icon: const Icon(Icons.link),
+                          onTap: _openUrlDialog,
+                        ),
+                        GlassCircleButton(
                           tooltip: tr('Закрыть'),
                           icon: const Icon(Icons.close),
                           onTap: () => Navigator.of(ctx).pop(),
@@ -170,6 +177,58 @@ class _StepViewerScreenState extends State<StepViewerScreen> {
     } finally {
       _catalogOpen = false;
     }
+  }
+
+  // ---- Открытие по ссылке (отзыв 081dffa7: «пропала возможность открыть
+  // с помощью url») -------------------------------------------------------
+
+  Future<void> _openUrlDialog() async {
+    final ctrl = TextEditingController();
+    String? error;
+    final url = await showGlassDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          title: Text(tr('Открыть модель по ссылке')),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              keyboardType: TextInputType.url,
+              decoration: InputDecoration(
+                labelText: tr('Ссылка на .stp / .step / .glb'),
+                hintText: 'https://…',
+              ),
+              onSubmitted: (_) => Navigator.pop(ctx, ctrl.text.trim()),
+            ),
+            if (error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(error!,
+                    style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
+              ),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Отмена'))),
+            FilledButton(
+              onPressed: () {
+                final raw = ctrl.text.trim();
+                final uri = Uri.tryParse(raw);
+                if (raw.isEmpty ||
+                    uri == null ||
+                    !(uri.isScheme('http') || uri.isScheme('https'))) {
+                  setS(() => error = tr('Нужна полная ссылка http:// или https://'));
+                  return;
+                }
+                Navigator.pop(ctx, raw);
+              },
+              child: Text(tr('Открыть')),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (url != null && url.isNotEmpty) await _loadModel(url);
   }
 
   // ---- build ------------------------------------------------------------

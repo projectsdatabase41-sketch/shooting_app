@@ -1122,12 +1122,26 @@ async function loadUrl(url, name) {
     showOverlay('Скачиваю файл…', url);
     const response = await fetch(url);
     if (!response.ok) throw new Error(`Не удалось скачать файл (HTTP ${response.status})`);
-    const buffer = await response.arrayBuffer();
+    let buffer = await response.arrayBuffer();
+    // Модели каталога лежат в репозитории сжатыми (.stp.gz): ChromeDrive
+    // отдаёт их с CORS, а обычные файлы на Drive браузер блокирует.
+    buffer = await maybeGunzip(buffer);
     hideOverlay();
-    await loadBuffer(buffer, name || url.split('/').pop());
+    await loadBuffer(buffer, (name || url.split('/').pop() || 'model.stp').replace(/\.gz$/i, ''));
   } catch (err) {
     fail(err);
   }
+}
+
+/** Распаковывает gzip-буфер, если он сжат (по сигнатуре 1f 8b). */
+async function maybeGunzip(buffer) {
+  const head = new Uint8Array(buffer, 0, Math.min(2, buffer.byteLength));
+  if (head.length < 2 || head[0] !== 0x1f || head[1] !== 0x8b) return buffer;
+  if (typeof DecompressionStream === 'undefined') {
+    throw new Error('браузер не умеет распаковывать gzip');
+  }
+  const stream = new Blob([buffer]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return await new Response(stream).arrayBuffer();
 }
 
 function fail(err) {
