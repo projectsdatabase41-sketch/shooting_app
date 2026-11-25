@@ -937,6 +937,13 @@ class _FinalsLobbyScreenState extends State<FinalsLobbyScreen> {
                   value: _hostBle,
                   onChanged: started ? null : (v) => setState(() => _hostBle = v),
                 ),
+              if (FinalsBle.canBridge)
+                // Отзыв 25.11 (b77e62d5): ответ на вопрос «Bluetooth или общий Wi-Fi»
+                // прямо под переключателем.
+                Text(
+                  tr('В тире без интернета — Bluetooth (устройства рядом, до ~10 м). В одном Wi-Fi — общий Wi-Fi: дальше и стабильнее. В остальных случаях — через интернет.'),
+                  style: theme.textTheme.bodySmall,
+                ),
               Text(tr('Участники'), style: theme.textTheme.titleSmall),
               for (final p in _picks)
                 ListTile(

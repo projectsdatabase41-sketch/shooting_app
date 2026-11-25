@@ -39,6 +39,11 @@ class DemoMode {
   static LocalDbService? _db;
   static final List<String> _crumbs = [];
   static const _kCrumbs = 'diag_crumbs', _kOpen = 'diag_open';
+  /// Отзыв 25.11 (50cb01f9): последнее настоящее исключение сеанса (тип,
+  /// текст, краткий стек). По нему при следующем запуске отличают вылет от
+  /// ложного маркера «сеанс оборвался», который остаётся и после штатного
+  /// снятия процесса системой.
+  static const _kEx = 'diag_last_error';
 
   static String _get(String k) {
     final r = _db?.db.select('SELECT hex FROM color_prefs WHERE key = ?', [k]);
@@ -75,8 +80,15 @@ class DemoMode {
       WidgetsBinding.instance.addObserver(_LifeObserver());
     } catch (_) {}
     if (crashed) {
-      // Прошлый сеанс оборвался на переднем плане (вылет, нехватка памяти): сообщаем, где это было.
-      Future.delayed(const Duration(seconds: 6), () => sendError('Crash', 'Прошлый сеанс оборвался без выхода', null, '--- путь до вылета ---\n$trail'));
+      // Отзыв 25.11 (50cb01f9): ложный маркер без исключения не отправляем.
+      // Флаг «сеанс оборвался» остаётся «1» и после штатного снятия процесса
+      // системой, поэтому отчёт уходит только когда в прошлом сеансе
+      // сохранено настоящее исключение; без него слот просто очищается.
+      final saved = _get(_kEx);
+      _put(_kEx, '');
+      if (saved.isNotEmpty) {
+        Future.delayed(const Duration(seconds: 6), () => _sendSavedCrash(saved, trail));
+      }
     }
   }
 
@@ -272,10 +284,19 @@ class DemoMode {
 
   /// Отчёт об ошибке в ту же таблицу отзывов: что случилось, где, технические
   /// подробности (тип ошибки, стек, платформа) — без личных данных.
-  static Future<String?> sendError(String where, Object error, [StackTrace? stack, String? extra]) async {
+  ///
+  /// [type] — настоящий тип исключения при повторной отправке сохранённого
+  /// сбоя (отзыв 25.11, 50cb01f9): без него в отчёте был бы «String».
+  static Future<String?> sendError(String where, Object error,
+      [StackTrace? stack, String? extra, String? type]) async {
     if (!ChatSettings.isConfigured) return tr('Сервер отзывов не настроен');
     if (_isNetworkNoise(error)) return null;
     if (_isExpectedUserMessage(error)) return null;
+    // Отзыв 25.11 (50cb01f9): запоминаем настоящее исключение (стек и/или
+    // нестроковый тип) — по нему при следующем запуске отличают вылет от
+    // ложного маркера «сеанс оборвался». Повтор отправки сохранённого
+    // исключения сам не пересохраняем, иначе оно никогда не «тратится».
+    if (type == null) _saveLastException(error, stack);
     // Одну и ту же ошибку за сеанс шлём один раз; разные — не чаще раза в 2 с.
     final key = '$where|${'$error'.length > 160 ? '$error'.substring(0, 160) : '$error'}';
     if (!_sentErrors.add(key)) return null;
@@ -287,7 +308,7 @@ class DemoMode {
     try {
       screen = screenSnapshot(maxChars: 1000);
     } catch (_) {}
-    final text = '[ОШИБКА] $error\nТип: ${error.runtimeType}\nГде: $where'
+    final text = '[ОШИБКА] $error\nТип: ${type ?? error.runtimeType}\nГде: $where'
         '${extra == null ? '' : '\n$extra'}${_crumbs.isEmpty || where == 'Crash' ? '' : '\n--- путь ---\n${_crumbs.join('\n')}'}${st.isEmpty ? '' : '\n--- стек ---\n$st'}${screen.isEmpty ? '' : '\n--- экран ---\n$screen'}';
     final client = http.Client();
     try {
@@ -302,6 +323,40 @@ class DemoMode {
     } finally {
       client.close();
     }
+  }
+
+  /// Отзыв 25.11 (50cb01f9): сохраняет тип, текст и краткий стек настоящего
+  /// исключения. Исключение без стека и со строковым типом — не исключение,
+  /// его не сохраняем: именно такие «маркеры» тонули в отзывах раньше.
+  static void _saveLastException(Object error, StackTrace? stack) {
+    final st = (stack?.toString() ?? '').split('\n').take(12).join('\n');
+    final type = error.runtimeType.toString();
+    if (type == 'String' && st.isEmpty) return;
+    final msg = '$error'.replaceAll('\n', ' / ');
+    _put(_kEx, '$type\n${msg.length > 200 ? '${msg.substring(0, 200)}…' : msg}\n--- стек ---\n$st');
+  }
+
+  /// Отзыв 25.11 (50cb01f9): отчёт о вылете прошлого сеанса отправляется
+  /// только по сохранённому исключению. Нет стека и тип только строковый —
+  /// падения не было (строковый маркер), отчёт не отправляем.
+  static Future<void> _sendSavedCrash(String saved, String trail) async {
+    final nl = saved.indexOf('\n');
+    if (nl < 0) return;
+    final type = saved.substring(0, nl);
+    var rest = saved.substring(nl + 1);
+    String stack = '';
+    const mark = '\n--- стек ---\n';
+    final si = rest.indexOf(mark);
+    if (si >= 0) {
+      stack = rest.substring(si + mark.length);
+      rest = rest.substring(0, si);
+    }
+    if (stack.isEmpty && type == 'String') return;
+    final thrown = rest.isEmpty ? 'Прошлый сеанс оборвался без выхода' : rest;
+    final marker = '--- маркер прошлой сессии ---\nПрошлый сеанс оборвался без выхода'
+        '${trail.isEmpty ? '' : '\n--- путь до вылета ---\n$trail'}';
+    await sendError('Crash', thrown, stack.isEmpty ? null : StackTrace.fromString(stack),
+        marker, type);
   }
 
   /// Показывает сообщение об ошибке и сразу сам отправляет подробности

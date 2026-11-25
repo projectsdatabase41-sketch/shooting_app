@@ -4,6 +4,7 @@ import 'dart:async' show unawaited;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../gdrive/chat_ai_export.dart';
 import '../gdrive/chat_drive_backup.dart';
 import '../gdrive/gdrive_service.dart';
 import '../i18n/i18n.dart';
@@ -32,6 +33,8 @@ class _ChatBackupSettingsScreenState extends State<ChatBackupSettingsScreen> {
   bool _driveBusy = false;
   String? _driveMessage;
   String? _vaultMessage;
+  bool _aiBusy = false;
+  String? _aiMessage;
 
   LocalDbService get db => widget.db;
 
@@ -310,6 +313,64 @@ class _ChatBackupSettingsScreenState extends State<ChatBackupSettingsScreen> {
     }
   }
 
+  /// Выгрузка «для ИИ»: вся история и медиа — в Nexus/Chats вашей папки на
+  /// Диске (messages.jsonl + chat.md + media/), с прогрессом «N из M»
+  /// (отзыв 22.11: долгие операции без прогресса выглядят зависанием).
+  /// Ошибки не прячем: первая видна и в строке статуса, и в снекбаре.
+  Future<void> _exportNow() async {
+    if (!GDriveService.configured(db)) {
+      setState(() => _aiMessage = tr('Сначала подключите Google Диск: включите модуль «Google Диск» и откройте его'));
+      return;
+    }
+    setState(() {
+      _aiBusy = true;
+      _aiMessage = null;
+    });
+    final progress = ValueNotifier<(int, int)>((0, 0));
+    var cancelled = false;
+    final closeDialog = _showProgress(
+      title: tr('Выгрузка на Google Диск'),
+      progress: progress,
+      progressText: (done, total) => tr('Переписок выгружено: {n} из {m}', {'n': done, 'm': total}),
+      cancelled: () => cancelled,
+      onCancel: () => cancelled = true,
+      note: tr('История и медиа кладутся в Nexus/Chats на вашем Диске; вложения могут идти долго'),
+    );
+    try {
+      final r = await ChatAiExport(db, GDriveService(db))
+          .exportAll(cancelled: () => cancelled, onProgress: (done, total) => progress.value = (done, total));
+      final msg = r.messageText();
+      if (mounted) {
+        setState(() => _aiMessage = cancelled ? '${tr('Выгрузка остановлена')}. $msg' : msg);
+        if (r.errors.isNotEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(tr('Не всё выгружено: {e}', {'e': r.errors.first}))),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        final msg = friendlyError(e);
+        setState(() => _aiMessage = tr('Не удалось выгрузить: {e}', {'e': msg}));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      }
+    } finally {
+      closeDialog();
+      progress.dispose();
+      if (mounted) setState(() => _aiBusy = false);
+    }
+  }
+
+  /// Статус последней выгрузки «для ИИ» — под кнопкой «Выгрузить сейчас».
+  String _aiStatusText() {
+    final last = ChatAiExport.lastRun(db);
+    if (last == null) return tr('Ещё не выгружали: формат для ИИ — messages.jsonl, chat.md, media/');
+    final st = ChatAiExport.lastStatus(db);
+    final when = tr('Последняя выгрузка: {t}', {'t': DateFormat('dd.MM.yy HH:mm').format(last)});
+    if (st == null || st == 'ok') return when;
+    return '$when. ${tr('В прошлый раз были ошибки')}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final mode = ChatBackupService.mode(db);
@@ -404,6 +465,27 @@ class _ChatBackupSettingsScreenState extends State<ChatBackupSettingsScreen> {
                   : tr('Вернуть переписку и вложения из папки Nexus/Chats на Диске')),
               onTap: _driveBusy ? null : () => _driveRun(restore: true),
             ),
+            if (GDriveService.configured(db)) ...[
+              SwitchListTile(
+                secondary: const Icon(Icons.smart_toy_outlined),
+                title: Text(tr('Хранить переписки только на Google Диске')),
+                subtitle: Text(tr(
+                    'История и медиа на Диске, в облаке только доставка: старые сообщения удаляются из Supabase после выгрузки. По умолчанию выключено — чтобы не удалить уже загруженную историю')),
+                value: ChatDriveBackup.driveOnlyOn(db),
+                onChanged: (v) {
+                  ChatDriveBackup.setDriveOnly(db, v);
+                  setState(() => _aiMessage = null);
+                },
+              ),
+              ListTile(
+                leading: _aiBusy
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.upload_file_outlined),
+                title: Text(tr('Выгрузить сейчас')),
+                subtitle: Text(_aiMessage ?? _aiStatusText()),
+                onTap: _aiBusy ? null : _exportNow,
+              ),
+            ],
           ],
           if (ChatVault.supported) ...[
             const Divider(height: 24),

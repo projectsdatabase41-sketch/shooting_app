@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../widgets/glass_route.dart';
 import '../widgets/app_backdrop.dart';
 import '../widgets/app_loader.dart';
@@ -14,6 +16,17 @@ import '../widgets/glass_pill.dart';
 import 'final_run_screen.dart' show FinalResultScreen;
 
 /// Чемпионы по формату и (для тренера) записи, ждущие подписи.
+
+/// Обратный отсчёт до удаления по `delete_at`, например «через 9:41».
+String championsDeleteCountdown(Object? deleteAt) {
+  final dt = DateTime.tryParse('$deleteAt');
+  if (dt == null) return '';
+  final left = dt.difference(DateTime.now());
+  if (left <= Duration.zero) return tr('удаление выполняется');
+  final s = left.inSeconds % 60;
+  return tr('через {t}', {'t': '${left.inMinutes}:${s.toString().padLeft(2, '0')}'});
+}
+
 class ChampionsScreen extends StatefulWidget {
   const ChampionsScreen({super.key});
 
@@ -35,6 +48,9 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
   bool _busy = false;
   List<Map<String, dynamic>> _banned = [];
   List<Map<String, dynamic>> _appeals = [];
+  List<Map<String, dynamic>> _marked = []; // мои финалы, помеченные на удаление
+  String _myUid = '';
+  Timer? _tick;
   bool _loading = true;
   Set<String> _myAthletes = {}; // chat-id спортсменов, подключённых к этому тренеру
 
@@ -53,6 +69,9 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
     final pending = await _svc.pendingForMe();
     final banned = await _svc.myBanned();
     final appeals = await _svc.appeals();
+    // Если колонка delete_at ещё не создана (SQL не выполнен), myMarked
+    // вернёт пустой список — секция просто не покажется.
+    final marked = await _svc.myMarked();
     final auth = ChatAuthService(db);
     final access = CoachAccessService(db);
     final mine = <String>{};
@@ -68,10 +87,22 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
         _pending = pending;
         _banned = banned;
         _appeals = appeals;
+        _marked = marked;
         _myAthletes = mine;
+        _myUid = auth.userId;
         _loading = false;
       });
+      _ensureTick();
     }
+  }
+
+  /// Пока есть помеченные записи — раз в секунду обновляем обратный отсчёт.
+  void _ensureTick() {
+    if (_marked.isEmpty) return;
+    _tick ??= Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted || _marked.isEmpty) return;
+      setState(() {});
+    });
   }
 
   /// Загрузка чемпионов выбранного упражнения (с нуля или следующей страницей).
@@ -144,6 +175,32 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
     if (err == null) _load();
   }
 
+  /// Пометка своего финала на удаление (или снятие пометки, если стоит).
+  Future<void> _markDelete(Map<String, dynamic> r) async {
+    final marked = r['delete_at'] != null;
+    if (!marked) {
+      final ok = await showGlassDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(tr('Пометить финал на удаление?')),
+          content: Text(tr('Через 10 минут финал будет удалён из публикации. До этого пометку можно снять.')),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Отмена'))),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Пометить'))),
+          ],
+        ),
+      );
+      if (ok != true) return;
+    }
+    final err = await _svc.markDelete(r['id'] as String, cancel: marked);
+    if (!mounted) return;
+    if (_svc.markDeleteSupported == false) setState(() {}); // действие больше не показывать
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(err ?? tr(marked ? 'Пометка снята' : 'Финал будет удалён в течение 10 минут'))),
+    );
+    if (err == null) _load();
+  }
+
   String _until(Map<String, dynamic> r) {
     final v = '${r['banned_until']}';
     return v.contains('infinity') ? tr('навсегда') : tr('до {d}', {'d': v.substring(0, 10)});
@@ -152,6 +209,7 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
   @override
   void dispose() {
     _search.dispose();
+    _tick?.cancel();
     super.dispose();
   }
 
@@ -366,6 +424,24 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
                     ),
                   const SizedBox(height: 16),
                 ],
+                if (_marked.isNotEmpty) ...[
+                  Text(tr('Пометка на удаление'), style: theme.textTheme.titleSmall),
+                  for (final r in _marked)
+                    Card(
+                      child: ListTile(
+                        title: Text(
+                          '${(r['total'] as num).toStringAsFixed(1)} · '
+                          '${tr(FinalFormat.all.firstWhere((f) => f.id == r['format_id'], orElse: () => FinalFormat.airRifle10m).nameKey)}',
+                        ),
+                        subtitle: Text(championsDeleteCountdown(r['delete_at'])),
+                        trailing: TextButton(
+                          onPressed: () => _act(_svc.markDelete(r['id'] as String, cancel: true), tr('Пометка снята')),
+                          child: Text(tr('Снять пометку')),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                ],
                 _filters(theme),
                 const SizedBox(height: 12),
                 Text(tr('Чемпионы'), style: theme.textTheme.titleSmall),
@@ -381,6 +457,8 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
                           userId: people[i].userId,
                           name: people[i].name,
                           place: i + 1,
+                          myUid: _myUid,
+                          onMark: _markDelete,
                           onOpenProtocol: _openProtocol,
                           onReport: _report,
                         ),
@@ -414,14 +492,18 @@ class ChampionProfileScreen extends StatefulWidget {
   final String userId;
   final String name;
   final int place;
+  final String myUid; // мой auth.uid() — свои записи можно пометить на удаление
   final void Function(Map<String, dynamic> row, int place) onOpenProtocol;
   final void Function(Map<String, dynamic> row) onReport;
+  final Future<void> Function(Map<String, dynamic> row) onMark;
   const ChampionProfileScreen({
     super.key,
     required this.svc,
     required this.userId,
     required this.name,
     required this.place,
+    required this.myUid,
+    required this.onMark,
     required this.onOpenProtocol,
     required this.onReport,
   });
@@ -432,6 +514,7 @@ class ChampionProfileScreen extends StatefulWidget {
 
 class _ChampionProfileScreenState extends State<ChampionProfileScreen> {
   List<Map<String, dynamic>>? _rows;
+  Timer? _tick;
 
   @override
   void initState() {
@@ -439,6 +522,26 @@ class _ChampionProfileScreenState extends State<ChampionProfileScreen> {
     widget.svc.resultsOf(widget.userId).then((r) {
       if (mounted) setState(() => _rows = r);
     });
+    _tick = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (mounted && _rows?.any((r) => r['delete_at'] != null) == true) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
+
+  /// Пометить/снять пометку на своей записи, затем перезагрузить список.
+  Future<void> _mark(Map<String, dynamic> r) async {
+    await widget.onMark(r);
+    final mine = widget.myUid == widget.userId;
+    if (mounted && mine && widget.svc.markDeleteSupported) {
+      widget.svc.resultsOf(widget.userId).then((rows) {
+        if (mounted) setState(() => _rows = rows);
+      });
+    }
   }
 
   @override
@@ -465,22 +568,35 @@ class _ChampionProfileScreenState extends State<ChampionProfileScreen> {
                   ),
                 if (rows.isEmpty) Padding(padding: const EdgeInsets.all(12), child: Text(tr('Результатов нет'))),
                 for (final r in rows)
-                  Card(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: ListTile(
-                      onTap: () => widget.onOpenProtocol(r, widget.place),
-                      title: Text(tr(FinalFormat.all.firstWhere((f) => f.id == r['format_id'], orElse: () => FinalFormat.airRifle10m).nameKey)),
-                      subtitle: Text('${r['created_at']}'.length >= 10 ? '${r['created_at']}'.substring(0, 10) : ''),
-                      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Text((r['total'] as num).toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-                        IconButton(
-                          tooltip: tr('Пожаловаться'),
-                          icon: const Icon(Icons.flag_outlined, size: 20),
-                          onPressed: () => widget.onReport(r),
-                        ),
-                      ]),
-                    ),
-                  ),
+                  Builder(builder: (_) {
+                    final mine = '${r['user_id']}' == widget.myUid && widget.svc.markDeleteSupported;
+                    final marked = r['delete_at'] != null;
+                    final created = '${r['created_at']}';
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        onTap: () => widget.onOpenProtocol(r, widget.place),
+                        title: Text(tr(FinalFormat.all.firstWhere((f) => f.id == r['format_id'], orElse: () => FinalFormat.airRifle10m).nameKey)),
+                        subtitle: Text(marked
+                            ? '${created.length >= 10 ? created.substring(0, 10) : ''} · ${tr('удаляется {t}', {'t': championsDeleteCountdown(r['delete_at'])})}'
+                            : (created.length >= 10 ? created.substring(0, 10) : '')),
+                        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Text((r['total'] as num).toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                          if (mine)
+                            IconButton(
+                              tooltip: tr(marked ? 'Снять пометку' : 'Пометить на удаление'),
+                              icon: Icon(marked ? Icons.restore : Icons.delete_outline, size: 20),
+                              onPressed: () => _mark(r),
+                            ),
+                          IconButton(
+                            tooltip: tr('Пожаловаться'),
+                            icon: const Icon(Icons.flag_outlined, size: 20),
+                            onPressed: () => widget.onReport(r),
+                          ),
+                        ]),
+                      ),
+                    );
+                  }),
               ],
             ),
       ),

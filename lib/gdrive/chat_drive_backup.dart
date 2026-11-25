@@ -9,6 +9,7 @@ import '../models/chat_message.dart';
 import '../services/chat_backup_service.dart';
 import '../services/chat_messages_repository.dart';
 import '../services/local_db_service.dart';
+import 'chat_ai_export.dart';
 import 'gdrive_service.dart';
 
 /// Одна запись индекса, ждущая восстановления: чей контакт и что в записи.
@@ -69,6 +70,15 @@ class ChatDriveBackup {
   static void setOn(LocalDbService db, bool v) => _put(db, _onKey, v ? '1' : '0');
   static DateTime? lastRun(LocalDbService db) => DateTime.tryParse(_get(db, _lastKey) ?? '')?.toLocal();
 
+  /// Хранение переписок ТОЛЬКО на Диске (отзыв 25.11: в Supabase мало места
+  /// на переписки). Выключен по умолчанию, чтобы случайно не удалить уже
+  /// загруженную облачную историю. Включён — после успешного экспорта
+  /// переписки ([ChatAiExport]) старые строки её транзита удаляются из
+  /// Supabase (chat_messages), свежие остаются для доставки.
+  static const _driveOnlyKey = 'chat_store_drive_only';
+  static bool driveOnlyOn(LocalDbService db) => _get(db, _driveOnlyKey) == '1';
+  static void setDriveOnly(LocalDbService db, bool v) => _put(db, _driveOnlyKey, v ? '1' : '0');
+
   /// Когда переписка последний раз восстанавливалась с Диска (null — ещё ни разу).
   static DateTime? restoredAt(LocalDbService db) => DateTime.tryParse(_get(db, _restoredKey) ?? '')?.toLocal();
   static void markRestored(LocalDbService db) => _put(db, _restoredKey, DateTime.now().toUtc().toIso8601String());
@@ -90,6 +100,9 @@ class ChatDriveBackup {
     _lastAuto = DateTime.now();
     try {
       await ChatDriveBackup(db, GDriveService(db)).sync();
+      // Режим «только Диск»: вслед за копией выгружаем в формат для ИИ —
+      // он же удаляет старые строки транзита из Supabase (см. ChatAiExport).
+      if (driveOnlyOn(db)) await ChatAiExport(db, GDriveService(db)).exportAll();
     } catch (_) {}
   }
 

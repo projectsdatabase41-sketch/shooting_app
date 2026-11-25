@@ -188,12 +188,30 @@ class GroupScatterPainter extends CustomPainter {
       canvas.drawCircle(center, rMm * mmToPx, ringPaint);
     }
 
-    // Перекрестие центра мишени.
-    final crossPaint = Paint()
-      ..color = ringColor.withValues(alpha: 0.5)
-      ..strokeWidth = 1;
-    canvas.drawLine(Offset(center.dx - maxPx, center.dy), Offset(center.dx + maxPx, center.dy), crossPaint);
-    canvas.drawLine(Offset(center.dx, center.dy - maxPx), Offset(center.dx, center.dy + maxPx), crossPaint);
+    // Перекрестие центра мишени. Отзыв 25.11 (ae4fcda4): на светлой бумаге
+    // крестик с alpha 0.5 и толщиной 1 терялся между кольцами и пробоинами.
+    // Теперь он контрастный («негативный» к бумаге — как просил владелец):
+    // под тёмной линией идёт светлый подслой, она почти непрозрачная и
+    // толще кольца, а в центре — точка.
+    final crossColor = ringColor.computeLuminance() < 0.5
+        ? Colors.black.withValues(alpha: 0.85)
+        : Colors.white.withValues(alpha: 0.9);
+    final haloColor = ringColor.computeLuminance() < 0.5
+        ? Colors.white.withValues(alpha: 0.75)
+        : Colors.black.withValues(alpha: 0.55);
+    final armPx = maxPx * 0.9;
+    void crossLine(Paint paint, double half) {
+      canvas.drawLine(Offset(center.dx - half, center.dy), Offset(center.dx + half, center.dy), paint);
+      canvas.drawLine(Offset(center.dx, center.dy - half), Offset(center.dx, center.dy + half), paint);
+    }
+
+    crossLine(Paint()
+      ..color = haloColor
+      ..strokeWidth = 3, armPx);
+    crossLine(Paint()
+      ..color = crossColor
+      ..strokeWidth = 1.4, armPx);
+    canvas.drawCircle(center, 1.8, Paint()..color = crossColor);
 
     final meanPos = center + Offset(meanPointMm.dx, -meanPointMm.dy) * mmToPx;
 

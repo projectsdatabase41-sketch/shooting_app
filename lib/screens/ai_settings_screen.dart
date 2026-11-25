@@ -37,9 +37,27 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
   late final SupabaseAuthService _personalAuth;
   late final LocalDbService _db;
 
+  // Отзыв 25.11 (1cf86141): готовые адреса поставщиков LLM, чтобы не искать
+  // вручную, и фокус поля URL для варианта «Своя ссылка».
+  static const _llmProviders = <String, String>{
+    'OpenRouter': 'https://openrouter.ai/api/v1',
+    'DeepSeek': 'https://api.deepseek.com/v1',
+    'OpenAI': 'https://api.openai.com/v1',
+    'Groq': 'https://api.groq.com/openai/v1',
+    'Mistral': 'https://api.mistral.ai/v1',
+    'Ollama': 'http://localhost:11434/v1',
+    'Gemini': 'https://generativelanguage.googleapis.com/v1beta/openai',
+  };
+  late final FocusNode _apiUrlFocus;
+
   List<String>? _available;
   bool _loading = false;
   String? _message;
+  // Поиск по доступным моделям (отзыв 25.11, 1cf86141): фильтрует _shown
+  // по подстроке без учёта регистра.
+  late final TextEditingController _modelSearch = TextEditingController()
+    ..addListener(_onSearchChanged);
+  void _onSearchChanged() => setState(() {});
 
   /// Результаты проверки цепочки: модель → что ответил сервер.
   final Map<String, String> _probe = {};
@@ -80,6 +98,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     _customInstructions =
         TextEditingController(text: _settings.customInstructions);
     _geminiKey = TextEditingController(text: _settings.geminiKey);
+    _apiUrlFocus = FocusNode();
     _baseInstructions = TextEditingController(
         text: _settings.baseInstructionsOverride.isEmpty
             ? AiContext.defaultBasePrompt
@@ -94,6 +113,9 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     _customInstructions.dispose();
     _baseInstructions.dispose();
     _geminiKey.dispose();
+    _apiUrlFocus.dispose();
+    _modelSearch.removeListener(_onSearchChanged);
+    _modelSearch.dispose();
     super.dispose();
   }
 
@@ -332,8 +354,32 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
               obscureText: true,
             ),
             const SizedBox(height: 12),
+            // Отзыв 25.11 (1cf86141): готовые поставщики LLM под рукой —
+            // чип подставляет адрес, ключ в поле API Key не трогается.
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final e in _llmProviders.entries)
+                  ActionChip(
+                    label: Text(e.key, style: theme.textTheme.labelSmall),
+                    tooltip: e.value,
+                    onPressed: () => setState(() => _apiBaseUrl.text = e.value),
+                  ),
+                ActionChip(
+                  label: Text(tr('Своя ссылка'),
+                      style: theme.textTheme.labelSmall),
+                  onPressed: () {
+                    setState(() => _apiBaseUrl.clear());
+                    FocusScope.of(context).requestFocus(_apiUrlFocus);
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
             TextField(
               controller: _apiBaseUrl,
+              focusNode: _apiUrlFocus,
               decoration: InputDecoration(
                 labelText: 'URL',
                 helperText:
@@ -568,15 +614,34 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             ],
             if (_available != null) ...[
               const SizedBox(height: 12),
-              // Уже добавленные модели из списка доступных пропадают.
+              // Уже добавленные модели из списка доступных пропадают; при
+              // активном поиске остаются только совпавшие по подстроке
+              // (отзыв 25.11, 1cf86141). Список не загружен (_shown пуст) —
+              // работает как раньше.
               Builder(builder: (_) {
                 final used = _models.text.split(RegExp(r'[\r\n]+')).map((e) => e.trim()).toSet();
-                _shown = [for (final m in _available!) if (!used.contains(m)) m];
+                final all = [for (final m in _available!) if (!used.contains(m)) m];
+                final q = _modelSearch.text.trim().toLowerCase();
+                _shown =
+                    q.isEmpty ? all : [for (final m in all) if (m.toLowerCase().contains(q)) m];
                 return const SizedBox.shrink();
               }),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _modelSearch,
+                decoration: InputDecoration(
+                  labelText: tr('Поиск среди доступных моделей'),
+                  prefixIcon: const Icon(Icons.search),
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 8),
               Text(
-                tr('Бесплатные модели сейчас ({p}) — нажмите, чтобы добавить:',
-                    {'p': _shown.length}),
+                _modelSearch.text.trim().isEmpty
+                    ? tr('Бесплатные модели сейчас ({p}) — нажмите, чтобы добавить:',
+                        {'p': _shown.length})
+                    : tr('Найдено по поиску ({p}) — нажмите, чтобы добавить:',
+                        {'p': _shown.length}),
                 style: theme.textTheme.bodySmall,
               ),
               const SizedBox(height: 8),

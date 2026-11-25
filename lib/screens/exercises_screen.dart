@@ -10,6 +10,7 @@ import '../services/supabase_service.dart';
 import '../state/app_data_store.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/glass_pill.dart';
+import '../widgets/stance_icon.dart';
 import '../widgets/swipe_to_delete.dart';
 import 'exercise_editor_screen.dart';
 import 'trainings_history_screen.dart';
@@ -125,6 +126,8 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
                       totalShots: ex.totalShots,
                       seriesSize: ex.seriesSize,
                       series: ex.series,
+                      stance: _stanceFor(ex),
+                      weapon: _weaponFor(face),
                       onTap: () => Navigator.of(context).push(
                         MaterialPageRoute(
                             builder: (_) =>
@@ -255,6 +258,8 @@ class _ExerciseCard extends StatelessWidget {
 
   /// Описание серий. Пустой список — упражнение старого вида.
   final List<SeriesSpec> series;
+  final StanceKind stance;
+  final WeaponKind weapon;
   final VoidCallback onTap;
   final VoidCallback onRename;
   final VoidCallback onMerge;
@@ -267,6 +272,8 @@ class _ExerciseCard extends StatelessWidget {
     required this.totalShots,
     required this.seriesSize,
     required this.series,
+    required this.stance,
+    required this.weapon,
     required this.onTap,
   });
 
@@ -292,8 +299,15 @@ class _ExerciseCard extends StatelessWidget {
                   color: cs.primaryContainer,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(Icons.gps_fixed,
-                    size: 20, color: cs.onPrimaryContainer),
+                child: Center(
+                  child: StanceIcon(
+                    size: 24,
+                    stance: stance,
+                    weapon: weapon,
+                    color: cs.onPrimaryContainer,
+                    semanticLabel: tr('Изготовка'),
+                  ),
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -363,6 +377,62 @@ class _ExerciseCard extends StatelessWidget {
     );
   }
 }
+
+/// Изготовка для значка карточки упражнения (отзыв a69f8d83).
+///
+/// Признаки, которые реально есть в данных упражнения:
+/// - три положения по названию: «3 положения», «три положения», «3П»,
+///   «3×40»/«3x20» (стартовый набор: «Винтовка 50 м, 3 положения — …»,
+///   нормативы: «МВ-3×40»); либо свободная структура серий, где по названиям
+///   серий встречаются все три изготовки («лёжа», «с колена», «стоя» —
+///   слова те же, что в `stanceFromName` из finals/bot.dart);
+/// - одиночная изготовка — теми же словами в названии, затем в названиях серий.
+/// Признаков не хватает — характерное значение по умолчанию: standing.
+StanceKind _stanceFor(Exercise ex) {
+  final name = '${ex.name} ${ex.shownName}'.toLowerCase();
+  if (name.contains('3 полож') ||
+      name.contains('три полож') ||
+      name.contains('3п') ||
+      RegExp(r'3\s*[×x]').hasMatch(name)) {
+    return StanceKind.allThree;
+  }
+  var prone = false, kneeling = false, standing = false;
+  for (final spec in ex.series) {
+    final s = spec.name.toLowerCase();
+    if (s.contains('лёж')) prone = true;
+    if (s.contains('колен')) kneeling = true;
+    if (s.contains('стоя') || s.contains('стойк')) standing = true;
+  }
+  if (prone && kneeling && standing) return StanceKind.allThree;
+  // Одиночная изготовка — по названию упражнения, затем по названиям серий.
+  return _stanceOfWord(name) ?? _stanceOfSeries(ex.series) ?? StanceKind.standing;
+}
+
+StanceKind? _stanceOfWord(String s) {
+  if (s.contains('лёж')) return StanceKind.prone;
+  if (s.contains('колен')) return StanceKind.kneeling;
+  if (s.contains('стоя') || s.contains('стойк')) return StanceKind.standing;
+  return null;
+}
+
+StanceKind? _stanceOfSeries(List<SeriesSpec> series) {
+  for (final spec in series) {
+    if (spec.counts) {
+      final found = _stanceOfWord(spec.name.toLowerCase());
+      if (found != null) return found;
+    }
+  }
+  return null;
+}
+
+/// Оружие для значка — по коду мишени, как и во всём приложении
+/// (`UserProfile.exerciseRelevant` различает дисциплины префиксом «pistol»);
+/// IPSC тоже считается пистолетом (`TargetFace.isIpsc` —
+/// «пистолет/ружьё»). Не пистолетная мишень — по умолчанию rifle.
+WeaponKind _weaponFor(TargetFace face) =>
+    face.code.startsWith('pistol') || face.isIpsc
+        ? WeaponKind.pistol
+        : WeaponKind.rifle;
 
 class _MiniChip extends StatelessWidget {
   final String text;

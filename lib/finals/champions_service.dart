@@ -198,6 +198,55 @@ class ChampionsService {
   Future<String?> requestAppeal(String id) => _post('rpc/finals_request_appeal', {'p_id': id});
   Future<String?> voteAppeal(String id) => _post('finals_appeals', {'champion_id': id}, conflict: 'Вы уже голосовали');
 
+  /// RPC пометки на удаление установлен на сервере? Становится false, когда
+  /// сервер ответил 404/PGRST202 (SQL не выполнен) — UI тогда не показывает
+  /// действие вовсе.
+  bool markDeleteSupported = true;
+
+  /// Пометить свой финал на удаление (через 10 минут он исчезнет из публикации)
+  /// или, при [cancel], снять пометку. Возвращает текст ошибки или `null`.
+  Future<String?> markDelete(String id, {bool cancel = false}) async {
+    final token = await auth.ensureFreshToken();
+    if (token == null) return 'Нет входа в мессенджер';
+    final client = http.Client();
+    try {
+      final res = await client.post(
+        Uri.parse('${auth.url}/rest/v1/rpc/finals_champion_mark_delete'),
+        headers: {
+          'apikey': auth.anonKey,
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'p_id': id, 'p_cancel': cancel}),
+      ).timeout(const Duration(seconds: 20));
+      if (res.statusCode == 404 && res.body.contains('PGRST202')) {
+        markDeleteSupported = false;
+        return 'Обновите базу: функция пометки не установлена';
+      }
+      if (res.statusCode < 300) {
+        // Функция возвращает текст ошибки строкой; при успехе — null.
+        final body = utf8.decode(res.bodyBytes).trim();
+        if (body.isNotEmpty && body != 'null') {
+          try {
+            final j = jsonDecode(body);
+            if (j is String && j.isNotEmpty) return j;
+          } catch (_) {}
+        }
+        return null;
+      }
+      return 'Сервер: ${res.statusCode}';
+    } catch (_) {
+      return 'Нет сети';
+    } finally {
+      client.close();
+    }
+  }
+
+  /// Мои финалы, помеченные на удаление (владелец видит их до снятия пометки
+  /// и после истечения её срока — политика champions_owner_read).
+  Future<List<Map<String, dynamic>>> myMarked() =>
+      _get('user_id=eq.${auth.userId}&delete_at=not.is.null&order=delete_at.asc');
+
   /// Короткое объяснение отказа сервера: код и сообщение базы (если есть).
   String _explain(http.Response res) {
     var detail = '';
