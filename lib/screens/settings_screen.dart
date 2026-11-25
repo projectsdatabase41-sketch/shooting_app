@@ -25,7 +25,6 @@ import '../services/knowledge_column_discovery.dart';
 import '../services/supabase_auth_service.dart';
 import '../i18n/i18n.dart';
 import 'network_diagnostics_screen.dart';
-import 'voice_settings_screen.dart';
 import 'screen_buttons_settings_screen.dart';
 import '../state/app_data_store.dart';
 import '../state/home_tabs_view_model.dart';
@@ -177,13 +176,9 @@ class SettingsScreen extends StatelessWidget {
               onChanged: (v) => EconomyMode.set(store.db, v),
             ),
           ),
-          ListTile(
-            leading: const Icon(Icons.mic_none),
-            title: Text(tr('Голосовое управление')),
-            subtitle: Text(tr('Команды голосом: разделы, тренировка, заметки')),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => VoiceSettingsScreen(db: store.db))),
-          ),
+          // Голосовое управление переехало в «Модули» (отзыв 25.11,
+          // 05337c42: «лучше добавить в блок модули»). Отдельной плитки здесь
+          // больше нет — настройки открываются из строки модуля.
           // Новости и PDF-инструменты здесь больше НЕ дублируются: это
           // модули (AppModule.news / AppModule.pdf) со своими плитками на
           // главном экране — включаются и выключаются в «Модулях». Дважды

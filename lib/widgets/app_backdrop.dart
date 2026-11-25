@@ -65,12 +65,17 @@ class _AppBackdropState extends State<AppBackdrop> {
       return Stack(fit: StackFit.expand, children: [ColoredBox(color: Theme.of(context).scaffoldBackgroundColor), widget.child]);
     }
     return Stack(fit: StackFit.expand, children: [
+      // Отзыв 25.11 (102eae18): фон раздела — на всю высоту Stack, включая
+      // статус-бар и зону под прозрачной шапкой. Никаких SafeArea/отступов
+      // сверху для обоев: отступы для контента задают сами экраны.
       // Обои — слои (см. theme/wallpaper.dart): рисуются по размеру всего окна и по центру,
       // чтобы бесшовно продолжаться на боковых полях широкого экрана (main.dart).
-      OverflowBox(
-        minWidth: w,
-        maxWidth: w,
-        child: SizedBox(width: w, child: Wallpaper(kind: widget.kind)),
+      Positioned.fill(
+        child: OverflowBox(
+          minWidth: w,
+          maxWidth: w,
+          child: SizedBox(width: w, child: Wallpaper(kind: widget.kind)),
+        ),
       ),
       widget.child,
     ]);

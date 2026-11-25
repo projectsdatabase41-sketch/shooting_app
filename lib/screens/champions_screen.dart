@@ -76,7 +76,10 @@ class _ChampionsScreenState extends State<ChampionsScreen> {
 
   /// Загрузка чемпионов выбранного упражнения (с нуля или следующей страницей).
   Future<void> _loadChamps({bool more = false}) async {
-    if (_busy) return;
+    // Отзыв 25.11 (crash 66eb7239): страницу могли закрыть до первого
+    // кадра — `setState` на снятом State ронял экран с «Null check
+    // operator used on a null value» (framework.dart:1219).
+    if (!mounted || _busy) return;
     setState(() => _busy = true);
     final page = await _svc.champions(_fmt, q: _q, offset: more ? _rows.length : 0,
         gender: _gender,

@@ -25,7 +25,7 @@ import '../state/exercise_detail_view_model.dart';
 import '../state/personalization_view_model.dart';
 import '../state/target_view_model.dart';
 import '../theme/app_theme.dart';
-import '../widgets/analytics_bento.dart';import '../widgets/analytics_panel.dart' show AnalyticsDynamics;
+import '../widgets/analytics_panel.dart' show AnalyticsDynamics;
 import '../widgets/comments_thread.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/section_header.dart';
@@ -213,6 +213,11 @@ class _DetailBodyState extends State<_DetailBody> {
               _buildBlock(context, block, showSeriesBlock: true),
               const SizedBox(height: 16),
             ],
+            // В узкой раскладке списка выстрелов нет нигде, кроме этой
+            // карточки: на широком экране его заменила лента SIUS справа
+            // (отзыв 25.11, cb00e7a5), но удалять/помечать выстрелы
+            // по-прежнему нужно (там же — избранное и комментарии).
+            _ShotsListBlock(onChanged: _onShotEdited),
           ],
         ),
       );
@@ -246,7 +251,16 @@ class _DetailBodyState extends State<_DetailBody> {
             child: SingleChildScrollView(
               physics: scrollPhysics,
               padding: EdgeInsets.fromLTRB(12, topInset + GlassHeader.height + 4, 0, 24),
-              child: _TargetBlock(faceRadiusHeight: targetCanvasHeight),
+              // «Результат по сериям» — сразу под мишенью и колесом, а не в
+              // правой колонке (отзыв 25.11, a0d4d65c).
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _TargetBlock(faceRadiusHeight: targetCanvasHeight),
+                  const SizedBox(height: 12),
+                  _SeriesBlock(session: session, face: widget.face),
+                ],
+              ),
             ),
           ),
           Expanded(
@@ -262,9 +276,15 @@ class _DetailBodyState extends State<_DetailBody> {
                 // правой колонке — панель со списком выстрелов, суммами
                 // серий и числом центральных. Обратного отсчёта здесь нет —
                 // тренировка уже прошла; показываем прошедшее время.
-                SizedBox(height: 280, child: _siusPanel(context, session)),
-                const SizedBox(height: 16),
-                _ShotsListBlock(onChanged: _onShotEdited),
+                // Лента выстрелов — одна на всю правую колонку (отзыв 25.11,
+                // cb00e7a5: «список выстрелов вертикальной лентой + суммы
+                // серий после каждой, пристрелку не считать»). Второй,
+                // отдельный список ниже больше не нужен — он дублировал те
+                // же выстрелы (было: панель 280 px + _ShotsListBlock).
+                SizedBox(
+                  height: math.max(280.0, size.height - topInset - GlassHeader.height - 80),
+                  child: _siusPanel(context, session),
+                ),
                 const SizedBox(height: 16),
                 for (final block in rightBlocks) ...[
                   _buildBlock(context, block, showSeriesBlock: false),
@@ -902,13 +922,9 @@ class _HistoryAnalyticsPanelState extends State<_HistoryAnalyticsPanel> {
     final mode = modes.isEmpty ? 0 : _mode % modes.length;
 
     final blocks = <(String, Widget)>[
-      ('bento', _block(
-        title: tr('Обзор'),
-        // Одна просматриваемая тренировка — карточки «По месяцам» в
-        // обзоре нет (отзыв владельца 22.11, п. 2).
-        subtitle: tr('Итог, серии и габариты — по одному взгляду'),
-        child: AnalyticsBento(shots: shots, face: face, dynamics: modes, showMonths: false),
-      )),
+      // Блок «Обзор» удалён (отзывы 25.11: 1bffae2d, 953867d4, a0d4d65c —
+      // «блоки обзор убрать вообще, это лишнее»): те же итоги уже есть в
+      // панели SIUS справа и в блоках динамики/СТП ниже.
       if (modes.isNotEmpty)
         ('dynamics', _block(
           title: modes[mode].title,

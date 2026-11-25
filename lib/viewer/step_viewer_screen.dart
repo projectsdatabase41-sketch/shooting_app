@@ -39,6 +39,12 @@ class StepViewerScreen extends StatefulWidget {
 }
 
 class _StepViewerScreenState extends State<StepViewerScreen> {
+  // Отзыв 25.11 (54136573): адрес модели не показываем. Ссылка/Drive-id
+  // живут только в [_url] и уходят напрямую в загрузку (страница вьюера
+  // с ?url= или мост NexusViewer.load) — в интерфейсе их нет: заголовок
+  // шапки нейтральный («3D-модель»), подписей с URL/именем файла нет
+  // (Text, tooltip, Semantics проверены); ошибки WebView приходят уже
+  // с вырезанными ссылками (_redactLinks в step_viewer_io.dart).
   String? _url;
 
   /// Мост к `window.NexusViewer`. Появляется, когда страница вьюера
@@ -177,6 +183,11 @@ class _StepViewerScreenState extends State<StepViewerScreen> {
       // пересчитывала размер и перерисовывала 3D-сцену (отзыв 24.11,
       // п.2 — «дёргание» интерфейса при открытии клавиатуры).
       resizeToAvoidBottomInset: false,
+      // Отзыв 25.11 (102eae18): обои рисуем на всю высоту, включая
+      // статус-бар и зону под прозрачной шапкой; раньше тело с фоном
+      // начиналось под шапкой, и эта полоса была залита цветом
+      // персонализации. Отступ сверху — только у содержимого (см. body).
+      extendBodyBehindAppBar: true,
       // Шапка нужна только когда экран открыт отдельной страницей (старый
       // путь из каталога): тогда без кнопки «назад» вернуться нельзя. В
       // основном пути — вкладка общего меню, шапка-страница не нужна, и
@@ -189,19 +200,28 @@ class _StepViewerScreenState extends State<StepViewerScreen> {
           : null,
       body: AppBackdrop(
         kind: 'settings',
-        child: _ViewerBody(
-          key: ValueKey('viewer-page-$_pageVersion'),
-          modelUrl: _url,
-          onJs: (js) {
-            // Мост запоминаем, как только страница вьюера отдала API.
-            if (js != null && mounted) setState(() => _js = js);
-          },
-          // Кнопка «Каталог» в шапке самого вьюера зовёт хендлер NexusApp
-          // (п. C, замечания владельца 24.11) — открываем то же окошко.
-          onOpenCatalog: () {
-            if (!mounted) return;
-            _openCatalog();
-          },
+        // Отступ сверху (статус-бар + шапка) оставляем только контенту:
+        // страница вьюера сидит под шапкой, как раньше, а фон заходит выше.
+        child: Padding(
+          padding: canPop
+              ? EdgeInsets.only(
+                  top: MediaQuery.paddingOf(context).top +
+                      GlassHeader.height)
+              : EdgeInsets.zero,
+          child: _ViewerBody(
+            key: ValueKey('viewer-page-$_pageVersion'),
+            modelUrl: _url,
+            onJs: (js) {
+              // Мост запоминаем, как только страница вьюера отдала API.
+              if (js != null && mounted) setState(() => _js = js);
+            },
+            // Кнопка «Каталог» в шапке самого вьюера зовёт хендлер NexusApp
+            // (п. C, замечания владельца 24.11) — открываем то же окошко.
+            onOpenCatalog: () {
+              if (!mounted) return;
+              _openCatalog();
+            },
+          ),
         ),
       ),
       // Веб: тело — iframe переменного происхождения, наружной шапки у

@@ -35,7 +35,7 @@ class NewsService {
       if (data is! Map) return false;
       final list = _parseList(data['items']);
       if (list.isEmpty) return false;
-      items = list;
+      items = _clean(list);
       updatedAt = '${data['updatedAt'] ?? ''}';
       return true;
     } catch (_) {
@@ -75,7 +75,7 @@ class NewsService {
       final list = _parseList(data['items']);
       // Сервер отдал пустой список — это не повод затирать показанное.
       if (list.isEmpty) return;
-      items = list;
+      items = _clean(list);
       updatedAt = '${data['updatedAt'] ?? ''}';
       lastRefreshFailed = false;
       if (db != null) {
@@ -106,6 +106,70 @@ class NewsService {
           ))
       .where((i) => i.title.isNotEmpty)
       .toList();
+
+  // Отзыв 25.11 (eabeec17): дубли из двух источников.
+  /// Лента собирается из двух источников: воркер отдаёт сетевой ответ, а
+  /// до его прихода показан кэш — одну и ту же новость разные источники
+  /// дают с разными хвостами ссылки или слегка разными заголовками.
+  /// Убираем дубликаты по нормализованной ссылке и по заголовку, оставляя
+  /// первый (самый свежий) экземпляр, и сортируем по дате — новые сверху.
+  /// Дата приходит строкой: парсим мягко (DateTime.tryParse), существующий
+  /// показ (`_shortDate` в news_screen.dart обрезает первые 10 символов)
+  /// не меняется, непарсируемые даты уходят в конец с исходным порядком.
+  static List<NewsItem> _clean(List<NewsItem> list) {
+    final seenLinks = <String>{};
+    final seenTitles = <String>{};
+    final unique = <NewsItem>[];
+    for (final n in list) {
+      final link = _linkKey(n.link);
+      if (link.isNotEmpty && !seenLinks.add(link)) continue;
+      if (!seenTitles.add(_titleKey(n.title))) continue;
+      unique.add(n);
+    }
+    final stamps = [
+      for (final n in unique)
+        DateTime.tryParse(n.date)?.millisecondsSinceEpoch ??
+            -0x7fffffffffffffff
+    ];
+    final order = List<int>.generate(unique.length, (i) => i);
+    // Dart-сортировка нестабильна, поэтому при равных датах сохраняем
+    // исходный порядок по индексу.
+    order.sort((a, b) {
+      final byDate = stamps[b].compareTo(stamps[a]); // новые сверху
+      return byDate != 0 ? byDate : a.compareTo(b);
+    });
+    return [for (final i in order) unique[i]];
+  }
+
+  /// Ключ ссылки: нижний регистр, без схемы, www и завершающих слэшей,
+  /// query-хвосты вида ?utm_... выбрасываются — ссылку из двух источников
+  /// узнаём как одну.
+  static String _linkKey(String raw) {
+    var s = raw.trim().toLowerCase();
+    if (s.isEmpty) return s;
+    s = s.replaceFirst(RegExp(r'^(https?:)?//'), '');
+    s = s.replaceFirst(RegExp(r'^www\.'), '');
+    final hash = s.indexOf('#');
+    if (hash >= 0) s = s.substring(0, hash);
+    final q = s.indexOf('?');
+    if (q >= 0) {
+      final kept = s
+          .substring(q + 1)
+          .split('&')
+          .where((p) => p.isNotEmpty && !p.startsWith('utm_'))
+          .join('&');
+      s = '${s.substring(0, q)}${kept.isEmpty ? '' : '?$kept'}';
+    }
+    while (s.endsWith('/')) {
+      s = s.substring(0, s.length - 1);
+    }
+    return s;
+  }
+
+  /// Ключ заголовка: без регистра и пробелов — один и тот же заголовок от
+  /// разных источников сравниваем как один.
+  static String _titleKey(String raw) =>
+      raw.toLowerCase().replaceAll(RegExp(r'\s+'), '');
 }
 
 /// Клиентский фильтр ленты: источники чекбоксами + слова по заголовку и

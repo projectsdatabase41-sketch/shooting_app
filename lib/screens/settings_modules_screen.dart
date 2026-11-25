@@ -9,6 +9,7 @@ import '../state/home_tabs_view_model.dart';
 import '../widgets/glass_pill.dart';
 import '../widgets/settings_draft_scope.dart';
 import '../widgets/home_tabs_bar.dart';
+import 'voice_settings_screen.dart';
 
 /// «Модули»: все рабочие пространства приложения в одном списке. Режимов
 /// «спортсмен / тренер» нет — каждое пространство принадлежит модулю,
@@ -129,7 +130,15 @@ class _SettingsModulesScreenState extends State<SettingsModulesScreen> {
                 leading: Icon(spec?.icon ?? Icons.circle_outlined),
                 title: Text(id == 'athletes' ? tr('Я тренер') : (spec?.label == null ? id : tr(spec!.label))),
                 subtitle: needs != null ? Text(needs) : (on ? null : Text(tr('выключено'))),
+                // Голосовое управление: модуль включает/выключает голос, а
+                // настройки команд открываются нажатием на строку (отзыв
+                // 25.11, 05337c42 — «в блоке модули»).
+                onTap: id == 'voice'
+                    ? () => Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => VoiceSettingsScreen(db: db)))
+                    : null,
                 trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                  if (id == 'voice') const Icon(Icons.chevron_right),
                   Switch(value: on && needs == null, onChanged: needs != null ? null : (v) => _toggle(id, v, store)),
                 ]),
               ),

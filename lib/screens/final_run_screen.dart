@@ -475,7 +475,10 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
 
   Widget _body(BuildContext context, {required bool wide}) {
     final theme = Theme.of(context);
-    final top = MediaQuery.paddingOf(context).top + GlassHeader.height;
+    // Отзыв 25.11 (4284f0c9, ca854964): между шапкой и мишенью был большой
+    // пустой отступ — тело и так начинается под статус-баром, а шапка
+    // стеклянная и висит поверх содержимого. Оставляем только дыхание 8 px.
+    final top = MediaQuery.paddingOf(context).top + 8;
     final side = _board ? _BoardView(c: c) : _FinalShotList(c: c);
     if (wide) {
       // Отзыв 23.11 №3: мишень слева, список выстрелов/табло справа.
