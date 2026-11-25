@@ -1,8 +1,22 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../i18n/i18n.dart';
 import '../logic/scoring.dart';
 import '../models/target_face.dart';
+
+/// Стрелка смещения выстрела от центра — как в списке на SIUS-мониторе
+/// (фото владельца 24.11: «50 ↘ 10.1», «59 ↑ 9.6»). Восемь направлений;
+/// в «мёртвой зоне» у центра — точка, чтобы стрелки не прыгали на
+/// десятых долях миллиметра. [deadZoneMm] — радиус, внутри которого
+/// направление считается незначимым.
+String siusDirectionArrow(Offset pointMm, {double deadZoneMm = 1.0}) {
+  if (pointMm.distance < deadZoneMm) return '·';
+  final deg = (math.atan2(pointMm.dy, pointMm.dx) * 180 / math.pi + 360) % 360;
+  final oct = (deg / 45).round() % 8;
+  return const ['→', '↗', '↑', '↖', '←', '↙', '↓', '↘'][oct];
+}
 
 /// Один элемент списка выстрелов панели «как SIUS».
 ///
@@ -345,6 +359,19 @@ class _SiusPanelState extends State<SiusPanel> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
+                      // Номер последнего выстрела и его направление — как на
+                      // SIUS, где над крупной оценкой стоит «60» (фото 24.11).
+                      if (last != null)
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            '#${last.number} '
+                            '${siusDirectionArrow(last.point, deadZoneMm: math.max(0.6, widget.face.caliberRadiusMm * 0.5))}',
+                            maxLines: 1,
+                            style: mono(theme.textTheme.labelMedium!.copyWith(
+                                color: cs.onSurfaceVariant)),
+                          ),
+                        ),
                       Expanded(
                         child: Center(
                           child: FittedBox(
@@ -473,6 +500,18 @@ class _ShotLine extends StatelessWidget {
               maxLines: 1,
               style: mono(theme.textTheme.bodyMedium)
                   .copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
+          // Смещение от центра — как на SIUS (фото 24.11, отзыв f6cc163e):
+          // стрелка стоит между номером и отметкой серии.
+          SizedBox(
+            width: 16,
+            child: Text(
+              siusDirectionArrow(row.point, deadZoneMm: math.max(0.6, face.caliberRadiusMm * 0.5)),
+              maxLines: 1,
+              textAlign: TextAlign.center,
+              style: mono(theme.textTheme.bodyMedium)
+                  .copyWith(color: cs.onSurfaceVariant),
             ),
           ),
           if (mark != null)

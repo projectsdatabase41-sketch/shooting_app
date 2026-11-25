@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:http/http.dart' as http;
 
 import 'call_service.dart';
@@ -116,7 +117,12 @@ class NewsService {
   /// Дата приходит строкой: парсим мягко (DateTime.tryParse), существующий
   /// показ (`_shortDate` в news_screen.dart обрезает первые 10 символов)
   /// не меняется, непарсируемые даты уходят в конец с исходным порядком.
-  static List<NewsItem> _clean(List<NewsItem> list) {
+  static List<NewsItem> _clean(List<NewsItem> list) => dedupe(list);
+
+  /// То же, что внутренняя чистка ленты, но доступно тестам: дедупликация
+  /// по ссылке/заголовку и сортировка по дате (отзыв 25.11, eabeec17).
+  @visibleForTesting
+  static List<NewsItem> dedupe(List<NewsItem> list) {
     final seenLinks = <String>{};
     final seenTitles = <String>{};
     final unique = <NewsItem>[];
@@ -128,7 +134,7 @@ class NewsService {
     }
     final stamps = [
       for (final n in unique)
-        DateTime.tryParse(n.date)?.millisecondsSinceEpoch ??
+        _dateMs(n.date) ??
             -0x7fffffffffffffff
     ];
     final order = List<int>.generate(unique.length, (i) => i);
@@ -139,6 +145,41 @@ class NewsService {
       return byDate != 0 ? byDate : a.compareTo(b);
     });
     return [for (final i in order) unique[i]];
+  }
+
+  /// Дата новости → миллисекунды UTC. Лента приходит в формате RSS/RFC-822
+  /// («Tue, 24 Nov 2026 10:00:00 +0000»), который `DateTime.parse` не
+  /// понимает: до этой правки все даты выходили null и сортировка по дате
+  /// фактически не работала (отзыв eabeec17).
+  static int? _dateMs(String raw) {
+    final iso = DateTime.tryParse(raw);
+    if (iso != null) return iso.millisecondsSinceEpoch;
+    final m = RegExp(
+            r'(\d{1,2})\s+([A-Za-z]{3})[A-Za-z]*\s+(\d{4})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?\s*([+-]\d{4})?')
+        .firstMatch(raw);
+    if (m == null) return null;
+    const months = {
+      'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+      'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
+    };
+    final mon = months[m.group(2)!.toLowerCase()];
+    if (mon == null) return null;
+    var dt = DateTime.utc(
+      int.parse(m.group(3)!),
+      mon,
+      int.parse(m.group(1)!),
+      int.parse(m.group(4)!),
+      int.parse(m.group(5)!),
+      int.tryParse(m.group(6) ?? '') ?? 0,
+    );
+    final off = m.group(7);
+    if (off != null && off.length == 5) {
+      final sign = off.startsWith('-') ? -1 : 1;
+      final h = int.parse(off.substring(1, 3));
+      final min = int.parse(off.substring(3, 5));
+      dt = dt.subtract(Duration(minutes: sign * (h * 60 + min)));
+    }
+    return dt.millisecondsSinceEpoch;
   }
 
   /// Ключ ссылки: нижний регистр, без схемы, www и завершающих слэшей,

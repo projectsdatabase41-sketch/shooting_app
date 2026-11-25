@@ -259,4 +259,18 @@ void main() {
       }
     });
   });
+
+  // Отзыв f6cc163e (фото SIUS): у каждой строки — стрелка смещения от
+  // центра, в «мёртвой зоне» — точка.
+  test('стрелка смещения: восемь направлений и мёртвая зона у центра', () {
+    expect(siusDirectionArrow(const Offset(5, 0), deadZoneMm: 0.6), '→');
+    expect(siusDirectionArrow(const Offset(4, 4), deadZoneMm: 0.6), '↗');
+    expect(siusDirectionArrow(const Offset(0, 5), deadZoneMm: 0.6), '↑');
+    expect(siusDirectionArrow(const Offset(-4, 4), deadZoneMm: 0.6), '↖');
+    expect(siusDirectionArrow(const Offset(-5, 0), deadZoneMm: 0.6), '←');
+    expect(siusDirectionArrow(const Offset(-4, -4), deadZoneMm: 0.6), '↙');
+    expect(siusDirectionArrow(const Offset(0, -5), deadZoneMm: 0.6), '↓');
+    expect(siusDirectionArrow(const Offset(4, -4), deadZoneMm: 0.6), '↘');
+    expect(siusDirectionArrow(const Offset(0.2, -0.1), deadZoneMm: 0.6), '·');
+  });
 }
