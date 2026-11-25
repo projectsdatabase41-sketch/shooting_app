@@ -1,8 +1,12 @@
 import 'dart:convert';
-import 'dart:io' show File;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
+
+// Локальные файлы вложений читаются только на мобильных/десктопе; отдельный
+// файл нужен, чтобы `dart:io` не попадал в веб-сборку (deploy-web).
+import 'chat_ai_export_local_web.dart'
+    if (dart.library.io) 'chat_ai_export_local_io.dart';
 
 import '../i18n/i18n.dart' show tr;
 import '../logic/friendly_error.dart';
@@ -565,13 +569,7 @@ class ChatAiExport {
       }
     }
     if (!kIsWeb && m.attachmentLocalPath != null && m.attachmentLocalPath!.isNotEmpty) {
-      try {
-        final f = File(m.attachmentLocalPath!);
-        if (await f.exists()) {
-          final bytes = await f.readAsBytes();
-          if (bytes.length <= ChatDriveBackup.maxFileBytes) return bytes;
-        }
-      } catch (_) {}
+      return readLocalBytes(m.attachmentLocalPath!, maxBytes: ChatDriveBackup.maxFileBytes);
     }
     return null;
   }

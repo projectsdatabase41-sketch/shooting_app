@@ -135,7 +135,10 @@ class NewsService {
     final stamps = [
       for (final n in unique)
         _dateMs(n.date) ??
-            -0x7fffffffffffffff
+            // Без даты — в конец. Число обязано точно представиться в
+            // JavaScript: 2^53−1 — максимум безопасного целого (веб-сборка
+            // падала на 0x7fffffffffffffff, отзыв 25.11).
+            -9007199254740991
     ];
     final order = List<int>.generate(unique.length, (i) => i);
     // Dart-сортировка нестабильна, поэтому при равных датах сохраняем
