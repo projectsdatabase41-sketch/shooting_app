@@ -33,6 +33,12 @@ void main() {
       rng: math.Random(1),
     );
     addTearDown(c.dispose);
+    // Портретная ориентация задаётся явно: в горизонтали шапки нет (отзыв
+    // 23fb17fd), а тест проверяет кнопку «Табло» именно в шапке.
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     await tester.binding.setSurfaceSize(const Size(400, 800));
     await tester.pumpWidget(ChangeNotifierProvider<AppDataStore>.value(
       value: store,

@@ -862,7 +862,9 @@ class _ShotsListSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final shots = vm.session.countingShots;
+    // Отзыв f8cda488: пристрелочные выстрелы тоже показываем в списке —
+    // отдельной группой «Пристрелка» и без попадания в итог.
+    final shots = vm.session.shots;
     if (shots.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 4),
@@ -877,7 +879,7 @@ class _ShotsListSection extends StatelessWidget {
     // начинается другая, и где именно просел результат.
     final bySeries = <int, List<dynamic>>{};
     for (final s in shots) {
-      bySeries.putIfAbsent(s.seriesNo, () => []).add(s);
+      bySeries.putIfAbsent(s.counts ? s.seriesNo : -1, () => []).add(s);
     }
     final seriesNos = bySeries.keys.toList()..sort();
 
@@ -892,14 +894,17 @@ class _ShotsListSection extends StatelessWidget {
         sum += (s.score as double);
         whole += (s.score as double).floor();
       }
-      totalTenths += sum;
-      totalWhole += whole;
+      final sightingGroup = n < 0;
+      if (!sightingGroup) {
+        totalTenths += sum;
+        totalWhole += whole;
+      }
       blocks.add(Padding(
         padding: const EdgeInsets.only(top: 10, bottom: 2),
         child: Row(
           children: [
             Text(
-              tr('Серия {n}', {'n': n}),
+              sightingGroup ? tr('Пристрелка') : tr('Серия {n}', {'n': n}),
               style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
             const Spacer(),

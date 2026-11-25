@@ -66,6 +66,9 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
 
   FinalRunController get c => widget.controller;
 
+  /// Зум мишени, переживающий поворот экрана (отзыв 0ecf7a6c).
+  final ValueNotifier<double> _padScale = ValueNotifier<double>(1);
+
   @override
   void initState() {
     super.initState();
@@ -115,6 +118,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
     VoiceControl.instance.unregister(this);
     FinalsAnnouncer.stop();
     _timer?.cancel();
+    _padScale.dispose();
     c.removeListener(_onChange);
     super.dispose();
   }
@@ -298,7 +302,11 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
       },
       child: Scaffold(
         extendBodyBehindAppBar: true,
-        appBar: GlassHeader(
+        // Отзыв 23fb17fd: в горизонтали шапку убираем — она отнимает высоту
+        // у мишени; управление переезжает в строку действий внизу.
+        appBar: MediaQuery.orientationOf(context) == Orientation.landscape
+            ? null
+            : GlassHeader(
           // «Назад»: с табло — на личный монитор, оттуда — выход из финала.
           leading: IconButton(
             tooltip: tr('Назад'),
@@ -381,6 +389,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
             onHold: (_) {},
             onShot: _onShot,
             sighting: sighting,
+            scaleNotifier: _padScale,
           ),
         ),
         if (sighting)
@@ -466,6 +475,28 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
         icon: const Icon(Icons.undo),
         label: Text(tr('Назад')),
       ),
+      // В горизонтали шапки нет: переключатель табло, пауза и выход живут
+      // здесь, левым блоком (отзывы 23fb17fd, 66ae8063).
+      if (wide) ...[
+        IconButton(
+          tooltip: _board ? tr('Мой экран') : tr('Табло зрителей'),
+          icon: Icon(_board ? Icons.person : Icons.tv),
+          onPressed: () => setState(() => _board = !_board),
+        ),
+        GestureDetector(
+          onLongPress: c.paused ? null : () => c.pause(long: true),
+          child: IconButton(
+            tooltip: c.paused ? tr('Продолжить') : tr('Пауза'),
+            icon: Icon(c.paused ? Icons.play_arrow : Icons.pause),
+            onPressed: c.paused ? c.resume : c.pause,
+          ),
+        ),
+        IconButton(
+          tooltip: tr('Покинуть финал'),
+          icon: const Icon(Icons.logout),
+          onPressed: _leave,
+        ),
+      ],
     ];
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 8, 4),
@@ -552,13 +583,23 @@ class ShotPad extends StatefulWidget {
 
   /// Идёт пристрелка: на бумаге рисуется загнутый уголок, как на бланке.
   final bool sighting;
-  const ShotPad({required this.face, required this.marks, required this.enabled, required this.onHold, required this.onShot, this.colors, this.lockCenter = false, this.sighting = false});
+  /// Масштаб мишени живёт снаружи: при повороте экрана дерево перестраивается
+  /// (широкая/узкая раскладка), состояние виджета уничтожается, а выбранный
+  /// зум должен остаться (отзыв 0ecf7a6c).
+  final ValueNotifier<double>? scaleNotifier;
+  const ShotPad({required this.face, required this.marks, required this.enabled, required this.onHold, required this.onShot, this.colors, this.lockCenter = false, this.sighting = false, this.scaleNotifier});
 
   @override
   State<ShotPad> createState() => _ShotPadState();
 }
 
 class _ShotPadState extends State<ShotPad> {
+  @override
+  void initState() {
+    super.initState();
+    // Зум, выбранный до поворота экрана, восстанавливается из notifier.
+    _scale = widget.scaleNotifier?.value ?? 1;
+  }
   /// Увеличение лупы: шаг десятой доли занимает ~4,5 пикселя (мягче, чем
   /// раньше: сильное увеличение «убегало» из-под пальца).
   double get _zoom => (4.5 * widget.face.faceRadiusMm / (_stepMm * _loupe / 2)).clamp(3.0, 24.0);
@@ -603,6 +644,7 @@ class _ShotPadState extends State<ShotPad> {
   void _setScale(double v, Size s) {
     setState(() {
       _scale = v.clamp(1.0, _maxScale).toDouble();
+      widget.scaleNotifier?.value = _scale;
       _pan = _clampPan(_pan, s);
     });
   }
@@ -687,6 +729,7 @@ class _ShotPadState extends State<ShotPad> {
       _suppressShot = true;
       setState(() {
         _scale = 1;
+        widget.scaleNotifier?.value = 1;
         _pan = Offset.zero;
       });
       return;
@@ -1365,13 +1408,20 @@ class FinalResultScreen extends StatelessWidget {
     }
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      child: DataTable(
-        columnSpacing: 14,
-        headingRowHeight: 36,
-        dataRowMinHeight: 34,
-        dataRowMaxHeight: 34,
-        columns: [for (final c in cols) DataColumn(label: Text(c, style: theme.textTheme.labelMedium))],
-        rows: rows,
+      // Отзыв 41805e2d: таблицу итогов можно приблизить — на телефоне
+      // мелкие десятые иначе не разобрать. Двойное касание/щипок, до 4×.
+      child: InteractiveViewer(
+        maxScale: 4,
+        minScale: 1,
+        boundaryMargin: const EdgeInsets.all(24),
+        child: DataTable(
+          columnSpacing: 14,
+          headingRowHeight: 36,
+          dataRowMinHeight: 34,
+          dataRowMaxHeight: 34,
+          columns: [for (final c in cols) DataColumn(label: Text(c, style: theme.textTheme.labelMedium))],
+          rows: rows,
+        ),
       ),
     );
   }
