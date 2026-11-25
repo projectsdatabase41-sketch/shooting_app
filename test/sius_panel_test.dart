@@ -164,7 +164,7 @@ void main() {
           seriesLabel: 'Серия 2 из 2',
         ),
       );
-      expect(find.textContaining('S1 101.1'), findsOneWidget);
+      expect(find.textContaining('101.1-1x'), findsOneWidget);
       // Незавершённая серия не суммируется.
       expect(find.textContaining('S2'), findsNothing);
       // Итог: сумма всей тренировки (111.3), после тире — число центральных (2)
@@ -188,7 +188,7 @@ void main() {
       expect(find.text('Серия 1'), findsOneWidget);
       expect(find.text('Серия 2'), findsOneWidget);
       // Метка закрытия серии «S10»-вида: в серии по 2 выстрела.
-      expect(find.text('S2'), findsOneWidget);
+      expect(find.text('20.0-0x'), findsOneWidget);
     });
 
     testWidgets('пристрелка: «последние 5» и MPI вместо сумм и Σ', (tester) async {

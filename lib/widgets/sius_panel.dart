@@ -8,11 +8,12 @@ import '../models/target_face.dart';
 
 /// Стрелка смещения выстрела от центра — как в списке на SIUS-мониторе
 /// (фото владельца 24.11: «50 ↘ 10.1», «59 ↑ 9.6»). Восемь направлений;
-/// в «мёртвой зоне» у центра — точка, чтобы стрелки не прыгали на
-/// десятых долях миллиметра. [deadZoneMm] — радиус, внутри которого
-/// направление считается незначимым.
-String siusDirectionArrow(Offset pointMm, {double deadZoneMm = 1.0}) {
-  if (pointMm.distance < deadZoneMm) return '·';
+/// точка только у ровного центра 0.0 / 0.0 (отзывы 25a22fd9, 26101bc8:
+/// направление привязано к координатам, а не к «центральному» выстрелу,
+/// поэтому 10.7 со смещением тоже получает стрелку).
+String siusDirectionArrow(Offset pointMm, {double deadZoneMm = 0}) {
+  if (pointMm.dx == 0 && pointMm.dy == 0) return '·';
+  if (deadZoneMm > 0 && pointMm.distance < deadZoneMm) return '·';
   final deg = (math.atan2(pointMm.dy, pointMm.dx) * 180 / math.pi + 360) % 360;
   final oct = (deg / 45).round() % 8;
   return const ['→', '↗', '↑', '↖', '←', '↙', '↓', '↘'][oct];
@@ -114,6 +115,19 @@ class _SiusPanelState extends State<SiusPanel> {
 
   /// Новые выстрелы приходят снизу: как только список вырос, едем к
   /// последней строке — SIUS-монитор всегда показывает текущий выстрел.
+  /// Автоскролл только когда выстрел ДОБАВИЛСЯ (отзыв 19266344): иначе
+  /// пользователь листает историю, а список прыгает обратно в конец.
+  int _lastShotCount = 0;
+
+  @override
+  void didUpdateWidget(covariant SiusPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.shots.length > _lastShotCount) {
+      _lastShotCount = widget.shots.length;
+      _scrollToLast();
+    }
+  }
+
   void _scrollToLast() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scroll.hasClients || !mounted) return;
@@ -151,23 +165,32 @@ class _SiusPanelState extends State<SiusPanel> {
     return countInSeries >= limits[series - 1];
   }
 
-  /// Сумма по каждой завершённой серии: «S1 104.5 · S2 105.2 …».
+  /// Сумма по каждой завершённой серии в формате владельца (25a22fd9):
+  /// «104.9-6x · 105.2-6x», где после тире — число центральных в серии.
+  /// Раньше писали «S1 104.9», и обозначение серии читалось непонятно.
   String get _seriesSumsText {
     final sumBySeries = <int, double>{};
     final countBySeries = <int, int>{};
+    final pointsBySeries = <int, List<(double, double)>>{};
     for (final s in _counting) {
       sumBySeries[s.series] = (sumBySeries[s.series] ?? 0) + s.score;
       countBySeries[s.series] = (countBySeries[s.series] ?? 0) + 1;
+      (pointsBySeries[s.series] ??= []).add((s.point.dx, s.point.dy));
     }
     final parts = <String>[];
     for (final series in sumBySeries.keys.toList()..sort()) {
       if (series > 0 &&
           _seriesComplete(series, countBySeries[series] ?? 0)) {
-        parts.add('S$series ${sumBySeries[series]!.toStringAsFixed(1)}');
+        parts.add(_seriesSumLabel(
+            sumBySeries[series]!, pointsBySeries[series] ?? const []));
       }
     }
     return parts.join(' · ');
   }
+
+  /// «106.5-6x»: сумма серии и число центральных в ней.
+  String _seriesSumLabel(double sum, List<(double, double)> points) =>
+      '${sum.toStringAsFixed(1)}-${countInnerTenPoints(points, widget.face)}x';
 
   /// Итог под последним выстрелом: «Σ 628.4 — 12», число после тире —
   /// количество центральных выстрелов (геометрический критерий inner ten
@@ -245,19 +268,11 @@ class _SiusPanelState extends State<SiusPanel> {
                   : tr('Серия {n}', {'n': s.series}),
         ));
       }
-      // Отметка серии как на SIUS: 'P' — пристрелочный выстрел; на
-      // последнем выстреле ЗАВЕРШЁННОЙ серии — метка «S10»-вида с числом
-      // выстрелов в неё (владелец 24.11: «номер, значение, отметка серии
-      // P/S10»). У незакрытой серии отметки нет — она ещё не «S».
-      final next = i + 1 < widget.shots.length ? widget.shots[i + 1] : null;
-      String? mark;
-      if (s.sighting) {
-        mark = 'P';
-      } else if (s.series > 0 &&
-          (next == null || _groupOf(next) != s.series) &&
-          _seriesComplete(s.series, countIn(s.series))) {
-        mark = 'S${countIn(s.series)}';
-      }
+      // Отметка: 'P' — пристрелочный выстрел. Отметку закрытия серии
+      // больше не пишем (отзыв 25a22fd9: «Sn не надо»): сумма с числом
+      // центральных «106.5-6x» стоит в нижней строке серий, дублировать
+      // её в каждой строке незачем.
+      final String? mark = s.sighting ? 'P' : null;
       final isLast = i == widget.shots.length - 1;
       children.add(_ShotLine(
         row: s,
@@ -366,7 +381,7 @@ class _SiusPanelState extends State<SiusPanel> {
                           fit: BoxFit.scaleDown,
                           child: Text(
                             '#${last.number} '
-                            '${siusDirectionArrow(last.point, deadZoneMm: math.max(0.6, widget.face.caliberRadiusMm * 0.5))}',
+                            '${siusDirectionArrow(last.point)}',
                             maxLines: 1,
                             style: mono(theme.textTheme.labelMedium!.copyWith(
                                 color: cs.onSurfaceVariant)),
@@ -507,7 +522,7 @@ class _ShotLine extends StatelessWidget {
           SizedBox(
             width: 16,
             child: Text(
-              siusDirectionArrow(row.point, deadZoneMm: math.max(0.6, face.caliberRadiusMm * 0.5)),
+              siusDirectionArrow(row.point),
               maxLines: 1,
               textAlign: TextAlign.center,
               style: mono(theme.textTheme.bodyMedium)

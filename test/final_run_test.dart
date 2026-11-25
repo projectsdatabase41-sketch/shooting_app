@@ -340,7 +340,7 @@ void main() {
     expect(c.live.first.avg, 0);
   });
 
-  test('живой рейтинг — по сумме на контрольной точке (ISSF 2026 / владелец 24.11), средний выстрел — подпись', () {
+  test('живой рейтинг — по среднему выстрелу (отзыв 201f5e91), сумма — только при равенстве', () {
     final face = TargetFace.rifle10m;
     final competitors = [
       FinalCompetitor('a', 'A', isUser: true),
@@ -368,9 +368,11 @@ void main() {
     for (var i = 0; i < 5; i++) {
       c.submitShotFor('h', 3.0, 0);
     }
-    expect(c.live[0].c.id, 'h'); // сумма решает
-    expect(c.live[1].c.id, 'a');
-    expect(c.live[1].avg, greaterThan(c.live[0].avg)); // средний сохранился как подпись
+    // A: один точный выстрел (средний выше); H: пять похуже, но сумма больше.
+    // С 25.11 место считается по среднему (отзыв 201f5e91), поэтому впереди A.
+    expect(c.live[0].c.id, 'a');
+    expect(c.live[1].c.id, 'h');
+    expect(c.live[0].avg, greaterThan(c.live[1].avg));
   });
 
   test('несколько людей: каждый ставит свои выстрелы, раунд ждёт всех, нули за неотмеченное', () {

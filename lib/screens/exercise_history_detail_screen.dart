@@ -232,7 +232,10 @@ class _DetailBodyState extends State<_DetailBody> {
     // Ширину мишени ограничиваем с двух сторон: узкие складни и высокие
     // телефоны в альбомной — слева веером, короткие — не отъедали у
     // правой колонки больше половины экрана.
-    final targetPaneWidth = math.max(280.0, math.min(520.0, size.width * 0.42));
+    // Отзыв b4868a41: мишень ~70% ширины, список выстрелов ~30% справа.
+    // Ограничиваем разумно: на узких экранах не меньше 240 px, но не больше
+    // 70% ширины.
+    final targetPaneWidth = math.max(240.0, math.min(0.7 * size.width, 640.0));
     final targetCanvasHeight = math.max(
       240.0,
       math.min(targetPaneWidth, size.height * 0.7),

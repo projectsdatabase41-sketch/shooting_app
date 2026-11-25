@@ -150,8 +150,10 @@ class _FinalsScreenState extends State<FinalsScreen> {
                       if (ok == true) setState(() => repo.delete(r.id));
                     },
                   ),
-                  onTap: () => Navigator.of(context)
-                      .push(MaterialPageRoute(builder: (_) => FinalResultScreen(record: r.data))),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                      // Отзыв 82e01b13: при открытии итогов из списка финалов
+                      // результат не озвучиваем — это просмотр, а не финиш.
+                      builder: (_) => FinalResultScreen(record: r.data, announce: false))),
                 ),
               ),
         ],

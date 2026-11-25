@@ -122,6 +122,8 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
   /// «Готов»: только теперь идёт отсчёт — начинается пристрелка (5 минут), звучит «Пристрелка», затем команды.
   void _begin() {
     if (_started) return;
+    // Проба до «Готов» не идёт в пристрелку (отзыв ac4c4f27).
+    c.clearPreparationShots();
     setState(() => _started = true);
     _timer = SecondTicker(c.tick)..start();
   }
@@ -325,10 +327,19 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
               icon: Icon(_board ? Icons.person : Icons.tv),
               onPressed: () => setState(() => _board = !_board),
             ),
-            IconButton(
-              tooltip: c.paused ? tr('Продолжить') : tr('Пауза'),
-              icon: Icon(c.paused ? Icons.play_arrow : Icons.pause),
-              onPressed: c.paused ? c.resume : c.pause,
+            // Удержание паузы — долгая (судьинская) пауза до «Продолжить»:
+            // отзывы 7c58a3e2 и 4013c8db (в т.ч. при исчерпанном лимите).
+            GestureDetector(
+              onLongPress: c.paused ? null : () => c.pause(long: true),
+              child: IconButton(
+                tooltip: c.paused
+                    ? tr('Продолжить')
+                    : tr('Пауза (удержать — долгая пауза)'),
+                icon: Icon(c.paused
+                    ? Icons.play_arrow
+                    : (c.longPaused ? Icons.pause_circle : Icons.pause)),
+                onPressed: c.paused ? c.resume : c.pause,
+              ),
             ),
             IconButton(
               tooltip: tr('Покинуть финал'),
@@ -489,7 +500,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
         SizedBox(height: top),
         Expanded(
           child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Expanded(flex: 5, child: _padArea(context)),
+            Expanded(flex: 6, child: _padArea(context)),
             Expanded(
               flex: 4,
               child: _board
@@ -502,6 +513,9 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
             ),
           ]),
         ),
+        // Отзыв f4362cb2: в горизонтали тоже нужна стрелка «удалить выстрел»
+        // (у нас это «Назад» — отменяет последнюю пробоину) и прочие кнопки.
+        _actionRow(context, wide: true),
       ]);
     }
     if (_board) {
@@ -512,7 +526,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
     return Column(children: [
       SizedBox(height: top),
       Text(c.user.name, style: theme.textTheme.titleSmall),
-      Expanded(flex: 5, child: _padArea(context)),
+      Expanded(flex: 6, child: _padArea(context)),
       _actionRow(context, wide: false),
       Expanded(flex: 4, child: side),
     ]);
@@ -1118,26 +1132,9 @@ class _BoardRow extends StatelessWidget {
                     ),
                     child: Text(tr('Бот'), style: theme.textTheme.labelSmall),
                   ),
-                  // Чем занят бот (отзыв владельца 24.11): отдых, прицеливание
-                  // или перезарядка — пауза между выстрелами видна в статусе.
-                  Builder(builder: (_) {
-                    final st = c.botStageOf(row.c.id);
-                    if (st.isEmpty) return const SizedBox.shrink();
-                    return Flexible(
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 6),
-                        child: Text(
-                          tr(switch (st) {
-                            'aim' => 'целится',
-                            'reload' => 'перезаряжает',
-                            _ => 'отдых',
-                          }),
-                          style: theme.textTheme.labelSmall?.copyWith(color: cs.onSurfaceVariant),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    );
-                  }),
+                  // Чем занят бот больше не показываем (отзыв b513adc5:
+                  // «перезарядка, целится и все остальные действия ботов
+                  // стоит убрать, от них нет смысла») — только метка «Бот».
                 ],
               ]),
               // Места идут по сумме на контрольной точке (ISSF 2026); средний
@@ -1315,7 +1312,17 @@ class FinalResultScreen extends StatelessWidget {
   /// статистики по выстрелам.
   final bool readOnly;
   final String? title;
-  const FinalResultScreen({super.key, required this.record, this.readOnly = false, this.title});
+
+  /// Озвучивать ли итог при открытии. Из списка финалов — нет (отзыв
+  /// 82e01b13), после самого финала — да.
+  final bool announce;
+  const FinalResultScreen({
+    super.key,
+    required this.record,
+    this.readOnly = false,
+    this.title,
+    this.announce = true,
+  });
 
   /// Протокол финала: по каждому участнику суммы серий, одиночные выстрелы
   /// и итог (как в ведомости финалистов).
@@ -1456,7 +1463,7 @@ class FinalResultScreen extends StatelessWidget {
       body: AppBackdrop(kind: 'finals', child: ListView(
         padding: EdgeInsets.fromLTRB(16, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 16, 24),
         children: [
-          if (!readOnly) _ResultVoice(text: _resultSpeech(st)),
+          if (!readOnly && announce) _ResultVoice(text: _resultSpeech(st)),
           _protocol(context, st),
           const SizedBox(height: 12),
           if (!readOnly && mine.isNotEmpty) ...[

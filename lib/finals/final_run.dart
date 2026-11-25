@@ -218,6 +218,14 @@ class FinalRunController extends ChangeNotifier {
     return 'single:${roundIndex - format.seriesShots.length + 1}';
   }
 
+  /// Отзыв ac4c4f27: выстрелы, нащёлканные ДО «Готов» (в подготовке), —
+  /// проба, а не пристрелка. При старте пристрелки со временем убираем их.
+  void clearPreparationShots() {
+    _staged.remove(userId);
+    sightShots.remove(userId);
+    notifyListeners();
+  }
+
   /// Пропустить пристрелку (человек готов).
   void skipSighting() {
     if (phase != RunPhase.sighting) return;
@@ -231,20 +239,36 @@ class FinalRunController extends ChangeNotifier {
   ///
   /// [counted] = false — команда «Стоп» тренера в ручном режиме ([advance]):
   /// это остановка раунда, а не пауза финала, лимит не расходует.
-  void pause({bool counted = true}) {
+  /// Долгая (судьинская) пауза: время стоит, пока не нажали «Продолжить»,
+  /// без автопродолжения через [maxPauseSeconds] (отзывы 7c58a3e2, 4013c8db).
+  bool longPaused = false;
+
+  void pause({bool counted = true, bool long = false}) {
     if (paused || phase == RunPhase.finished) return;
     if (counted) {
       if (pausesLeft <= 0) {
+        if (long) {
+          // Удержание паузы при исчерпанном лимите — принудительная долгая
+          // пауза судьи: она не считается обычной и не идёт с отсчётом.
+          paused = true;
+          longPaused = true;
+          pauseSecondsLeft = null;
+          pauseNotice = tr('Долгая пауза: время пойдёт после «Продолжить»');
+          log.add({'e': 'pause_long_forced', 't': clock});
+          notifyListeners();
+          return;
+        }
         pauseNotice = tr('Лимит пауз исчерпан: не больше 2 за финал');
         log.add({'e': 'pause_denied', 't': clock});
         notifyListeners();
         return;
       }
       pausesLeft--;
-      pauseSecondsLeft = maxPauseSeconds;
+      pauseSecondsLeft = long ? null : maxPauseSeconds;
     }
+    longPaused = long;
     paused = true;
-    pauseNotice = null;
+    pauseNotice = long ? tr('Долгая пауза: время пойдёт после «Продолжить»') : null;
     log.add({'e': 'pause', 't': clock});
     notifyListeners();
   }
@@ -253,6 +277,7 @@ class FinalRunController extends ChangeNotifier {
     pausedBy = null;
     pauseSecondsLeft = null;
     pauseNotice = null;
+    longPaused = false;
     if (!paused) return;
     paused = false;
     log.add({'e': 'resume', 't': clock});
@@ -277,12 +302,8 @@ class FinalRunController extends ChangeNotifier {
     }
     switch (phase) {
       case RunPhase.sighting:
-        // Боты тоже пристреливаются: до 5 выстрелов, примерно раз в 3–6 секунд.
-        for (final e in bots.entries) {
-          final list = sightShots.putIfAbsent(e.key, () => []);
-          if (list.length < 5 && rng.nextInt(5) == 0)
-            list.add(e.value.shotPoint());
-        }
+        // Отзыв cc403ad2: на пристрелке боты НЕ работают — пристрелка только
+        // для своего прицеливания, чужие пробоины на ней не нужны.
         if (--secondsLeft <= 0 && !manual)
           _beginLoading(pauseAfterSighting + 5);
       case RunPhase.loading:
@@ -658,8 +679,11 @@ class FinalRunController extends ChangeNotifier {
       for (final r in rows)
         if (r.c.active) r
     ]..sort((a, b) {
-        final byTotal = b.total.compareTo(a.total);
-        return byTotal != 0 ? byTotal : b.avg.compareTo(a.avg);
+        // Отзыв 201f5e91: место в финале — по среднему выстрелу, а не по
+        // сумме: у участников разное число выстрелов, сумма ставит вперёд
+        // того, кто просто больше успел. Сумма — только при равном среднем.
+        final byAvg = b.avg.compareTo(a.avg);
+        return byAvg != 0 ? byAvg : b.total.compareTo(a.total);
       });
     final out = [
       for (final r in rows)
