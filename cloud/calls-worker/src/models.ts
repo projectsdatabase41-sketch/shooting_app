@@ -31,7 +31,10 @@
 import type { Env } from './index';
 
 /** Корректный id модели: ровно 32 hex-символа (128 бит). */
-const ID_RE = /^[0-9a-f]{32}$/;
+// id моделей — это id файла на Google Диске (буквы в обоих регистрах, цифры,
+// «-» и «_», 20–64 символа). Раньше здесь было строго 32 hex, из-за чего
+// каталог владельца (Drive-id) не проходил проверку (отзыв 26.11).
+const ID_RE = /^[A-Za-z0-9_-]{20,64}$/;
 
 const jsonModel = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -94,7 +97,7 @@ async function openModels(env: Env, data: Uint8Array): Promise<Uint8Array | null
 const KIND_FILE: Record<string, string> = { preview: 'preview.png', glb: 'model.glb', stp: 'model.stp' };
 /** Потолки размеров: AES-GCM целиком расшифровывается в памяти воркера (~128 МБ),
  * поэтому крупные модели не пропускаем — превью 10 МБ, GLB 64 МБ, STEP 32 МБ. */
-const KIND_MAX: Record<string, number> = { preview: 10e6, glb: 64e6, stp: 32e6, catalog: 5e6 };
+const KIND_MAX: Record<string, number> = { preview: 10e6, glb: 96e6, stp: 64e6, catalog: 5e6 };
 
 /** Владелец: сравнение токена с секретом (не строка в коде), через SHA-256 — без утечек по времени. */
 async function adminOk(req: Request, env: Env): Promise<boolean> {
@@ -199,7 +202,7 @@ export async function handleModels(req: Request, env: Env, url: URL): Promise<Re
   }
 
   // Файл модели: только по строгому id и одному из трёх имён.
-  const file = /^\/models\/([0-9a-f]{32})\/(preview\.png|model\.glb|model\.stp)$/.exec(path);
+  const file = new RegExp(`^/models/([A-Za-z0-9_-]{20,64})/(preview\\.png|model\\.glb|model\\.stp)$`).exec(path);
   if (file && req.method === 'GET') {
     const [, id, fname] = file;
     const body = await readModel(env, `models/${id}/${fname}`);
@@ -214,7 +217,7 @@ export async function handleModels(req: Request, env: Env, url: URL): Promise<Re
 
   // Загрузка и удаление — только владельцу.
   if (path === '/models/upload' && req.method === 'POST') return modelsUpload(req, env);
-  const del = /^\/models\/([0-9a-f]{32})$/.exec(path);
+  const del = /^\/models\/([A-Za-z0-9_-]{20,64})$/.exec(path);
   if (del && req.method === 'DELETE') return modelsDelete(req, env, del[1]);
 
   // Любой другой /models/… — 404, чтобы не утекать в «unauthorized» остальных маршрутов.
