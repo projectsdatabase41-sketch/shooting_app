@@ -434,6 +434,12 @@ class KnowledgeService {
     // блок «ИНСТРУКЦИИ ПРИЛОЖЕНИЯ» готовится здесь: ставится ДО сборки
     // промпта и честно сбрасывается, если вопрос сменился на посторонний.
     await AiContext.prepareAppGuide(trimmed);
+    // Отзыв владельца 26.11: если вопрос о приложении, книжные материалы в
+    // контекст не подмешиваем — иначе на «что это за приложение» модель
+    // цитировала случайные страницы книг («Приложение B…», «tags: …»).
+    // Ответ берётся из инструкций приложения (APP GUIDE), а книги — только
+    // если вопрос не про приложение.
+    final appQuestion = AiContext.hasAppGuide;
     if (trimmed.length < minQuestionLength) return const [];
     if (isSmallTalk(trimmed)) return const [];
     final words = withSynonyms(withExtraTerms(keywords(trimmed), extraTerms));
@@ -441,6 +447,8 @@ class KnowledgeService {
 
     final results = <KnowledgeChunk>[];
     for (final (table, baseUrl, token) in await _allTables()) {
+      // Вопрос о приложении — смотрим только инструкции приложения.
+      if (appQuestion && table.name != AiSettings.guideDocsTable) continue;
       // Своя таблица пользователя, в которой по словам вопроса ничего не
       // нашлось («что у меня в заметках?» — слово «заметках» внутри самих
       // заметок не встречается): отдаём её последние записи, иначе ИИ

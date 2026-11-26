@@ -402,16 +402,16 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             ),
           ],
           ]),
-          // Озвучка финалов моделью ИИ — настройки появляются со своим ключом.
-          if (_ownKey)
-            _card([
-              SectionHeader(
-                title: tr('Озвучка финалов'),
-                subtitle: tr('Диктор голосом модели вместо голоса телефона'),
-              ),
-              const SizedBox(height: 12),
-              FinalsVoicePanel(db: _db),
-            ]),
+          // Озвучка финалов: отдельный блок и свой ключ (отзыв владельца
+          // 26.11 — не у каждого ключа есть доступ к моделям озвучки).
+          _card([
+            SectionHeader(
+              title: tr('Озвучка финалов'),
+              subtitle: tr('Диктор голосом модели вместо голоса телефона'),
+            ),
+            const SizedBox(height: 12),
+            FinalsVoicePanel(db: _db),
+          ]),
           _card([
           SectionHeader(
             title: tr('Поиск в интернете'),

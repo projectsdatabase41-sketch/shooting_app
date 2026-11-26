@@ -515,6 +515,64 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
     );
   }
 
+  /// Круглые кнопки управления для горизонтали — слева, там же, где +/− зума
+  /// (отзыв владельца 26.11: «кнопки что снизу … расположить слева … стиль
+  /// круглых кнопок как кнопка назад»).
+  Widget _wideRail(BuildContext context) {
+    final sighting = c.phase == RunPhase.sighting;
+    final marks = _myMarks;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (sighting && !_started)
+          GlassCircleButton(
+            icon: const BoldIcon(Icons.check),
+            tooltip: tr('Готов'),
+            onTap: _begin,
+          ),
+        if (sighting && _started)
+          GlassCircleButton(
+            icon: const BoldIcon(Icons.skip_next),
+            tooltip: tr('Пропустить пристрелку'),
+            onTap: c.skipSighting,
+          ),
+        if (!c.user.active && c.phase != RunPhase.finished)
+          GlassCircleButton(
+            icon: const BoldIcon(Icons.done_all),
+            tooltip: tr('Завершить результат'),
+            onTap: c.fastForward,
+          ),
+        if (c.awaitingResult)
+          GlassCircleButton(
+            icon: const BoldIcon(Icons.close),
+            tooltip: tr('Промах'),
+            onTap: () => c.markMiss(c.userId),
+          ),
+        GlassCircleButton(
+          icon: const BoldIcon(Icons.undo),
+          tooltip: tr('Назад'),
+          onTap: marks.isEmpty ? null : _undo,
+        ),
+        const SizedBox(height: 6),
+        GlassCircleButton(
+          icon: BoldIcon(_board ? Icons.person : Icons.tv),
+          tooltip: _board ? tr('Мой экран') : tr('Табло зрителей'),
+          onTap: () => setState(() => _board = !_board),
+        ),
+        GlassCircleButton(
+          icon: BoldIcon(c.paused ? Icons.play_arrow : Icons.pause),
+          tooltip: c.paused ? tr('Продолжить') : tr('Пауза'),
+          onTap: c.paused ? c.resume : c.pause,
+        ),
+        GlassCircleButton(
+          icon: const BoldIcon(Icons.logout),
+          tooltip: tr('Покинуть финал'),
+          onTap: _leave,
+        ),
+      ],
+    );
+  }
+
   Widget _body(BuildContext context, {required bool wide}) {
     final theme = Theme.of(context);
     // Отзыв 25.11 (4284f0c9, ca854964): между шапкой и мишенью был большой
@@ -530,23 +588,25 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
       return Column(children: [
         SizedBox(height: top),
         Expanded(
-          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Expanded(flex: 6, child: _padArea(context)),
-            Expanded(
-              flex: 4,
-              child: _board
-                  ? side
-                  : Padding(
-                      // Те же отступы, что у мишени рядом.
-                      padding: const EdgeInsets.fromLTRB(0, 2, 8, 2),
-                      child: _siusPanel(),
-                    ),
-            ),
+          child: Stack(children: [
+            Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Expanded(flex: 6, child: _padArea(context)),
+              Expanded(
+                flex: 4,
+                child: _board
+                    ? side
+                    : Padding(
+                        // Те же отступы, что у мишени рядом.
+                        padding: const EdgeInsets.fromLTRB(0, 2, 8, 2),
+                        child: _siusPanel(),
+                      ),
+              ),
+            ]),
+            // Отзывы 23fb17fd, 66ae8063, 26.11: управление — круглыми
+            // кнопками слева, как «Назад» в вертикальном режиме.
+            Positioned(left: 8, bottom: 8, child: _wideRail(context)),
           ]),
         ),
-        // Отзыв f4362cb2: в горизонтали тоже нужна стрелка «удалить выстрел»
-        // (у нас это «Назад» — отменяет последнюю пробоину) и прочие кнопки.
-        _actionRow(context, wide: true),
       ]);
     }
     if (_board) {

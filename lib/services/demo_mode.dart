@@ -1,5 +1,6 @@
 import '../widgets/glass_route.dart';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import '../widgets/glass_pill.dart';
 import 'package:flutter/foundation.dart';
@@ -31,7 +32,16 @@ class DemoMode {
 
   static void load(LocalDbService db) {
     final rows = db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [_key]);
-    enabled.value = rows.isNotEmpty && '${rows.first['hex']}' == '1';
+    if (rows.isEmpty) {
+      // Отзыв владельца 26.11: у новых пользователей кнопка отзывов включена
+      // по умолчанию — иначе люди не находят, как пожаловаться.
+      enabled.value = true;
+      db.db.execute(
+          'INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex',
+          [_key, '1']);
+    } else {
+      enabled.value = '${rows.first['hex']}' == '1';
+    }
     _initDiagnostics(db);
   }
 
@@ -475,7 +485,21 @@ class _DemoFeedbackOverlayState extends State<DemoFeedbackOverlay> {
   /// Недописанный отзыв сохраняется, если окно закрыли (чтобы не терять текст).
   static String _draft = '';
 
-  Offset? _pos; // от правого нижнего угла
+  Offset? _pos; // левый-верхний угол кнопки, переживает перезапуск
+  static const _kPos = 'feedback_btn_pos';
+
+  /// Восстановить позицию кнопки (её можно утащить в любое место экрана).
+  void _loadPos() {
+    final raw = DemoMode._get(_kPos);
+    if (raw.isEmpty) return;
+    final parts = raw.split(',');
+    if (parts.length != 2) return;
+    final x = double.tryParse(parts[0]);
+    final y = double.tryParse(parts[1]);
+    if (x != null && y != null) _pos = Offset(x, y);
+  }
+
+  void _savePos(Offset p) => DemoMode._put(_kPos, '${p.dx.round()},${p.dy.round()}');
 
   Future<void> _open() async {
     final ctx = widget.navigatorKey.currentContext;
@@ -554,6 +578,7 @@ class _DemoFeedbackOverlayState extends State<DemoFeedbackOverlay> {
   @override
   void initState() {
     super.initState();
+    _loadPos();
     ScreenButtons.openFeedback = _open;
   }
 
@@ -659,17 +684,26 @@ class _DemoFeedbackOverlayState extends State<DemoFeedbackOverlay> {
           // При включённых «Кнопках на экране» она живёт в общем веере.
           if (!DemoMode.enabled.value || ScreenButtons.on.value) return const SizedBox.shrink();
           final size = MediaQuery.sizeOf(context);
-          final pos = _pos ?? const Offset(8, 120);
+          // Отзыв владельца 26.11: кнопку можно утащить в любое место экрана
+          // (она перекрывает контент), позиция запоминается между запусками.
+          final pos = _pos ?? Offset(size.width - 64, 140);
           return Positioned(
-            right: pos.dx,
-            bottom: pos.dy,
+            left: pos.dx,
+            top: pos.dy,
             child: Material(
               color: Colors.transparent,
               child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
                 onPanUpdate: (d) => setState(() {
-                  final p = _pos ?? const Offset(8, 120);
-                  _pos = Offset((p.dx - d.delta.dx).clamp(0, size.width - 56), (p.dy - d.delta.dy).clamp(0, size.height - 56));
+                  final p = _pos ?? Offset(size.width - 64, 140);
+                  _pos = Offset(
+                    (p.dx + d.delta.dx).clamp(0.0, math.max(0.0, size.width - 56)),
+                    (p.dy + d.delta.dy).clamp(0.0, math.max(0.0, size.height - 56)),
+                  );
                 }),
+                onPanEnd: (_) {
+                  if (_pos != null) _savePos(_pos!);
+                },
                 // круглая, как кнопка «назад» (48 px); без tooltip — здесь нет Overlay
                 child: GlassCircleButton(
                   icon: const BoldIcon(Icons.rate_review_outlined),

@@ -183,10 +183,17 @@ class AiContext {
   /// приложение (или справочник не прочитан): в системный промпт не добавляется.
   static String? appGuideBlock;
 
+  /// Вопрос был про приложение (тогда книги в контекст не подмешиваем —
+  /// отзыв владельца 26.11: на «что это за приложение» ИИ цитировал книги).
+  static bool get hasAppGuide => (appGuideBlock ?? '').trim().isNotEmpty;
+
   /// Секции справочника и основы слов, по которым вопрос попадает в секцию.
   /// Список намеренно узкий: «обычный» стрелковый вопрос («сравни серии»)
   /// не должен тянуть за собой ~1500 символов инструкций.
   static const Map<String, List<String>> _appGuideSectionWords = {
+    // Общий вопрос «что это за приложение» — сюда, чтобы ответ был обзором,
+    // а не страницей книги со словом «приложение» (отзыв владельца 26.11).
+    'Nexus: что это за приложение': ['nexus', 'нексус', 'что это', 'умеет', 'возможност', 'обзор', 'за приложен'],
     'Приложение и настройки': ['приложен', 'модул', 'настро', 'обновлен', 'язык', 'блокир', 'pin', 'пин', 'интерфейс'],
     'Supabase: базы данных': ['supabase', 'баз', 'таблиц', ' sql', 'sql ', 'вход', 'синхрон', 'проверк', 'учетн', 'учётн', 'rls', 'anon'],
     'Google Диск': ['диск', 'drive', 'гугл', 'google', 'резерв', 'бэкап', 'копия', 'копи', 'восстанов', 'apps script', 'скрипт'],
@@ -420,8 +427,9 @@ Answer:
 - No clarifying questions: assume reasonably; ask only if the question cannot be understood. No insults or profanity, even if quoted.
 - A vague question ("how is it?") is about CONTEXT "source" when one is attached; with no source it is ordinary chat.
 - No data -> ONE line saying what is missing ("no such data in the available materials"). No invented numbers, no filler.
+- Never quote the materials or add a "From the materials" / "Из материалов" section: the app shows sources itself. Use excerpts only as facts for your own wording. When the question is about the app itself, use ONLY the APP GUIDE and ignore book excerpts completely.
 
-Scope: shooting - technique, position, breathing, aiming, trigger; weapon, gear, ammo; ISSF rules; training, psychology; result analysis. Also the app itself: questions about Nexus features and settings (Supabase connection, Google Drive, messenger, calls, finals, 3D models, PDF tools, coach tasks, statistics, updates, security) are answered too - from the APP GUIDE excerpt when one is given, otherwise from your knowledge of the app, honestly admitting what you don't know. Unrelated topics (weather, politics, other software): decline in one line.
+Scope: shooting - technique, position, breathing, aiming, trigger; weapon, gear, ammo; ISSF rules; training, psychology; result analysis. Also the app itself: questions about Nexus features and settings (Supabase connection, Google Drive, messenger, calls, finals, 3D models, PDF tools, coach tasks, statistics, updates, security) are answered too - from the APP GUIDE excerpt when one is given, otherwise from your knowledge of the app, honestly admitting what you don't know. A general question like "what is this app" gets one short paragraph plus up to 6 bullet features from the APP GUIDE, no quotations. Unrelated topics (weather, politics, other software): decline in one line.
 
 Sources, in order: (1) CONTEXT data; (2) knowledge-base excerpts - the main source for rules, norms, figures, technique, specs; (3) past_conversations, where "ПОДРОБНО:" marks the full text - retell it exactly. Never rely on your own recollection of training data. The app prints used excerpts verbatim under your reply: do not retell them, add no facts of your own. Use an excerpt only for the same subject (weapon, discipline, distance, category). If sources disagree, say which is which. A fact outside the sources, if the user insists, starts with "I think..." and is marked unverified.
 
@@ -450,7 +458,7 @@ You are the assistant of Nexus, a shooting-sports app. Answer fast and briefly.
 
 Rules:
 - Reply in the language the user writes in, 1-2 sentences: answer first, no preamble, no recap, no offers, no reasoning aloud. No clarifying questions. No insults.
-- Facts (rules, norms, figures, technique) only from CONTEXT, the knowledge-base excerpts and past_conversations, never from memory; same subject only (weapon, discipline, distance, category). The app prints excerpts verbatim: do not retell them, add no facts of your own. Nothing there -> "no such data in the available materials".
+- Facts (rules, norms, figures, technique) only from CONTEXT, the knowledge-base excerpts and past_conversations, never from memory; same subject only (weapon, discipline, distance, category). The app prints excerpts verbatim: do not retell or quote them, add no facts of your own. App questions are answered from APP GUIDE only. Nothing there -> "no such data in the available materials".
 - CONTEXT "legend" gives the column order; x,y are mm from the centre (x right, y up). "…ещё N" = rows omitted: never invent numbers.
 - A vague question is about CONTEXT "source". App questions (Google Drive, messenger, finals, settings) are answered as well, 1-2 lines, from the APP GUIDE excerpt or what you know of the app. Unrelated topics (weather, politics): decline in one line.
 - Only when explicitly asked, end with ONE block, strict JSON:
@@ -469,7 +477,7 @@ Rules:
 MODE: NORMAL. Accuracy over brevity.
 First a scratchpad (up to 120 words, plain lines, no headings): question type (numbers, rule, technique, planning); scope (training, series, period, weapon, discipline); evidence (CONTEXT columns and excerpt file names that apply, discard other weapons/disciplines/editions); recompute every sum, mean, difference and group size, check units and the target maximum; one alternative reading and why you drop it; conclusion and confidence.
 Then a line with exactly ---ANSWER--- and only the answer after it. Small talk: answer directly, no scratchpad, no marker.
-In the answer: conclusion first, then the key figures and how you got them (1-2 lines), for advice 1-3 concrete steps on the user's own data. Name the source of each rule or figure. Up to 6 sentences. Flag thin data (few shots, one training).
+In the answer: conclusion first, then the key figures and how you got them (1-2 lines), for advice 1-3 concrete steps on the user's own data. Name the source only for rules or figures taken from the materials; an app question needs no source names. Up to 6 sentences. Flag thin data (few shots, one training).
 ''',
         AiProfile.think => '''
 MODE: THINK. CONTEXT ends with HELPER WORKING NOTES: drafts by colleagues - independent approaches plus a verifier's AGREED / DISPUTED. Treat them as a draft: check the decisive numbers against CONTEXT and the excerpts, fix mistakes silently, trust the data when they differ. Build on AGREED; for each DISPUTED point say plainly what differs and which reading the data supports. Do not retell the approaches or steps. Final answer: conclusion first, then the key figures, then 1-3 steps if useful. Lines marked NO DATA or (unverified) are gaps: name what is missing, do not guess. Up to 8 sentences.

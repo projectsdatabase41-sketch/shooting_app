@@ -85,34 +85,48 @@ class _FinalsVoicePanelState extends State<FinalsVoicePanel> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final hasKey = AiSettings(widget.db).hasOwnKey;
-    // Настройки озвучки видны только со своим ключом ИИ.
-    if (!hasKey) {
-      return widget.standalone
-          ? Text(tr('Добавьте свой ключ в настройках ИИ ассистента — тогда здесь появятся настройки озвучки.'), style: theme.textTheme.bodyMedium)
-          : const SizedBox.shrink();
-    }
+    // Отзыв владельца 26.11: не у всех ключей есть доступ к моделям озвучки,
+    // поэтому панель не прячем за чужим ключом — свой ключ и адрес можно
+    // вписать прямо здесь, и тогда основной ключ ИИ не нужен.
+    final hasMainKey = AiSettings(widget.db).hasOwnKey;
+    final hasVoiceKey = _key.text.trim().isNotEmpty;
+    final hasKey = hasMainKey || hasVoiceKey;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(
-        tr('Сейчас диктор говорит голосом телефона. Со своим ключом ИИ можно включить озвучку моделью: записи (команды, числа и фразы с именами, своим и ботов) создаются заранее, в финале только проигрываются. Нет записи — говорит голос телефона.'),
+        tr('Сейчас диктор говорит голосом телефона. Со своим ключом можно включить озвучку моделью: записи (команды, числа и фразы с именами, своим и ботов) создаются заранее, в финале только проигрываются. Нет записи — говорит голос телефона.'),
         style: theme.textTheme.bodySmall,
       ),
       if (!hasKey)
         Padding(
           padding: const EdgeInsets.only(top: 8),
-          child: Text(tr('Добавьте свой ключ в настройках ИИ ассистента — тогда здесь появятся настройки озвучки.'), style: TextStyle(color: theme.colorScheme.error)),
+          child: Text(
+            tr('Впишите свой ключ озвучки ниже (или добавьте ключ в настройках ИИ ассистента).'),
+            style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+          ),
         ),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         title: Text(tr('Озвучка моделью ИИ')),
-        subtitle: Text(tr('Используется ваш ключ и адрес из настроек ИИ')),
+        subtitle: Text(hasVoiceKey
+            ? tr('Свой ключ и адрес озвучки — отдельно от ассистента')
+            : tr('Используется ваш ключ и адрес из настроек ИИ')),
         value: _on && hasKey,
         onChanged: hasKey ? (v) => setState(() => _on = v) : null,
       ),
       Row(children: [
-        Expanded(child: TextField(controller: _model, decoration: InputDecoration(labelText: tr('Модель озвучки'), helperText: 'tts-1'))),
+        Expanded(child: TextField(controller: _model, decoration: InputDecoration(labelText: tr('Модель озвучки'), helperText: 'gpt-4o-mini-tts / tts-1 / tts-1-hd'))),
         const SizedBox(width: 8),
         Expanded(child: TextField(controller: _voice, decoration: InputDecoration(labelText: tr('Голос'), helperText: 'alloy'))),
+      ]),
+      const SizedBox(height: 6),
+      // Выбор из ходовых моделей озвучки: не у всех провайдеров они есть,
+      // поэтому список — подсказка, а поле выше остаётся свободным.
+      Wrap(spacing: 6, runSpacing: 6, children: [
+        for (final m in const ['gpt-4o-mini-tts', 'tts-1', 'tts-1-hd'])
+          ActionChip(
+            label: Text(m, style: theme.textTheme.labelSmall),
+            onPressed: () => setState(() => _model.text = m),
+          ),
       ]),
       const SizedBox(height: 8),
       TextField(
