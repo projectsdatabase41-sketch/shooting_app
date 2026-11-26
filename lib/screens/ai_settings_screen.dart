@@ -472,7 +472,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             // дешевле, чем разбираться по ошибке в чате.
             const SizedBox(height: 12),
             Text(
-              tr('В этой сборке ключа нет — ассистент не ответит. Переключитесь на «Свой ключ» и вставьте свой.'),
+              tr('В этой сборке встроенного ключа нет: ИИ работает через сервер после входа в мессенджер, иначе переключитесь на «Свой ключ» и вставьте свой.'),
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.error,
                   ),

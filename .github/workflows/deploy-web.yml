@@ -75,11 +75,10 @@ jobs:
             --base-href "/${{ github.event.repository.name }}/" \
             --no-web-resources-cdn \
             --pwa-strategy=none \
-            --dart-define=BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            --dart-define=OPENROUTER_KEY="${{ secrets.OPENROUTER_KEY }}" \
-            --dart-define=OPENROUTER_KEY_2="${{ secrets.OPENROUTER_KEY_2 }}" \
-            --dart-define=OPENROUTER_KEY_3="${{ secrets.OPENROUTER_KEY_3 }}" \
-            --dart-define=OPENROUTER_KEY_4="${{ secrets.OPENROUTER_KEY_4 }}"
+            --dart-define=BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          # Ключи OpenRouter в клиент НЕ передаём (безопасность 26.11):
+          # раньше они попадали в main.dart.js и APK, и любой мог их вытащить.
+          # Теперь ИИ идёт через воркер /ai, ключи — в секрете воркера.
 
       # Имя кеша меняется на каждый деплой — иначе байты воркера не
       # меняются, браузер не видит новую версию и не проходит цикл

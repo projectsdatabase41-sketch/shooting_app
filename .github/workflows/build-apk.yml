@@ -82,10 +82,6 @@ jobs:
           free -h || true
           df -h / || true
           flutter build apk --release \
-            --dart-define=OPENROUTER_KEY="${{ secrets.OPENROUTER_KEY }}" \
-            --dart-define=OPENROUTER_KEY_2="${{ secrets.OPENROUTER_KEY_2 }}" \
-            --dart-define=OPENROUTER_KEY_3="${{ secrets.OPENROUTER_KEY_3 }}" \
-            --dart-define=OPENROUTER_KEY_4="${{ secrets.OPENROUTER_KEY_4 }}" \
             --build-name="0.${{ github.run_number }}" \
             --dart-define=APP_VERSION="0.${{ github.run_number }}" \
             --dart-define=GIT_SHA="${{ github.sha }}" \
