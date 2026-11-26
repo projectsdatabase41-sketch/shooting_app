@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'ai_memory_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 import '../logic/ai_context.dart';
 import '../services/ai_service.dart';
@@ -25,7 +27,16 @@ class AiSettingsScreen extends StatefulWidget {
   State<AiSettingsScreen> createState() => _AiSettingsScreenState();
 }
 
+enum _AiTab { general, memory, voice, vision }
+
 class _AiSettingsScreenState extends State<AiSettingsScreen> {
+  /// Отзыв владельца 26.11: настройки ИИ разделены на страницы — общие ключи,
+  /// память, озвучивание и зрение. У каждой страницы свои ключ и модели.
+  _AiTab _tab = _AiTab.general;
+  late final TextEditingController _visionKey;
+  late final TextEditingController _visionModel;
+  String? _visionResult;
+  bool _visionBusy = false;
   late final AiSettings _settings;
   late final TextEditingController _key;
   late final TextEditingController _apiBaseUrl;
@@ -98,6 +109,8 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     _customInstructions =
         TextEditingController(text: _settings.customInstructions);
     _geminiKey = TextEditingController(text: _settings.geminiKey);
+    _visionKey = TextEditingController(text: _pref('ai_vision_key'));
+    _visionModel = TextEditingController(text: _pref('ai_vision_model') ?? 'gpt-4o-mini');
     _apiUrlFocus = FocusNode();
     _baseInstructions = TextEditingController(
         text: _settings.baseInstructionsOverride.isEmpty
@@ -288,6 +301,54 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     );
   }
 
+  String? _pref(String key) {
+    final r = _db.db.select('SELECT hex FROM color_prefs WHERE key = ?', [key]);
+    return r.isEmpty ? null : '${r.first['hex']}';
+  }
+
+  void _setPref(String key, String value) => _db.db.execute(
+      'INSERT INTO color_prefs (key, hex) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET hex = excluded.hex',
+      [key, value]);
+
+  /// Проверка доступа к моделям раздела «Зрение»: запрашивает список моделей
+  /// у провайдера тем же ключом (отзыв владельца 26.11 — тест в каждом разделе).
+  Future<void> _checkVision() async {
+    final key = _visionKey.text.trim().isNotEmpty ? _visionKey.text.trim() : _settings.apiKey;
+    if (key.isEmpty) {
+      setState(() => _visionResult = tr('Нужен ключ: свой в разделе «Зрение» или общий в «Общих»'));
+      return;
+    }
+    setState(() {
+      _visionBusy = true;
+      _visionResult = null;
+    });
+    try {
+      final base = _settings.apiBaseUrl;
+      final res = await http.get(Uri.parse('$base/models'), headers: {
+        'Authorization': 'Bearer $key',
+      }).timeout(const Duration(seconds: 20));
+      if (res.statusCode >= 400) {
+        setState(() => _visionResult = tr('Провайдер ответил кодом {s}', {'s': res.statusCode}));
+        return;
+      }
+      final data = jsonDecode(res.body);
+      final ids = <String>[
+        if (data is Map && data['data'] is List)
+          for (final m in data['data'] as List)
+            if (m is Map && m['id'] is String) m['id'] as String,
+      ];
+      final want = _visionModel.text.trim();
+      final found = ids.any((id) => id == want || id.contains(want));
+      setState(() => _visionResult = found
+          ? tr('Модель {m} доступна на этом ключе', {'m': want})
+          : tr('Модели {m} нет среди {n} доступных — выберите другую', {'m': want, 'n': ids.length}));
+    } catch (e) {
+      setState(() => _visionResult = friendlyError(e));
+    } finally {
+      if (mounted) setState(() => _visionBusy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -312,6 +373,19 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 32),
         children: [
           _card([
+            SegmentedButton<_AiTab>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(value: _AiTab.general, label: Text('Общие')),
+                ButtonSegment(value: _AiTab.memory, label: Text('Память')),
+                ButtonSegment(value: _AiTab.voice, label: Text('Озвучивание')),
+                ButtonSegment(value: _AiTab.vision, label: Text('Зрение')),
+              ],
+              selected: {_tab},
+              onSelectionChanged: (s) => setState(() => _tab = s.first),
+            ),
+          ]),
+          if (_tab == _AiTab.general) _card([
           SectionHeader(
             title: tr('Доступ'),
             subtitle: switch (_mode) {
@@ -404,7 +478,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
           ]),
           // Озвучка финалов: отдельный блок и свой ключ (отзыв владельца
           // 26.11 — не у каждого ключа есть доступ к моделям озвучки).
-          _card([
+          if (_tab == _AiTab.voice) _card([
             SectionHeader(
               title: tr('Озвучка финалов'),
               subtitle: tr('Диктор голосом модели вместо голоса телефона'),
@@ -412,7 +486,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             const SizedBox(height: 12),
             FinalsVoicePanel(db: _db),
           ]),
-          _card([
+          if (_tab == _AiTab.general) _card([
           SectionHeader(
             title: tr('Поиск в интернете'),
             subtitle: tr(
@@ -447,7 +521,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             ),
           ),
           ]),
-          _card([
+          if (_tab == _AiTab.memory) _card([
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.psychology_outlined),
@@ -457,7 +531,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AiMemoryScreen())),
           ),
           ]),
-          _card([
+          if (_tab == _AiTab.memory) _card([
           SectionHeader(title: tr('Инструкция ассистенту')),
           const SizedBox(height: 12),
           TextField(
@@ -530,7 +604,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
           // сам подставляет ключ — со встроенным ключом ручной выбор
           // модели заменяет одна кнопка ниже (решение пользователя,
           // пункт 2 списка правок).
-          _card([
+          if (_tab == _AiTab.general) _card([
           if (_ownKey) ...[
             SectionHeader(
               title: tr('Модели'),
@@ -704,7 +778,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
           ],
           ]),
           // Справочные материалы — для всех (решение пользователя).
-          _card([
+          if (_tab == _AiTab.memory) _card([
             SectionHeader(
               title: tr('Справочные материалы'),
               subtitle: tr(
@@ -736,6 +810,46 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                   ),
               ],
             ),
+          ]),
+          if (_tab == _AiTab.vision) _card([
+            SectionHeader(
+              title: tr('ИИ-зрение, генерация и анализ изображений'),
+              subtitle: tr('Пока функции зрения не включены — здесь заранее настраиваются ключ и модель'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _visionKey,
+              obscureText: true,
+              onChanged: (v) => _setPref('ai_vision_key', v.trim()),
+              decoration: InputDecoration(
+                labelText: tr('Свой ключ для зрения (необязательно)'),
+                helperText: tr('Пусто — используется общий ключ из раздела «Общие»'),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _visionModel,
+              onChanged: (v) => _setPref('ai_vision_model', v.trim()),
+              decoration: InputDecoration(
+                labelText: tr('Модель зрения'),
+                helperText: tr('Например gpt-4o-mini, qwen2.5-vl, llava'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              FilledButton.icon(
+                onPressed: _visionBusy ? null : _checkVision,
+                icon: _visionBusy
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.visibility_outlined),
+                label: Text(tr('Проверить доступ')),
+              ),
+            ]),
+            if (_visionResult != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(_visionResult!, style: theme.textTheme.bodySmall),
+              ),
           ]),
           if (_message != null) ...[
             const SizedBox(height: 20),
