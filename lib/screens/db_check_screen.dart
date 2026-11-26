@@ -59,11 +59,19 @@ class _DbCheckScreenState extends State<DbCheckScreen> {
     final msg = ScaffoldMessenger.of(context);
     try {
       final sql = await rootBundle.loadString('lib/db/nexus_personal_db.sql');
-      final ok = await copyText(sql);
+      // Отзыв 19.11/26.11: при вставке поверх выделенного текста SQL Editor
+      // склеивает строки и получается «ALTER TABLE on …». Показываем размер,
+      // чтобы было видно, если вставилось не всё (в актуальном файле 1887 строк).
+      final lines = '\n'.allMatches(sql).length + 1;
+      final kb = (sql.length / 1024).round();
+      final broken = sql.contains('alter table on ');
+      final ok = broken ? false : await copyText(sql);
       msg.showSnackBar(SnackBar(
-          content: Text(ok
-              ? tr('SQL скопирован — вставьте в SQL Editor и нажмите Run')
-              : tr('Не удалось скопировать — выделите текст вручную'))));
+          content: Text(broken
+              ? tr('SQL в этой сборке повреждён — обновите приложение и не копируйте его')
+              : ok
+                  ? tr('Скопировано: {n} строк, {k} КБ. Вставьте в НОВЫЙ пустой запрос SQL Editor (не поверх выделенного текста) и нажмите Run', {'n': lines, 'k': kb})
+                  : tr('Не удалось скопировать — выделите текст вручную'))));
     } catch (e) {
       msg.showSnackBar(SnackBar(content: Text(tr('Не удалось скопировать: {e}', {'e': friendlyError(e)}))));
     }
