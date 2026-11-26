@@ -23,7 +23,7 @@ MEDIA_MAX_OBJECT_MB = "25"
 # Мёртвые убраны: issf-sports.org/rss/news.xml — 404, nrablog.com/feed/ — 404,
 # thefirearmblog.com/blog/feed/ — 406 (не отдаёт RSS нашему user-agent),
 # all4shooters.com/en/rss/ — из нашей сети не отвечает.
-NEWS_FEEDS = "https://www.issf-academy.com/feed/,https://www.shootinguk.co.uk/feed/,https://www.ammoland.com/feed/,https://www.ssusa.org/rss/"
+NEWS_FEEDS = "https://www.thefirearmblog.com/blog/feed/,https://www.shootinguk.co.uk/feed/,https://www.ssusa.org/rss/,https://www.ammoland.com/feed/,https://www.thetruthaboutguns.com/feed/,https://www.alloutdoor.com/feed/,https://www.shootingillustrated.com/feed/"
 # NEWS_KEYWORDS больше не используется: по указанию владельца 23.11 сервер
 # грузит все новости, фильтрация перенесена в приложение
 # (lib/services/news_service.dart, NewsFilter).

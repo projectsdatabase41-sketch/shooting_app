@@ -658,16 +658,18 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
             ]),
           ),
           // Вертикальное колесо выстрелов: повёрнутая полоса, как в портрете.
+          // Отзыв по фото 26.11: «крутилка слишком широкая и низкая» — делаем
+          // узкой (44 px) и высокой (до 75% высоты экрана).
           SizedBox(
-            width: 64,
+            width: 44,
             child: Center(
               child: SizedBox(
-                height: math.min(240, box.maxHeight * 0.55),
+                height: math.min(300, box.maxHeight * 0.75),
                 child: RotatedBox(
                   quarterTurns: 1,
                   child: SizedBox(
-                    width: math.min(240, box.maxHeight * 0.55),
-                    height: 64,
+                    width: math.min(300, box.maxHeight * 0.75),
+                    height: 44,
                     child: const _ShotWheelBar(),
                   ),
                 ),
@@ -1323,9 +1325,15 @@ class _TargetPage extends StatelessWidget {
     final vm = context.watch<TargetViewModel>();
     final workspace = height != null;
     // Рамка вокруг мишени: ClipRect держит увеличенную мишень внутри отведённой области.
-    final canvas = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: ClipRect(child: TargetCanvas(addByTouch: workspace)),
+    // Непрозрачная подложка (отзыв 26.11: «сиреневая маска» на мишени):
+    // полупрозрачные поверхности темы просвечивали обои, и мишень выглядела
+    // залитой цветом. Под мишенью — плотный фон, обои остаются за карточкой.
+    final canvas = ColoredBox(
+      color: Theme.of(context).colorScheme.surface,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: ClipRect(child: TargetCanvas(addByTouch: workspace)),
+      ),
     );
     if (!workspace) {
       return Column(

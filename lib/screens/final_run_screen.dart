@@ -369,7 +369,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
   }
 
   /// Одна мишень спортсмена со своими наложениями (подпись пристрелки, пауза).
-  Widget _padArea(BuildContext context) {
+  Widget _padArea(BuildContext context, {bool showZoomButtons = true}) {
     final theme = Theme.of(context);
     final sighting = c.phase == RunPhase.sighting;
     final marks = _myMarks;
@@ -389,6 +389,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
             onHold: (_) {},
             onShot: _onShot,
             sighting: sighting,
+            showZoomButtons: showZoomButtons,
             scaleNotifier: _padScale,
           ),
         ),
@@ -590,8 +591,7 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
         Expanded(
           child: Stack(children: [
             Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Expanded(flex: 6, child: _padArea(context)),
-              Expanded(
+              Expanded(flex: 6, child: _padArea(context, showZoomButtons: false)),              Expanded(
                 flex: 4,
                 child: _board
                     ? side
@@ -647,7 +647,12 @@ class ShotPad extends StatefulWidget {
   /// (широкая/узкая раскладка), состояние виджета уничтожается, а выбранный
   /// зум должен остаться (отзыв 0ecf7a6c).
   final ValueNotifier<double>? scaleNotifier;
-  const ShotPad({required this.face, required this.marks, required this.enabled, required this.onHold, required this.onShot, this.colors, this.lockCenter = false, this.sighting = false, this.scaleNotifier});
+
+  /// Показывать кнопки +/− над мишенью. В горизонтали они перекрывали
+  /// левую колонку с управлением (фото владельца 26.11) — там выключены,
+  /// зум остаётся щипком.
+  final bool showZoomButtons;
+  const ShotPad({required this.face, required this.marks, required this.enabled, required this.onHold, required this.onShot, this.colors, this.lockCenter = false, this.sighting = false, this.scaleNotifier, this.showZoomButtons = true});
 
   @override
   State<ShotPad> createState() => _ShotPadState();
@@ -989,6 +994,8 @@ class _ShotPadState extends State<ShotPad> {
           ),
         ),
         // Кнопки зума на всех устройствах (щипок двумя пальцами тоже работает).
+        // В горизонтали скрыты: перекрывали левую колонку кнопок (отзыв 26.11).
+        if (widget.showZoomButtons)
         Positioned(
           left: 2,
           bottom: 2,
@@ -1159,10 +1166,81 @@ class _BoardView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rows = c.live;
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
-      itemCount: rows.length,
-      itemBuilder: (ctx, i) => _BoardRow(c: c, row: rows[i], index: i),
+    // Отзыв 312aa887: мишени выводим внизу отдельной лентой, а не в каждой
+    // строке — строки ботов стали компактнее, мишени не разрывают таблицу.
+    return Column(children: [
+      Expanded(
+        child: ListView.builder(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+          itemCount: rows.length,
+          itemBuilder: (ctx, i) => _BoardRow(c: c, row: rows[i], index: i),
+        ),
+      ),
+      _BoardTargets(c: c),
+    ]);
+  }
+}
+
+/// Лента мишеней табло: у кого есть пробоины — мишень, имя и сумма.
+class _BoardTargets extends StatelessWidget {
+  final FinalRunController c;
+  const _BoardTargets({required this.c});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final items = <(LiveRow, List<Offset>, List<Offset>)>[];
+    for (final row in c.live) {
+      final pts = [
+        for (final s in c.shots)
+          if (s.who == row.c.id && !s.shootOff) Offset(s.x, s.y)
+      ];
+      if (c.humans.contains(row.c.id) && row.c.active) {
+        for (final st in c.stagedOf(row.c.id)) {
+          pts.add(Offset(st.x, st.y));
+        }
+      }
+      if (pts.isEmpty) continue;
+      final ghosts = [
+        for (final s in c.shots)
+          if (s.who == row.c.id && s.shootOff) Offset(s.x, s.y),
+      ];
+      items.add((row, pts, ghosts));
+    }
+    if (items.isEmpty) return const SizedBox.shrink();
+    return Container(
+      height: 132,
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainer.withValues(alpha: 0.6),
+        border: Border(top: BorderSide(color: cs.outlineVariant)),
+      ),
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: items.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (ctx, i) {
+          final (row, pts, ghosts) = items[i];
+          return SizedBox(
+            width: 92,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              SizedBox(
+                width: 78,
+                height: 78,
+                child: _MiniTarget(c: c, points: pts, ghosts: ghosts),
+              ),
+              const SizedBox(height: 2),
+              Text(row.c.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall),
+              Text(row.total.toStringAsFixed(1),
+                  style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700)),
+            ]),
+          );
+        },
+      ),
     );
   }
 }
@@ -1180,18 +1258,6 @@ class _BoardRow extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final isBot = !c.humans.contains(row.c.id);
-    // Пробоины участника: зачётные + отмеченные в текущем раунде (те же, что
-    // идут в живую таблицу); перестрелочные — бледными призраками.
-    final pts = [for (final s in c.shots) if (s.who == row.c.id && !s.shootOff) Offset(s.x, s.y)];
-    if (c.humans.contains(row.c.id) && row.c.active) {
-      for (final st in c.stagedOf(row.c.id)) {
-        pts.add(Offset(st.x, st.y));
-      }
-    }
-    final ghosts = [
-      for (final s in c.shots)
-        if (s.who == row.c.id && s.shootOff) Offset(s.x, s.y),
-    ];
     // Целые — сумма целых частей выстрелов (как в протоколе финала).
     final whole = row.shots.fold<int>(0, (a, b) => a + b.floor());
     return Opacity(
@@ -1254,16 +1320,7 @@ class _BoardRow extends StatelessWidget {
             style: theme.textTheme.titleLarge
                 ?.copyWith(fontWeight: FontWeight.w800, fontFeatures: const [FontFeature.tabularFigures()]),
           ),
-          // Миниатюра мишени — только если есть пробоины (посадочных
-          // пустых квадратов на табло быть не должно).
-          if (pts.isNotEmpty) ...[
-            const SizedBox(width: 10),
-            SizedBox(
-              width: 56,
-              height: 56,
-              child: _MiniTarget(c: c, points: pts, ghosts: ghosts),
-            ),
-          ],
+          // Мишени переехали вниз отдельной лентой (_BoardTargets) — отзыв 312aa887.
         ]),
       ),
     );

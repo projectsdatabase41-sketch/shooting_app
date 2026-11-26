@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../i18n/i18n.dart';
@@ -122,6 +124,10 @@ class _ModelsCatalogBodyState extends State<ModelsCatalogBody> {
 
   late final TextEditingController _search = TextEditingController();
 
+  /// Поиск с задержкой: раньше каждая буква перестраивала сетку из 329
+  /// карточек, клавиатура в 3D-каталоге дёргалась (отзыв 26.11).
+  Timer? _searchDebounce;
+
   @override
   void initState() {
     super.initState();
@@ -133,6 +139,7 @@ class _ModelsCatalogBodyState extends State<ModelsCatalogBody> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _search.dispose();
     super.dispose();
   }
@@ -226,7 +233,12 @@ class _ModelsCatalogBodyState extends State<ModelsCatalogBody> {
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
           child: TextField(
             controller: _search,
-            onChanged: (v) => setState(() => _query = v),
+            onChanged: (v) {
+              _searchDebounce?.cancel();
+              _searchDebounce = Timer(const Duration(milliseconds: 200), () {
+                if (mounted) setState(() => _query = v);
+              });
+            },
             decoration: InputDecoration(
               isDense: true,
               prefixIcon: const Icon(Icons.search),
@@ -325,6 +337,8 @@ class _ModelsCatalogBodyState extends State<ModelsCatalogBody> {
         mainAxisExtent: tileH,
       ),
       itemCount: items.length,
+      addAutomaticKeepAlives: false,
+      cacheExtent: 400,
       itemBuilder: (_, i) => _card(items[i], tileW),
     );
   }

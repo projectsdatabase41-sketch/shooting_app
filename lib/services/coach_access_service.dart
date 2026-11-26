@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'secret_box.dart';
 import 'dart:convert';
 
@@ -5,6 +7,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/coach_chat_message.dart';
 import 'local_db_service.dart';
+import 'coach_links_sync.dart';
 import '../i18n/i18n.dart';
 
 /// Один сохранённый спортсмен у тренера — мульти-спортсменский режим
@@ -163,12 +166,34 @@ class CoachAccessService {
         athlete.token.trim(),
       ],
     );
+    // Отзыв 26.11: зеркалим подключение в свою базу, чтобы ИИ тренера видел
+    // спортсмена. Повторное подключение (новый токен/адрес) перезаписывает
+    // строку — см. CoachLinksSync.
+    unawaited(CoachLinksSync(db).upsert(CoachAthlete(
+      id: id,
+      name: name,
+      url: url,
+      anonKey: athlete.anonKey.trim(),
+      token: athlete.token.trim(),
+    )));
     return isNew;
   }
 
   void deleteAthlete(String id) {
     db.db.execute('DELETE FROM coach_athletes WHERE id = ?', [id]);
     if (activeAthleteId == id) forget();
+    // Убираем и зеркало в базе тренера: спортсмен больше не подключён.
+    unawaited(CoachLinksSync(db).remove(id));
+  }
+
+  /// Обновить статус токена в зеркале (valid / revoked / unknown).
+  Future<void> _syncTokenStatus(CoachAthlete a, ShareTokenStatus s) async {
+    final status = switch (s) {
+      ShareTokenStatus.valid => 'valid',
+      ShareTokenStatus.revoked => 'revoked',
+      ShareTokenStatus.unknown => 'unknown',
+    };
+    await CoachLinksSync(db).upsert(a, status: status);
   }
 
   void reorderAthletes(List<String> orderedIds) {
@@ -289,6 +314,7 @@ class CoachAccessService {
   /// То же для конкретного спортсмена (не переключая активное подключение).
   Future<ShareTokenStatus> checkTokenStatusFor(CoachAthlete a) async {
     final client = clientFactory();
+    var status = ShareTokenStatus.unknown;
     try {
       final res = await client
           .post(
@@ -297,14 +323,20 @@ class CoachAccessService {
             body: jsonEncode({'p_token': a.token}),
           )
           .timeout(const Duration(seconds: 20));
-      if (res.statusCode >= 400) return ShareTokenStatus.unknown;
-      if (res.bodyBytes.isEmpty) return ShareTokenStatus.revoked;
-      return jsonDecode(utf8.decode(res.bodyBytes)) == null ? ShareTokenStatus.revoked : ShareTokenStatus.valid;
+      if (res.statusCode < 400) {
+        status = (res.bodyBytes.isEmpty || jsonDecode(utf8.decode(res.bodyBytes)) == null)
+            ? ShareTokenStatus.revoked
+            : ShareTokenStatus.valid;
+      }
     } catch (_) {
-      return ShareTokenStatus.unknown;
+      status = ShareTokenStatus.unknown;
     } finally {
       client.close();
     }
+    // Отзыв 26.11: статус токена обновляем и в базе тренера, чтобы ИИ видел
+    // «доступ отозван», а не «нет тренировок».
+    await _syncTokenStatus(a, status);
+    return status;
   }
 
   Future<ShareTokenStatus> checkTokenStatus() async {

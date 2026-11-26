@@ -17,7 +17,9 @@ import '../models/exercise_detail_block.dart';
 import '../models/shot.dart';
 import '../models/target_face.dart';
 import '../models/training_session.dart';
+import '../models/target_color_scheme.dart';
 import '../painters/analytics_painters.dart';
+import '../painters/target_painter.dart';
 import '../painters/score_graph_painter.dart';
 import '../services/comments_repository.dart';
 import '../state/app_data_store.dart';
@@ -99,6 +101,20 @@ class _DetailBodyState extends State<_DetailBody> {
   /// `notifyListeners` у вью-модели защищённый и извне недоступен —
   /// иначе список и мишень остались бы со старыми выстрелами.
   void _onShotEdited() => setState(() {});
+
+  @override
+  void initState() {
+    super.initState();
+    // Отзыв 26.11 (d81c7608, 80b9adff): при открытии истории мишень сразу
+    // приближается под пробоины — не нужно щипать вручную. Если есть сильный
+    // отрыв, масштаб подбирается так, чтобы он остался виден.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final vm = context.read<TargetViewModel>();
+      final shots = vm.session.countingShots;
+      if (shots.isNotEmpty) vm.zoomToShots(shots);
+    });
+  }
 
   /// Панель «как SIUS» для wide-режима истории (владелец 24.11): тот же
   /// виджет, что в финалах, но без обратного отсчёта — вместо него
@@ -569,6 +585,14 @@ class _SingleShotScreen extends StatelessWidget {
       body: ListView(
         padding: EdgeInsets.fromLTRB(16, MediaQuery.paddingOf(context).top + GlassHeader.height + 8, 16, 16),
         children: [
+          // Отзыв ca1307d4: центр мишени — по центру, а пробоина этого
+          // выстрела «доигрывается» зумом: мишень приближена и сдвинута так,
+          // чтобы отметка стояла ровно в центре кадра.
+          SizedBox(
+            height: 260,
+            child: _SingleShotTarget(shot: shot, face: face, colors: colors),
+          ),
+          const SizedBox(height: 12),
           SingleShotInfo(shot: shot, face: face, colors: colors),
           const SizedBox(height: 12),
           Text(tr('Заметки'), style: Theme.of(context).textTheme.titleSmall),
@@ -1364,4 +1388,69 @@ class _SeriesButtons extends StatelessWidget {
     if (v < -0.05) return '−$s';
     return '0.0';
   }
+}
+
+/// Мишень выстрела с автозумом: пробоина ставится в центр кадра.
+class _SingleShotTarget extends StatelessWidget {
+  final Shot shot;
+  final TargetFace face;
+  final TargetColorScheme colors;
+  const _SingleShotTarget({required this.shot, required this.face, required this.colors});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (ctx, box) {
+      final side = box.biggest.shortestSide;
+      final far = shot.radiusMm;
+      final zoom = (face.faceRadiusMm * 0.8 / (far <= 0.5 ? 1.0 : far)).clamp(1.0, 6.9).toDouble();
+      final k = side / 2 * zoom / face.faceRadiusMm;
+      final pan = Offset(-shot.xMm * k, shot.yMm * k);
+      final center = Offset(box.maxWidth / 2, box.maxHeight / 2) + pan;
+      return ClipRect(
+        child: Stack(children: [
+          Positioned.fill(
+            child: CustomPaint(
+              painter: TargetPainter(
+                face: face,
+                colors: colors,
+                visibleShots: const [],
+                selectedShot: null,
+                currentSeriesNo: shot.seriesNo,
+                zoom: zoom,
+                pan: pan,
+                denseLabels: true,
+              ),
+            ),
+          ),
+          Positioned.fill(
+            child: CustomPaint(
+              painter: _ShotDotPainter(center: center),
+            ),
+          ),
+        ]),
+      );
+    });
+  }
+}
+
+/// Отметка выстрела на мишени одного выстрела: точка с ореолом.
+class _ShotDotPainter extends CustomPainter {
+  final Offset center;
+  const _ShotDotPainter({required this.center});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final halo = Paint()..color = const Color(0xFFFFD54F).withValues(alpha: 0.35);
+    final dot = Paint()..color = const Color(0xFFFF6D00);
+    final ring = Paint()
+      ..color = const Color(0xFFFFF8E1)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    canvas.drawCircle(center, 12, halo);
+    canvas.drawCircle(center, 6, dot);
+    canvas.drawCircle(center, 6, ring);
+  }
+
+  @override
+  bool shouldRepaint(_ShotDotPainter old) => old.center != center;
 }

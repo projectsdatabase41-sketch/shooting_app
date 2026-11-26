@@ -1377,9 +1377,19 @@ for (const key of Object.keys(sensitivityControls)) {
   });
 }
 
-dom.qualityBtn?.addEventListener('click', () => {
+dom.qualityBtn?.addEventListener('click', async () => {
   if (state.modelKind !== 'step' || !state.lastBuffer) return;
-  void switchQuality(state.quality === 'fine' ? 'draft' : 'fine');
+  // Отзыв владельца 26.11: кнопка должна реально переключать SD↔HD, а не
+  // только подсвечиваться. Пока идёт повторный разбор — пишем, что делаем.
+  const target = state.quality === 'fine' ? 'draft' : 'fine';
+  dom.qualityBtn.disabled = true;
+  dom.qualityBtn.textContent = target === 'fine' ? 'HD…' : 'SD…';
+  try {
+    await switchQuality(target);
+  } finally {
+    dom.qualityBtn.disabled = false;
+    showQualityState(state.quality, state.cacheHit);
+  }
 });
 
 dom.cacheClearBtn?.addEventListener('click', async () => {

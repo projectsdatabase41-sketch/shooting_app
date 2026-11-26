@@ -39,7 +39,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.binding.setSurfaceSize(const Size(400, 800));
+    await tester.binding.setSurfaceSize(const Size(900, 600));
     await tester.pumpWidget(ChangeNotifierProvider<AppDataStore>.value(
       value: store,
       child: MaterialApp(home: FinalRunScreen(controller: c, store: store)),

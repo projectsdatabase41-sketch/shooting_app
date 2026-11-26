@@ -772,6 +772,24 @@ class TargetViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Автозум по пробоинам (отзывы 26.11: «максимальный зум при открытии, если
+  /// нет отрывов» и «автозум везде, где мишень с пробоинами»). Подбирает
+  /// масштаб так, чтобы самая дальняя пробоина оставалась видна с запасом;
+  /// сильный отрыв уменьшает зум, поэтому мишень не «уезжает».
+  void zoomToShots(List<Shot> shots) {
+    double far = 0;
+    for (final s in shots) {
+      if (s.radiusMm > far) far = s.radiusMm;
+    }
+    if (far <= 0) return;
+    final fit = (face.faceRadiusMm * 0.8 / far).clamp(1.0, 6.9).toDouble();
+    if (fit <= zoom + 0.01) return; // не отдаляем то, что уже приближено
+    zoom = fit;
+    panX = 0;
+    panY = 0;
+    notifyListeners();
+  }
+
   void applyScale(double scaleDelta, double focalDx, double focalDy) {
     // Потолок 6.9, а не 6.0 (просьба пользователя «ещё на 10-15%»):
     // на мишени 50 м десятка занимает считанные пиксели, и запаса не
