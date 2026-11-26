@@ -485,7 +485,12 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
             ),
           ],
         ),
-        body: Column(
+        // Плотный фон экрана (отзыв по фото 15:27): полупрозрачные карточки
+        // раздела просвечивали обои, и вся область от мишени до «Тренера»
+        // выглядела сиреневой маской. Мишень и списки теперь на своём фоне.
+        body: ColoredBox(
+          color: Theme.of(context).colorScheme.surface,
+          child: Column(
           children: [
             // Управление тренировкой — над разделами и неподвижно.
             if (vm.showTrainingControls) _TrainingControlsBar(embedded: widget.embedded),
@@ -638,6 +643,7 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
           ],
         ),
       ),
+        ),
     );
   }
 
