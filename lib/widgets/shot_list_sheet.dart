@@ -146,7 +146,11 @@ class _ShotRow extends StatelessWidget {
               Icon(Icons.star, size: 16, color: Colors.amber.shade700),
               const SizedBox(width: 4),
             ],
-            Expanded(
+            // Отзыв 26.11: строки были «растянуты по горизонтали» — счёт
+            // прижат влево, координаты вправо, между ними пустота на всю
+            // ширину. Держим счёт и координаты рядом.
+            SizedBox(
+              width: 76,
               child: Text.rich(
                 TextSpan(
                   style: theme.textTheme.bodyMedium,
@@ -160,6 +164,7 @@ class _ShotRow extends StatelessWidget {
                 ),
               ),
             ),
+            const SizedBox(width: 8),
             if (hasNote) ...[
               Icon(Icons.notes_outlined, size: 15, color: theme.colorScheme.onSurfaceVariant),
               const SizedBox(width: 8),
