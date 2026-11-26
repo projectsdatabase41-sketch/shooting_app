@@ -11,6 +11,7 @@ import '../voice/voice_grammar.dart';
 import 'package:uuid/uuid.dart';
 import 'package:provider/provider.dart';
 import '../logic/ai_context.dart';
+import '../logic/stance_plan.dart';
 import '../logic/shot_photo_detection.dart';
 import '../models/exercise.dart';
 import '../models/comment.dart';
@@ -29,6 +30,7 @@ import '../widgets/raised_3d_button.dart';
 import '../widgets/shot_list_sheet.dart';
 import '../widgets/athlete_coach_chat.dart';
 import '../widgets/shot_wheel.dart';
+import '../widgets/stance_icon.dart';
 import '../services/comments_repository.dart';
 import '../logic/friendly_error.dart' show friendlyErrorDevMode;
 import '../widgets/target_canvas.dart';
@@ -1682,6 +1684,7 @@ class _TrainingControlsBar extends StatelessWidget {
               ],
             ),
             const _CurrentSeriesLine(),
+            const _StanceLine(),
           ],
         ),
       ),
@@ -2160,6 +2163,63 @@ class _SeriesStrip extends StatelessWidget {
           ),
         ]),
       ),
+    );
+  }
+}
+
+/// Индикатор изготовки в тренировке (запрос владельца 26.11): те же
+/// картинки, что на плитках упражнений. Для «3 положений» — три значка
+/// в порядке ISSF и подпись, где идёт тренировка сейчас.
+class _StanceLine extends StatelessWidget {
+  const _StanceLine();
+
+  @override
+  Widget build(BuildContext context) {
+    final vm = context.watch<TargetViewModel>();
+    final plan = StancePlan.forExercise(vm.exercise);
+    final cur = plan.stanceFor(vm.currentSeriesNo);
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    Widget icon(StanceKind s) => StanceIcon(
+          size: 20,
+          stance: s,
+          weapon: plan.weapon,
+          color: s == cur ? cs.primary : cs.onSurfaceVariant.withValues(alpha: 0.45),
+          semanticLabel: tr(StancePlan.label(s)),
+        );
+
+    if (!plan.threePositions) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 2),
+        child: Row(children: [
+          icon(cur),
+          const SizedBox(width: 4),
+          Text(tr('Изготовка: {s}', {'s': tr(StancePlan.label(cur))}),
+              style: tt.labelSmall),
+        ]),
+      );
+    }
+    final order = <StanceKind>[];
+    for (final s in plan.bySeries) {
+      if (!order.contains(s)) order.add(s);
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Row(children: [
+        for (final s in order) ...[icon(s), const SizedBox(width: 2)],
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            tr('Сейчас: {s} · порядок: {o}', {
+              's': tr(StancePlan.label(cur)),
+              'o': order.map((s) => tr(StancePlan.label(s))).join(' → '),
+            }),
+            style: tt.labelSmall,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ]),
     );
   }
 }

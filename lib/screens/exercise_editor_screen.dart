@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/exercise.dart';
 import '../models/series_spec.dart';
 import '../models/target_face.dart';
+import '../logic/stance_plan.dart';
 import '../state/app_data_store.dart';
 import '../widgets/glass_pill.dart';
 import '../i18n/i18n.dart';
@@ -195,6 +196,18 @@ class _ExerciseEditorScreenState extends State<ExerciseEditorScreen> {
             ],
             onChanged: (v) => setState(() => _faceCode = v ?? _faceCode),
           ),
+          // Запрос владельца 26.11: при выборе мишени сразу видно, какая
+          // изготовка (и в каком порядке, если их три).
+          if (StancePlan.hintForFace(_faceCode).isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6, left: 4),
+              child: Text(
+                tr(StancePlan.hintForFace(_faceCode)),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ),
           const SizedBox(height: 20),
           SegmentedButton<bool>(
             segments: [

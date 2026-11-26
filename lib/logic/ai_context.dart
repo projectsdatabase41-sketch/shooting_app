@@ -8,6 +8,7 @@ import '../models/exercise.dart';
 import '../models/shot.dart';
 import '../models/target_face.dart';
 import '../models/training_session.dart';
+import 'stance_plan.dart';
 
 /// Откуда пользователь задаёт вопрос. От этого зависит, что для бота
 /// «сейчас» и о чём его, скорее всего, спрашивают.
@@ -553,6 +554,14 @@ Notes: only when explicitly asked to save a note, add a ```note block at the end
       // координатам невозможно.
       if (s.extra != null && s.extra!.isNotEmpty) {
         b.writeln('device=${jsonEncode(s.extra)}');
+      }
+      // Изготовка (запрос владельца 26.11): ИИ должен знать не только имя
+      // упражнения, но и какое положение и в каком порядке идёт.
+      if (exercise != null) {
+        final plan = StancePlan.forExercise(exercise!);
+        b.writeln(plan.threePositions
+            ? 'stances=order:${plan.orderHint} (ISSF: kneeling → prone → standing)'
+            : 'stance=${plan.orderHint}');
       }
       final open = _limitShots(s.shots);
       b.writeln('shots (open training, n|series|score|x|y|time):');
