@@ -14,6 +14,9 @@
   "ai": {
     "proxy": true
   },
+  "models": {
+    "proxy": true
+  },
   "push": {
     "quietSeconds": 120
   },
