@@ -36,14 +36,11 @@
     <span class="brand-name">STEP&nbsp;Viewer</span>
   </div>
 
+  <!-- Панель управления (отзыв владельца 26.11): «Подогнать» убрана,
+       «Фон» и «Рёбра» стоят рядом — это одна группа отображения, «Масса»
+       переехала вниз (к редактированию деталей), качество называется
+       SD/HD, шестерёнка настроек — справа. -->
   <div class="toolbar" role="toolbar" aria-label="Управление просмотром">
-    <!-- «Каталог» — первая слева (замечания владельца 24.11): открывает
-         окошко каталога в приложении через мост NexusApp (JS-хендлер
-         регистрирует Flutter, см. lib/viewer/step_viewer_io.dart).
-         По умолчанию спрятана: app.js при загрузке покажет её, только
-         если мост найден (window.NexusApp / window.flutter_inappwebview).
-         На вебе и в standalone кнопка остаётся скрытой — «Каталог» там
-         показывает сам Flutter (FAB над iframe). -->
     <button id="catalog-btn" class="btn" type="button" hidden title="Каталог 3D-моделей">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 2.5h4.5v4.5H2.5ZM9 2.5h4.5v4.5H9ZM2.5 9h4.5v4.5H2.5ZM9 9h4.5v4.5H9Z"/></svg>
       Каталог
@@ -57,30 +54,31 @@
 
     <span class="sep" aria-hidden="true"></span>
 
-    <!-- Блок ракурсов (segmented «Изо/Спереди/Сверху/Справа») убран целиком
-         (замечание 1 владельца 24.11: виды могут быть перепутаны в проекте).
-         «Подогнать» и остальные кнопки — на месте: панели масса/настройки
-         опущены под шапкой и не перекрываются (возврат к «как было ранее»).
-         Быстрые клавиши 1–4 оставлены в app.js: визуального блока с видами
-         больше нет, а клавиатурные ракурсы на ПК ничего не загромождают. -->
+    <!-- Группа отображения: рёбра и фон — один блок. -->
+    <span class="seg" role="group" aria-label="Отображение">
+      <button id="edges-btn" class="btn is-on" type="button" title="Показывать рёбра (E)">Рёбра</button>
+      <button id="theme-btn" class="btn" type="button" title="Светлый / тёмный фон (T)">Фон</button>
+    </span>
 
-    <button id="fit-btn" class="btn" type="button" title="Подогнать под экран (F)">
-      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V3.5A1.5 1.5 0 0 1 3.5 2H6M10 2h2.5A1.5 1.5 0 0 1 14 3.5V6M14 10v2.5a1.5 1.5 0 0 1-1.5 1.5H10M6 14H3.5A1.5 1.5 0 0 1 2 12.5V10"/></svg>
-      Подогнать
-    </button>
-    <button id="edges-btn" class="btn is-on" type="button" title="Показывать рёбра (E)">Рёбра</button>
-    <button id="theme-btn" class="btn" type="button" title="Светлый / тёмный фон (T)">Фон</button>
-    <button id="mass-btn" class="btn" type="button" title="Масса, центр тяжести и объём модели (M)">Масса</button>
-    <button id="quality-btn" class="btn" type="button" hidden title="Качество триангуляции: черновик открывается быстрее">Качество: точно</button>
-    <button id="settings-btn" class="btn btn-icon" type="button" title="Чувствительность мыши и кэш">⚙</button>
+    <button id="quality-btn" class="btn" type="button" hidden title="SD — быстрый черновик, HD — полная точность">SD</button>
+
+    <span class="grow" aria-hidden="true"></span>
+
+    <button id="settings-btn" class="btn btn-icon" type="button" title="Настройки: чувствительность вращения и кэш">⚙</button>
   </div>
 </header>
 
-<aside id="info" class="info is-empty" aria-live="polite">
-  <div id="info-title" class="info-title">Модель не загружена</div>
-  <div id="info-stats" class="info-stats">Откройте .stp / .step / .glb файл</div>
+<!-- Низ: детали модели (скрыть/показать) и масса. -->
+<aside id="bottombar" class="bottombar">
+  <div id="parts-strip" class="parts-strip" aria-label="Детали модели"></div>
+  <div class="bottombar-line">
+    <div id="info" class="info is-empty" aria-live="polite">
+      <div id="info-title" class="info-title">Модель не загружена</div>
+      <div id="info-stats" class="info-stats">Откройте .stp / .step / .glb файл</div>
+    </div>
+    <button id="mass-btn" class="btn" type="button" hidden title="Масса и центр тяжести (M)">Масса</button>
+  </div>
 </aside>
-
 
 <aside id="mass-panel" class="mass-panel" hidden>
   <header class="mass-panel-head">
@@ -133,28 +131,25 @@
     <button id="mass-copy" class="btn" type="button">Скопировать отчёт</button>
   </footer>
 </aside>
+
 <div class="hint">
   <span><b>ЛКМ</b> — вращать</span>
   <span><b>ПКМ / wheel‑клик</b> — панорама</span>
   <span><b>Колесо</b> — масштаб</span>
-  <span><b>F</b> — подогнать</span>
 </div>
 
 <div id="empty" class="empty">
   <div class="empty-card">
     <div class="empty-title">Откройте STEP‑файл</div>
     <div id="empty-sub" class="empty-sub">Кнопка «Открыть STEP» или перетащите файл (.stp / .step / .glb) — всё обрабатывается локально, на устройстве</div>
-    <!-- Чипы «Посмотреть на примере» из версии для ПК убраны (владелец, 24.11):
-         папка samples/ не объявлена в pubspec (править его нельзя) и не попадёт
-         в APK/сборку, поэтому ссылки вели бы на несуществующие файлы.
-         Открывается по-прежнему через файл или ?url=/?model=. -->
   </div>
 </div>
 
 <div id="overlay" class="overlay" hidden>
   <div class="overlay-box">
-    <div class="spinner" aria-hidden="true"></div>
+    <div class="overlay-n" aria-hidden="true">N</div>
     <div id="overlay-text" class="overlay-text">Читаю STEP…</div>
+    <div id="overlay-tip" class="overlay-tip"></div>
     <div id="overlay-sub" class="overlay-sub"></div>
   </div>
 </div>

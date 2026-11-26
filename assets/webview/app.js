@@ -68,7 +68,6 @@ const dom = {
   viewport: document.getElementById('viewport'),
   openBtn: document.getElementById('open-btn'),
   fileInput: document.getElementById('file-input'),
-  fitBtn: document.getElementById('fit-btn'),
   edgesBtn: document.getElementById('edges-btn'),
   themeBtn: document.getElementById('theme-btn'),
   // Блок ракурсов ([data-view]) убран из разметки (замечание 1 владельца
@@ -480,7 +479,9 @@ async function loadStepBuffer(buffer, fileName, options = {}) {
 /** Выбор качества: большие файлы сначала показываем черновиком. */
 function pickQuality(bytesLength) {
   if (state.qualityUserChoice) return state.qualityUserChoice;
-  return bytesLength > DRAFT_THRESHOLD_BYTES ? 'draft' : 'fine';
+  // Отзыв владельца 26.11: по умолчанию SD (черновик) — открывается быстро,
+  // HD пользователь включает кнопкой. Большие файлы больше не решают за него.
+  return 'draft';
 }
 
 /**
@@ -505,11 +506,12 @@ async function switchQuality(quality) {
 function showQualityState(quality, fromCache) {
   if (!dom.qualityBtn) return;
   dom.qualityBtn.hidden = state.modelKind !== 'step';
-  dom.qualityBtn.textContent = quality === 'draft' ? 'Качество: черновик' : 'Качество: точно';
+  // Отзыв владельца 26.11: качество называется SD/HD, а не «черновик/точно».
+  dom.qualityBtn.textContent = quality === 'draft' ? 'SD' : 'HD';
   dom.qualityBtn.classList.toggle('is-on', quality === 'fine');
   dom.qualityBtn.title = fromCache
     ? 'Геометрия взята из кэша — переключение мгновенное'
-    : 'Переключить качество триангуляции (большие файлы сначала открываются черновиком)';
+    : 'SD — быстрый черновик, HD — полная точность (может занять до минуты)';
 }
 /** Быстрый путь: готовый GLB/glTF (например, заранее сконвертированный STEP). */
 async function loadGltfBuffer(buffer, fileName) {
@@ -1006,14 +1008,46 @@ function applyTheme(theme, silent) {
 /* UI                                                                  */
 /* ------------------------------------------------------------------ */
 
+const LOADING_TIPS = [
+  'Извлекаю геометрию из файла…',
+  'Разбираю сборку на детали…',
+  'Считаю поверхности и кромки…',
+  'Упрощаю сетку для быстрого показа…',
+  'Тяжёлая сборка — это нормально, ждём до 4 минут…',
+  'Почти готово: собираю сцену…',
+];
+let overlayTipTimer = 0;
+let overlayTipIndex = 0;
+
+function startOverlayTips() {
+  const tipEl = document.getElementById('overlay-tip');
+  if (!tipEl) return;
+  overlayTipIndex = 0;
+  tipEl.textContent = LOADING_TIPS[0];
+  clearInterval(overlayTipTimer);
+  // Отзыв владельца 26.11: подсказки меняются раз в 10 секунд, чтобы при
+  // тяжёлом файле не казалось, что приложение зависло.
+  overlayTipTimer = setInterval(() => {
+    overlayTipIndex = (overlayTipIndex + 1) % LOADING_TIPS.length;
+    tipEl.textContent = LOADING_TIPS[overlayTipIndex];
+  }, 10000);
+}
+
+function stopOverlayTips() {
+  clearInterval(overlayTipTimer);
+  overlayTipTimer = 0;
+}
+
 function showOverlay(text, sub) {
   dom.overlayText.textContent = text || '';
   dom.overlaySub.textContent = sub || '';
   dom.overlay.hidden = false;
+  startOverlayTips();
 }
 
 function hideOverlay() {
   dom.overlay.hidden = true;
+  stopOverlayTips();
 }
 
 /* Оверлей с «живым» счётчиком времени: разбор STEP может идти десятки секунд. */
@@ -1052,13 +1086,13 @@ function showToast(message) {
 }
 
 function updateInfo(elapsedMs) {
-  const name = state.fileName || 'model.stp';
-  dom.infoTitle.textContent = name;
-  dom.infoTitle.title = name;
+  // Отзыв владельца 26.11: внизу не показываем ни имя файла (это ID на
+  // Google Диске), ни время генерации. Только состав модели.
+  dom.infoTitle.textContent = state.parts ? 'Модель загружена' : 'Модель не загружена';
+  dom.infoTitle.title = '';
 
   const parts = formatNumber(state.parts);
   const tris = formatNumber(state.triangles);
-  const time = elapsedMs ? `${(elapsedMs / 1000).toFixed(1)} с` : '—';
 
   let dims = '';
   const box = state.bbox;
@@ -1069,12 +1103,60 @@ function updateInfo(elapsedMs) {
 
   let extra = '';
   if (state.modelKind === 'step') {
-    extra += state.quality === 'draft' ? ' · черновик' : ' · точно';
+    extra += state.quality === 'draft' ? ' · SD' : ' · HD';
     if (state.cacheHit) extra += ' · из кэша';
   }
 
-  dom.infoStats.textContent = `${parts} тел · ${tris} треугольников · ${time}${dims}${extra}`;
+  dom.infoStats.textContent = state.parts
+    ? `${parts} деталей · ${tris} треугольников${dims}${extra}`
+    : 'Откройте .stp / .step / .glb файл';
   dom.info.classList.remove('is-empty');
+  buildPartsStrip();
+}
+
+/** Список деталей внизу: каждую можно скрыть (она становится прозрачной). */
+function buildPartsStrip() {
+  const strip = document.getElementById('parts-strip');
+  if (!strip) return;
+  const all = [];
+  if (state.modelGroup) {
+    state.modelGroup.traverse((child) => {
+      if (child.isMesh && child.name !== 'edges') all.push(child);
+    });
+  }
+  strip.textContent = '';
+  if (!all.length) return;
+  all.slice(0, 80).forEach((mesh, index) => {
+    const hidden = mesh.userData.hiddenPart === true;
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'part-chip' + (hidden ? ' is-hidden' : '');
+    chip.title = mesh.name || `Деталь ${index + 1}`;
+    chip.textContent = `${hidden ? '◌' : '◉'} ${mesh.name || `Деталь ${index + 1}`}`;
+    chip.addEventListener('click', () => togglePart(mesh));
+    strip.appendChild(chip);
+  });
+}
+
+/** Скрыть/показать деталь: прозрачность, а не удаление — сборку видно без неё. */
+function togglePart(mesh) {
+  if (!mesh.userData.origMaterial) {
+    const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    mesh.userData.origMaterial = mesh.material;
+    const ghosts = list.map((m) => {
+      const copy = m.clone();
+      copy.transparent = true;
+      copy.opacity = 0.06;
+      copy.depthWrite = false;
+      return copy;
+    });
+    mesh.userData.ghostMaterial = Array.isArray(mesh.material) ? ghosts : ghosts[0];
+  }
+  const hidden = mesh.userData.hiddenPart === true;
+  mesh.material = hidden ? mesh.userData.origMaterial : mesh.userData.ghostMaterial;
+  mesh.userData.hiddenPart = !hidden;
+  buildPartsStrip();
+  renderer.render(scene, camera);
 }
 
 /** Размер кэша в настройках. */
@@ -1119,7 +1201,9 @@ async function loadFile(file) {
 
 async function loadUrl(url, name) {
   try {
-    showOverlay('Скачиваю файл…', url);
+    // Отзыв владельца 26.11: адрес модели в оверлее не показываем — вместо
+    // него крупная «N» и меняющиеся подсказки (см. startOverlayTips).
+    showOverlay('Скачиваю файл…', '');
     const response = await fetch(url);
     if (!response.ok) throw new Error(`Не удалось скачать файл (HTTP ${response.status})`);
     let buffer = await response.arrayBuffer();
@@ -1229,7 +1313,8 @@ if (window.NexusApp || window.flutter_inappwebview) {
   window.addEventListener('flutterInAppWebViewPlatformReady', wireCatalogBtn, { once: true });
 }
 
-dom.fitBtn.addEventListener('click', () => fitView());
+// Кнопки «Подогнать» в панели больше нет (отзыв владельца 26.11) — вид
+// подгоняется сам при загрузке и по клавише F.
 
 dom.edgesBtn.addEventListener('click', () => setEdgesEnabled(!state.edgesEnabled));
 
