@@ -423,6 +423,11 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
     // через вью-модель.
     vm.onJumpToTargetRequested = () => _jumpTo(WorkspacePage.target);
 
+    // Отзыв владельца 26.11: горизонтальный режим — как в финале. Шапку
+    // убираем, мишень слева, вертикальное колесо между мишенью и списком
+    // выстрелов, выстрелы справа, серии — снизу.
+    final landscape = MediaQuery.orientationOf(context) == Orientation.landscape;
+
 
     return PopScope(
       // Если завершённая тренировка была разблокирована и что-то поправили, выход спрашивает —
@@ -433,7 +438,9 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
         _handleFinishedEditExit(context, vm);
       },
       child: Scaffold(
-        appBar: GlassHeader(
+        // Отзыв владельца 26.11: в горизонтали шапку убираем (как в финале),
+        // управление — круглыми кнопками слева.
+        appBar: landscape ? null : GlassHeader(
           title: Text(vm.exercise.shownName,
               style: Theme.of(context)
                   .textTheme
@@ -506,6 +513,11 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
                   // Рамке раздела нужна фиксированная высота: у выстрелов,
                   // ассистента, заметок и чата с тренером своя прокрутка.
                   final sectionH = math.max(380.0, box.maxHeight * 0.75);
+
+                  // Горизонталь на телефоне/планшете — как финал (отзыв 26.11).
+                  if (!isDesktopOrWeb && landscape && box.maxWidth >= 600) {
+                    return _wideTraining(context, vm, box);
+                  }
 
                   if (isDesktopOrWeb) {
                     // Мишень слева: квадрат по высоте экрана, ширина чуть
@@ -627,6 +639,86 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
         ),
       ),
     );
+  }
+
+  /// Горизонтальная раскладка тренировки (отзыв владельца 26.11): мишень
+  /// слева, вертикальное колесо выстрелов между мишенью и списком, выстрелы
+  /// справа, серии — снизу. Управление — круглыми кнопками слева.
+  Widget _wideTraining(BuildContext context, TargetViewModel vm, BoxConstraints box) {
+    final targetH = math.min(box.maxHeight * 0.82, box.maxWidth * 0.55);
+    return Stack(children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(56, 4, 8, 4),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Expanded(
+            flex: 6,
+            child: Column(children: [
+              Expanded(child: _TargetPage(height: targetH)),
+              _SeriesStrip(vm: vm),
+            ]),
+          ),
+          // Вертикальное колесо выстрелов: повёрнутая полоса, как в портрете.
+          SizedBox(
+            width: 64,
+            child: Center(
+              child: SizedBox(
+                height: math.min(240, box.maxHeight * 0.55),
+                child: RotatedBox(
+                  quarterTurns: 1,
+                  child: SizedBox(
+                    width: math.min(240, box.maxHeight * 0.55),
+                    height: 64,
+                    child: const _ShotWheelBar(),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 4,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: _ShotsListSection(vm: vm),
+            ),
+          ),
+        ]),
+      ),
+      Positioned(
+        left: 8,
+        top: MediaQuery.paddingOf(context).top + 8,
+        child: _landscapeTools(context, vm),
+      ),
+    ]);
+  }
+
+  /// Круглые кнопки слева в горизонтали — вместо шапки.
+  Widget _landscapeTools(BuildContext context, TargetViewModel vm) {
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      GlassCircleButton(
+        icon: const BoldIcon(Icons.arrow_back),
+        tooltip: tr('Назад'),
+        onTap: () => Navigator.of(context).maybePop(),
+      ),
+      if (vm.zoom != 1.0 || vm.panX != 0 || vm.panY != 0)
+        GlassCircleButton(
+          icon: const BoldIcon(Icons.zoom_out_map),
+          tooltip: tr('Сбросить зум'),
+          onTap: vm.resetZoom,
+        ),
+      if (vm.canEditShots)
+        GlassCircleButton(
+          icon: BoldIcon(vm.isEditing
+              ? Icons.remove_red_eye_outlined
+              : Icons.edit_outlined),
+          tooltip: vm.isEditing ? tr('Просмотр') : tr('Правка'),
+          onTap: () => _toggleEditMode(vm),
+        ),
+      GlassCircleButton(
+        icon: const BoldIcon(Icons.grid_view),
+        tooltip: tr('Разделы'),
+        onTap: () => _openOverview(context),
+      ),
+    ]);
   }
 
   Widget _pageBody(WorkspacePage page, TargetViewModel vm) {
@@ -2009,6 +2101,50 @@ class _ShotWheelBar extends StatelessWidget {
             child: wheel,
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Полоса серий под мишенью в горизонтальном режиме тренировки (отзыв 26.11).
+class _SeriesStrip extends StatelessWidget {
+  final TargetViewModel vm;
+  const _SeriesStrip({required this.vm});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final shots = vm.session.countingShots;
+    if (shots.isEmpty) return const SizedBox(height: 6);
+    final sums = <int, double>{};
+    for (final s in shots) {
+      sums[s.seriesNo] = (sums[s.seriesNo] ?? 0) + s.score;
+    }
+    final total = shots.fold(0.0, (a, s) => a + s.score);
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 2),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(children: [
+          for (final n in (sums.keys.toList()..sort()))
+            Container(
+              margin: const EdgeInsets.only(right: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest.withValues(alpha: 0.7),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                '${tr('Серия {n}', {'n': n})} · ${sums[n]!.toStringAsFixed(1)}',
+                style: theme.textTheme.labelMedium,
+              ),
+            ),
+          Text(
+            '${tr('Итого')} ${total.toStringAsFixed(1)}',
+            style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+        ]),
       ),
     );
   }
