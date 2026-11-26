@@ -2,6 +2,9 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart' show rootBundle;
 
+import 'call_service.dart';
+import 'remote_config.dart';
+
 /// Каталог 3D-моделей с Google Drive.
 ///
 /// Владелец 24.11: «Модели должны лететь с гугл диска. Я открыл
@@ -54,8 +57,16 @@ class DriveModelsCatalog {
   /// `server/models/<id>.stp.gz`: raw.githubusercontent отдаёт их с CORS и
   /// без скачивания на устройство. Сжатие в 4 раза — STP это текст.
   /// Отзыв d8c68001: «failed to fetch при попытке открыть любую модель».
-  static String modelUrl(String id) =>
-      '$_rawBase/$id.stp.gz';
+  /// Адрес модели для вьюера.
+  ///
+  /// По умолчанию — файлы из репозитория (публично). Как только каталог
+  /// загружен в приватный R2, в `config/chat-config.json` ставится
+  /// `"models": {"proxy": true}`, и адрес переключается на воркер звонков:
+  /// файлы лежат в R2 зашифрованными и ссылку на хранилище не отдают.
+  /// Отзыв владельца 26.11: «модели платные, в открытом виде не хранить».
+  static String modelUrl(String id) => RemoteConfig.modelsProxyEnabled
+      ? '${CallService.url}/models/$id/model.stp'
+      : '$_rawBase/$id.stp.gz';
 
   static const _rawBase =
       'https://raw.githubusercontent.com/projectsdatabase41-sketch/shooting_app/main/server/models';
