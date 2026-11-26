@@ -13,6 +13,26 @@ import 'supabase_auth_service.dart';
 /// SQL Editor, а здесь — проверка результата; после сбоя достаточно запустить
 /// тот же SQL ещё раз (он идемпотентный) и проверить снова.
 class DbSetupCheck {
+  /// Аргументы-пустышки для проверки функций. Без них PostgREST отвечает
+  /// 404/PGRST202 «функция не найдена», даже когда она есть: у всех функций,
+  /// кроме list_public_tables, обязательные параметры (жалоба 26.11 —
+  /// «таблицы зелёные, функции красные»).
+  static const probes = <String, Map<String, dynamic>>{
+    'validate_share_token': {'p_token': 'probe'},
+    'get_share_policy': {'p_token': 'probe'},
+    'get_shared_table': {'p_token': 'probe', 'p_table': 'x', 'p_limit': 1},
+    'coach_create_task': {'p_token': 'probe', 'p_task': <String, dynamic>{}},
+    'coach_get_tasks': {'p_token': 'probe'},
+    'coach_delete_task': {
+      'p_token': 'probe',
+      'p_task_id': '00000000-0000-0000-0000-000000000000',
+    },
+    'athlete_submit_run': {'p_run': <String, dynamic>{}},
+    'get_coach_chat': {'p_token': 'probe'},
+    'add_coach_chat': {'p_token': 'probe', 'p_text': 'probe'},
+  };
+
+  /// Проверка таблиц и функций личной базы.
   static const tables = <String>[
     'project_settings', 'target_faces', 'exercise_templates', 'training_packages', 'exercises', 'file_assets',
     'photo_import_jobs', 'shots', 'remote_athlete_sources', 'archived_packages', 'share_grants', 'share_events',
@@ -73,7 +93,7 @@ class DbSetupCheck {
         for (var attempt = 0; attempt < 2; attempt++) {
           try {
             final r = await client
-                .post(Uri.parse('${auth.url}/rest/v1/rpc/$f'), headers: headers, body: '{}')
+                .post(Uri.parse('${auth.url}/rest/v1/rpc/$f'), headers: headers, body: jsonEncode(probes[f] ?? const <String, dynamic>{}))
                 .timeout(const Duration(seconds: 35));
             // функция есть, если сервер ответил чем угодно, кроме «не найдена»
             // (400 «нет аргументов» / 403 «нужен токен» — значит, она существует)
