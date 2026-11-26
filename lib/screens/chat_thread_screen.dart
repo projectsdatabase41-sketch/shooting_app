@@ -78,6 +78,7 @@ import 'dart:typed_data' show Uint8List;
 import 'photo_viewer_screen.dart';
 import '../i18n/i18n.dart';
 import '../widgets/messenger_bubble.dart';
+import '../services/secure_screen.dart';
 
 /// Переписка с одним контактом. Открытие ветки сразу отмечает входящие
 /// прочитанными локально (сервер их к этому моменту уже не хранит — см.
@@ -371,6 +372,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   @override
   void initState() {
     super.initState();
+    SecureScreen.enable();
     _lastTranslationLanguage = widget.prefs.translationLanguage;
     PushService.incomingPing.addListener(_onPushPing);
     WidgetsBinding.instance.addObserver(this);
@@ -543,6 +545,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   @override
   void dispose() {
+    SecureScreen.disable();
     for (final t in _scrollTimers) {
       t.cancel();
     }

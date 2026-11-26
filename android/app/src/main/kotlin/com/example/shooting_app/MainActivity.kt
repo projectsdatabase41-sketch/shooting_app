@@ -21,6 +21,16 @@ class MainActivity : FlutterFragmentActivity() {
     /// возвращаем обычное поведение.
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "nexus/secure")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "setSecure" -> {
+                        setSecure(call.argument<Boolean>("on") == true)
+                        result.success(true)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "nexus/soft_input")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -54,6 +64,19 @@ class MainActivity : FlutterFragmentActivity() {
                 window.attributes = attrs
             }
         } catch (_: Throwable) {
+        }
+    }
+
+    /// Запрет скриншотов для личных экранов (переписка, безопасность).
+    /// Экран сам просит включить/выключить через канал nexus/secure.
+    private fun setSecure(on: Boolean) {
+        if (on) {
+            window.setFlags(
+                WindowManager.LayoutParams.FLAG_SECURE,
+                WindowManager.LayoutParams.FLAG_SECURE
+            )
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
     }
 }

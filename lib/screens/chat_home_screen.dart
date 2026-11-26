@@ -44,6 +44,7 @@ import 'chat_people_screen.dart';
 import 'chat_settings_screen.dart';
 import 'chat_thread_screen.dart';
 import '../i18n/i18n.dart';
+import '../services/secure_screen.dart';
 
 /// Мессенджер — отдельная учётная запись от личной базы тренировок (см.
 /// `ChatAuthService`). Главный экран — список собеседников; переписка с
@@ -101,6 +102,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
   @override
   void initState() {
     super.initState();
+    SecureScreen.enable();
     _db = context.read<AppDataStore>().db;
     _auth = ChatAuthService(_db);
     _mainAuth = SupabaseAuthService(_db);
@@ -193,6 +195,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
 
   @override
   void dispose() {
+    SecureScreen.disable();
     ChatAuthService.otherDeviceActive.removeListener(_deviceBanner);
     try {
       _bannerMessenger?.clearMaterialBanners();

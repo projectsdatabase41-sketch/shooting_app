@@ -7,6 +7,7 @@ import '../services/app_lock.dart';
 import '../services/local_db_service.dart';
 import '../widgets/glass_pill.dart';
 import '../widgets/pattern_pad.dart';
+import '../services/secure_screen.dart';
 
 /// «Защита входа»: PIN при запуске приложения, вход по биометрии, время до повторной блокировки.
 class SecuritySettingsScreen extends StatefulWidget {
@@ -24,9 +25,17 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
   @override
   void initState() {
     super.initState();
+    // PIN и биометрия — личный экран: запрещаем скриншоты и превью.
+    SecureScreen.enable();
     AppLock.biometricAvailable().then((v) {
       if (mounted) setState(() => _bioAvailable = v);
     });
+  }
+
+  @override
+  void dispose() {
+    SecureScreen.disable();
+    super.dispose();
   }
 
   /// Диалог: два раза ввести новый PIN. `null` — отмена.
