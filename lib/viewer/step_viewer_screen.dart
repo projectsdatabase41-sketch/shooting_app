@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../i18n/i18n.dart';
 import '../services/drive_models_catalog.dart' show DriveModelsCatalog;
+import '../services/soft_input.dart';
 import '../widgets/app_backdrop.dart';
 import '../widgets/glass_pill.dart';
 import '../widgets/glass_route.dart';
@@ -67,6 +68,15 @@ class _StepViewerScreenState extends State<StepViewerScreen> {
   void initState() {
     super.initState();
     _url = widget.modelUrl; // открытие по modelUrl извне не ломаем
+    // Отзыв 26.11: клавиатура дёргала 3D-сцену. Пока экран открыт, окно
+    // Android не сжимается под клавиатуру (см. lib/services/soft_input.dart).
+    SoftInput.adjustNothing();
+  }
+
+  @override
+  void dispose() {
+    SoftInput.adjustResize();
+    super.dispose();
   }
 
   bool get _hasBridge =>
@@ -97,7 +107,7 @@ class _StepViewerScreenState extends State<StepViewerScreen> {
 
   Future<void> _openCatalog() async {
     if (_catalogOpen) return;
-    _catalogOpen = true;
+    if (mounted) setState(() => _catalogOpen = true);
     try {
       final cs = Theme.of(context).colorScheme;
       await showDialog<void>(
@@ -175,7 +185,7 @@ class _StepViewerScreenState extends State<StepViewerScreen> {
         ),
       );
     } finally {
-      _catalogOpen = false;
+      if (mounted) setState(() => _catalogOpen = false);
     }
   }
 
@@ -267,7 +277,9 @@ class _StepViewerScreenState extends State<StepViewerScreen> {
                   top: MediaQuery.paddingOf(context).top +
                       GlassHeader.height)
               : EdgeInsets.zero,
-          child: _ViewerBody(
+          child: Offstage(
+            offstage: _catalogOpen,
+            child: _ViewerBody(
             key: ValueKey('viewer-page-$_pageVersion'),
             modelUrl: _url,
             onJs: (js) {
@@ -280,6 +292,7 @@ class _StepViewerScreenState extends State<StepViewerScreen> {
               if (!mounted) return;
               _openCatalog();
             },
+          ),
           ),
         ),
       ),

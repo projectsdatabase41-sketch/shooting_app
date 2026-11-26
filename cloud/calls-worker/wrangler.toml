@@ -5,6 +5,11 @@ compatibility_date = "2025-09-01"
 [vars]
 # Открытые ключи подписи токенов чат-базы — ими проверяется пользователь.
 JWKS_URL = "https://yirvomezybprdlntxyas.supabase.co/auth/v1/.well-known/jwks.json"
+# Пробуждение бесплатного проекта Supabase: cron воркера дважды в день,
+# чтобы проект не ушёл в паузу после недели без активности.
+# anon-ключ публичный — он же лежит в config/chat-config.json.
+KEEPALIVE_URL = "https://yirvomezybprdlntxyas.supabase.co"
+KEEPALIVE_ANON = "sb_publishable_2nW7G7lKueMQamuFeoC3Cw_iql48Xj3"
 # Пороги трафика через ретранслятор в месяц — ниже бесплатных объёмов
 # (Cloudflare 1000 ГБ, Metered 500 МБ), чтобы не платить никогда.
 CF_TURN_LIMIT_GB = "800"

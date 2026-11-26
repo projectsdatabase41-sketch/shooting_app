@@ -50,34 +50,56 @@ class DbSetupCheck {
       if (token != null) 'Authorization': 'Bearer $token',
       'Content-Type': 'application/json',
     };
-    final client = (clientFactory ?? http.Client.new)();
+      final client = (clientFactory ?? http.Client.new)();
     try {
       Future<MapEntry<String, bool>> table(String t) async {
-        try {
-          final r = await client
-              .get(Uri.parse('${auth.url}/rest/v1/$t?select=*&limit=0'), headers: headers)
-              .timeout(const Duration(seconds: 20));
-          return MapEntry(t, !isMissing(r.statusCode, utf8.decode(r.bodyBytes)));
-        } catch (_) {
-          return MapEntry(t, false);
+        // Две попытки: одиночный таймаут не должен выглядеть как
+        // «таблицы нет» (жалоба 26.11: проверка показывала отсутствующие
+        // таблицы при медленной сети).
+        for (var attempt = 0; attempt < 2; attempt++) {
+          try {
+            final r = await client
+                .get(Uri.parse('${auth.url}/rest/v1/$t?select=*&limit=0'), headers: headers)
+                .timeout(const Duration(seconds: 35));
+            return MapEntry(t, !isMissing(r.statusCode, utf8.decode(r.bodyBytes)));
+          } catch (_) {
+            if (attempt == 1) return MapEntry(t, false);
+          }
         }
+        return MapEntry(t, false);
       }
 
       Future<MapEntry<String, bool>> fn(String f) async {
-        try {
-          final r = await client
-              .post(Uri.parse('${auth.url}/rest/v1/rpc/$f'), headers: headers, body: '{}')
-              .timeout(const Duration(seconds: 20));
-          // функция есть, если сервер ответил чем угодно, кроме «не найдена»
-          // (400 «нет аргументов» / 403 «нужен токен» — значит, она существует)
-          return MapEntry(f, !isMissing(r.statusCode, utf8.decode(r.bodyBytes)));
-        } catch (_) {
-          return MapEntry(f, false);
+        for (var attempt = 0; attempt < 2; attempt++) {
+          try {
+            final r = await client
+                .post(Uri.parse('${auth.url}/rest/v1/rpc/$f'), headers: headers, body: '{}')
+                .timeout(const Duration(seconds: 35));
+            // функция есть, если сервер ответил чем угодно, кроме «не найдена»
+            // (400 «нет аргументов» / 403 «нужен токен» — значит, она существует)
+            return MapEntry(f, !isMissing(r.statusCode, utf8.decode(r.bodyBytes)));
+          } catch (_) {
+            if (attempt == 1) return MapEntry(f, false);
+          }
         }
+        return MapEntry(f, false);
       }
 
-      final t = await Future.wait(tables.map(table));
-      final f = await Future.wait(functions.map(fn));
+      // Не больше 6 запросов одновременно: 34 параллельных запроса к
+      // маленькому проекту Supabase упирались в троттлинг и давали ложные
+      // «не хватает» (жалоба 26.11).
+      Future<List<MapEntry<String, bool>>> limited<T>(
+          List<T> items, Future<MapEntry<String, bool>> Function(T) f) async {
+        final out = <MapEntry<String, bool>>[];
+        for (var i = 0; i < items.length; i += 6) {
+          final part = items.skip(i).take(6).map(f);
+          out.addAll(await Future.wait(part));
+        }
+        return out;
+      }
+
+      final t = await limited(tables, table);
+      final f = await limited(functions, fn);
       return (tables: Map.fromEntries(t), functions: Map.fromEntries(f));
     } finally {
       client.close();

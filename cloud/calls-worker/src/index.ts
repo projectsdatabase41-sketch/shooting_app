@@ -53,6 +53,10 @@ export interface Env {
   ILOVEPDF_PUBLIC_KEY: string;
   /** RSS-источники новостей через запятую. */
   NEWS_FEEDS: string;
+  /// URL и anon-ключ Supabase для пробуждения проекта (не секрет: anon-ключ
+  /// и так публичный, лежит в config/chat-config.json).
+  KEEPALIVE_URL?: string;
+  KEEPALIVE_ANON?: string;
   // NEWS_KEYWORDS больше не используется: по указанию владельца 23.11 сервер
   // грузит все новости из фидов без фильтрации, отбор делает приложение
   // (NewsFilter в lib/services/news_service.dart).
@@ -708,8 +712,41 @@ export default {
   // поэтому лимиты источников не зависят от числа пользователей.
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(refreshNews(env));
+    // Supabase на бесплатном плане усыпляет проект после недели без
+    // активности. Cron воркера идёт дважды в день — им и будим
+    // (см. supabaseKeepalive и docs/sql/2026-11-26-keepalive.sql).
+    ctx.waitUntil(supabaseKeepalive(env));
   },
 };
+
+/// Пробуждение проекта Supabase: один дешёвый RPC-запрос.
+///
+/// Это не «поддержание нагрузки», а именно отметка активности раз в 12 часов,
+/// чтобы бесплатный проект не ушёл в паузу после 7 дней тишины. Ключ — обычный
+/// anon (он публичный), service_role не нужен и не используется.
+async function supabaseKeepalive(env: Env): Promise<void> {
+  const base = (env.KEEPALIVE_URL || '').replace(/\/+$/, '');
+  const anon = env.KEEPALIVE_ANON || '';
+  if (!base || !anon) return;
+  try {
+    const res = await fetch(`${base}/rest/v1/rpc/keepalive`, {
+      method: 'POST',
+      headers: {
+        apikey: anon,
+        Authorization: `Bearer ${anon}`,
+        'Content-Type': 'application/json',
+      },
+      body: '{}',
+    });
+    // 404 = функция ещё не создана (SQL не выполнен) — это нормально,
+    // запрос всё равно дошёл до проекта.
+    if (res.status !== 404 && !res.ok) {
+      console.warn('supabase keepalive', res.status);
+    }
+  } catch (e) {
+    console.warn('supabase keepalive failed', e instanceof Error ? e.message : e);
+  }
+}
 
 type RTCIceServerLike = { urls: string | string[]; username?: string; credential?: string };
 type TurnProvider = 'cloudflare' | 'metered';

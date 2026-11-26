@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shooting_app/logic/stance_plan.dart';
 import 'package:shooting_app/models/exercise.dart';
-import 'package:shooting_app/models/series_spec.dart';
 import 'package:shooting_app/widgets/stance_icon.dart';
 
 Exercise _ex(String name, String face, int shots, int seriesSize) => Exercise(

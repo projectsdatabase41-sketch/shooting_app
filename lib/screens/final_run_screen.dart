@@ -359,11 +359,17 @@ class _FinalRunScreenState extends State<FinalRunScreen> {
         // Отзыв 23.11 №1/№2: личный монитор по умолчанию, табло — по кнопке в шапке.
         // В горизонтальном режиме на широком экране (отзыв 23.11 №3) мишень
         // остаётся слева, а справа — список выстрелов либо табло.
-        body: LayoutBuilder(builder: (ctx, box) {
-          final mq = MediaQuery.of(ctx);
-          final wide = mq.orientation == Orientation.landscape && box.maxWidth >= 700;
-          return _body(ctx, wide: wide);
-        }),
+        // Плотный фон (отзыв 26.11: «фиолетовая маска финала»): тема могла
+        // задать полупрозрачный цвет фона, и обои просвечивали через весь
+        // экран. На финале фон непрозрачный, как в тренировке.
+        body: ColoredBox(
+          color: theme.colorScheme.surface,
+          child: LayoutBuilder(builder: (ctx, box) {
+            final mq = MediaQuery.of(ctx);
+            final wide = mq.orientation == Orientation.landscape && box.maxWidth >= 700;
+            return _body(ctx, wide: wide);
+          }),
+        ),
       ),
     );
   }

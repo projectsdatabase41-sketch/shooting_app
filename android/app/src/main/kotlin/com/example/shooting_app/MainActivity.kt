@@ -2,13 +2,39 @@ package com.example.shooting_app
 
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
+
 import io.flutter.embedding.android.FlutterFragmentActivity
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodChannel
 
 // FragmentActivity нужна биометрическому входу (local_auth).
 class MainActivity : FlutterFragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestHighRefreshRate()
+    }
+
+    /// Канал «мягкая клавиатура» (отзыв 26.11: в 3D-вьюере клавиатура
+    /// дёргала WebView). На время экрана 3D включаем ADJUST_NOTHING — окно
+    /// не меняет размер, WebView не перерисовывает сцену; при выходе
+    /// возвращаем обычное поведение.
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "nexus/soft_input")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "setMode" -> {
+                        val nothing = call.argument<String>("mode") == "nothing"
+                        window.setSoftInputMode(
+                            if (nothing) WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
+                            else WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+                        )
+                        result.success(true)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
     }
 
     /// Просит у системы самую высокую частоту обновления экрана (90/120 Гц), с тем же разрешением:
