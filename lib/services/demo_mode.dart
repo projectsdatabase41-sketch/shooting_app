@@ -133,6 +133,14 @@ class DemoMode {
   /// Данные с экрана текстом (вместо скриншота): видимые надписи, состояние переключателей и
   /// флажков. Поля ввода не читаются (там может быть личное). Не больше [maxChars] знаков.
   static String screenSnapshot({int maxChars = 2500}) {
+    // Аудит 26.11: автодиагностика отправляла ВЕСЬ видимый текст экрана, а на
+    // экранах переписки и ассистента это личные сообщения и имена. Такие
+    // экраны в отчёт не попадают — только пометка, что это чат.
+    final pageName = currentPage();
+    if (RegExp(r'Chat|AiChat|Messenger|Мессенджер|Ассистент|Переписка', caseSensitive: false)
+        .hasMatch(pageName)) {
+      return 'экран переписки/ассистента: текст не отправляется (личное)';
+    }
     final route = DemoRouteObserver.instance.top;
     final ctx = route is ModalRoute ? route.subtreeContext : null;
     if (ctx == null) return '';
