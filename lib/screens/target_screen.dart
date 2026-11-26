@@ -1659,18 +1659,26 @@ class _TrainingControlsBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final vm = context.watch<TargetViewModel>();
     final status = vm.session.status;
+    // Отзыв 26.11: в горизонтали верхние «Пауза/Завершить» прятались под
+    // шторкой уведомлений Android — убираем их совсем, нажать всё равно
+    // нельзя. В портрете оставляем. Плюс сдвигаем строку ниже статус-бара,
+    // чтобы время не залезало под часы и батарею.
+    final landscape = MediaQuery.orientationOf(context) == Orientation.landscape;
+    final topPad = landscape ? MediaQuery.paddingOf(context).top : 0.0;
 
     return Material(
       color: Theme.of(context).colorScheme.surfaceContainerHighest,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: EdgeInsets.fromLTRB(12, 6 + topPad, 12, 6),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                _buildActionButton(context, vm, status),
-                const SizedBox(width: 12),
+                if (!landscape) ...[
+                  _buildActionButton(context, vm, status),
+                  const SizedBox(width: 12),
+                ],
                 Text(tr('Общее: {p}', {'p': _fmt(vm.elapsed)}),
                     style: const TextStyle(fontSize: 12)),
                 const SizedBox(width: 12),
