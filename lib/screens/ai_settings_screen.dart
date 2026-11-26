@@ -21,19 +21,21 @@ import '../i18n/i18n.dart';
 
 /// Настройки ассистента: ключ, цепочка моделей, справочные материалы.
 class AiSettingsScreen extends StatefulWidget {
-  const AiSettingsScreen({super.key});
+  /// Какую вкладку открыть сразу (финалы ведут в «Озвучивание»).
+  final AiSettingsTab initialTab;
+  const AiSettingsScreen({super.key, this.initialTab = AiSettingsTab.general});
 
   @override
   State<AiSettingsScreen> createState() => _AiSettingsScreenState();
 }
 
-enum _AiTab { general, memory, voice, vision }
+/// Разделы настроек ИИ (отзыв владельца 26.11): у каждого свои ключ и модели.
+enum AiSettingsTab { general, memory, voice, vision }
 
 class _AiSettingsScreenState extends State<AiSettingsScreen> {
   /// Отзыв владельца 26.11: настройки ИИ разделены на страницы — общие ключи,
   /// память, озвучивание и зрение. У каждой страницы свои ключ и модели.
-  _AiTab _tab = _AiTab.general;
-  late final TextEditingController _visionKey;
+  AiSettingsTab _tab = AiSettingsTab.general;  late final TextEditingController _visionKey;
   late final TextEditingController _visionModel;
   String? _visionResult;
   bool _visionBusy = false;
@@ -90,6 +92,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
   @override
   void initState() {
     super.initState();
+    _tab = widget.initialTab;
     _db = context.read<AppDataStore>().db;
     _settings = AiSettings(_db);
     _personalAuth = SupabaseAuthService(_db);
@@ -373,19 +376,19 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             EdgeInsets.fromLTRB(16, topInset + GlassHeader.height + 8, 16, 32),
         children: [
           _card([
-            SegmentedButton<_AiTab>(
+            SegmentedButton<AiSettingsTab>(
               showSelectedIcon: false,
               segments: const [
-                ButtonSegment(value: _AiTab.general, label: Text('Общие')),
-                ButtonSegment(value: _AiTab.memory, label: Text('Память')),
-                ButtonSegment(value: _AiTab.voice, label: Text('Озвучивание')),
-                ButtonSegment(value: _AiTab.vision, label: Text('Зрение')),
+                ButtonSegment(value: AiSettingsTab.general, label: Text('Общие')),
+                ButtonSegment(value: AiSettingsTab.memory, label: Text('Память')),
+                ButtonSegment(value: AiSettingsTab.voice, label: Text('Озвучивание')),
+                ButtonSegment(value: AiSettingsTab.vision, label: Text('Зрение')),
               ],
               selected: {_tab},
               onSelectionChanged: (s) => setState(() => _tab = s.first),
             ),
           ]),
-          if (_tab == _AiTab.general) _card([
+          if (_tab == AiSettingsTab.general) _card([
           SectionHeader(
             title: tr('Доступ'),
             subtitle: switch (_mode) {
@@ -478,7 +481,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
           ]),
           // Озвучка финалов: отдельный блок и свой ключ (отзыв владельца
           // 26.11 — не у каждого ключа есть доступ к моделям озвучки).
-          if (_tab == _AiTab.voice) _card([
+          if (_tab == AiSettingsTab.voice) _card([
             SectionHeader(
               title: tr('Озвучка финалов'),
               subtitle: tr('Диктор голосом модели вместо голоса телефона'),
@@ -486,7 +489,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             const SizedBox(height: 12),
             FinalsVoicePanel(db: _db),
           ]),
-          if (_tab == _AiTab.general) _card([
+          if (_tab == AiSettingsTab.general) _card([
           SectionHeader(
             title: tr('Поиск в интернете'),
             subtitle: tr(
@@ -521,7 +524,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             ),
           ),
           ]),
-          if (_tab == _AiTab.memory) _card([
+          if (_tab == AiSettingsTab.memory) _card([
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.psychology_outlined),
@@ -531,7 +534,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AiMemoryScreen())),
           ),
           ]),
-          if (_tab == _AiTab.memory) _card([
+          if (_tab == AiSettingsTab.memory) _card([
           SectionHeader(title: tr('Инструкция ассистенту')),
           const SizedBox(height: 12),
           TextField(
@@ -604,7 +607,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
           // сам подставляет ключ — со встроенным ключом ручной выбор
           // модели заменяет одна кнопка ниже (решение пользователя,
           // пункт 2 списка правок).
-          if (_tab == _AiTab.general) _card([
+          if (_tab == AiSettingsTab.general) _card([
           if (_ownKey) ...[
             SectionHeader(
               title: tr('Модели'),
@@ -778,7 +781,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
           ],
           ]),
           // Справочные материалы — для всех (решение пользователя).
-          if (_tab == _AiTab.memory) _card([
+          if (_tab == AiSettingsTab.memory) _card([
             SectionHeader(
               title: tr('Справочные материалы'),
               subtitle: tr(
@@ -811,7 +814,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
               ],
             ),
           ]),
-          if (_tab == _AiTab.vision) _card([
+          if (_tab == AiSettingsTab.vision) _card([
             SectionHeader(
               title: tr('ИИ-зрение, генерация и анализ изображений'),
               subtitle: tr('Пока функции зрения не включены — здесь заранее настраиваются ключ и модель'),

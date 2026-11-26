@@ -4,7 +4,7 @@ import 'dart:async';
 import 'dart:convert';
 import '../widgets/glass_route.dart';
 import '../widgets/app_backdrop.dart';
-import 'finals_voice_settings_screen.dart';
+import 'ai_settings_screen.dart';
 import '../finals/voice_packs.dart';
 import 'dart:math' as math;
 
@@ -770,10 +770,11 @@ stp — сколько выстрелов до пика формы (1–30), dis
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.record_voice_over_outlined),
-                  title: Text(tr('Голос ИИ')),
-                  subtitle: Text(tr('Озвучка моделью ИИ: нужен свой ключ в настройках ИИ')),
+                  title: Text(tr('Озвучка финалов')),
+                  subtitle: Text(tr('Ключ, модель и голос — в настройках ИИ, раздел «Озвучивание»')),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => FinalsVoiceSettingsScreen(db: store.db))),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => const AiSettingsScreen(initialTab: AiSettingsTab.voice))),
                 ),
                 // 4. Откуда данные ботов.
                 Container(
