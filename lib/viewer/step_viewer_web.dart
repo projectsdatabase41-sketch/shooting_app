@@ -1,49 +1,62 @@
-import 'dart:ui_web' as ui_web;
-
 import 'package:flutter/material.dart';
-import 'package:web/web.dart' as web;
+import 'package:url_launcher/url_launcher.dart';
 
+import '../i18n/i18n.dart';
 import 'step_viewer_common.dart';
 
-/// Веб: вьюер лежит в ассетах приложения (`assets/assets/webview/`),
-/// поэтому показываем его iframe того же origin — без плагинов и без
-/// отдельной публикации сайта вьюера.
-///
-/// Вьюер открывается в ПОЛНОМ режиме — со своей шапкой (замечания
-/// владельца 24.11, п.1 возвращаем как было). Моста `window.NexusViewer`
-/// снаружи iframe не достать: [onJs] на вебе не вызывается никогда.
-/// Кнопка «Каталог» внутри iframe спрятана (моста нет) — на вебе «Каталог»
-/// рисует сам Flutter (FAB над iframe), поэтому [onOpenCatalog] тут не
-/// используется, принят для одинаковой сигнатуры с step_viewer_io.
+/// Веб: встроенный iframe конфликтует с Flutter-слоем — Flutter рисует
+/// поверх сцены синюю заглушку platform view (отзыв 27.11). Отдельная
+/// вкладка работает нормально, поэтому на вебе 3D открывается в новой
+/// вкладке, а здесь — карточка с кнопкой.
 Widget buildViewer(
   BuildContext context, {
   String? modelUrl,
   void Function(StepViewerJs? js)? onJs,
   VoidCallback? onOpenCatalog,
 }) {
-  var uri = Uri.base.resolve('assets/assets/webview/index.html');
-  final params = <String, String>{
-    // Шапку вьюера НЕ прячем (возврат «как было ранее», замечание 1
-    // владельца 24.11) — параметр embed больше не отправляем.
-    if (modelUrl != null && modelUrl.isNotEmpty) 'url': modelUrl,
-  };
-  if (params.isNotEmpty) uri = uri.replace(queryParameters: params);
-  // Свой тип представления на каждый адрес: при открытии по ссылке src
-  // должен смениться, а фабрика регистрируется один раз на тип.
-  final viewType = 'step-viewer-${uri.toString().hashCode}';
-  ui_web.platformViewRegistry.registerViewFactory(viewType, (int _) {
-    final frame = web.document.createElement('iframe') as web.HTMLIFrameElement;
-    frame.src = uri.toString();
-    frame.style.border = 'none';
-    frame.style.width = '100%';
-    frame.style.height = '100%';
-    frame.setAttribute('allow', 'fullscreen');
-    frame.setAttribute('title', 'STEP viewer');
-    return frame;
-  });
-  // Тёмный фон под загрузку страницы вьюера — чтобы не мелькала белая вспышка.
+  final uri = Uri.base
+      .resolve('assets/assets/webview/index.html')
+      .replace(queryParameters: (modelUrl == null || modelUrl.isEmpty) ? null : {'url': modelUrl});
+  final cs = Theme.of(context).colorScheme;
   return ColoredBox(
     color: const Color(0xFF121417),
-    child: HtmlElementView(viewType: viewType),
+    child: Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 460),
+        child: Card(
+          color: cs.surfaceContainerHigh,
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.threed_rotation, size: 40, color: cs.primary),
+              const SizedBox(height: 10),
+              Text(tr('3D-модель открывается в новой вкладке'),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 6),
+              Text(
+                tr('На вебе встроенная сцена перекрывается интерфейсом, поэтому модель показывается отдельной страницей. Выберите модель в каталоге — вкладка откроется сама.'),
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 14),
+              Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.center, children: [
+                FilledButton.icon(
+                  onPressed: () => launchUrl(uri, webOnlyWindowName: '_blank'),
+                  icon: const Icon(Icons.open_in_new),
+                  label: Text(tr('Открыть 3D в новой вкладке')),
+                ),
+                if (onOpenCatalog != null)
+                  OutlinedButton.icon(
+                    onPressed: onOpenCatalog,
+                    icon: const Icon(Icons.grid_view_outlined),
+                    label: Text(tr('Каталог')),
+                  ),
+              ]),
+            ]),
+          ),
+        ),
+      ),
+    ),
   );
 }

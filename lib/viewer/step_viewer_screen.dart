@@ -87,6 +87,17 @@ class _StepViewerScreenState extends State<StepViewerScreen> {
   /// пробуем `NexusViewer.load(url)` в уже открытом вьюере; не готов —
   /// открываем страницу заново с `?url=` (владелец 24.11).
   Future<void> _loadModel(String url) async {
+    // Веб: встроенный iframe перекрывается слоем Flutter (синяя заглушка
+    // platform view), поэтому модель открываем отдельной вкладкой — там
+    // сцена работает (отзыв 27.11).
+    if (kIsWeb) {
+      final uri = Uri.base
+          .resolve('assets/assets/webview/index.html')
+          .replace(queryParameters: {'url': url});
+      await launchUrl(uri, webOnlyWindowName: '_blank');
+      if (mounted) setState(() => _url = url);
+      return;
+    }
     final js = _js;
     if (_hasBridge && js != null && await js.loadModel(url)) {
       if (!mounted) return;
