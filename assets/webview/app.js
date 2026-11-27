@@ -1378,10 +1378,19 @@ for (const key of Object.keys(sensitivityControls)) {
 }
 
 dom.qualityBtn?.addEventListener('click', async () => {
-  if (state.modelKind !== 'step' || !state.lastBuffer) return;
-  // Отзыв владельца 26.11: кнопка должна реально переключать SD↔HD, а не
-  // только подсвечиваться. Пока идёт повторный разбор — пишем, что делаем.
   const target = state.quality === 'fine' ? 'draft' : 'fine';
+  // Отзыв 27.11: кнопка должна переключать качество и без выбранной модели —
+  // тогда выбор применится при следующем открытии STEP. Раньше клик молча
+  // игнорировался, если модель ещё не загружена.
+  state.quality = target;
+  state.qualityUserChoice = target;
+  if (state.modelKind !== 'step' || !state.lastBuffer) {
+    showQualityState(target, false);
+    showToast(target === 'fine'
+      ? 'HD включён — применится при открытии модели'
+      : 'SD включён — применится при открытии модели');
+    return;
+  }
   dom.qualityBtn.disabled = true;
   dom.qualityBtn.textContent = target === 'fine' ? 'HD…' : 'SD…';
   try {

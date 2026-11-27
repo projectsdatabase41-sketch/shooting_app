@@ -269,15 +269,10 @@ class _StepViewerScreenState extends State<StepViewerScreen> {
           : null,
       body: AppBackdrop(
         kind: 'settings',
-        // Отступ сверху (статус-бар + шапка) оставляем только контенту:
-        // страница вьюера сидит под шапкой, как раньше, а фон заходит выше.
-        child: Padding(
-          padding: canPop
-              ? EdgeInsets.only(
-                  top: MediaQuery.paddingOf(context).top +
-                      GlassHeader.height)
-              : EdgeInsets.zero,
-          child: Offstage(
+        // Отзыв 27.11: фон 3D-модели тянем до самой шапки — раньше под
+        // шапкой оставалась полоса обоев приложения. Шапка прозрачная и
+        // лежит поверх, отступ содержимому больше не нужен.
+        child: Offstage(
             offstage: _catalogOpen,
             child: _ViewerBody(
             key: ValueKey('viewer-page-$_pageVersion'),
@@ -295,7 +290,6 @@ class _StepViewerScreenState extends State<StepViewerScreen> {
           ),
           ),
         ),
-      ),
       // Веб: тело — iframe переменного происхождения, наружной шапки у
       // страницы нет, поэтому «Каталог» — маленькая FAB внизу справа.
       // Она сидит у края и шапку вьюера (вверху) не перекрывает.

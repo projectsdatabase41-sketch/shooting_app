@@ -495,7 +495,12 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
           child: Column(
           children: [
             // Управление тренировкой — над разделами и неподвижно.
-            if (vm.showTrainingControls) _TrainingControlsBar(embedded: widget.embedded),
+            if (vm.showTrainingControls)
+              _TrainingControlsBar(
+                embedded: widget.embedded,
+                onPage: _selectBottom,
+                onOverview: () => _openOverview(context),
+              ),
             Expanded(
               child: LayoutBuilder(
                 builder: (context, box) {
@@ -672,11 +677,11 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
             width: 44,
             child: Center(
               child: SizedBox(
-                height: math.min(300, box.maxHeight * 0.75),
+                height: math.max(160, box.maxHeight - 8),
                 child: RotatedBox(
                   quarterTurns: 1,
                   child: SizedBox(
-                    width: math.min(300, box.maxHeight * 0.75),
+                    width: math.max(160, box.maxHeight - 8),
                     height: 44,
                     child: const _ShotWheelBar(),
                   ),
@@ -1653,7 +1658,12 @@ class _StatisticsPageState extends State<_StatisticsPage> {
 class _TrainingControlsBar extends StatelessWidget {
   /// Внутри главного экрана закрытие после завершения делает сам главный экран.
   final bool embedded;
-  const _TrainingControlsBar({this.embedded = false});
+
+  /// Правые кнопки горизонтальной шапки (отзыв 27.11): тренер, ассистент,
+  /// разделы — правая часть экрана меняется под нужды спортсмена.
+  final ValueChanged<WorkspacePage>? onPage;
+  final VoidCallback? onOverview;
+  const _TrainingControlsBar({this.embedded = false, this.onPage, this.onOverview});
 
   @override
   Widget build(BuildContext context) {
@@ -1665,20 +1675,72 @@ class _TrainingControlsBar extends StatelessWidget {
     // чтобы время не залезало под часы и батарею.
     final landscape = MediaQuery.orientationOf(context) == Orientation.landscape;
     final topPad = landscape ? MediaQuery.paddingOf(context).top : 0.0;
+    final cs = Theme.of(context).colorScheme;
+
+    // Горизонталь: одна компактная строка вместо трёх — изготовка значком,
+    // крупное время по центру, справа кнопки разделов (отзыв 27.11: шапка
+    // занимала слишком много высоты).
+    if (landscape) {
+      final plan = StancePlan.forExercise(vm.exercise);
+      final stance = plan.stanceFor(vm.currentSeriesNo);
+      return Material(
+        color: cs.surfaceContainerHighest,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(12, 2 + topPad, 4, 2),
+          child: Row(children: [
+            StanceIcon(
+              size: 26,
+              stance: stance,
+              weapon: plan.weapon,
+              color: cs.onSurfaceVariant,
+              semanticLabel: tr(StancePlan.label(stance)),
+            ),
+            Expanded(
+              child: Center(
+                child: Text(
+                  _fmt(vm.elapsed),
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    fontFeatures: [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ),
+            ),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              tooltip: tr('Тренер'),
+              onPressed: onPage == null ? null : () => onPage!(WorkspacePage.coach),
+              icon: const Icon(Icons.chat_bubble_outline, size: 20),
+            ),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              tooltip: tr('Ассистент'),
+              onPressed: onPage == null ? null : () => onPage!(WorkspacePage.assistant),
+              icon: const Icon(Icons.auto_awesome_outlined, size: 20),
+            ),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              tooltip: tr('Разделы'),
+              onPressed: onOverview,
+              icon: const Icon(Icons.grid_view, size: 20),
+            ),
+          ]),
+        ),
+      );
+    }
 
     return Material(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      color: cs.surfaceContainerHighest,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(12, 6 + topPad, 12, 6),
+        padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                if (!landscape) ...[
-                  _buildActionButton(context, vm, status),
-                  const SizedBox(width: 12),
-                ],
+                _buildActionButton(context, vm, status),
+                const SizedBox(width: 12),
                 Text(tr('Общее: {p}', {'p': _fmt(vm.elapsed)}),
                     style: const TextStyle(fontSize: 12)),
                 const SizedBox(width: 12),
