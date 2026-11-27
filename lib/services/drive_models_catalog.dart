@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:http/http.dart' as http;
 
 import 'call_service.dart';
 import 'remote_config.dart';
@@ -81,6 +82,30 @@ class DriveModelsCatalog {
   /// (в памяти после успешной загрузки он остаётся навсегда — данные
   /// уже локальные, сети тут нет).
   static Future<bool> load() async {
+    // Отзыв 27.11: каталог пробуем взять с воркера (он лежит в R2 рядом с
+    // моделями), чтобы новые модели появлялись без пересборки приложения.
+    // Нет сети/воркера — работаем на встроенном ассете, как раньше.
+    if (RemoteConfig.modelsProxyEnabled) {
+      try {
+        final res = await http
+            .get(Uri.parse('${CallService.url}/models/index'))
+            .timeout(const Duration(seconds: 12));
+        if (res.statusCode == 200) {
+          final data = jsonDecode(utf8.decode(res.bodyBytes));
+          if (data is Map && data['items'] is List) {
+            final remote = _parseList(data['items'] as List);
+            if (remote.isNotEmpty) {
+              items = remote;
+              _loaded = true;
+              lastErrorCode = null;
+              return true;
+            }
+          }
+        }
+      } catch (_) {
+        // ниже — встроенный каталог
+      }
+    }
     try {
       final raw = await rootBundle.loadString(_assetPath);
       final data = jsonDecode(raw);

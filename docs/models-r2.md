@@ -57,3 +57,34 @@ node tool/upload_models_r2.mjs
 - `GET /models/<id>/model.stp` сейчас публичный: кто знает id, скачает файл.
   Для платного доступа следующим шагом добавляется проверка входа
   (Supabase-токен, как у `/ai`) и лимит скачиваний на пользователя.
+
+## Автосинхронизация папки моделей (27.11)
+
+Приложение теперь берёт каталог моделей с воркера (`GET /models/index`), а
+встроенный `assets/models/catalog.json` остаётся запасным вариантом без сети.
+Поэтому новые модели появляются **без пересборки приложения**.
+
+Порядок:
+
+1. В `config/chat-config.json` должно быть `"models": {"proxy": true}`.
+2. Запустить слежение за папкой моделей (Node 18+):
+
+```powershell
+$env:MODELS_ADMIN_TOKEN="твой-админ-токен"
+node tool/watch_models.mjs
+```
+
+Скрипт раз в минуту смотрит `C:\Users\Admin\Downloads\models_stp`, заливает
+новые и изменённые `.stp` в R2, обновляет `assets/models/catalog.json` и
+загружает каталог на воркер. Один проход без слежения: `--once`.
+
+3. Чтобы работало без открытого окна, поставь задачу в Планировщик:
+
+```powershell
+schtasks /Create /TN "Nexus models sync" /SC MINUTE /MO 10 ^
+  /TR "powershell -NoProfile -Command \"$env:MODELS_ADMIN_TOKEN='ТОКЕН'; node C:\Users\Admin\Downloads\shooting_app\tool\watch_models.mjs --once\""
+```
+
+Ограничения: скрипт ничего не удаляет — убранные из папки модели остаются в
+каталоге; id существующих моделей сохраняются, новым выдаётся стабильный id
+из имени файла.
