@@ -1072,22 +1072,25 @@ class _ShotsListSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         ...blocks,
-        Padding(
-          padding: const EdgeInsets.only(top: 10),
-          child: Row(
-            children: [
-              Text(
-                tr('Итого'),
-                style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const Spacer(),
-              Text(
-                '${totalTenths.toStringAsFixed(1)} / $totalWhole',
-                style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-              ),
-            ],
+        // Отзыв 27.11: во время пристрелки «Итого 0.0 / 0» только путало —
+        // пока нет зачётных выстрелов, итог не показываем.
+        if (totalWhole > 0 || totalTenths > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Row(
+              children: [
+                Text(
+                  tr('Итого'),
+                  style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const Spacer(),
+                Text(
+                  '${totalTenths.toStringAsFixed(1)} / $totalWhole',
+                  style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
           ),
-        ),
       ],
     );
   }
@@ -1736,7 +1739,7 @@ class _TrainingControlsBar extends StatelessWidget {
             Expanded(
               child: Center(
                 child: Text(
-                  _fmt(vm.elapsed),
+                  _timeLabel(vm),
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
@@ -1852,6 +1855,19 @@ class _TrainingControlsBar extends StatelessWidget {
         return Text(tr('Завершена'),
             style: const TextStyle(fontWeight: FontWeight.bold));
     }
+  }
+
+  /// Время в шапке горизонтали (отзыв 27.11): обратный отсчёт времени
+  /// упражнения. Если время вышло — уходим в минус, стрелять можно.
+  String _timeLabel(TargetViewModel vm) {
+    Duration? total;
+    for (final spec in vm.exercise.series) {
+      final limit = spec.timeLimit;
+      if (limit != null) total = (total ?? Duration.zero) + limit;
+    }
+    if (total == null) return _fmt(vm.elapsed);
+    final left = total - vm.elapsed;
+    return left.isNegative ? '-' : _fmt(left);
   }
 
   String _fmt(Duration d) {

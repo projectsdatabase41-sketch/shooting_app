@@ -258,9 +258,14 @@ class _DetailBodyState extends State<_DetailBody> {
     );
     // Блоки мишени и серий в правой колонке не повторяются: мишень —
     // слева, серии заменены списком выстрелов (отзыв владельца 23.11, п. 5).
+    // Отзыв 27.11: в готовой тренировке в горизонтали чаты не нужны —
+    // остаются список выстрелов и статистика (экран-монитор).
     final rightBlocks = [
       for (final block in blocks.visible)
-        if (block != ExerciseDetailBlock.target && block != ExerciseDetailBlock.series) block,
+        if (block != ExerciseDetailBlock.target &&
+            block != ExerciseDetailBlock.series &&
+            block != ExerciseDetailBlock.chat)
+          block,
     ];
 
     return Scaffold(
