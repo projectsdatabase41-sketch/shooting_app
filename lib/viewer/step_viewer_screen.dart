@@ -247,7 +247,36 @@ class _StepViewerScreenState extends State<StepViewerScreen> {
   Widget build(BuildContext context) {
     final canPop = ModalRoute.of(context)?.canPop == true;
 
+    // Отзыв 27.11 (веб): синий экран поверх 3D. Обои-подложка вокруг iframe
+    // на вебе конфликтовали с platform view — iframe оказывался ПОД синим
+    // слоем обоев. На вебе фону вьюера быть не должно: только ровный тёмный
+    // цвет под самим iframe. На Android AppBackdrop остаётся.
+    final content = Padding(
+      padding: canPop
+          ? EdgeInsets.only(
+              top: MediaQuery.paddingOf(context).top + GlassHeader.height)
+          : EdgeInsets.zero,
+      child: Offstage(
+        offstage: _catalogOpen,
+        child: _ViewerBody(
+          key: ValueKey('viewer-page-$_pageVersion'),
+          modelUrl: _url,
+          onJs: (js) {
+            // Мост запоминаем, как только страница вьюера отдала API.
+            if (js != null && mounted) setState(() => _js = js);
+          },
+          onOpenCatalog: () {
+            if (!mounted) return;
+            _openCatalog();
+          },
+        ),
+      ),
+    );
+
     return Scaffold(
+      // На вебе фон страницы ровный: голубой фон темы не должен
+      // просвечивать/перекрывать iframe (отзыв 27.11).
+      backgroundColor: kIsWeb ? const Color(0xFF121417) : null,
       // Клавиатура не должна сжимать WebView: при каждом кадре открытия она
       // пересчитывала размер и перерисовывала 3D-сцену (отзыв 24.11,
       // п.2 — «дёргание» интерфейса при открытии клавиатуры).
@@ -267,38 +296,11 @@ class _StepViewerScreenState extends State<StepViewerScreen> {
               child: GlassHeader(title: Text(tr('3D-модель'))),
             )
           : null,
-      body: AppBackdrop(
-        kind: 'settings',
-        // Отзыв 27.11: фон 3D-модели тянем до самой шапки — раньше под
-        // шапкой оставалась полоса обоев приложения. Шапка прозрачная и
-        // лежит поверх, отступ содержимому больше не нужен.
-        child: Padding(
-          // Фон вьюера — на весь экран, включая полосу под шапкой, а само
-          // содержимое (его кнопки) остаётся ниже шапки: иначе Каталог/SD-HD
-          // уезжали под неё (отзыв 27.11).
-          padding: canPop
-              ? EdgeInsets.only(
-                  top: MediaQuery.paddingOf(context).top + GlassHeader.height)
-              : EdgeInsets.zero,
-          child: Offstage(
-            offstage: _catalogOpen,
-            child: _ViewerBody(
-            key: ValueKey('viewer-page-$_pageVersion'),
-            modelUrl: _url,
-            onJs: (js) {
-              // Мост запоминаем, как только страница вьюера отдала API.
-              if (js != null && mounted) setState(() => _js = js);
-            },
-            // Кнопка «Каталог» в шапке самого вьюера зовёт хендлер NexusApp
-            // (п. C, замечания владельца 24.11) — открываем то же окошко.
-            onOpenCatalog: () {
-              if (!mounted) return;
-              _openCatalog();
-            },
-          ),
-          ),
-        ),
-        ),
+      // Веб: без обоев-подложки — iframe должен лежать на своём тёмном фоне,
+      // иначе синий слой обоев перекрывает сцену (отзыв 27.11).
+      body: kIsWeb
+          ? ColoredBox(color: const Color(0xFF121417), child: content)
+          : AppBackdrop(kind: 'settings', child: content),
       // Веб: тело — iframe переменного происхождения, наружной шапки у
       // страницы нет, поэтому «Каталог» — маленькая FAB внизу справа.
       // Она сидит у края и шапку вьюера (вверху) не перекрывает.
