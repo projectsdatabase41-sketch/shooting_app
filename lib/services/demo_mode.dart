@@ -180,6 +180,73 @@ class DemoMode {
     return lines.join('\n');
   }
 
+  /// Подробная структура экрана для отзывов: дерево виджетов с размерами и
+  /// координатами. Владелец включает галочку, когда нужно показать агенту
+  /// точную раскладку — тогда не приходится угадывать по тексту.
+  ///
+  /// Личные экраны (переписка, ассистент) не отправляются. Поля ввода и их
+  /// содержимое исключены. Объём ограничен, чтобы отзыв не раздувался.
+  static String detailedSnapshot({int maxChars = 8000}) {
+    final pageName = currentPage();
+    if (RegExp(r'Chat|AiChat|Messenger|Мессенджер|Ассистент|Переписка', caseSensitive: false)
+        .hasMatch(pageName)) {
+      return 'экран переписки/ассистента: структура не отправляется (личное)';
+    }
+    final route = DemoRouteObserver.instance.top;
+    if (route is! ModalRoute) return '';
+    final ctx = route.subtreeContext;
+    if (ctx == null) return '';
+    final mq = MediaQuery.maybeOf(ctx);
+    final b = StringBuffer();
+    if (mq != null) {
+      b.writeln(
+          'screen=${mq.size.width.round()}x${mq.size.height.round()} '
+          'orientation=${mq.orientation.name} dpr=${mq.devicePixelRatio.toStringAsFixed(2)} '
+          'keyboard=${mq.viewInsets.bottom.round()} '
+          'brightness=${mq.platformBrightness.name}');
+    }
+    b.writeln('page=$pageName route=${route.settings.name ?? route.runtimeType}');
+    var visited = 0;
+    void walk(Element e, int depth) {
+      if (visited++ > 800 || b.length > maxChars || depth > 30) return;
+      final w = e.widget;
+      if (w is Offstage && w.offstage) return;
+      if (w is Opacity && w.opacity == 0) return;
+      if (w is EditableText) return;
+      final ro = e.renderObject;
+      var geo = '';
+      if (ro is RenderBox && ro.hasSize && !ro.size.isEmpty) {
+        final off = ro.localToGlobal(Offset.zero);
+        geo = ' @${off.dx.round()},${off.dy.round()} '
+            '${ro.size.width.round()}x${ro.size.height.round()}';
+      }
+      var extra = '';
+      if (w is Text) {
+        final t = (w.data ?? w.textSpan?.toPlainText() ?? '')
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim();
+        if (t.isNotEmpty) {
+          extra = ' "${t.length > 80 ? t.substring(0, 80) : t}"';
+        }
+      } else if (w is Icon) {
+        extra = ' icon=${w.icon?.codePoint}';
+      } else if (w is Switch) {
+        extra = ' value=${w.value}';
+      } else if (w is Checkbox) {
+        extra = ' value=${w.value}';
+      } else if (w is Slider) {
+        extra = ' value=${w.value.toStringAsFixed(2)}';
+      }
+      if (geo.isNotEmpty || extra.isNotEmpty) {
+        b.writeln('${'  ' * depth}${w.runtimeType}$geo$extra');
+      }
+      e.visitChildren((c) => walk(c, depth + 1));
+    }
+
+    (ctx as Element).visitChildren((e) => walk(e, 0));
+    return b.toString();
+  }
+
   /// Текст заголовка экрана (AppBar / GlassHeader): первый Text внутри шапки.
   static String? _findTitle(BuildContext ctx) {
     String? result;
@@ -518,6 +585,7 @@ class _DemoFeedbackOverlayState extends State<DemoFeedbackOverlay> {
       screen = DemoMode.screenSnapshot();
     } catch (_) {}
     var attach = screen.isNotEmpty;
+    var structure = false;
     final ctl = TextEditingController(text: _draft);
     await showGlassDialog<void>(
       context: ctx,
@@ -548,6 +616,18 @@ class _DemoFeedbackOverlayState extends State<DemoFeedbackOverlay> {
                     onChanged: (v) => setS(() => attach = v ?? false),
                     title: Text(tr('Приложить данные экрана (текстом, без полей ввода)'), style: Theme.of(dctx).textTheme.bodySmall),
                   ),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  value: structure,
+                  onChanged: (v) => setS(() => structure = v ?? false),
+                  title: Text(
+                      tr('Приложить подробную структуру экрана (блоки, размеры, координаты)'),
+                      style: Theme.of(dctx).textTheme.bodySmall),
+                  subtitle: Text(
+                      tr('Выключи, если на экране личные данные: имена, переписка'),
+                      style: Theme.of(dctx).textTheme.labelSmall),
+                ),
                 if (error != null) Text(error!, style: TextStyle(color: Theme.of(dctx).colorScheme.error)),
               ]),
             ),
@@ -558,7 +638,19 @@ class _DemoFeedbackOverlayState extends State<DemoFeedbackOverlay> {
                     ? null
                     : () async {
                         setS(() => busy = true);
-                        final body = attach ? '${ctl.text.trim()}\n\n--- экран ---\n$screen' : ctl.text;
+                        var body = ctl.text.trim();
+                        if (attach) {
+                          body = '$body\n\n--- экран ---\n$screen';
+                        }
+                        if (structure) {
+                          var detailed = '';
+                          try {
+                            detailed = DemoMode.detailedSnapshot();
+                          } catch (_) {}
+                          if (detailed.isNotEmpty) {
+                            body = '$body\n\n--- структура ---\n$detailed';
+                          }
+                        }
                         final err = await DemoMode.send(body, page);
                         if (!dctx.mounted) return;
                         if (err == null) {
