@@ -20,6 +20,7 @@
 
 // Каталог 3D-моделей: новые маршруты /models/* (см. src/models.ts, просьба владельца 23.11).
 import { handleModels } from './models';
+import { syncModelsFromDrive } from './gdrive_models';
 
 export interface Env {
   ROOMS: DurableObjectNamespace;
@@ -56,6 +57,10 @@ export interface Env {
   /// URL и anon-ключ Supabase для пробуждения проекта (не секрет: anon-ключ
   /// и так публичный, лежит в config/chat-config.json).
   KEEPALIVE_URL?: string;
+  /// JSON сервисного аккаунта Google для автоимпорта моделей с Диска.
+  GOOGLE_SA_JSON?: string;
+  /// id папки моделей на Диске (по умолчанию — rootId из catalog.json).
+  GDRIVE_MODELS_FOLDER?: string;
   KEEPALIVE_ANON?: string;
   // NEWS_KEYWORDS больше не используется: по указанию владельца 23.11 сервер
   // грузит все новости из фидов без фильтрации, отбор делает приложение
@@ -716,6 +721,9 @@ export default {
     // активности. Cron воркера идёт дважды в день — им и будим
     // (см. supabaseKeepalive и docs/sql/2026-11-26-keepalive.sql).
     ctx.waitUntil(supabaseKeepalive(env));
+    // Отзыв 27.11: дважды в день забираем новые модели из папки Google Диска
+    // в R2 (если задан сервисный аккаунт).
+    ctx.waitUntil(syncModelsFromDrive(env).catch((e) => console.error('gdrive sync', e)));
   },
 };
 

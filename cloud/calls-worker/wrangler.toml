@@ -10,6 +10,8 @@ JWKS_URL = "https://yirvomezybprdlntxyas.supabase.co/auth/v1/.well-known/jwks.js
 # anon-ключ публичный — он же лежит в config/chat-config.json.
 KEEPALIVE_URL = "https://yirvomezybprdlntxyas.supabase.co"
 KEEPALIVE_ANON = "sb_publishable_2nW7G7lKueMQamuFeoC3Cw_iql48Xj3"
+# Папка моделей на Google Диске для автоимпорта в R2 (cron 04:00/16:00 UTC).
+GDRIVE_MODELS_FOLDER = "1jctM_rUtijeK3ts8lPUfRW5NSzT88VFO"
 # Пороги трафика через ретранслятор в месяц — ниже бесплатных объёмов
 # (Cloudflare 1000 ГБ, Metered 500 МБ), чтобы не платить никогда.
 CF_TURN_LIMIT_GB = "800"

@@ -69,7 +69,7 @@ async function modelsKey(env: Env): Promise<CryptoKey | null> {
 }
 
 /** Шифрует тело: nonce(12) | ciphertext(+tag) — как медиа чата (media_vault.dart). */
-async function sealModels(env: Env, clear: Uint8Array): Promise<Uint8Array> {
+export async function sealModels(env: Env, clear: Uint8Array): Promise<Uint8Array> {
   const key = await modelsKey(env);
   if (!key) throw new Error('MODELS_KEY not configured');
   const nonce = crypto.getRandomValues(new Uint8Array(12));
@@ -177,7 +177,7 @@ async function modelsDelete(req: Request, env: Env, id: string): Promise<Respons
 // ---------- Публичное чтение ----------
 
 /** Общая расшифровка файла из R2: null — нет объекта или не расшифровалось. */
-async function readModel(env: Env, r2Key: string): Promise<Uint8Array | null> {
+export async function readModel(env: Env, r2Key: string): Promise<Uint8Array | null> {
   const obj = await env.MEDIA.get(r2Key);
   if (!obj) return null;
   const sealed = new Uint8Array(await obj.arrayBuffer());
