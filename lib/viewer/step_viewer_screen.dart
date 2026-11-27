@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../i18n/i18n.dart';
 import '../services/drive_models_catalog.dart' show DriveModelsCatalog;
@@ -247,30 +248,28 @@ class _StepViewerScreenState extends State<StepViewerScreen> {
   Widget build(BuildContext context) {
     final canPop = ModalRoute.of(context)?.canPop == true;
 
-    // Отзыв 27.11 (веб): синий экран поверх 3D. Обои-подложка вокруг iframe
-    // на вебе конфликтовали с platform view — iframe оказывался ПОД синим
-    // слоем обоев. На вебе фону вьюера быть не должно: только ровный тёмный
-    // цвет под самим iframe. На Android AppBackdrop остаётся.
+    // Отзыв 27.11 (веб): синий экран поверх 3D. На вебе iframe — это
+    // platform view, и обёртки (Offstage/подложки) ломают его композицию:
+    // Flutter рисует вместо сцены синюю заглушку. На вебе отдаём iframe
+    // напрямую, без Offstage и без обоев; на Android поведение прежнее.
+    final viewer = _ViewerBody(
+      key: ValueKey('viewer-page-$_pageVersion'),
+      modelUrl: _url,
+      onJs: (js) {
+        // Мост запоминаем, как только страница вьюера отдала API.
+        if (js != null && mounted) setState(() => _js = js);
+      },
+      onOpenCatalog: () {
+        if (!mounted) return;
+        _openCatalog();
+      },
+    );
     final content = Padding(
       padding: canPop
           ? EdgeInsets.only(
               top: MediaQuery.paddingOf(context).top + GlassHeader.height)
           : EdgeInsets.zero,
-      child: Offstage(
-        offstage: _catalogOpen,
-        child: _ViewerBody(
-          key: ValueKey('viewer-page-$_pageVersion'),
-          modelUrl: _url,
-          onJs: (js) {
-            // Мост запоминаем, как только страница вьюера отдала API.
-            if (js != null && mounted) setState(() => _js = js);
-          },
-          onOpenCatalog: () {
-            if (!mounted) return;
-            _openCatalog();
-          },
-        ),
-      ),
+      child: kIsWeb ? viewer : Offstage(offstage: _catalogOpen, child: viewer),
     );
 
     return Scaffold(
@@ -293,7 +292,21 @@ class _StepViewerScreenState extends State<StepViewerScreen> {
       appBar: canPop
           ? PreferredSize(
               preferredSize: const Size.fromHeight(GlassHeader.height),
-              child: GlassHeader(title: Text(tr('3D-модель'))),
+              child: GlassHeader(
+                title: Text(tr('3D-модель')),
+                actions: [if (kIsWeb)
+                  IconButton(
+                    tooltip: tr('Открыть в новой вкладке'),
+                    icon: const Icon(Icons.open_in_new),
+                    onPressed: () {
+                      final uri = Uri.base
+                          .resolve('assets/assets/webview/index.html')
+                          .replace(queryParameters: _url == null ? null : {'url': _url!});
+                      launchUrl(uri, webOnlyWindowName: '_blank');
+                    },
+                  ),
+                ],
+              ),
             )
           : null,
       // Веб: без обоев-подложки — iframe должен лежать на своём тёмном фоне,
