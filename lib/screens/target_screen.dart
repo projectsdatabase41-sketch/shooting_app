@@ -495,7 +495,8 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
           child: Column(
           children: [
             // Управление тренировкой — над разделами и неподвижно.
-            if (vm.showTrainingControls)
+            // В горизонтали шапки нет вовсе (отзыв 27.11): время внизу слева.
+            if (vm.showTrainingControls && !landscape)
               _TrainingControlsBar(
                 embedded: widget.embedded,
                 onPage: _selectBottom,
@@ -696,30 +697,32 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
   /// слева, вертикальное колесо выстрелов между мишенью и списком, выстрелы
   /// справа, серии — снизу. Управление — круглыми кнопками слева.
   Widget _wideTraining(BuildContext context, TargetViewModel vm, BoxConstraints box) {
-    final targetH = math.min(box.maxHeight * 0.82, box.maxWidth * 0.55);
+    final top = MediaQuery.paddingOf(context).top;
+    final bottom = MediaQuery.paddingOf(context).bottom;
+    // Отзыв 27.11: шапку убрали совсем — мишень уходит вверх; справа только
+    // список выстрелов, уже (30% вместо 40%) и крупнее (×1.4); время —
+    // внизу слева; вместо поля заметки — полоса серий.
+    final wheelH = math.max(160.0, box.maxHeight - top - bottom - 8).toDouble();
     return Stack(children: [
       Padding(
-        padding: const EdgeInsets.fromLTRB(56, 4, 8, 4),
+        padding: EdgeInsets.fromLTRB(8, 0, 6, bottom + 2),
         child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Expanded(
-            flex: 6,
+            flex: 7,
             child: Column(children: [
-              Expanded(child: _TargetPage(height: targetH)),
+              Expanded(child: _TargetPage(height: wheelH, compact: true)),
               _SeriesStrip(vm: vm),
             ]),
           ),
-          // Вертикальное колесо выстрелов: повёрнутая полоса, как в портрете.
-          // Отзыв по фото 26.11: «крутилка слишком широкая и низкая» — делаем
-          // узкой (44 px) и высокой (до 75% высоты экрана).
           SizedBox(
             width: 44,
             child: Center(
               child: SizedBox(
-                height: math.max(160, box.maxHeight - 8),
+                height: wheelH,
                 child: RotatedBox(
                   quarterTurns: 1,
                   child: SizedBox(
-                    width: math.max(160, box.maxHeight - 8),
+                    width: wheelH,
                     height: 44,
                     child: const _ShotWheelBar(),
                   ),
@@ -728,23 +731,62 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
             ),
           ),
           Expanded(
-            flex: 4,
+            flex: 3,
             child: Padding(
-              padding: const EdgeInsets.only(left: 4),
-              child: _ShotsListSection(vm: vm),
+              padding: EdgeInsets.only(left: 6, top: top + 4),
+              child: MediaQuery(
+                data: MediaQuery.of(context).copyWith(
+                  textScaler: const TextScaler.linear(1.4),
+                ),
+                child: _ShotsListSection(vm: vm),
+              ),
             ),
           ),
         ]),
       ),
       Positioned(
         left: 8,
-        top: MediaQuery.paddingOf(context).top + 8,
+        top: top + 8,
         child: _landscapeTools(context, vm),
+      ),
+      // Время — внизу слева, крупно.
+      Positioned(
+        left: 12,
+        bottom: bottom + 6,
+        child: IgnorePointer(
+          child: Text(
+            _landscapeTimeLabel(vm),
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.w800,
+              fontFeatures: const [FontFeature.tabularFigures()],
+              color: Theme.of(context).colorScheme.onSurface,
+              shadows: const [Shadow(blurRadius: 6, color: Colors.black54)],
+            ),
+          ),
+        ),
       ),
     ]);
   }
 
-  /// Круглые кнопки слева в горизонтали — вместо шапки.
+  /// Обратный отсчёт упражнения для нижней подписи (после нуля — в минус).
+  String _landscapeTimeLabel(TargetViewModel vm) {
+    Duration? total;
+    for (final spec in vm.exercise.series) {
+      final limit = spec.timeLimit;
+      if (limit != null) total = (total ?? Duration.zero) + limit;
+    }
+    String fmt(Duration d) {
+      final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+      final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+      return '${d.inHours > 0 ? '${d.inHours}:' : ''}$m:$s';
+    }
+    if (total == null) return fmt(vm.elapsed);
+    final left = total - vm.elapsed;
+    return left.isNegative ? '-${fmt(left.abs())}' : fmt(left);
+  }
+
+  /// Круглые кнопки слева: только назад, отменить выстрел и правка.
   Widget _landscapeTools(BuildContext context, TargetViewModel vm) {
     return Column(mainAxisSize: MainAxisSize.min, children: [
       GlassCircleButton(
@@ -752,11 +794,11 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
         tooltip: tr('Назад'),
         onTap: () => Navigator.of(context).maybePop(),
       ),
-      if (vm.zoom != 1.0 || vm.panX != 0 || vm.panY != 0)
+      if (vm.canEditShots)
         GlassCircleButton(
-          icon: const BoldIcon(Icons.zoom_out_map),
-          tooltip: tr('Сбросить зум'),
-          onTap: vm.resetZoom,
+          icon: const BoldIcon(Icons.undo),
+          tooltip: tr('Отменить выстрел'),
+          onTap: vm.undoLastShot,
         ),
       if (vm.canEditShots)
         GlassCircleButton(
@@ -766,11 +808,6 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
           tooltip: vm.isEditing ? tr('Просмотр') : tr('Правка'),
           onTap: () => _toggleEditMode(vm),
         ),
-      GlassCircleButton(
-        icon: const BoldIcon(Icons.grid_view),
-        tooltip: tr('Разделы'),
-        onTap: () => _openOverview(context),
-      ),
     ]);
   }
 
@@ -1372,7 +1409,10 @@ class _WorkspaceOverview extends StatelessWidget {
 /// отметка к выстрелу, кнопка отмены выстрела); без него — мишень этапа задания (прежняя раскладка).
 class _TargetPage extends StatelessWidget {
   final double? height;
-  const _TargetPage({this.height});
+  /// Компактный режим горизонтали (отзыв 27.11): только мишень и кнопка
+  /// отмены — без поля заметки и колеса, их рисует сама раскладка.
+  final bool compact;
+  const _TargetPage({this.height, this.compact = false});
 
   @override
   Widget build(BuildContext context) {
@@ -1429,8 +1469,10 @@ class _TargetPage extends StatelessWidget {
             ],
           ),
         ),
-        if (vm.isEditing) const _EditActionBar() else const _ShotNoteBar(),
-        const _ShotWheelBar(),
+        if (!compact) ...[
+          if (vm.isEditing) const _EditActionBar() else const _ShotNoteBar(),
+          const _ShotWheelBar(),
+        ],
       ],
     );
   }
