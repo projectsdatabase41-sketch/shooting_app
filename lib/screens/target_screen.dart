@@ -604,6 +604,26 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
                         left: 6,
                         top: 6,
                         child: Column(mainAxisSize: MainAxisSize.min, children: [
+                          // Веб/десктоп: завершить тренировку (отзыв 27.11 —
+                          // на ноутбуке кнопки не было вовсе).
+                          if (vm.session.status == SessionStatus.notStarted)
+                            GlassCircleButton(
+                              icon: const BoldIcon(Icons.play_arrow),
+                              tooltip: tr('Начать'),
+                              onTap: vm.start,
+                            ),
+                          if (vm.session.status == SessionStatus.running)
+                            GlassCircleButton(
+                              icon: const BoldIcon(Icons.pause),
+                              tooltip: tr('Пауза'),
+                              onTap: vm.pause,
+                            ),
+                          if (vm.session.status != SessionStatus.finished)
+                            GlassCircleButton(
+                              icon: const BoldIcon(Icons.stop),
+                              tooltip: tr('Завершить'),
+                              onTap: vm.finish,
+                            ),
                           if (vm.canEditShots)
                             GlassCircleButton(
                               icon: const BoldIcon(Icons.undo),
@@ -794,6 +814,26 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
         tooltip: tr('Назад'),
         onTap: () => Navigator.of(context).maybePop(),
       ),
+      // Завершить тренировку должно быть можно и в горизонтали (отзыв 27.11:
+      // после удаления шапки на вебе не оставалось ни одной кнопки финиша).
+      if (vm.session.status == SessionStatus.notStarted)
+        GlassCircleButton(
+          icon: const BoldIcon(Icons.play_arrow),
+          tooltip: tr('Начать'),
+          onTap: vm.start,
+        ),
+      if (vm.session.status == SessionStatus.running)
+        GlassCircleButton(
+          icon: const BoldIcon(Icons.pause),
+          tooltip: tr('Пауза'),
+          onTap: vm.pause,
+        ),
+      if (vm.session.status != SessionStatus.finished)
+        GlassCircleButton(
+          icon: const BoldIcon(Icons.stop),
+          tooltip: tr('Завершить'),
+          onTap: vm.finish,
+        ),
       if (vm.canEditShots)
         GlassCircleButton(
           icon: const BoldIcon(Icons.undo),
