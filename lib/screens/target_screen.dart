@@ -539,7 +539,11 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
                     final targetH = math
                         .min(maxByWidth, maxByHeight)
                         .clamp(220.0, _maxTargetSizeDesktop);
-                    return Row(
+                    // Отзыв 27.11 (веб-версия): в широкой раскладке не было
+                    // кнопок отмены выстрела, сброса зума, правки и разделов —
+                    // вернули их такой же колонкой, как в APK.
+                    return Stack(children: [
+                      Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // Левая колонка: мишень, поле заметки и «крутилка».
@@ -592,7 +596,41 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
                           ),
                         ),
                       ],
-                    );
+                      ),
+                      // Те же кнопки, что в левой колонке APK: отмена
+                      // выстрела, сброс зума, правка, разделы.
+                      Positioned(
+                        left: 6,
+                        top: 6,
+                        child: Column(mainAxisSize: MainAxisSize.min, children: [
+                          if (vm.canEditShots)
+                            GlassCircleButton(
+                              icon: const BoldIcon(Icons.undo),
+                              tooltip: tr('Отменить выстрел'),
+                              onTap: vm.undoLastShot,
+                            ),
+                          if (vm.zoom != 1.0 || vm.panX != 0 || vm.panY != 0)
+                            GlassCircleButton(
+                              icon: const BoldIcon(Icons.zoom_out_map),
+                              tooltip: tr('Сбросить зум'),
+                              onTap: vm.resetZoom,
+                            ),
+                          if (vm.canEditShots)
+                            GlassCircleButton(
+                              icon: BoldIcon(vm.isEditing
+                                  ? Icons.remove_red_eye_outlined
+                                  : Icons.edit_outlined),
+                              tooltip: vm.isEditing ? tr('Просмотр') : tr('Правка'),
+                              onTap: () => _toggleEditMode(vm),
+                            ),
+                          GlassCircleButton(
+                            icon: const BoldIcon(Icons.grid_view),
+                            tooltip: tr('Разделы'),
+                            onTap: () => _openOverview(context),
+                          ),
+                        ]),
+                      ),
+                    ]);
                   }
 
                   // Мобильный (отзыв 23.11 №2): ОДНА общая прокрутка —
