@@ -928,6 +928,19 @@ function newsStrip(s: string): string {
     .trim();
 }
 
+/// Источники, которым доверяем как спортивным: их новости берём целиком.
+const NEWS_SPORT_SOURCES = new Set([
+  'issf-academy.com',
+  'ssusa.org',
+  'shootinguk.co.uk',
+  'olympic.ca',
+  'espn.com',
+]);
+/// Спортивные признаки (стрелковый спорт, соревнования, тренировки).
+const NEWS_SPORT_RE = /(issf|стрельб|пулев|стендов|винтовк|пистолет|карабин|соревнован|чемпионат|кубок|олимп|медал|рекорд|сборная|тренер|спортсмен|мишен|тир\b|shooting|air ?rifle|air ?pistol|target|rifle|pistol|olympic|championship|competition|medal|record|athlete|coach|training|world cup|biathlon)/i;
+/// Криминал, охота и политика — не новости спорта.
+const NEWS_BAD_RE = /(shot dead|killed|murder|police|arrest|charged|crime|shooting incident|school shooting|mass shooting|расстрел|убил|полици|задержан|уголовн|охот|hunting|hunter|deer|bear|boar|trophy|poach|браконьер)/i;
+
 async function refreshNews(env: Env): Promise<{ items: number; sources: string[] }> {
   const feeds = (env.NEWS_FEEDS || '').split(',').map((s) => s.trim()).filter(Boolean);
   // Без серверной фильтрации по ключевым словам: по указанию владельца 23.11
@@ -946,8 +959,15 @@ async function refreshNews(env: Env): Promise<{ items: number; sources: string[]
         const title = newsPick(b, 'title');
         if (!title) continue;
         const link = newsPick(b, 'link') || (/<link[^>]+href="([^"]+)"/i.exec(b)?.[1] ?? '');
-        const summary = (newsPick(b, 'description') || newsPick(b, 'summary') || newsPick(b, 'content')).slice(0, 240);
+        const summary = (newsPick(b, 'description') || newsPick(b, 'summary') || newsPick(b, 'content')).slice(0, 400);
         const date = newsPick(b, 'pubDate') || newsPick(b, 'updated') || '';
+        // Отзыв 27.11: «мало спорта, много оружия и криминала». Оставляем
+        // спортивные материалы: источники стрелкового спорта — целиком,
+        // остальные — только при явных спортивных словах. Криминал/охота
+        // отбрасываются всегда.
+        const text = `${title} ${summary}`;
+        if (NEWS_BAD_RE.test(text)) continue;
+        if (!NEWS_SPORT_SOURCES.has(host) && !NEWS_SPORT_RE.test(text)) continue;
         // Все позиции уходят в ленту: без фильтра по словам (указание
         // владельца 23.11), отбор по источникам и словам делает клиент.
         // Картинка новости: enclosure, media:content или первая <img> в тексте.
