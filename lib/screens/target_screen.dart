@@ -451,13 +451,6 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
                   ?.copyWith(fontWeight: FontWeight.w600),
               overflow: TextOverflow.ellipsis),
           actions: [
-            // Сброс зума — кнопка надёжнее щипка, который мог «залипнуть» на максимуме.
-            if (vm.zoom != 1.0 || vm.panX != 0 || vm.panY != 0)
-              GlassCircleButton(
-                icon: const BoldIcon(Icons.zoom_out_map),
-                tooltip: tr('Сбросить зум'),
-                onTap: vm.resetZoom,
-              ),
             if (vm.isFinishedAndLocked)
               GlassCircleButton(
                 icon: const BoldIcon(Icons.lock_outline),
@@ -630,12 +623,6 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
                               tooltip: tr('Отменить выстрел'),
                               onTap: vm.undoLastShot,
                             ),
-                          if (vm.zoom != 1.0 || vm.panX != 0 || vm.panY != 0)
-                            GlassCircleButton(
-                              icon: const BoldIcon(Icons.zoom_out_map),
-                              tooltip: tr('Сбросить зум'),
-                              onTap: vm.resetZoom,
-                            ),
                           if (vm.canEditShots)
                             GlassCircleButton(
                               icon: BoldIcon(vm.isEditing
@@ -716,80 +703,7 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
   /// Горизонтальная раскладка тренировки (отзыв владельца 26.11): мишень
   /// слева, вертикальное колесо выстрелов между мишенью и списком, выстрелы
   /// справа, серии — снизу. Управление — круглыми кнопками слева.
-  Widget _wideTraining(BuildContext context, TargetViewModel vm, BoxConstraints box) {
-    final top = MediaQuery.paddingOf(context).top;
-    final bottom = MediaQuery.paddingOf(context).bottom;
-    // Отзыв 27.11: шапку убрали совсем — мишень уходит вверх; справа только
-    // список выстрелов, уже (30% вместо 40%) и крупнее (×1.4); время —
-    // внизу слева; вместо поля заметки — полоса серий.
-    final wheelH = math.max(160.0, box.maxHeight - top - bottom - 8).toDouble();
-    return Stack(children: [
-      Padding(
-        padding: EdgeInsets.fromLTRB(8, 0, 6, bottom + 2),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Expanded(
-            flex: 7,
-            child: Column(children: [
-              Expanded(child: _TargetPage(height: wheelH, compact: true)),
-              _SeriesStrip(vm: vm),
-            ]),
-          ),
-          SizedBox(
-            width: 44,
-            child: Center(
-              child: SizedBox(
-                height: wheelH,
-                child: RotatedBox(
-                  quarterTurns: 1,
-                  child: SizedBox(
-                    width: wheelH,
-                    height: 44,
-                    child: const _ShotWheelBar(),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 3,
-            child: Padding(
-              padding: EdgeInsets.only(left: 6, top: top + 4),
-              child: MediaQuery(
-                data: MediaQuery.of(context).copyWith(
-                  textScaler: const TextScaler.linear(1.4),
-                ),
-                child: _ShotsListSection(vm: vm),
-              ),
-            ),
-          ),
-        ]),
-      ),
-      Positioned(
-        left: 8,
-        top: top + 8,
-        child: _landscapeTools(context, vm),
-      ),
-      // Время — внизу слева, крупно.
-      Positioned(
-        left: 12,
-        bottom: bottom + 6,
-        child: IgnorePointer(
-          child: Text(
-            _landscapeTimeLabel(vm),
-            style: TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.w800,
-              fontFeatures: const [FontFeature.tabularFigures()],
-              color: Theme.of(context).colorScheme.onSurface,
-              shadows: const [Shadow(blurRadius: 6, color: Colors.black54)],
-            ),
-          ),
-        ),
-      ),
-    ]);
-  }
-
-  /// Обратный отсчёт упражнения для нижней подписи (после нуля — в минус).
+  /// Обратный отсчёт упражнения (после нуля — в минус).
   String _landscapeTimeLabel(TargetViewModel vm) {
     Duration? total;
     for (final spec in vm.exercise.series) {
@@ -806,49 +720,258 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
     return left.isNegative ? '-${fmt(left.abs())}' : fmt(left);
   }
 
-  /// Круглые кнопки слева: только назад, отменить выстрел и правка.
-  Widget _landscapeTools(BuildContext context, TargetViewModel vm) {
-    return Column(mainAxisSize: MainAxisSize.min, children: [
-      GlassCircleButton(
-        icon: const BoldIcon(Icons.arrow_back),
-        tooltip: tr('Назад'),
-        onTap: () => Navigator.of(context).maybePop(),
+  Widget _wideTraining(BuildContext context, TargetViewModel vm, BoxConstraints box) {
+    final top = MediaQuery.paddingOf(context).top;
+    final bottom = MediaQuery.paddingOf(context).bottom;
+    const headerH = 46.0;
+    final wheelH =
+        math.max(140.0, box.maxHeight - top - bottom - headerH - 14).toDouble();
+    final showSeries = box.maxWidth >= 760;
+    return Stack(children: [
+      Padding(
+        padding: EdgeInsets.fromLTRB(6, top + 4, 6, bottom + 4),
+        child: Column(children: [
+          SizedBox(height: headerH, child: _wideHeader(context, vm)),
+          const SizedBox(height: 6),
+          Expanded(
+            child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Expanded(
+                flex: 7,
+                child: _panel(context,
+                    radius: 14,
+                    child: _TargetPage(height: wheelH, compact: true)),
+              ),
+              const SizedBox(width: 6),
+              SizedBox(
+                width: 44,
+                child: Center(
+                  child: SizedBox(
+                    height: wheelH,
+                    child: RotatedBox(
+                      quarterTurns: 1,
+                      child: SizedBox(
+                        width: wheelH,
+                        height: 44,
+                        child: const _ShotWheelBar(),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                flex: 3,
+                child: _panel(
+                  context,
+                  radius: 12,
+                  child: MediaQuery(
+                    data: MediaQuery.of(context).copyWith(
+                      textScaler: const TextScaler.linear(1.35),
+                    ),
+                    child: _ShotsListSection(vm: vm),
+                  ),
+                ),
+              ),
+              if (showSeries) ...[
+                const SizedBox(width: 6),
+                SizedBox(
+                  width: 66,
+                  child: _panel(context, radius: 12, child: _SeriesColumn(vm: vm)),
+                ),
+              ],
+            ]),
+          ),
+        ]),
       ),
-      // Завершить тренировку должно быть можно и в горизонтали (отзыв 27.11:
-      // после удаления шапки на вебе не оставалось ни одной кнопки финиша).
-      if (vm.session.status == SessionStatus.notStarted)
-        GlassCircleButton(
-          icon: const BoldIcon(Icons.play_arrow),
-          tooltip: tr('Начать'),
-          onTap: vm.start,
-        ),
-      if (vm.session.status == SessionStatus.running)
-        GlassCircleButton(
-          icon: const BoldIcon(Icons.pause),
-          tooltip: tr('Пауза'),
-          onTap: vm.pause,
-        ),
-      if (vm.session.status != SessionStatus.finished)
-        GlassCircleButton(
-          icon: const BoldIcon(Icons.stop),
-          tooltip: tr('Завершить'),
-          onTap: vm.finish,
-        ),
-      if (vm.canEditShots)
-        GlassCircleButton(
-          icon: const BoldIcon(Icons.undo),
-          tooltip: tr('Отменить выстрел'),
-          onTap: vm.undoLastShot,
-        ),
-      if (vm.canEditShots)
-        GlassCircleButton(
-          icon: BoldIcon(vm.isEditing
-              ? Icons.remove_red_eye_outlined
-              : Icons.edit_outlined),
-          tooltip: vm.isEditing ? tr('Просмотр') : tr('Правка'),
-          onTap: () => _toggleEditMode(vm),
-        ),
+      // Левая колонка круглых кнопок: выровнена по высоте, одинаковые отступы.
+      Positioned(
+        left: 2,
+        top: top + headerH + 10,
+        bottom: bottom + 8,
+        child: _wideRail(context, vm),
+      ),
     ]);
+  }
+
+  /// Шапка тренировки: название + изготовка слева, таймер, пауза и выход.
+  Widget _wideHeader(BuildContext context, TargetViewModel vm) {
+    final cs = Theme.of(context).colorScheme;
+    final plan = StancePlan.forExercise(vm.exercise);
+    final stance = plan.stanceFor(vm.currentSeriesNo);
+    final running = vm.session.status == SessionStatus.running;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.outlineVariant),
+        boxShadow: const [
+          BoxShadow(color: Colors.black26, blurRadius: 12, offset: Offset(0, 4)),
+        ],
+      ),
+      child: Row(children: [
+        StanceIcon(
+          size: 24,
+          stance: stance,
+          weapon: plan.weapon,
+          color: cs.onSurfaceVariant,
+          semanticLabel: tr(StancePlan.label(stance)),
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            vm.exercise.shownName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context)
+                .textTheme
+                .titleSmall
+                ?.copyWith(fontWeight: FontWeight.w700),
+          ),
+        ),
+        const Spacer(),
+        Text(
+          _landscapeTimeLabel(vm),
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            fontFeatures: [FontFeature.tabularFigures()],
+          ),
+        ),
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          tooltip: running ? tr('Пауза') : tr('Продолжить'),
+          onPressed: vm.session.status == SessionStatus.finished
+              ? null
+              : () => running ? vm.pause() : vm.resume(),
+          icon: Icon(running ? Icons.pause : Icons.play_arrow, size: 20),
+        ),
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          tooltip: tr('Выйти из тренировки'),
+          onPressed: () => Navigator.of(context).maybePop(),
+          icon: const Icon(Icons.close, size: 20),
+        ),
+      ]),
+    );
+  }
+
+  /// Панель-карточка: одинаковая рамка и тень для мишени, списка и серий.
+  Widget _panel(BuildContext context,
+      {required Widget child, double radius = 12, EdgeInsets? padding}) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: padding,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: cs.outlineVariant),
+        boxShadow: const [
+          BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 3)),
+        ],
+      ),
+      child: child,
+    );
+  }
+
+  /// Левая колонка: кнопки одного размера, равные промежутки.
+  Widget _wideRail(BuildContext context, TargetViewModel vm) {
+    void panel(WorkspacePage page) => _openSectionPanel(context, vm, page);
+    return SizedBox(
+      width: 48,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          GlassCircleButton(
+            icon: const BoldIcon(Icons.star_border),
+            tooltip: tr('В избранное'),
+            onTap: () {
+              final shots = vm.session.shots;
+              if (shots.isEmpty) return;
+              final idx = vm.selectedIndex >= 0 && vm.selectedIndex < shots.length
+                  ? vm.selectedIndex
+                  : shots.length - 1;
+              vm.toggleFavorite(shots[idx].id);
+            },
+          ),
+          GlassCircleButton(
+            icon: const BoldIcon(Icons.sticky_note_2_outlined),
+            tooltip: tr('Заметки'),
+            onTap: () => panel(WorkspacePage.notes),
+          ),
+          if (vm.canEditShots)
+            GlassCircleButton(
+              icon: BoldIcon(vm.isEditing
+                  ? Icons.remove_red_eye_outlined
+                  : Icons.edit_outlined),
+              tooltip: vm.isEditing ? tr('Просмотр') : tr('Правка'),
+              onTap: () => _toggleEditMode(vm),
+            ),
+          GlassCircleButton(
+            icon: const BoldIcon(Icons.delete_outline),
+            tooltip: tr('Удалить выстрел'),
+            onTap: () => _confirmUndo(context, vm),
+          ),
+          GlassCircleButton(
+            icon: const BoldIcon(Icons.insights_outlined),
+            tooltip: tr('Статистика'),
+            onTap: () => panel(WorkspacePage.statistics),
+          ),
+          GlassCircleButton(
+            icon: const BoldIcon(Icons.support_agent),
+            tooltip: tr('Тренер'),
+            onTap: () => panel(WorkspacePage.coach),
+          ),
+          GlassCircleButton(
+            icon: const BoldIcon(Icons.auto_awesome_outlined),
+            tooltip: tr('Ассистент'),
+            onTap: () => panel(WorkspacePage.assistant),
+          ),
+          GlassCircleButton(
+            icon: const BoldIcon(Icons.zoom_in),
+            tooltip: tr('Приблизить'),
+            onTap: () => vm.applyScale(1.25, 0, 0),
+          ),
+          GlassCircleButton(
+            icon: const BoldIcon(Icons.zoom_out),
+            tooltip: tr('Отдалить'),
+            onTap: () => vm.applyScale(0.8, 0, 0),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmUndo(BuildContext context, TargetViewModel vm) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('Удалить выстрел?')),
+        content: Text(tr('Последний выстрел будет удалён. Это действие нельзя отменить.')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Отмена'))),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Удалить'))),
+        ],
+      ),
+    );
+    if (ok == true) vm.undoLastShot();
+  }
+
+  void _openSectionPanel(
+      BuildContext context, TargetViewModel vm, WorkspacePage page) {
+    showGlassSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => ChangeNotifierProvider.value(
+        value: vm,
+        child: FractionallySizedBox(
+          heightFactor: 0.92,
+          child: _pageBody(page, vm),
+        ),
+      ),
+    );
   }
 
   Widget _pageBody(WorkspacePage page, TargetViewModel vm) {
@@ -1116,7 +1239,10 @@ class _ShotsListSection extends StatelessWidget {
         sum += (s.score as double);
         whole += (s.score as double).floor();
       }
-      final sightingGroup = n < 0;
+            // Центральные выстрелы (x=0, y=0): их количество идёт в итог серии
+      // как «104.5 -5*» — направление к ним не относится (28.11).
+      final centers = rows.where((s) => (s.xMm as double) == 0 && (s.yMm as double) == 0).length;
+final sightingGroup = n < 0;
       if (!sightingGroup) {
         totalTenths += sum;
         totalWhole += whole;
@@ -1140,9 +1266,19 @@ class _ShotsListSection extends StatelessWidget {
           ],
         ),
       ));
-      for (final s in rows) {
-        blocks.add(_row(context, s));
+      for (var i = 0; i < rows.length; i++) {
+        blocks.add(_row(context, rows[i], last: i == rows.length - 1));
       }
+      blocks.add(Padding(
+        padding: const EdgeInsets.only(left: 28, top: 1, bottom: 6),
+        child: Text(
+          '${sum.toStringAsFixed(1)} -$centers*',
+          style: theme.textTheme.labelMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: sightingGroup ? cs.onSurfaceVariant : cs.primary,
+          ),
+        ),
+      ));
     }
 
     return Column(
@@ -1173,29 +1309,41 @@ class _ShotsListSection extends StatelessWidget {
   }
 
   /// Одна строка: номер, результат, стрелка направления от центра.
-  Widget _row(BuildContext context, dynamic s) {
+  Widget _row(BuildContext context, dynamic s, {bool last = false}) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final score = (s.score as double);
+    final x = s.xMm as double;
+    final y = s.yMm as double;
+    final center = x == 0 && y == 0;
+    // Последний выстрел серии — крупнее в 2 раза и цветом темы (макет 28.11).
+    final scoreStyle = last
+        ? theme.textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w800,
+            color: cs.primary,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          )
+        : theme.textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          );
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
+      padding: EdgeInsets.symmetric(vertical: last ? 1 : 3),
       child: Row(
         children: [
           SizedBox(
-            width: 28,
-            child: Text('${s.shotNumber}', style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+            width: 26,
+            child: Text('${s.shotNumber}',
+                style: theme.textTheme.labelSmall?.copyWith(color: cs.onSurfaceVariant)),
           ),
           SizedBox(
-            width: 52,
-            child: Text(
-              score.toStringAsFixed(1),
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
-            ),
+            width: last ? 66 : 52,
+            child: Text(score.toStringAsFixed(1), style: scoreStyle),
           ),
-          _arrow(context, (s.xMm as double), (s.yMm as double)),
+          if (center)
+            Text('*', style: theme.textTheme.bodyMedium)
+          else
+            _arrow(context, x, y),
         ],
       ),
     );
@@ -2330,45 +2478,50 @@ class _ShotWheelBar extends StatelessWidget {
 }
 
 /// Полоса серий под мишенью в горизонтальном режиме тренировки (отзыв 26.11).
-class _SeriesStrip extends StatelessWidget {
+
+/// Правая колонка серий в горизонтали: сумма и число центральных «-N*»,
+/// активная серия — цветом темы.
+class _SeriesColumn extends StatelessWidget {
   final TargetViewModel vm;
-  const _SeriesStrip({required this.vm});
+  const _SeriesColumn({required this.vm});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
+    final cs = Theme.of(context).colorScheme;
     final shots = vm.session.countingShots;
-    if (shots.isEmpty) return const SizedBox(height: 6);
+    if (shots.isEmpty) {
+      return Center(
+        child: Text('-', style: TextStyle(color: cs.onSurfaceVariant)),
+      );
+    }
     final sums = <int, double>{};
+    final centers = <int, int>{};
     for (final s in shots) {
       sums[s.seriesNo] = (sums[s.seriesNo] ?? 0) + s.score;
+      if (s.xMm == 0 && s.yMm == 0) {
+        centers[s.seriesNo] = (centers[s.seriesNo] ?? 0) + 1;
+      }
     }
-    final total = shots.fold(0.0, (a, s) => a + s.score);
-    return Padding(
-      padding: const EdgeInsets.only(top: 4, bottom: 2),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(children: [
-          for (final n in (sums.keys.toList()..sort()))
-            Container(
-              margin: const EdgeInsets.only(right: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: cs.surfaceContainerHighest.withValues(alpha: 0.7),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                '${tr('Серия {n}', {'n': n})} · ${sums[n]!.toStringAsFixed(1)}',
-                style: theme.textTheme.labelMedium,
+    final active = vm.currentSeriesNo;
+    final keys = sums.keys.toList()..sort();
+    return ListView(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      children: [
+        for (final n in keys)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Text(
+              '${sums[n]!.toStringAsFixed(1)} -${centers[n] ?? 0}*',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                fontFeatures: const [FontFeature.tabularFigures()],
+                color: n == active ? cs.primary : cs.onSurfaceVariant,
               ),
             ),
-          Text(
-            '${tr('Итого')} ${total.toStringAsFixed(1)}',
-            style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
           ),
-        ]),
-      ),
+      ],
     );
   }
 }
