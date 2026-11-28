@@ -525,6 +525,11 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
                     return _wideTraining(context, vm, box);
                   }
 
+                  // Портрет телефона — своя раскладка из макета 28.11.
+                  if (Display.isPhoneLayout && !landscape) {
+                    return _portraitTraining(context, vm, box);
+                  }
+
                   if (isDesktopOrWeb) {
                     // Мишень слева: квадрат по высоте экрана, ширина чуть
                     // больше высоты — под отступы и кнопку отмены выстрела.
@@ -971,6 +976,144 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
           child: _pageBody(page, vm),
         ),
       ),
+    );
+  }
+
+
+  /// Портрет: мишень сверху, горизонтальное колесо, список выстрелов слева,
+  /// серии и таймер справа, кнопки — правой колонкой (макет 28.11).
+  Widget _portraitTraining(
+      BuildContext context, TargetViewModel vm, BoxConstraints box) {
+    final top = MediaQuery.paddingOf(context).top;
+    final bottom = MediaQuery.paddingOf(context).bottom;
+    const headerH = 44.0;
+    final targetH = math.max(180.0, (box.maxHeight - top - bottom - headerH - 40) * 0.42);
+    final railW = 44.0;
+    return Stack(children: [
+      Padding(
+        padding: EdgeInsets.fromLTRB(6, top + 4, 6, bottom + 4),
+        child: Column(children: [
+          SizedBox(height: headerH, child: _wideHeader(context, vm)),
+          const SizedBox(height: 6),
+          SizedBox(
+            height: targetH,
+            child: _panel(context,
+                radius: 14,
+                child: _TargetPage(height: targetH, compact: true)),
+          ),
+          const SizedBox(height: 4),
+          SizedBox(height: 32, child: const _ShotWheelBar()),
+          const SizedBox(height: 4),
+          Expanded(
+            child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Expanded(
+                flex: 6,
+                child: _panel(
+                  context,
+                  radius: 12,
+                  child: MediaQuery(
+                    data: MediaQuery.of(context).copyWith(
+                      textScaler: const TextScaler.linear(1.25),
+                    ),
+                    child: _ShotsListSection(vm: vm),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                flex: 3,
+                child: Column(children: [
+                  SizedBox(
+                    height: 26,
+                    child: Center(
+                      child: Text(
+                        _landscapeTimeLabel(vm),
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          fontFeatures: [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Expanded(
+                    child: _panel(context,
+                        radius: 12, child: _SeriesColumn(vm: vm)),
+                  ),
+                ]),
+              ),
+              const SizedBox(width: 4),
+              SizedBox(width: railW, child: _portraitRail(context, vm)),
+            ]),
+          ),
+        ]),
+      ),
+    ]);
+  }
+
+  /// Правая колонка кнопок портрета: выровнена, без «сброса зума».
+  Widget _portraitRail(BuildContext context, TargetViewModel vm) {
+    void panel(WorkspacePage page) => _openSectionPanel(context, vm, page);
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        GlassCircleButton(
+          icon: const BoldIcon(Icons.star_border),
+          tooltip: tr('В избранное'),
+          onTap: () {
+            final shots = vm.session.shots;
+            if (shots.isEmpty) return;
+            final idx = vm.selectedIndex >= 0 && vm.selectedIndex < shots.length
+                ? vm.selectedIndex
+                : shots.length - 1;
+            vm.toggleFavorite(shots[idx].id);
+          },
+        ),
+        if (vm.canEditShots)
+          GlassCircleButton(
+            icon: BoldIcon(vm.isEditing
+                ? Icons.remove_red_eye_outlined
+                : Icons.edit_outlined),
+            tooltip: vm.isEditing ? tr('Просмотр') : tr('Правка'),
+            onTap: () => _toggleEditMode(vm),
+          ),
+        GlassCircleButton(
+          icon: const BoldIcon(Icons.sticky_note_2_outlined),
+          tooltip: tr('Заметка к выстрелу'),
+          onTap: () => panel(WorkspacePage.notes),
+        ),
+        GlassCircleButton(
+          icon: const BoldIcon(Icons.insights_outlined),
+          tooltip: tr('Статистика'),
+          onTap: () => panel(WorkspacePage.statistics),
+        ),
+        GlassCircleButton(
+          icon: const BoldIcon(Icons.support_agent),
+          tooltip: tr('Тренер'),
+          onTap: () => panel(WorkspacePage.coach),
+        ),
+        GlassCircleButton(
+          icon: const BoldIcon(Icons.auto_awesome_outlined),
+          tooltip: tr('Ассистент'),
+          onTap: () => panel(WorkspacePage.assistant),
+        ),
+        GlassCircleButton(
+          icon: const BoldIcon(Icons.delete_outline),
+          tooltip: tr('Удалить выстрел'),
+          onTap: () => _confirmUndo(context, vm),
+        ),
+        GlassCircleButton(
+          icon: const BoldIcon(Icons.zoom_in),
+          tooltip: tr('Приблизить'),
+          onTap: () => vm.applyScale(1.25, 0, 0),
+        ),
+        GlassCircleButton(
+          icon: const BoldIcon(Icons.zoom_out),
+          tooltip: tr('Отдалить'),
+          onTap: () => vm.applyScale(0.8, 0, 0),
+        ),
+      ],
     );
   }
 
