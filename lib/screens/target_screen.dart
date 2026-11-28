@@ -2,7 +2,7 @@ import '../widgets/glass_route.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
+
 import '../widgets/ai_gate.dart';
 import 'focus_training_screen.dart';
 import '../voice/clock_shot.dart';
@@ -12,6 +12,7 @@ import 'package:uuid/uuid.dart';
 import 'package:provider/provider.dart';
 import '../logic/ai_context.dart';
 import '../logic/stance_plan.dart';
+import '../logic/display_profile.dart';
 import '../logic/shot_photo_detection.dart';
 import '../models/exercise.dart';
 import '../models/comment.dart';
@@ -506,10 +507,9 @@ class _WorkspaceBodyState extends State<_WorkspaceBody> {
               child: LayoutBuilder(
                 builder: (context, box) {
                   // Определяем, десктоп/веб ли это (широкий экран).
-                  final isDesktopOrWeb = kIsWeb ||
-                      defaultTargetPlatform == TargetPlatform.windows ||
-                      defaultTargetPlatform == TargetPlatform.macOS ||
-                      defaultTargetPlatform == TargetPlatform.linux;
+                  // Профиль отображения (28.11): веб с телефона идёт по
+                  // мобильной вёрстке, как Android; десктоп — по широкой.
+                  final isDesktopOrWeb = Display.isDesktopLayout;
 
                   // Разделы под переключателем. Мишень в список кнопок не
                   // попадает — она закреплена сверху. Пустую статистику не
